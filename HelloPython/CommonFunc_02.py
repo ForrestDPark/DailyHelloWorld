@@ -1,4 +1,53 @@
 
+def daily_hello(contents = """""",daycon_num=0, log_update=True):
+    import datetime as dt
+    import subprocess
+    now = dt.datetime.now()
+    # 날짜 형식 지정
+    date_format = now.strftime("%Y.%m.%d %a")
+    # 시간 형식 지정
+    if now.hour < 12:
+        time_format = now.strftime("AM%I:%M")
+    else:
+        time_format = now.strftime("PM%I:%M")
+    daycon = {
+                    '1.트랙-첫걸음':"https://dacon.io/pblTrack/236362/edu/305",\
+                    '2.트랙-첫걸음':"https://dacon.io/pblTrack/236362/edu/306",
+                    '3.수화분류':"https://dacon.io/edu/323",
+                    '4.xai':"https://dacon.io/edu/307",
+                    '5.당뇨병 예측':"https://dacon.io/edu/1009",
+                    '6.아파트경매가 예측':"https://dacon.io/edu/1014",
+                    '7.중급 당뇨병 예측':"https://dacon.io/edu/1017",
+                    '8.랭커특강':"https://dacon.io/forum/410560?category=ranker-videos",
+                    '9.해커톤- 식당리뷰':"https://dacon.io/competitions/official/236351/overview/description"
+    }
+    for key,link in daycon.items():
+            if int(key.split(".")[0])==daycon_num:
+                if daycon_num:
+                    print(rainbow_orange(f"\n{key}링크를 실행합니다 "))
+    with open("hello_log.txt", "r+") as f: # "r+" 모드로 파일 열기
+        if log_update:
+            # 파일 내용 읽어오기
+            file_content = f.read()
+            # 파일 포인터를 파일 시작 부분으로 이동
+            f.seek(0)
+            # 새 내용을 먼저 쓰기
+            f.write(f"""{date_format} {time_format}\n{contents}
+                \n{file_content}""") # 기존 내용 추가
+    with open("hello_log.txt", "r") as f:
+        print(red("-"*30+ "Log"+"-"*30))
+        # print(rainbow_green(f.read()))
+        lines = f.read().splitlines()
+        # 각 줄을 무지개 녹색으로 출력
+        for line in lines:
+            if ':' in line:
+                print(yellow(line))
+            else:
+                print(green(line))
+        # 월화 수목 금토 일  분류해서 그날 해야하는 링크를 자동으로 떠오르게 만들것. 
+        for key,link in daycon.items():
+            if int(key.split(".")[0])==daycon_num:
+                    link = f'/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir="/Users/<>/Applications/Google Chrome.app/" --new-tab {link}'
 
 def Analysis_title(Title):
     random_imoticon = ["🙀","👻","😜","🤗","🙄","🤑","🤖"]
