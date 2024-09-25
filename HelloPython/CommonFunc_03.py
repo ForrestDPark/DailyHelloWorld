@@ -1,4 +1,4 @@
-
+## last update : 2024.09.25
 def daily_hello(contents = """""",daycon_num=0, log_update=True):
     import datetime as dt
     import subprocess
