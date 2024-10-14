@@ -1,5 +1,26 @@
 
 
+## update a 2024.10.13 인공신경망 학습 을 위한 콜벡 함수 
+
+def evaluate_model(model,test_data,test_label):
+    classifications = model.predict(test_data)
+
+    for i in range(len(test_data)):
+        if i<10:
+            print(f"{i+1}번째이미지는 {max(classifications[i])*100:.2f}%확률로 {test_label[i]}입니다.")
+
+
+
+## Call back 을 이용해서 에포크 수를 자동으로 맞춰주자. 
+def callback_setting(percent = 0.95):
+    import tensorflow as tf
+    class myCallback(tf.keras.callbacks.Callback): ## callback함수 를 상속함. 
+        def on_epoch_end(self,epoch, logs={}):
+            if(logs.get('accuracy')>percent):
+                print(f"\n 정확도 {percent*100}% 에 도달하여 훈련을 멈춥니다.!!")
+                self.model.stop_training = True
+    return myCallback()
+
 
 def daily_hello(contents = """""",daycon_num=0, log_update=True):
     import datetime as dt
