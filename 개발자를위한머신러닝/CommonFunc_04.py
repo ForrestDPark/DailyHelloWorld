@@ -16,7 +16,7 @@ def callback_setting(percent = 0.95):
     import tensorflow as tf
     class myCallback(tf.keras.callbacks.Callback): ## callback함수 를 상속함. 
         def on_epoch_end(self,epoch, logs={}):
-            if(logs.get('accuracy')>percent):
+            if logs.get('accuracy') is not None and logs.get('accuracy') > percent:
                 print(f"\n 정확도 {percent*100}% 에 도달하여 훈련을 멈춥니다.!!")
                 self.model.stop_training = True
     return myCallback()
