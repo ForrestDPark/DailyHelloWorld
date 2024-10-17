@@ -1,7 +1,60 @@
 
 
 ## update a 2024.10.13 인공신경망 학습 을 위한 콜벡 함수 
+## update a 2024.10.16 zip file exstracition
+def overfitting_test(
+    trainig_score= 0.94,
+    validation_score = 0.88
+    ):
+    if trainig_score> validation_score:
+        print(yellow(" 훈련이 검증보다 잘되니 과대 적합입니다."))
+    else:
+         print(yellow(" 검증이 훈련보다 잘되니 과소 적합입니다."))
 
+def train_val_generator(
+    TRANING_DIR = './Data/rps/',
+    VALIDATION_DIR = "./Data/rps-test-set/",
+    img_size = (150,150),
+    class_mode_='categorical' # binary
+    ):
+    ## train validation generator 
+    print("\n◎Augumented training generator -- update(2024.10.16) by pdg")
+    from tensorflow.keras.preprocessing.image import ImageDataGenerator
+    # TRANING_DIR = './Data/rps/'
+    
+    ## data augumentation 을 위한 IDG  생성 
+    training_datagen = ImageDataGenerator(
+        rescale =1./255,
+        rotation_range =40,
+        width_shift_range =0.2,
+        height_shift_range =0.2,
+        shear_range = 0.2,
+        horizontal_flip = True,
+        fill_mode = 'nearest'
+    )
+    ## train data 를 dict 에서 가져와서 class 분류 한 tg
+    train_generator = training_datagen.flow_from_directory(
+        TRANING_DIR,
+        target_size = img_size,
+        class_mode = class_mode_
+    )
+    
+    # VALIDATION_DIR = "./Data/rps-test-set/"
+    validation_datagen = ImageDataGenerator(rescale = 1./255)
+    validation_generator = validation_datagen.flow_from_directory(
+        VALIDATION_DIR,
+        target_size=img_size,
+        class_mode=class_mode_
+    )   
+    
+    return train_generator,validation_generator
+
+def zip_extarction(source_path,target_folder_path):
+    import zipfile
+    zip_ref = zipfile.ZipFile(source_path,'r')
+    zip_ref.extractall(target_folder_path)
+    zip_ref.close()
+    
 def evaluate_model(model,test_data,test_label):
     classifications = model.predict(test_data)
 
