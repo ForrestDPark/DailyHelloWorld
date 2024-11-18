@@ -295,10 +295,12 @@ def data_column_info(data_column_info_str = ""):
 def df_display_centered(df, message=""):
     from IPython.display import display, HTML
     import pandas as pd 
+    if message=="":
+        message =f"   - DataFrame shape : {df.shape}"
     if type(df) != type(pd.DataFrame()):
         df=pd.DataFrame(df)
-    print(rainbow_green(message))
-    display(HTML('<div style="text-align: center; margin-left: 50px;">{}</div>'.format(df.to_html().replace('<table>', '<table style="margin: 0 auto;">'))))
+    print(green(message))
+    display(HTML('<div style="text-align: center; margin-left: 30px;">{}</div>'.format(df.to_html().replace('<table>', '<table style="margin: 0 auto;">'))))
 
 def data_watch_one(start_, dataInfo=False, data_folder_path="./Data"):
     ## Data Fetching range
@@ -1552,7 +1554,14 @@ def colored_text(text, color='default', bold=False):
     return f"{bold_code}{color_code}{text}{reset_code}"
 def blue(str, b=False):return colored_text(str, 'blue', bold=b)
 def yellow(str, b=False):return colored_text(str, 'yellow', bold=b)
-def y(str):print(yellow(str))
+def y(string):
+    if type(string) != type(""):
+        string= str(string)
+    print(yellow(string))
+def g(string):
+    if type(string) != type(""):
+        string= str(string)
+    print(green(string))
 def red(str, b=False):return colored_text(str, 'red', bold=b)
 def green(str, b=False):return colored_text(str, 'green', bold=b)
 def magenta(str, b=False):return colored_text(str, 'magenta', bold=b)
@@ -1581,7 +1590,38 @@ def rainbow_text(text,bold =False):
     bold_code = '\033[1m' if bold else ''
     return f"{bold_code}{colored_text}"
 
-
+def yd(order,exp , df ,heading=3):
+    import pandas as pd 
+    if type(df) !=type(pd.DataFrame()):
+        df = pd.DataFrame(df)
+    from IPython.display import display
+    y(f"{order}. {exp} "); 
+    if heading ==0:
+        g(f"   Displayed rows= {len(df)}/{len(df)}")
+        # if int(df.isna().sum()) !=0:
+        #     g(f"   Null included rows: {df.isnull().sum()}")
+        df_display_centered(df)
+    else:
+        g(f"   Displayed rows= {heading}/{len(df)}")
+        # if int(df.isna().sum()) !=0:
+        #     g(f"   Null included rows: {df.isnull().sum()}")
+        df_display_centered(df.head(heading))
+def gd(order,exp , df ,heading=3):
+    import pandas as pd 
+    if type(df) !=type(pd.DataFrame()):
+        df = pd.DataFrame(df)
+    from IPython.display import display
+    g(f"{order}. {exp} "); 
+    if heading ==0:
+        g(f"   - Displayed rows= {len(df)}/{len(df)}")
+        # if int(df.isna().sum()) !=0:
+        #     g(f"   Null included rows: {df.isnull().sum()}")
+        df_display_centered(df)
+    else:
+        g(f"   - Displayed rows= {heading}/{len(df)}")
+        # if int(df.isna().sum()) !=0:
+        #     g(f"   Null included rows: {df.isnull().sum()}")
+        df_display_centered(df.head(heading))
 if __name__ == "__main__":
     
     with open("update_log.txt") as update_log:
