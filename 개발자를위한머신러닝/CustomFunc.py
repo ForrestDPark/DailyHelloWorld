@@ -1,5 +1,5 @@
 
-
+## update 2024.11.25 데이콘 타입으로 머신러닝 전처리 함수 수정
 ## update a 2024.10.13 인공신경망 학습 을 위한 콜벡 함수 
 ## update a 2024.10.16 zip file exstracition
 ## update 2024.10.21 diary db crud -> v1.0
@@ -252,9 +252,6 @@ def evaluate_model(model,test_data,test_label):
     for i in range(len(test_data)):
         if i<10:
             print(f"{i+1}번째이미지는 {max(classifications[i])*100:.2f}%확률로 {test_label[i]}입니다.")
-
-
-
 ## Call back 을 이용해서 에포크 수를 자동으로 맞춰주자. 
 def callback_setting(percent = 0.95):
     import tensorflow as tf
@@ -265,14 +262,12 @@ def callback_setting(percent = 0.95):
                 self.model.stop_training = True
     return myCallback()
 
-
 def Analysis_title(Title):
     random_imoticon = ["🙀","👻","😜","🤗","🙄","🤑","🤖"]
     import numpy as np
     import random
     imo = random_imoticon[random.randrange(1,len(random_imoticon))]
     print(rainbow_green(f"✻✻✻✻______{imo*1} {Title} {imo*1}______✻✻✻✻",True))
-
 
 def data_column_info(data_column_info_str = ""):
     if data_column_info_str:
@@ -488,62 +483,237 @@ class DataPreprocessing(Basic):
         super().__init__()
 
     def __str__(self):
-        return f"""
-                - key_selector
-                - MLOutput_target_ratio 
-                - quantile_dist_for_binary_output
-                - feeature_outlier_graph
-                - pairPlot_numeric_cols
-                """
+        return yellow(f"""
+    ** 전처리 과정 순서를 따라서 데이터를 확인하세요  **
     
-    def key_selector(data_dict,num=0, file_list_show = False, df_info_show= False,df_graph_show=False):
-        """
-            - Description : data가 들어있는 dictionary 파일을 순서대로 선택해서 출력함 
-                그리고 딕셔너리에 있는 df key 를 출력하고 사용자가 몇번째 데이터를 호출했는지 알려줌. 
-            - 예시 : 
-            - update 2024.09.11 AM 10:50 by pdg
-                - 출력되는거 보기싫어서 기능 만듬. 
-        """
-        from IPython.display import display, HTML
-        data_name= sorted(data_dict.keys())[num]
-        i = num
-        df = data_dict[data_name]
-        data_num= sorted(data_dict.keys())[i]
-        if df_info_show:
-            print(green("◎  "+f"{data_num}"+"--"*(100-(len(data_num)//2)) ,True))
-            print(rainbow_green(f"-Data info : ",True))
-            df.info()
-            # 화면 가운데 정렬하여 출력
-            print(yellow(f"-DataFrame.head : ",True))
-            display(df.head(3))
-            print(yellow(f"-DataFrame.tail : ",True))
-            display(df.tail(3))
-            print(yellow("-Random sample Watching(7) : ",True))
-            display(df.sample(7))
-            print(rainbow_orange(f"-DataFrame Describtion:",True))
-            display(df.describe())
-            if df_graph_show:
-                DataPreprocessing.plotSetting(pltStyle='default')
-                DataPreprocessing.dataInfo2(DataPreprocessing.key_selector(data_dict,i))
-            print(blue("--"*100))
-        if file_list_show:
-            for order,i in enumerate(sorted(data_dict.keys())):
-                print(rainbow_magenta(f"\t{order} 번째 : {i}"))
-                print(rainbow_yellow(f"\t{num}번째 데이터: {data_name} "))
-                    
-        return data_dict[data_name]
+    1. Step1. 데이터의 outline 을 살펴보고 독립과 종속을 확인, 결측치 확인 : 
+        >> DataPreprocessing.step_1_Raw_data_processing(train,test,submission)
     
-    ### training Set Analysis Functions
-    def MLOutput_target_ratio(train_df, target_col="Outcome",graph_show=False):
+    2. 종속변수와 독립변수를 분할하여 train_x, train_y 를 생성 : 
+        >>train_x,train_y,test_x= DataPreprocessing.step_2_Indep_dep_val_split(train,test,target_colname= 'target', drop_test ='id')
+    
+    3. 수치형 칼럼과 범주형 칼럼을 분류하기 위해서 칼럼분포를 시각화(hist, boxplot) 하고 수치형데이터 의 분포와 왜도확인: 
+        >> DataPreprocessing.step_3_0_dataInfo2(df), 
+        >> DataPreprocessing.step_3_1_numeric_column_dist_boxplot(train_x)
+        >> DataPreprocessing.step_3_2_Skewness_check(train) 
+    
+    4. Target 값의 분포를 확인하여 데이터의 균일도를 확인합니다.(이진분류 타겟일 경우 적용)
+        >> DataPreprocessing.step_4_MLOutput_target_ratio(train_df, target_col="Outcome",graph_show=False)
+    
+    5. Outlier 를 확인(0),사용자기준으로 걸르고 최빈값으로 대체(1), zscore, IQR 값으로 확인후 제거(2) : 
+        >> DataPreprocessing.step_5_0_Outlier_check(X_train, col='income_total') =>
+        >> train_x=DataPreprocessing.step_5_1_Outlier_processing(train_x,'trestbps',over_val=170,under_val=0, replace_outlier = 'mode')
+        >> X_train = DataPreprocessing.step_5_2_Outlier_erase(X_train, col='income_total', threshold = 3, IQR=True)
+    
+    6. 정규화 를 진행합니다. 
+        >> train_x_scaled_df,test_x_scaled_df = DataPreprocessing.step_6_Standardization(train_x,test_x,need_to_scale = ['age','trestbps','chol','thalach'])
+    
+    7. 범주형 데이터에 원핫 인코딩을 진행합니다 : 
+        >> train_x_encoded_df,test_x_encoded_df = DataPreprocessing.step_7_OHE_process(train_x,test_x,need_to_encoding = ['sex','cp','restecg','slope','thal'])
+    
+    8. 로그 변환 이 필요한 데이터에 로그 변환을 진행합니다. : 
+        >> train_x,test_x= DataPreprocessing.step_8_Log_transform(train_x,test_x, need_to_log_trainsform=['oldpeak'])
+    
+    9. 정규화 된 데이터와 범주형 데이터를 병합하여 기존 train_x, test_x 에 붙입니다. 
+    
+
+    
+    
+    기타 : 
+    - key_selector
+    - quantile_dist_for_binary_output
+    - feeature_outlier_graph
+    - pairPlot_numeric_cols
+    """)
+    ## 1 : Data 확인
+    def step_1_Raw_data_processing(train,test, submission):
+        """
+        1. Step1. 데이터의 outline 을 살펴보고 독립과 종속을 확인, 결측치 확인 : 
+        >> DataPreprocessing.step_1_Raw_data_processing(train,test,submission)
+        """
+        
+        g("1. RAW DATA CHECK")
+        gd("1.1","train data", train)
+        gd(1.2, 'test data', test)
+        gd(1.3 ,'submisison ',submission)
+        g("1.4 Train data 결측치 확인")
+        print(train.isna().sum(0))
+        print(train.info())
+        # print(train.describe())
+    ## 2 : 데이터 종속 독립 분리
+    def step_2_Indep_dep_val_split(train,test,target_colname= 'target', drop_test ='id'):
+        """
+        2. 종속변수와 독립변수를 분할하여 train_x, train_y 를 생성 : 
+        >>train_x,train_y,test_x= DataPreprocessing.step_2_Indep_dep_val_split(train,test,target_colname= 'target', drop_test ='id')
+        """
+        g("2. 독립변수와 종속 변수 분할 결과 ")
+        if drop_test:
+            train_x = train.drop([drop_test,target_colname], axis =1)
+        else : 
+        train_y = train[target_colname]
+        test_x = test.drop([drop_test], axis= 1)
+        
+        return train_x,train_y,test_x
+    ## 3-0 : 수치형, 범주형 포괄 분포확인
+    def step_3_0_dataInfo2(df, replace_Nan=False, PrintOutColnumber = 0,nanFillValue=0, graphPlot=False):
+        """
+            3. 수치형 칼럼과 범주형 칼럼을 분류하기 위해서 칼럼분포를 시각화(hist, boxplot) 하고 수치형데이터 의 분포와 왜도확인: 
+        >> DataPreprocessing.step_3_0_dataInfo2(df), 
+        >> DataPreprocessing.step_3_1_numeric_column_dist_boxplot(train_x)
+        >> DataPreprocessing.step_3_2_Skewness_check(train) 
+        """
+        g("4. Data inforamtion check")
+        import warnings ;warnings.filterwarnings('ignore')
+        ### Description  : 새운 데이터 정보 까기 함수
+        import pandas as pd
+        column_count = len(df.columns)
+        row_count = len(df.index)
+        nul_count  = df.isnull().sum().sum()
+        value_kind_limit =10
+        under_limit_columns =[]
+        if PrintOutColnumber ==0 :
+            PrintOutColnumber = column_count
+        print(yellow(f" ◎ Column  : {column_count} 개 "))
+        for num,i in enumerate(df.columns.tolist()):
+            if num%5 != 0: 
+                print(r_orange(f"   {i}"), end=", ")
+            else:
+                print(r_orange(f"\n   {i}"), end=", ")
+        else:print("")
+        print(yellow(f" ◎ Row size    : {row_count} 개"))
+        print(yellow(f" ◎ Null count   : {nul_count} 개"))
+        
+        
+        for idx, col in enumerate(df.columns):
+            if df[f"{col}"].isnull().sum():
+                print(f"   => {idx}번째.[{col}]컬럼 : ",f"null {df[f'{col}'].isnull().sum()} 개,\t not null {df[f'{col}'].notnull().sum()} 개")
+                ## Null data fill
+                if replace_Nan : ## nan 을 0 으로 대체 
+                    df[col].fillna(value=nanFillValue, inplace=True)  
+        print(yellow(" ◎ 칼럼별 데이터 중복체크"))
+
+        for idx, col in enumerate(df.dtypes.keys()):
+            value_counts = df[col].value_counts()
+            under_limit_columns.append(col)
+            print(yellow(f"   □ {idx+1}번째 칼럼 \" {col}\"  타입 {df.dtypes[col]})"),\
+                            red(f"\n    {len(df[col].unique())}"),\
+                            green(f"\t/{len(df[col])} ")+ "\t[uniq/raw]",\
+            )
+            
+            ### Value count 값 분포 확인
+            check_df = pd.DataFrame(
+                    {
+                        f'\"{col}\" 칼럼의 중복값': value_counts.index.tolist(),
+                        '개수분포': value_counts.values.tolist()
+                    },
+                    index=range(1, len(value_counts) + 1)
+    )
+
+            df_display_centered(check_df.head(10))
+            
+            # 그래프 생성
+            import matplotlib.pyplot as plt
+            import seaborn as sns
+            
+            if len(check_df.index) <10 :
+                plt.figure(figsize=(8, 6))  # 그래프 크기 설정
+                labels = value_counts.index.tolist()
+                for i, label in enumerate(labels):
+                    # label을 문자열로 변환
+                    label = str(label)
+                    if len(label) > 10:
+                        labels[i] = label[:10] + "..."
+                colors = sns.color_palette("pastel", len(value_counts.values)) 
+                # 퍼센트와 실제 수치 함께 표시
+                def make_autopct(values):
+                    def my_autopct(pct):
+                        total = sum(values)
+                        val = int(round(pct * total / 100.0))
+                        return f'{pct:.1f}% ({val:d})'
+                    return my_autopct
+
+                plt.pie(value_counts.values, labels=labels, autopct=make_autopct(value_counts.values), startangle=90, colors=colors)
+                plt.title(f"{col} 컬럼 값 분포 (파이 차트)", fontsize=13)
+                plt.axis('equal')  # 파이 차트를 원형으로 유지
+                plt.show()  # 그래프 출력
+                if graphPlot :DataPreprocessing.column_hist(df,col)
+            else:
+                plt.figure(figsize=(14, 4))  # 그래프 크기 설정
+                sns.barplot(x=value_counts.index, y=value_counts.values, palette="viridis") 
+                plt.title(f"{col} 컬럼 값 분포",fontsize=13)  # 그래프 제목 설정
+                # x축 레이블 길이가 10 글자 이상이면 ...으로 표현
+                for label in plt.gca().get_xticklabels():
+                    label = str(label)
+                    if len(label) > 10:
+                        label = label[:10] + "..."  # 변경
+                        # label.set_text(label[:10] + "...")
+                plt.ylabel("개수")  # y축 레이블 설정
+                plt.xticks(rotation=45)  # x축 레이블 회전
+                plt.tight_layout()  # 레이블 간 간격 조정
+                plt.show()  # 그래프 출력
+                if graphPlot :DataPreprocessing.column_hist(df,col)
+
+        else: 
+            print(red("\t[RESULT]"),"🙀🙀🙀"*10)
+            print(yellow(f"\t🟦{value_kind_limit}개이하의 값 종류를 가지는 칼럼 "))
+            # print(red(str(under_limit_columns)))
+            for col in under_limit_columns:
+                print("\t\t-",yellow(f"{col}:{len(df[col].unique())}: {df[col].unique().tolist()}"))
+            else:
+                
+                print("\t",red(f"총 {len(under_limit_columns)}개"))
+                print(r_cy(" ---- data frame 의 정보 조사 완료 -----}",True))
+                return under_limit_columns
+    ## 3-1 : 수치형 데이터 분포확인
+    def step_3_1_numeric_column_dist_boxplot(train_x):
+        """
+            3. 수치형 칼럼과 범주형 칼럼을 분류하기 위해서 칼럼분포를 시각화(hist, boxplot) 하고 수치형데이터 의 분포와 왜도확인: 
+        >> DataPreprocessing.step_3_0_dataInfo2(df), 
+        >> DataPreprocessing.step_3_1_numeric_column_dist_boxplot(train_x)
+        >> DataPreprocessing.step_3_2_Skewness_check(train) 
+        """
+        g("3. train data 수치형 칼럼의 분포 확인")
+        import matplotlib.pyplot as plt , seaborn as sns
+        DataPreprocessing.plotSetting()
+        import pandas as pd
+        numeric_col = train_x.select_dtypes(include ='number').columns.tolist()
+        for feature in numeric_col:
+            plt.figure(figsize = (8,3))
+            plt.subplot(1,2,1)
+            sns.histplot(train_x[feature], kde = True, color= 'skyblue')
+            plt.title(f"Distribution of {feature} ")
+            plt.subplot(1,2,2)
+            sns.boxplot(y = train_x[feature])
+            plt.title("Boxplot of "+ feature)
+            plt.show()
+       ## 3 : 수치형 데이터의 왜도 확인
+    ## 3-2 : 수치형 데이터의 칼럼별 왜도확인
+    def step_3_2_Skewness_check(train):
+        """
+        3. 수치형 칼럼과 범주형 칼럼을 분류하기 위해서 칼럼분포를 시각화(hist, boxplot) 하고 수치형데이터 의 분포와 왜도확인: 
+        >> DataPreprocessing.step_3_0_dataInfo2(df), 
+        >> DataPreprocessing.step_3_1_numeric_column_dist_boxplot(train_x)
+        >> DataPreprocessing.step_3_2_Skewness_check(train) 
+        """
+        g("3. train data skewness check")
+        skewness = train.select_dtypes("number").skew()
+        y(skewness)
+    ## 4 : 타겟 데이터 균일도 확인
+    def step_4_MLOutput_target_ratio(train_df, target_col="Outcome",graph_show=False):
+        """
+        4. Target 값의 분포를 확인하여 데이터의 균일도를 확인합니다.(이진분류 타겟일 경우 적용)
+        >> DataPreprocessing.step_4_MLOutput_target_ratio(train_df, target_col="Outcome",graph_show=False)
+        """
+        g("5. Output Target Ratio Check")
         ### Target 변수 class 별 갯수 및 비율 구하기 ( outcome 이 0 아니면 1일때 만 사용가능 )
         target_counts = train_df[target_col].value_counts()
         target_ratio = train_df[target_col].value_counts(normalize=True)
         # print(yellow(f"target_counts ['0'] = {target_counts[0]}  target_counts ['1'] = {target_counts[1]}"))
         # print(yellow(f"target_ratio ['0'] = {round(target_ratio[0]*100,2)} %  target_ratio ['1'] = {round(target_ratio[1]*100)} %"))
-        print(yellow("-ML output target count-"))
+        
         for value in target_counts.index:
             print(blue("--" * 20))
-            print(rainbow_green(f"{value}:"))
+            print(r_g(f"{value}:"))
             print(yellow(f"  Target Counts : {target_counts[value]} 개"))
             print(yellow(f"  Target Ratio : {round(target_ratio[value]*100, 2)}%"))
             print(blue("--" * 20))
@@ -556,8 +726,8 @@ class DataPreprocessing(Basic):
 
             plt.figure(figsize=(6,4))
             ax = sns.countplot(x=target_col, data=train_df,palette='viridis')
-            print(rainbow_orange("--Target --",True))
-            print(magenta("""  ** data 의 불균형을 확인하세요! 50:50 이 아니면 더 많은 쪽에 편향되어 학습됩니다. (편향시-> oversampling, undersampling,SMOTE)
+            print(r_g("--Target --",True))
+            print(r_g("""  ** data 의 불균형을 확인하세요! 50:50 이 아니면 더 많은 쪽에 편향되어 학습됩니다. (편향시-> oversampling, undersampling,SMOTE)
                           """))
             
             # Annotate the bars with the percentage values
@@ -574,7 +744,7 @@ class DataPreprocessing(Basic):
             feature=train_df.drop(columns=target_col)
             numeric_features=feature.select_dtypes(include=['number']).columns.tolist()
             plt.figure(figsize=(10,6))
-            print(rainbow_orange("--Features --",True))
+            print(r_g("--Features --",True))
             # print(red("  ** data 의 불균형을 확인하세요!"))
             for idx, feature in enumerate(numeric_features):
                 ax1 = plt.subplot(3,3,idx+1)
@@ -584,7 +754,246 @@ class DataPreprocessing(Basic):
 
             plt.show()
         # df_display_centered(target_ratio)
+    ## 5-0: 이상치 시각화 및 확인
+    def step_5_0_Outlier_check(X_train, col='income_total'):
+        """
+        5. Outlier 를 확인(0),사용자기준으로 걸르고 최빈값으로 대체(1), zscore, IQR 값으로 확인후 제거(2) : 
+        >> DataPreprocessing.step_5_0_Outlier_check(X_train, col='income_total') =>
+        >> train_x=DataPreprocessing.step_5_1_Outlier_processing(train_x,'trestbps',over_val=170,under_val=0, replace_outlier = 'mode')
+        >> X_train = DataPreprocessing.step_5_2_Outlier_erase(X_train, col='income_total', threshold = 3, IQR=True)
+    
+        """
+        import matplotlib.pyplot as plt , seaborn as sns
+        def out_zscore(data, threshold =3):
+            import numpy as np
+            mean = np.mean(data)
+            std = np.std(data)
+            zscores = [(x-mean)/std for x in data]
+            outliers = [x for x in data if np.abs((x- mean)/std)> threshold]
+            return zscores, len(outliers)
+        zscores ,num_outliers = out_zscore(X_train['income_total'])
+        (f" - 이상치 탐지 {col}")
+        plt.figure(figsize= (10,5))
+        plt.boxplot(X_train[col], vert = False)
+        plt.title(f"Boxplot for feature {col}")
+        plt.show()
+        
+        
+        plt.figure(figsize =(10,5))
+        DataPreprocessing.plotSetting()
+        sns.distplot(zscores, color='red')
+        plt.axvspan(xmin= 3, xmax = max(zscores), alpha =0.2, color= 'red')
+        plt.title("Z-score 분포 와 이상치 영역")
+        plt.show()
+        print(yellow(f"  Total number of outliers are {num_outliers} [BEFORE]"))
+    ## 5-1 : 이상치 최빈값 변환
+    def step_5_1_Outlier_processing(df,colname,over_val=0,under_val=0, replace_outlier = 'mode'):
+        """
+        5. Outlier 를 확인(0),사용자기준으로 걸르고 최빈값으로 대체(1), zscore, IQR 값으로 확인후 제거(2) : 
+        >> DataPreprocessing.step_5_0_Outlier_check(X_train, col='income_total') =>
+        >> train_x=DataPreprocessing.step_5_1_Outlier_processing(train_x,'trestbps',over_val=170,under_val=0, replace_outlier = 'mode')
+        >> X_train = DataPreprocessing.step_5_2_Outlier_erase(X_train, col='income_total', threshold = 3, IQR=True)
+        """
+        g("6. Outlier 최빈값 대체")
+        import pandas as pd
+        from IPython.display import display
+        mode_value = df[colname].mode()[0] # 최빈값
+        mean_value = df[colname].mean()
+        if over_val!=0:
+            y(f" - {colname}에서 outlier(over) 를 포함하는 data display")
+            display(df.loc[df[colname]> over_val , colname])
+            outlier_index = df.loc[df[colname]>over_val,colname].index
+            # outlier ->Na 
+            df.loc[df[colname]>over_val,colname] = pd.NA
+            if replace_outlier =='mode':
+                df[colname] = df[colname].fillna(mode_value)
+                gd("",f" {colname} feature의 이상치 변환 ({over_val} => {mode_value}) 결과",df.loc[outlier_index])
+            
+        if under_val!=0:
+            df[colname]<under_val
+            y(f" -{colname}에서 outlier(under) 를 포함하는 data display")
+            display(df.loc[df[colname] < under_val , colname])
+            outlier_index = df.loc[df[colname]<under_val,colname].index
+            # outlier ->Na 
+            df.loc[df[colname]<under_val,colname] = pd.NA
+            if replace_outlier =='mode':
+                df[colname] = df[colname].fillna(mode_value)
+                gd("",f" {colname} feature의 이상치 변환 ({under_val} => {mode_value}) 결과",df.loc[outlier_index])
+        
+        return df
+    ## 5-2 : 이상치 제거 (Zscore, IQR)
+    def step_5_2_Outlier_erase(X_train, col='income_total', threshold = 3,scipy_use=False, Z_score =False, IQR =False):
+        """
+        5. Outlier 를 확인(0),사용자기준으로 걸르고 최빈값으로 대체(1), zscore, IQR 값으로 확인후 제거(2) : 
+        >> DataPreprocessing.step_5_0_Outlier_check(X_train, col='income_total') =>
+        >> train_x=DataPreprocessing.step_5_1_Outlier_processing(train_x,'trestbps',over_val=170,under_val=0, replace_outlier = 'mode')
+        >> X_train = DataPreprocessing.step_5_2_Outlier_erase(X_train, col='income_total', threshold = 3, IQR=True)
+        """
+        from scipy import stats
+        import matplotlib.pyplot as plt
+        result  =0
+        if Z_score:
+            
+            Z_train = X_train.copy()
+            mean_train = Z_train[col].mean()
+            std_train = Z_train[col].std()
+            g(f" - Train 데이터의 평균 : {mean_train:.2f}, 표준편차 :{std_train:.2f}")
+            g(f" - 임계값 설정 : threshold ={threshold}" )
+            g(" - Train 데이터로 Z점수 계산 및 이상치 제거 ")
+            Z_train[f'z_score_{col}'] = (Z_train[col] - mean_train)/std_train 
+            if scipy_use :
+                print(yellow(" -- zscore 를 직접계산합니다."))
+                train_no_outliers = Z_scipy_train[Z_scipy_train[f'z_score_{col}'].abs() <=threshold]
+                train_no_outliers = train_no_outliers.drop(f'z_score_{col}', axis =1)
+            else:        
+                print(yellow(" -- zscore 를 계산하기 위해 scipy stat 라이브러리를 사용합니다."))
+                train_no_outliers = Z_train[Z_train[f'z_score_{col}'].abs() <=threshold]
+                train_no_outliers = train_no_outliers.drop(f'z_score_{col}', axis =1)
+            
+            print(yellow(f" - train no outliers shape:  {train_no_outliers.shape}/ {X_train.shape}"))
+            result = train_no_outliers
+        elif IQR:
+            print(yellow(" - InterQuantile Range 방식을 사용하여 이상치를 탐지합니다. "))
+            Z_scipy_train  =X_train.copy()
+            Z_scipy_train[f'z_score_{col}'] = stats.zscore(Z_scipy_train[col])
+            Q1 = X_train[col].quantile(0.25)
+            Q3 = X_train[col].quantile(0.75)
+            IQR = Q3 - Q1
+            lower_bound = Q1 - 1.5 * IQR
+            upper_bound = Q3 + 1.5 * IQR
+            print(yellow(f" - IQR탐지결과 -> {col}열의  lower {lower_bound}, upper : {upper_bound}, Q1:{Q1}, Q3:{Q3}, IQR:{IQR}"))
+            lower_outliers = X_train[X_train[col]< lower_bound]
+            upper_outliers = X_train[X_train[col]> upper_bound]
+            num_lower_outliers = len(lower_outliers)
+            num_upper_outliers = len(upper_outliers)
+            y_(f" - Number of lower outliers in '{col}' column: {num_lower_outliers}")
+            y_(f" - Number of upper outliers in '{col}' column: {num_upper_outliers}")
+            result = 0
+            
+            y_(f" - aquantile 함수를 활용한 IQR 이상치 제거 결과")
+            train_no_outliers_iqr = X_train[(X_train[col] >= lower_bound) & (X_train[col]<=upper_bound)]
+            y_((f" - train on outliers shape: {train_no_outliers_iqr.shape}"))
+            g( "- 이상치 제거후 boxplot 확인 ")
+            plt.figure(figsize = (7,3))
+            plt.boxplot(train_no_outliers_iqr[col],vert=False)
+            plt.title(f"Box plot for Featrue {col} (AFTER IQR outlier 제거)")
+            plt.show()
+            result = train_no_outliers_iqr
+            
+        else: 
+            y_(" Zscore 나 IQR 을 선택하세요")
+            resutl  =0
+        
+        return result   
+    ## 6 : 수치형데이터의 정규화 
+    def step_6_Standardization(train_x,test_x,need_to_scale = ['age','trestbps','chol','thalach']):
+        """
+        6. 정규화 를 진행합니다. 
+        >> train_x_scaled_df,test_x_scaled_df = DataPreprocessing.step_6_Standardization(train_x,test_x,need_to_scale = ['age','trestbps','chol','thalach'])
+        """
+        g(f"7. {need_to_scale} 칼럼의 정규화를 진행합니다 ")
+        import pandas as pd
+        import matplotlib.pyplot as plt, seaborn as sns
+        from sklearn.preprocessing import StandardScaler
+        
+        scaler = StandardScaler()
+        train_x_scaled = scaler.fit_transform(train_x[need_to_scale])
+        test_x_scaled = scaler.transform(test_x[need_to_scale] )
+        train_x_scaled_df = pd.DataFrame(train_x_scaled, columns =need_to_scale)
+        test_x_scaled_df = pd.DataFrame(test_x_scaled, columns = need_to_scale)
 
+        gd("","- 스케일링후 데이터 확인", train_x_scaled_df)
+        for feature in train_x_scaled_df.columns:
+            plt.figure(figsize = (8,3))
+            plt.subplot(1,2,1)
+            sns.histplot(train_x_scaled_df[feature], kde = True, color= 'skyblue')
+            plt.title(f"Distribution of scaled {feature} ")
+            plt.subplot(1,2,2)
+            sns.boxplot(y = train_x_scaled_df[feature])
+            plt.title("Boxplot of scaled"+ feature)
+            plt.show()  
+        return train_x_scaled_df,test_x_scaled_df
+    ## 7 : 범주형데이터의 onehot encoding
+    def step_7_OHE_process(train_x,test_x,need_to_encoding = ['sex','cp','restecg','slope','thal']):
+        """
+        7. 범주형 데이터에 원핫 인코딩을 진행합니다 : 
+        >> train_x_encoded_df,test_x_encoded_df = DataPreprocessing.step_7_OHE_process(train_x,test_x,need_to_encoding = ['sex','cp','restecg','slope','thal'])
+        """
+        g(f"8.{need_to_encoding} 칼럼의 One Hot Encoding 을 진행합니다 ")
+        import pandas as pd
+        from sklearn.preprocessing import OneHotEncoder 
+        ohe = OneHotEncoder()
+        train_x_encoded = ohe.fit_transform(train_x[need_to_encoding]).toarray()
+        test_x_encoded = ohe.transform(test_x[need_to_encoding]).toarray()
+        encoded_col = ohe.get_feature_names_out(need_to_encoding)
+        y(encoded_col)
+        train_x_encoded_df = pd.DataFrame(train_x_encoded, columns=encoded_col)
+        test_x_encoded_df = pd.DataFrame(test_x_encoded,columns=encoded_col)
+        return train_x_encoded_df,test_x_encoded_df
+    ## 8 : 이상치 데이터 로그변환 
+    def step_8_Log_transform(train_x,test_x, need_to_log_trainsform='oldpeak'):
+        """
+        8. 로그 변환 이 필요한 데이터에 로그 변환을 진행합니다. : 
+        >> train_x,test_x= DataPreprocessing.step_8_Log_transform(train_x,test_x, need_to_log_trainsform=['oldpeak'])
+        """
+        g(f"8.{need_to_log_trainsform} 칼럼의 Log 변환 을 진행합니다 ")
+        
+        import pandas as pd , matplotlib.pyplot as plt, seaborn as sns, numpy as np
+        # zero_index = train_x.loc[train_x[need_to_log_trainsform]<=0,need_to_log_trainsform].index
+
+        train_x.loc[train_x[need_to_log_trainsform]==0,need_to_log_trainsform] = pd.NA
+        train_x[need_to_log_trainsform]=train_x[need_to_log_trainsform].fillna(0.0001)
+        
+        train_x[need_to_log_trainsform] =np.log(train_x[need_to_log_trainsform])
+        test_x[need_to_log_trainsform] =np.log(test_x[need_to_log_trainsform])
+        
+        # display(test_x[need_to_log_trainsform].head())
+        plt.figure(figsize=(6,3))
+        plt.title(f"{need_to_log_trainsform} feature 의 log 변환후 분포")
+        ax = sns.histplot(train_x[need_to_log_trainsform], kde= True, color = 'yellow')
+        plt.show()
+        
+        return train_x, test_x
+    
+    ## 기타
+    def key_selector(data_dict,num=0, file_list_show = False, df_info_show= False,df_graph_show=False):
+        """
+            - Description : data가 들어있는 dictionary 파일을 순서대로 선택해서 출력함 
+                그리고 딕셔너리에 있는 df key 를 출력하고 사용자가 몇번째 데이터를 호출했는지 알려줌. 
+            - 예시 : 
+            - update 2024.09.11 AM 10:50 by pdg
+                - 출력되는거 보기싫어서 기능 만듬. 
+        """
+        from IPython.display import display, HTML
+        data_name= sorted(data_dict.keys())[num]
+        i = num
+        df = data_dict[data_name]
+        data_num= sorted(data_dict.keys())[i]
+        if df_info_show:
+            print(green("◎  "+f"{data_num}"+"--"*(100-(len(data_num)//2)) ,True))
+            print(r_g(f"-Data info : ",True))
+            df.info()
+            # 화면 가운데 정렬하여 출력
+            print(yellow(f"-DataFrame.head : ",True))
+            display(df.head(3))
+            print(yellow(f"-DataFrame.tail : ",True))
+            display(df.tail(3))
+            print(yellow("-Random sample Watching(7) : ",True))
+            display(df.sample(7))
+            print(r_g(f"-DataFrame Describtion:",True))
+            display(df.describe())
+            if df_graph_show:
+                DataPreprocessing.plotSetting(pltStyle='default')
+                DataPreprocessing.dataInfo2(DataPreprocessing.key_selector(data_dict,i))
+            print(blue("--"*100))
+        if file_list_show:
+            for order,i in enumerate(sorted(data_dict.keys())):
+                print(r_g(f"\t{order} 번째 : {i}"))
+                print(r_g(f"\t{num}번째 데이터: {data_name} "))
+                    
+        return data_dict[data_name]
+    
+    ### training Set Analysis Functions( 정리 필요)
     def quantile_dist_for_binary_output(train, target_col="Outcome"):
         print(yellow("*이진 분류 output 일 경우에 한하여 모든 칼럼에서의 output 비율을 사분위 단위로 보는 히스토그램을 플랏합니다"))
         import matplotlib.pyplot as plt
@@ -624,7 +1033,6 @@ class DataPreprocessing(Basic):
             plt.tight_layout()
             plt.show()
     
-
     def feeature_outlier_graph(train, target_col = "Outcome"):
         print(yellow("*이상치를 찾아보자"))
         import matplotlib.pyplot as plt
@@ -758,108 +1166,6 @@ class DataPreprocessing(Basic):
         print(colored_text("  - ◎ matplot graph set complete",'blue',bold=True))
         # print(rainbow_green(f"✻✻✻✻______{imo*1} {Title} {imo*1}______✻✻✻✻",True))
 
-    def dataInfo2(df, replace_Nan=False, PrintOutColnumber = 0,nanFillValue=0, graphPlot=True):
-        ### Description  : 새운 데이터 정보 까기 함수
-        import pandas as pd
-        column_count = len(df.columns)
-        row_count = len(df.index)
-        nul_count  = df.isnull().sum().sum()
-        value_kind_limit =10
-        under_limit_columns =[]
-        if PrintOutColnumber ==0 :
-            PrintOutColnumber = column_count
-        print(yellow(f" ◎ Column  : {column_count} 개 "))
-        for num,i in enumerate(df.columns.tolist()):
-            if num%5 != 0: 
-                print(rainbow_orange(f"   {i}"), end=", ")
-            else:
-                print(rainbow_orange(f"\n   {i}"), end=", ")
-        else:print("")
-        print(yellow(f" ◎ Row size    : {row_count} 개"))
-        print(yellow(f" ◎ Null count   : {nul_count} 개"))
-        
-        
-        for idx, col in enumerate(df.columns):
-            if df[f"{col}"].isnull().sum():
-                print(f"   => {idx}번째.[{col}]컬럼 : ",f"null {df[f'{col}'].isnull().sum()} 개,\t not null {df[f'{col}'].notnull().sum()} 개")
-                ## Null data fill
-                if replace_Nan : ## nan 을 0 으로 대체 
-                    df[col].fillna(value=nanFillValue, inplace=True)  
-        print(yellow(" ◎ 칼럼별 데이터 중복체크"))
-
-        for idx, col in enumerate(df.dtypes.keys()):
-            value_counts = df[col].value_counts()
-            under_limit_columns.append(col)
-            print(yellow(f"   □ {idx+1}번째 칼럼 \" {col}\"  타입 {df.dtypes[col]})"),\
-                            red(f"\n    {len(df[col].unique())}"),\
-                            green(f"\t/{len(df[col])} ")+ "\t[uniq/raw]",\
-            )
-            
-            ### Value count 값 분포 확인
-            check_df = pd.DataFrame(
-                    {
-                        f'\"{col}\" 칼럼의 중복값': value_counts.index.tolist(),
-                        '개수분포': value_counts.values.tolist()
-                    },
-                    index=range(1, len(value_counts) + 1)
-    )
-
-            df_display_centered(check_df.head(10))
-            
-            # 그래프 생성
-            import matplotlib.pyplot as plt
-            import seaborn as sns
-            
-            if len(check_df.index) <10 :
-                plt.figure(figsize=(8, 6))  # 그래프 크기 설정
-                labels = value_counts.index.tolist()
-                for i, label in enumerate(labels):
-                    # label을 문자열로 변환
-                    label = str(label)
-                    if len(label) > 10:
-                        labels[i] = label[:10] + "..."
-                colors = sns.color_palette("pastel", len(value_counts.values)) 
-                # 퍼센트와 실제 수치 함께 표시
-                def make_autopct(values):
-                    def my_autopct(pct):
-                        total = sum(values)
-                        val = int(round(pct * total / 100.0))
-                        return f'{pct:.1f}% ({val:d})'
-                    return my_autopct
-
-                plt.pie(value_counts.values, labels=labels, autopct=make_autopct(value_counts.values), startangle=90, colors=colors)
-                plt.title(f"{col} 컬럼 값 분포 (파이 차트)", fontsize=13)
-                plt.axis('equal')  # 파이 차트를 원형으로 유지
-                plt.show()  # 그래프 출력
-                if graphPlot :DataPreprocessing.column_hist(df,col)
-            else:
-                plt.figure(figsize=(14, 4))  # 그래프 크기 설정
-                sns.barplot(x=value_counts.index, y=value_counts.values, palette="viridis") 
-                plt.title(f"{col} 컬럼 값 분포",fontsize=13)  # 그래프 제목 설정
-                # x축 레이블 길이가 10 글자 이상이면 ...으로 표현
-                for label in plt.gca().get_xticklabels():
-                    label = str(label)
-                    if len(label) > 10:
-                        label = label[:10] + "..."  # 변경
-                        # label.set_text(label[:10] + "...")
-                plt.ylabel("개수")  # y축 레이블 설정
-                plt.xticks(rotation=45)  # x축 레이블 회전
-                plt.tight_layout()  # 레이블 간 간격 조정
-                plt.show()  # 그래프 출력
-                if graphPlot :DataPreprocessing.column_hist(df,col)
-
-        else: 
-            print(red("\t[RESULT]"),"🙀🙀🙀"*10)
-            print(yellow(f"\t🟦{value_kind_limit}개이하의 값 종류를 가지는 칼럼 "))
-            # print(red(str(under_limit_columns)))
-            for col in under_limit_columns:
-                print("\t\t-",yellow(f"{col}:{len(df[col].unique())}: {df[col].unique().tolist()}"))
-            else:
-                
-                print("\t",red(f"총 {len(under_limit_columns)}개"))
-                print(rainbow_cyan(" ---- data frame 의 정보 조사 완료 -----}",True))
-                return under_limit_columns
-    
     def column_hist(df,col):
         import pandas as pd
         import matplotlib.pyplot as plt
@@ -1196,6 +1502,76 @@ class ModelTest:
     # 예시 데이터 (training_table과 target_table이 이미 존재한다고 가정)
     # training_table = pd.DataFrame(...)
     # target_table = pd.DataFrame(...)
+    
+    def __str__(self):
+        return yellow(f"""
+    ** 순서를 따라서 모델테스트를 해보세요! **
+    
+    1. 분류모델일 경우 
+                - RF test : submission = ModelTest.RandomForestClassifierModel(train_x,train_y, test_x,submission,target_col='target')
+                - 저장     :submission.to_csv("./심장질환예측/submission_rf.csv",index=False)
+                - XGB test : submission = ModelTest.XGBoostClassifierModel(train_x,train_y, test_x,submission,target_col='target')
+                - 저장     :submission.to_csv("./심장질환예측/submission_xgb.csv",index=False)
+    
+    """)
+    ## 분류 모델 
+    def RandomForestClassifierModel(train_x,train_y, test_x,submission,target_col='target'):
+        g("11. RandomForest Classification model check")
+        from sklearn.model_selection import train_test_split
+        X_train , X_valid , y_train, y_valid = train_test_split(train_x,train_y, test_size=0.3, random_state=42)
+        from sklearn.ensemble import RandomForestClassifier
+        from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+
+        test_model_rf = RandomForestClassifier(random_state=42)
+        test_model_rf_hyper = RandomForestClassifier(n_estimators = 150, max_depth= 12, min_samples_split =2, random_state= 42 )
+
+        test_model_rf.fit(X_train,y_train)
+        test_model_rf_hyper.fit(X_train,y_train)
+        test_model_rf_hyper_pred = test_model_rf_hyper.predict(X_valid)
+        
+        g("   *** 랜덤 포래스트 모델 성능 지표")
+        accuracy_RF = accuracy_score(y_valid,test_model_rf_hyper_pred)
+        precision_RF =precision_score(y_valid,test_model_rf_hyper_pred)
+        recall_RF = recall_score(y_valid,test_model_rf_hyper_pred)
+        f1_RF = f1_score(y_valid,test_model_rf_hyper_pred)
+        print(yellow("  Accuracy :"),accuracy_RF)
+        print(yellow("  Precision :"),precision_RF)
+        print(yellow("  Recall"),recall_RF)
+        print(yellow("  F1-score :"),f1_RF)
+        
+        
+        final_model = test_model_rf_hyper
+        final_model.fit(train_x,train_y)
+        final_predict = final_model.predict(test_x)
+        submission[target_col]= final_predict
+        return submission 
+    
+    def XGBoostClassifierModel(train_x,train_y,test_x,submission, target_col='target'):
+        g("11. XGBoost Classification model check")
+        from sklearn.model_selection import train_test_split
+        X_train , X_valid , y_train, y_valid = train_test_split(train_x,train_y, test_size=0.3, random_state=42)
+        from xgboost import XGBClassifier
+        from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+
+        test_model_xgb = XGBClassifier(random_state=42)
+        test_model_xgb.fit(X_train,y_train)
+        test_model_xgb_pred= test_model_xgb.predict(X_valid)
+        g("   *** XGBoost 모델 성능 지표")
+        accuracy_RF = accuracy_score(y_valid,test_model_xgb_pred)
+        precision_RF =precision_score(y_valid,test_model_xgb_pred)
+        recall_RF = recall_score(y_valid,test_model_xgb_pred)
+        f1_RF = f1_score(y_valid,test_model_xgb_pred)
+        print(yellow("  Accuracy :"),accuracy_RF)
+        print(yellow("  Precision :"),precision_RF)
+        print(yellow("  Recall"),recall_RF)
+        print(yellow("  F1-score :"),f1_RF)
+        
+        final_model = test_model_xgb
+        final_model.fit(train_x,train_y)
+        final_predict = final_model.predict(test_x)
+        submission[target_col]= final_predict
+        return submission 
+    
 
     # 데이터 분할
     def real_pred_compare(predictions,test_target,test_input):
@@ -1457,6 +1833,10 @@ class ModelTest:
         predictions = multi_output_regressor_rf.predict(test_input)
         ModelTest.real_pred_compare(predictions, test_target, test_input)
 
+
+    ### 분류 모델 
+    
+
 class CustomList:
     ## 객체를 List 처럼 쓰자. 
     def __init__(self,data): ## 객체()
@@ -1555,13 +1935,20 @@ def colored_text(text, color='default', bold=False):
 def blue(str, b=False):return colored_text(str, 'blue', bold=b)
 def yellow(str, b=False):return colored_text(str, 'yellow', bold=b)
 def y(string):
-    if type(string) != type(""):
+    if type(string) != type("ss"):
         string= str(string)
-    print(yellow(string))
+        print(yellow(string))
+    else: print(yellow(string))
+def y_(string):
+    if type(string) != type("ss"):
+        string= str(string)
+        print(yellow(string))
+    else: print(yellow(string))
 def g(string):
-    if type(string) != type(""):
+    if type(string) != type("ss"):
         string= str(string)
-    print(green(string))
+        print(green(string))
+    else: print(green(string))
 def red(str, b=False):return colored_text(str, 'red', bold=b)
 def green(str, b=False):return colored_text(str, 'green', bold=b)
 def magenta(str, b=False):return colored_text(str, 'magenta', bold=b)
@@ -1613,12 +2000,12 @@ def gd(order,exp , df ,heading=3):
     from IPython.display import display
     g(f"{order}. {exp} "); 
     if heading ==0:
-        g(f"   - Displayed rows= {len(df)}/{len(df)}")
+        y(f"   - Displayed rows= {len(df)}/{len(df)}")
         # if int(df.isna().sum()) !=0:
         #     g(f"   Null included rows: {df.isnull().sum()}")
         df_display_centered(df)
     else:
-        g(f"   - Displayed rows= {heading}/{len(df)}")
+        y(f"   - Displayed rows= {heading}/{len(df)}")
         # if int(df.isna().sum()) !=0:
         #     g(f"   Null included rows: {df.isnull().sum()}")
         df_display_centered(df.head(heading))

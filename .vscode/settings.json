@@ -1,0 +1,5 @@
+{
+    "python.analysis.extraPaths": [
+        "./개발자를위한머신러닝"
+    ]
+}
