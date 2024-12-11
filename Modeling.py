@@ -1,5 +1,5 @@
-
-# 12.2 :...something, Ridge update, kfold update
+# 12.5 : lgbm , stacking classifier..
+# 12.2 :...something, Ridge update, kfold update..
 #12.1 : class process time, system update
 ## 2024.11.30 : regresision xgb rf update,..
 ## 2024.11.29 : yd, dfdisplay updatae
@@ -70,7 +70,7 @@ def make_plot(y_true, pred):
     plt.legend()
     plt.show()
 #1. 기본적인 LogisticRegression 분류 model 을 검증 데이터를 통해 만듬. 
-def Modeling_1_LogisticRegression(train_x,train_y,test_x):
+def Modeling_1_LogisticRegression(train_x,train_y,test_x,optimal_tunnig =False):
     """
     # #기본적인 LogisticRegression 분류 model 을 검증 데이터를 통해 만듬. 
     ## lrc_model, lr_pred = Modeling_1_LogisticRegression(X_train,y_train,X_valid,y_valid)
@@ -96,47 +96,49 @@ def Modeling_1_LogisticRegression(train_x,train_y,test_x):
     y_(f" -로지스틱 회귀 분류 모델 NMAE: {score}")
     y_(f" -로지스틱 회귀 분류 모델 ACC: {100*acc:.2f}%")
     
-    
-    y_(" - kfold 모델 파라미터 튜닝 ")
-    lr_model_dict = {
-        'model_iblinear' : LogisticRegression(max_iter=180,solver='liblinear'),
-        'model_lbfgs' : LogisticRegression(max_iter=180,solver='lbfgs'),
-        'model_newton_cg' : LogisticRegression(max_iter=180,solver='newton-cg'),
-        'model_newton_cholesky' : LogisticRegression(max_iter=180,solver='newton-cholesky'),
-        'model_sag' : LogisticRegression(max_iter=180,solver='sag'),
-        'model_saga': LogisticRegression(max_iter=180,solver='saga')
-    }
-    import numpy as np
-    from sklearn.model_selection import KFold,cross_val_score
-    kf = KFold(n_splits= 5, shuffle=True, random_state =42)
-    # C cadidates
-    c_list = [10e-7, 10e-6, 10e-5, 10e-4,10e-3,10e-2, 10e-3,1, 10,10^2]
-    scores_list =[]
-    model_score_list = []
-    model_list=[]
-    for model in lr_model_dict.keys():
-        for c_val in c_list:
-            lr_model_dict[model].C= c_val
-            scores = cross_val_score(lr_model_dict[model],X_train,y_train, scoring = 'accuracy', cv=kf)
-            scores_list.append(np.mean(scores))
-        print(yellow(f" - {model} performance : {str(scores_list)}"))
-        best_score = max(scores_list)
-        model_score_list.append(best_score)
-        model_list.append(model)
-        optimal_C = c_list(np.argmax(scores_list))
-        y(f" - Opimal C : {optimal_C}")
-        import matplotlib.pyplot as plt
-        plt.figure(figsize=(10,6))
-        plt.plot(c_list, scores_list, marker= 'o', linestyle= '--')
-        plt.xlabel(" C")
-        plt.ylabel(" Cross-Validation Score(Accuracu)")
-        plt.title(f" C vs. Accuracy Score of {model}")
-        plt.xscale('log')
-        plt.show()
-    best_model = model_list[np.argmax(model_score_list)]
-    best_model_score = np.max(model_score_list)
-    final_model = lr_model_dict[best_model]
+    if optimal_tunnig:
         
+        y_(" - kfold 모델 파라미터 튜닝 ")
+        lr_model_dict = {
+            'model_iblinear' : LogisticRegression(max_iter=180,solver='liblinear'),
+            'model_lbfgs' : LogisticRegression(max_iter=180,solver='lbfgs'),
+            'model_newton_cg' : LogisticRegression(max_iter=180,solver='newton-cg'),
+            'model_newton_cholesky' : LogisticRegression(max_iter=180,solver='newton-cholesky'),
+            'model_sag' : LogisticRegression(max_iter=180,solver='sag'),
+            'model_saga': LogisticRegression(max_iter=180,solver='saga')
+        }
+        import numpy as np
+        from sklearn.model_selection import KFold,cross_val_score
+        kf = KFold(n_splits= 5, shuffle=True, random_state =42)
+        # C cadidates
+        c_list = [10e-7, 10e-6, 10e-5, 10e-4,10e-3,10e-2, 10e-3,1, 10,10^2]
+        scores_list =[]
+        model_score_list = []
+        model_list=[]
+        for model in lr_model_dict.keys():
+            for c_val in c_list:
+                lr_model_dict[model].C= c_val
+                scores = cross_val_score(lr_model_dict[model],X_train,y_train, scoring = 'accuracy', cv=kf)
+                scores_list.append(np.mean(scores))
+            print(yellow(f" - {model} performance : {str(scores_list)}"))
+            best_score = max(scores_list)
+            model_score_list.append(best_score)
+            model_list.append(model)
+            optimal_C = c_list[np.argmax(scores_list)]
+            y(f" - Opimal C : {optimal_C}")
+            # import matplotlib.pyplot as plt
+            # plt.figure(figsize=(10,6))
+            # plt.plot(c_list, scores_list, marker= 'o', linestyle= '--')
+            # plt.xlabel(" C")
+            # plt.ylabel(" Cross-Validation Score(Accuracu)")
+            # plt.title(f" C vs. Accuracy Score of {model}")
+            # plt.xscale('log')
+            # plt.show()
+        best_model = model_list[np.argmax(model_score_list)]
+        best_model_score = np.max(model_score_list)
+        final_model = lr_model_dict[best_model]
+        
+    final_model =model
     # 12. 모델 검증 시각화 
     final_model.fit(train_x,train_y)
     lrc_prd =final_model.predict(test_x)
@@ -305,21 +307,139 @@ def Modeling_6_VotingClassifier(best_models,train_x,train_y,test_x,voting_ ='har
     start_time = record_processing_time(start=True)
     print(r_cy("\n======================= Modeling_6_VotingClassifier ======================="))
     from sklearn.ensemble import VotingClassifier
+    from sklearn.ensemble import BaggingClassifier
+    from sklearn.ensemble import DecisionTreeClassifier
+    from sklearn.ensemble import RidgeClassifier
+    from sklearn.ensemble import XGBClassifier
+    from sklearn.ensemble import LGBMClassifier
+    from sklearn.ensemble import GradientBoostingClassifier
+    from sklearn.ensemble import SVC
+    from sklearn.ensemble import RidgeClassifierCV
+    from sklearn.ensemble import RandomForestClassifier
+    
     y(f" - Voting Classifier {voting_} voting model( rfc,gbc,etc) 을 생성합니다.")
     estimators = [
         ('rfc', best_models[0]),
         ('gbc', best_models[1]),
-        ('etc', best_models[2])
+        ('etc', best_models[2]),
+        ('bag', BaggingClassifier(random_state=42)),
+        ('dt', DecisionTreeClassifier(random_state=42)),
+        ('rc', RidgeClassifier(random_state=42)),
+        ('xgb', XGBClassifier(random_state=42)),
+        ('lgb', LGBMClassifier(random_state=42)),
+        ('gb', GradientBoostingClassifier(random_state=42)),
+        ('svc', SVC(random_state=42)),
+        ('rcc', RidgeClassifierCV()),
+        ('rf', RandomForestClassifier(random_state=42))
     ]
+    
+    ## hard voting 은  rf 와 xgboost 에 가중을 준다. 
     if voting_=='hard':
-        model = VotingClassifier(estimators= estimators , voting=voting_)
+        model = VotingClassifier(estimators= estimators , voting=voting_,
+                                 weights= [1,1,1,1,1,1,2,1,1,1,1,2])
     if voting_ == 'soft':
         model = VotingClassifier(estimators= estimators , voting=voting_)
     model.fit(train_x,train_y)
-    
-    
+    from sklearn.ensemble import StackingClassifier
+
     record_processing_time(end=True, started_time= start_time)
     return model ,model.predict(test_x)
+
+
+def Modeling_6_StackingClassifier(best_models,train_x,train_y,test_x,voting_ ='hard'):
+    """
+    """
+    start_time = record_processing_time(start=True)
+    print(r_cy("\n======================= Modeling_6_StackingClassifier ======================="))
+    from sklearn.ensemble import VotingClassifier
+    from sklearn.ensemble import BaggingClassifier
+    from sklearn.ensemble import DecisionTreeClassifier
+    from sklearn.ensemble import RidgeClassifier
+    from sklearn.ensemble import XGBClassifier
+    from sklearn.ensemble import LGBMClassifier
+    from sklearn.ensemble import GradientBoostingClassifier
+    from sklearn.ensemble import SVC
+    from sklearn.ensemble import RidgeClassifierCV
+    
+    import numpy as np
+    from sklearn.ensemble import StackingClassifier
+    from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, ExtraTreesClassifier
+
+    rf = RandomForestClassifier(n_estimators = 10)
+    gb = GradientBoostingClassifier(n_estimators = 10)
+    et = ExtraTreesClassifier(n_estimators = 10)
+    from sklearn.model_selection import train_test_split
+    X_train,X_valid, y_train, y_valid = train_test_split(train_x,train_y,random_state=42,test_size=0.3)
+    # 학습 데이터로 모델 학습
+    rf.fit(X_train, y_train)
+    gb.fit(X_train, y_train)
+    et.fit(X_train, y_train)
+
+    # 스태킹 학습에 사용할 데이터
+    pred1 = rf.predict_proba(X_valid)
+    pred2 = gb.predict_proba(X_valid)
+    pred3 = et.predict_proba(X_valid)
+
+    # 스태킹 예측에 사용할 데이터
+    test_pred1 = rf.predict_proba(test_x)
+    test_pred2 = gb.predict_proba(test_x)
+    test_pred3 = et.predict_proba(test_x)
+
+    # shape = (학습/ 테스트데이터의 개수, 모델의 수) 
+    train_stack = np.column_stack((pred1,pred2,pred3))
+    test_stack = np.column_stack((test_pred1,test_pred2,test_pred3))
+
+    print(train_stack)
+    print(train_stack.shape)
+    # 메타 모델 정의 및 학습
+    meta_model = RandomForestClassifier(n_estimators = 10, random_state = 42)
+    meta_model.fit(train_stack, y_valid)
+
+    # 학습된 메타 모델을 사용하여 최종 예측 수행
+    final_pred = meta_model.predict(test_stack)
+    from sklearn.ensemble import BernoulliNB
+    from sklearn.ensemble import SGDClassifier
+    from sklearn.ensemble import AdaBoostClassifier
+    from sklearn.ensemble import KNeighborsClassifier
+
+    estimators = [
+        ('rfc', best_models[0]),
+        ('gbc', best_models[1]),
+        ('etc', best_models[2]),
+        ('bag', BaggingClassifier(random_state=42)),
+        ('dt', DecisionTreeClassifier(random_state=42)),
+        ('rc', RidgeClassifier(random_state=42)),
+        ('xgb', XGBClassifier(random_state=42)),
+        ('lgb', LGBMClassifier(random_state=42)),
+        ('gb', GradientBoostingClassifier(random_state=42)),
+        ('svc', SVC(random_state=42)),
+        ('rcc', RidgeClassifierCV()),
+        ('rf', RandomForestClassifier(random_state=42))
+        
+        ("naive_bayes", BernoulliNB()),
+        ("SGD", SGDClassifier(random_state=42, n_jobs=-1)),
+        ("rfc", RandomForestClassifier(random_state=42, n_jobs=-1)),
+        ("ada", AdaBoostClassifier(random_state=42)),
+        ("lgbm", LGBMClassifier(random_state=42)),
+        ("lgbm2", LGBMClassifier(n_estimators=80, random_state=42)),
+        ("xgb", XGBClassifier(random_state=42)),
+        ("knc1", KNeighborsClassifier()),
+        ("knc2", KNeighborsClassifier(n_neighbors=4))
+    ]
+    meta_model = RandomForestClassifier(n_estimators = 10, random_state = 42)
+
+    stacked_model = StackingClassifier(estimators = estimators,
+                                    final_estimator = meta_model,
+                                    cv = 3)
+
+    # train_x, train_y는 전체 train 데이터를 의미합니다.
+    stacked_model.fit(train_x, train_y)
+    stack_pred = stacked_model.predict(test_x)
+
+    record_processing_time(end=True, started_time= start_time)
+    return stacked_model, stack_pred
+
+
 #7. 기타
 ##  RF model 생성 -> model pred
 def ModelTest_RandomForestClassifierModel(train_x,train_y, test_x,submission,target_col='target',binary_target =False):
@@ -400,6 +520,69 @@ def ModelTest_XGBoostClassifierModel(train_x,train_y,test_x,submission, target_c
     final_predict = final_model.predict(test_x)
     submission[target_col]= final_predict
     return final_model,final_predict 
+
+
+## LGBM model 생성.
+def Modeling_1_LGBM_clssifier(train_x,train_y,test_x):
+    """
+    ## lgbm_model, lgbm_prd= Modeling_1_LGBM_clssifier(train_x,train_y,test_x)
+    """
+    start_time = record_processing_time(start=True)
+    print(r_cy("\n======================= Modeling_1_LGBM_clssifier ======================="))
+    from sklearn.model_selection import train_test_split
+    X_train,X_valid, y_train,y_valid =train_test_split(train_x,train_y,test_size=0.3,random_state=42)
+    import warnings; warnings.filterwarnings('ignore')
+
+    from lightgbm import LGBMClassifier
+    from lightgbm.callback import early_stopping, log_evaluation
+
+    tuning_lgbm = LGBMClassifier(n_estimators = 300, max_depth =6, random_state=42,verbose=-1)
+    early_stop = early_stopping(stopping_rounds =5)
+    log_eval = log_evaluation(period =20)
+    tuning_lgbm.fit(
+        X_train,y_train,
+        eval_set = [(X_valid,y_valid)],
+        eval_metric = 'multi_logloss',
+        callbacks =[early_stop, log_eval],
+        
+    )
+    y_(f" - tunned LGBM ACC:{tuning_lgbm.score(X_valid,y_valid)}")
+    import lightgbm as lgb
+    import matplotlib.pyplot as plt
+
+
+    try:
+        
+        loss_plot = lgb.plot_metric(tuning_lgbm.evals_result_, metric='multi_logloss')
+    except:
+        print("eval error")
+   
+    
+    import lightgbm as lgbimport 
+    try:
+        loss_plot = lgb.plot_metric(tuning_lgbm.evals_result_,metric= 'multi_logloss')
+    except:
+        print("eval error2")
+    importance_plot = lgb.plot_importance(tuning_lgbm.booster_, max_num_features=10)
+    plt.show()
+    
+    pred= tuning_lgbm.predict(X_valid)
+    logloss_pred = tuning_lgbm.predict_proba(X_valid)
+    # print(pred)
+    # print(logloss_pred)
+    
+    y_pred = tuning_lgbm.predict(X_valid)
+    acc = ACC(y_valid, y_pred)
+    score = NMAE(y_valid,y_pred)
+    y_(f" - LGBM 분류 모델 NMAE: {score}")
+    y_(f" - LGBM 분류 모델 ACC: {100*acc:.2f}%")
+    final_model =tuning_lgbm
+    # 12. 모델 검증 시각화 
+    final_model.fit(train_x,train_y)
+    lgbm_prd =final_model.predict(test_x)
+    
+    record_processing_time(end=True, started_time= start_time)
+    return final_model, lgbm_prd
 
 ##-------------------------[END]-----------------------------------------##
 
@@ -857,6 +1040,60 @@ def Modeling_1_XGBoost_regresssion(train_x, train_y, test_x,mult_class =False, s
     
     return final_model, predictions
 
+def Modeling_1_LGBM_regression(train_x,train_y,test_x):
+    """
+    ## lgbm_model, lgbm_prd= Modeling_1_LGBM_regression(train_x,train_y,test_x)
+    """
+    start_time = record_processing_time(start=True)
+    print(r_cy("\n======================= Modeling_1_LGBM_clssifier ======================="))
+    from sklearn.model_selection import train_test_split
+    X_train,X_valid, y_train,y_valid =train_test_split(train_x,train_y,test_size=0.3,random_state=42)
+    from lightgbm import LGBMRegressor
+    import warnings; warnings.filterwarnings('ignore')
+    from lightgbm.callback import early_stopping, log_evaluation
+
+    tuning_lgbm = LGBMRegressor(
+                    n_estimators = 300, 
+                    max_depth =8, 
+                    random_state=42,
+                    verbose=-1,
+                    learning_rate =0.01)
+    # 조기 종료 및 학습 로그 출력 콜백 정의
+    early_stop = early_stopping(stopping_rounds =15)
+    log_eval = log_evaluation(period =20)
+    tuning_lgbm.fit(
+        X_train,y_train,
+        eval_set = [(X_valid,y_valid)],
+        eval_metric = 'rmse',
+        callbacks =[early_stop, log_eval],
+    )
+    
+    
+    y_(f" - tunned LGBM 결정계수 :{tuning_lgbm.score(X_valid,y_valid)}")
+
+    import lightgbm as lgb
+    import matplotlib.pyplot as plt
+    loss_plot = lgb.plot_metric(tuning_lgbm.evals_result_, metric='rmse')
+    plt.show()
+    
+    import lightgbm as lgbimport 
+    loss_plot = lgb.plot_metric(tuning_lgbm.evals_result_,metric= 'rmse')
+    plt.show()
+    importance_plot = lgb.plot_importance(tuning_lgbm.booster_, max_num_features=5)
+    plt.show()
+    
+    # pred= tuning_lgbm.predict(X_valid)
+    # logloss_pred = tuning_lgbm.predict_proba(X_valid)
+    # y_pred = tuning_lgbm.predict(X_valid)
+    
+    ## 통합 학습
+    final_model =tuning_lgbm
+    final_model.fit(train_x,train_y)
+    lgbm_prd =final_model.predict(test_x)
+    
+    record_processing_time(end=True, started_time= start_time)
+    return final_model, lgbm_prd
+
 
 ## 2 : GRID SEARCH
 def Modeling_2_GridSearch_reg_model(train_x, train_y,test_x):
@@ -908,11 +1145,16 @@ def Modeling7_reg_model_start(train_x, train_y, test_x):
 
     #XGBoost regression model
     xgb_model , xgb_prediction= Modeling_1_XGBoost_regresssion(train_x, train_y, test_x,mult_class =False, save =False)
+
+    lgbm_model, lgbm_prd= Modeling_1_LGBM_regression(train_x,train_y,test_x)
+
+    
     reg_pred_dict ={
         "lr":lr_prediction,
         # "knn":knn_prediction,
         "rf":rf_prediction,
-        "xgb":xgb_prediction
+        "xgb":xgb_prediction,
+        "lgbm":lgbm_prd
     }
     record_processing_time(end=True, started_time= start_time)
     return reg_pred_dict
@@ -944,12 +1186,16 @@ def Modeling7_clf_model_start(target_type,train_x, train_y, test_x):
     vc_h, vc_h_pred = Modeling_6_VotingClassifier(best_models,train_x,train_y,test_x,voting_='hard')
     vc_s,vc_s_pred = Modeling_6_VotingClassifier(best_models,train_x,train_y,test_x,voting_='soft')
     
+    lgbm_model, lgbm_prd= Modeling_1_LGBM_clssifier(train_x,train_y,test_x)
+
+    
     clf_pred_dict ={
         "lrc":lrc_pred,
         "vc_h":vc_h_pred,
         "vc_s":vc_s_pred,
         "rf_s":rf_s_pred,
-        "rf_h":rf_h_pred
+        "rf_h":rf_h_pred,
+        "lgbm":lgbm_prd
     }
     record_processing_time(end=True, started_time= start_time) 
     return clf_pred_dict
@@ -985,6 +1231,7 @@ def record_processing_time(start=False, end=False, started_time =""):
     if end :
         end = time.time()
         print(r_cy(f"process time : {time.time()-started_time:.4f} sec")) # 종료와 함께 수행시간 출력
+        return end-started_time
     time.sleep(1) # 측정하고자 하는 코드 부분
     
 

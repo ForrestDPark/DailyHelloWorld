@@ -1,4 +1,4 @@
-# 12.3 qcut function update
+# 12.3 qcut function update//
 # 12.2 smote, nearmiss update
  ## 2024.12.1 scaling update, 
 ## outlier feature dist update, skewness update
@@ -24,47 +24,27 @@ class Basic:
         return red(f"Custom Func Version : {self.version} -update {self.last_update}",b=True)
     def __str__(self):
         return yellow(f"""
+    [[[ INFO ]]]
     ** 전처리 과정 순서를 따라서 데이터를 확인하세요  **
+    # Basic
+    import sys,os ; sys.path.append("./../../../../")
+    from DataPreprocessing_ import *
+    from Modeling import *
 
-    #1. Step1. 데이터 Target 균일도, 독립, 종속, 결측치  확인: 
-        > target = step_1_Raw_Taregt_EDA(train,test,submission)
-        > 
+    DataFolder = "영화 관객수"
+    id_column ='ID'
+    train,test, submission,id_column=Order_1_data_fetch(DataFolder,id_column=id_column)
+    target ,target_type,obj, data_type_df, train_x,train_y,test_x, =Order_2_EDA(train,test, submission,id_column)
 
-    2. 종속변수와 독립변수를 분할하여 train_x, train_y 를 생성 : 
-        >>train_x,train_y,test_x=  step_2_Indep_dep_val_split(train,test,target_colname= 'target', drop_test ='id')
-
-    3. 수치형 칼럼과 범주형 칼럼을 분류하기 위해서 칼럼분포를 시각화(hist, boxplot) 하고 수치형데이터 의 분포와 왜도확인: 
-        >>  step_3_0_dataInfo2(df), 
-        >>  step_3_1_numeric_column_dist_boxplot(train_x)
-        >>  step_3_2_Skewness_check(train) 
-
-    4. Target 값의 분포를 확인하여 데이터의 균일도를 확인합니다.(이진분류 타겟일 경우 적용)
-        >>  step_4_MLOutput_target_ratio(train_df, target_col="Outcome",graph_show=False)
-
-    5. Outlier 를 확인(0),사용자기준으로 걸르고 최빈값으로 대체(1), zscore, IQR 값으로 확인후 제거(2) : 
-        >>  step_5_0_Outlier_check(X_train, col='income_total') =>
-        >> train_x= step_5_1_Outlier_processing(train_x,'trestbps',over_val=170,under_val=0, replace_outlier = 'mode')
-        >> X_train =  step_5_2_Outlier_erase(X_train, col='income_total', threshold = 3, IQR=True)
-
-    6. 정규화 를 진행합니다. 
-        >> train_x_scaled_df,test_x_scaled_df =  step_6_Standardization(train_x,test_x,need_to_scale = ['age','trestbps','chol','thalach'])
-
-    7. 범주형 데이터에 원핫 인코딩을 진행합니다 : 
-        >> train_x_encoded_df,test_x_encoded_df =  step_7_OHE_process(train_x,test_x,need_to_encoding = ['sex','cp','restecg','slope','thal'])
-
-    8. 로그 변환 이 필요한 데이터에 로그 변환을 진행합니다. : 
-        >> train_x,test_x=  step_8_Log_transform(train_x,test_x, need_to_log_trainsform=['oldpeak'])
-
-    9. 정규화 된 데이터와 범주형 데이터를 병합하여 기존 train_x, test_x 에 붙입니다. 
-
-
-
-
-    기타 : 
-    - key_selector
-    - quantile_dist_for_binary_output
-    - feeature_outlier_graph
-    - pairPlot_numeric_cols
+    # Feature engineering
+    train,train_x,train_y,test_x=\
+        ORder_3_FE_by_dataType(train_x,train_y,test_x,target, data_type_df,id_column,
+                            obj_to_cat=True,
+                            obj_to_OHE=False,
+                            outl_col_binning=False,
+                            DBSCANout=False)
+    lgbm_model, lgbm_prd= Modeling_1_LGBM_regression(train_x,train_y,test_x)
+    Order_4_modeling_and_submission(DataFolder,target_type,target,submission,train_x_1, train_y_1, test_x_1)
     """)
 
 ####################################################################################################################################################################################
@@ -74,6 +54,186 @@ class Basic:
 # record_processing_time(end=True, started_time= start_time)
 
 ################################################################################################################################################
+
+def Order_1_data_fetch(DataFolder,id_column ='ID'):
+    """
+    # #Data fetch
+    ## train,test, submission,id_column=Order_1_data_fetch(DataFolder,id_column=id_column)
+    """
+    # Basic
+    import pandas as pd
+    train = pd.read_csv(f"./{DataFolder}/train.csv")
+    test = pd.read_csv(f"./{DataFolder}/test.csv")
+    submission = pd.read_csv(f"./{DataFolder}/sample_submission.csv")
+    
+    return train,test, submission,id_column
+def Order_2_EDA(train,test, submission,id_column):
+    """
+    ## target ,target_type,obj, data_type_df, train_x,train_y,test_x, =Order_2_EDA(train,test, submission,id_column)
+    """
+    # TARGET EDA
+    target ,target_type,obj,_= step_1_Raw_Taregt_EDA(train,test, submission, outlier_val =0, info_=True,id_column=id_column)
+    data_type_df=step_1_0_EDA_DataCategory(train,target,id_column=id_column)
+    
+
+    # Independent Variables(train_x) and Dependeant Variable(train_y) SPLIT
+    train_x,train_y,test_x= step_2_1_Indep_dep_val_split(train,test,target_colname= target, drop_test =id_column)
+    return target ,target_type,obj, data_type_df, train_x,train_y,test_x
+def ORder_3_FE_by_dataType(train_x,train_y,test_x,target, data_type_df,id_column,
+                           feature_balence_check =True,
+                           obj_to_cat=True,
+                           obj_to_OHE=False,
+                           outl_col_binning=False,
+                           DBSCANout=False,
+                           
+                           ):
+    """
+    # # Feature engineering 
+    ## train,train_x,train_y,test_x=ORder_3_FE_by_dataType(train_x,train_y,test_x,target, data_type_df,obj_to_cat,obj_to_OHE=False)
+    ## train,train_x,train_y,test_x=\
+    ## ORder_3_FE_by_dataType(train_x,train_y,test_x,target, data_type_df,id_column,
+    ##                       obj_to_cat=True,
+    ##                       obj_to_OHE=False,
+    ##                       outl_col_binning=False,
+    ##                       DBSCANout=False)
+    """
+    import pandas as pd
+    data_type_df=data_type_df.reset_index()
+    print(r_orange("\n⭐️ DATA TYPE CHECK ",b=True))
+    df_display_centered(data_type_df)
+    def str_extract_array(string_):
+        pattern = r"'(.*?)'"
+        import re
+        # re.findall() 함수를 사용하여 모든 일치하는 문자열을 리스트로 추출
+        matches = re.findall(pattern, string_)
+        return matches
+    
+    ## 1. NAN MISSING (nan 있으면 인코딩 안됨. )
+    if data_type_df['missing_value'][0]==1:
+        print(r_orange("\n⭐️ Nan 데이터가 있는 칼럼이 있습니다. 결측치 최빈값 대체 처리 실행 ",b=True))
+        missing_cols = str_extract_array(data_type_df['missing_cols'][0])
+        for col in missing_cols:
+            y_(f"- {col} 의 결측치 를 {train_x[col].mode()[0]}으로 대체 합니다. ")
+            train_x[col] =train_x[col].fillna( train_x[col].mode()[0])
+        
+        y_(" - 결측치 대체 후 체크")
+        display(train_x.isna().sum())
+    
+    
+    
+    ## OBJECT COL PROCESS
+    if data_type_df['obj_col'][0]==1:
+        y_(" - 문자형 칼럼이 있습니다. 수치 추출 혹은 인코딩 작업 실행")
+        
+        obj_cols = str_extract_array(data_type_df['obj_cols'][0])
+        if obj_to_OHE:
+            #범주형 데이터에 원핫 인코딩 진행
+            train_x,test_x = step_2_0_FE_OneHotEncoding(train_x,test_x,need_to_encoding = obj_cols)
+        
+        if obj_to_cat:
+            train_x[obj_cols] = train_x[obj_cols].astype('category')
+            test_x[obj_cols] = test_x[obj_cols].astype('category')
+            y("- object type column 을 category 로 전환합니다. ")
+            result = train_x.dtypes[train_x.dtypes=='category']
+            df_display_centered(result)
+    
+    
+
+    ## ZERO MISSING
+    if data_type_df['zero_missing'][0]==1:
+        print(r_orange("\n⭐️ Zero Missing Value 가 있습니다. 결측치 평균값 대체 처리 실행 ",b=True))
+        # Missing Value Process 
+        missing_cols =str_extract_array(data_type_df['zero_missing_cols'][0])
+        user_selected_zero_replace_col = []
+        if user_selected_zero_replace_col==[]:
+            print(red(" zero missing 추정 칼럼이 발견되었지만 zero 를 평균값으로 대체 하지 않습니다."))
+        
+        train_x,test_x = step_2_1_FE_MissingValueProcess(train_x,test_x,user_selected_zero_replace_col, type ="to_mean", zero_mean_nan=True)
+    
+
+    ## OULIER
+    if data_type_df['outlier'][0]==1:
+        print(r_orange("\n⭐️ outlier 가 포착되는 칼럼이 있습니다. 이상치 체크및 제거 작업 실행 ",b=True))
+        outlier_cols =str_extract_array(data_type_df['outlier_cols'][0])
+        print(outlier_cols)
+        if outl_col_binning:
+            print(r_orange("\n⭐️ outlier 가 포착되는 칼럼에 범주화를 적용합니다.  ",b=True))
+            # 등빈도 binning
+            for col in outlier_cols:
+                train_x,test_x = step_2_0_FE_Qcut_binning_categorize(train_x,train_y,test_x,col,target ,q_=6)
+        
+        if DBSCANout:
+            # 정규화 안되어있는 feature 에서 2개씩 뽑아서 아웃라이어 제거
+            train_DBSCANed_=step_5_3_Outlier_erase_DBSCAN(
+                                pd.concat([train_x,train_y],axis=1),
+                                db_eps = 0.5,
+                                db_min_sample  =5,
+                                all_case=True,
+                                outlier_erase=True)
+            train_DBSCANed_=train_DBSCANed_.drop("clusters", axis=1)
+            train_x,train_y,test_x= step_2_1_Indep_dep_val_split(train_DBSCANed_,test_x,target_colname= target, drop_test ="")
+    
+    ## REgression Problem
+    if data_type_df['target_type'][0]=="Continuous" :
+        #FEATURE 칼럼 EDA
+        y_(" Target 이 연속형 변수인 회귀 문제입니다. ")
+       
+        ## 칼럼 polynomial 생성 해보자.
+        #[FE 4] 모든 feature 상호간 곱하거나 자신을 제곱하여 칼럼을 추가
+        # train_x= step_2_0_FE_polinomial_cols(train_x)
+        # test_x= step_2_0_FE_polinomial_cols(test_x)
+
+        setp_1_Feature_EDA(pd.concat([train_x,train_y],axis=1),
+                           target,
+                           data_type_df['target_type'][0],
+                           id_column,
+                           cols_target_plt=True,
+                           pair_plot =True)
+    
+    
+    
+    
+    
+    ## TARGET BALANCE when discrete target type
+    if data_type_df['target_type'][0]!="Continuous" and data_type_df['target_valance'][0]==0:
+        train_ = pd.concat([train_x,train_y] , axis =1)
+        print((len(train_[target].value_counts().index.tolist()))) 
+        if feature_balence_check and  (len(train_[target].value_counts().index.tolist()) ==2):
+            #Target 이 2진 분류일때 해보는 짓.
+            for col in train_.drop(target, axis = 1).select_dtypes('number').columns.tolist():step_2_0_EDA_feature_balance_quantile(train_, target,col)
+        
+        print(r_orange("\n⭐️ 데이터 타겟의 수량이 불균일합니다. 균일화 작업 실행.  ",b=True))
+        ## Over sampling 실행 case 
+        try :
+            train_x_smote, train_y_smote  = step_4_1_Oversampling(train_x,train_y, smote=True,feature_select=[])
+            step_4_MLOutput_target_ratio(pd.concat([train_x_smote, train_y_smote],axis=1), target_col=target,graph_show=False)
+            train_x =train_x_smote
+            train_y= train_y_smote
+            
+        except AttributeError as e:
+            print(f"⚠️ SMOTE 적용 중 에러 발생: {e}.  원본 데이터를 사용합니다.")
+        except Exception as e: # 다른 예외도 처리할 수 있도록 추가
+            print(f"⚠️ 오버샘플링 중 예상치 못한 에러 발생: {e}. 원본 데이터를 사용합니다.")
+
+        ## Under sampling 실행 case
+        # train_x_nearmiss,train_y_nearmiss= step_4_2_UnderSampling(train_x,train_y, Nearmiss=True)
+        # step_4_MLOutput_target_ratio(pd.concat([train_x_nearmiss,train_y_nearmiss],axis=1), target_col=target,graph_show=False)
+        # train_x =train_x_nearmiss
+        # train_y= train_y_nearmiss
+    train = pd.concat([train_x,train_y],axis=1)
+    return train,train_x,train_y,test_x
+def Order_4_modeling_and_submission(DataFolder,target_type,target,submission,train_x, train_y, test_x):
+    """
+    ## Order_4_modeling_and_submission(DataFolder,target_type,target,submission,train_sc, train_y_0, test_sc)
+    """
+    import Modeling
+    if target_type=='Continuous':
+        reg_pred_dict= Modeling.Modeling7_reg_model_start(train_x, train_y, test_x)
+        Modeling.Modeling8_submission_go(target_type,submission,target,reg_pred_dict,DataFolder)
+    else :
+        clf_pred_dict =Modeling.Modeling7_clf_model_start(target_type,train_x, train_y, test_x)
+        Modeling.Modeling8_submission_go(target_type,submission,target,clf_pred_dict,DataFolder)
+
 
 
 ## Raw data processing
@@ -140,19 +300,25 @@ def step_1_Raw_Taregt_EDA(train,test, submission, outlier_val =0, info_ =True,id
     target = submission.columns.tolist()[-1]
     plotSetting('default')
     import matplotlib.pyplot as plt
+    import seaborn as sns
     
     ## Discrete Catigorical TARGET CASE
     if len(train[target].value_counts().index)<20:
         target_type ='Categorical'
         gd("","target value counts",pd.DataFrame(train[target].value_counts().sort_index()),heading=0)
         y_(" -  Target distribution visualization ")
-        x= train[target].value_counts().sort_index().index
-        y = train[target].value_counts().sort_index().values
-        plt.figure(figsize=(6,3), dpi = 150)
+        
+        target_ratio = round(train[target].value_counts(normalize=True)*100,2)
+        plt.figure(figsize=(9,5))
+        ax = sns.countplot(x = target, data = train,palette='viridis')
+        for i , patch in enumerate(ax.patches):
+            height = patch.get_height()
+            ax.text(patch.get_x() + patch.get_width()/2.,
+                    height,
+                    "{:.2f}%".format(target_ratio[i]) )
         plt.title(f"Target({target}) Distribution")
         plt.xlabel(target)
         plt.ylabel("Counts [#]")
-        plt.bar(x,y)
         plt.show()
         
     ## Continuous TARGET CASE   
@@ -306,10 +472,10 @@ def step_1_0_EDA_DataCategory(train,target,id_column = 'ID'):
     return filtered_df
 
 ## 1 : FEATURE EDA 
-def setp_1_Feature_EDA(train, target, target_type ,exclude_col=[], cols_target_plt=True, pair_plot =True):
+def setp_1_Feature_EDA(train, target, target_type ,id_column,exclude_col=[], cols_target_plt=True, pair_plot =True):
     """ 
     # #FEATURE 칼럼 EDA 
-    ## setp_1_Feature_EDA(train, target, target_type ,exclude_col=['id'], cols_target_plt=True, pair_plot =True)
+    ## setp_1_Feature_EDA(train, target, target_type ,id_column,exclude_col=[id_coulmn], cols_target_plt=True, pair_plot =True)
     """
     start_time = record_processing_time(start=True)
     print(r_cy("\n======================= setp_1_Feature_EDA ======================="))
@@ -322,22 +488,28 @@ def setp_1_Feature_EDA(train, target, target_type ,exclude_col=[], cols_target_p
     numeric_cols = train.select_dtypes(include='number').columns.tolist()
     numeric_cols =set(numeric_cols)-set([target]+exclude_col)
     
+    plt.figure(figsize=(10,6))
+    for idx, feature in enumerate(numeric_cols):
+        ax1 = plt.subplot(len(numeric_cols)//3 if len(numeric_cols)%3==0 else len(numeric_cols)//3+1,3,idx+1)
+        plt.title(feature)
+        sns.histplot(x= feature, data = train[numeric_cols], kde = True)
+        
     if cols_target_plt and target_type =='Categorical':
         y_(" - column  vs target 분포 ")
         print(green(f" -  {numeric_cols} 분포"))
         total_graph_num=len(numeric_cols)
-        total_row = total_graph_num //2 + total_graph_num%2
-        plt.figure(figsize= (8,total_row*2.5))
-
+        total_row = total_graph_num //3 + total_graph_num%3
+        plt.figure(figsize= (10,total_row*2.5))
         for order,feature in enumerate(numeric_cols):
             x  = train.groupby(target).mean().reset_index()[target]
             y = train.groupby(target).mean().reset_index()[feature]
-            plt.subplot(total_row,2,order+1)
+            print(len(numeric_cols)//3)
+            plt.subplot(total_row,3,order+1)
             plt.title(f"{feature} vs {target}")
             plt.bar(x,y)
             plt.xlabel(target)
             plt.ylabel(feature+" Count")
-            plt.tight_layout()
+        plt.tight_layout()
         plt.show()
     if cols_target_plt and target_type =='Continuous' :
         y_(" - Features box plot dist")
@@ -368,7 +540,8 @@ def setp_1_Feature_EDA(train, target, target_type ,exclude_col=[], cols_target_p
     
     y_(" - CORRELATION CHECK (HEAT MAP) about continuous")
     plt.figure(figsize = (12,10))
-    ax = sns.heatmap(data = train.corr(method ='pearson'), annot= True, fmt='.2f', linewidths = .5, cmap='Blues')
+    ## heatmap colors Blues => coolwarm
+    ax = sns.heatmap(data = train.corr(method ='pearson'), annot= True, fmt='.2f', linewidths = .5, cmap='coolwarm')
     plt.show()
         
     corr_table = train[list(numeric_cols)+ [target]].corr()
@@ -398,7 +571,7 @@ def setp_1_Feature_EDA(train, target, target_type ,exclude_col=[], cols_target_p
     else:
         y_(" - 공산성이 있는 칼럼이 없습니다. ")
     ## target poly list top
-    step_2_EDA_if_poly_top_corr_list(train,target)
+    step_2_EDA_if_poly_top_corr_list(train,target,id_column=id_column)
     
     plt.show()
     record_processing_time(end=True, started_time= start_time)
@@ -468,6 +641,143 @@ def step_1_Special_col_EDA(train,feature, target):
     plt.subplot(1,2,2)
     sns.barplot(x=feature_splited_dict['red'][target].value_counts().index, y=feature_splited_dict['red'][target].value_counts())
     plt.xlabel('red')
+
+## 2 : [EDA] feature 데이터 균일 도 파악(사분위별) 
+def step_2_0_EDA_feature_balance_quantile(train, target,selected_feature):
+    """
+    ## Target 이 2진 분류일때 해보는 짓.
+    ## for col in train.drop(target, axis = 1).select_dtypes('number').columns.tolist():step_2_EDA_feature_balance_quantile(train, target,col)
+    ## step_2_0_EDA_feature_balance_quantile(train, target,selected_feature)
+    """
+    ## EDA
+    import matplotlib.pyplot as plt, seaborn as sns
+    import pandas as pd, numpy as np
+    
+    q_list = [ np.percentile(train[selected_feature],i) for q,i in enumerate(range(0,101,25))]
+    c_index =train[target].value_counts(normalize=True).index
+    c=train[target].value_counts(normalize=True).values
+    ratio = c[0]/c[1]
+    train[train[target]==c_index[0]]
+
+    # histogram 
+    plt.figure(figsize=(8,4))
+    ## class 가 0 인것들을 4분위수 기준으로 bin 을 나누어 hist plot
+    h0_ax1 = sns.histplot(data = train[train[target]==c_index[0]],
+                        x = selected_feature,
+                        bins = q_list,
+                        color = 'g',
+                        alpha = 0.3,
+                        label =f"{target} = {c_index[0]}"
+                        )
+    h1_ax1 = sns.histplot(data = train[train[target]==c_index[1]],
+                        x = selected_feature,
+                        bins = q_list,
+                        color = 'r',
+                        alpha = 0.3,
+                        label = f"{target}={c_index[1]}"
+                        )
+
+    feature_column = selected_feature
+    filtered_data = train[(train[target] == c_index[1])]
+    h1_heights, h1_edges = np.histogram(filtered_data[feature_column], bins=q_list)
+    # target 변수의 class가 1일 때의 각 bin의 높이(개수)와 경계값을 얻어옵니다
+
+    # target class 1의 갯수 대비 target class 0의 갯수의 비율과 일치하는 각 구간의 수평선을 그린다
+
+    for i in range(len(h1_heights)):
+        plt.hlines(y=h1_heights[i] * ratio, 
+                xmin=h1_edges[i],
+                xmax= h1_edges[i+1],
+                linestyles='solid',
+                colors = 'blue',
+                alpha=0.5)
+    plt.legend()
+    plt.gca().set_title(f"{selected_feature}  4분위수(25,75)를 기준으로 bin 을 나눔")
+    plt.tight_layout()
+    plt.show()
+    try:
+        train['quantile'] = pd.qcut(train[selected_feature], q=4, labels=False)
+
+        diff_q_dict={
+            f"diff_q{i}" : len(train[(train['quantile']==i)&(train[target]==c_index[0])]) - \
+                    len(train[(train['quantile']==i)&(train[target]==c_index[1])])
+                    for i in range(len(q_list)-1)
+        }
+        for q,i in enumerate(diff_q_dict.keys()):
+            print(yellow(f" {q+1} 사분위의 데이터는 {c_index[0]} 이 {c_index[1] } 보다 {diff_q_dict[i]} 개 {'많습니다' if diff_q_dict[i]>0 else '적습니다'} "))
+    except Exception as e:
+        print(f"error  :{e}")
+
+## 2. : [EDA] binary class feature correation analysis
+def step_2_0_EDA_biClass_featureCorr(train, target):
+    """
+    # #[EDA] binary class feature correation analysis
+    ## step_2_0_EDA_biClass_featureCorr(train, target)
+    """
+    import pandas as pd
+    from scipy.stats import pointbiserialr
+    import matplotlib.pyplot as plt, seaborn as sns 
+    
+
+    correlation_org_lst , correlation_dealout_lst = [],[]
+
+    p_value_org_lst, p_value_dealout_lst =[],[]
+
+    feature_lst =train.columns[1:-1].to_list()
+    # 점 이연 상관계수 계산 및 출력
+
+    for feature in feature_lst:
+        correlation_org, p_value_org = pointbiserialr(train[feature], train[target])
+        correlation_org_lst.append(correlation_org)
+        p_value_org_lst.append(p_value_org)
+        
+    # 데이터프레임 생성 
+    correlation_dict = {
+        'Feature': feature_lst,
+        'correlation_org': correlation_org_lst,
+        "p_value_org": p_value_org_lst
+    }
+    correlation_df = pd.DataFrame(correlation_dict)
+    display(correlation_df)
+    
+    plt.figure(figsize= (16,8))
+    plt.subplot(2,2,1)
+    sns.barplot(x='Feature', y = 'p_value_org', data = correlation_df)
+    plt.gca().set_xticklabels(feature_lst, rotation =30)
+    plt.gca().set_title("p_value [original train]")
+    
+    plt.subplot(2,2,2)
+    sns.barplot(x='Feature', y='p_value_org', data = correlation_df)
+    plt.gca().set_xticklabels(feature_lst, rotation=30)
+    plt.gca().set_title("p_value [original data]")
+    
+    plt.show()
+
+## 2. : [EDA] 수치형 feature 들의  다중공선성 체크 
+def step_2_0_EDA_VIF_multicolinearity_check(train):
+    """
+    ## step_2_0_EDA_VIF_multicolinearity_check(train)
+    """
+    # Import required libraries 
+    from statsmodels.stats.outliers_influence import variance_inflation_factor
+    import pandas as pd 
+    
+    features_org = train.select_dtypes("number").columns.tolist()
+    train_x = train[features_org]
+    vif = pd.DataFrame()
+    vif['features'] = train_x.columns
+    VIF_list = []
+    for i in range(len(train_x.columns)):
+        # variance_inflation_factor 함수를 사용하여 각 feature 의 VIF 값 계산
+        VIF_value = variance_inflation_factor(train_x.values, i )
+        VIF_list.append(VIF_value)
+
+    vif["VIF"]= VIF_list
+    display(vif.sort_values("VIF",ascending=False))
+    # figure 
+    plt.figure(figsize=(10,4))
+    sns.barplot(x= "VIF", y = "features", data = vif.sort_values("VIF", ascending= False))
+    plt.show()
 
 ## 2 : [FE] OBJECT type -> 수치 가 아니면 킬람 식제
 def step_2_0_FE_erase(train,test, object_cols = [], delete = False, to_numuric =False):
@@ -550,9 +860,6 @@ def step_2_0_FE_CategoryEncoding(train_x,test_x,to_en_cols=[]):
     test_x = pd.concat([test_encoded,test_encoded_df],axis = 1).drop(to_en_cols, axis =1)
     
     return train_x, test_x
-    
-    
-
 
 ## 2-0 : [FE] DATETIME -> 날짜변수가 있을 경우 분리하여 정제
 def step_2_0_FE_Seperate_datetime(train_x,date_to_num =False, orderd_week_day =False):
@@ -775,10 +1082,10 @@ def step_2_0_FE_polinomial_cols(train_x):
     return train_x
 
 ## [EDA] 2~3차 항이 있을때 target 에 대한 상관계수가 달라지는 지확인한다. 
-def step_2_EDA_if_poly_top_corr_list(train,target,deg3=False):
+def step_2_EDA_if_poly_top_corr_list(train,target,id_column,deg3=False):
     """ 
     # # 2~3차 항이 있을때 target 에 대한 상관계수가 달라지는 지확인한다. 
-    ## step_2_EDA_if_poly_top_corr_list(train,target,deg3=False)
+    ## step_2_EDA_if_poly_top_corr_list(train,target,id_column,deg3=False)
     """
     from sklearn.preprocessing import PolynomialFeatures
     import pandas as pd
@@ -786,13 +1093,16 @@ def step_2_EDA_if_poly_top_corr_list(train,target,deg3=False):
     if deg3:
         poly = PolynomialFeatures(degree=3)
     else:
-        poly = PolynomialFeatures(degree=2)   
-    train_= train.drop("ID",axis=1)
-    X_poly = poly.fit_transform(train_)
+        poly = PolynomialFeatures(degree=2)
+    if id_column in train.columns :
+        train= train.drop("ID",axis=1)    
+    train = train.select_dtypes("number")
+    X_poly = poly.fit_transform(train)
     corr_table =pd.DataFrame(X_poly,columns =poly.get_feature_names_out()).corr()
     aa=abs(corr_table[target].sort_values(ascending=False))>0.4
     col_list=corr_table[target].sort_values(ascending=False)[aa].index.tolist()
-    colist  = [i for i in col_list if "target" not in i ]
+    colist  = [i for i in col_list if target not in i ]
+    y_(" - Target 과 상관관계 지수 ")
     display(corr_table[target].sort_values(ascending=False)[colist])
 
 ##  [EDA]Feature IMportance EDA in DT    
@@ -1946,68 +2256,6 @@ def data_fetch(data_folder_path,start,end):
 
     return data_dict
 
-def plotSetting(pltStyle="seaborn-v0_8", setting_info =False ):
-    '''
-    ## plotSetting(pltStyle="default")
-    ## plotSetting(pltStyle="seaborn-v0_8")
-    ## plotSetting(pltStyle="Solarize_Light2")
-    ## plotSetting(pltStyle="fivethirtyeight")
-    ## plotSetting(pltStyle="grayscale")
-
-    '''
-
-    if setting_info:
-        import warnings ;warnings.filterwarnings('ignore')
-        import sys ;sys.path.append("../../../")
-        import os 
-        print(blue(f"  ⁍ 현재 경로의 폴더 목록 --",True))
-        count =1
-        for order,file in enumerate(os.listdir(os.getcwd())):
-            if os.path.isdir(os.path.join(os.getcwd(),file)):
-                print(yellow(f"  폴더{count} :  {str(os.path.join(os.getcwd(),file))}"))
-                count +=1
-        
-        print(blue("../ +  ../../ 경로 python path 에 추가. "))
-        sys.path.append("../")
-        sys.path.append("../../")
-        
-        
-        print(blue(f"◎ 주피터 가상환경  : {os.environ['CONDA_DEFAULT_ENV']}",True))
-        print(blue(f"◎ Python 설치 경로:{sys.executable}",True))
-        print(blue(f"◎ Graph 한글화 Setting",True))
-        
-        def package_list_save_text():
-            ## last update : 2024.10.18
-            import sys
-            import subprocess
-            # 파이썬 패키지 목록을 실행 결과로 저장
-            output = subprocess.check_output([sys.executable, '-m', 'pip', 'freeze'])
-            # 결과를 디코딩하여 문자열로 변환
-            output_string = output.decode('utf-8')
-            # 메모장을 열고 결과를 붙여넣기
-            with open("package_list.txt", "w", encoding='utf-8') as f:
-                f.write(output_string)
-            print("패키지 목록이 package_list.txt 파일에 저장되었습니다.")
-        package_list_save_text()
-        
-    # graph style seaborn
-    import matplotlib.pyplot as plt # visiulization
-    import platform
-    from matplotlib import font_manager, rc # rc : 폰트 변경 모듈font_manager : 폰트 관리 모듈
-    plt.style.use(pltStyle)
-    plt.rcParams['axes.unicode_minus'] = False# unicode 설정
-    plt.rcParams['font.family'] = 'Arial Unicode MS' # or another suitable font
-    
-    if platform.system() == 'Darwin': rc('font', family='AppleGothic') # os가 macos
-    elif platform.system() == 'Windows': # os가 windows
-        path = 'c:/Windows/Fonts/malgun.ttf' 
-        font_name = font_manager.FontProperties(fname=path).get_name()
-        rc('font', family=font_name)
-    else:
-        print("Unknown System")
-    print(colored_text("  - ◎ matplot graph set complete",'blue',bold=True))
-    # print(rainbow_green(f"✻✻✻✻______{imo*1} {Title} {imo*1}______✻✻✻✻",True))
-
 def column_hist(df,col):
     import pandas as pd
     import matplotlib.pyplot as plt
@@ -2395,6 +2643,70 @@ def 시계열그래프_칼럼안에서특정데이터에해당하는_다른열�
     visualize_01(target,numeric_columns,target_col)
     visualize_01(target,numeric_columns,['신규회원수','신규아동수','대기정회원수','웹회원수'])
 
+
+
+## Plot setting 
+def plotSetting(pltStyle="seaborn-v0_8", setting_info =False ):
+    '''
+    ## plotSetting(pltStyle="default")
+    ## plotSetting(pltStyle="seaborn-v0_8")
+    ## plotSetting(pltStyle="Solarize_Light2")
+    ## plotSetting(pltStyle="fivethirtyeight")
+    ## plotSetting(pltStyle="grayscale")
+
+    '''
+
+    if setting_info:
+        import warnings ;warnings.filterwarnings('ignore')
+        import sys ;sys.path.append("../../../")
+        import os 
+        print(blue(f"  ⁍ 현재 경로의 폴더 목록 --",True))
+        count =1
+        for order,file in enumerate(os.listdir(os.getcwd())):
+            if os.path.isdir(os.path.join(os.getcwd(),file)):
+                print(yellow(f"  폴더{count} :  {str(os.path.join(os.getcwd(),file))}"))
+                count +=1
+        
+        print(blue("../ +  ../../ 경로 python path 에 추가. "))
+        sys.path.append("../")
+        sys.path.append("../../")
+        
+        
+        print(blue(f"◎ 주피터 가상환경  : {os.environ['CONDA_DEFAULT_ENV']}",True))
+        print(blue(f"◎ Python 설치 경로:{sys.executable}",True))
+        print(blue(f"◎ Graph 한글화 Setting",True))
+        
+        def package_list_save_text():
+            ## last update : 2024.10.18
+            import sys
+            import subprocess
+            # 파이썬 패키지 목록을 실행 결과로 저장
+            output = subprocess.check_output([sys.executable, '-m', 'pip', 'freeze'])
+            # 결과를 디코딩하여 문자열로 변환
+            output_string = output.decode('utf-8')
+            # 메모장을 열고 결과를 붙여넣기
+            with open("package_list.txt", "w", encoding='utf-8') as f:
+                f.write(output_string)
+            print("패키지 목록이 package_list.txt 파일에 저장되었습니다.")
+        package_list_save_text()
+        
+    # graph style seaborn
+    import matplotlib.pyplot as plt # visiulization
+    import platform
+    from matplotlib import font_manager, rc # rc : 폰트 변경 모듈font_manager : 폰트 관리 모듈
+    plt.style.use(pltStyle)
+    plt.rcParams['axes.unicode_minus'] = False# unicode 설정
+    plt.rcParams['font.family'] = 'Arial Unicode MS' # or another suitable font
+    
+    if platform.system() == 'Darwin': rc('font', family='AppleGothic') # os가 macos
+    elif platform.system() == 'Windows': # os가 windows
+        path = 'c:/Windows/Fonts/malgun.ttf' 
+        font_name = font_manager.FontProperties(fname=path).get_name()
+        rc('font', family=font_name)
+    else:
+        print("Unknown System")
+    print(colored_text("  - ◎ matplot graph set complete",'blue',bold=True))
+    # print(rainbow_green(f"✻✻✻✻______{imo*1} {Title} {imo*1}______✻✻✻✻",True))
 
 ##df display 
 def df_display_centered(df, message=""):
