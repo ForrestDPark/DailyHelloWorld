@@ -1,0 +1,39 @@
+{
+    "cells": [
+        {
+            "language": "markdown",
+            "source": [
+                "관리자 비번 \n공인 아이피 : 211.188.56.226\n\nHostName 서버 접속용 ip\nPort 외부포트 \nIdentityFile 네이버 인증키 파일 경로\nUser 초기 리눅스 아이디 root\n\n\nback-office-test-server\nroot\nR3**2$iHh?d$7Fg\n\n\nHost 211.188.56.226\n\tHostName 211.188.56.226 \n\tPort 1592 \n\tIdentityFile /Users/forrestdpark/Desktop/NaverCloud_keys/back-office-test.pem\n\tUser root\n\n\nAWS 로 올ㄹ리자 naver 시간 많이 걸린다.. \n\n\naws ip 13.209.86.156\n\nqwe123"
+            ],
+            "outputs": []
+        },
+        {
+            "language": "javascript",
+            "source": [
+                "require('dotenv').config();\nconst express = require('express');\nconst app = express();\nconst port = 80;\n\napp.get('/', (req, res) => {\n  // res.setHeader(\"Content-Type\", \"text/html\");\n  res.write(\" hello grk\")\n  res.send(`.env 테스트 : ${process.env.DATABASE_NAME}`);\n  // response 에서 작성 \n  // html file 읽기 \n  // fs.readFile('homepage.html','utf8',(err,data)=>{\n  //     if (err) {\n  //         console.error(\"html file 읽는중 error 발생\",err);\n  //         res.writeHead(500);\n  //         res.end(\"<h1> Server error</h1>\");\n  //         return;\n  //     }\n  //     res.write(data); // html file content response\n\n})\n\napp.listen(port, () => {\n  console.log(`Example app listening on port ${port}`)\n})"
+            ],
+            "outputs": []
+        },
+        {
+            "language": "javascript",
+            "source": [
+                "require('dotenv').config();\nconst express = require('express');\nconst fs = require('fs');\nconst app = express();\nconst port = 80;\n\napp.get('/', (req, res) => {\n    res.setHeader(\"Content-Type\", \"text/html\");\n    // 먼저 html 파일을 읽어서 data 변수에 담는다\n    fs.readFile('./hompage.html', 'utf8', (err, data) => {\n        if (err) {\n            console.error(\"html file 읽는중 error 발생\", err);\n            res.writeHead(500);\n            res.end(\"<h1> Server error</h1>\");\n            return;\n        }\n        // data 변수에 담긴 html을 수정하여 htmlWithEnv 변수에 담는다\n        const htmlWithEnv = data.replace('{{DATABASE_NAME}}', process.env.DATABASE_NAME);\n\n        // 수정된 html을 응답에 뿌린다\n        res.write(\" hello grk<br>\"); // 환경변수 앞에 내용 추가\n        res.write(htmlWithEnv); // html content response\n        res.end();\n    });\n});\n\napp.listen(port, () => {\n    console.log(`Example app listening on port ${port}`);\n});"
+            ],
+            "outputs": []
+        },
+        {
+            "language": "markdown",
+            "source": [
+                "# VScode 로 네이버 클라우드의 ec2 서버 접속하기 \n\n\n1. extension remote-SSH 설치\n\n1. 네이버 클라우드 접속 > 콘솔 > 포트포워딩 설정 >\n\n가상 머신의 경우 서버 접속용 공인 ip 있음. \n\nNIC(Network interface) > ACG 규칙 보기 \ninbound 규칙 프로토콜 허용 포트 3389, 22\noutbound 규칙 tcp \n목적지 : 61.36.170.194/32 \n허용포트 1-65535 전부 \n\n목적지 0.0.0.0/0 \n허용포트 1592 \n\n\n\n\n참고 \n\n1. https://kimce.tistory.com/21\n2. https://kimce.tistory.com/22\n\nns-751.awsdns-29.net.\nns-1324.awsdns-37.org.\nns-1769.awsdns-29.co.uk.\nns-249.awsdns-31.com.\n"
+            ],
+            "outputs": []
+        },
+        {
+            "language": "markdown",
+            "source": [
+                "#[] 정리할것 AWS 서버에 html 올리고 가비아 도메인으로 배포까지 \n\n학원 도커 내용 다시 리뷰 할것\n\n참고 https://jindevelopetravel0919.tistory.com/189"
+            ],
+            "outputs": []
+        }
+    ]
+}

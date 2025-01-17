@@ -1,0 +1,60 @@
+
+<!--views/detail.handlebars-->
+<h1>{{title}}</h1>
+<!-- (1) 게시글 제목 --> 
+<h2 class="text-xl"> Project title</h2>
+<!-- (2)) 작성자 이름 --> 
+<div>
+    Writer : <b> Writer name</b>
+</div>
+<!-- (3) 조회수 와 작성일시-->
+<div>
+    조회수 : 999    | 작성일 시 : 2025-01-16 099:03:00
+    <button onclick="modifyPost()">수정</button>
+    <button onclick="deletePost()">삭제</button>
+</div>
+
+<div>
+    <pre> THIS IS A TEST HO!</pre>
+</div>
+
+<section>
+    <div>
+        <h3> 3개의 댓글이 있습니다. </h3>
+    </div>
+    <!-- (7) 댓글 작성폼 -->
+    <form method="post" action="/write-comment">
+        <div>
+            <input type="text" name="name" placeholder="input name" />
+            <input type="password" name="password" placeholder="input password" />
+        </div>
+        <div>
+            <textarea cols="40" rows="3" name="comment" placeholder="댓글 입력해주세요"></textarea>
+            <!--댓글 전송 버튼-->
+            <br/> <br/> <button> 댓글 쓰기</button>
+        </div>
+
+    </form>
+</section>
+
+<!-- (9) 댓글 표시 영역 -->
+<section>
+    <div>
+        <div>
+            작성자 : <b> 댓글 작성자</b>
+        </div>
+        <div>
+            작성일시 : 2025-01-16 00:00:00
+            <button onclick="deleteComment('1')">삭제</button>
+        </div>
+        <div>
+            <pre>{{comment}}</pre>
+        </div>
+    </div>
+</section>
+
+<footer>
+    <div>
+        <a href="/">목록으로</a> 
+    </div>
+</footer>

@@ -79,6 +79,7 @@ def Order_2_EDA(train,test, submission,id_column):
     # Independent Variables(train_x) and Dependeant Variable(train_y) SPLIT
     train_x,train_y,test_x= step_2_1_Indep_dep_val_split(train,test,target_colname= target, drop_test =id_column)
     return target ,target_type,obj, data_type_df, train_x,train_y,test_x
+
 def ORder_3_FE_by_dataType(train_x,train_y,test_x,target, data_type_df,id_column,
                            feature_balence_check =True,
                            obj_to_cat=True,
@@ -356,7 +357,7 @@ def step_1_Raw_Taregt_EDA(train,test, submission, outlier_val =0, info_ =True,id
 ## Data FE category check
 def step_1_0_EDA_DataCategory(train,target,id_column = 'ID'):
     """
-    data_type, data_category, missing_cols =step_1_0_EDA_DataCategory(train)
+    filtered_df = step_1_0_EDA_DataCategory(train)
     """
     print(r_cy("\n======================= step_1_0_EDA_DataCategory ======================="))
     start_time = record_processing_time(start=True)
@@ -761,6 +762,7 @@ def step_2_0_EDA_VIF_multicolinearity_check(train):
     # Import required libraries 
     from statsmodels.stats.outliers_influence import variance_inflation_factor
     import pandas as pd 
+    import matplotlib.pyplot as plt, seaborn as sns
     
     features_org = train.select_dtypes("number").columns.tolist()
     train_x = train[features_org]
@@ -1198,7 +1200,7 @@ def step_2_1_Indep_dep_val_split(train,test,target_colname= 'target', drop_test 
     print(r_cy("\n======================= step_2_1_Indep_dep_val_split ======================="))
     y(" - 독립변수와 종속 변수 분할 결과 ")
     if drop_test in train.columns.tolist():
-        print(red(f' train 에서 {drop_test}을 삭제게합니다.' ))
+        print(red(f' train 에서 {drop_test}을 삭제합니다.' ))
         train_x = train.drop([drop_test,target_colname], axis =1)
         test_x = test.drop([drop_test], axis= 1)
     else : 
@@ -1512,7 +1514,7 @@ def step_4_1_Oversampling(train_x,train_y, ros =False, smote =False,feature_sele
     #2.
     ## train_x_smote, train_y_smote  = step_4_1_Oversampling(train_x,train_y, smote=True,feature_select=[])
     ## step_4_MLOutput_target_ratio(pd.concat([train_x_smote, train_y_smote],axis=1), target_col=target,graph_show=False)
-
+    ## link  :https://beauty-from-simple.tistory.com/40
     """
     print(r_cy("\n======================= step_4_1_Oversampling ======================="))
     import pandas as pd
@@ -1555,6 +1557,43 @@ def step_4_1_Oversampling(train_x,train_y, ros =False, smote =False,feature_sele
         plt.title("SMOTE oversampled DATA")
         plt.show()
         return X_smote, y_smote 
+
+def step_4_1_Oversampling_kf_check(train_x,train_y):
+    from sklearn.model_selection import StratifiedKFold
+    from imblearn.over_sampling import SMOTE, BorderlineSMOTE, KMeansSMOTE,SVMSMOTE
+    from sklearn.metrics import accuracy_score
+    from sklearn.ensemble import RandomForestClassifier
+    import numpy as np 
+
+    rf_model_resampled_ =RandomForestClassifier(random_state= 42)
+
+    # 교차 검증을 수동으로 구현하기 위한 리스트 초기화 
+    accuracies = []
+
+    kf = StratifiedKFold(n_splits = 4, shuffle=True, random_state =42)
+    smote_kmeans = KMeansSMOTE(random_state=42)
+
+    for train_idx, val_idx in kf.split(train_x, train_y):
+        # 학습 데이터와 검증 데이터 분할 
+        #검증데이터 셋 만들기
+        X_train, X_valid = train_x.iloc[train_idx], train_x.iloc[val_idx]
+        y_train,y_valid = train_y.iloc[train_idx], train_y.iloc[val_idx]
+        
+        # 학습 데이터에만 SMOTE 오버샘플링 적용 
+        X_train_resampled, y_train_resampled = smote_kmeans.fit_resample(X_train,y_train)
+        # 오버 샘플링 된 학습 데이터로 모델 학습 
+        rf_model_resampled_.fit(X_train_resampled,y_train_resampled)
+        # 검증 데이터에 대한 예측
+        val_predictions = rf_model_resampled_.predict(X_valid)
+        
+        # 성능 지표 계산
+        accuracies.append(accuracy_score(y_valid, val_predictions))
+    
+    # 성능 지표의 평균 계산
+    mean_accuracy =np.mean(accuracies)
+    y(f" - acc of each Fold :{accuracies}")
+    y(f" - mean acc :{mean_accuracy}")
+
 ## 4-2: RUS 와 NearMiss 를 활용한 언더셈플링 = 데이터 균일화
 def step_4_2_UnderSampling(train_x, train_y, rus =False, Nearmiss=False, f12=[]):
     """
@@ -1635,7 +1674,7 @@ def step_5_0_Outlier_check(train, target='income_total'):
     """
     # # Outlier of target column 
     ## outlier_value = step_5_0_Outlier_check(X_train, target=target)
-
+    ## blog link : https://beauty-from-simple.tistory.com/38
     """
     print(r_cy("\n======================= step_5_0_Outlier_check ======================="))
     import matplotlib.pyplot as plt , seaborn as sns
@@ -1647,6 +1686,8 @@ def step_5_0_Outlier_check(train, target='income_total'):
         outliers = [x for x in data if np.abs((x- mean)/std)> threshold]
         return zscores, len(outliers)
     zscores ,num_outliers = out_zscore(train[target])
+    
+    
     y(f" -  Outlier check in {target} column")
     plt.figure(figsize= (12,3))
     plt.boxplot(train[target], vert = False)
@@ -1740,15 +1781,91 @@ def step_5_0_EDA_region_split_by_outlier(train,target,outlier_value):
 
     plt.show()
 
+## 5-0: [EDA] 이상치 확인 및 대체 후 cross validation 검증하기 
+def step_5_1_Outlier_Zcheck_replace(train, target='income_total', replace_stat = 'median'):
+    """
+    # # Outlier of target column 
+    ## tep_5_1_Outlier_Zcheck_replace(train, target='Outcome')
+    ## blog link : https://beauty-from-simple.tistory.com/38
+    """
+    print(r_cy("\n======================= step_5_1_Outlier_Zcheck_replace ======================="))
+    ## libarary
+    import numpy as np, pandas as pd
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.model_selection import cross_val_score,cross_validate, KFold, StratifiedKFold
+    from scipy import stats 
+    
+    ## numeric feature in train extraction 
+    numeric_features = train.select_dtypes(include = [np.number]).columns.tolist()
+    
+    train_x = train[numeric_features]
+    train_y = train[target]
+    kf = StratifiedKFold(n_splits =4, shuffle=True, random_state=42)
+    RF_model  = RandomForestClassifier(random_state= 42)
+    cv_result = cross_validate(RF_model, train_x, train_y, cv=kf,scoring=['accuracy','precision','recall','f1'])
+    test_df_colname=['test_accuracy', 'test_precision','test_recall','test_f1']
+    df_cv_result = pd.DataFrame(cv_result, columns = test_df_colname)
+    
+    
+    yd(" ⭐️ Basic Cross validation ⭐️",df_cv_result)
+    y(f"각 평가지표의 평균 :{df_cv_result.describe().loc['mean',:].mean().T}")
+    
+    ## 이상치 탐지 
+    z_scores = np.abs(stats.zscore(train_x))
+    # print(z_scores)
+    z_threshold = 3
+    train_zscore = train.copy()[(z_scores<z_threshold).all(axis=1)]
+    display(train_zscore)
+    y_(f" Z >{z_threshold} 이상치 개수 :{len(train)- len(train_zscore)} [{100*(len(train)- len(train_zscore))/len(train):.1f}%]")
+    # outlier detect 
+    def detect_outlier(df, col):
+        Q1 = df[col].quantile(0.25)
+        Q3 = df[col].quantile(0.75)
+        IQR = Q3-Q1
+        # iqr 기반 이상치 범위 정의 
+        lower_bound = Q1 -1.5*IQR
+        upper_bound = Q3+ 1.5*IQR
+        
+        return df[(df[col]<lower_bound) | (df[col]>upper_bound)].index
+
+    ## 이상치인 데이터만 추출 
+    outlier_dict = {}
+    for col in numeric_features:
+        outliers = detect_outlier(train,col)
+        if len(outliers)> 0:
+            outlier_dict[col] = outliers
+    
+    if replace_stat =='median':
+        # 이상치를 중앙값으로 대체 
+        train_dout_median = train.copy()
+        for column, outlier_indices in outlier_dict.items():
+            median_value = train_dout_median[column].median()
+            train_dout_median.loc[outlier_indices,column] = median_value 
+            
+        train_dout_median_x = train_dout_median[numeric_features]
+        train_dout_median_y = train_dout_median[target]
+        
+        cv_result_dout_median = cross_validate(RF_model,train_dout_median_x,
+                                               train_dout_median_y, 
+                                               cv=kf,
+                                               scoring =['accuracy','precision','recall','f1']
+                                               )
+        df_cv_result_dout_median = pd.DataFrame(cv_result_dout_median,columns=test_df_colname)
+        yd(" ⭐️ 이상치 대체후 Cross validation ⭐️",df_cv_result_dout_median)
+        y(f"각 평가지표의 평균 :{df_cv_result_dout_median.describe().loc['mean',:].mean().T}")
+
+
+
+
 ## 5-1 : [FE] 이상치 최빈값 변환
 def step_5_1_Outlier_processing(df,colname,over_val=0,under_val=0, replace_outlier = 'mode'):
     """
+    # related blog link : 
     # # Outlier 를 확인(0),사용자기준으로 걸르고 최빈값으로 대체(1), zscore, IQR 값으로 확인후 제거(2) : 
-        
     ## step_5_0_Outlier_check(X_train, col='income_total')
     ## train_x= step_5_1_Outlier_processing(train_x,'trestbps',over_val=170,under_val=0, replace_outlier = 'mode')
     ## X_train =  step_5_2_Outlier_erase(X_train, col='income_total', threshold = 3, IQR=True)
-
+    
     """
     g("6. Outlier 최빈값 대체")
     import pandas as pd

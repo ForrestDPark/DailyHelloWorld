@@ -1,0 +1,11 @@
+{
+    "cells": [
+        {
+            "language": "markdown",
+            "source": [
+                "# PostgreSQL 과 Node.js 연동하는 방법. \n\n\n\n\n\n참고 \n\n\n1. [[velog,2022, PostgreSQL node.js 연동]](https://velog.io/@paul7/PostgreSQL%EB%A5%BC-Node.js%EC%97%90-%EC%97%B0%EB%8F%99%ED%95%98%EA%B8%B0)\n"
+            ],
+            "outputs": []
+        }
+    ]
+}

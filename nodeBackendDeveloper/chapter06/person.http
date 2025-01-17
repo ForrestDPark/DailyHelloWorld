@@ -1,0 +1,30 @@
+@server = http://forrestest.site
+
+# Get 
+# GET {{server}}/person
+
+#POST
+
+# POST {{server}}/personal
+# Content-Type: application/json
+
+# {
+# 	"name": "ForrestPark",
+# 	"age": 35,
+# 	"email": "pulpilisory@gmail.com"
+# }
+
+
+## 생성한 문서 확인 
+# GET {{server}}/person/pulpilisory@gmail.com
+
+## PUT 요청 보내기 , 문서 수정하기 
+PUT {{server}}/person/pulpilisory@gmail.com
+Content-Type: application/json
+
+{
+    "age": 32
+}
+
+## 문서 삭제 
+# DELETE {{server}}/person/pulpilisory@gmail.com

@@ -1,0 +1,130 @@
+
+.hljs {
+  display: flex !important;
+  flex-direction: column;
+  padding: 0 !important;
+  font-size: 15px;
+  border-radius: 8px;
+  background-color: #343131;
+}
+
+.hljs .line {
+  counter-increment: line-idx;
+  line-height: 1.5;
+}
+
+.hljs .line:hover {
+  background-color: #262830;
+}
+.hljs .line:hover::before {
+  color: #cfd2d1;
+}
+
+.dark .hljs .line:hover {
+  --tw-bg-opacity: 1;
+  background-color: rgb(53 54 56 / var(--tw-bg-opacity));
+}
+
+/* 코드블록 줄번호 */
+.hljs .line::before {
+  content: counter(line-idx);
+  width: 24px;
+  display: inline-block;
+  text-align: right;
+  margin-right: 16px;
+  font-size: 15px;
+  color: #747a7a;
+}
+
+/* 2024.12.18  hljs( highlight.js) 
+.hljs 클래스 내부에 있는 .code-header 클래스에 적용되는 스타일
+*/
+.hljs .code-header {
+  display: flex;
+  align-items: center;
+  padding: 14px;
+  border-radius: 8px 8px 0 0;
+  --tw-bg-opacity: 1;
+  background-color:#434041;
+  /* #434041
+   rgb(218 217 218 / var(--tw-bg-opacity))
+  */
+}
+
+.dark .hljs .code-header {
+  --tw-bg-opacity: 1;
+  background-color: rgb(67 64 65 / var(--tw-bg-opacity));
+}
+
+.hljs .code-header .btn {
+  border-radius: 50%;
+  width: 15px;
+  height: 15px;
+  margin: 0 5px;
+}
+
+.hljs .code-header .mac_dot {
+  border-radius: 50%;
+  width: 13px;
+  height: 13px;
+  margin: 0 5px;
+}
+
+.hljs .code-header .mac_dot.red {
+  background-color: #f5655b;
+}
+
+.hljs .code-header .mac_dot.yellow {
+  background-color: #f6bd3b;
+}
+
+.hljs .code-header .mac_dot.green {
+  background-color: #43c645;
+}
+
+.hljs .code-body {
+  max-height: 1000px;
+  margin: 23px 8px;
+  overflow: auto;
+}
+
+/* 코드블록 스크롤바 */
+.hljs .code-body::-webkit-scrollbar {
+  width: 8px;
+  height: 3px;
+}
+
+.hljs .code-body::-webkit-scrollbar-thumb {
+  --tw-bg-opacity: 1;
+  background-color: rgb(218 217 218 / var(--tw-bg-opacity));
+}
+
+.dark .hljs .code-body::-webkit-scrollbar-thumb {
+  --tw-bg-opacity: 1;
+  background-color: rgb(67 64 65 / var(--tw-bg-opacity));
+}
+
+.hljs .code-body::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+}
+
+.hljs .code-body::-webkit-scrollbar-corner {
+  display: none;
+}
+
+/* 코드블록 복사버튼 */
+.hljs .copy-btn {
+  border: none;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 2px;
+  width: 50px;
+  border-radius: 4px;
+  margin-left: auto;
+  margin-right: 10px;
+}
+
+
+/* ----- end ----*/
+
+

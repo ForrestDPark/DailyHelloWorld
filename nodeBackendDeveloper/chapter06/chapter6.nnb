@@ -1,0 +1,165 @@
+{
+    "cells": [
+        {
+            "language": "markdown",
+            "source": [
+                "# 6. NoSQL 데이터베이스 몽고디비 사용하기 \n\n## 6.1 몽고디비\n\n- 데이터베이스 : 데이터를 체계화하여 관리하는 데이터의 집합 또는 해당 작업을 수행하는 응용프로그램\n- NoSQL 데이터 베이스 : 데이터 모델에 따라 키-벨류, 칼럼, 도큐먼트, 그래프 타입으로 분류 \n\n|종류|설명 |\n|--|--|\n|키-밸류타입|키를 기준으로 데이터 조회, 값으로 데이터 저장|\n|도큐먼트 타입|JSON 과 유사한 형식의 객체를 담은 데이터 저장|\n|그래프 타입|노드를 사용하여 데이터 저장, 엣지를 사용해 데이터 관계 저장|\n\n\n## 6.1.1. 기본용어 \n\n|용어|설명 |\n|--|--|\n|테이블|행과 열로 이루어진 데이터 모음|\n|로우-칼럼|행 , 데이터 항목, 레코드 - 테이블에서 특정 한자료, 열|\n|기본키|중복 되지않는 식별 키|\n|외래키|두 테이블 연결시 사용하는 키|\n|RDB|관계형 데이터 베이스 (2차원 테이블 구조)|\n|스키마|DB 테이블 명세를 기술한 데이터 |\n|모델|테이블과 테입르 사이 컬럼ㄷ르의 형태를 정의한 클래스 user 테이블 모델은 User 클래스로 생성|\n|컬렉션|몽고디비 사용언어, 도큐먼트의 집합, RDB에서 테이블과 동일함|\n|조인|두개이상의 테이블 또는 컬랙션을 조합|\n|트랜잭션|데이터 변경을 수행하는 작업단위|\n|클러스터|데이터 처리량 높이기 위해 데이터를 여러 서버에 저장하는 기법|\n|샤드|큰 데이터 베이스를 작은 단위로 분할하는 기능, 노드 단위 분산저장, 성능 및 확장성 향상|\n\n\n6.1.2. 몽고디비 특징 \n- 도큐먼트 : BSON 데이터 포맷 (Binary JSON) json 을 바이너리 형식으로 저장함. \n- json 에서는 지원하지 않는 자료형인 Date(new Data() 값을 넣을수 있음, UTC 표현), BinData 타입을 지원 (바이트의 배열)\n- 바이너리로 저장하기 때문에 용량이 문자열보다 작고 성능이 좋다. \n\n|장점|단점 |\n|--|--|\n|· 스키마를 지정하지 않아도 됨, 유연한 데이터 저장가능<br> ·여러 테이블 조인하는 것보다 빠름<br> · 클러스터 지원, 스케일 아웃 쉬움<br> · 타 NoSQL 대비 인덱스 지원 잘되어있음| · 메모리 많이 사용<br> · 디스크 저장공간을 RDB에 비해 많이 사용<br> ·복잡한 조인은 사용하기 힘듬<br> ·트랜젝션 지원이 RDB 에 비해 약함|\n\nBSON 은 JSON 과 유사하여 자바스크립트와 호환성이 좋다. \n몽고디비에서 사용하는 쿼리도 자바스크립트를 사용함\n\nMEAN : MongoDB(DB) + Express(backend) + Angular(frontend) + Nginx(webserver) 를 사용하는 기술 스택 인기 있었음. \n\n모든것이 자바 스크립트!\n[MongoDB vs MySQL](http://bit.ly/42A5K8k)\n\n\n## 6.2 몽고디비 아틀라스 설정 \n\n(1) https://mongodb.com > MongoDB Atlas - Community Server >\n\n\n<img src=\"https://blog.kakaocdn.net/dn/wcIbx/btsLJVlCzYM/oVKPPL4HQ0brZfNDEKPNN1/img.webp\" data-is-animation=\"false\" data-origin-width=\"1688\" data-origin-height=\"1744\" data-filename=\"Screenshot 2025-01-11 at 5.35.16 PM.webp\" width=\"745\" height=\"770\">\n\n<img src=\"https://blog.kakaocdn.net/dn/lhl3b/btsLLSAXoQ9/JnrYQLtqVGeADeOI0M8UEk/img.webp\" data-is-animation=\"false\" data-origin-width=\"1492\" data-origin-height=\"818\" data-filename=\"Screenshot 2025-01-11 at 5.39.24 PM.webp\" width=\"749\" height=\"411\">\n\n<img src=\"https://blog.kakaocdn.net/dn/ejj7Fp/btsLK7ZEdR5/fwoef86Y3VXjCa0vVIOjrK/img.webp\" data-is-animation=\"false\" data-origin-width=\"1650\" data-origin-height=\"1522\" data-filename=\"Screenshot 2025-01-11 at 5.45.35 PM.webp\" width=\"761\" height=\"702\">\n(2) create a database user - username, password 입력 > Create Database User 클릭 \n\n\n\n(3) driver 클릭 >  View full code sample 복사 \n몽고디비 클러스터에 접속하는 방법\n1. 몽고디비 셸 or 몽고디비 콤파스 GUI  사용 \n2. 애플리케이션(node.js, VScode ..등)에서 몽고디비 드라이버를 연결하여 사용하는 방법\n\nnode.js 애플리케이션에서 돌아가야하므로 driver 클릭\n<img src=\"https://blog.kakaocdn.net/dn/OwZcN/btsLJdUISbY/j58hmmBn6F2ndTNsthwp40/img.webp\" data-is-animation=\"false\" data-origin-width=\"1488\" data-origin-height=\"1526\" data-filename=\"Screenshot 2025-01-11 at 5.46.06 PM.webp\" width=\"750\" height=\"769\">\n\n\n<img src=\"https://blog.kakaocdn.net/dn/bU2Nwa/btsLK8de8k8/UCbf5ICsfCMnFPr81zSX91/img.webp\" data-is-animation=\"false\" data-origin-width=\"1480\" data-origin-height=\"1758\" data-filename=\"Screenshot 2025-01-11 at 5.47.21 PM.webp\" width=\"748\" height=\"889\">\n\nnpm install mongodb 을 설치한다. \ndb_password 부분에 나의 비밀번호를 입력하고 실행해서 확인하자. `꺽쇠까지 다지우고 비번을 쳐야한다.`\n```JS\n\nconst { MongoClient, ServerApiVersion } = require('mongodb');\nconst uri = \"mongodb+srv://YOURID:YOURPASSWORD@cluster0.kbog4.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0\";\n\n// Create a MongoClient with a MongoClientOptions object to set the Stable API version\nconst client = new MongoClient(uri, {\n  serverApi: {\n    version: ServerApiVersion.v1,\n    strict: true,\n    deprecationErrors: true,\n  }\n});\n\nasync function run() {\n  try {\n    await client.connect();\n    await client.db(\"admin\").command({ ping: 1 });\n    const adminDB = client.db('test').admin(); // admin DB 인스턴스\n    const listDatabases = await adminDB.listDatabases(); // db 정보 가져오기 \n\n    console.log(listDatabases)\n    return \"OK\";\n    console.log(\"Pinged your deployment. You successfully connected to MongoDB!\");\n  } finally {\n    // Ensures that the client will close when you finish/error\n    await client.close();\n  }\n}\nrun() // 실행함수 \n  .then(console.log)\n  .catch(console.error)\n  .finally(() => client.close())\n```\n\nvs code 에서도 mongodb extension 을 설치해서  실행하면 db 를 한눈에 볼수있다. \n\n<img src=\"https://blog.kakaocdn.net/dn/GOBzh/btsLK7SVPkc/RJv6VRUetm5DvePmypgFd0/img.png\" data-is-animation=\"false\" data-origin-width=\"863\" data-origin-height=\"1173\" data-filename=\"edited_Screenshot 2025-01-11 at 6.25.21 PM.webp\" width=\"629\" height=\"1004\">\n\n내컴퓨터에서는 접속이 되지만 AWS EC2 에서는 접속이 안되고 있다. \nip 를 추가해주어야한다. > 추가하면 ububuntu 에서도 잘돌아간다. \n\n<img src=\"https://blog.kakaocdn.net/dn/bhRsbg/btsLL7Y3BfY/MVD6AAkdTd1cN3IxwIH0n0/img.webp\" data-is-animation=\"false\" data-origin-width=\"1688\" data-origin-height=\"1442\" data-filename=\"Screenshot 2025-01-11 at 6.46.23 PM.webp\" width=\"751\" height=\"642\">\n\n여기에서 AWS 공인 아이피를 추가한다. \n<img src=\"https://blog.kakaocdn.net/dn/dr0L8r/btsLLPK6cXH/6Z0bwB5IKKPVniN5Udp14K/img.webp\" data-is-animation=\"false\" data-origin-width=\"1322\" data-origin-height=\"1006\" data-filename=\"Screenshot 2025-01-11 at 6.47.28 PM.webp\" width=\"752\" height=\"572\">\n\n\n# 결과 \n<img src=\"https://blog.kakaocdn.net/dn/kDT7F/btsLK2xnfYH/rnMH6DYjzlRHeDrv7OXI2K/img.webp\" data-is-animation=\"false\" data-origin-width=\"1016\" data-origin-height=\"608\" data-filename=\"Screenshot 2025-01-11 at 6.49.05 PM.webp\" width=\"751\" height=\"449\">\n\n\n# 6.4 몽고디비 CRUD API 만들기 \n\n## CRUD 해보기\n\n```JS\nconst MongoClient = require('mongodb').MongoClient;\nconst url = \"mongodb+srv://pulpilisory:PASSWORD@cluster0.kbog4.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0\";\n\nconst client = new MongoClient(url, {\n  serverApi: {\n    version: ServerApiVersion.v1,\n    strict: true,\n    deprecationErrors: true,\n  }\n});\n\nasync function main(){\n  try {\n    // connection 생성및 연결 시도 \n    await client.connect();\n    console.log(\"Mongo db 접속 성공\");\n\n    const collection = client.db('test').collection('person')// test db 에 person collection 을 사용, 없으면 생성후 사용\n    // Insert\n    //await collection.insertOne({name: 'Forrest', age:30});\n    //console.log(\"문서 추가 완료\")\n\n    // Read\n    const documents = await collection.find({name: \"Forrest\"}).toArray();\n    // console.log(documents)\n\n    // Update \n    await collection.updateOne({ name : \"Forrest\"}, {$set: {age: 31}});\n    console.log('문서 업데이트 ')\n\n    // Update 된것 확인 \n    const updatedDocuments = await collection.find({name : \"Forrest\"}).toArray()\n    console.log(\"갱신된 문서 : \", updatedDocuments)\n    \n    // await collection.deleteOne({name : \"Forrest\"});\n    // console.log('문서 삭제 ');\n    await client.close()\n  } catch (err){\n    console.error(err)\n  }\n  finally {\n  }\n}\nmain()\n```\n### CRUD 에 필요한 연산자 설명\n\n\n\n|연산자|설명|\n|--|--|\n|$set|Doc 속성변경|\n|$unset|속성 삭제|\n|$rename|속성 이름 변경|\n|$inc|필드값 증가|\n|$mul|필드값 곱하기 |\n|$min|지정 값과 현 값중 작은 값 |\n|$max|지 정값과 현 값 중 큰 값|\n|$currentDate|현 날짜와 시간 필드 업데이트|\n|$addToSet|배열 필드없으면 필드에 값 추가|\n|$pop|배열 필드에서 첫전째 or 막값 삭제|\n|$pull|배열 필드 모든값 삭제|\n|$push|배열 필드의 끝값 추가|\n|$each|여러개 값 추가 하여 필드 수정|\n\n## 6.5.2 몽구스로 스키마 만들기 \n몽구로 스키마를 왜 만들어야 하나? \n\n\n```Bash\ncd chapter6\nmkdir test-mongoose\ncd test-mongoose\nnpm install mongoose\n```\n\n## 스키마에 대해서 좀 알아보자. \n\n기존 몽고디비 예제에서 사용한 person 객체를 스키마로 만든다. \n여러 컬렉션에 조인 할 필요 없이 이미 필요한 모든 것을 갖춘 문서 작성 가능\n하지만 join과 스키마가 필요한 경우가 생길때가 있다. \n몽구스는 강제로 스키마를 부활시키고 join과 같은 기능을하는 populate 를 사용하게 해준다. \n몽구스는 MongoDB 기반의 Node.js 용 ODM(object data mapping) 라이브러리이다. \n자바스크립트 문법을 사용함. \n데이터를 db 에서 조회할때 자바스크립트 객체로 간편하게 바꿈. 읽어오는 속도가 빠름. \n몽구스는 1대 다 및 다대 다 관계 모두 사용 가능한 양방향 참조(Two-way-referencing) 이라는게 있다. \n\n예시 \n```JS\nconst todoSchema = new mongoose.Schema({\n  userId : {ref: 'User', type: mongoose.Schema.Types.ObjectId},\n  title: String,\n  gallery: [\n    {\n      ref: 'Gallery',\n      type: mongoose.Schema.Types.ObjectId\n    }\n  ]\n});\nmongoose.model('Todo', todoSchema)\n\nconst gallerySchema = new mongoose.Schema(\n  {\n    todo : [\n      {\n        ref: 'Todo'\n        type: mongoose.Schema.Types.ObjectId,\n      },\n    ],\n    files : Object,\n  }\n);\nmongoose.model('Gallery',gallerySchema)\n\n\n```\n\n참고\n1. [naver blog, 2019,기특한 몽구스 ](https://blog.naver.com/theonlyoneu/221733823893)\n\n\n# Schema 설계 하는 법 \n\n## Schema 란?\n데이터베이스에서 사용되는 문서의 구조를 정의하는것. \nschema는 필드 이름, 타입, 기본값, 제약 조건 등을 정의하여 문서 형식 결정 \nMongoDB는 schemaless 이므로 각 문서는 자유롭게 필드르 추가하거나 제거 가능. \n각 문선의 구조를 일정하게 유지하고자 하는 경우 스키마 사용\nmongoose를 사용하여 스키마를 만들어주어야한다. \n예시 \n```JS\n\nconst mongoose = require('mongoose')\nconst Schema  = mongoose.Schema // 몽구스 스키마 정의시 사용되는 생성자. \nconst contractSchema = new Schema({ // 스키마 객체 생성 \n  name : {type: String, required : true}, // 스키마 필드 정의\n  email: { type: String, required : true},\n  phone: { type: String , required: true, unique: true} // db 내 고유한 값을 가져야함. \n})\nconst Contact = mongoose.model('Contact', contactSchema) // 스키마 타입을 갖는 Contact 컬랙션(모델) 생성\n// 모델은 db 와 상호작용(crud)하는데 사용.\nmodule.exports = Contact // node.js 에서 현재 모듈을 다른 파일에서 required 로 불러와 사용할 수 있도록 내보내는데 사용\n\n// required: true 는 스키마 정의에서 해당 필드가 반드시 입력되어야함, 안되면 오류발생\n// Nosql 에서 필드 는 sql에서 칼럼과 같다. \n```\n`스키마 생성시 추가적인 속성`\n|속성|타입|설명|\n|--|--|--|\n|required|boolean, function| 해당 속성이 필수인지여부|\n|default|Any,function|기본값 설정 함수인 |\n|select|boolean|쿼리 수행시 기본적으로 선택되는 값인지 여부|\n|validate|func|유효성 검증 함수 추가<br> `email : {tye:String, validate : () => {return this.email.indexOf('@')>0;}}`|\n|get|func|커스텀 get 함수 설정 <br> name : {type: String, get: v => v.toLowerCase()|\n|set|func|커스텀 set 함수 설정 |\n|alias|String| 속성으로 주어진 이름이 아닌 별칭 사용|\n|immutable|boolean|true로 설정시 값 변경|\n|transform|func|Document#toJSON() 호출시 transform에 지정된 함수 실행 |\n|index|bool|해당 인덱스를 정의할지 여부|\n|unique|bool|해당 속성에 유니크 인덱스 정의할지 여부|\n|sparse|bool|해당 속성에 희소 인덱스 정의할지 여부|\n\n이렇게 생성한뒤 다른 파일에서 Contact 모델을 가져와서 사용한다. \n```JS\n\nconst Contact = require('./contact-model')\n\nasync function addContact() {\n  try {\n    const newContact  = new Contact({\n      name: '홍길동',\n      email : 'gildong@naver.com',\n      phone : '010-7333-1111',\n    })\n    const savedContact = await newContact.save()\n    console.log('new contact 저장 완료 ',savedContact);\n\n  } catch (error) {\n    console.error('연락처 저장 실패', error)\n  }\n}\naddContact();\n```\n\n\n\n\n# 2. Schema Design \n\n몽고 디비 에서 엔티티는 데이터 베이스에 저장된 개체 즉, 문서를 나타내는 것.  문서는 특정 속성과 값을 갖고 데이터 베이스 컬렉션의 멤버이다. \n클러스터 > 데이터 베이스 > 컬렉션(table) > 문서(entity) > 필드/키(column),값(row)\n스키마는 컬렉션에 저장되는 문선의 모양을 정의함. 각 필드의 타입, 필수여부, 제약조건 설정. \n몽고디비는 관계를 포함(embedding), 참조(referencing) 방식을 사용함. \n\n|RDBMS|MongoDB|\n|--|--|\n|database|database|\n|Table|Collection|\n|Tuple/row|Document|\n|Column|key/field|\n|table join|Embedded documents|\n|primary key|primary key(_id)|\n\n\n참고 : [티스토리,2017,몽고디비 ](https://sjh836.tistory.com/98)\n# JavaScript Arrow Function \n\n```JS\nfunction sum(a,b){\n    return a+b\n}\n\nconst sum  = (a,b) => { a+b}\n\n// 함수 몸체가 한줄이면 return 도생략하고 {} 도 생략가능 \n\n//매개변수가 하나뿐이면 매개변수의 괄호 부분을 생략할수 있다. \n//매개변수 없는 경우\n() => {}\n// 매개변수 한개인경우 소괄호 생략\nx => {}\n// 매개변수 여러개인경우 소괄호 생략 불가. \n(x,y) => {}\n\nx => {return x*x}\nx => x*x\n\n// 객체 리터럴 반환  * 중괄호를 사용하여 객체를 직접 정의하는 방식 \n() => {return {a:1}} \n\nconst calc = {\n    add : function(a,b) {\n        return a+b\n    },\n    sub : (a,b) => a-b,\n    etc : 'asdf'\n}\n```\n화살표 함수는 function 함수를 축약하여 표현하는 문법이다. \n- 화살표 함수에는 this 가 존재하지 않는다. \n\n\n\n\n# 6.5.3 몽구스 와 익스프레스로 CRUD API 만들기 \n\n\n### 테스트 코드 \n```JS\n\n```\n### **body parser**\n|Content type|설명 |\n|:--|--|\n|application/json| JSON 데이터|\n|application/xml| XML 데이터|\n|text/html| HTML 문서|\n|application/x-www-form-urlencoded| 폼 데이터|\n|multipart/form-data| 파일 업로드 시|"
+            ],
+            "outputs": []
+        },
+        {
+            "language": "typescript",
+            "source": [
+                "// person model 생성 \n\nvar mongoose = require('mongoose')\nvar Schema = mongoose.Schema\n\nconst personSchema = new Schema({\n    name : String ,\n    age : Number , \n    email: { type: String, required : true},\n})\nmodule.exports = mongoose.model('Person', personSchema)"
+            ],
+            "outputs": [
+                {
+                    "items": [
+                        {
+                            "mime": "text/plain",
+                            "value": [
+                                "Model { Person }"
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "language": "typescript",
+            "source": [
+                "const { r, y, g, b, bold, underline, reverse, bgRed, bgGreen } = require('./txtFunc');\n// Mongoos, express CRUD test\nconst {MongoClient, ServerApiVersion} = require('mongodb')\nconst express = require(\"express\")\nconst bodyParser = require(\"body-parser\")\nconst mongoose = require(\"mongoose\")\nconst Person = require(\"./person-model\")\n\n\n// 1. 경고 무시 설정\nmongoose.set(\"strictQuery\", false); \n// 몽구스에서 쿼리에 필터를 빈객체 {} 로 넣으면 모든값을 불러오게 되어 에러 \n\nconst app = express();\n\n//2. HTTP 에서 body 를 파싱하기 위한설정\napp.use(bodyParser.json()) \n// app.use(bodyParser.text())\n// app.use(bodyParser.text({ type: 'text/plain' }));\n// app.use(bodyParser.urlencoded({extended :true}))\napp.listen(80, async() => {\n    console.log(\"Server started\")\n\n    // const MongoClient = require('mongodb').MongoClient;\n    \n    const url = \"mongodb+srv://pulpilisory:qwe123@cluster0.kbog4.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0\";\n    \n    const client = new MongoClient(url, {\n      serverApi: {\n        version: ServerApiVersion.v1,\n        strict: true,\n        deprecationErrors: true,\n      }\n    });\n\n    // 3. mongoDB connection \n    // error : useNewUrlParser 는 4.0 부터는 사용하지 않음. \n    // error : useUnifiedTopology 는 4.0 부터는 사용하지 않음. \n    mongoose\n      .connect(url)\n      .then(console.log(\"Connected to MongoDB with Mongoose\"))\n      .catch((error) => console.error(\"Mongoose connection error:\", error));\n})\n\n\n// 4. 모든 person 데이터 출력 \napp.get(\"/person\", async (req,res) => {\n  const person = await Person.find({});\n\n  // 특정 필드 제외시 .find({}, {name:1, email:0})\n  // sorting : .find({},{sort: {name:1}})\n  // limit(문서수 지정) : Person.find({},{limit:10})\n  // skip(앞에서 제외할 문서수 지정) : .find({},{skip:5})\n  res.send(person);\n})\n\n// 5. 특정 이메일로 person 찾기 \napp.get(\"/person/:email\", async (req, res)=> {\n  const person = await Person.findOne({ email: req.params.email})\n  res.send(person)\n})\n\n// 6. person 데이터 추가하가ㅣ \napp.post(\"/personal\", async (req, res) => {\n  console.log(\"request logs \")\n  console.log(\"request headers:\",req.headers)\n  console.log(\"request body ===> \",req.body)\n  try {\n    const person = new Person(req.body)\n    // await person.save()\n    const result = await Person.create(req.body) //로 추가 해도됨\n    res.send(result)\n  } catch (error) {\n    console.error(\"Error creating person\",error)\n    res.status(500).send({error: \"내부 서버 에러 \"})\n  }\n\n})\n\n// 7. person data 수정하기 \napp.put(\"/person/:email\", async (req,res)=> {\n  const person = await Person.findOneAndUpdate(//문서 하나만 찾아서 수정하는 경우 updateOne() 과 같음.\n    {email: req.params.email},\n    {$set: req.body},\n    {new: true}\n  )\n  console.log(person)\n  res.send(person)\n})\n//  8. person 데이터 삭제하기 \napp.delete(\"/person/:email\", async (req,res) => {\n  await Person.deleteMany({ email : req.params.email});\n  res.send({ success: true})\n})\n"
+            ],
+            "outputs": [
+                {
+                    "items": [
+                        {
+                            "mime": "application/vnd.code.notebook.error",
+                            "value": {
+                                "name": "Error",
+                                "message": "Failed to generate code object, Argument name clash (27:31)",
+                                "stack": ""
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "language": "powershell",
+            "source": [
+                "# npm install mongodb\n\nnpm install mongoose\nnpm install express\nnode person-model.js"
+            ],
+            "outputs": [
+                {
+                    "items": [
+                        {
+                            "mime": "application/vnd.code.notebook.stdout",
+                            "value": [
+                                "",
+                                "up to date, audited 20 packages in 471ms",
+                                "",
+                                "1 package is looking for funding",
+                                "  run `npm fund` for details",
+                                "",
+                                "found 0 vulnerabilities",
+                                "",
+                                "added 74 packages, and audited 94 packages in 1s",
+                                "",
+                                "15 packages are looking for funding",
+                                "  run `npm fund` for details",
+                                "",
+                                "found 0 vulnerabilities",
+                                ""
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "language": "typescript",
+            "source": [
+                "const {MongoClient, ServerApiVersion} = require('mongodb')\n\n// const MongoClient = require('mongodb').MongoClient;\n\nconst url = \"mongodb+srv://pulpilisory:qwe123@cluster0.kbog4.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0\";\n\nconst client = new MongoClient(url, {\n  serverApi: {\n    version: ServerApiVersion.v1,\n    strict: true,\n    deprecationErrors: true,\n  }\n});\n\n// const client = new MongoClient(url, { userNewUrlParser: true});\n\nasync function main(){\n  try {\n    // connection 생성및 연결 시도 \n    await client.connect();\n    console.log(\"Mongo db 접속 성공\");\n\n    const collection = client.db('test').collection('person')// test db 에 person collection 을 사용, 없으면 생성후 사용\n    // Insert\n    await collection.insertOne({name: 'Forrest', age:30});\n    console.log(\"문서 추가 완료\")\n\n    // Read\n    const documents = await collection.find({name: \"Forrest\"}).toArray();\n    // console.log(documents)\n\n    // Update \n    await collection.updateOne({ name : \"Forrest\"}, {$set: {age: 31}});\n    console.log('문서 업데이트 ')\n\n    // Update 된것 확인 \n    const updatedDocuments = await collection.find({name : \"Forrest\"}).toArray()\n    console.log(\"갱신된 문서 : \", updatedDocuments)\n    \n    // await collection.deleteOne({name : \"Forrest\"});\n    // console.log('문서 삭제 ');\n    await client.close()\n  } catch (err){\n    console.error(err)\n  }\n  finally {\n\n  }\n}\n\nmain()\n"
+            ],
+            "outputs": [
+                {
+                    "items": [
+                        {
+                            "mime": "application/vnd.code.notebook.stdout",
+                            "value": [
+                                "Mongo db 접속 성공",
+                                "문서 추가 완료",
+                                "갱신된 문서 :  [",
+                                "  {",
+                                "    _id: new ObjectId('678250fb483252b0fed89a92'),",
+                                "    name: 'Forrest',",
+                                "    age: 31",
+                                "  },",
+                                "  {",
+                                "    _id: new ObjectId('6784e0c408a14e70f4c28566'),",
+                                "    name: 'Forrest',",
+                                "    age: 30",
+                                "  }",
+                                "]",
+                                ""
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "language": "typescript",
+            "source": [
+                "// Person model schema\n\nvar mongoose = require('mongoose');\nvar Schema = mongoose.Schema;\n\nconst personSchema = new Schema({\n    name : String, \n    age : Number,\n    email : { type: String, required: true}\n\n})\n\nmodule.exports = mongoose.model('Person',personSchema)\n\n\n"
+            ],
+            "outputs": [
+                {
+                    "items": [
+                        {
+                            "mime": "text/plain",
+                            "value": [
+                                "Model { Person }"
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "language": "markdown",
+            "source": [
+                "스키마 생성시 선언가능한 타입 \n|타입|설명|\n|--|--|\n|String|속성을 문자열로 선언 **`const schema = new Schema({name:String})`**|\n|Number|숫자로 선언 **`const schema = new Schema({age:Number})`**|\n|Date|날짜로 선언 |\n|Buffer|버퍼로 선언 const binData = new Schema({binData:Buffer})|\n|Boolean|불로 선언 const test = new Boolean({b : Boolean})|\n|Mixed|무엇이든 가능한 타입 const Any = new Schema({any: {}})|\n|Object|고유 식별자 값 const keySchema = new Schema({key : mongoose.ObjectId})|\n|Array|[] 로 선언 const names = new Schema({names : [String]})|\n|Decimal128|128 비트 10진수 부동소수점선언 const f = new Schema({f : Decimal28})|\n|Map|Map 의 하위 클래스인 MongooseMap 타입 선언 const site = new Schema({<br>  url : {<br>    type: Map,<br>of: String } })|\n|Schema|특정 스키마 타입으로 타입을 선언 할수 있음. |\n\n\n"
+            ],
+            "outputs": []
+        },
+        {
+            "language": "typescript",
+            "source": [
+                "const { r, y, g, b, bold, underline, reverse, bgRed, bgGreen } = require('./txtFunc');\nr('이것은 빨간색 글자입니다.');\ny('이것은 노란색 글자입니다.');\ng('이것은 초록색 글자입니다.');\nb('이것은 하늘색 글자입니다.');\nbold('이것은 굵은 글자입니다.');\nunderline('이것은 밑줄 글자입니다.');\nreverse('이것은 반전 글자입니다.');\nbgRed('이것은 빨간색 배경입니다.');\nbgGreen('이것은 초록색 배경입니다.');\n"
+            ],
+            "outputs": [
+                {
+                    "items": [
+                        {
+                            "mime": "application/vnd.code.notebook.stdout",
+                            "value": [
+                                "\u001b[31m이것은 빨간색 글자입니다.\u001b[0m",
+                                "\u001b[33m이것은 노란색 글자입니다.\u001b[0m",
+                                "\u001b[32m이것은 초록색 글자입니다.\u001b[0m",
+                                "\u001b[36m이것은 하늘색 글자입니다.\u001b[0m",
+                                "\u001b[1m이것은 굵은 글자입니다.\u001b[0m",
+                                "\u001b[4m이것은 밑줄 글자입니다.\u001b[0m",
+                                "\u001b[7m이것은 반전 글자입니다.\u001b[0m",
+                                "\u001b[41m이것은 빨간색 배경입니다.\u001b[0m",
+                                "\u001b[42m이것은 초록색 배경입니다.\u001b[0m",
+                                ""
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,42 @@
+
+<!-- views/write.handlebars-->
+<h1>[{{title}}] 글 {{#if (eq mode "create")}}작성 {{else}}수정 {{/if}} </h1>
+<div> 
+
+
+    <!-- (1) 글쓰기 폼 -->
+    <form name="boardForm" method="post" {{#if (eq mode "create")}}
+    action="/write" {{else}} action="/modify" {{/if}}>
+        <!-- 수정모드인 때는 id 값을 form 을 통해 전송한다. -->
+        {{#if (eq mode "modify")}}
+        <input type="hidden" name="id" value="{{post._id}}" />
+        {{/if}}
+
+        
+        <!-- (2) 제목입력 칸 -->
+        <div>
+            <label> title </label>
+            <input type="text" name = "title" placeholder="input title" value="{{post.title}}" />
+
+        </div>
+        <!-- (3)이름 입력 칸 -->
+        <div>
+            <label>writer name</label>
+            <input type="text" name="writer" placeholder="input your name" value="{{post.writer}}" />
+        </div>
+        <!-- (4) 비밀 번호 입력 칸  -->
+        <div>password</div>
+        <input type="password" name="password" placeholder="please input password" value="" />
+        <!-- (5) 본문 입력 -->
+        <div>
+            <label>insert main content</label></div><br>
+            <textarea placeholder="main" name="content" cols="50" rows="10" >{{post.content}}"</textarea>
+        </br>
+        </div>
+        <div>
+            <!--(6) 버튼 영역-->
+            <button type="submit">저장</button>
+            <button type="button" onclick="location.href='/'">취소</button>
+        </div>
+    </form>
+</div>

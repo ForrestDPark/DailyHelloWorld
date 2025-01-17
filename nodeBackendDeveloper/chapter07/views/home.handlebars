@@ -1,0 +1,79 @@
+<!--home.handlebars-->
+<!--title 영역 -->
+<h1>{{title}}</h1>
+
+<!-- 검색어 영역 -->
+<!-- (1) value 에 검색어 데이터를 넣음. -->
+<input type="text" name="search" id="search" value="{{search}}"
+ size="50" placeholder="Input search word"/>
+<!-- (2) 버튼 클릭시 search 변수에 검색어 데이터를 담아서 서버로 보냄. -->
+<button onclick ="location.href=`/?search=${document.getElementById('search').value}`">검색</button>
+<br />
+<a href="/write"> 글쓰기 </a>
+
+<br>
+<!-- <p> 이페이지에서 사용하는 변수들 </p>
+<p> id : {{_id}}</p>
+<p> root :{{@root}}</p>
+<p> posts :{{posts}}</p> -->
+
+<div>
+    <table>
+        <thead>
+            <tr>
+                <th width = "50%">제목</th>
+                <th>작성자</th>
+                <th>조회수</th>
+                <th>등록일</th>
+            </tr>
+        </thead>
+        <!-- (1) 게시글 데이터 표시 -->
+        <tbody>
+            {{#each posts}}
+            <tr>
+                <!-- (2) 상세 페이지 링크 -->
+                <td><a href="/detail/{{_id}}">{{title}}</a></td>
+
+                <td align="center">{{writer}}</td>
+                <td align="center">{{hits}}</td>
+
+                <!-- (3) dateString 헬퍼 함수 사용 -->
+                <td align="center">{{dateString createdDt}}</td>
+            </tr>
+            {{/each}}
+        </tbody>
+    </table>
+</div>
+
+<!--페이징 영역-->
+<div>
+    <!--(4) with 내장 헬퍼 함수 paginator 객체 가 컨택스트가 됨.-->
+    {{#with paginator}}
+    <!-- (5) @root :서버의 최상위 컨텍스트 참조, '<<' 링크를 통해 page 1로 이동  (괄호는 &lt 사용)-->
+    <a href="/?page=1&search={{@root.search}}">&lt;&lt;</a>
+    {{#if hasPrev}}
+    <a href="/?page={{prevPage}}&search={{@root.search}}"">&lt;</a>"
+    <!-- (6) 1페이지 인 경우 이전 페이지 가 없으므로 링크가 없음 -->
+    {{else}} 
+    <a>&lt</a>
+    {{/if}}
+    <!-- 현재 페이지 번호 리스트 나타내기 -->
+    {{#each pageList}}
+    {{#if (eq . @root.paginator.page)}}
+    <a>{{.}}</a>
+    {{else}}
+    <a href="/?page={{.}}&search={{@root.search}}">{{.}}</a>
+    {{/if}}
+    {{/each}}
+
+    <!-- '>>' 부분 구현  -->
+    {{#if hasNext}}
+    <a href="/?page={{nextPage}}&search={{@root.search}}">&gt;</a>
+
+    {{else}}
+    <a>&gt;</a>
+    {{/if}}
+    <a href="/?page={{lastPage}}&search={{@root.search}}">&gt;&gt;</a>
+    
+    {{/with}}
+</div>

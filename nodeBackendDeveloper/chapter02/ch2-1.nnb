@@ -1,0 +1,67 @@
+{
+    "cells": [
+        {
+            "language": "markdown",
+            "source": [
+                "# [node.js] VScode 안에서 Jupyter 처럼 Javascript, typscript 노트북을 실행하는 방법?\n---\n<!-- 글작성일 : 2025.1.8 -->\n<!--💡이글을 쓰게 된 이유는 무엇인가요?-->\n\n************************************************************\n|**😥 <span style=\"color:red\"> 문제점 🧨</span>** |<span style=\"color:red\"> node.js 를 스터디할때 javascirpt 를 일일히 terminal 을 통해 실행해야한다.</span> |\n|:--|:--|\n|**<span style=\"color:#b181ebff\">🧪나쁜영향😫</span>** | **<sapn style=\"color:#b181ebff\"> 환경이  안좋아서 개발하는데 스트레스가쌓인다</span>**|\n|**<span style=\"color:#008080\">💁‍♂️해결방법💊</span>** | **<span style=\"color:#008080\"> Node.js notebook 이라는 extension 을 설치한다.</span>**|\n************************************************************\n\n### ℹ️ 참고\n\n1.🌐 [JavaScript/TypeScript 노트북 vscode 플러그인](https://freeislet.tistory.com/53) <br>\n\n\n### <span style=\"color:#21409a\">**1. 설치**<span>\n**(1) Extension > Node.js note > 설치 > open a sample node.js notebook**\n**(2) .nnb 파일 생성 > console.log check**\n\n[##_Image|kage@cfUnmP/btsLHy4oZKj/hgqpXUCRIzBSguVxvKFH10/img.webp|CDM|1.3|{\"originWidth\":2750,\"originHeight\":886,\"style\":\"alignCenter\",\"width\":748,\"height\":241,\"caption\":\"extension\",\"filename\":\"Screenshot 2025-01-08 at 2.51.16 PM.webp\"}_##]\n\n# 결과 \n\n[##_Image|kage@d4M2CW/btsLG4WJMxX/YCjympJPTOVvi7HWAZHBD1/img.webp|CDM|1.3|{\"originWidth\":1398,\"originHeight\":922,\"style\":\"alignCenter\",\"width\":753,\"height\":497,\"caption\":\"test,nnb 생성하고 log 출력 확인\",\"filename\":\"Screenshot 2025-01-08 at 3.02.15 PM.webp\"}_##]\n\n"
+            ],
+            "outputs": []
+        },
+        {
+            "language": "markdown",
+            "source": [
+                "# Node.js 콜스택 작동에 대해 알아보자 \n\n```JavaScript\n// Callstack example\n\nfunction func1(){\n    console.log(\"1\");\n    func2();\n    return;\n}\n\nfunction func2(){\n    console.log(\"2\");\n    return;\n}\nfunc1();\n```\n[##_Image|kage@bp8dR3/btsLFPTM42k/gHEwcCopyedUEsh2Qrts01/img.webp|CDM|1.3|{\"originWidth\":930,\"originHeight\":948,\"style\":\"alignCenter\",\"width\":753,\"height\":768,\"caption\":\"call stack 작동 순서\",\"filename\":\"Screenshot 2025-01-08 at 3.18.32 PM.webp\"}_##]\n\n"
+            ],
+            "outputs": []
+        },
+        {
+            "language": "javascript",
+            "source": [
+                "console.log(\"hello\")\n// Callstack example\n\nfunction func1(){\n    console.log(\"1\");\n    func2();\n    return;\n}\n\nfunction func2(){\n    console.log(\"2\");\n    return;\n}\nfunc1();"
+            ],
+            "outputs": [
+                {
+                    "items": [
+                        {
+                            "mime": "application/vnd.code.notebook.stdout",
+                            "value": [
+                                "hello",
+                                "1",
+                                "2",
+                                ""
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "language": "markdown",
+            "source": [
+                "## 2.3.2 이벤트 기반 아키텍처\n- JavaScript 는 싱글 스레드이기때문에 동시에 100개의 요청을 받으면 마지막 요청은 10초 대기 해야한다. \n\n- 콜스택에 쌓인 작업을 다른곳에서 처리한다음 처리가 완료되었을때 알림을 받으면 스레드가 하나라도 빠르게 처리 할수있음. \n- 마치 카페에서 종업원이 커피 제조하는 도중에 다음 주문을 받고 빠르게 제조된 음식이 먼저 나오는 것과 같음. \n\n## 2.3.3 이벤트 루프 \n🤔 이벤트 루프\n- 반응자 패턴 (reactor pattern) 사용\n- 디멀티플렉서와 이벤트 큐로 구성됨 \n- 반응자 패턴은 이벤트를 추가흔 주체와 해당 이벤트를 실행하는 주체를 분리(decoupling) 하는 구조임. \n- Node.js 이벤트 루프는 libuv에 있음. \n- libuv 소스 파일의 uv_run() 함수 \n- 이벤트 루프는 여러개의 FIFO 큐로 이루어짐\n- 페이팔, 넷플릭스, 우버, 링크드인, 나사, 네이버 는 node.js 를 실제 상용 서비스에 사용함. \n\n🤔 Node.js 를 선택해야하는 이유\n- 적은 메모리로도 좋은 성능이 가능함. \n- 마이크로서비스와 클라우드 환경에도 적합함. \n장점 : \n- 비동기 이벤트 기반 IO 사용하여 도잇에 여러 요청 다룸. \n- 프론트개발자의 백엔드 진입이 용이함. \n- 클라이언트와 같은 어어를 사용하면 서버코드에 사용된 로직을 클라이언트에서도 사용 할수있음. \n- 개발자 생태계가 좋음. 패키지 매니저에서 필요한 대부분을 제공\n- V8 엔진이 JIT 컴파일러이므로 서버 기도잉 빠름. \n\n단점 : \n- 기본적으로 cpu 하나만 사용하므로 멀티코어를 사용하려면 별도작업 필요\n- 비동기를 지원하지 않는 IO 요청이나 cpu 작업은 주의해서 작업 필요\n- 콜백을 중첩해서 계속 사용하면 코드 작성및 디버깅이 힘들어짐. \n- 이벤트 기반 프로그래밍 은 타언어보다 어려울수 있음. \n\n\n\n\n\n💁‍♂️ 마이크로 서비스란? \n- 서비스를 작은 단위로 쪼개고 쪼갠 서비스는 독립적으로 수행되는 소규모 시스템이다. 명확하고 절대적으로 분리된 인터페이스 정의에 의해 긴밀하게 통신하는 아키텍처 \n장점 :\n- 민첩한 대응이 가능하다. \n- 소규모 조직 업무영역으로 이루어짐. \n- 관리하기 용이하다.\n- 서비스 단위 테스트가 쉽다. \n- 배포가 쉽다. \n- 서비스 확장/개선 경제적이고 정확한 시스템 확장 가능\n\n단점 : \n- 업무 분리가 어렵다. (도메인 주도 설계)\n- 분산 시스템이 어렵고 코딩이 복잡해질수있다.\n- 대규모 서비스가 되면 지연/장애율이 올라감.\n- \n\n참고 \n\n1. [마이크로서비스란?](https://freeend.tistory.com/115)\n"
+            ],
+            "outputs": []
+        },
+        {
+            "language": "javascript",
+            "source": [
+                "console.log(\"1\")\nsetTimeout(() => console.log(2), 1000)\n\n// setTimeout은 api 이므로 callstack 에서 나와서 Node.js API 로이동\n\nconsole.log(\"3\")\n// setTimeout을 기다리는 동안 \"3\" 실행됨\n\n// 일정시간이 지나고 api 를 거쳐 test que 로 setTimeout 이 이동\n// 이벤트 루프의 각 단계를 거쳐 결과가 콜스택에 다시 추가됨.\n// \"2\" 출력이 실행됨\n"
+            ],
+            "outputs": [
+                {
+                    "items": [
+                        {
+                            "mime": "application/vnd.code.notebook.stdout",
+                            "value": [
+                                "1",
+                                "3",
+                                "2",
+                                ""
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

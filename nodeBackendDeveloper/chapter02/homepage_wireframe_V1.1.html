@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Research Platform Wireframe</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f7f9fc;
+            color: #333;
+        }
+        header {
+            background-color: #3b82f6;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2rem;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        header h1 {
+            margin: 0;
+        }
+        .top-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .top-right button {
+            background-color: white;
+            color: #3b82f6;
+            border: 1px solid #3b82f6;
+            padding: 0.5rem 1rem;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .top-right button:hover {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .container {
+            display: flex;
+            padding: 2rem;
+        }
+        .sidebar {
+            width: 240px;
+            background-color: #ffffff;
+            padding: 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .sidebar h2 {
+            font-size: 1.2rem;
+            margin-top: 0;
+            color: #3b82f6;
+        }
+        .sidebar ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .sidebar ul li {
+            margin: 1rem 0;
+        }
+        .sidebar ul li a {
+            text-decoration: none;
+            color: #333;
+            font-weight: 500;
+            padding: 0.5rem;
+            display: block;
+            border-radius: 5px;
+        }
+        .sidebar ul li a:hover {
+            background-color: #f0f4ff;
+            color: #3b82f6;
+        }
+        .main {
+            flex: 1;
+            margin-left: 2rem;
+            background-color: #ffffff;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .main h3 {
+            font-size: 1.5rem;
+            margin-top: 0;
+            color: #3b82f6;
+        }
+        .button {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            background-color: #3b82f6;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-align: center;
+        }
+        .button:hover {
+            background-color: #2563eb;
+        }
+        footer {
+            background-color: #ffffff;
+            color: #777;
+            text-align: center;
+            padding: 1rem;
+            border-top: 1px solid #eaeaea;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Research Platform</h1>
+        <div class="top-right">
+            <button>Settings</button>
+            <button>Log Out</button>
+        </div>
+    </header>
+
+    <div class="container">
+        <aside class="sidebar">
+            <h2>Menu</h2>
+            <ul>
+                <li><a href="#">Dashboard</a></li>
+                <li><a href="#">Project Management</a></li>
+                <li><a href="#">Task Management</a></li>
+                <li><a href="#">Messages</a></li>
+                <li><a href="#">Quick Actions</a></li>
+                <li><a href="#">Data Management</a></li>
+            </ul>
+        </aside>
+
+        <main class="main">
+            <div class="section">
+                <h3>Dashboard</h3>
+                <p>A summary of ongoing projects, deadlines, and recent activity.</p>
+            </div>
+            <div class="section">
+                <h3>Messages</h3>
+                <p>Collaborate with team members and stay updated.</p>
+                <a href="#" class="button">Open Messages</a>
+            </div>
+            <div class="section">
+                <h3>Task Management</h3>
+                <p>Manage all tasks efficiently in one place.</p>
+                <a href="#" class="button">View Tasks</a>
+            </div>
+            <div class="section">
+                <h3>Project Management</h3>
+                <p>Manage all your research projects in one place.</p>
+                <a href="#" class="button">Create New Project</a>
+            </div>
+            <div class="section">
+                <h3>Quick Actions</h3>
+                <a href="#" class="button">Manuscript Assistance</a>
+                <a href="#" class="button">IRB Assistance</a>
+                <a href="#" class="button">Protocol Assistance</a>
+            </div>
+        </main>
+    </div>
+
+    <footer>
+        <p>&copy; GRK Partners Research Platform.</p>
+    </footer>
+</body>
+</html>
