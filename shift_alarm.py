@@ -1,0 +1,687 @@
+#!/usr/bin/env python3
+"""
+교대근무 메뉴바 앱 (날씨 + Elmedia 폴더 재생 + 근무표 자동 인식 + 오늘 급여 실시간 표시)
+설치: pip install rumps
+실행: python3 shift_alarm.py
+
+추가된 기능:
+- d_team_schedule_2026.json (근무표에서 추출한 D조 날짜별 근무표)을 읽어서
+  매일 자정에 "오늘 날짜"에 해당하는 근무(D/S/G/휴)를 자동으로 찾아
+  알람을 자동 설정한다.
+- 메뉴바에서 수동으로 근무를 눌러서 덮어쓰는 것도 여전히 가능하다
+  (수동 선택 시 "자동 모드"는 꺼지고, 다시 켜고 싶으면 메뉴에서 켤 수 있다).
+- 오늘 근무 중 "지금까지 벌어들인 급여" 실시간 추정치
+  - 급여명세서를 역산해서 얻은 통상시급을 기본값으로 사용
+  - 주간(Day)/오후(Swing): 통상시급 그대로
+  - 야간(GY, 22:00~06:00): 통상시급 x 1.5 (야간수당 50% 가산분 반영)
+  - 자정을 넘기는 야간 근무도 정확히 계산 (어제 시작한 근무를 오늘도 이어서 카운트)
+  - 이 값은 "추정치"예요. 정확한 통상시급은 매달 급여명세서 나올 때마다
+    메뉴의 "시급 설정"에서 갱신해주면 더 정확해져요.
+"""
+
+import rumps
+import subprocess
+import os
+import json
+import urllib.request
+import threading
+import datetime
+
+# ── 설정 파일 경로 ──────────────────────────────────────────
+CONFIG_FILE = os.path.expanduser("~/.shift_alarm_config.json")
+
+# ── 근무표 JSON 경로 (엑셀에서 추출한 D조 날짜별 근무) ─────────────
+# 스크립트와 같은 폴더에 d_team_schedule_2026.json 을 두거나,
+# 아래 경로를 실제 위치로 바꿔주세요.
+SCHEDULE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "d_team_schedule_2026.json")
+
+# ── 근무표 코드(D/S/G/휴) → 앱 내부 근무 이름 매핑 ───────────────
+CODE_TO_SHIFT = {
+    "D": "Day",
+    "S": "Swing",
+    "G": "GY",
+    "휴": "휴무",
+}
+
+# ── 앱 내부 근무 이름 → 메뉴바 타이틀용 짧은 코드 (역매핑) ────────
+SHIFT_TO_SHORT_CODE = {v: k for k, v in CODE_TO_SHIFT.items()}
+
+# ── 근무별 알람 시간 ─────────────────────────────────────────
+SHIFT_TIMES = {
+    "Day":   {"hour": 2,  "minute": 55},
+    "Swing": {"hour": 10, "minute": 55},
+    "GY":    {"hour": 18, "minute": 5},
+    "휴무":  None
+}
+
+# ── 근무별 실제 근무 시작/종료 시각 (근로계약서 기준) ─────────────
+SHIFT_WORK_HOURS = {
+    "Day":   {"start": (6, 0),  "end": (14, 0), "crosses_midnight": False},
+    "Swing": {"start": (14, 0), "end": (22, 0), "crosses_midnight": False},
+    "GY":    {"start": (22, 0), "end": (6, 0),  "crosses_midnight": True},
+}
+
+# ── 급여 계산용 시급 설정 ────────────────────────────────────
+# 급여명세서의 "야간근로수당 = 야간시간 x 통상시급 x 50%" 식을
+# 역산해서 얻은 값을 기본값으로 사용. 매달 명세서 나오면
+# 메뉴 "시급 설정"에서 이 값을 갱신하면 됨 (설정은 CONFIG_FILE에 저장되어 재실행해도 유지됨).
+HOURLY_WAGE = 14861
+
+SHIFT_WAGE_MULTIPLIER = {
+    "Day":   1.0,
+    "Swing": 1.0,
+    "GY":    1.5,   # 야간수당 50% 가산
+}
+
+# ── 실행할 단축어 이름 ────────────────────────────────────────
+SHORTCUT_NAME = "아침루틴음악재생"
+
+# ── Elmedia로 열 음악 폴더 ─────────────────────────────────────
+PLAYLIST_FOLDER = "/Users/forrestdpark/Desktop/BlogImage/Coffee and Meditation"
+
+# ── 아산시 좌표 ──────────────────────────────────────────────
+LATITUDE  = 36.78
+LONGITUDE = 127.00
+
+# ── launchd / 알람 스크립트 경로 ────────────────────────────────
+PLIST_PATH        = os.path.expanduser("~/Library/LaunchAgents/com.shfitalarm.music.plist")
+ALARM_SCRIPT_PATH = os.path.expanduser("~/Library/Scripts/shift_alarm_run.sh")
+
+
+# ════════════════════════════════════════════════════════════
+# 설정 저장/불러오기
+# ════════════════════════════════════════════════════════════
+
+def load_config():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r") as f:
+            return json.load(f)
+    # auto_mode 기본값 True: 처음 실행하면 자동으로 근무표를 따라간다
+    return {"current_shift": None, "auto_mode": True, "show_earnings": True}
+
+
+def save_config(config):
+    with open(CONFIG_FILE, "w") as f:
+        json.dump(config, f)
+
+
+# ════════════════════════════════════════════════════════════
+# 근무표 JSON 불러오기 + 오늘 근무 조회
+# ════════════════════════════════════════════════════════════
+
+def load_schedule():
+    """d_team_schedule_2026.json 을 로드. 실패 시 빈 dict 반환."""
+    try:
+        with open(SCHEDULE_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def get_shift_for_date(schedule, date: datetime.date):
+    """근무표에서 특정 날짜의 근무 코드(D/S/G/휴)를 찾아
+    앱 내부 근무 이름(Day/Swing/GY/휴무)으로 변환해서 반환.
+    근무표에 없는 날짜면 None 반환."""
+    date_str = date.strftime("%Y-%m-%d")
+    code = schedule.get(date_str)
+    if code is None:
+        return None
+    return CODE_TO_SHIFT.get(code)
+
+
+# ════════════════════════════════════════════════════════════
+# 오늘 급여 계산
+# ════════════════════════════════════════════════════════════
+
+def get_active_shift_window(schedule, now):
+    """
+    현재 시각(now) 기준으로 "지금 진행 중인 근무"를 찾는다.
+    GY(야간)는 어제 시작해서 오늘 새벽까지 이어질 수 있으므로
+    어제/오늘 두 날짜를 모두 확인한다.
+
+    반환: (shift_name, start_datetime, end_datetime) 또는 None(근무 없음/휴무)
+    """
+    today = now.date()
+    yesterday = today - datetime.timedelta(days=1)
+
+    # 1) 어제 시작한 GY 근무가 오늘 새벽까지 이어지는 경우
+    yshift = get_shift_for_date(schedule, yesterday)
+    if yshift == "GY":
+        info = SHIFT_WORK_HOURS["GY"]
+        start_dt = datetime.datetime.combine(yesterday, datetime.time(*info["start"]))
+        end_dt = datetime.datetime.combine(today, datetime.time(*info["end"]))
+        if start_dt <= now <= end_dt:
+            return "GY", start_dt, end_dt
+
+    # 2) 오늘 시작하는 근무 (Day/Swing/GY)
+    tshift = get_shift_for_date(schedule, today)
+    if tshift in ("Day", "Swing", "GY"):
+        info = SHIFT_WORK_HOURS[tshift]
+        start_dt = datetime.datetime.combine(today, datetime.time(*info["start"]))
+        if info["crosses_midnight"]:
+            end_dt = datetime.datetime.combine(today + datetime.timedelta(days=1), datetime.time(*info["end"]))
+        else:
+            end_dt = datetime.datetime.combine(today, datetime.time(*info["end"]))
+        if start_dt <= now <= end_dt:
+            return tshift, start_dt, end_dt
+
+    return None
+
+
+def calc_today_earnings(schedule, now=None):
+    """
+    지금까지 진행된 근무 시간을 기준으로 오늘 벌어들인 급여(추정치)와
+    근무 완료 시 받게 될 총액을 계산해서 반환.
+
+    반환: dict 또는 근무 없음(휴무 등)이면 None
+    """
+    now = now or datetime.datetime.now()
+    window = get_active_shift_window(schedule, now)
+    if window is None:
+        return None
+
+    shift, start_dt, end_dt = window
+    elapsed = (now - start_dt).total_seconds() / 3600.0
+    elapsed = max(0.0, min(elapsed, 8.0))  # 8시간 근무 기준으로 클램프
+
+    multiplier = SHIFT_WAGE_MULTIPLIER.get(shift, 1.0)
+    rate_per_hour = HOURLY_WAGE * multiplier
+
+    earned_so_far = int(elapsed * rate_per_hour)
+    total_when_done = int(8.0 * rate_per_hour)
+
+    return {
+        "shift": shift,
+        "elapsed_hours": round(elapsed, 2),
+        "earned_so_far": earned_so_far,
+        "total_when_done": total_when_done,
+    }
+
+
+def get_earnings_status(schedule, now=None):
+    """
+    지금 이 순간의 급여 표시 상태를 반환.
+    - state == "active":  지금 근무 중. earned_so_far / elapsed_hours / total_when_done 포함
+    - state == "waiting": 오늘 근무는 예정돼 있지만 지금은 근무 시간이 아님(출근 전 등).
+                          그 근무를 마치면 받게 될 total_when_done 과 시작 시각(start_time) 포함
+    - state == "off":     오늘 근무표에 근무 코드가 없음(휴무) → 급여 표시 안 함
+    """
+    now = now or datetime.datetime.now()
+    info = calc_today_earnings(schedule, now)
+    if info:
+        return {"state": "active", **info}
+
+    today = now.date()
+    tshift = get_shift_for_date(schedule, today)
+    if tshift in SHIFT_WORK_HOURS:
+        wh = SHIFT_WORK_HOURS[tshift]
+        multiplier = SHIFT_WAGE_MULTIPLIER.get(tshift, 1.0)
+        total_when_done = int(8.0 * HOURLY_WAGE * multiplier)
+        start_dt = datetime.datetime.combine(today, datetime.time(*wh["start"]))
+        return {"state": "waiting", "shift": tshift, "start_time": start_dt, "total_when_done": total_when_done}
+
+    return {"state": "off"}
+
+
+def format_won_short(amount):
+    """메뉴바 타이틀용 짧은 금액 표기. 예: 178332 → '17.8만'"""
+    return f"{amount / 10000:.1f}만"
+
+
+# ════════════════════════════════════════════════════════════
+# osascript 입력창
+# ════════════════════════════════════════════════════════════
+
+def ask_input(title, message, default=""):
+    """osascript로 텍스트 입력창 띄우기 → 입력값 반환 / 취소 시 None"""
+    script = (
+        f'tell application "System Events"\n'
+        f'  activate\n'
+        f'  set result to display dialog "{message}" '
+        f'default answer "{default}" '
+        f'with title "{title}" '
+        f'buttons {{"취소", "확인"}} default button "확인"\n'
+        f'  if button returned of result is "확인" then\n'
+        f'    return text returned of result\n'
+        f'  else\n'
+        f'    return "__CANCELLED__"\n'
+        f'  end if\n'
+        f'end tell'
+    )
+    try:
+        out = subprocess.check_output(["osascript", "-e", script], stderr=subprocess.DEVNULL)
+        val = out.decode().strip()
+        return None if val == "__CANCELLED__" else val
+    except subprocess.CalledProcessError:
+        return None
+
+
+# ════════════════════════════════════════════════════════════
+# Elmedia 폴더 재생 (m3u 없이 폴더 자체를 직접 엶)
+# ════════════════════════════════════════════════════════════
+
+def play_folder_in_elmedia():
+    """Elmedia Video Player로 음악 폴더 자체를 엶"""
+    if not os.path.isdir(PLAYLIST_FOLDER):
+        return False, "폴더를 찾을 수 없습니다."
+    try:
+        subprocess.Popen(["open", "-a", "Elmedia Video Player", PLAYLIST_FOLDER])
+        return True, "Elmedia로 폴더를 열었습니다."
+    except Exception as e:
+        return False, str(e)
+
+
+# ════════════════════════════════════════════════════════════
+# 알람 실행 셸 스크립트 (launchd가 이 스크립트를 실행)
+# ════════════════════════════════════════════════════════════
+
+def write_alarm_script():
+    """실제 알람 시 실행될 셸 스크립트 생성 (폴더 직접 열기 방식)"""
+    os.makedirs(os.path.dirname(ALARM_SCRIPT_PATH), exist_ok=True)
+    script = f"""#!/bin/bash
+# 교대근무 아침 알람 실행 스크립트
+
+# 1. Elmedia로 음악 폴더 직접 열기 (m3u 파싱 문제 우회)
+open -a "Elmedia Video Player" "{PLAYLIST_FOLDER}"
+
+# 2. 맥 단축어 실행 (유튜브 랜덤 음악)
+/usr/bin/shortcuts run "{SHORTCUT_NAME}"
+"""
+    with open(ALARM_SCRIPT_PATH, "w") as f:
+        f.write(script)
+    os.chmod(ALARM_SCRIPT_PATH, 0o755)
+
+
+def write_plist(hour, minute):
+    write_alarm_script()
+    plist = f"""<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.shfitalarm.music</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>{ALARM_SCRIPT_PATH}</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>{hour}</integer>
+        <key>Minute</key>
+        <integer>{minute}</integer>
+    </dict>
+</dict>
+</plist>"""
+    with open(PLIST_PATH, "w") as f:
+        f.write(plist)
+
+
+def remove_plist():
+    if os.path.exists(PLIST_PATH):
+        subprocess.run(["launchctl", "unload", PLIST_PATH], capture_output=True)
+        os.remove(PLIST_PATH)
+
+
+def register_alarm(hour, minute):
+    remove_plist()
+    write_plist(hour, minute)
+    subprocess.run(["launchctl", "load", PLIST_PATH], capture_output=True)
+
+
+def unregister_alarm():
+    remove_plist()
+
+
+# ════════════════════════════════════════════════════════════
+# 날씨
+# ════════════════════════════════════════════════════════════
+
+def fetch_weather():
+    try:
+        url = (
+            f"https://api.open-meteo.com/v1/forecast"
+            f"?latitude={LATITUDE}&longitude={LONGITUDE}"
+            f"&current=temperature_2m,precipitation_probability"
+            f"&timezone=Asia/Seoul"
+        )
+        with urllib.request.urlopen(url, timeout=5) as res:
+            data = json.loads(res.read())
+        temp = round(data["current"]["temperature_2m"])
+        rain = data["current"]["precipitation_probability"]
+        return f"{temp}°C 🌧{rain}%"
+    except Exception:
+        return ""
+
+
+# ════════════════════════════════════════════════════════════
+# 메뉴바 앱
+# ════════════════════════════════════════════════════════════
+
+class ShiftAlarmApp(rumps.App):
+    def __init__(self):
+        global HOURLY_WAGE
+        config = load_config()
+        if "shift_times" in config:
+            for shift, t in config["shift_times"].items():
+                if shift in SHIFT_TIMES and t:
+                    SHIFT_TIMES[shift] = t
+        if "hourly_wage" in config:
+            HOURLY_WAGE = config["hourly_wage"]
+
+        self.config = config
+        self.schedule = load_schedule()
+
+        current = config.get("current_shift")
+        title = f"⏰ {current}" if current else "⏰ 근무미설정"
+        super().__init__(title, quit_button=None)
+
+        self.weather_str = ""
+        self.earnings_item = rumps.MenuItem("오늘 급여: -")
+        self.weather_item = rumps.MenuItem("날씨: 로딩 중")
+        self.build_menu()
+
+        # 날씨 10분마다 갱신
+        self.weather_timer = rumps.Timer(self._refresh_weather, 600)
+        self.weather_timer.start()
+        threading.Thread(target=self._init_weather, daemon=True).start()
+
+        # 자동 모드면, 앱 시작 시 바로 오늘 근무로 맞춘다
+        if self.config.get("auto_mode", True):
+            self.apply_today_shift(notify=False)
+
+        # 매일 자정(00:01)에 오늘 근무를 다시 계산해서 자동 적용
+        self.midnight_timer = rumps.Timer(self._check_midnight, 60)
+        self.midnight_timer.start()
+        self._last_checked_date = datetime.date.today()
+
+        # 급여 실시간 갱신 (30초마다)
+        self.earnings_timer = rumps.Timer(self._refresh_earnings, 30)
+        self.earnings_timer.start()
+        self._refresh_earnings(None)
+
+    # ── 날씨 ────────────────────────────────────────────────
+
+    def _init_weather(self):
+        self.weather_str = fetch_weather()
+        self.weather_item.title = f"날씨: {self.weather_str}" if self.weather_str else "날씨: 조회 실패"
+        self._update_title()
+
+    def _refresh_weather(self, _):
+        threading.Thread(target=self._init_weather, daemon=True).start()
+
+    def _update_title(self):
+        # 메뉴바 아이콘이 많으면 macOS가 긴 타이틀을 통째로 숨겨버릴 수 있으므로
+        # 타이틀은 최대한 짧게 유지한다. 날씨/자동모드 여부/정확한 금액 등
+        # 자세한 정보는 메뉴 항목(드롭다운)과 "현재 설정 확인"에서 확인.
+        current = self.config.get("current_shift")
+        code = SHIFT_TO_SHORT_CODE.get(current, current or "?")
+
+        money = ""
+        if self.config.get("show_earnings", True):
+            status = get_earnings_status(self.schedule)
+            if status["state"] == "active":
+                money = format_won_short(status["earned_so_far"])
+            elif status["state"] == "waiting":
+                money = f"{format_won_short(status['total_when_done'])}예정"
+
+        self.title = f"{code} {money}".strip() if current else "미설정"
+
+    # ── 급여 갱신 ────────────────────────────────────────────
+
+    def _refresh_earnings(self, _):
+        status = get_earnings_status(self.schedule)
+        if status["state"] == "active":
+            self.earnings_item.title = (
+                f"💰 오늘 급여: {status['earned_so_far']:,}원 "
+                f"(근무 {status['elapsed_hours']}h / 완료 시 {status['total_when_done']:,}원)"
+            )
+        elif status["state"] == "waiting":
+            start_str = status["start_time"].strftime("%H:%M")
+            self.earnings_item.title = (
+                f"💰 다음 근무({status['shift']}, {start_str} 시작) 예상: {status['total_when_done']:,}원"
+            )
+        else:
+            self.earnings_item.title = "💰 오늘은 휴무입니다"
+        self._update_title()
+
+    # ── 근무표 자동 적용 ────────────────────────────────────
+
+    def _check_midnight(self, _):
+        """1분마다 날짜가 바뀌었는지 확인, 바뀌었으면 자동으로 근무 갱신"""
+        today = datetime.date.today()
+        if today != self._last_checked_date:
+            self._last_checked_date = today
+            if self.config.get("auto_mode", True):
+                self.apply_today_shift(notify=True)
+
+    def apply_today_shift(self, notify=True, target_date=None):
+        """근무표(JSON)를 조회해서 오늘(또는 target_date) 근무를 자동 설정"""
+        date = target_date or datetime.date.today()
+        self.schedule = load_schedule()  # 혹시 파일이 갱신됐을 수도 있으니 매번 다시 로드
+        shift = get_shift_for_date(self.schedule, date)
+
+        if shift is None:
+            if notify:
+                rumps.notification(
+                    "근무표 자동 설정 실패",
+                    f"{date.isoformat()} 근무 정보 없음",
+                    "근무표 JSON에 해당 날짜가 없습니다. 수동으로 선택해주세요."
+                )
+            return False
+
+        self._set_shift_internal(shift, notify=notify)
+        return True
+
+    # ── 근무 선택 (메뉴 클릭 / 자동 적용 공통) ─────────────────
+
+    def _set_shift_internal(self, shift, notify=True):
+        time = SHIFT_TIMES.get(shift)
+        if time:
+            register_alarm(time["hour"], time["minute"])
+            if notify:
+                rumps.notification("교대근무 알람 설정", f"{shift} 근무",
+                                   f"알람이 {time['hour']:02d}:{time['minute']:02d}으로 설정되었습니다.")
+        else:
+            unregister_alarm()
+            if notify:
+                rumps.notification("교대근무 알람", "휴무", "알람이 해제되었습니다.")
+
+        self.config["current_shift"] = shift
+        save_config(self.config)
+        self._update_title()
+        self._refresh_earnings(None)
+        self.build_menu()
+
+    def make_shift_callback(self, shift):
+        def callback(_):
+            # 메뉴에서 수동으로 누르면 자동 모드를 끈다 (덮어쓰기 방지)
+            self.config["auto_mode"] = False
+            save_config(self.config)
+            self._set_shift_internal(shift, notify=True)
+        return callback
+
+    def toggle_auto_mode(self, _):
+        current = self.config.get("auto_mode", True)
+        self.config["auto_mode"] = not current
+        save_config(self.config)
+        if self.config["auto_mode"]:
+            rumps.notification("근무표 자동 모드", "켜짐", "매일 자정에 근무표 기준으로 자동 설정됩니다.")
+            self.apply_today_shift(notify=True)
+        else:
+            rumps.notification("근무표 자동 모드", "꺼짐", "이제부터 수동으로 근무를 선택해야 합니다.")
+        self._update_title()
+        self.build_menu()
+
+    def refresh_today_now(self, _):
+        """수동으로 '오늘 근무 다시 불러오기' 버튼"""
+        ok = self.apply_today_shift(notify=True)
+        if not ok:
+            rumps.alert("근무표 조회 실패", "근무표 JSON에서 오늘 날짜를 찾을 수 없습니다.")
+
+    def toggle_earnings_display(self, _):
+        current = self.config.get("show_earnings", True)
+        self.config["show_earnings"] = not current
+        save_config(self.config)
+        self._update_title()
+        self.build_menu()
+
+    # ── 메뉴 빌드 ────────────────────────────────────────────
+
+    def build_menu(self):
+        self.menu.clear()
+        current = self.config.get("current_shift")
+        auto_on = self.config.get("auto_mode", True)
+        earnings_on = self.config.get("show_earnings", True)
+
+        for shift, time in SHIFT_TIMES.items():
+            if time:
+                label = f"{'✓ ' if shift == current else ''}{shift}  ({time['hour']:02d}:{time['minute']:02d} 알람)"
+            else:
+                label = f"{'✓ ' if shift == current else ''}{shift}"
+            self.menu.add(rumps.MenuItem(label, callback=self.make_shift_callback(shift)))
+
+        self.menu.add(None)
+
+        auto_label = f"{'✓ ' if auto_on else ''}근무표 자동 적용 (매일 자정)"
+        self.menu.add(rumps.MenuItem(auto_label, callback=self.toggle_auto_mode))
+        self.menu.add(rumps.MenuItem("오늘 근무 다시 불러오기", callback=self.refresh_today_now))
+
+        self.menu.add(None)
+
+        self.menu.add(self.earnings_item)
+        earnings_label = f"{'✓ ' if earnings_on else ''}메뉴바에 급여 표시"
+        self.menu.add(rumps.MenuItem(earnings_label, callback=self.toggle_earnings_display))
+        self.menu.add(rumps.MenuItem(f"시급 설정 (현재 {HOURLY_WAGE:,}원)", callback=self.change_hourly_wage))
+        self.menu.add(self.weather_item)
+
+        self.menu.add(None)
+
+        time_menu = rumps.MenuItem("⚙️ 알람 시간 설정")
+        for shift in ["Day", "Swing", "GY"]:
+            t = SHIFT_TIMES[shift]
+            time_menu.add(rumps.MenuItem(
+                f"{shift} 시간 변경  (현재 {t['hour']:02d}:{t['minute']:02d})",
+                callback=self.make_time_change_callback(shift)
+            ))
+        self.menu.add(time_menu)
+
+        self.menu.add(rumps.MenuItem("🎬 Elmedia 지금 바로 재생", callback=self.play_elmedia_now))
+        self.menu.add(rumps.MenuItem("현재 설정 확인", callback=self.show_status))
+        self.menu.add(None)
+        self.menu.add(rumps.MenuItem("종료", callback=self.quit_app))
+
+    # ── 시급 수정 ────────────────────────────────────────────
+
+    def change_hourly_wage(self, _):
+        threading.Thread(target=self._change_hourly_wage_thread, daemon=True).start()
+
+    def _change_hourly_wage_thread(self):
+        global HOURLY_WAGE
+        val = ask_input("시급 설정", "통상시급을 입력하세요 (원)\\n※ 급여명세서 나올 때마다 업데이트 권장", str(HOURLY_WAGE))
+        if val is None:
+            return
+        try:
+            new_wage = int(val.strip().replace(",", ""))
+            assert new_wage > 0
+        except Exception:
+            subprocess.run(["osascript", "-e", 'display alert "오류" message "숫자만 입력하세요."'])
+            return
+        HOURLY_WAGE = new_wage
+        self.config["hourly_wage"] = new_wage
+        save_config(self.config)
+        self._refresh_earnings(None)
+        self.build_menu()
+
+    # ── 시간 변경 (osascript 입력창) ─────────────────────────
+
+    def make_time_change_callback(self, shift):
+        def callback(_):
+            threading.Thread(target=self.change_time, args=(shift,), daemon=True).start()
+        return callback
+
+    def change_time(self, shift):
+        current = SHIFT_TIMES[shift]
+
+        hour_val = ask_input(
+            f"{shift} 시간 변경",
+            f"{shift} 알람\\n시(Hour)를 입력하세요 (0~23)",
+            str(current["hour"])
+        )
+        if hour_val is None:
+            return
+        try:
+            hour = int(hour_val.strip())
+            assert 0 <= hour <= 23
+        except Exception:
+            subprocess.run(["osascript", "-e", 'display alert "오류" message "0~23 사이 숫자를 입력하세요."'])
+            return
+
+        min_val = ask_input(
+            f"{shift} 시간 변경",
+            f"{shift} 알람\\n분(Minute)을 입력하세요 (0~59)",
+            str(current["minute"])
+        )
+        if min_val is None:
+            return
+        try:
+            minute = int(min_val.strip())
+            assert 0 <= minute <= 59
+        except Exception:
+            subprocess.run(["osascript", "-e", 'display alert "오류" message "0~59 사이 숫자를 입력하세요."'])
+            return
+
+        SHIFT_TIMES[shift]["hour"] = hour
+        SHIFT_TIMES[shift]["minute"] = minute
+        self.config["shift_times"] = SHIFT_TIMES
+        save_config(self.config)
+
+        if self.config.get("current_shift") == shift:
+            register_alarm(hour, minute)
+
+        subprocess.run(["osascript", "-e",
+            f'display notification "알람이 {hour:02d}:{minute:02d}으로 변경되었습니다." with title "{shift} 시간 변경 완료"'])
+        self.build_menu()
+
+    # ── Elmedia 즉시 재생 ─────────────────────────────────────
+
+    def play_elmedia_now(self, _):
+        ok, msg = play_folder_in_elmedia()
+        if not ok:
+            rumps.alert("오류", msg)
+            return
+        rumps.notification("Elmedia", "재생 시작", msg)
+
+    # ── 상태 확인 ────────────────────────────────────────────
+
+    def show_status(self, _):
+        current = self.config.get("current_shift")
+        auto_on = self.config.get("auto_mode", True)
+        auto_text = "자동(근무표 기준)" if auto_on else "수동"
+        status = get_earnings_status(self.schedule)
+        if status["state"] == "active":
+            earnings_text = f"오늘 급여: {status['earned_so_far']:,}원"
+        elif status["state"] == "waiting":
+            earnings_text = f"다음 근무({status['shift']}) 예상 급여: {status['total_when_done']:,}원"
+        else:
+            earnings_text = "오늘은 휴무입니다"
+
+        if current and SHIFT_TIMES.get(current):
+            t = SHIFT_TIMES[current]
+            msg = (f"현재 근무: {current} ({auto_text})\n"
+                   f"알람 시간: {t['hour']:02d}:{t['minute']:02d}\n"
+                   f"{earnings_text}\n"
+                   f"날씨: {self.weather_str or '로딩 중'}")
+        elif current == "휴무":
+            msg = f"현재: 휴무 ({auto_text}, 알람 없음)\n{earnings_text}\n날씨: {self.weather_str or '로딩 중'}"
+        else:
+            msg = "근무가 설정되지 않았습니다."
+        rumps.alert("현재 설정", msg)
+
+    def quit_app(self, _):
+        rumps.quit_application()
+
+
+if __name__ == "__main__":
+    ShiftAlarmApp().run()
