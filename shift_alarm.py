@@ -150,11 +150,14 @@ def get_shift_for_date(schedule, date: datetime.date):
 # 오늘 급여 계산
 # ════════════════════════════════════════════════════════════
 
-def get_active_shift_window(schedule, now):
+def get_active_shift_window(schedule, now, today_override=None):
     """
     현재 시각(now) 기준으로 "지금 진행 중인 근무"를 찾는다.
     GY(야간)는 어제 시작해서 오늘 새벽까지 이어질 수 있으므로
     어제/오늘 두 날짜를 모두 확인한다.
+
+    today_override: 연차 등으로 근무표와 다르게 오늘 근무를 수동 지정한 경우
+    ("Day"/"Swing"/"GY"/"휴무") 근무표 대신 이 값을 오늘 근무로 사용한다.
 
     반환: (shift_name, start_datetime, end_datetime) 또는 None(근무 없음/휴무)
     """
@@ -171,7 +174,7 @@ def get_active_shift_window(schedule, now):
             return "GY", start_dt, end_dt
 
     # 2) 오늘 시작하는 근무 (Day/Swing/GY)
-    tshift = get_shift_for_date(schedule, today)
+    tshift = today_override if today_override is not None else get_shift_for_date(schedule, today)
     if tshift in ("Day", "Swing", "GY"):
         info = SHIFT_WORK_HOURS[tshift]
         start_dt = datetime.datetime.combine(today, datetime.time(*info["start"]))
@@ -185,7 +188,7 @@ def get_active_shift_window(schedule, now):
     return None
 
 
-def calc_today_earnings(schedule, now=None):
+def calc_today_earnings(schedule, now=None, today_override=None):
     """
     지금까지 진행된 근무 시간을 기준으로 오늘 벌어들인 급여(추정치)와
     근무 완료 시 받게 될 총액을 계산해서 반환.
@@ -193,7 +196,7 @@ def calc_today_earnings(schedule, now=None):
     반환: dict 또는 근무 없음(휴무 등)이면 None
     """
     now = now or datetime.datetime.now()
-    window = get_active_shift_window(schedule, now)
+    window = get_active_shift_window(schedule, now, today_override=today_override)
     if window is None:
         return None
 
@@ -215,21 +218,28 @@ def calc_today_earnings(schedule, now=None):
     }
 
 
-def get_earnings_status(schedule, now=None):
+def get_earnings_status(schedule, now=None, today_override=None):
     """
     지금 이 순간의 급여 표시 상태를 반환.
     - state == "active":  지금 근무 중. earned_so_far / elapsed_hours / total_when_done 포함
     - state == "waiting": 오늘 근무는 예정돼 있지만 지금은 근무 시간이 아님(출근 전 등).
                           그 근무를 마치면 받게 될 total_when_done 과 시작 시각(start_time) 포함
     - state == "off":     오늘 근무표에 근무 코드가 없음(휴무) → 급여 표시 안 함
+
+    today_override: 연차 등으로 근무표와 다르게 오늘 근무를 수동 지정한 경우 사용
+    ("Day"/"Swing"/"GY"/"휴무"). "휴무"면 무조건 state == "off".
     """
     now = now or datetime.datetime.now()
-    info = calc_today_earnings(schedule, now)
+
+    if today_override == "휴무":
+        return {"state": "off"}
+
+    info = calc_today_earnings(schedule, now, today_override=today_override)
     if info:
         return {"state": "active", **info}
 
     today = now.date()
-    tshift = get_shift_for_date(schedule, today)
+    tshift = today_override if today_override is not None else get_shift_for_date(schedule, today)
     if tshift in SHIFT_WORK_HOURS:
         wh = SHIFT_WORK_HOURS[tshift]
         multiplier = SHIFT_WAGE_MULTIPLIER.get(tshift, 1.0)
@@ -491,6 +501,12 @@ class ShiftAlarmApp(rumps.App):
     def _refresh_weather(self, _):
         threading.Thread(target=self._init_weather, daemon=True).start()
 
+    def _today_override(self):
+        """자동 모드가 꺼져있으면(연차 등으로 수동 지정) 근무표 대신 쓸 오늘 근무값."""
+        if self.config.get("auto_mode", True):
+            return None
+        return self.config.get("current_shift")
+
     def _update_title(self):
         # 메뉴바 아이콘이 많으면 macOS가 긴 타이틀을 통째로 숨겨버릴 수 있으므로
         # 타이틀은 최대한 짧게 유지한다. 날씨/자동모드 여부/정확한 금액 등
@@ -500,7 +516,7 @@ class ShiftAlarmApp(rumps.App):
 
         money = ""
         if self.config.get("show_earnings", True):
-            status = get_earnings_status(self.schedule)
+            status = get_earnings_status(self.schedule, today_override=self._today_override())
             if status["state"] == "active":
                 money = format_won_short(status["earned_so_far"])
             elif status["state"] == "waiting":
@@ -514,7 +530,7 @@ class ShiftAlarmApp(rumps.App):
     # ── 급여 갱신 ────────────────────────────────────────────
 
     def _refresh_earnings(self, _):
-        status = get_earnings_status(self.schedule)
+        status = get_earnings_status(self.schedule, today_override=self._today_override())
         if status["state"] == "active":
             self.earnings_item.title = (
                 f"💰 오늘 급여: {status['earned_so_far']:,}원 "
@@ -780,7 +796,7 @@ class ShiftAlarmApp(rumps.App):
         current = self.config.get("current_shift")
         auto_on = self.config.get("auto_mode", True)
         auto_text = "자동(근무표 기준)" if auto_on else "수동"
-        status = get_earnings_status(self.schedule)
+        status = get_earnings_status(self.schedule, today_override=self._today_override())
         if status["state"] == "active":
             earnings_text = f"오늘 급여: {status['earned_so_far']:,}원"
         elif status["state"] == "waiting":
