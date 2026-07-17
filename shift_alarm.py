@@ -27,6 +27,7 @@ import rumps
 import subprocess
 import os
 import json
+import shlex
 import urllib.request
 import threading
 import datetime
@@ -103,6 +104,11 @@ LONGITUDE = 127.00
 # ── launchd / 알람 스크립트 경로 ────────────────────────────────
 PLIST_PATH        = os.path.expanduser("~/Library/LaunchAgents/com.shfitalarm.music.plist")
 ALARM_SCRIPT_PATH = os.path.expanduser("~/Library/Scripts/shift_alarm_run.sh")
+
+# ── 아침 학습(ebook_reader.py) 관련 경로 ────────────────────────
+EBOOK_PY_PATH = "/opt/anaconda3/bin/python3"
+EBOOK_READER_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ebook_reader.py")
+EBOOK_LAST_STATE_FILE = os.path.expanduser("~/.ebook_reader_last.json")
 
 
 # ════════════════════════════════════════════════════════════
@@ -342,6 +348,53 @@ def play_folder_in_elmedia():
         return True, "Elmedia로 폴더를 열었습니다."
     except Exception as e:
         return False, str(e)
+
+
+# ════════════════════════════════════════════════════════════
+# 아침 학습 (ebook_reader.py를 새 터미널 창에서 실행)
+# ════════════════════════════════════════════════════════════
+
+def load_last_ebook_state():
+    """마지막으로 읽던 책 정보(~/.ebook_reader_last.json)를 불러온다. 없으면 None."""
+    if not os.path.exists(EBOOK_LAST_STATE_FILE):
+        return None
+    try:
+        with open(EBOOK_LAST_STATE_FILE, encoding="utf-8") as f:
+            state = json.load(f)
+        if not os.path.exists(state.get("file", "")):
+            return None
+        return state
+    except Exception:
+        return None
+
+
+def choose_ebook_file():
+    """macOS 파일 선택 다이얼로그로 pdf/epub 파일을 고른다. 취소하면 None."""
+    apple_script = 'POSIX path of (choose file of type {"pdf", "epub"} with prompt "읽을 파일을 선택하세요")'
+    try:
+        result = subprocess.run(["osascript", "-e", apple_script], capture_output=True, text=True, timeout=120)
+        path = result.stdout.strip()
+        return path or None
+    except Exception:
+        return None
+
+
+def open_ebook_reader_terminal(file_path):
+    """ebook_reader.py를 새 터미널 창에서 실행 (검정 배경 + 초록 글씨 스타일)"""
+    py_cmd = f"{EBOOK_PY_PATH} {shlex.quote(EBOOK_READER_SCRIPT)} {shlex.quote(file_path)}"
+    apple_script = f'''
+tell application "Terminal"
+    activate
+    do script "{py_cmd}"
+    delay 1
+    tell window 1
+        set background color to {{0, 0, 0}}
+        set normal text color to {{10000, 65535, 10000}}
+        set font size to 20
+    end tell
+end tell
+'''
+    subprocess.Popen(["osascript", "-e", apple_script])
 
 
 # ════════════════════════════════════════════════════════════
@@ -705,6 +758,7 @@ class ShiftAlarmApp(rumps.App):
         self.menu.add(time_menu)
 
         self.menu.add(rumps.MenuItem("🎬 Elmedia 지금 바로 재생", callback=self.play_elmedia_now))
+        self.menu.add(rumps.MenuItem("📖 아침 학습 실행", callback=self.read_ebook_now))
         self.menu.add(rumps.MenuItem("현재 설정 확인", callback=self.show_status))
         self.menu.add(None)
         self.menu.add(rumps.MenuItem("종료", callback=self.quit_app))
@@ -789,6 +843,25 @@ class ShiftAlarmApp(rumps.App):
             rumps.alert("오류", msg)
             return
         rumps.notification("Elmedia", "재생 시작", msg)
+
+    # ── 아침 학습 (ebook_reader.py) ──────────────────────────
+
+    def read_ebook_now(self, _):
+        last = load_last_ebook_state()
+        if last:
+            choice = rumps.alert(
+                "아침 학습",
+                f"마지막으로 읽은 책: {last['file_name']}\n(P.{last['page']} 부근까지 읽음)\n\n이어서 읽을까요?",
+                ok="이어서 읽기",
+                cancel="다른 책 선택...",
+            )
+            if choice == 1:
+                open_ebook_reader_terminal(last["file"])
+                return
+
+        path = choose_ebook_file()
+        if path:
+            open_ebook_reader_terminal(path)
 
     # ── 상태 확인 ────────────────────────────────────────────
 
