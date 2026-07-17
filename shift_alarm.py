@@ -380,9 +380,11 @@ def choose_ebook_file():
 
 
 def open_ebook_reader_terminal(file_path):
-    """ebook_reader.py를 새 터미널 창에서 실행 (검정 배경 + 초록 글씨 스타일)"""
+    """ebook_reader.py를 새 터미널 창에서 실행 (검정 배경 + 초록 글씨, 확대 폰트 + 전체창, 볼륨 80%)"""
     py_cmd = f"{EBOOK_PY_PATH} {shlex.quote(EBOOK_READER_SCRIPT)} {shlex.quote(file_path)}"
     apple_script = f'''
+set volume output volume 80
+
 tell application "Terminal"
     activate
     do script "{py_cmd}"
@@ -390,7 +392,8 @@ tell application "Terminal"
     tell window 1
         set background color to {{0, 0, 0}}
         set normal text color to {{10000, 65535, 10000}}
-        set font size to 20
+        set font size to 28
+        set zoomed to true
     end tell
 end tell
 '''
