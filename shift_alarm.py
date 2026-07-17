@@ -241,8 +241,8 @@ def get_earnings_status(schedule, now=None):
 
 
 def format_won_short(amount):
-    """메뉴바 타이틀용 짧은 금액 표기. 예: 178332 → '17.8만'"""
-    return f"{amount / 10000:.1f}만"
+    """메뉴바 타이틀용 짧은 금액 표기(반올림). 예: 119000 → '12만'"""
+    return f"{round(amount / 10000)}만"
 
 
 # ════════════════════════════════════════════════════════════
@@ -284,6 +284,11 @@ def get_today_reminders(schedule, now=None):
         if is_block_end and REMINDERS["kakao_cleanup"]["enabled"]:
             reminders.append(REMINDERS["kakao_cleanup"]["label"])
     return reminders
+
+
+def get_today_reminder_icons(schedule, now=None):
+    """메뉴바 타이틀용: 오늘의 리마인더 라벨에서 이모지만 뽑아 반환."""
+    return [label.split(" ", 1)[0] for label in get_today_reminders(schedule, now=now)]
 
 
 # ════════════════════════════════════════════════════════════
@@ -408,9 +413,10 @@ def fetch_weather():
             data = json.loads(res.read())
         temp = round(data["current"]["temperature_2m"])
         rain = data["current"]["precipitation_probability"]
-        return f"{temp}°C 🌧{rain}%"
+        icon = "🌧️" if rain >= 50 else "⛅" if rain >= 20 else "☀️"
+        return {"icon": icon, "text": f"{temp}°C 🌧{rain}%"}
     except Exception:
-        return ""
+        return None
 
 
 # ════════════════════════════════════════════════════════════
@@ -440,6 +446,7 @@ class ShiftAlarmApp(rumps.App):
         super().__init__(title, quit_button=None)
 
         self.weather_str = ""
+        self.weather_icon = ""
         self.earnings_item = rumps.MenuItem("오늘 급여: -")
         self.weather_item = rumps.MenuItem("날씨: 로딩 중")
         self.build_menu()
@@ -470,8 +477,15 @@ class ShiftAlarmApp(rumps.App):
     # ── 날씨 ────────────────────────────────────────────────
 
     def _init_weather(self):
-        self.weather_str = fetch_weather()
-        self.weather_item.title = f"날씨: {self.weather_str}" if self.weather_str else "날씨: 조회 실패"
+        weather = fetch_weather()
+        if weather:
+            self.weather_str = weather["text"]
+            self.weather_icon = weather["icon"]
+            self.weather_item.title = f"날씨: {self.weather_str}"
+        else:
+            self.weather_str = ""
+            self.weather_icon = ""
+            self.weather_item.title = "날씨: 조회 실패"
         self._update_title()
 
     def _refresh_weather(self, _):
@@ -490,9 +504,12 @@ class ShiftAlarmApp(rumps.App):
             if status["state"] == "active":
                 money = format_won_short(status["earned_so_far"])
             elif status["state"] == "waiting":
-                money = f"{format_won_short(status['total_when_done'])}예정"
+                money = format_won_short(status["total_when_done"])
 
-        self.title = f"{code} {money}".strip() if current else "미설정"
+        reminder_icons = "".join(get_today_reminder_icons(self.schedule))
+
+        parts = [code, money, reminder_icons, self.weather_icon]
+        self.title = " ".join(p for p in parts if p) if current else "미설정"
 
     # ── 급여 갱신 ────────────────────────────────────────────
 
