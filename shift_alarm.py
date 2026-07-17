@@ -368,6 +368,14 @@ def load_last_ebook_state():
         return None
 
 
+def truncate_title(name, length=14):
+    """메뉴바 표시용으로 파일명을 짧게 자른다 (확장자 제거 + ...말줄임)."""
+    stem = os.path.splitext(name)[0]
+    if len(stem) <= length:
+        return stem
+    return stem[:length] + "..."
+
+
 def choose_ebook_file():
     """macOS 파일 선택 다이얼로그로 pdf/epub 파일을 고른다. 취소하면 None."""
     apple_script = 'POSIX path of (choose file of type {"pdf", "epub"} with prompt "읽을 파일을 선택하세요")'
@@ -764,7 +772,8 @@ class ShiftAlarmApp(rumps.App):
 
         last_ebook = load_last_ebook_state()
         if last_ebook:
-            resume_label = f"📖 이어하기: {last_ebook['file_name']} (P.{last_ebook['page']})"
+            short_name = truncate_title(last_ebook['file_name'])
+            resume_label = f"📖 이어하기: {short_name} (P.{last_ebook['page']})"
             self.menu.add(rumps.MenuItem(resume_label, callback=self.resume_ebook_now))
         self.menu.add(rumps.MenuItem("📖 다른 책 선택해서 읽기", callback=self.choose_ebook_now))
         self.menu.add(rumps.MenuItem("현재 설정 확인", callback=self.show_status))
