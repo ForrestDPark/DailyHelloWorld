@@ -53,8 +53,8 @@ SHIFT_TO_SHORT_CODE = {v: k for k, v in CODE_TO_SHIFT.items()}
 # ── 근무별 알람 시간 ─────────────────────────────────────────
 SHIFT_TIMES = {
     "Day":   {"hour": 2,  "minute": 55},
-    "Swing": {"hour": 10, "minute": 55},
-    "GY":    {"hour": 18, "minute": 5},
+    "Swing": {"hour": 8,  "minute": 30},
+    "GY":    {"hour": 16, "minute": 30},
     "휴무":  None
 }
 
