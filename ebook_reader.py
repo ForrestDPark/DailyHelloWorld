@@ -10,7 +10,7 @@
 - 마지막으로 읽은 파일/페이지는 ~/.ebook_reader_last.json 에 기록해서
   shift_alarm.py 메뉴에서 "이어서 읽기" 여부를 물어볼 때 사용한다.
 """
-import os, subprocess, sys, time, signal, json, webbrowser, asyncio
+import os, subprocess, sys, time, signal, json, asyncio
 import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup
@@ -209,7 +209,6 @@ def upload_bundle_to_notion(all_text, s_p):
 
         if res.status_code in [200, 201]:
             print_status("🚀  노션 저장 성공!", GREEN)
-            webbrowser.open(f"https://www.notion.so/{DATABASE_ID.replace('-', '')}")
         else:
             print_status(f"❌  노션 에러: {res.status_code}", ORANGE)
     except Exception as e:
