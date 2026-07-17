@@ -17,6 +17,10 @@
   - 자정을 넘기는 야간 근무도 정확히 계산 (어제 시작한 근무를 오늘도 이어서 카운트)
   - 이 값은 "추정치"예요. 정확한 통상시급은 매달 급여명세서 나올 때마다
     메뉴의 "시급 설정"에서 갱신해주면 더 정확해져요.
+- 주간 리마인더 (헬스장/엄마 전화/카톡 정리): 요일이 아니라 근무표의 "휴무 블록"을
+  기준으로 판단해서 "오늘이 그 날"이면 알림이 뜬다 (교대근무자라 요일이 매번 바뀌므로).
+  헬스장은 주 2회(휴무 시작일 + 그로부터 이틀 뒤), 엄마 전화는 휴무 시작일, 카톡 정리는 휴무 마지막날.
+  메뉴의 "🔔 리마인더 켜기/끄기"에서 각 항목을 개별적으로 켜고 끌 수 있음.
 """
 
 import rumps
@@ -71,6 +75,19 @@ SHIFT_WAGE_MULTIPLIER = {
     "Day":   1.0,
     "Swing": 1.0,
     "GY":    1.5,   # 야간수당 50% 가산
+}
+
+# ── 주간 리마인더 설정 ───────────────────────────────────────
+# 교대근무자는 요일이 아니라 근무표의 "휴무 블록"을 기준으로 리마인더를 잡는다.
+# - 헬스장: 주 2회. 휴무 블록 연속 이틀을 몰아가면 복귀 근무가 힘드므로,
+#   휴무 시작일 + 그로부터 이틀 뒤(근무 복귀 후여도 무방)로 분산
+# - 엄마한테 전화: 휴무 블록의 첫날 (근무 마치고 쉬기 시작하는 날)
+# - 카톡 정리: 휴무 블록의 마지막날 (다시 출근하기 전날)
+# 각 항목은 메뉴의 "🔔 리마인더 켜기/끄기"에서 개별적으로 켜고 끌 수 있음.
+REMINDERS = {
+    "gym":           {"label": "🏋️ 헬스장 가는 날",     "enabled": True},
+    "call_mom":      {"label": "📞 엄마한테 전화하는 날", "enabled": True},
+    "kakao_cleanup": {"label": "🧹 카톡 정리하는 날",     "enabled": True},
 }
 
 # ── 실행할 단축어 이름 ────────────────────────────────────────
@@ -229,6 +246,47 @@ def format_won_short(amount):
 
 
 # ════════════════════════════════════════════════════════════
+# 주간 리마인더 (헬스장 / 엄마 전화 / 카톡 정리 등)
+# ════════════════════════════════════════════════════════════
+
+def _is_off_block_start(schedule, d):
+    """d가 휴무 블록의 첫날인지 (그 전날은 근무였는지) 반환."""
+    return (get_shift_for_date(schedule, d) == "휴무"
+            and get_shift_for_date(schedule, d - datetime.timedelta(days=1)) != "휴무")
+
+
+def get_today_reminders(schedule, now=None):
+    """
+    오늘 근무표 기준으로 해당하는 리마인더 라벨 목록을 반환.
+
+    - 헬스장: 주 2회. 휴무 블록 첫날 1회 + 그로부터 이틀 뒤 1회
+      (근무 복귀 후라도 상관없음, 연속 휴무일에 몰아가면 다음 근무가 힘드므로 분산).
+    - 엄마한테 전화: 오늘이 휴무 블록의 첫날 (어제는 근무였음)
+    - 카톡 정리: 오늘이 휴무 블록의 마지막날 (내일은 근무)
+    """
+    now = now or datetime.datetime.now()
+    today = now.date()
+
+    reminders = []
+    if REMINDERS["gym"]["enabled"] and (
+        _is_off_block_start(schedule, today)
+        or _is_off_block_start(schedule, today - datetime.timedelta(days=2))
+    ):
+        reminders.append(REMINDERS["gym"]["label"])
+
+    if get_shift_for_date(schedule, today) == "휴무":
+        yesterday = today - datetime.timedelta(days=1)
+        tomorrow = today + datetime.timedelta(days=1)
+        is_block_start = get_shift_for_date(schedule, yesterday) != "휴무"
+        is_block_end = get_shift_for_date(schedule, tomorrow) != "휴무"
+        if is_block_start and REMINDERS["call_mom"]["enabled"]:
+            reminders.append(REMINDERS["call_mom"]["label"])
+        if is_block_end and REMINDERS["kakao_cleanup"]["enabled"]:
+            reminders.append(REMINDERS["kakao_cleanup"]["label"])
+    return reminders
+
+
+# ════════════════════════════════════════════════════════════
 # osascript 입력창
 # ════════════════════════════════════════════════════════════
 
@@ -369,6 +427,10 @@ class ShiftAlarmApp(rumps.App):
                     SHIFT_TIMES[shift] = t
         if "hourly_wage" in config:
             HOURLY_WAGE = config["hourly_wage"]
+        if "reminders_enabled" in config:
+            for key, enabled in config["reminders_enabled"].items():
+                if key in REMINDERS:
+                    REMINDERS[key]["enabled"] = enabled
 
         self.config = config
         self.schedule = load_schedule()
@@ -400,6 +462,10 @@ class ShiftAlarmApp(rumps.App):
         self.earnings_timer = rumps.Timer(self._refresh_earnings, 30)
         self.earnings_timer.start()
         self._refresh_earnings(None)
+
+        # 오늘의 리마인더 알림 (앱 시작 시 한 번)
+        self._last_reminder_notified = None
+        self._maybe_notify_reminders()
 
     # ── 날씨 ────────────────────────────────────────────────
 
@@ -449,12 +515,14 @@ class ShiftAlarmApp(rumps.App):
     # ── 근무표 자동 적용 ────────────────────────────────────
 
     def _check_midnight(self, _):
-        """1분마다 날짜가 바뀌었는지 확인, 바뀌었으면 자동으로 근무 갱신"""
+        """1분마다 날짜가 바뀌었는지 확인, 바뀌었으면 자동으로 근무 갱신 + 리마인더 확인"""
         today = datetime.date.today()
         if today != self._last_checked_date:
             self._last_checked_date = today
             if self.config.get("auto_mode", True):
                 self.apply_today_shift(notify=True)
+            self._maybe_notify_reminders()
+            self.build_menu()
 
     def apply_today_shift(self, notify=True, target_date=None):
         """근무표(JSON)를 조회해서 오늘(또는 target_date) 근무를 자동 설정"""
@@ -473,6 +541,27 @@ class ShiftAlarmApp(rumps.App):
 
         self._set_shift_internal(shift, notify=notify)
         return True
+
+    # ── 리마인더 (헬스장/엄마 전화/카톡 정리 등) ────────────────
+
+    def _maybe_notify_reminders(self):
+        """오늘 하루에 한 번만, 오늘 요일에 해당하는 리마인더를 알림으로 띄운다."""
+        today = datetime.date.today()
+        if self._last_reminder_notified == today:
+            return
+        self._last_reminder_notified = today
+
+        todays = get_today_reminders(self.schedule)
+        if todays:
+            rumps.notification("오늘의 리마인더", "", "\n".join(todays))
+
+    def make_reminder_toggle_callback(self, key):
+        def callback(_):
+            REMINDERS[key]["enabled"] = not REMINDERS[key]["enabled"]
+            self.config.setdefault("reminders_enabled", {})[key] = REMINDERS[key]["enabled"]
+            save_config(self.config)
+            self.build_menu()
+        return callback
 
     # ── 근무 선택 (메뉴 클릭 / 자동 적용 공통) ─────────────────
 
@@ -555,6 +644,21 @@ class ShiftAlarmApp(rumps.App):
         self.menu.add(rumps.MenuItem(earnings_label, callback=self.toggle_earnings_display))
         self.menu.add(rumps.MenuItem(f"시급 설정 (현재 {HOURLY_WAGE:,}원)", callback=self.change_hourly_wage))
         self.menu.add(self.weather_item)
+
+        self.menu.add(None)
+
+        today_reminders = get_today_reminders(self.schedule)
+        reminder_status = " / ".join(today_reminders) if today_reminders else "오늘 예정된 리마인더 없음"
+        self.menu.add(rumps.MenuItem(f"🔔 오늘: {reminder_status}"))
+
+        reminder_menu = rumps.MenuItem("🔔 리마인더 켜기/끄기")
+        for key, r in REMINDERS.items():
+            check = "✓ " if r["enabled"] else ""
+            reminder_menu.add(rumps.MenuItem(
+                f"{check}{r['label']}",
+                callback=self.make_reminder_toggle_callback(key)
+            ))
+        self.menu.add(reminder_menu)
 
         self.menu.add(None)
 
@@ -667,16 +771,21 @@ class ShiftAlarmApp(rumps.App):
         else:
             earnings_text = "오늘은 휴무입니다"
 
+        today_reminders = get_today_reminders(self.schedule)
+        reminders_text = " / ".join(today_reminders) if today_reminders else "없음"
+
         if current and SHIFT_TIMES.get(current):
             t = SHIFT_TIMES[current]
             msg = (f"현재 근무: {current} ({auto_text})\n"
                    f"알람 시간: {t['hour']:02d}:{t['minute']:02d}\n"
                    f"{earnings_text}\n"
+                   f"오늘의 리마인더: {reminders_text}\n"
                    f"날씨: {self.weather_str or '로딩 중'}")
         elif current == "휴무":
-            msg = f"현재: 휴무 ({auto_text}, 알람 없음)\n{earnings_text}\n날씨: {self.weather_str or '로딩 중'}"
+            msg = (f"현재: 휴무 ({auto_text}, 알람 없음)\n{earnings_text}\n"
+                   f"오늘의 리마인더: {reminders_text}\n날씨: {self.weather_str or '로딩 중'}")
         else:
-            msg = "근무가 설정되지 않았습니다."
+            msg = f"근무가 설정되지 않았습니다.\n오늘의 리마인더: {reminders_text}"
         rumps.alert("현재 설정", msg)
 
     def quit_app(self, _):
