@@ -333,12 +333,13 @@ def main():
         print_progress_bar(current_idx + 1, total, page)
         print_sentence_box(data['content'], current_idx + 1, total, page)
 
-        read_buffer.append(data['content'])
-        asyncio.run(speak(data['content']))
-
+        # 재생 시작 "전에" 저장해둬야, 재생 중 Ctrl+C로 꺼도 진행 상황이 남는다.
         with open(PROGRESS_FILE, 'w') as f:
             f.write(str(current_idx + 1))
         save_last_state(page, current_idx + 1, total)
+
+        read_buffer.append(data['content'])
+        asyncio.run(speak(data['content']))
 
 if __name__ == "__main__":
     main()
