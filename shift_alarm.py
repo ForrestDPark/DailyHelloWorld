@@ -761,7 +761,12 @@ class ShiftAlarmApp(rumps.App):
         self.menu.add(time_menu)
 
         self.menu.add(rumps.MenuItem("🎬 Elmedia 지금 바로 재생", callback=self.play_elmedia_now))
-        self.menu.add(rumps.MenuItem("📖 아침 학습 실행", callback=self.read_ebook_now))
+
+        last_ebook = load_last_ebook_state()
+        if last_ebook:
+            resume_label = f"📖 이어하기: {last_ebook['file_name']} (P.{last_ebook['page']})"
+            self.menu.add(rumps.MenuItem(resume_label, callback=self.resume_ebook_now))
+        self.menu.add(rumps.MenuItem("📖 다른 책 선택해서 읽기", callback=self.choose_ebook_now))
         self.menu.add(rumps.MenuItem("현재 설정 확인", callback=self.show_status))
         self.menu.add(None)
         self.menu.add(rumps.MenuItem("종료", callback=self.quit_app))
@@ -849,19 +854,14 @@ class ShiftAlarmApp(rumps.App):
 
     # ── 아침 학습 (ebook_reader.py) ──────────────────────────
 
-    def read_ebook_now(self, _):
+    def resume_ebook_now(self, _):
         last = load_last_ebook_state()
-        if last:
-            choice = rumps.alert(
-                "아침 학습",
-                f"마지막으로 읽은 책: {last['file_name']}\n(P.{last['page']} 부근까지 읽음)\n\n이어서 읽을까요?",
-                ok="이어서 읽기",
-                cancel="다른 책 선택...",
-            )
-            if choice == 1:
-                open_ebook_reader_terminal(last["file"])
-                return
+        if not last:
+            rumps.alert("오류", "이어서 읽을 책 정보가 없습니다.")
+            return
+        open_ebook_reader_terminal(last["file"])
 
+    def choose_ebook_now(self, _):
         path = choose_ebook_file()
         if path:
             open_ebook_reader_terminal(path)
