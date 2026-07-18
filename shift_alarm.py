@@ -17,10 +17,11 @@
   - 자정을 넘기는 야간 근무도 정확히 계산 (어제 시작한 근무를 오늘도 이어서 카운트)
   - 이 값은 "추정치"예요. 정확한 통상시급은 매달 급여명세서 나올 때마다
     메뉴의 "시급 설정"에서 갱신해주면 더 정확해져요.
-- 주간 리마인더 (헬스장/엄마 전화/카톡 정리): 요일이 아니라 근무표의 "휴무 블록"을
+- 주간 리마인더 (헬스장/엄마 전화/카톡 정리/아울렛 쇼핑): 요일이 아니라 근무표의 "휴무 블록"을
   기준으로 판단해서 "오늘이 그 날"이면 알림이 뜬다 (교대근무자라 요일이 매번 바뀌므로).
   헬스장은 주 2회(휴무 시작일 + 그로부터 이틀 뒤, 단 근무 종료 시각에 헬스장이 닫혀있으면 그날은 건너뜀 —
-  헬스장이 토/일 06:00~17:00만 운영이라 주말 저녁 이후 퇴근이면 스킵), 엄마 전화는 휴무 시작일, 카톡 정리는 휴무 마지막날.
+  헬스장이 토/일 06:00~17:00만 운영이라 주말 저녁 이후 퇴근이면 스킵), 엄마 전화는 휴무 시작일, 카톡 정리는 휴무 마지막날,
+  아울렛 쇼핑은 한 달에 한 번(그 달의 첫 번째 휴무 블록 시작일).
   메뉴의 "🔔 리마인더 켜기/끄기"에서 각 항목을 개별적으로 켜고 끌 수 있음.
 """
 
@@ -87,11 +88,13 @@ SHIFT_WAGE_MULTIPLIER = {
 #   헬스장이 닫혀있으면(주말 저녁~다음날 새벽) 그날은 리마인더를 건너뜀
 # - 엄마한테 전화: 휴무 블록의 첫날 (근무 마치고 쉬기 시작하는 날)
 # - 카톡 정리: 휴무 블록의 마지막날 (다시 출근하기 전날)
+# - 아울렛 쇼핑: 한 달에 한 번. 그 달의 첫 번째 휴무 블록 시작일에 알림
 # 각 항목은 메뉴의 "🔔 리마인더 켜기/끄기"에서 개별적으로 켜고 끌 수 있음.
 REMINDERS = {
-    "gym":           {"label": "🏋️ 헬스장 가는 날",     "enabled": True},
-    "call_mom":      {"label": "📞 엄마한테 전화하는 날", "enabled": True},
-    "kakao_cleanup": {"label": "🧹 카톡 정리하는 날",     "enabled": True},
+    "gym":             {"label": "🏋️ 헬스장 가는 날",       "enabled": True},
+    "call_mom":        {"label": "📞 엄마한테 전화하는 날",   "enabled": True},
+    "kakao_cleanup":   {"label": "🧹 카톡 정리하는 날",       "enabled": True},
+    "outlet_shopping": {"label": "🛍️ 아울렛 쇼핑하는 날",    "enabled": True},
 }
 
 # ── 실행할 단축어 이름 ────────────────────────────────────────
@@ -301,6 +304,18 @@ def _gym_time_ok(schedule, d):
     return is_gym_open(end_dt)
 
 
+def _is_first_off_block_start_of_month(schedule, d):
+    """d가 이번 달의 '첫 번째' 휴무 블록 시작일인지 반환 (한 달에 한 번 리마인더용)."""
+    if not _is_off_block_start(schedule, d):
+        return False
+    cursor = d.replace(day=1)
+    while cursor < d:
+        if _is_off_block_start(schedule, cursor):
+            return False
+        cursor += datetime.timedelta(days=1)
+    return True
+
+
 def get_today_reminders(schedule, now=None):
     """
     오늘 근무표 기준으로 해당하는 리마인더 라벨 목록을 반환.
@@ -331,6 +346,10 @@ def get_today_reminders(schedule, now=None):
             reminders.append(REMINDERS["call_mom"]["label"])
         if is_block_end and REMINDERS["kakao_cleanup"]["enabled"]:
             reminders.append(REMINDERS["kakao_cleanup"]["label"])
+
+    if REMINDERS["outlet_shopping"]["enabled"] and _is_first_off_block_start_of_month(schedule, today):
+        reminders.append(REMINDERS["outlet_shopping"]["label"])
+
     return reminders
 
 
