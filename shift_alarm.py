@@ -19,7 +19,8 @@
     메뉴의 "시급 설정"에서 갱신해주면 더 정확해져요.
 - 주간 리마인더 (헬스장/엄마 전화/카톡 정리): 요일이 아니라 근무표의 "휴무 블록"을
   기준으로 판단해서 "오늘이 그 날"이면 알림이 뜬다 (교대근무자라 요일이 매번 바뀌므로).
-  헬스장은 주 2회(휴무 시작일 + 그로부터 이틀 뒤), 엄마 전화는 휴무 시작일, 카톡 정리는 휴무 마지막날.
+  헬스장은 주 2회(휴무 시작일 + 그로부터 이틀 뒤, 단 근무 종료 시각에 헬스장이 닫혀있으면 그날은 건너뜀 —
+  헬스장이 토/일 06:00~17:00만 운영이라 주말 저녁 이후 퇴근이면 스킵), 엄마 전화는 휴무 시작일, 카톡 정리는 휴무 마지막날.
   메뉴의 "🔔 리마인더 켜기/끄기"에서 각 항목을 개별적으로 켜고 끌 수 있음.
 """
 
@@ -81,7 +82,9 @@ SHIFT_WAGE_MULTIPLIER = {
 # ── 주간 리마인더 설정 ───────────────────────────────────────
 # 교대근무자는 요일이 아니라 근무표의 "휴무 블록"을 기준으로 리마인더를 잡는다.
 # - 헬스장: 주 2회. 휴무 블록 연속 이틀을 몰아가면 복귀 근무가 힘드므로,
-#   휴무 시작일 + 그로부터 이틀 뒤(근무 복귀 후여도 무방)로 분산
+#   휴무 시작일 + 그로부터 이틀 뒤(근무 복귀 후여도 무방)로 분산.
+#   헬스장은 24시간이지만 토/일은 06:00~17:00만 운영이라, 근무 끝나는 시각에
+#   헬스장이 닫혀있으면(주말 저녁~다음날 새벽) 그날은 리마인더를 건너뜀
 # - 엄마한테 전화: 휴무 블록의 첫날 (근무 마치고 쉬기 시작하는 날)
 # - 카톡 정리: 휴무 블록의 마지막날 (다시 출근하기 전날)
 # 각 항목은 메뉴의 "🔔 리마인더 켜기/끄기"에서 개별적으로 켜고 끌 수 있음.
@@ -271,12 +274,41 @@ def _is_off_block_start(schedule, d):
             and get_shift_for_date(schedule, d - datetime.timedelta(days=1)) != "휴무")
 
 
+# ── 헬스장 운영 시간 ─────────────────────────────────────────
+# 평일(월~금)은 24시간, 토/일은 06:00~17:00만 운영.
+GYM_WEEKEND_OPEN  = datetime.time(6, 0)
+GYM_WEEKEND_CLOSE = datetime.time(17, 0)
+
+
+def is_gym_open(dt):
+    """주어진 시각에 헬스장이 열려있는지 (토/일만 06:00~17:00로 제한)."""
+    if dt.weekday() in (5, 6):  # 5=토요일, 6=일요일
+        return GYM_WEEKEND_OPEN <= dt.time() < GYM_WEEKEND_CLOSE
+    return True
+
+
+def _gym_time_ok(schedule, d):
+    """
+    d에 헬스장을 간다면(근무일이면 "근무 끝나고" 기준) 그 시각에 헬스장이 열려있는지.
+    휴무일이면 언제든 갈 수 있다고 보고 항상 통과 (근무 종료 시각이라는 제약이 없으므로).
+    """
+    shift = get_shift_for_date(schedule, d)
+    info = SHIFT_WORK_HOURS.get(shift)
+    if not info:
+        return True
+    end_date = d + datetime.timedelta(days=1) if info["crosses_midnight"] else d
+    end_dt = datetime.datetime.combine(end_date, datetime.time(*info["end"]))
+    return is_gym_open(end_dt)
+
+
 def get_today_reminders(schedule, now=None):
     """
     오늘 근무표 기준으로 해당하는 리마인더 라벨 목록을 반환.
 
     - 헬스장: 주 2회. 휴무 블록 첫날 1회 + 그로부터 이틀 뒤 1회
       (근무 복귀 후라도 상관없음, 연속 휴무일에 몰아가면 다음 근무가 힘드므로 분산).
+      단, 그날 "근무 끝나고" 헬스장에 가는 시각에 헬스장이 닫혀있으면(주말 저녁~새벽)
+      그날은 리마인더를 띄우지 않는다.
     - 엄마한테 전화: 오늘이 휴무 블록의 첫날 (어제는 근무였음)
     - 카톡 정리: 오늘이 휴무 블록의 마지막날 (내일은 근무)
     """
@@ -284,7 +316,7 @@ def get_today_reminders(schedule, now=None):
     today = now.date()
 
     reminders = []
-    if REMINDERS["gym"]["enabled"] and (
+    if REMINDERS["gym"]["enabled"] and _gym_time_ok(schedule, today) and (
         _is_off_block_start(schedule, today)
         or _is_off_block_start(schedule, today - datetime.timedelta(days=2))
     ):
