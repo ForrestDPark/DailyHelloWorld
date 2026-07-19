@@ -61,6 +61,15 @@ SHIFT_TIMES = {
     "휴무":  None
 }
 
+# ── 근무별 "전자제품 전원 끄기" 알람 시간 ─────────────────────────
+# 근무 끝나고 쉬는(자는) 시간대에 맞춰 전자제품을 끄라고 하루 한 번 알려준다.
+# Day:   17:00~02:00 / GY: 08:00~16:00 / Swing: 23:50~08:00
+ELECTRONICS_OFF_TIMES = {
+    "Day":   {"hour": 17, "minute": 0},
+    "GY":    {"hour": 8,  "minute": 0},
+    "Swing": {"hour": 23, "minute": 50},
+}
+
 # ── 근무별 실제 근무 시작/종료 시각 (근로계약서 기준) ─────────────
 SHIFT_WORK_HOURS = {
     "Day":   {"start": (6, 0),  "end": (14, 0), "crosses_midnight": False},
@@ -89,12 +98,15 @@ SHIFT_WAGE_MULTIPLIER = {
 # - 엄마한테 전화: 휴무 블록의 첫날 (근무 마치고 쉬기 시작하는 날)
 # - 카톡 정리: 휴무 블록의 마지막날 (다시 출근하기 전날)
 # - 아울렛 쇼핑: 한 달에 한 번. 그 달의 첫 번째 휴무 블록 시작일에 알림
+# - 2만보 걷기: 주 1회, 휴무 블록의 마지막날. 단 헬스장 가는 날과 겹치면(휴무가 하루뿐인 주)
+#   그 주는 건너뜀 — 절대 같은 날에 겹치지 않게
 # 각 항목은 메뉴의 "🔔 리마인더 켜기/끄기"에서 개별적으로 켜고 끌 수 있음.
 REMINDERS = {
     "gym":             {"label": "🏋️ 헬스장 가는 날",       "enabled": True},
     "call_mom":        {"label": "📞 엄마한테 전화하는 날",   "enabled": True},
     "kakao_cleanup":   {"label": "🧹 카톡 정리하는 날",       "enabled": True},
     "outlet_shopping": {"label": "🛍️ 아울렛 쇼핑하는 날",    "enabled": True},
+    "walk_20k":        {"label": "🚶 2만보 걷는 날",         "enabled": True},
 }
 
 # ── 실행할 단축어 이름 ────────────────────────────────────────
@@ -326,15 +338,18 @@ def get_today_reminders(schedule, now=None):
       그날은 리마인더를 띄우지 않는다.
     - 엄마한테 전화: 오늘이 휴무 블록의 첫날 (어제는 근무였음)
     - 카톡 정리: 오늘이 휴무 블록의 마지막날 (내일은 근무)
+    - 2만보 걷기: 주 1회, 휴무 블록의 마지막날. 헬스장 가는 날과 겹치면(휴무가 하루뿐인 주)
+      그 주는 건너뜀
     """
     now = now or datetime.datetime.now()
     today = now.date()
 
     reminders = []
-    if REMINDERS["gym"]["enabled"] and _gym_time_ok(schedule, today) and (
+    is_gym_day = REMINDERS["gym"]["enabled"] and _gym_time_ok(schedule, today) and (
         _is_off_block_start(schedule, today)
         or _is_off_block_start(schedule, today - datetime.timedelta(days=2))
-    ):
+    )
+    if is_gym_day:
         reminders.append(REMINDERS["gym"]["label"])
 
     if get_shift_for_date(schedule, today) == "휴무":
@@ -346,6 +361,8 @@ def get_today_reminders(schedule, now=None):
             reminders.append(REMINDERS["call_mom"]["label"])
         if is_block_end and REMINDERS["kakao_cleanup"]["enabled"]:
             reminders.append(REMINDERS["kakao_cleanup"]["label"])
+        if is_block_end and not is_gym_day and REMINDERS["walk_20k"]["enabled"]:
+            reminders.append(REMINDERS["walk_20k"]["label"])
 
     if REMINDERS["outlet_shopping"]["enabled"] and _is_first_off_block_start_of_month(schedule, today):
         reminders.append(REMINDERS["outlet_shopping"]["label"])
@@ -590,6 +607,11 @@ class ShiftAlarmApp(rumps.App):
         self.midnight_timer.start()
         self._last_checked_date = datetime.date.today()
 
+        # 근무별 "전자제품 전원 끄기" 알람 (1분마다 시각 체크)
+        self._last_electronics_off_notified = None
+        self.electronics_off_timer = rumps.Timer(self._check_electronics_off, 60)
+        self.electronics_off_timer.start()
+
         # 급여 실시간 갱신 (30초마다)
         self.earnings_timer = rumps.Timer(self._refresh_earnings, 30)
         self.earnings_timer.start()
@@ -671,6 +693,25 @@ class ShiftAlarmApp(rumps.App):
                 self.apply_today_shift(notify=True)
             self._maybe_notify_reminders()
             self.build_menu()
+
+    def _check_electronics_off(self, _):
+        """1분마다 현재 근무 기준 '전자제품 전원 끄기' 시각인지 확인, 하루 한 번만 알림."""
+        current = self.config.get("current_shift")
+        t = ELECTRONICS_OFF_TIMES.get(current)
+        if not t:
+            return
+        now = datetime.datetime.now()
+        if now.hour != t["hour"] or now.minute != t["minute"]:
+            return
+        today = now.date()
+        if self._last_electronics_off_notified == today:
+            return
+        self._last_electronics_off_notified = today
+        rumps.notification(
+            "🔌 전자제품 전원 끄기",
+            f"{current} 근무 기준",
+            "지금부터 전자제품 전원을 꺼주세요."
+        )
 
     def apply_today_shift(self, notify=True, target_date=None):
         """근무표(JSON)를 조회해서 오늘(또는 target_date) 근무를 자동 설정"""
