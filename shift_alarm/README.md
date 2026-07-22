@@ -2,15 +2,15 @@
 
 이 문서는 **새 세션(다른 기기·다른 클라이언트 포함)에서도 이전 대화 맥락 없이 바로 이어서 작업할 수 있도록** `shift_alarm.py` / `ebook_reader.py`에 지금까지 쌓인 기능과 확정 규칙을 전부 기록해둔 것이다. 손자병법 파이프라인 README(`손자병법/README.md`)와 같은 목적.
 
-- 로컬 경로: `/Users/forrestdpark/Desktop/PDG/DailyHelloWorld_/shift_alarm.py`
-- 실행: `/opt/anaconda3/bin/python3 shift_alarm.py` (백그라운드로 계속 켜져있는 rumps 메뉴바 앱. 코드 수정 후에는 기존 프로세스를 `kill`하고 `nohup ... &`로 재실행해야 반영됨)
+- 로컬 경로: `/Users/forrestdpark/Desktop/PDG/DailyHelloWorld_/shift_alarm/shift_alarm.py` (관련 파일 전부 `shift_alarm/` 폴더 안 — 손자병법 파이프라인이 `손자병법/` 폴더를 쓰는 것과 같은 패턴)
+- 실행: `cd shift_alarm && /opt/anaconda3/bin/python3 shift_alarm.py` (백그라운드로 계속 켜져있는 rumps 메뉴바 앱. 코드 수정 후에는 기존 프로세스를 `kill`하고 `nohup ... &`로 재실행해야 반영됨)
 - 사용자는 3교대(Day/Swing/GY) + 휴무로 도는 D조 근무자.
 
 ---
 
 ## 1. 근무표 데이터
 
-- `d_team_schedule_2026.json` — 날짜(`YYYY-MM-DD`) → 근무 코드(`D`/`S`/`G`/`휴`) 매핑. 엑셀 근무표에서 추출. **저장소엔 git으로 추적 안 됨(untracked)** — 로컬에만 있으면 됨, 스크립트와 같은 폴더에 위치.
+- `d_team_schedule_2026.json` — 날짜(`YYYY-MM-DD`) → 근무 코드(`D`/`S`/`G`/`휴`) 매핑. 엑셀 근무표에서 추출. git으로 추적됨(클라우드 자동화 등 다른 환경에서도 오늘 근무를 판단할 수 있어야 해서 저장소에 포함시킴) — `shift_alarm/` 폴더 안, 스크립트와 같은 위치.
 - 코드 매핑: `D`→Day, `S`→Swing, `G`→GY(야간), `휴`→휴무.
 - 실제 근무 시간 (`SHIFT_WORK_HOURS`): Day 06:00-14:00 / Swing 14:00-22:00 / GY 22:00-06:00(자정 넘어감).
 - 근무표 패턴: 휴무 2일 + 근무 6일 반복이 기본이지만, 실제로는 1일/2일/4일짜리 휴무 블록이 섞여있음(연 1일×10회, 2일×35회, 4일×3회) — 로직 짤 때 "휴무는 항상 2일"이라고 가정하면 안 됨.
@@ -79,7 +79,7 @@
 메뉴에서 근무를 수동으로 선택하면(`auto_mode` 꺼짐), 그 값이 알람뿐 아니라 급여 계산(3번 항목)에도 그대로 반영됨. 연차로 쉬는 날은 메뉴에서 `휴무`를 선택하면 그날 알람도 꺼지고 급여도 "휴무"로 처리됨.
 
 ## 10. 자잘한 운영 메모
-- 코드/설정 변경 후에는 실행 중인 프로세스를 찾아(`ps aux | grep shift_alarm`) `kill`하고 `nohup /opt/anaconda3/bin/python3 shift_alarm.py > /tmp/shift_alarm.log 2>&1 &`로 재실행해야 반영됨 (rumps 앱이라 hot-reload 없음).
+- 코드/설정 변경 후에는 실행 중인 프로세스를 찾아(`ps aux | grep shift_alarm`) `kill`하고, `shift_alarm/` 폴더 안에서 `nohup /opt/anaconda3/bin/python3 shift_alarm.py > /tmp/shift_alarm.log 2>&1 &`로 재실행해야 반영됨 (rumps 앱이라 hot-reload 없음). `SCHEDULE_FILE`/`EBOOK_READER_SCRIPT` 등은 `__file__` 기준 상대경로라 폴더 위치가 바뀌어도 코드 수정 없이 그대로 동작함.
 - `~/Downloads/shift_alarm.py`에도 항상 최신 사본을 동기화해둠 (사용자가 그쪽에서도 참조하는 습관이 있어서).
 - 이 저장소(`DailyHelloWorld`)는 shift_alarm 외에도 손자병법 해석 파이프라인 등 전혀 다른 프로젝트들이 같이 들어있는 개인 모음 저장소라, `git status`에 관련 없는 변경사항(다른 폴더의 M/D/??)이 항상 잔뜩 떠 있다 — shift_alarm.py/ebook_reader.py만 `git add`해서 커밋할 것.
 - 여러 세션(로컬 CLI + 웹/모바일 "claude remote-control")이 같은 저장소에 동시에 커밋할 수 있으므로, push 전에 `git fetch && git log HEAD..origin/main --oneline`으로 원격에 새 커밋이 있는지 항상 확인하고, 있으면 merge 후 push할 것.
