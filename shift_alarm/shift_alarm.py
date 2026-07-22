@@ -29,6 +29,7 @@ import rumps
 import subprocess
 import os
 import json
+import re
 import shlex
 import urllib.request
 import threading
@@ -127,6 +128,11 @@ ALARM_SCRIPT_PATH = os.path.expanduser("~/Library/Scripts/shift_alarm_run.sh")
 EBOOK_PY_PATH = "/opt/anaconda3/bin/python3"
 EBOOK_READER_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ebook_reader.py")
 EBOOK_LAST_STATE_FILE = os.path.expanduser("~/.ebook_reader_last.json")
+
+# ── 손자병법 해석 파이프라인 (별도 폴더, README의 "완료된 구절" 표 참조) ──
+SUNZI_README_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "손자병법", "README.md"
+)
 
 
 # ════════════════════════════════════════════════════════════
@@ -436,6 +442,29 @@ def load_last_ebook_state():
         return None
 
 
+# ════════════════════════════════════════════════════════════
+# 손자병법 해석 파이프라인 (최신 완료 구절 노션 링크)
+# ════════════════════════════════════════════════════════════
+
+def get_latest_sunzi_entry():
+    """
+    손자병법/README.md의 "완료된 구절" 표에서 마지막 줄(가장 최근 완료된 구절)의
+    구절명 + 노션 링크를 반환. 파일이 없거나 표를 못 찾으면 None.
+    """
+    if not os.path.exists(SUNZI_README_PATH):
+        return None
+    try:
+        with open(SUNZI_README_PATH, encoding="utf-8") as f:
+            content = f.read()
+        rows = re.findall(r'^\|\s*(.+?)\s*\|\s*\[링크\]\((https?://\S+?)\)\s*\|', content, re.MULTILINE)
+        if not rows:
+            return None
+        title, url = rows[-1]
+        return {"title": title, "url": url}
+    except Exception:
+        return None
+
+
 def truncate_title(name, length=14):
     """메뉴바 표시용으로 파일명을 짧게 자른다 (확장자 제거 + ...말줄임)."""
     stem = os.path.splitext(name)[0]
@@ -612,6 +641,11 @@ class ShiftAlarmApp(rumps.App):
         self.electronics_off_timer = rumps.Timer(self._check_electronics_off, 60)
         self.electronics_off_timer.start()
 
+        # 5분마다 메뉴 재빌드 — 손자병법 최신 링크, 이북 이어하기 등
+        # 외부(클라우드 루틴 등)에서 파일이 갱신돼도 자정까지 기다리지 않고 반영되게
+        self.menu_refresh_timer = rumps.Timer(self._periodic_menu_refresh, 300)
+        self.menu_refresh_timer.start()
+
         # 급여 실시간 갱신 (30초마다)
         self.earnings_timer = rumps.Timer(self._refresh_earnings, 30)
         self.earnings_timer.start()
@@ -712,6 +746,10 @@ class ShiftAlarmApp(rumps.App):
             f"{current} 근무 기준",
             "지금부터 전자제품 전원을 꺼주세요."
         )
+
+    def _periodic_menu_refresh(self, _):
+        """5분마다 메뉴 재빌드 (외부 파일 변경 반영용)."""
+        self.build_menu()
 
     def apply_today_shift(self, notify=True, target_date=None):
         """근무표(JSON)를 조회해서 오늘(또는 target_date) 근무를 자동 설정"""
@@ -868,6 +906,12 @@ class ShiftAlarmApp(rumps.App):
             resume_label = f"📖 이어하기: {short_name} (P.{last_ebook['page']})"
             self.menu.add(rumps.MenuItem(resume_label, callback=self.resume_ebook_now))
         self.menu.add(rumps.MenuItem("📖 다른 책 선택해서 읽기", callback=self.choose_ebook_now))
+
+        sunzi_entry = get_latest_sunzi_entry()
+        if sunzi_entry:
+            short_title = truncate_title(sunzi_entry["title"])
+            self.menu.add(rumps.MenuItem(f"⚔️ 손자병법 최신: {short_title}", callback=self.open_latest_sunzi))
+
         self.menu.add(rumps.MenuItem("현재 설정 확인", callback=self.show_status))
         self.menu.add(None)
         self.menu.add(rumps.MenuItem("종료", callback=self.quit_app))
@@ -966,6 +1010,13 @@ class ShiftAlarmApp(rumps.App):
         path = choose_ebook_file()
         if path:
             open_ebook_reader_terminal(path)
+
+    def open_latest_sunzi(self, _):
+        entry = get_latest_sunzi_entry()
+        if not entry:
+            rumps.alert("오류", "손자병법 완료 구절 정보를 찾을 수 없습니다.")
+            return
+        subprocess.Popen(["open", entry["url"]])
 
     # ── 상태 확인 ────────────────────────────────────────────
 
