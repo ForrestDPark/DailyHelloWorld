@@ -101,6 +101,7 @@ SHIFT_WAGE_MULTIPLIER = {
 # - 아울렛 쇼핑: 한 달에 한 번. 그 달의 첫 번째 휴무 블록 시작일에 알림
 # - 2만보 걷기: 주 1회, 휴무 블록의 마지막날. 단 헬스장 가는 날과 겹치면(휴무가 하루뿐인 주)
 #   그 주는 건너뜀 — 절대 같은 날에 겹치지 않게
+# - 빨래: 휴무일마다 매번
 # 각 항목은 메뉴의 "🔔 리마인더 켜기/끄기"에서 개별적으로 켜고 끌 수 있음.
 REMINDERS = {
     "gym":             {"label": "🏋️ 헬스장 가는 날",       "enabled": True},
@@ -108,6 +109,7 @@ REMINDERS = {
     "kakao_cleanup":   {"label": "🧹 카톡 정리하는 날",       "enabled": True},
     "outlet_shopping": {"label": "🛍️ 아울렛 쇼핑하는 날",    "enabled": True},
     "walk_20k":        {"label": "🚶 2만보 걷는 날",         "enabled": True},
+    "laundry":         {"label": "🧺 빨래 돌리는 날",         "enabled": True},
 }
 
 # ── 실행할 단축어 이름 ────────────────────────────────────────
@@ -346,6 +348,7 @@ def get_today_reminders(schedule, now=None):
     - 카톡 정리: 오늘이 휴무 블록의 마지막날 (내일은 근무)
     - 2만보 걷기: 주 1회, 휴무 블록의 마지막날. 헬스장 가는 날과 겹치면(휴무가 하루뿐인 주)
       그 주는 건너뜀
+    - 빨래: 휴무일마다 매번
     """
     now = now or datetime.datetime.now()
     today = now.date()
@@ -369,6 +372,8 @@ def get_today_reminders(schedule, now=None):
             reminders.append(REMINDERS["kakao_cleanup"]["label"])
         if is_block_end and not is_gym_day and REMINDERS["walk_20k"]["enabled"]:
             reminders.append(REMINDERS["walk_20k"]["label"])
+        if REMINDERS["laundry"]["enabled"]:
+            reminders.append(REMINDERS["laundry"]["label"])
 
     if REMINDERS["outlet_shopping"]["enabled"] and _is_first_off_block_start_of_month(schedule, today):
         reminders.append(REMINDERS["outlet_shopping"]["label"])
