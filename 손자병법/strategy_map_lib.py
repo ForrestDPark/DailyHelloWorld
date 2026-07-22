@@ -6,6 +6,7 @@
 v2: 텍스트 폭 실측 기반 줄바꿈, 정보박스 세로 채움 자동 분배,
     하단 3박스 캔버스 중앙 정렬, 한자 옆 독음 표기 헬퍼(hj) 추가.
 """
+import os
 import numpy as np
 import matplotlib
 matplotlib.use('Agg')
@@ -18,9 +19,42 @@ from matplotlib.colors import LightSource
 import matplotlib.colors as mcolors
 from PIL import Image, ImageDraw, ImageFont
 
-FONT_PATH = '/System/Library/Fonts/AppleSDGothicNeo.ttc'
-FALLBACK_FONT_PATH = '/System/Library/Fonts/STHeiti Medium.ttc'
-EMOJI_PATH = '/System/Library/Fonts/Apple Color Emoji.ttc'
+# ── 폰트 경로 (플랫폼 자동 감지) ──────────────────────────────
+# 스펙(README)은 macOS의 Apple 폰트를 원본으로 문서화하고 있으므로, 이 경로들을
+# 절대 지우거나 덮어쓰지 않는다. macOS에서 실행되면 그대로 이 경로들을 쓰고,
+# (지금처럼) 이 파일들이 없는 Linux 환경에서만 Noto CJK KR 계열로 자동 폴백한다.
+_APPLE_FONT_PATH = '/System/Library/Fonts/AppleSDGothicNeo.ttc'
+_APPLE_FALLBACK_FONT_PATH = '/System/Library/Fonts/STHeiti Medium.ttc'
+_APPLE_EMOJI_PATH = '/System/Library/Fonts/Apple Color Emoji.ttc'
+_APPLE_EMOJI_BASE_PX = 160  # Apple Color Emoji 유효 픽셀 크기(160/96/64/48 등)
+
+# Linux 대체 경로: NotoSansCJK-Regular.ttc(KR/JP/SC/TC/HK 5-face 콜렉션)에서
+# fontTools로 KR(face index 1) 단일 폰트를 추출해 이 경로에 저장해두었다
+# (matplotlib FT2Font는 ttc의 face index를 직접 고를 방법이 없어, 확실한 한국어
+# 자형을 쓰려면 단일 폰트 파일로 분리해야 함). Sans는 본문/제목용, Serif는
+# 폴백용으로 같은 방식으로 추출.
+_LINUX_FONT_PATH = '/usr/share/fonts/truetype/noto-kr/NotoSansCJKkr-Regular.otf'
+_LINUX_FALLBACK_FONT_PATH = '/usr/share/fonts/truetype/noto-kr/NotoSerifCJKkr-Regular.otf'
+_LINUX_EMOJI_PATH = '/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf'
+# NotoColorEmoji는 CBDT/CBLC 단일 스트라이크(109ppem)만 내장되어 있어, PIL이
+# 그 값이 아닌 다른 크기로 요청하면 "invalid pixel size" 오류를 낸다.
+_LINUX_EMOJI_BASE_PX = 109
+
+if os.path.exists(_APPLE_FONT_PATH):
+    FONT_PATH = _APPLE_FONT_PATH
+    FALLBACK_FONT_PATH = _APPLE_FALLBACK_FONT_PATH
+    EMOJI_PATH = _APPLE_EMOJI_PATH
+    EMOJI_BASE_PX = _APPLE_EMOJI_BASE_PX
+else:
+    FONT_PATH = _LINUX_FONT_PATH
+    FALLBACK_FONT_PATH = _LINUX_FALLBACK_FONT_PATH
+    EMOJI_PATH = _LINUX_EMOJI_PATH
+    EMOJI_BASE_PX = _LINUX_EMOJI_BASE_PX
+
+# 기존 스크립트들의 pe_em() zoom 값은 전부 Apple(160px) 기준으로 튜닝되어
+# 있으므로, 실제 래스터 크기가 다르면(예: Noto 109px) zoom을 보정해 화면에
+# 그려지는 물리적 크기가 플랫폼에 관계없이 비슷하게 유지되도록 한다.
+_EMOJI_ZOOM_SCALE = _APPLE_EMOJI_BASE_PX / EMOJI_BASE_PX
 
 _main_ft = fm.get_font(FONT_PATH)
 
@@ -48,21 +82,25 @@ def hj(hanja_text, reading):
 _emoji_cache = {}
 
 
-def make_emoji(e, px=160):
-    if e in _emoji_cache:
-        return _emoji_cache[e]
+def make_emoji(e, px=None):
+    px = px or EMOJI_BASE_PX
+    key = (e, px)
+    if key in _emoji_cache:
+        return _emoji_cache[key]
     font = ImageFont.truetype(EMOJI_PATH, px)
     img = Image.new('RGBA', (px + 20, px + 20), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     d.text((10, 10), e, font=font, embedded_color=True)
     arr = np.asarray(img)
-    _emoji_cache[e] = arr
+    _emoji_cache[key] = arr
     return arr
 
 
 def pe_em(ax, e, x, y, zoom=0.22, z=20):
+    # zoom 값은 Apple Color Emoji(160px) 기준으로 튜닝됐으므로, 실제 래스터
+    # 크기(EMOJI_BASE_PX)에 맞춰 화면상 물리적 크기가 유지되도록 보정한다.
     ax.add_artist(ob.AnnotationBbox(
-        ob.OffsetImage(make_emoji(e), zoom=zoom),
+        ob.OffsetImage(make_emoji(e), zoom=zoom * _EMOJI_ZOOM_SCALE),
         (x, y), frameon=False, zorder=z))
 
 
