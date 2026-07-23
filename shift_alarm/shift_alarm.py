@@ -110,13 +110,40 @@ SHIFT_WAGE_MULTIPLIER = {
 # - 빨래: 휴무일마다 매번
 # 각 항목은 메뉴의 "🔔 리마인더 켜기/끄기"에서 개별적으로 켜고 끌 수 있음.
 REMINDERS = {
-    "gym":             {"label": "🏋️ 헬스장 가는 날",       "enabled": True},
+    "gym":             {"label": "🏋️ 헬스장 가는 날(상체/하체)", "enabled": True},
     "call_mom":        {"label": "📞 엄마한테 전화하는 날",   "enabled": True},
     "kakao_cleanup":   {"label": "🧹 카톡 정리하는 날",       "enabled": True},
     "outlet_shopping": {"label": "🛍️ 아울렛 쇼핑하는 날",    "enabled": True},
     "walk_20k":        {"label": "🚶 2만보 걷는 날",         "enabled": True},
     "laundry":         {"label": "🧺 빨래 돌리는 날",         "enabled": True},
+    "outing":          {"label": "🗺️ 월 1회 나들이 추천",    "enabled": True},
 }
+
+# ── 월 1회 나들이 추천 장소 (아산시 기준 + 근교) ────────────────────
+# 2026-07-24 추가. 매달 다른 곳이 뜨도록 (연도,월) 기준으로 순환시킨다.
+NEARBY_PLACES = [
+    "현충사 (아산 — 이순신 사당, 산책로)",
+    "외암민속마을 (아산 — 전통 한옥마을)",
+    "신정호 국민관광지 (아산 — 호수 둘레길)",
+    "온양온천 스파비스 (아산 — 온천)",
+    "아산 지중해마을 (아산 — 이국적 테마마을)",
+    "곡교천 은행나무길 (아산 — 산책/드라이브)",
+    "세계꽃식물원 (아산 — 식물원)",
+    "태학산자연휴양림 (아산 — 숲 산책)",
+    "도고온천 (아산 — 온천)",
+    "독립기념관 (천안 — 아산 인근)",
+    "각원사 (천안 — 아산 인근, 대불)",
+    "예당호 출렁다리 (예산 — 아산 인근)",
+    "공산성 (공주 — 아산에서 당일치기)",
+    "무령왕릉 (공주 — 아산에서 당일치기)",
+    "간월암 (서산 — 아산에서 당일치기, 일몰 명소)",
+]
+
+
+def pick_monthly_outing_place(d):
+    """(연,월) 기준으로 매달 다른 장소를 순환 선택 — 같은 달엔 항상 같은 곳."""
+    idx = (d.year * 12 + d.month) % len(NEARBY_PLACES)
+    return NEARBY_PLACES[idx]
 
 # ── 실행할 단축어 이름 ────────────────────────────────────────
 SHORTCUT_NAME = "아침루틴음악재생"
@@ -352,30 +379,54 @@ def _is_first_off_block_start_of_month(schedule, d):
     return True
 
 
+def _last_day_of_month(d):
+    if d.month == 12:
+        return d.replace(day=31)
+    return d.replace(month=d.month + 1, day=1) - datetime.timedelta(days=1)
+
+
+def _is_last_off_block_start_of_month(schedule, d):
+    """d가 이번 달의 '마지막' 휴무 블록 시작일인지 반환.
+    아울렛 쇼핑(첫 번째 휴무 블록)과 겹치지 않도록 나들이 추천은 마지막 블록에 배정."""
+    if not _is_off_block_start(schedule, d):
+        return False
+    cursor = _last_day_of_month(d)
+    while cursor > d:
+        if _is_off_block_start(schedule, cursor):
+            return False
+        cursor -= datetime.timedelta(days=1)
+    return True
+
+
 def get_today_reminders(schedule, now=None):
     """
     오늘 근무표 기준으로 해당하는 리마인더 라벨 목록을 반환.
 
-    - 헬스장: 주 2회. 휴무 블록 첫날 1회 + 그로부터 이틀 뒤 1회
+    - 헬스장: 주 2회. 휴무 블록 첫날 = 상체, 그로부터 이틀 뒤 = 하체로 구분
       (근무 복귀 후라도 상관없음, 연속 휴무일에 몰아가면 다음 근무가 힘드므로 분산).
       단, 그날 "근무 끝나고" 헬스장에 가는 시각에 헬스장이 닫혀있으면(주말 저녁~새벽)
-      그날은 리마인더를 띄우지 않는다.
+      그날은 리마인더를 띄우지 않는다. (2026-07-24: 상체/하체 구분 추가)
     - 엄마한테 전화: 오늘이 휴무 블록의 첫날 (어제는 근무였음)
     - 카톡 정리: 오늘이 휴무 블록의 마지막날 (내일은 근무)
-    - 2만보 걷기: 주 1회, 휴무 블록의 마지막날. 헬스장 가는 날과 겹치면(휴무가 하루뿐인 주)
-      그 주는 건너뜀
+    - 2만보 걷기: 주 1회, 휴무 블록의 마지막날. (2026-07-24: 너무 안 뜬다는 피드백으로
+      헬스장 날과 겹쳐도 더 이상 건너뛰지 않음 — 그냥 매 휴무 블록 마지막날마다 뜸)
     - 빨래: 휴무일마다 매번
+    - 나들이 추천: 월 1회, 이번 달의 '마지막' 휴무 블록 시작일(아울렛 쇼핑=첫 번째 블록과
+      겹치지 않게). 아산시 기준 근교 명소를 매달 순환 추천. (2026-07-24 추가)
     """
     now = now or datetime.datetime.now()
     today = now.date()
 
     reminders = []
-    is_gym_day = REMINDERS["gym"]["enabled"] and _gym_time_ok(schedule, today) and (
+    is_gym_upper = REMINDERS["gym"]["enabled"] and _gym_time_ok(schedule, today) and \
         _is_off_block_start(schedule, today)
-        or _is_off_block_start(schedule, today - datetime.timedelta(days=2))
-    )
-    if is_gym_day:
-        reminders.append(REMINDERS["gym"]["label"])
+    is_gym_lower = REMINDERS["gym"]["enabled"] and _gym_time_ok(schedule, today) and \
+        not is_gym_upper and _is_off_block_start(schedule, today - datetime.timedelta(days=2))
+    is_gym_day = is_gym_upper or is_gym_lower
+    if is_gym_upper:
+        reminders.append("🏋️ 상체 운동 하는 날")
+    elif is_gym_lower:
+        reminders.append("🏋️ 하체 운동 하는 날")
 
     if get_shift_for_date(schedule, today) == "휴무":
         yesterday = today - datetime.timedelta(days=1)
@@ -386,13 +437,17 @@ def get_today_reminders(schedule, now=None):
             reminders.append(REMINDERS["call_mom"]["label"])
         if is_block_end and REMINDERS["kakao_cleanup"]["enabled"]:
             reminders.append(REMINDERS["kakao_cleanup"]["label"])
-        if is_block_end and not is_gym_day and REMINDERS["walk_20k"]["enabled"]:
+        if is_block_end and REMINDERS["walk_20k"]["enabled"]:
             reminders.append(REMINDERS["walk_20k"]["label"])
         if REMINDERS["laundry"]["enabled"]:
             reminders.append(REMINDERS["laundry"]["label"])
 
     if REMINDERS["outlet_shopping"]["enabled"] and _is_first_off_block_start_of_month(schedule, today):
         reminders.append(REMINDERS["outlet_shopping"]["label"])
+
+    if REMINDERS["outing"]["enabled"] and _is_last_off_block_start_of_month(schedule, today):
+        place = pick_monthly_outing_place(today)
+        reminders.append(f"🗺️ 어디 가보자: {place}")
 
     return reminders
 
@@ -935,7 +990,9 @@ class ShiftAlarmApp(rumps.App):
             elif status["state"] == "waiting":
                 money = format_won_short(status["total_when_done"])
 
-        reminder_icons = "".join(get_today_reminder_icons(self.schedule))
+        # ★ 2026-07-24: 공백 없이 이어붙이면(특히 휴무일처럼 리마인더가 여러 개
+        # 동시에 뜨는 날) 이모지들이 서로 겹쳐 보여 찌그러진 것처럼 보였다.
+        reminder_icons = " ".join(get_today_reminder_icons(self.schedule))
 
         parts = [code, money, reminder_icons, self.weather_icon]
         self.title = " ".join(p for p in parts if p) if current else "미설정"

@@ -26,6 +26,9 @@
 --recursive 를 주면 하위 폴더까지 재귀적으로 다 검사한다.
 폴더 구분 없이 북마크 전체를 대상으로 하려면 폴더 이름 대신 --all 사용:
   python3 fix_bookmarks.py --all --replace "OLD" "NEW"
+
+접속 확인 없이 폴더 안 주소만 텍스트로 뽑고 싶으면 --list (네트워크 요청 없음, 즉시 종료):
+  python3 fix_bookmarks.py "폴더이름" --list
 """
 
 import argparse
@@ -119,6 +122,10 @@ def main():
     )
     ap.add_argument("--archive", action="store_true", help="깨진 링크는 Wayback Machine 저장본 검색")
     ap.add_argument("--apply", action="store_true", help="실제로 Bookmarks 파일에 반영 (기본은 미리보기만)")
+    ap.add_argument(
+        "--list", action="store_true",
+        help="접속 확인 없이 대상 북마크의 주소만 한 줄씩 그대로 출력하고 끝냄 (다른 옵션과 함께 쓰면 --list가 우선)",
+    )
     ap.add_argument("--bookmarks-file", default=str(BOOKMARKS_PATH), help="Bookmarks 파일 경로 (다른 프로필 쓸 때)")
     args = ap.parse_args()
 
@@ -134,7 +141,8 @@ def main():
         for key in ("bookmark_bar", "other", "synced"):
             if key in roots:
                 bookmarks.extend(collect_bookmarks(roots[key], recursive=True))
-        print(f"전체 북마크 대상: {len(bookmarks)}개\n")
+        if not args.list:
+            print(f"전체 북마크 대상: {len(bookmarks)}개\n")
     else:
         if not args.folder:
             sys.exit("폴더 이름을 지정하거나 --all 을 사용하세요.")
@@ -147,6 +155,11 @@ def main():
         if folder is None:
             sys.exit(f'"{args.folder}" 폴더를 찾을 수 없음')
         bookmarks = collect_bookmarks(folder, args.recursive)
+
+    if args.list:
+        for bm in bookmarks:
+            print(bm.get("url", ""))
+        return
 
     if args.replace:
         old, new = args.replace

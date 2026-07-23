@@ -10,7 +10,7 @@ TARGET_DIR="${1:-.}"
 TARGET_PATH=$(cd "$TARGET_DIR" && pwd)
 TEMP_SCRIPT="$HOME/whisper_series_stream_run.sh"
 
-/opt/anaconda3/bin/python3 -m pip install requests pykakasi --quiet --disable-pip-version-check 2>/dev/null
+/opt/anaconda3/bin/python3 -m pip install requests pykakasi edge-tts --quiet --disable-pip-version-check 2>/dev/null
 
 cat << 'EOF' > "$TEMP_SCRIPT"
 #!/bin/zsh
@@ -114,12 +114,32 @@ for FILENAME in "${VALID_FILES[@]}"; do
         export MYTMP="$MYTMP"
 
         cat << 'PYEOF' > "$PY_WORKER"
-import os, sys, re, requests, time, base64, subprocess, warnings, shutil
+import os, sys, re, requests, time, base64, subprocess, warnings, shutil, asyncio
 from datetime import datetime
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 from pykakasi import kakasi
+import edge_tts
 kks = kakasi()
+
+# ── 대사 읽어주는 TTS (2026-07-24 추가) ─────────────────────────────
+# 영상에서 잘라낸 실제 음성이 대사 중간중간 끊기거나 공백이 많다는 피드백으로,
+# 세트(대사 3줄) 오디오를 영상에서 자르는 대신 edge-tts로 직접 합성한다.
+# ebook_reader.py(shift_alarm 프로젝트)가 영어 TTS에 쓰는 것과 같은 라이브러리.
+JA_VOICE    = "ja-JP-NanamiNeural"
+JA_TTS_RATE = "-10%"
+
+def synthesize_tts(text, out_mp3_path):
+    """text를 JA_VOICE로 읽어 mp3로 저장. 성공하면 True."""
+    try:
+        async def _run():
+            communicate = edge_tts.Communicate(text, JA_VOICE, rate=JA_TTS_RATE)
+            await communicate.save(out_mp3_path)
+        asyncio.run(_run())
+        return os.path.exists(out_mp3_path) and os.path.getsize(out_mp3_path) > 0
+    except Exception as e:
+        print(f"  ⚠️  TTS 생성 실패: {e}")
+        return False
 
 # ── 시크릿은 코드에 하드코딩하지 않고 macOS 키체인에서 읽는다 ──────────
 # 등록: security add-generic-password -a "$USER" -s "jp_subtitle_notion_token" -w "<토큰>" -U
@@ -256,24 +276,19 @@ def merge_images(paths, out_path, max_bytes=4 * 1024 * 1024):
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         os.replace(out_path + "_tmp.jpg", out_path)
 
+    # ★ 2026-07-24: 사용자가 EPUB 본문 중간중간 이미지가 검은 화면/빈 박스로
+    # 나오는 걸 발견함. 원인 확인: ffmpeg가 만든 jpg 중 일부가 표준 JFIF
+    # (APP0) 헤더 없이 저장되고, 그런 파일은 e리더가 크기를 못 읽어서 빈
+    # 박스로 렌더링한다 — 표지에서 겪은 것과 동일한 버그. 한 영상 안에서도
+    # 세트별로 어느 ffmpeg 경로(단일 스케일 vs hstack 합성)를 탔는지에 따라
+    # 헤더가 있다 없다 갈리는 걸로 보임(원인 특정보다 결과 정규화가 더
+    # 확실해서 이 방법으로 고침). `sips`로 다시 저장하면 항상 표준 JFIF로
+    # 정규화된다 — 표지에 이미 쓰던 것과 같은 처리를 세트 썸네일에도 적용.
+    subprocess.run(["sips", "-s", "format", "jpeg", out_path, "--out", out_path],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
     print(f"  📐 병합 이미지: {os.path.getsize(out_path)//1024}KB")
     return True
-
-def concat_audio_clips(clip_paths, out_path):
-    if not clip_paths:
-        return False
-    if len(clip_paths) == 1:
-        subprocess.run(["cp", clip_paths[0], out_path])
-        return os.path.exists(out_path)
-    list_file = out_path + "_list.txt"
-    with open(list_file, "w") as f:
-        for p in clip_paths:
-            f.write(f"file '{os.path.abspath(p)}'\n")
-    subprocess.run(["ffmpeg", "-y", "-f", "concat", "-safe", "0",
-                    "-i", list_file, "-c", "copy", out_path],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    os.remove(list_file)
-    return os.path.exists(out_path)
 
 def notion_append(url, children, retries=3):
     for attempt in range(retries):
@@ -317,47 +332,90 @@ def build_monitor_blocks(img_url, ja_list, ko_list):
     return blocks
 
 def create_epub_css(work_dir):
-    """EPUB용 CSS — 일본어 황금색 크게, 한국어 회색 작게"""
+    """EPUB용 CSS — 일본어 황금색 크게, 한국어 회색 작게.
+    ★ 2026-07-24: 페이지당 정보 밀도가 너무 낮다는 피드백으로 개편.
+    이미지를 100%→38%로 줄이고 텍스트 옆이 아니라 위에 작게 배치해서
+    화면(페이지)당 텍스트 줄 수를 늘림. 세트마다 hr 하나로 밋밋하게
+    구분하던 것 대신, 카드형 박스(.set)로 묶어서 스캔하기 쉽게 함."""
     css_path = os.path.join(work_dir, "epub_style.css")
     css = """\
 body {
     font-family: "Hiragino Kaku Gothic Pro", "ヒラギノ角ゴ Pro", sans-serif;
     background-color: #111111;
     color: #dddddd;
-    line-height: 1.8;
+    line-height: 1.6;
     padding: 1em;
 }
+h1 {
+    color: #f5c842;
+    border-bottom: 2px solid #f5c842;
+    padding-bottom: 0.3em;
+}
+h2.scene {
+    color: #f5c842;
+    font-size: 1.15em;
+    margin-top: 1.8em;
+    margin-bottom: 0.6em;
+    padding: 0.3em 0.6em;
+    background-color: #1c1c1c;
+    border-left: 4px solid #f5c842;
+}
+div.set {
+    margin-bottom: 0.9em;
+    padding-bottom: 0.7em;
+    border-bottom: 1px solid #2a2a2a;
+}
+img.scene-thumb {
+    width: 38%;
+    border-radius: 4px;
+    margin: 0.4em 0;
+    display: block;
+    opacity: 0.92;
+}
+audio {
+    width: 60%;
+    height: 1.8em;
+    margin: 0.2em 0 0.5em 0;
+    filter: invert(0.8);
+}
 p.ja {
-    font-size: 1.35em;
+    font-size: 1.2em;
     font-weight: bold;
     color: #f5c842;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.03em;
     margin-bottom: 0.1em;
-    margin-top: 0.6em;
-    text-shadow: 0 0 8px rgba(245,200,66,0.3);
+    margin-top: 0.5em;
 }
 p.ko {
-    font-size: 0.85em;
-    color: #666666;
+    font-size: 0.82em;
+    color: #777777;
     margin-top: 0;
-    margin-bottom: 0.2em;
+    margin-bottom: 0.15em;
     padding-left: 0.5em;
     border-left: 2px solid #333333;
 }
-img {
-    width: 100%;
-    border-radius: 6px;
-    margin: 0.8em 0;
+div.overview {
+    background-color: #1a1a1a;
+    border: 1px solid #333333;
+    border-radius: 8px;
+    padding: 1.2em 1.4em;
+    margin-bottom: 1.5em;
 }
-audio {
-    width: 100%;
-    margin: 0.4em 0 0.8em 0;
-    filter: invert(0.8);
+div.overview h2 {
+    color: #f5c842;
+    margin-top: 0;
 }
-hr {
-    border: none;
-    border-top: 1px solid #2a2a2a;
-    margin: 1.2em 0;
+div.overview table {
+    width: 100%;
+    border-collapse: collapse;
+}
+div.overview td {
+    padding: 0.3em 0.5em;
+    border-bottom: 1px solid #2a2a2a;
+}
+div.overview td:first-child {
+    color: #999999;
+    width: 40%;
 }
 nav#toc a { color: #f5c842; text-decoration: none; }
 """
@@ -365,8 +423,13 @@ nav#toc a { color: #f5c842; text-decoration: none; }
         f.write(css)
     return css_path
 
+# ★ 2026-07-24: 몇 세트마다 h2 소제목("장면 N")을 넣어서 파트 하나가
+# 끊김없이 한 덩어리로 흐르지 않고 EPUB 목차/네비게이션에서 하위 챕터로
+# 분할되게 함. 표시 간격 — 8세트(=대사 24줄)마다 하나.
+SCENE_SIZE = 8
+
 def save_to_md(work_dir, note_title, merged_img_path, ja_list, ko_list,
-               concat_wav_path=None, part_num="1", chunk_idx=0):
+               tts_mp3_path=None, part_num="1", chunk_idx=0):
     base_name  = os.environ.get("FILENAME_NO_EXT", "result")
     result_dir = os.path.join(work_dir, f"{base_name}_work")
     img_dir    = os.path.join(result_dir, "images")
@@ -379,35 +442,55 @@ def save_to_md(work_dir, note_title, merged_img_path, ja_list, ko_list,
         shutil.copy2(merged_img_path, os.path.join(img_dir, img_filename))
 
     mp3_tag = ""
-    if concat_wav_path and os.path.exists(concat_wav_path):
+    if tts_mp3_path and os.path.exists(tts_mp3_path):
+        # edge-tts가 이미 mp3로 저장해주므로 ffmpeg 재인코딩 없이 복사만 하면 됨.
         mp3_name = f"p{part_num}_{chunk_idx:03d}.mp3"
         mp3_path = os.path.join(audio_dir, mp3_name)
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", concat_wav_path,
-             "-codec:a", "libmp3lame", "-qscale:a", "4", mp3_path],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        shutil.copy2(tts_mp3_path, mp3_path)
+        mp3_tag = (
+            f'<audio controls="controls">'
+            f'<source src="{base_name}_work/audio/{mp3_name}" type="audio/mpeg" />'
+            f'</audio>'
         )
-        if os.path.exists(mp3_path):
-            mp3_tag = (
-                f'<audio controls="controls">'
-                f'<source src="{base_name}_work/audio/{mp3_name}" type="audio/mpeg" />'
-                f'</audio>'
-            )
 
     md_path = os.path.join(work_dir, f"{note_title}.md")
     if not os.path.exists(md_path):
+        total_lines = len(parsed_lines)
+        total_sets  = TOTAL_SETS
+        scene_count = (total_sets + SCENE_SIZE - 1) // SCENE_SIZE
+        overview = f"""# {note_title}
+
+<div class="overview">
+<h2>📋 개요</h2>
+<table>
+<tr><td>파트</td><td>{part_num} / {total_parts}편</td></tr>
+<tr><td>대사 문장 수</td><td>{total_lines}줄</td></tr>
+<tr><td>장면 수</td><td>{scene_count}개 (장면당 대사 약 {SCENE_SIZE * 3}줄)</td></tr>
+<tr><td>표기 방식</td><td>원문 위(금색, 한자엔 후리가나 병기) / 번역 아래(회색)</td></tr>
+<tr><td>오디오</td><td>각 장면 대사 구간 mp3 첨부 — 재생 버튼으로 원어 음성 확인 가능</td></tr>
+</table>
+</div>
+
+"""
         with open(md_path, "w", encoding="utf-8") as f:
-            f.write(f"# {note_title}\n\n")
+            f.write(overview)
 
     with open(md_path, "a", encoding="utf-8") as f:
-        f.write(f'<img src="{base_name}_work/images/{img_filename}" alt="scene" style="width:100%;" />\n\n')
+        if (chunk_idx - 1) % SCENE_SIZE == 0:
+            scene_num = (chunk_idx - 1) // SCENE_SIZE + 1
+            # ★ 마크다운 네이티브 헤더 문법({.scene}은 pandoc 헤더 속성 확장)을
+            # 써야 --toc가 이걸 목차 항목으로 잡는다. <h2> raw HTML로 쓰면
+            # pandoc이 그냥 불투명한 블록으로 취급해서 목차에 안 잡힌다(확인됨).
+            f.write(f'## 🎬 장면 {scene_num} {{.scene}}\n\n')
+        f.write('<div class="set">\n\n')
+        f.write(f'<img class="scene-thumb" src="{base_name}_work/images/{img_filename}" alt="scene" />\n\n')
         if mp3_tag:
             f.write(mp3_tag + "\n\n")
         for ja, ko in zip(ja_list, ko_list):
             furi = generate_furigana(ja)
             f.write(f'<p class="ja">{furi}</p>\n')
             f.write(f'<p class="ko">{ko}</p>\n\n')
-        f.write("---\n\n")
+        f.write("</div>\n\n")
 
 
 # ── Apple Notes ───────────────────────────────────────────────────
@@ -575,21 +658,12 @@ for idx in range(0, len(parsed_lines), 3):
     merged_path = os.path.join(img_folder, f"part{part_num}_{chunk_idx:03d}_merged.jpg")
     merge_ok    = merge_images(snap_paths, merged_path)
 
-    clip_paths = []
-    for i, c in enumerate(chunk):
-        clip_start = max(0.0, offset_sec + c['start'] - 0.15)
-        clip_dur   = max(0.8, (c['end'] - c['start']) + 0.3)
-        clip_path  = os.path.join(work_dir, f"temp_clip_{base_name}_{chunk_idx}_{i+1}.wav")
-        subprocess.run([
-            "ffmpeg", "-y",
-            "-ss", str(clip_start), "-i", video_path,
-            "-t", str(clip_dur), "-c:a", "pcm_s16le", clip_path
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if os.path.exists(clip_path):
-            clip_paths.append(clip_path)
-
-    concat_path = os.path.join(work_dir, f"temp_concat_{base_name}_{chunk_idx}.wav")
-    concat_ok   = concat_audio_clips(clip_paths, concat_path)
+    # ★ 2026-07-24: 영상에서 대사 구간을 잘라 이어붙이던 방식(끊김/공백이
+    # 잦다는 피드백) 대신, 세트의 3줄을 통째로 edge-tts에 넘겨 한 번에
+    # 합성한다 — 자연스럽고, 네트워크 호출도 줄이고, wav→mp3 변환도 필요없다.
+    tts_text = "".join(ja_list)
+    tts_mp3  = os.path.join(work_dir, f"temp_tts_{base_name}_{chunk_idx}.mp3")
+    tts_ok   = synthesize_tts(tts_text, tts_mp3)
 
     COLORS = ["\033[1;96m", "\033[1;93m", "\033[1;92m"]
     print(f"\033[1;36m{'='*54}\033[0m")
@@ -602,9 +676,6 @@ for idx in range(0, len(parsed_lines), 3):
         print(f" {COLORS[i]}▶ {ja_list[i]}  →  {ko_list[i]}\033[0m")
     print(f"\033[1;36m{'='*54}\033[0m\n")
 
-    for p in clip_paths:
-        if os.path.exists(p): os.remove(p)
-
     uploaded_url  = upload_image(merged_path) if merge_ok else None
     notion_blocks = build_monitor_blocks(uploaded_url, ja_list, ko_list)
     for i in range(0, len(notion_blocks), 20):
@@ -615,11 +686,11 @@ for idx in range(0, len(parsed_lines), 3):
 
     if merge_ok:
         save_to_md(work_dir, note_title, merged_path, ja_list, ko_list,
-                   concat_path if concat_ok else None,
+                   tts_mp3 if tts_ok else None,
                    part_num=part_num, chunk_idx=chunk_idx)
 
-    if concat_ok and os.path.exists(concat_path):
-        os.remove(concat_path)
+    if tts_ok and os.path.exists(tts_mp3):
+        os.remove(tts_mp3)
 
 print(f"\n✅ [{base_name}] {part_num}/{total_parts}편 완료 │ {TOTAL_SETS}세트")
 PYEOF
@@ -691,15 +762,36 @@ PYMERGE
 
     CSS_FILE="${WORKING_DIR}/epub_style.css"
 
+    # ★ 2026-07-24: 예전엔 본문에 쓰던 3장짜리 가로 합성 썸네일(1440x270,
+    #   책 표지로 쓰기엔 너무 납작한 배너 모양)을 그대로 표지로 재사용했다.
+    #   대신 원본 영상에서 세로 표지 비율로 직접 한 장을 새로 뽑아서 제목을
+    #   입힌다. 또한 ffmpeg가 만든 jpg는 표준 JFIF 헤더가 없어서 pandoc이
+    #   가로/세로를 못 읽는 문제(EPUB 안에서 표지가 0x0으로 깨짐)가 있었는데,
+    #   `sips`로 다시 저장해서 표준 JFIF로 정규화하면 해결된다(확인 완료).
     COVER_FILE="${WORKING_DIR}/${FILENAME_NO_EXT}_work/cover.jpg"
-    FIRST_IMG=$(find "${WORKING_DIR}/${FILENAME_NO_EXT}_work/images" \
-        -name "*_merged.jpg" 2>/dev/null | sort | head -1)
+    SNAP_AT=$(( TOTAL_SECS / 25 ))
+    (( SNAP_AT < 5 ))  && SNAP_AT=5
+    (( SNAP_AT > 90 )) && SNAP_AT=90
 
-    if [[ -n "$FIRST_IMG" && -f "$FIRST_IMG" ]]; then
-        cp "$FIRST_IMG" "$COVER_FILE"
-        echo "🎨 표지 준비 완료"
+    # ★ 2026-07-24: 이 ffmpeg 호출을 터미널에서 직접 실행하면 항상 성공하는데,
+    # 실제 파이프라인(백그라운드로 오래 도는 실행) 안에서는 가끔 조용히
+    # 실패하는 경우가 있었다(원인 미확정 — 리소스 경합으로 추정). 원인을
+    # 못 찾았으니 최소한 재발 시 바로 알 수 있게 stderr를 로그 파일로 남긴다.
+    COVER_LOG="${MYTMP}/cover_${FILENAME_NO_EXT}.log"
+    ffmpeg -y -ss "$SNAP_AT" -i "$FILENAME" -vframes 1 \
+        -vf "crop=ih*2/3:ih:(iw-ih*2/3)/2:0,scale=960:1440,\
+drawbox=x=0:y=1150:w=960:h=290:color=black@0.55:t=fill,\
+drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial Bold.ttf':text='${FILENAME_NO_EXT}':fontcolor=white:fontsize=90:x=(w-text_w)/2:y=1230,\
+drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese Subtitle Study':fontcolor=#cccccc:fontsize=34:x=(w-text_w)/2:y=1340" \
+        -q:v 3 "$COVER_FILE" > "$COVER_LOG" 2>&1
+
+    if [[ -f "$COVER_FILE" ]]; then
+        sips -s format jpeg "$COVER_FILE" --out "$COVER_FILE" &>/dev/null
+        echo "🎨 표지 준비 완료 (${SNAP_AT}초 지점, 세로 960x1440)"
     else
         COVER_FILE=""
+        echo "⚠️  표지 캡처 실패 — 로그: $COVER_LOG"
+        tail -20 "$COVER_LOG"
     fi
 
     if (( TOTAL_PARTS == 1 )); then
@@ -728,6 +820,7 @@ PYMERGE
             "--metadata" "title=${FILENAME_NO_EXT}"
             "--metadata" "author=LanguageStudy"
             "--toc"
+            "--toc-depth=2"
             "--standalone"
         )
         [[ -f "$CSS_FILE" ]]   && PANDOC_ARGS+=("--css=${CSS_FILE}")
@@ -765,14 +858,21 @@ EOF
 
 chmod +x "$TEMP_SCRIPT"
 
-# ── 새 터미널 창에서 실행 ────────────────────────────────────────────
+# ── 새 iTerm 창에서 실행 ────────────────────────────────────────────
 # ★ 2026-07-23: 원래 iTerm을 `tell application "iTerm" ...`으로 제어했는데,
 #   이건 macOS 자동화(Automation) 권한이 필요하고, 이 스크립트가 메뉴바 앱
 #   (launchd 백그라운드 프로세스) 등에서 호출되면 권한 팝업 자체가 안 떠서
 #   조용히 실패한다 (shift_alarm 프로젝트의 이북리더에서 겪은 것과 동일한
 #   문제 — 그쪽 README 8-1 참조). 대신 실행 가능한 .command 파일을 만들고
-#   `open`으로 여는 방식으로 바꿨다 — 권한이 전혀 필요 없고, iTerm이 없는
-#   환경에서도 기본 Terminal.app으로 항상 동작한다.
+#   `open`으로 여는 방식으로 바꿨다 — 권한이 전혀 필요 없다.
+#   ★ 2026-07-24: 처음엔 `open -a Terminal`로 바꿨었는데, 그러면 `imgcat`
+#   장면 미리보기가 안 보인다 — imgcat은 iTerm2 전용 인라인 이미지
+#   이스케이프 시퀀스라 일반 Terminal.app은 그걸 해석하지 못한다. 확인해보니
+#   `open -a iTerm <파일>.command`도 Terminal과 동일하게 권한 없이 스크립트를
+#   실행해준다(Automation 권한이 필요한 건 `tell application`뿐이고, `open`은
+#   Finder 더블클릭과 같은 취급이라 애초에 무관함) — 그래서 iTerm으로 되돌림.
+#   iTerm이 설치돼 있지 않으면 이 줄만 `open -a Terminal "$LAUNCHER"`로 바꾸면
+#   되지만, 그러면 imgcat 미리보기는 다시 안 보임.
 LAUNCHER="/tmp/_whisper_series_launch.command"
 cat > "$LAUNCHER" <<LAUNCHEREOF
 #!/bin/zsh
@@ -781,4 +881,4 @@ zsh "$TEMP_SCRIPT"
 rm -f "$TEMP_SCRIPT"
 LAUNCHEREOF
 chmod +x "$LAUNCHER"
-open -a Terminal "$LAUNCHER"
+open -a iTerm "$LAUNCHER"
