@@ -141,6 +141,12 @@ EBOOK_LAST_STATE_FILE = os.path.expanduser("~/.ebook_reader_last.json")
 # 만들었다 — 최초 1회 "Terminal 제어 허용?" 팝업이 뜨면 사용자가 허용해야 동작함.
 STYLE_TERMINAL_APP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "StyleEbookTerminal.app")
 
+# ── 일본어자막추출 프로젝트(형제 폴더) 연동 경로 ────────────────────
+JP_SUBTITLE_SCRIPT = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "일본어자막추출", "whisper_series_stream.sh"
+)
+
 # ── 손자병법 해석 파이프라인 (별도 폴더, README의 "완료된 구절" 표 참조) ──
 SUNZI_README_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "손자병법", "README.md"
@@ -497,6 +503,27 @@ def choose_ebook_file():
         return path or None
     except Exception:
         return None
+
+
+def choose_jp_subtitle_folder():
+    """macOS 폴더 선택 다이얼로그로 일본어 영상 폴더를 고른다. 취소하면 None."""
+    apple_script = 'POSIX path of (choose folder with prompt "일본어 영상이 있는 폴더를 선택하세요")'
+    try:
+        result = subprocess.run(["osascript", "-e", apple_script], capture_output=True, text=True, timeout=120)
+        path = result.stdout.strip()
+        return path or None
+    except Exception:
+        return None
+
+
+def run_jp_subtitle_extraction(folder_path):
+    """일본어자막추출/whisper_series_stream.sh를 백그라운드로 실행한다.
+    스크립트 자체가 새 터미널 창(.command + open)을 띄우고 바로 리턴하므로,
+    여기서는 그냥 fire-and-forget으로 실행만 하면 된다."""
+    if not os.path.exists(JP_SUBTITLE_SCRIPT):
+        return False
+    subprocess.Popen(["zsh", JP_SUBTITLE_SCRIPT, folder_path])
+    return True
 
 
 # ════════════════════════════════════════════════════════════
@@ -1124,6 +1151,7 @@ class ShiftAlarmApp(rumps.App):
 
         self.menu.add(rumps.MenuItem("🎲 추천 사이트 열기 (天 폴더 랜덤 3개)", callback=self.open_random_bookmarks_now))
         self.menu.add(rumps.MenuItem("🔄 북마크 최신화 (天 폴더)", callback=self.refresh_bookmarks_now))
+        self.menu.add(rumps.MenuItem("🎥 일본어 자막 추출 (폴더 선택)", callback=self.run_jp_subtitle_now))
 
         sunzi_entry = get_latest_sunzi_entry()
         if sunzi_entry:
@@ -1255,6 +1283,16 @@ class ShiftAlarmApp(rumps.App):
         if result["failed_domains"]:
             msg += f" ({', '.join(result['failed_domains'])}는 실패)"
         rumps.notification("북마크 최신화 완료", "", msg)
+
+    def run_jp_subtitle_now(self, _):
+        folder = choose_jp_subtitle_folder()
+        if not folder:
+            return
+        ok = run_jp_subtitle_extraction(folder)
+        if not ok:
+            rumps.alert("오류", f"스크립트를 찾을 수 없습니다:\n{JP_SUBTITLE_SCRIPT}")
+            return
+        rumps.notification("일본어 자막 추출", "시작됨", f"{folder}\n새 터미널 창에서 진행 상황을 확인하세요.")
 
     def open_latest_sunzi(self, _):
         entry = get_latest_sunzi_entry()

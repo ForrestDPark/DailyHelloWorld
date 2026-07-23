@@ -117,6 +117,14 @@
 
 **참고**: 이 로직을 개발한 세션(Claude Code)의 샌드박스 환경은 `topgirl.co`(루트 도메인)를 DNS로 못 찾는 등 네트워크 제약이 있어서, 실제 사용자 맥에서 메뉴를 눌러 직접 확인이 필요하다.
 
+## 11. 🎥 일본어 자막 추출 연동 (2026-07-23 추가)
+
+메뉴의 `🎥 일본어 자막 추출 (폴더 선택)`을 누르면 macOS 폴더 선택 다이얼로그가 뜨고, 고른 폴더를 대상으로 `일본어자막추출/whisper_series_stream.sh`를 실행한다(자세한 파이프라인 내용·필수 키체인 등록은 `일본어자막추출/README.md` 참조).
+
+- `JP_SUBTITLE_SCRIPT` 상수가 `__file__` 기준으로 형제 폴더(`../일본어자막추출/whisper_series_stream.sh`)를 가리킨다 — `shift_alarm/`과 `일본어자막추출/`이 항상 같은 저장소 루트 밑에 나란히 있어야 함.
+- `run_jp_subtitle_extraction()`은 그 스크립트를 `subprocess.Popen`으로 그냥 실행만 하고 바로 리턴한다(fire-and-forget) — 스크립트 자체가 내부에서 `.command` 파일을 만들어 `open -a Terminal`로 새 터미널 창을 열고 실제 작업을 진행하기 때문에, 여기서 결과를 기다리거나 출력을 파싱할 필요가 없다.
+- 노션 토큰/freeimage.host API 키를 키체인에 등록해두지 않으면 새로 뜬 터미널 창에서 "❌ 노션 토큰을 키체인에서 찾을 수 없습니다"로 바로 실패한다 — 최초 1회 `일본어자막추출/README.md`의 키체인 등록 명령 실행 필요.
+
 ## 11. 자잘한 운영 메모
 - 코드/설정 변경 후에는 `launchctl kickstart -k gui/$(id -u)/com.shiftalarm.menubar`로 재시작해야 반영됨 (rumps 앱이라 hot-reload 없음; ★ 2026-07-23부터 LaunchAgent 등록 방식으로 바뀌어 `nohup` 방식은 더 이상 안 씀 — 1번 항목 참조). `SCHEDULE_FILE`/`EBOOK_READER_SCRIPT` 등은 `__file__` 기준 상대경로라 폴더 위치가 바뀌어도 코드 수정 없이 그대로 동작하지만, **plist의 `ProgramArguments` 자체는 절대경로라 폴더/파일을 옮기면 별도로 고쳐야 함**(1번 항목 참조).
 - `~/Downloads/shift_alarm.py`에도 항상 최신 사본을 동기화해둠 (사용자가 그쪽에서도 참조하는 습관이 있어서).
