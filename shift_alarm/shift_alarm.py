@@ -130,6 +130,10 @@ ALARM_SCRIPT_PATH = os.path.expanduser("~/Library/Scripts/shift_alarm_run.sh")
 EBOOK_PY_PATH = "/opt/anaconda3/bin/python3"
 EBOOK_READER_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ebook_reader.py")
 EBOOK_LAST_STATE_FILE = os.path.expanduser("~/.ebook_reader_last.json")
+# 터미널 창 스타일링(배경/폰트/전체화면) 전용 미니 앱. launchd로 뜨는 python3는
+# 자동화 권한 팝업 자체가 뜨지 않아서, 독립 .app으로 분리해 Finder에서 연 것처럼
+# 만들었다 — 최초 1회 "Terminal 제어 허용?" 팝업이 뜨면 사용자가 허용해야 동작함.
+STYLE_TERMINAL_APP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "StyleEbookTerminal.app")
 
 # ── 손자병법 해석 파이프라인 (별도 폴더, README의 "완료된 구절" 표 참조) ──
 SUNZI_README_PATH = os.path.join(
@@ -490,24 +494,32 @@ def choose_ebook_file():
 
 
 def open_ebook_reader_terminal(file_path):
-    """ebook_reader.py를 새 터미널 창에서 실행 (검정 배경 + 초록 글씨, 확대 폰트 + 전체창, 볼륨 80%)"""
-    py_cmd = f"{EBOOK_PY_PATH} {shlex.quote(EBOOK_READER_SCRIPT)} {shlex.quote(file_path)}"
-    apple_script = f'''
-set volume output volume 80
+    """ebook_reader.py를 새 터미널 창에서 실행 (검정 배경 + 초록 글씨, 확대 폰트 + 전체창, 볼륨 80%).
 
-tell application "Terminal"
-    activate
-    do script "{py_cmd}"
-    delay 1
-    tell window 1
-        set background color to {{0, 0, 0}}
-        set normal text color to {{10000, 65535, 10000}}
-        set font size to 28
-        set zoomed to true
-    end tell
-end tell
-'''
-    subprocess.Popen(["osascript", "-e", apple_script])
+    핵심 실행은 `open`으로 .command 파일을 열어서 처리 — 이 방식은 macOS 자동화
+    (Automation) 권한이 없어도 항상 동작한다 (2026-07-23 버그: launchd로 뜨는 이
+    python3 프로세스에 그 권한이 없어서 예전 tell application "Terminal" 방식이
+    조용히 실패했었음. 자세한 건 README 참고).
+
+    창 스타일링(배경색/폰트 크기/전체화면)은 tell application "Terminal" 이 필요한데,
+    launchd로 뜨는 python3에서 직접 osascript로 이걸 보내면 자동화 권한 팝업 자체가
+    뜨지 않는다는 게 확인됐다 (2026-07-23) — 그래서 STYLE_TERMINAL_APP이라는 독립
+    .app으로 분리했다. `open -a`로 앱을 여는 건 Finder에서 더블클릭한 것과 동일하게
+    취급되어 팝업이 정상적으로 뜬다. 최초 1회 "Terminal을 제어하시겠습니까?" 팝업이
+    뜨면 허용해야 그 뒤로 계속 스타일링이 적용된다 (허용 안 해도 리더 실행 자체는
+    영향 없음 — 위 .command 부분은 이미 완료된 뒤라 항상 창은 뜬다).
+    """
+    py_cmd = f"{EBOOK_PY_PATH} {shlex.quote(EBOOK_READER_SCRIPT)} {shlex.quote(file_path)}"
+    launcher_path = "/tmp/_ebook_reader_launch.command"
+    with open(launcher_path, "w", encoding="utf-8") as f:
+        f.write("#!/bin/bash\n")
+        f.write("osascript -e 'set volume output volume 80' >/dev/null 2>&1\n")
+        f.write(f"{py_cmd}\n")
+    os.chmod(launcher_path, 0o755)
+    subprocess.Popen(["open", "-a", "Terminal", launcher_path])
+
+    if os.path.exists(STYLE_TERMINAL_APP):
+        subprocess.Popen(["open", "-a", STYLE_TERMINAL_APP])
 
 
 # ════════════════════════════════════════════════════════════

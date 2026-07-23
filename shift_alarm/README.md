@@ -3,7 +3,7 @@
 이 문서는 **새 세션(다른 기기·다른 클라이언트 포함)에서도 이전 대화 맥락 없이 바로 이어서 작업할 수 있도록** `shift_alarm.py` / `ebook_reader.py`에 지금까지 쌓인 기능과 확정 규칙을 전부 기록해둔 것이다. 손자병법 파이프라인 README(`손자병법/README.md`)와 같은 목적.
 
 - 로컬 경로: `/Users/forrestdpark/Desktop/PDG/DailyHelloWorld_/shift_alarm/shift_alarm.py` (관련 파일 전부 `shift_alarm/` 폴더 안 — 손자병법 파이프라인이 `손자병법/` 폴더를 쓰는 것과 같은 패턴)
-- 실행: `cd shift_alarm && /opt/anaconda3/bin/python3 shift_alarm.py` (백그라운드로 계속 켜져있는 rumps 메뉴바 앱. 코드 수정 후에는 기존 프로세스를 `kill`하고 `nohup ... &`로 재실행해야 반영됨)
+- **실행 방식(★ 2026-07-23 확정): `~/Library/LaunchAgents/com.shiftalarm.menubar.plist`로 등록된 LaunchAgent다** (로그인 시 자동 시작, `RunAtLoad=true`). 코드 수정 후 재시작은 `nohup`이 아니라 `launchctl kickstart -k gui/$(id -u)/com.shiftalarm.menubar`로 한다 (기존 프로세스 kill + 재시작을 한 번에 처리). **주의: plist의 `ProgramArguments` 경로는 `shift_alarm.py` 파일을 옮기면 반드시 같이 수정해야 한다** — 코드 안 `__file__` 기준 상대경로와 달리 plist 진입점은 절대경로 고정이라 자동으로 안 따라가고, 이미 떠 있는 프로세스는 멀쩡히 돌다가 다음 재부팅/재로드 때(즉 "껐다 켤 때") 그제서야 조용히 실패한다(자세한 사례는 8-1 참조).
 - 사용자는 3교대(Day/Swing/GY) + 휴무로 도는 D조 근무자.
 
 ---
@@ -75,11 +75,27 @@
   - `📖 다른 책 선택해서 읽기` — 항상 표시, macOS 파일선택 다이얼로그(pdf/epub)로 새 책 선택.
 - 실행되면 새 터미널 창이 뜨는데: 검정 배경+초록 글씨, 폰트 크기 28(원래 20에서 1.4배), 창은 `zoomed`(전체창), 실행 시 맥 시스템 볼륨을 80%로 설정.
 
+### 8-1. ★★ 터미널 창이 안 뜨거나 스타일이 안 먹는 문제 (2026-07-23, 근본 원인 확정)
+
+**증상**: `이어하기`/`다른 책 선택` 메뉴를 눌러도 아무 반응이 없거나(창 자체가 안 뜸), 창은 뜨는데 스타일링(검정 배경/초록 글씨/폰트 28/전체화면)이 하나도 안 먹음.
+
+**근본 원인 — launchd로 뜨는 백그라운드 프로세스는 macOS 자동화(Automation, `kTCCServiceAppleEvents`) 권한을 절대 얻을 수 없다.**
+- 예전 코드는 `open_ebook_reader_terminal()`이 `tell application "Terminal" ... do script`로 새 창을 열고 스타일까지 한 번에 처리했다. 이 방식은 "Terminal을 제어할 권한"이 필요한데, 이 권한은 macOS가 **화면에 팝업을 띄워서 사용자가 직접 '허용'을 눌러야만** 부여된다.
+- `shift_alarm.py`는 `~/Library/LaunchAgents/com.shiftalarm.menubar.plist`로 등록된 LaunchAgent라서 로그인 시 launchd가 조용히 백그라운드로 띄운다. 이 실행 경로에서는 **권한 팝업 자체가 뜨지 않는다** (Finder 더블클릭이나 Terminal에서 직접 실행한 게 아니라서 macOS가 "책임 프로세스"를 GUI 세션에 제대로 붙이지 못함). 그래서 팝업이 안 뜨고, `system.log`의 TCC 데이터베이스(`~/Library/Application Support/com.apple.TCC/TCC.db`)를 조회해보면 이 python3 바이너리에 대한 권한 기록이 아예 없었다 — "거부됨"도 아니고 "물어본 적조차 없음" 상태. AppleEvent는 그냥 조용히 실패하고, 코드도 그 실패를 체크하지 않아서 사용자 입장에선 그냥 "아무 일도 안 일어남"으로 보였다.
+- 참고로 같은 이유로 `com.shiftalarm.menubar.plist`의 경로가 옛날 위치(`shift_alarm.py`를 `shift_alarm/` 서브폴더로 옮기기 전 경로)를 계속 가리키고 있었던 별개의 버그도 있었다 — 이건 "이미 떠 있던 프로세스는 파일이 옮겨져도 계속 잘 돌아가다가, 로그아웃/재부팅 등으로 launchd가 plist를 다시 읽어들이는 순간(즉 '껐다 켜는' 순간) 그제서야 옛 경로를 못 찾아 실패하는" 패턴이라 원인 파악이 헷갈리기 쉽다. plist의 `ProgramArguments` 경로는 스크립트를 옮기면 반드시 같이 고쳐야 한다(코드 안의 `__file__` 기준 상대경로와는 별개로, plist의 진입점 경로는 절대경로로 고정돼 있어서 자동으로 안 따라감).
+
+**해결 (2단계 분리 구조로 재작성됨):**
+1. **창을 여는 것(핵심 기능)**: `/tmp/_ebook_reader_launch.command`라는 실행 가능한 셸 스크립트를 만들고 `open -a Terminal <파일>`로 연다. 이건 AppleEvent가 아니라 Launch Services가 문서를 여는 것뿐이라 자동화 권한이 전혀 필요 없다 — **항상 100% 동작을 보장.**
+2. **스타일링(배경/폰트/전체화면)**: `shift_alarm/StyleEbookTerminal.app`이라는 별도의 작은 컴파일된 AppleScript 앱(`osacompile`로 빌드)으로 분리했다. `open -a StyleEbookTerminal.app`으로 여는 것도 Launch Services를 통하는 거라 launchd가 직접 부르는 것과 달리 **정상적으로 권한 팝업이 뜬다.** 최초 1회 "Terminal을 제어하도록 허용하시겠습니까?" 팝업에서 허용을 누르면, 그 뒤로는 이 앱 자체(경로 기준)에 영구적으로 권한이 기록되어 launchd가 불러도 계속 스타일링이 적용된다. (2026-07-23 세션에서 최초 실행 시 이미 허용 처리됨 — `TCC.db`에 `StyleEbookTerminal.app/Contents/MacOS/applet`이 `auth_value=2`로 기록된 것 확인.)
+3. `open_ebook_reader_terminal()`이 이제 이 두 단계를 순서대로(창 열기 → 스타일링 앱 열기) 실행한다. 스타일링 앱이 없거나 실패해도(`os.path.exists` 체크) 창 열기 자체는 항상 성공한다 — 핵심 기능과 부가 기능(스타일)을 절대 하나의 실패 지점으로 묶지 않는다.
+
+**교훈 (다른 메뉴 항목/미래 자동화에도 적용):** `subprocess.Popen(["osascript", "-e", 'tell application "X" ...'])`을 launchd 백그라운드 앱(rumps 메뉴바 앱 포함) 안에서 직접 호출하는 코드는 전부 이 문제를 안고 있을 수 있다. Elmedia 재생(`open -a "Elmedia Video Player" ...`)처럼 `open`만 쓰는 코드는 안전하지만, `tell application` 형태로 다른 앱을 "제어"하는 AppleScript가 필요하면 반드시 별도 `.app`(`osacompile`)으로 분리해서 `open -a`로 불러야 한다.
+
 ## 9. 연차/수동 근무 오버라이드
 메뉴에서 근무를 수동으로 선택하면(`auto_mode` 꺼짐), 그 값이 알람뿐 아니라 급여 계산(3번 항목)에도 그대로 반영됨. 연차로 쉬는 날은 메뉴에서 `휴무`를 선택하면 그날 알람도 꺼지고 급여도 "휴무"로 처리됨.
 
 ## 10. 자잘한 운영 메모
-- 코드/설정 변경 후에는 실행 중인 프로세스를 찾아(`ps aux | grep shift_alarm`) `kill`하고, `shift_alarm/` 폴더 안에서 `nohup /opt/anaconda3/bin/python3 shift_alarm.py > /tmp/shift_alarm.log 2>&1 &`로 재실행해야 반영됨 (rumps 앱이라 hot-reload 없음). `SCHEDULE_FILE`/`EBOOK_READER_SCRIPT` 등은 `__file__` 기준 상대경로라 폴더 위치가 바뀌어도 코드 수정 없이 그대로 동작함.
+- 코드/설정 변경 후에는 `launchctl kickstart -k gui/$(id -u)/com.shiftalarm.menubar`로 재시작해야 반영됨 (rumps 앱이라 hot-reload 없음; ★ 2026-07-23부터 LaunchAgent 등록 방식으로 바뀌어 `nohup` 방식은 더 이상 안 씀 — 1번 항목 참조). `SCHEDULE_FILE`/`EBOOK_READER_SCRIPT` 등은 `__file__` 기준 상대경로라 폴더 위치가 바뀌어도 코드 수정 없이 그대로 동작하지만, **plist의 `ProgramArguments` 자체는 절대경로라 폴더/파일을 옮기면 별도로 고쳐야 함**(1번 항목 참조).
 - `~/Downloads/shift_alarm.py`에도 항상 최신 사본을 동기화해둠 (사용자가 그쪽에서도 참조하는 습관이 있어서).
 - 이 저장소(`DailyHelloWorld`)는 shift_alarm 외에도 손자병법 해석 파이프라인 등 전혀 다른 프로젝트들이 같이 들어있는 개인 모음 저장소라, `git status`에 관련 없는 변경사항(다른 폴더의 M/D/??)이 항상 잔뜩 떠 있다 — shift_alarm.py/ebook_reader.py만 `git add`해서 커밋할 것.
 - 여러 세션(로컬 CLI + 웹/모바일 "claude remote-control")이 같은 저장소에 동시에 커밋할 수 있으므로, push 전에 `git fetch && git log HEAD..origin/main --oneline`으로 원격에 새 커밋이 있는지 항상 확인하고, 있으면 merge 후 push할 것.
