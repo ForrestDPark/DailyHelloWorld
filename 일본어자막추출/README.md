@@ -28,6 +28,7 @@ security add-generic-password -a "$USER" -s "jp_subtitle_freeimage_key" -w "<fre
 
 | 도구 | 용도 | 확인 |
 |---|---|---|
+| **iTerm2** (`/Applications/iTerm.app`) | 실제 처리가 진행되는 새 창 (★ `imgcat` 미리보기 때문에 필수 — 아래 "iTerm 자동화 권한 문제" 참고) | `brew install --cask iterm2` |
 | `ffmpeg`/`ffprobe` | 오디오 추출, 장면 캡처, 이미지/오디오 합치기 | `brew install ffmpeg` |
 | `/opt/homebrew/bin/whisper-cli` (whisper.cpp) | 일본어 음성 인식 | `brew install whisper-cpp` |
 | `/opt/homebrew/share/whisper-cpp/models/ggml-medium.bin` (없으면 `ggml-small.bin`로 자동 폴백) | Whisper 모델 | `whisper-cpp-download-ggml-model medium` 등 |
@@ -66,9 +67,11 @@ security add-generic-password -a "$USER" -s "jp_subtitle_freeimage_key" -w "<fre
 
 재현/검증: 실패했던 `MIAA-444` 작업 폴더(`~/Desktop/BlogImage/AV/`)에서 `--epub-version=3` 뺀 명령으로 직접 재실행해서 정상적으로 46MB EPUB이 만들어지는 것 확인함(표지 이미지 관련 `Could not determine image type` 경고는 뜨지만 무해함 — 실제로는 유효한 JPEG이고 pandoc의 크기 감지 로직만 못 읽는 것, 1440x270처럼 세로로 아주 납작한 비율이라 그런 것으로 추정).
 
-### iTerm 자동화(Automation) 권한 문제 → Terminal.command 방식으로 교체 (2026-07-23)
+### iTerm 자동화(Automation) 권한 문제 → `.command` + `open -a iTerm` 방식으로 교체 (2026-07-23, 2026-07-24 iTerm으로 재확정)
 
-원본 스크립트는 맨 끝에서 `tell application "iTerm" ... create window ...`로 새 창을 열었는데, 이건 macOS 자동화 권한이 필요하다. 사용자가 직접 터미널에서 실행할 땐 문제없지만, **shift_alarm 메뉴바 앱(launchd 백그라운드 프로세스)에서 호출하면 권한 팝업 자체가 안 떠서 조용히 실패한다** — shift_alarm 프로젝트의 이북리더에서 이미 겪은 것과 동일한 문제(그 프로젝트 README 8-1 참조). 그래서 실행 가능한 `.command` 파일을 만들고 `open -a Terminal`로 여는 방식으로 바꿨다 — 권한이 전혀 필요 없고, iTerm이 없는 환경에서도 기본 Terminal.app으로 항상 동작한다.
+원본 스크립트는 맨 끝에서 `tell application "iTerm" ... create window ...`로 새 창을 열었는데, 이건 macOS 자동화 권한이 필요하다. 사용자가 직접 터미널에서 실행할 땐 문제없지만, **shift_alarm 메뉴바 앱(launchd 백그라운드 프로세스)에서 호출하면 권한 팝업 자체가 안 떠서 조용히 실패한다** — shift_alarm 프로젝트의 이북리더에서 이미 겪은 것과 동일한 문제(그 프로젝트 README 8-1 참조). 그래서 실행 가능한 `.command` 파일을 만들고 `open`으로 여는 방식으로 바꿨다 — 권한이 전혀 필요 없다.
+
+**★ 2026-07-24 정정**: 처음엔 `open -a Terminal`로 바꿨었는데, 그러면 장면 미리보기(`imgcat`)가 안 보인다는 걸 사용자가 지적함 — `imgcat`은 iTerm2 전용 인라인 이미지 이스케이프 시퀀스라 일반 Terminal.app은 못 그린다. 확인해보니 **`open -a iTerm <파일>.command`도 Terminal과 동일하게 자동화 권한 없이 스크립트를 실행해준다** — 애초에 Automation(`kTCCServiceAppleEvents`) 권한이 필요한 건 `tell application "X"` 같은 AppleEvent를 보낼 때뿐이고, `open`은 Finder에서 파일을 더블클릭하는 것과 같은 취급(Launch Services)이라 대상 앱이 Terminal이든 iTerm이든 상관없이 권한이 필요 없다. 그래서 최종적으로 `open -a iTerm`으로 되돌렸다 — 권한 문제도 없고 imgcat 미리보기도 정상 동작.
 
 ## 메뉴바(shift_alarm) 연동
 

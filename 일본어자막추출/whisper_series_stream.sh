@@ -765,14 +765,21 @@ EOF
 
 chmod +x "$TEMP_SCRIPT"
 
-# ── 새 터미널 창에서 실행 ────────────────────────────────────────────
+# ── 새 iTerm 창에서 실행 ────────────────────────────────────────────
 # ★ 2026-07-23: 원래 iTerm을 `tell application "iTerm" ...`으로 제어했는데,
 #   이건 macOS 자동화(Automation) 권한이 필요하고, 이 스크립트가 메뉴바 앱
 #   (launchd 백그라운드 프로세스) 등에서 호출되면 권한 팝업 자체가 안 떠서
 #   조용히 실패한다 (shift_alarm 프로젝트의 이북리더에서 겪은 것과 동일한
 #   문제 — 그쪽 README 8-1 참조). 대신 실행 가능한 .command 파일을 만들고
-#   `open`으로 여는 방식으로 바꿨다 — 권한이 전혀 필요 없고, iTerm이 없는
-#   환경에서도 기본 Terminal.app으로 항상 동작한다.
+#   `open`으로 여는 방식으로 바꿨다 — 권한이 전혀 필요 없다.
+#   ★ 2026-07-24: 처음엔 `open -a Terminal`로 바꿨었는데, 그러면 `imgcat`
+#   장면 미리보기가 안 보인다 — imgcat은 iTerm2 전용 인라인 이미지
+#   이스케이프 시퀀스라 일반 Terminal.app은 그걸 해석하지 못한다. 확인해보니
+#   `open -a iTerm <파일>.command`도 Terminal과 동일하게 권한 없이 스크립트를
+#   실행해준다(Automation 권한이 필요한 건 `tell application`뿐이고, `open`은
+#   Finder 더블클릭과 같은 취급이라 애초에 무관함) — 그래서 iTerm으로 되돌림.
+#   iTerm이 설치돼 있지 않으면 이 줄만 `open -a Terminal "$LAUNCHER"`로 바꾸면
+#   되지만, 그러면 imgcat 미리보기는 다시 안 보임.
 LAUNCHER="/tmp/_whisper_series_launch.command"
 cat > "$LAUNCHER" <<LAUNCHEREOF
 #!/bin/zsh
@@ -781,4 +788,4 @@ zsh "$TEMP_SCRIPT"
 rm -f "$TEMP_SCRIPT"
 LAUNCHEREOF
 chmod +x "$LAUNCHER"
-open -a Terminal "$LAUNCHER"
+open -a iTerm "$LAUNCHER"
