@@ -94,11 +94,12 @@
 ## 9. 연차/수동 근무 오버라이드
 메뉴에서 근무를 수동으로 선택하면(`auto_mode` 꺼짐), 그 값이 알람뿐 아니라 급여 계산(3번 항목)에도 그대로 반영됨. 연차로 쉬는 날은 메뉴에서 `휴무`를 선택하면 그날 알람도 꺼지고 급여도 "휴무"로 처리됨.
 
-## 10. 🎲 랜덤 추천 사이트 열기 (2026-07-23 추가)
-메뉴의 `🎲 추천 사이트 열기 (랜덤 북마크 3개)`를 누르면 크롬 북마크 **전체**(`bookmark_bar`/`other`/`synced` 전 폴더, 특정 폴더로 한정하지 않음)에서 무작위로 3개를 뽑아 크롬으로 연다.
-- 로직: `pick_random_bookmarks(n)`이 `~/Library/Application Support/Google/Chrome/Default/Bookmarks`를 직접 읽어 URL만 전부 모은 뒤 `random.sample`로 n개 추출 → `open_random_bookmarks(n)`이 각각 `open -a "Google Chrome" <url>`로 연다(북마크관리 프로젝트의 `fix_bookmarks.py`와 같은 파일 포맷을 읽지만, 여긴 읽기 전용이라 크롬이 켜져있어도 상관없음 — 북마크관리 쪽의 "크롬 켜진 채로 쓰면 덮어써짐" 문제와는 무관).
+## 10. 🎲 랜덤 추천 사이트 열기 (2026-07-23 추가, 같은 날 天 폴더로 범위 한정)
+메뉴의 `🎲 추천 사이트 열기 (天 폴더 랜덤 3개)`를 누르면 크롬 북마크의 **`天` 폴더 안에서만**(전체 북마크 아님 — 처음엔 전체로 만들었다가 사용자 피드백으로 즉시 天 폴더로 한정함) 무작위로 3개를 뽑아 크롬으로 연다.
+- 로직: `RANDOM_BOOKMARK_FOLDER = "天"` 상수로 대상 폴더를 지정. `pick_random_bookmarks(n, folder_name)`이 `~/Library/Application Support/Google/Chrome/Default/Bookmarks`를 읽어 `bookmark_bar`/`other`/`synced` 순서로 재귀 탐색해 그 이름의 폴더를 찾고(같은 이름 폴더가 여럿이면 처음 찾은 것), 그 폴더 안 URL만 모아 `random.sample`로 n개 추출 → `open_random_bookmarks(n)`이 각각 `open -a "Google Chrome" <url>`로 연다. (북마크관리 프로젝트의 `fix_bookmarks.py`와 폴더 탐색 로직이 사실상 동일 — 읽기 전용이라 크롬이 켜져있어도 상관없음. 북마크관리 쪽 "크롬 켜진 채로 쓰면 덮어써짐" 문제는 파일 쓰기 시나리오라 여긴 무관.)
+- 다른 폴더로 바꾸고 싶으면 `RANDOM_BOOKMARK_FOLDER` 상수만 바꾸면 됨.
 - 뽑힌 3개 URL은 알림(`rumps.notification`)으로도 보여줌.
-- 북마크를 못 읽으면(파일 없음/파싱 실패) "오류" 알럿만 띄우고 아무것도 열지 않음.
+- 폴더를 못 찾거나 북마크를 못 읽으면(파일 없음/파싱 실패) "오류" 알럿만 띄우고 아무것도 열지 않음.
 
 ## 11. 자잘한 운영 메모
 - 코드/설정 변경 후에는 `launchctl kickstart -k gui/$(id -u)/com.shiftalarm.menubar`로 재시작해야 반영됨 (rumps 앱이라 hot-reload 없음; ★ 2026-07-23부터 LaunchAgent 등록 방식으로 바뀌어 `nohup` 방식은 더 이상 안 씀 — 1번 항목 참조). `SCHEDULE_FILE`/`EBOOK_READER_SCRIPT` 등은 `__file__` 기준 상대경로라 폴더 위치가 바뀌어도 코드 수정 없이 그대로 동작하지만, **plist의 `ProgramArguments` 자체는 절대경로라 폴더/파일을 옮기면 별도로 고쳐야 함**(1번 항목 참조).

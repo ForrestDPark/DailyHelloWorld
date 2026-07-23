@@ -495,12 +495,13 @@ def choose_ebook_file():
 
 
 # ════════════════════════════════════════════════════════════
-# 랜덤 추천 사이트 (크롬 북마크 전체에서 무작위로 몇 개 열기)
+# 랜덤 추천 사이트 (크롬 북마크의 특정 폴더에서 무작위로 몇 개 열기)
 # ════════════════════════════════════════════════════════════
 
 CHROME_BOOKMARKS_PATH = os.path.expanduser(
     "~/Library/Application Support/Google/Chrome/Default/Bookmarks"
 )
+RANDOM_BOOKMARK_FOLDER = "天"  # 이 폴더 안 북마크만 대상 (전체 북마크 아님)
 
 
 def _collect_all_bookmark_urls(node):
@@ -514,15 +515,31 @@ def _collect_all_bookmark_urls(node):
     return urls
 
 
-def pick_random_bookmarks(n=3):
-    """크롬 북마크 전체(모든 폴더)에서 URL을 무작위로 n개 뽑는다. 실패하면 빈 리스트."""
+def _find_bookmark_folder(node, target_name):
+    if node.get("type") == "folder":
+        if node.get("name") == target_name:
+            return node
+        for child in node.get("children", []):
+            found = _find_bookmark_folder(child, target_name)
+            if found:
+                return found
+    return None
+
+
+def pick_random_bookmarks(n=3, folder_name=RANDOM_BOOKMARK_FOLDER):
+    """크롬 북마크의 folder_name 폴더 안에서만 URL을 무작위로 n개 뽑는다. 실패하면 빈 리스트."""
     try:
         data = json.loads(open(CHROME_BOOKMARKS_PATH, encoding="utf-8").read())
         roots = data.get("roots", {})
-        urls = []
+        folder = None
         for key in ("bookmark_bar", "other", "synced"):
             if key in roots:
-                urls.extend(_collect_all_bookmark_urls(roots[key]))
+                folder = _find_bookmark_folder(roots[key], folder_name)
+                if folder:
+                    break
+        if not folder:
+            return []
+        urls = _collect_all_bookmark_urls(folder)
         if not urls:
             return []
         return random.sample(urls, min(n, len(urls)))
@@ -531,7 +548,7 @@ def pick_random_bookmarks(n=3):
 
 
 def open_random_bookmarks(n=3):
-    """무작위로 뽑은 북마크 URL을 크롬 새 탭으로 연다."""
+    """RANDOM_BOOKMARK_FOLDER(天) 폴더에서 무작위로 뽑은 북마크 URL을 크롬 새 탭으로 연다."""
     urls = pick_random_bookmarks(n)
     for url in urls:
         subprocess.Popen(["open", "-a", "Google Chrome", url])
@@ -969,7 +986,7 @@ class ShiftAlarmApp(rumps.App):
             self.menu.add(rumps.MenuItem(resume_label, callback=self.resume_ebook_now))
         self.menu.add(rumps.MenuItem("📖 다른 책 선택해서 읽기", callback=self.choose_ebook_now))
 
-        self.menu.add(rumps.MenuItem("🎲 추천 사이트 열기 (랜덤 북마크 3개)", callback=self.open_random_bookmarks_now))
+        self.menu.add(rumps.MenuItem("🎲 추천 사이트 열기 (天 폴더 랜덤 3개)", callback=self.open_random_bookmarks_now))
 
         sunzi_entry = get_latest_sunzi_entry()
         if sunzi_entry:
