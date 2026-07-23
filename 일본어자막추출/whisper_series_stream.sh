@@ -10,7 +10,7 @@ TARGET_DIR="${1:-.}"
 TARGET_PATH=$(cd "$TARGET_DIR" && pwd)
 TEMP_SCRIPT="$HOME/whisper_series_stream_run.sh"
 
-/opt/anaconda3/bin/python3 -m pip install requests pykakasi --quiet --disable-pip-version-check 2>/dev/null
+/opt/anaconda3/bin/python3 -m pip install requests pykakasi edge-tts --quiet --disable-pip-version-check 2>/dev/null
 
 cat << 'EOF' > "$TEMP_SCRIPT"
 #!/bin/zsh
@@ -114,12 +114,32 @@ for FILENAME in "${VALID_FILES[@]}"; do
         export MYTMP="$MYTMP"
 
         cat << 'PYEOF' > "$PY_WORKER"
-import os, sys, re, requests, time, base64, subprocess, warnings, shutil
+import os, sys, re, requests, time, base64, subprocess, warnings, shutil, asyncio
 from datetime import datetime
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 from pykakasi import kakasi
+import edge_tts
 kks = kakasi()
+
+# ── 대사 읽어주는 TTS (2026-07-24 추가) ─────────────────────────────
+# 영상에서 잘라낸 실제 음성이 대사 중간중간 끊기거나 공백이 많다는 피드백으로,
+# 세트(대사 3줄) 오디오를 영상에서 자르는 대신 edge-tts로 직접 합성한다.
+# ebook_reader.py(shift_alarm 프로젝트)가 영어 TTS에 쓰는 것과 같은 라이브러리.
+JA_VOICE    = "ja-JP-NanamiNeural"
+JA_TTS_RATE = "-10%"
+
+def synthesize_tts(text, out_mp3_path):
+    """text를 JA_VOICE로 읽어 mp3로 저장. 성공하면 True."""
+    try:
+        async def _run():
+            communicate = edge_tts.Communicate(text, JA_VOICE, rate=JA_TTS_RATE)
+            await communicate.save(out_mp3_path)
+        asyncio.run(_run())
+        return os.path.exists(out_mp3_path) and os.path.getsize(out_mp3_path) > 0
+    except Exception as e:
+        print(f"  ⚠️  TTS 생성 실패: {e}")
+        return False
 
 # ── 시크릿은 코드에 하드코딩하지 않고 macOS 키체인에서 읽는다 ──────────
 # 등록: security add-generic-password -a "$USER" -s "jp_subtitle_notion_token" -w "<토큰>" -U
@@ -256,24 +276,19 @@ def merge_images(paths, out_path, max_bytes=4 * 1024 * 1024):
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         os.replace(out_path + "_tmp.jpg", out_path)
 
+    # ★ 2026-07-24: 사용자가 EPUB 본문 중간중간 이미지가 검은 화면/빈 박스로
+    # 나오는 걸 발견함. 원인 확인: ffmpeg가 만든 jpg 중 일부가 표준 JFIF
+    # (APP0) 헤더 없이 저장되고, 그런 파일은 e리더가 크기를 못 읽어서 빈
+    # 박스로 렌더링한다 — 표지에서 겪은 것과 동일한 버그. 한 영상 안에서도
+    # 세트별로 어느 ffmpeg 경로(단일 스케일 vs hstack 합성)를 탔는지에 따라
+    # 헤더가 있다 없다 갈리는 걸로 보임(원인 특정보다 결과 정규화가 더
+    # 확실해서 이 방법으로 고침). `sips`로 다시 저장하면 항상 표준 JFIF로
+    # 정규화된다 — 표지에 이미 쓰던 것과 같은 처리를 세트 썸네일에도 적용.
+    subprocess.run(["sips", "-s", "format", "jpeg", out_path, "--out", out_path],
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
     print(f"  📐 병합 이미지: {os.path.getsize(out_path)//1024}KB")
     return True
-
-def concat_audio_clips(clip_paths, out_path):
-    if not clip_paths:
-        return False
-    if len(clip_paths) == 1:
-        subprocess.run(["cp", clip_paths[0], out_path])
-        return os.path.exists(out_path)
-    list_file = out_path + "_list.txt"
-    with open(list_file, "w") as f:
-        for p in clip_paths:
-            f.write(f"file '{os.path.abspath(p)}'\n")
-    subprocess.run(["ffmpeg", "-y", "-f", "concat", "-safe", "0",
-                    "-i", list_file, "-c", "copy", out_path],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    os.remove(list_file)
-    return os.path.exists(out_path)
 
 def notion_append(url, children, retries=3):
     for attempt in range(retries):
@@ -414,7 +429,7 @@ nav#toc a { color: #f5c842; text-decoration: none; }
 SCENE_SIZE = 8
 
 def save_to_md(work_dir, note_title, merged_img_path, ja_list, ko_list,
-               concat_wav_path=None, part_num="1", chunk_idx=0):
+               tts_mp3_path=None, part_num="1", chunk_idx=0):
     base_name  = os.environ.get("FILENAME_NO_EXT", "result")
     result_dir = os.path.join(work_dir, f"{base_name}_work")
     img_dir    = os.path.join(result_dir, "images")
@@ -427,20 +442,16 @@ def save_to_md(work_dir, note_title, merged_img_path, ja_list, ko_list,
         shutil.copy2(merged_img_path, os.path.join(img_dir, img_filename))
 
     mp3_tag = ""
-    if concat_wav_path and os.path.exists(concat_wav_path):
+    if tts_mp3_path and os.path.exists(tts_mp3_path):
+        # edge-tts가 이미 mp3로 저장해주므로 ffmpeg 재인코딩 없이 복사만 하면 됨.
         mp3_name = f"p{part_num}_{chunk_idx:03d}.mp3"
         mp3_path = os.path.join(audio_dir, mp3_name)
-        subprocess.run(
-            ["ffmpeg", "-y", "-i", concat_wav_path,
-             "-codec:a", "libmp3lame", "-qscale:a", "4", mp3_path],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        shutil.copy2(tts_mp3_path, mp3_path)
+        mp3_tag = (
+            f'<audio controls="controls">'
+            f'<source src="{base_name}_work/audio/{mp3_name}" type="audio/mpeg" />'
+            f'</audio>'
         )
-        if os.path.exists(mp3_path):
-            mp3_tag = (
-                f'<audio controls="controls">'
-                f'<source src="{base_name}_work/audio/{mp3_name}" type="audio/mpeg" />'
-                f'</audio>'
-            )
 
     md_path = os.path.join(work_dir, f"{note_title}.md")
     if not os.path.exists(md_path):
@@ -647,21 +658,12 @@ for idx in range(0, len(parsed_lines), 3):
     merged_path = os.path.join(img_folder, f"part{part_num}_{chunk_idx:03d}_merged.jpg")
     merge_ok    = merge_images(snap_paths, merged_path)
 
-    clip_paths = []
-    for i, c in enumerate(chunk):
-        clip_start = max(0.0, offset_sec + c['start'] - 0.15)
-        clip_dur   = max(0.8, (c['end'] - c['start']) + 0.3)
-        clip_path  = os.path.join(work_dir, f"temp_clip_{base_name}_{chunk_idx}_{i+1}.wav")
-        subprocess.run([
-            "ffmpeg", "-y",
-            "-ss", str(clip_start), "-i", video_path,
-            "-t", str(clip_dur), "-c:a", "pcm_s16le", clip_path
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        if os.path.exists(clip_path):
-            clip_paths.append(clip_path)
-
-    concat_path = os.path.join(work_dir, f"temp_concat_{base_name}_{chunk_idx}.wav")
-    concat_ok   = concat_audio_clips(clip_paths, concat_path)
+    # ★ 2026-07-24: 영상에서 대사 구간을 잘라 이어붙이던 방식(끊김/공백이
+    # 잦다는 피드백) 대신, 세트의 3줄을 통째로 edge-tts에 넘겨 한 번에
+    # 합성한다 — 자연스럽고, 네트워크 호출도 줄이고, wav→mp3 변환도 필요없다.
+    tts_text = "".join(ja_list)
+    tts_mp3  = os.path.join(work_dir, f"temp_tts_{base_name}_{chunk_idx}.mp3")
+    tts_ok   = synthesize_tts(tts_text, tts_mp3)
 
     COLORS = ["\033[1;96m", "\033[1;93m", "\033[1;92m"]
     print(f"\033[1;36m{'='*54}\033[0m")
@@ -674,9 +676,6 @@ for idx in range(0, len(parsed_lines), 3):
         print(f" {COLORS[i]}▶ {ja_list[i]}  →  {ko_list[i]}\033[0m")
     print(f"\033[1;36m{'='*54}\033[0m\n")
 
-    for p in clip_paths:
-        if os.path.exists(p): os.remove(p)
-
     uploaded_url  = upload_image(merged_path) if merge_ok else None
     notion_blocks = build_monitor_blocks(uploaded_url, ja_list, ko_list)
     for i in range(0, len(notion_blocks), 20):
@@ -687,11 +686,11 @@ for idx in range(0, len(parsed_lines), 3):
 
     if merge_ok:
         save_to_md(work_dir, note_title, merged_path, ja_list, ko_list,
-                   concat_path if concat_ok else None,
+                   tts_mp3 if tts_ok else None,
                    part_num=part_num, chunk_idx=chunk_idx)
 
-    if concat_ok and os.path.exists(concat_path):
-        os.remove(concat_path)
+    if tts_ok and os.path.exists(tts_mp3):
+        os.remove(tts_mp3)
 
 print(f"\n✅ [{base_name}] {part_num}/{total_parts}편 완료 │ {TOTAL_SETS}세트")
 PYEOF
