@@ -34,6 +34,7 @@ import shlex
 import urllib.request
 import threading
 import datetime
+import random
 
 # ── 설정 파일 경로 ──────────────────────────────────────────
 CONFIG_FILE = os.path.expanduser("~/.shift_alarm_config.json")
@@ -493,6 +494,50 @@ def choose_ebook_file():
         return None
 
 
+# ════════════════════════════════════════════════════════════
+# 랜덤 추천 사이트 (크롬 북마크 전체에서 무작위로 몇 개 열기)
+# ════════════════════════════════════════════════════════════
+
+CHROME_BOOKMARKS_PATH = os.path.expanduser(
+    "~/Library/Application Support/Google/Chrome/Default/Bookmarks"
+)
+
+
+def _collect_all_bookmark_urls(node):
+    urls = []
+    if node.get("type") == "url":
+        u = node.get("url")
+        if u:
+            urls.append(u)
+    for child in node.get("children", []):
+        urls.extend(_collect_all_bookmark_urls(child))
+    return urls
+
+
+def pick_random_bookmarks(n=3):
+    """크롬 북마크 전체(모든 폴더)에서 URL을 무작위로 n개 뽑는다. 실패하면 빈 리스트."""
+    try:
+        data = json.loads(open(CHROME_BOOKMARKS_PATH, encoding="utf-8").read())
+        roots = data.get("roots", {})
+        urls = []
+        for key in ("bookmark_bar", "other", "synced"):
+            if key in roots:
+                urls.extend(_collect_all_bookmark_urls(roots[key]))
+        if not urls:
+            return []
+        return random.sample(urls, min(n, len(urls)))
+    except Exception:
+        return []
+
+
+def open_random_bookmarks(n=3):
+    """무작위로 뽑은 북마크 URL을 크롬 새 탭으로 연다."""
+    urls = pick_random_bookmarks(n)
+    for url in urls:
+        subprocess.Popen(["open", "-a", "Google Chrome", url])
+    return urls
+
+
 def open_ebook_reader_terminal(file_path):
     """ebook_reader.py를 새 터미널 창에서 실행 (검정 배경 + 초록 글씨, 확대 폰트 + 전체창, 볼륨 80%).
 
@@ -924,6 +969,8 @@ class ShiftAlarmApp(rumps.App):
             self.menu.add(rumps.MenuItem(resume_label, callback=self.resume_ebook_now))
         self.menu.add(rumps.MenuItem("📖 다른 책 선택해서 읽기", callback=self.choose_ebook_now))
 
+        self.menu.add(rumps.MenuItem("🎲 추천 사이트 열기 (랜덤 북마크 3개)", callback=self.open_random_bookmarks_now))
+
         sunzi_entry = get_latest_sunzi_entry()
         if sunzi_entry:
             short_title = truncate_title(sunzi_entry["title"])
@@ -1027,6 +1074,13 @@ class ShiftAlarmApp(rumps.App):
         path = choose_ebook_file()
         if path:
             open_ebook_reader_terminal(path)
+
+    def open_random_bookmarks_now(self, _):
+        urls = open_random_bookmarks(3)
+        if not urls:
+            rumps.alert("오류", "북마크를 불러올 수 없습니다.")
+            return
+        rumps.notification("추천 사이트", f"{len(urls)}개 열었습니다", "\n".join(urls))
 
     def open_latest_sunzi(self, _):
         entry = get_latest_sunzi_entry()

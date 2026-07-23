@@ -94,7 +94,13 @@
 ## 9. 연차/수동 근무 오버라이드
 메뉴에서 근무를 수동으로 선택하면(`auto_mode` 꺼짐), 그 값이 알람뿐 아니라 급여 계산(3번 항목)에도 그대로 반영됨. 연차로 쉬는 날은 메뉴에서 `휴무`를 선택하면 그날 알람도 꺼지고 급여도 "휴무"로 처리됨.
 
-## 10. 자잘한 운영 메모
+## 10. 🎲 랜덤 추천 사이트 열기 (2026-07-23 추가)
+메뉴의 `🎲 추천 사이트 열기 (랜덤 북마크 3개)`를 누르면 크롬 북마크 **전체**(`bookmark_bar`/`other`/`synced` 전 폴더, 특정 폴더로 한정하지 않음)에서 무작위로 3개를 뽑아 크롬으로 연다.
+- 로직: `pick_random_bookmarks(n)`이 `~/Library/Application Support/Google/Chrome/Default/Bookmarks`를 직접 읽어 URL만 전부 모은 뒤 `random.sample`로 n개 추출 → `open_random_bookmarks(n)`이 각각 `open -a "Google Chrome" <url>`로 연다(북마크관리 프로젝트의 `fix_bookmarks.py`와 같은 파일 포맷을 읽지만, 여긴 읽기 전용이라 크롬이 켜져있어도 상관없음 — 북마크관리 쪽의 "크롬 켜진 채로 쓰면 덮어써짐" 문제와는 무관).
+- 뽑힌 3개 URL은 알림(`rumps.notification`)으로도 보여줌.
+- 북마크를 못 읽으면(파일 없음/파싱 실패) "오류" 알럿만 띄우고 아무것도 열지 않음.
+
+## 11. 자잘한 운영 메모
 - 코드/설정 변경 후에는 `launchctl kickstart -k gui/$(id -u)/com.shiftalarm.menubar`로 재시작해야 반영됨 (rumps 앱이라 hot-reload 없음; ★ 2026-07-23부터 LaunchAgent 등록 방식으로 바뀌어 `nohup` 방식은 더 이상 안 씀 — 1번 항목 참조). `SCHEDULE_FILE`/`EBOOK_READER_SCRIPT` 등은 `__file__` 기준 상대경로라 폴더 위치가 바뀌어도 코드 수정 없이 그대로 동작하지만, **plist의 `ProgramArguments` 자체는 절대경로라 폴더/파일을 옮기면 별도로 고쳐야 함**(1번 항목 참조).
 - `~/Downloads/shift_alarm.py`에도 항상 최신 사본을 동기화해둠 (사용자가 그쪽에서도 참조하는 습관이 있어서).
 - 이 저장소(`DailyHelloWorld`)는 shift_alarm 외에도 손자병법 해석 파이프라인 등 전혀 다른 프로젝트들이 같이 들어있는 개인 모음 저장소라, `git status`에 관련 없는 변경사항(다른 폴더의 M/D/??)이 항상 잔뜩 떠 있다 — shift_alarm.py/ebook_reader.py만 `git add`해서 커밋할 것.
