@@ -773,19 +773,25 @@ PYMERGE
     (( SNAP_AT < 5 ))  && SNAP_AT=5
     (( SNAP_AT > 90 )) && SNAP_AT=90
 
+    # ★ 2026-07-24: 이 ffmpeg 호출을 터미널에서 직접 실행하면 항상 성공하는데,
+    # 실제 파이프라인(백그라운드로 오래 도는 실행) 안에서는 가끔 조용히
+    # 실패하는 경우가 있었다(원인 미확정 — 리소스 경합으로 추정). 원인을
+    # 못 찾았으니 최소한 재발 시 바로 알 수 있게 stderr를 로그 파일로 남긴다.
+    COVER_LOG="${MYTMP}/cover_${FILENAME_NO_EXT}.log"
     ffmpeg -y -ss "$SNAP_AT" -i "$FILENAME" -vframes 1 \
         -vf "crop=ih*2/3:ih:(iw-ih*2/3)/2:0,scale=960:1440,\
 drawbox=x=0:y=1150:w=960:h=290:color=black@0.55:t=fill,\
 drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial Bold.ttf':text='${FILENAME_NO_EXT}':fontcolor=white:fontsize=90:x=(w-text_w)/2:y=1230,\
 drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese Subtitle Study':fontcolor=#cccccc:fontsize=34:x=(w-text_w)/2:y=1340" \
-        -q:v 3 "$COVER_FILE" -loglevel error
+        -q:v 3 "$COVER_FILE" > "$COVER_LOG" 2>&1
 
     if [[ -f "$COVER_FILE" ]]; then
         sips -s format jpeg "$COVER_FILE" --out "$COVER_FILE" &>/dev/null
         echo "🎨 표지 준비 완료 (${SNAP_AT}초 지점, 세로 960x1440)"
     else
         COVER_FILE=""
-        echo "⚠️  표지 캡처 실패"
+        echo "⚠️  표지 캡처 실패 — 로그: $COVER_LOG"
+        tail -20 "$COVER_LOG"
     fi
 
     if (( TOTAL_PARTS == 1 )); then
