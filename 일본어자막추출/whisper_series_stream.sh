@@ -317,53 +317,101 @@ def build_monitor_blocks(img_url, ja_list, ko_list):
     return blocks
 
 def create_epub_css(work_dir):
-    """EPUB용 CSS — 일본어 황금색 크게, 한국어 회색 작게"""
+    """EPUB용 CSS — 일본어 황금색 크게, 한국어 회색 작게.
+    ★ 2026-07-24: 페이지당 정보 밀도가 너무 낮다는 피드백으로 개편.
+    이미지를 100%→38%로 줄이고 텍스트 옆이 아니라 위에 작게 배치해서
+    화면(페이지)당 텍스트 줄 수를 늘림. 세트마다 hr 하나로 밋밋하게
+    구분하던 것 대신, 카드형 박스(.set)로 묶어서 스캔하기 쉽게 함."""
     css_path = os.path.join(work_dir, "epub_style.css")
     css = """\
 body {
     font-family: "Hiragino Kaku Gothic Pro", "ヒラギノ角ゴ Pro", sans-serif;
     background-color: #111111;
     color: #dddddd;
-    line-height: 1.8;
+    line-height: 1.6;
     padding: 1em;
 }
+h1 {
+    color: #f5c842;
+    border-bottom: 2px solid #f5c842;
+    padding-bottom: 0.3em;
+}
+h2.scene {
+    color: #f5c842;
+    font-size: 1.15em;
+    margin-top: 1.8em;
+    margin-bottom: 0.6em;
+    padding: 0.3em 0.6em;
+    background-color: #1c1c1c;
+    border-left: 4px solid #f5c842;
+}
+div.set {
+    margin-bottom: 0.9em;
+    padding-bottom: 0.7em;
+    border-bottom: 1px solid #2a2a2a;
+}
+img.scene-thumb {
+    width: 38%;
+    border-radius: 4px;
+    margin: 0.4em 0;
+    display: block;
+    opacity: 0.92;
+}
+audio {
+    width: 60%;
+    height: 1.8em;
+    margin: 0.2em 0 0.5em 0;
+    filter: invert(0.8);
+}
 p.ja {
-    font-size: 1.35em;
+    font-size: 1.2em;
     font-weight: bold;
     color: #f5c842;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.03em;
     margin-bottom: 0.1em;
-    margin-top: 0.6em;
-    text-shadow: 0 0 8px rgba(245,200,66,0.3);
+    margin-top: 0.5em;
 }
 p.ko {
-    font-size: 0.85em;
-    color: #666666;
+    font-size: 0.82em;
+    color: #777777;
     margin-top: 0;
-    margin-bottom: 0.2em;
+    margin-bottom: 0.15em;
     padding-left: 0.5em;
     border-left: 2px solid #333333;
 }
-img {
-    width: 100%;
-    border-radius: 6px;
-    margin: 0.8em 0;
+div.overview {
+    background-color: #1a1a1a;
+    border: 1px solid #333333;
+    border-radius: 8px;
+    padding: 1.2em 1.4em;
+    margin-bottom: 1.5em;
 }
-audio {
-    width: 100%;
-    margin: 0.4em 0 0.8em 0;
-    filter: invert(0.8);
+div.overview h2 {
+    color: #f5c842;
+    margin-top: 0;
 }
-hr {
-    border: none;
-    border-top: 1px solid #2a2a2a;
-    margin: 1.2em 0;
+div.overview table {
+    width: 100%;
+    border-collapse: collapse;
+}
+div.overview td {
+    padding: 0.3em 0.5em;
+    border-bottom: 1px solid #2a2a2a;
+}
+div.overview td:first-child {
+    color: #999999;
+    width: 40%;
 }
 nav#toc a { color: #f5c842; text-decoration: none; }
 """
     with open(css_path, "w", encoding="utf-8") as f:
         f.write(css)
     return css_path
+
+# ★ 2026-07-24: 몇 세트마다 h2 소제목("장면 N")을 넣어서 파트 하나가
+# 끊김없이 한 덩어리로 흐르지 않고 EPUB 목차/네비게이션에서 하위 챕터로
+# 분할되게 함. 표시 간격 — 8세트(=대사 24줄)마다 하나.
+SCENE_SIZE = 8
 
 def save_to_md(work_dir, note_title, merged_img_path, ja_list, ko_list,
                concat_wav_path=None, part_num="1", chunk_idx=0):
@@ -396,18 +444,42 @@ def save_to_md(work_dir, note_title, merged_img_path, ja_list, ko_list,
 
     md_path = os.path.join(work_dir, f"{note_title}.md")
     if not os.path.exists(md_path):
+        total_lines = len(parsed_lines)
+        total_sets  = TOTAL_SETS
+        scene_count = (total_sets + SCENE_SIZE - 1) // SCENE_SIZE
+        overview = f"""# {note_title}
+
+<div class="overview">
+<h2>📋 개요</h2>
+<table>
+<tr><td>파트</td><td>{part_num} / {total_parts}편</td></tr>
+<tr><td>대사 문장 수</td><td>{total_lines}줄</td></tr>
+<tr><td>장면 수</td><td>{scene_count}개 (장면당 대사 약 {SCENE_SIZE * 3}줄)</td></tr>
+<tr><td>표기 방식</td><td>원문 위(금색, 한자엔 후리가나 병기) / 번역 아래(회색)</td></tr>
+<tr><td>오디오</td><td>각 장면 대사 구간 mp3 첨부 — 재생 버튼으로 원어 음성 확인 가능</td></tr>
+</table>
+</div>
+
+"""
         with open(md_path, "w", encoding="utf-8") as f:
-            f.write(f"# {note_title}\n\n")
+            f.write(overview)
 
     with open(md_path, "a", encoding="utf-8") as f:
-        f.write(f'<img src="{base_name}_work/images/{img_filename}" alt="scene" style="width:100%;" />\n\n')
+        if (chunk_idx - 1) % SCENE_SIZE == 0:
+            scene_num = (chunk_idx - 1) // SCENE_SIZE + 1
+            # ★ 마크다운 네이티브 헤더 문법({.scene}은 pandoc 헤더 속성 확장)을
+            # 써야 --toc가 이걸 목차 항목으로 잡는다. <h2> raw HTML로 쓰면
+            # pandoc이 그냥 불투명한 블록으로 취급해서 목차에 안 잡힌다(확인됨).
+            f.write(f'## 🎬 장면 {scene_num} {{.scene}}\n\n')
+        f.write('<div class="set">\n\n')
+        f.write(f'<img class="scene-thumb" src="{base_name}_work/images/{img_filename}" alt="scene" />\n\n')
         if mp3_tag:
             f.write(mp3_tag + "\n\n")
         for ja, ko in zip(ja_list, ko_list):
             furi = generate_furigana(ja)
             f.write(f'<p class="ja">{furi}</p>\n')
             f.write(f'<p class="ko">{ko}</p>\n\n')
-        f.write("---\n\n")
+        f.write("</div>\n\n")
 
 
 # ── Apple Notes ───────────────────────────────────────────────────
@@ -691,15 +763,30 @@ PYMERGE
 
     CSS_FILE="${WORKING_DIR}/epub_style.css"
 
+    # ★ 2026-07-24: 예전엔 본문에 쓰던 3장짜리 가로 합성 썸네일(1440x270,
+    #   책 표지로 쓰기엔 너무 납작한 배너 모양)을 그대로 표지로 재사용했다.
+    #   대신 원본 영상에서 세로 표지 비율로 직접 한 장을 새로 뽑아서 제목을
+    #   입힌다. 또한 ffmpeg가 만든 jpg는 표준 JFIF 헤더가 없어서 pandoc이
+    #   가로/세로를 못 읽는 문제(EPUB 안에서 표지가 0x0으로 깨짐)가 있었는데,
+    #   `sips`로 다시 저장해서 표준 JFIF로 정규화하면 해결된다(확인 완료).
     COVER_FILE="${WORKING_DIR}/${FILENAME_NO_EXT}_work/cover.jpg"
-    FIRST_IMG=$(find "${WORKING_DIR}/${FILENAME_NO_EXT}_work/images" \
-        -name "*_merged.jpg" 2>/dev/null | sort | head -1)
+    SNAP_AT=$(( TOTAL_SECS / 25 ))
+    (( SNAP_AT < 5 ))  && SNAP_AT=5
+    (( SNAP_AT > 90 )) && SNAP_AT=90
 
-    if [[ -n "$FIRST_IMG" && -f "$FIRST_IMG" ]]; then
-        cp "$FIRST_IMG" "$COVER_FILE"
-        echo "🎨 표지 준비 완료"
+    ffmpeg -y -ss "$SNAP_AT" -i "$FILENAME" -vframes 1 \
+        -vf "crop=ih*2/3:ih:(iw-ih*2/3)/2:0,scale=960:1440,\
+drawbox=x=0:y=1150:w=960:h=290:color=black@0.55:t=fill,\
+drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial Bold.ttf':text='${FILENAME_NO_EXT}':fontcolor=white:fontsize=90:x=(w-text_w)/2:y=1230,\
+drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese Subtitle Study':fontcolor=#cccccc:fontsize=34:x=(w-text_w)/2:y=1340" \
+        -q:v 3 "$COVER_FILE" -loglevel error
+
+    if [[ -f "$COVER_FILE" ]]; then
+        sips -s format jpeg "$COVER_FILE" --out "$COVER_FILE" &>/dev/null
+        echo "🎨 표지 준비 완료 (${SNAP_AT}초 지점, 세로 960x1440)"
     else
         COVER_FILE=""
+        echo "⚠️  표지 캡처 실패"
     fi
 
     if (( TOTAL_PARTS == 1 )); then
@@ -728,6 +815,7 @@ PYMERGE
             "--metadata" "title=${FILENAME_NO_EXT}"
             "--metadata" "author=LanguageStudy"
             "--toc"
+            "--toc-depth=2"
             "--standalone"
         )
         [[ -f "$CSS_FILE" ]]   && PANDOC_ARGS+=("--css=${CSS_FILE}")
