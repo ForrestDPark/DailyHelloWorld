@@ -38,18 +38,18 @@ python3 extract_high_pitch_video.py ./av2/
 
 **의존성**: `librosa`, `soundfile` — 스크립트 실행 시 없으면 자동으로 `pip install`(anaconda python3 기준, 다른 스크립트들이 pykakasi/edge-tts를 자동 설치하는 것과 동일한 관례). `ffmpeg`는 기존 파이프라인과 공유.
 
-**아직 실제 영상으로 검증 전** — 이 세션은 ffmpeg/librosa를 실행할 수 없는 클라우드 컨테이너라, 구간 병합 로직(`find_high_pitch_segments`)과 배경음 폴더 스캔 로직(`pick_random_bgm`)만 합성 데이터로 단위 테스트했고 전체 파이프라인(오디오 추출 → 실제 pitch 분석 → 영상 자르기 → 배경음 믹스)은 맥에서 직접 돌려서 확인 필요. 처음 돌려보고 결과가 기대와 다르면(너무 많이/적게 잡힘) `--top-percent`, `--min-duration`, `--max-gap` 값을 조정해서 재실행하면 됨(오디오 캐시가 있어서 pitch 분석부터는 빠르게 재시도 가능).
+**아직 실제 영상으로 검증 전** — 이 세션은 ffmpeg/librosa를 실행할 수 없는 클라우드 컨테이너라, 구간 병합 로직(`find_high_pitch_segments`)과 배경음 이어붙이기 재생목록 로직(`build_bgm_track`, ffmpeg 호출은 스텁으로 대체하고 재생목록 선택 로직만 검증)만 합성 데이터로 단위 테스트했고 전체 파이프라인(오디오 추출 → 실제 pitch 분석 → 영상 자르기 → 배경음 믹스)은 맥에서 직접 돌려서 확인 필요. 처음 돌려보고 결과가 기대와 다르면(너무 많이/적게 잡힘) `--top-percent`, `--min-duration`, `--max-gap` 값을 조정해서 재실행하면 됨(오디오 캐시가 있어서 pitch 분석부터는 빠르게 재시도 가능).
 
 ### 고음영상 배경음 입히기
 
-`일본어자막추출/bgm/` 폴더에 mp3 파일을 넣어두면, `extract_high_pitch_video.py`가 고음영상을 만든 뒤 자동으로 그중 하나를 무작위로 골라 배경음으로 얹은 `<파일명>_고음영상_bgm.mp4`를 추가로 생성한다. 원본 대사 오디오는 그대로 유지하고 그 위에 낮은 볼륨으로 mp3를 섞는 방식(ffmpeg `amix` 필터) — mp3가 영상보다 짧으면 자동으로 반복 재생해서 영상 길이만큼 채우고, 영상 길이에 맞춰 잘린다.
+`일본어자막추출/bgm/` 폴더에 (미리 잘라놓은) mp3 파일들을 넣어두면, `extract_high_pitch_video.py`가 고음영상을 만든 뒤 자동으로 이어붙여서 `<파일명>_고음영상_bgm.mp4`를 추가로 생성한다. **한 mp3를 반복 재생하는 게 아니라, `bgm/` 안의 여러 mp3를 무작위 순서로 이어붙여 영상 길이만큼 채우는 방식**이다(2026-07-23 수정 — 처음엔 하나를 골라 반복 재생했는데, 잘라놓은 클립들을 체인처럼 이어붙이는 게 맞다는 피드백으로 변경). 다 이어붙였는데도 영상 길이가 안 채워지면 다시 셔플해서 계속 이어붙인다(재생목록을 반복 순환하는 셈이지만 매번 순서가 바뀜). 원본 대사 오디오는 그대로 유지하고 그 위에 얹는 방식(ffmpeg `amix` 필터) — 영상 길이에 맞춰 끝은 잘린다.
 
 ```bash
 # bgm/ 폴더에 mp3가 있으면 기본 동작으로 자동 믹스됨 (별도 옵션 불필요)
 python3 extract_high_pitch_video.py MIAA-444.mp4
 
-# 배경음 볼륨 조절 (기본 0.25 = 25%)
-python3 extract_high_pitch_video.py MIAA-444.mp4 --bgm-volume 0.15
+# 배경음 볼륨 조절 (기본 0.5 = 50%)
+python3 extract_high_pitch_video.py MIAA-444.mp4 --bgm-volume 0.6
 
 # bgm/ 대신 다른 폴더의 mp3 사용
 python3 extract_high_pitch_video.py MIAA-444.mp4 --bgm-dir /path/to/other_bgm
