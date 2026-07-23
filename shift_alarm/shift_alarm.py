@@ -32,9 +32,14 @@ import json
 import re
 import shlex
 import urllib.request
+import urllib.error
+from urllib.parse import urlparse
 import threading
 import datetime
 import random
+import concurrent.futures
+import shutil
+import time
 
 # ── 설정 파일 경로 ──────────────────────────────────────────
 CONFIG_FILE = os.path.expanduser("~/.shift_alarm_config.json")
@@ -555,6 +560,137 @@ def open_random_bookmarks(n=3):
     return urls
 
 
+# ════════════════════════════════════════════════════════════
+# 북마크 최신화 — krNN.도메인 형태 서브도메인 로테이션 자동 감지+교체
+# (topgirl.co: kr41→kr44, sogirl.so: kr87 처럼 사이트가 주기적으로
+#  서브도메인 번호를 바꾸는데, 루트 도메인(topgirl.co)엔 DNS 레코드가
+#  아예 없어서 리다이렉트로는 최신 번호를 알아낼 수 없다 — 확인됨,
+#  2026-07-23. 그래서 후보 번호들을 직접 접속 테스트해서 찾는다.)
+# ════════════════════════════════════════════════════════════
+
+KR_SUBDOMAIN_RE = re.compile(r'^kr(\d+)\.(.+)$')
+
+
+def _host_alive(host, timeout=3):
+    """DNS+TCP+TLS까지 붙어서 뭐라도 HTTP 응답이 왔으면 살아있는 걸로 친다.
+    403/503 등 에러 응답도 '서버가 응답했다'는 뜻이라 살아있음으로 간주한다
+    (Cloudflare 봇 차단으로 403이 오는 경우가 실제로 있었음, 2026-07-23 확인).
+    DNS 실패/연결 거부/타임아웃일 때만 죽은 것으로 판단한다 — 로테이션이 끝난
+    옛 서브도메인은 이렇게 응답 자체가 없는 걸로 확인됨(kr42.topgirl.co 사례)."""
+    try:
+        req = urllib.request.Request(f"https://{host}", method="HEAD",
+                                      headers={"User-Agent": "Mozilla/5.0"})
+        urllib.request.urlopen(req, timeout=timeout)
+        return True
+    except urllib.error.HTTPError:
+        return True
+    except Exception:
+        return False
+
+
+def _detect_current_kr_subdomain(base_domain, known_numbers, probe_ahead=30):
+    """known_numbers 중 지금도 살아있는 것의 최댓값을 우선 채택.
+    전부 죽어있으면 그 다음 번호대(known 최댓값+1 ~ +probe_ahead)를 탐색한다.
+    못 찾으면 None."""
+    candidates = sorted(set(known_numbers), reverse=True)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        alive_flags = list(ex.map(lambda n: _host_alive(f"kr{n}.{base_domain}"), candidates))
+    alive = [n for n, ok in zip(candidates, alive_flags) if ok]
+    if alive:
+        return max(alive)
+
+    start = max(known_numbers) + 1
+    probe_nums = list(range(start, start + probe_ahead))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        probe_flags = list(ex.map(lambda n: _host_alive(f"kr{n}.{base_domain}"), probe_nums))
+    found = [n for n, ok in zip(probe_nums, probe_flags) if ok]
+    return max(found) if found else None
+
+
+def refresh_kr_subdomains(folder_name=RANDOM_BOOKMARK_FOLDER):
+    """folder_name 폴더 안 krNN.도메인 형태 URL을 도메인별로 지금 살아있는
+    번호로 일괄 교체한다. 크롬이 켜져있으면 종료 후 반영하고 다시 연다
+    (켜진 채로 쓰면 크롬이 종료될 때 메모리에 있던 옛 값으로 덮어써버리므로 —
+    북마크관리/fix_bookmarks.py와 동일한 문제, 동일한 해법).
+    반환: {"updated": int, "detail": [str,...], "failed_domains": [str,...]} 또는 {"error": str}"""
+    try:
+        data = json.loads(open(CHROME_BOOKMARKS_PATH, encoding="utf-8").read())
+    except Exception as e:
+        return {"error": f"북마크 파일을 읽을 수 없습니다: {e}"}
+
+    roots = data.get("roots", {})
+    folder = None
+    for key in ("bookmark_bar", "other", "synced"):
+        if key in roots:
+            folder = _find_bookmark_folder(roots[key], folder_name)
+            if folder:
+                break
+    if not folder:
+        return {"error": f'"{folder_name}" 폴더를 찾을 수 없습니다.'}
+
+    bookmarks = []
+
+    def _collect_nodes(node):
+        if node.get("type") == "url":
+            bookmarks.append(node)
+        for c in node.get("children", []):
+            _collect_nodes(c)
+
+    _collect_nodes(folder)
+
+    domains = {}
+    for bm in bookmarks:
+        host = urlparse(bm["url"]).hostname or ""
+        m = KR_SUBDOMAIN_RE.match(host)
+        if m:
+            domains.setdefault(m.group(2), set()).add(int(m.group(1)))
+
+    if not domains:
+        return {"updated": 0, "detail": [], "failed_domains": []}
+
+    updated = 0
+    detail = []
+    failed_domains = []
+    for base, nums in domains.items():
+        current = _detect_current_kr_subdomain(base, nums)
+        if current is None:
+            failed_domains.append(base)
+            continue
+        for bm in bookmarks:
+            host = urlparse(bm["url"]).hostname or ""
+            m = KR_SUBDOMAIN_RE.match(host)
+            if m and m.group(2) == base and int(m.group(1)) != current:
+                old_host, new_host = host, f"kr{current}.{base}"
+                bm["url"] = bm["url"].replace(old_host, new_host, 1)
+                updated += 1
+                detail.append(f"{bm.get('name', '')}: {old_host} → {new_host}")
+
+    if updated == 0:
+        return {"updated": 0, "detail": [], "failed_domains": failed_domains}
+
+    chrome_was_running = subprocess.run(
+        ["pgrep", "-f", "Google Chrome$"], capture_output=True
+    ).returncode == 0
+    if chrome_was_running:
+        subprocess.run(["osascript", "-e", 'quit app "Google Chrome"'])
+        for _ in range(10):
+            still_running = subprocess.run(
+                ["pgrep", "-f", "Google Chrome$"], capture_output=True
+            ).returncode == 0
+            if not still_running:
+                break
+            time.sleep(1)
+
+    shutil.copy2(CHROME_BOOKMARKS_PATH, CHROME_BOOKMARKS_PATH + ".bak")
+    with open(CHROME_BOOKMARKS_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=3)
+
+    if chrome_was_running:
+        subprocess.Popen(["open", "-a", "Google Chrome"])
+
+    return {"updated": updated, "detail": detail, "failed_domains": failed_domains}
+
+
 def open_ebook_reader_terminal(file_path):
     """ebook_reader.py를 새 터미널 창에서 실행 (검정 배경 + 초록 글씨, 확대 폰트 + 전체창, 볼륨 80%).
 
@@ -987,6 +1123,7 @@ class ShiftAlarmApp(rumps.App):
         self.menu.add(rumps.MenuItem("📖 다른 책 선택해서 읽기", callback=self.choose_ebook_now))
 
         self.menu.add(rumps.MenuItem("🎲 추천 사이트 열기 (天 폴더 랜덤 3개)", callback=self.open_random_bookmarks_now))
+        self.menu.add(rumps.MenuItem("🔄 북마크 최신화 (天 폴더)", callback=self.refresh_bookmarks_now))
 
         sunzi_entry = get_latest_sunzi_entry()
         if sunzi_entry:
@@ -1098,6 +1235,26 @@ class ShiftAlarmApp(rumps.App):
             rumps.alert("오류", "북마크를 불러올 수 없습니다.")
             return
         rumps.notification("추천 사이트", f"{len(urls)}개 열었습니다", "\n".join(urls))
+
+    def refresh_bookmarks_now(self, _):
+        rumps.notification("북마크 최신화", "확인 중...", "서브도메인 상태를 확인하고 있습니다 (몇 초 걸릴 수 있음)")
+        threading.Thread(target=self._refresh_bookmarks_thread, daemon=True).start()
+
+    def _refresh_bookmarks_thread(self):
+        result = refresh_kr_subdomains()
+        if "error" in result:
+            rumps.notification("북마크 최신화 실패", "", result["error"])
+            return
+        if result["updated"] == 0:
+            msg = "이미 전부 최신 상태입니다."
+            if result["failed_domains"]:
+                msg = f"{', '.join(result['failed_domains'])}: 현재 살아있는 서브도메인을 못 찾았습니다."
+            rumps.notification("북마크 최신화", "변경 없음", msg)
+            return
+        msg = f"{result['updated']}개 주소를 최신 서브도메인으로 교체했습니다."
+        if result["failed_domains"]:
+            msg += f" ({', '.join(result['failed_domains'])}는 실패)"
+        rumps.notification("북마크 최신화 완료", "", msg)
 
     def open_latest_sunzi(self, _):
         entry = get_latest_sunzi_entry()
