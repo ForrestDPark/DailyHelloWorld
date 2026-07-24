@@ -40,6 +40,7 @@ import random
 import concurrent.futures
 import shutil
 import time
+import signal
 
 # ── 설정 파일 경로 ──────────────────────────────────────────
 CONFIG_FILE = os.path.expanduser("~/.shift_alarm_config.json")
@@ -261,6 +262,86 @@ def get_active_shift_window(schedule, now, today_override=None):
             return tshift, start_dt, end_dt
 
     return None
+
+
+# ════════════════════════════════════════════════════════════
+# 근무 시간 전후 절전 방지 (SSH 원격 접속용, 2026-07-24 추가)
+# ════════════════════════════════════════════════════════════
+# 집 밖에서 SSH(mosh)로 접속하려면 노트북이 잠들면 안 되므로, 근무 시작 1시간
+# 전부터 종료 1시간 후까지 `caffeinate -s`로 시스템 절전을 막는다.
+STAY_AWAKE_MARGIN = datetime.timedelta(hours=1)
+CAFFEINATE_PID_FILE = os.path.expanduser("~/.shift_alarm_caffeinate.pid")
+
+
+def get_stay_awake_window(schedule, now, today_override=None):
+    """get_active_shift_window와 같은 방식으로 오늘(+어제 GY) 근무를 찾되,
+    시작 전 1시간부터 이미 창이 열리도록 앞뒤로 STAY_AWAKE_MARGIN만큼 패딩한다.
+    반환: (근무명, 패딩된 시작, 패딩된 종료) 또는 지금이 그 범위 밖이면 None."""
+    today = now.date()
+    yesterday = today - datetime.timedelta(days=1)
+
+    candidates = []
+
+    yshift = get_shift_for_date(schedule, yesterday)
+    if yshift == "GY":
+        info = SHIFT_WORK_HOURS["GY"]
+        start_dt = datetime.datetime.combine(yesterday, datetime.time(*info["start"])) - STAY_AWAKE_MARGIN
+        end_dt = datetime.datetime.combine(today, datetime.time(*info["end"])) + STAY_AWAKE_MARGIN
+        candidates.append(("GY", start_dt, end_dt))
+
+    tshift = today_override if today_override is not None else get_shift_for_date(schedule, today)
+    if tshift in ("Day", "Swing", "GY"):
+        info = SHIFT_WORK_HOURS[tshift]
+        start_dt = datetime.datetime.combine(today, datetime.time(*info["start"])) - STAY_AWAKE_MARGIN
+        if info["crosses_midnight"]:
+            end_dt = datetime.datetime.combine(today + datetime.timedelta(days=1), datetime.time(*info["end"])) + STAY_AWAKE_MARGIN
+        else:
+            end_dt = datetime.datetime.combine(today, datetime.time(*info["end"])) + STAY_AWAKE_MARGIN
+        candidates.append((tshift, start_dt, end_dt))
+
+    for shift, s, e in candidates:
+        if s <= now <= e:
+            return shift, s, e
+    return None
+
+
+def _caffeinate_running():
+    """CAFFEINATE_PID_FILE에 적힌 pid가 실제로 살아있는 caffeinate 프로세스인지 확인."""
+    if not os.path.exists(CAFFEINATE_PID_FILE):
+        return False
+    try:
+        with open(CAFFEINATE_PID_FILE) as f:
+            pid = int(f.read().strip())
+        os.kill(pid, 0)  # 신호를 보내지 않고 존재 여부만 확인
+        return True
+    except Exception:
+        return False
+
+
+def start_caffeinate():
+    """이미 떠있지 않으면 `caffeinate -s`(시스템 절전만 방지, 화면은 꺼져도 됨)를 백그라운드로 실행."""
+    if _caffeinate_running():
+        return
+    proc = subprocess.Popen(["caffeinate", "-s"])
+    with open(CAFFEINATE_PID_FILE, "w") as f:
+        f.write(str(proc.pid))
+
+
+def stop_caffeinate():
+    """떠있는 caffeinate가 있으면 종료하고 pid 파일 정리."""
+    if not os.path.exists(CAFFEINATE_PID_FILE):
+        return
+    try:
+        with open(CAFFEINATE_PID_FILE) as f:
+            pid = int(f.read().strip())
+        os.kill(pid, signal.SIGTERM)
+    except Exception:
+        pass
+    finally:
+        try:
+            os.remove(CAFFEINATE_PID_FILE)
+        except Exception:
+            pass
 
 
 def calc_today_earnings(schedule, now=None, today_override=None):
@@ -917,6 +998,7 @@ class ShiftAlarmApp(rumps.App):
         self.weather_icon = ""
         self.earnings_item = rumps.MenuItem("오늘 급여: -")
         self.weather_item = rumps.MenuItem("날씨: 로딩 중")
+        self.stay_awake_item = rumps.MenuItem("🌙 절전 방지: 확인 중...")
         self.build_menu()
 
         # 날씨 10분마다 갱신
@@ -947,6 +1029,11 @@ class ShiftAlarmApp(rumps.App):
         self.earnings_timer = rumps.Timer(self._refresh_earnings, 30)
         self.earnings_timer.start()
         self._refresh_earnings(None)
+
+        # 근무 전후 1시간 절전 방지 (SSH 접속용, 1분마다 체크)
+        self.stay_awake_timer = rumps.Timer(self._check_stay_awake, 60)
+        self.stay_awake_timer.start()
+        self._check_stay_awake(None)
 
         # 오늘의 리마인더 알림 (앱 시작 시 한 번)
         self._last_reminder_notified = None
@@ -1014,6 +1101,21 @@ class ShiftAlarmApp(rumps.App):
         else:
             self.earnings_item.title = "💰 오늘은 휴무입니다"
         self._update_title()
+
+    # ── 근무 전후 절전 방지 (SSH 접속용) ───────────────────────
+
+    def _check_stay_awake(self, _):
+        now = datetime.datetime.now()
+        window = get_stay_awake_window(self.schedule, now, today_override=self._today_override())
+        if window:
+            start_caffeinate()
+            shift, s, e = window
+            self.stay_awake_item.title = (
+                f"🌙 절전 방지 켜짐 ({s.strftime('%H:%M')}~{e.strftime('%H:%M')}, {shift})"
+            )
+        else:
+            stop_caffeinate()
+            self.stay_awake_item.title = "🌙 절전 방지 꺼짐 (근무 전후 1시간 아님)"
 
     # ── 근무표 자동 적용 ────────────────────────────────────
 
@@ -1170,6 +1272,7 @@ class ShiftAlarmApp(rumps.App):
         self.menu.add(rumps.MenuItem(earnings_label, callback=self.toggle_earnings_display))
         self.menu.add(rumps.MenuItem(f"시급 설정 (현재 {HOURLY_WAGE:,}원)", callback=self.change_hourly_wage))
         self.menu.add(self.weather_item)
+        self.menu.add(self.stay_awake_item)
 
         self.menu.add(None)
 
@@ -1390,6 +1493,7 @@ class ShiftAlarmApp(rumps.App):
         rumps.alert("현재 설정", msg)
 
     def quit_app(self, _):
+        stop_caffeinate()
         rumps.quit_application()
 
 

@@ -127,7 +127,17 @@
 - `run_jp_subtitle_extraction()`은 그 스크립트를 `subprocess.Popen`으로 그냥 실행만 하고 바로 리턴한다(fire-and-forget) — 스크립트 자체가 내부에서 `.command` 파일을 만들어 `open -a Terminal`로 새 터미널 창을 열고 실제 작업을 진행하기 때문에, 여기서 결과를 기다리거나 출력을 파싱할 필요가 없다.
 - 노션 토큰/freeimage.host API 키를 키체인에 등록해두지 않으면 새로 뜬 터미널 창에서 "❌ 노션 토큰을 키체인에서 찾을 수 없습니다"로 바로 실패한다 — 최초 1회 `일본어자막추출/README.md`의 키체인 등록 명령 실행 필요.
 
-## 11. 자잘한 운영 메모
+## 12. 🌙 근무 전후 1시간 절전 방지 (SSH 접속용, 2026-07-24 추가)
+
+집 밖에서 mosh/SSH로 이 맥에 접속하려면 노트북이 잠들면 안 되는데, 매번 수동으로 절전을 막기 번거로워서 근무 시작 1시간 전부터 종료 1시간 후까지 자동으로 `caffeinate -s`(시스템 절전만 방지, 화면 꺼짐은 허용)를 실행하도록 만들었다.
+
+- `get_stay_awake_window(schedule, now, today_override)`: `get_active_shift_window`와 같은 방식(어제 GY가 자정 넘어오는 경우 + 오늘 근무)으로 근무 시작/종료를 찾되, 앞뒤로 `STAY_AWAKE_MARGIN`(1시간)만큼 패딩해서 반환 — `get_active_shift_window`는 "지금 근무 중"일 때만 값을 주지만, 이건 근무 시작 "전"에도(패딩된 시작 시각부터) 이미 창이 열려야 하므로 별도로 만듦.
+- `start_caffeinate()`/`stop_caffeinate()`: `~/.shift_alarm_caffeinate.pid`에 PID를 기록해서 관리 — 매분(`_check_stay_awake`, `rumps.Timer(60)`) 지금이 그 창 안인지 확인해서 켜거나 끈다. 앱 시작 시에도 1회 즉시 체크(현재 근무 중에 앱을 재시작해도 바로 켜짐).
+- 메뉴바 드롭다운에 `🌙 절전 방지 켜짐 (05:00~15:00, Day)` / `🌙 절전 방지 꺼짐 (근무 전후 1시간 아님)` 형태로 상태 표시(`self.stay_awake_item`).
+- 앱 종료(`quit_app`) 시에도 `stop_caffeinate()` 호출 — 앱이 꺼진 채로 caffeinate만 계속 도는 걸 방지.
+- `caffeinate -s`는 시스템 절전만 막고 화면 잠금/디스플레이 꺼짐은 그대로 허용한다 — 네트워크(SSH 접속 가능 여부)에 영향 없이 배터리도 어느 정도 아낄 수 있음.
+
+## 13. 자잘한 운영 메모
 - 코드/설정 변경 후에는 `launchctl kickstart -k gui/$(id -u)/com.shiftalarm.menubar`로 재시작해야 반영됨 (rumps 앱이라 hot-reload 없음; ★ 2026-07-23부터 LaunchAgent 등록 방식으로 바뀌어 `nohup` 방식은 더 이상 안 씀 — 1번 항목 참조). `SCHEDULE_FILE`/`EBOOK_READER_SCRIPT` 등은 `__file__` 기준 상대경로라 폴더 위치가 바뀌어도 코드 수정 없이 그대로 동작하지만, **plist의 `ProgramArguments` 자체는 절대경로라 폴더/파일을 옮기면 별도로 고쳐야 함**(1번 항목 참조).
 - `~/Downloads/shift_alarm.py`에도 항상 최신 사본을 동기화해둠 (사용자가 그쪽에서도 참조하는 습관이 있어서).
 - 이 저장소(`DailyHelloWorld`)는 shift_alarm 외에도 손자병법 해석 파이프라인 등 전혀 다른 프로젝트들이 같이 들어있는 개인 모음 저장소라, `git status`에 관련 없는 변경사항(다른 폴더의 M/D/??)이 항상 잔뜩 떠 있다 — shift_alarm.py/ebook_reader.py만 `git add`해서 커밋할 것.
