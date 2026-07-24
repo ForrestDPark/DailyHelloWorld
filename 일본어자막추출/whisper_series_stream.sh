@@ -9,8 +9,12 @@
 TARGET_DIR="${1:-.}"
 TARGET_PATH=$(cd "$TARGET_DIR" && pwd)
 TEMP_SCRIPT="$HOME/whisper_series_stream_run.sh"
+# 이 스크립트 자신의 폴더 — 같은 폴더의 extract_high_pitch_video.py를 부르기 위함.
+SCRIPT_DIR="$(cd "$(dirname "${(%):-%x}")" && pwd)"
+# 고음영상 배경음 mp3가 있는 로컬 폴더(저작권 있는 음원이라 git에는 안 올림 — README 참조).
+BGM_DIR="${BGM_DIR:-/Users/forrestdpark/Desktop/BlogImage/BGM_DIR}"
 
-/opt/anaconda3/bin/python3 -m pip install requests pykakasi edge-tts --quiet --disable-pip-version-check 2>/dev/null
+/opt/anaconda3/bin/python3 -m pip install requests pykakasi edge-tts librosa soundfile --quiet --disable-pip-version-check 2>/dev/null
 
 cat << 'EOF' > "$TEMP_SCRIPT"
 #!/bin/zsh
@@ -31,7 +35,11 @@ MODEL_PATH="/opt/homebrew/share/whisper-cpp/models/ggml-medium.bin"
 [[ ! -f "$MODEL_PATH" ]] && MODEL_PATH="/opt/homebrew/share/whisper-cpp/models/ggml-small.bin"
 
 WHISPER_EXE="/opt/homebrew/bin/whisper-cli"
+# ★ 2026-07-24: 재추출 시 이 폴더 안에 예전에 만든 고음영상(파일명에 "_고음영상"
+# 포함 — extract_high_pitch_video.py의 OWN_OUTPUT_MARKER와 반드시 같은 문자열 유지)이
+# 원본인 척 다시 처리되지 않도록 제외한다.
 VALID_FILES=(*.(mp4|webm|mkv|mov)(N))
+VALID_FILES=(${VALID_FILES:#*_고음영상*})
 
 if [[ ${#VALID_FILES[@]} -eq 0 ]]; then
     echo "⚠️  처리할 영상 파일이 없습니다."
@@ -61,6 +69,13 @@ for FILENAME in "${VALID_FILES[@]}"; do
         TOTAL_PARTS=1
         echo "📊 총 ${TOTAL_MINS}분 → 45분 미만: 단편 처리"
     fi
+
+    # ── 고음영상(+배경음) 먼저 추출 ─────────────────────────────────
+    # ★ 2026-07-24: 자막/번역/EPUB(느림)보다 먼저 처리해서, 상대적으로 빨리
+    # 끝나는 고음영상 결과부터 확인할 수 있게 순서를 바꿨다.
+    echo "\n🎧 고음영상(+배경음) 추출 중 — 자막 작업보다 먼저 진행합니다..."
+    /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/extract_high_pitch_video.py" "$FILENAME" \
+        --bgm-dir "$BGM_DIR" --bgm-volume 0.5
 
     CHUNK_DURATION=$(( TOTAL_SECS / TOTAL_PARTS ))
     PART_SRT_FILES=()
@@ -846,6 +861,38 @@ drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese 
     echo "\033[1;32m[$FILENAME_NO_EXT] 전체 완료!\033[0m"
     echo "  📄 자막: $MERGED_SRT"
     echo "  📚 EPUB: $OUTPUT_EPUB"
+
+    # ── 최종 폴더 정리 ────────────────────────────────────────────
+    # ★ 2026-07-24: 최상위(<파일명>/)에는 원본 영상 + EPUB + bgm 고음영상 3개만
+    # 보이게 하고, 나머지 작업 파일(자막/후리가나 md/썸네일/캐시 등)은
+    # <파일명>/기타/ 로 몰아서 정리한다.
+    FINAL_DIR="$FILENAME_NO_EXT"
+    mkdir -p "${FINAL_DIR}/기타"
+
+    HIGHLIGHT_BGM=$(ls "${FILENAME_NO_EXT}_고음영상_"*"_bgm.mp4"(N) 2>/dev/null | head -1)
+    HIGHLIGHT_PLAIN_ALL=("${FILENAME_NO_EXT}_고음영상_"*.mp4(N))
+    HIGHLIGHT_PLAIN=""
+    for hf in "${HIGHLIGHT_PLAIN_ALL[@]}"; do
+        [[ "$hf" != *_bgm.mp4 ]] && HIGHLIGHT_PLAIN="$hf"
+    done
+
+    [[ -f "$FILENAME" ]] && mv "$FILENAME" "$FINAL_DIR/"
+    [[ -f "$OUTPUT_EPUB" ]] && mv "$OUTPUT_EPUB" "$FINAL_DIR/"
+    [[ -n "$HIGHLIGHT_BGM" ]] && mv "$HIGHLIGHT_BGM" "$FINAL_DIR/"
+
+    [[ -n "$HIGHLIGHT_PLAIN" ]] && mv "$HIGHLIGHT_PLAIN" "$FINAL_DIR/기타/"
+    [[ -f "$MERGED_SRT" ]] && mv "$MERGED_SRT" "$FINAL_DIR/기타/"
+    for f in "${FILENAME_NO_EXT}"*.md(N); do mv "$f" "$FINAL_DIR/기타/"; done
+    [[ -d "${FILENAME_NO_EXT}_work" ]] && mv "${FILENAME_NO_EXT}_work" "$FINAL_DIR/기타/"
+    for d in "${FILENAME_NO_EXT}_scenes_part"*(N); do mv "$d" "$FINAL_DIR/기타/"; done
+    for f in "temp_${FILENAME_NO_EXT}_part"*.wav(N) "temp_${FILENAME_NO_EXT}_part"*.wav.srt(N) \
+             "temp_${FILENAME_NO_EXT}_pitch.wav"(N); do
+        mv "$f" "$FINAL_DIR/기타/"
+    done
+
+    echo "📦 최종 폴더 정리 완료:"
+    echo "   $FINAL_DIR/  (원본 영상 + EPUB + bgm 고음영상)"
+    echo "   $FINAL_DIR/기타/  (자막/md/썸네일/캐시 등 나머지)"
 done
 
 echo "\n=================================================="
@@ -877,6 +924,8 @@ LAUNCHER="/tmp/_whisper_series_launch.command"
 cat > "$LAUNCHER" <<LAUNCHEREOF
 #!/bin/zsh
 export WORKING_DIR='$TARGET_PATH'
+export SCRIPT_DIR='$SCRIPT_DIR'
+export BGM_DIR='$BGM_DIR'
 zsh "$TEMP_SCRIPT"
 rm -f "$TEMP_SCRIPT"
 LAUNCHEREOF
