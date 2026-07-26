@@ -344,6 +344,10 @@ MAPS = {
             ((600, 2150), "독일 제1군단\n남서 차단", BLUE),
             ((1650, 1100), "독일 북익\n철도 집중·포위", BLUE),
         ],
+        "terrain_labels": [
+            ((520, 670), "동프로이센 철도망\n독일군 내선기동 축", AMBER),
+            ((1880, 1740), "마수리안 호수대\n제1·2군 사이의 기동 장벽", AMBER),
+        ],
         "focus": (950, 1650, 1450, 2200, "제2군 포위망"),
         "foot": ("패군\n통신·군단 결집 실패", "핵심\n호수대·철도·내선", "승군\n고립된 제2군만 타격"),
     },
@@ -373,6 +377,8 @@ def build(slug, cfg):
         arrow(draw, points, color, dashed=dashed)
     for xy, text, color in cfg["labels"]:
         label(draw, xy, text, color)
+    for xy, text, color in cfg.get("terrain_labels", []):
+        label(draw, xy, text, color, size=34)
     x0, y0, x1, y1, text = cfg["focus"]
     draw.ellipse((x0, y0, x1, y1), outline=AMBER, width=18)
     label(draw, ((x0 + x1) / 2, (y0 + y1) / 2), text, AMBER, size=40)
