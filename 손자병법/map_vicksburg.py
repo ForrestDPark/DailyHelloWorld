@@ -115,7 +115,7 @@ for k, rr in enumerate((6.7, 7.2)):
     ax.plot(tx, ty, color='#7a1010', lw=1.4, ls=(0, (4, 3)), alpha=0.5, zorder=7)
 T(ax, '47일 포위·참호·굴착 — 보급 완전 차단', 9.5, MAP_Y1 - 0.55, sz=20, c='#7a0000', bg='#fff0e8')
 
-draw_title(ax, ['빅스버그 공성전 전략도  ', 'Siege of Vicksburg', '  (1863)'])
+draw_title(ax, ['빅스버그 공성전 전략도  ', 'Vicksburg', '  (1863)'])
 
 legend_items = [
     ('arr', '#ee2222', '연방 강습/기동'),
