@@ -90,6 +90,25 @@ def upload_image(token, image_path):
     return upload["id"]
 
 
+def insert_blocks_near_top(page_id, blocks, headers):
+    """Notion 페이지에 파일 블록을 추가한다."""
+    child_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
+
+    for index in range(0, len(blocks), 50):
+        payload = {"children": blocks[index:index + 50]}
+        response = requests.patch(
+            child_url,
+            headers=headers,
+            json=payload,
+            timeout=30,
+        )
+        if not response.ok:
+            raise RuntimeError(
+                f"Notion 블록 삽입 실패 ({response.status_code}): {response.text}"
+            )
+        inserted = response.json().get("results", [])
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("book_dir")
@@ -123,6 +142,26 @@ def main():
 
     for manifest_path in manifests:
         manifest = json.load(open(manifest_path, encoding="utf-8"))
+        page_id = manifest["page_id"]
+        page_check = requests.get(
+            f"https://api.notion.com/v1/pages/{page_id}",
+            headers=headers,
+            timeout=20,
+        )
+        if page_check.status_code == 404:
+            print(f"⚠️ 접근할 수 없는 Notion 페이지 건너뜀: {manifest['page_url']}")
+            continue
+        page_check.raise_for_status()
+        child_check = requests.get(
+            f"https://api.notion.com/v1/blocks/{page_id}/children",
+            headers=headers,
+            params={"page_size": 1},
+            timeout=20,
+        )
+        if child_check.status_code == 404:
+            print(f"⚠️ 블록에 접근할 수 없는 Notion 페이지 건너뜀: {manifest['page_url']}")
+            continue
+        child_check.raise_for_status()
         images_already_synced = manifest.get("notion_images_synced", False)
         summary_already_synced = manifest.get("notion_summary_synced", False)
         if args.images_only and images_already_synced:
@@ -170,16 +209,7 @@ def main():
                 },
                 *image_blocks,
             ])
-        page_id = manifest["page_id"]
-        child_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
-        for index in range(0, len(blocks), 50):
-            response = requests.patch(
-                child_url,
-                headers=headers,
-                json={"children": blocks[index:index + 50]},
-                timeout=30,
-            )
-            response.raise_for_status()
+        insert_blocks_near_top(page_id, blocks, headers)
         properties = {
             "Git 경로": {"rich_text": [{"text": {"content": rel_book}}]},
             "대표 이미지 수": {"number": len(images)},

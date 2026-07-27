@@ -130,7 +130,7 @@ security add-generic-password -a "$USER" -s "jp_subtitle_notion_token" -w "<노�
 1. 선택한 폴더의 원본 영상을 모두 스캔한 뒤, **1단계에서 모든 영상의 운동용 고음 영상과 BGM 버전을 먼저 순차 생성**한다. 한 영상의 고음 추출이 실패해도 다음 영상은 계속 처리한다.
 2. 모든 영상의 고음 추출 시도가 끝나면 **2단계 자막 파이프라인**을 시작해, 원본을 한 편씩 자막·번역·Notion·EPUB까지 처리한다.
 3. 영상 길이가 45분(2700초) 이상이면 2편으로 분할, 아니면 통으로 처리.
-4. 각 파트: ffmpeg로 오디오 추출(16kHz mono, 대역폭 필터+노멀라이즈) → whisper-cli로 일본어 자막(.srt) 생성 → 파이썬 워커가:
+4. 각 파트: ffmpeg로 오디오 추출(16kHz mono, 대역폭 필터+노멀라이즈) → `whisper_corrections.txt`의 확인 완료 교정어를 초기 프롬프트에 포함해 whisper-cli로 일본어 자막(.srt) 생성 → 파이썬 워커가:
    - 대사 약 24줄을 장면 하나로 묶고, 장면 중앙 시점에서 대표 이미지 **한 장만** 캡처
    - 구글 번역 비공식 엔드포인트로 한국어 번역
    - `pykakasi`로 한자에 후리가나 병기 (예: `漢字(かんじ)`)
@@ -140,9 +140,11 @@ security add-generic-password -a "$USER" -s "jp_subtitle_notion_token" -w "<노�
    - `일본어자막추출/library/<작품명>/`에 대표 이미지, 전체 대사 JSONL/Markdown, Notion manifest, `SUMMARY.md`를 저장
    - 장면 하나(대사 약 24줄)를 마칠 때마다 `장면 N/전체 · 대사 N/전체줄 · 퍼센트` 진행률을 즉시 출력
 5. 파트별 자막을 시간축 보정해서 영상 전체의 통합 `.srt` 생성.
-6. 초안 EPUB은 장면마다 대표 이미지 한 장만 넣고, CSS `float`로 이미지 오른쪽과 아래에 대사가 흐르는 책형 레이아웃으로 생성한다. 장면 제목은 EPUB 목차에 포함된다.
+6. 초안 EPUB은 장면마다 대표 이미지 한 장만 넣고, 이미지 폭을 본문 기준 약 60%로 크게 잡는다. CSS `float`로 이미지 오른쪽과 아래에 대사가 흐르는 책형 레이아웃을 유지하며 장면 제목은 EPUB 목차에 포함된다.
 7. 완성된 EPUB을 Obsidian Study 폴더에 자동 복사(있으면).
 8. 오디오 캐시(`temp_*.wav`)와 자막 캐시(`temp_*.wav.srt`)는 재실행 시 재사용됨 — 지우면 처음부터 다시 처리.
+
+`청취 불확실` 후보는 교정 사전에 넣지 않는다. 이 사전은 다음 신규 추출의 표기를 유도하며 이미 만들어진 SRT 캐시를 자동으로 다시 쓰지는 않는다.
 
 ## ★ Git → Codex 요약 → Notion → 최종 EPUB 후처리
 
@@ -159,7 +161,7 @@ security add-generic-password -a "$USER" -s "jp_subtitle_notion_token" -w "<노�
 ```
 
 1. Codex가 `transcript_part*.jsonl`과 대표 이미지를 읽고 `SUMMARY.md`의 전체 줄거리와 장면별 목차를 작성한다.
-2. 추출이 끝나면 `sync_book_to_notion.py --images-only`가 대표 이미지 파일을 Notion File Upload API로 직접 올려 기존 작품 페이지에 추가한다. 외부 임시 URL을 이미지 주소로 저장하지 않으므로 다운로드 URL이 만료되어도 Notion이 파일을 계속 관리한다.
+2. 추출이 끝나면 `sync_book_to_notion.py --images-only`가 대표 이미지 파일을 Notion File Upload API로 직접 올려 기존 작품 페이지에 본문 폭의 이미지 블록으로 추가한다. 외부 임시 URL을 이미지 주소로 저장하지 않으므로 다운로드 URL이 만료되어도 Notion이 파일을 계속 관리한다.
 3. Codex가 요약을 완성한 뒤 `python3 sync_book_to_notion.py library/<작품명>`을 다시 실행하면 요약을 추가하고 상태를 `완료`로 바꾼다.
 4. `python3 finalize_japanese_book.py library/<작품명>`을 실행하면 `SUMMARY.md`와 전체 대사를 합쳐 목차가 포함된 최종 EPUB을 만든다. `SUMMARY.md`가 아직 “요약 대기 중”이면 빌드를 거부한다.
 

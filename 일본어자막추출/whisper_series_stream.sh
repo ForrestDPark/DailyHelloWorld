@@ -40,6 +40,13 @@ MODEL_PATH="/opt/homebrew/share/whisper-cpp/models/ggml-medium.bin"
 [[ ! -f "$MODEL_PATH" ]] && MODEL_PATH="/opt/homebrew/share/whisper-cpp/models/ggml-small.bin"
 
 WHISPER_EXE="/opt/homebrew/bin/whisper-cli"
+CORRECTIONS_FILE="${SCRIPT_DIR}/whisper_corrections.txt"
+WHISPER_PROMPT="일본어, 대사, 한자, 후리가나"
+if [[ -f "$CORRECTIONS_FILE" ]]; then
+    CONFIRMED_TERMS=$(sed -E 's/#.*$//; /^[[:space:]]*$/d' "$CORRECTIONS_FILE" \
+        | head -80 | paste -sd '、' -)
+    [[ -n "$CONFIRMED_TERMS" ]] && WHISPER_PROMPT="${WHISPER_PROMPT}。確認済み語彙：${CONFIRMED_TERMS}"
+fi
 # 재추출 시 현재 "_운동용" 결과와 예전 "_고음영상" 결과가 원본인 척 다시
 # 처리되지 않도록 둘 다 제외한다.
 VALID_FILES=(*.(mp4|webm|mkv|mov)(N))
@@ -179,7 +186,7 @@ while true; do
             echo "📝 Whisper 자막 분석 중..."
             $WHISPER_EXE -m "$MODEL_PATH" -f "./$TEMP_AUDIO" -osrt -l ja -p 4 \
                 --beam-size 5 --no-speech-thold 0.3 \
-                --prompt "일본어, 대사, 한자, 후리가나" > /dev/null 2>&1
+                --prompt "$WHISPER_PROMPT" > /dev/null 2>&1
             [[ ! -f "$PART_SRT" ]] && echo "❌ 자막 생성 실패" && continue
         fi
 
@@ -372,8 +379,8 @@ div.set {
     border-bottom: 1px solid #2a2a2a;
 }
 img.scene-thumb {
-    width: 34%;
-    max-width: 18em;
+    width: 60%;
+    max-width: 32em;
     border-radius: 4px;
     margin: 0.25em 1.1em 0.7em 0;
     float: left;
