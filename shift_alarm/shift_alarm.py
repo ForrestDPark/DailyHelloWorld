@@ -918,6 +918,9 @@ CHROME_BOOKMARKS_PATH = os.path.expanduser(
     "~/Library/Application Support/Google/Chrome/Default/Bookmarks"
 )
 RANDOM_BOOKMARK_FOLDER = "天"  # 이 폴더 안 북마크만 대상 (전체 북마크 아님)
+RANDOM_BOOKMARK_HISTORY_FILE = os.path.expanduser(
+    "~/.shift_alarm_random_bookmark_history.json"
+)
 
 
 def _collect_all_bookmark_urls(node):
@@ -942,10 +945,40 @@ def _find_bookmark_folder(node, target_name):
     return None
 
 
-def pick_random_bookmarks(n=3, folder_name=RANDOM_BOOKMARK_FOLDER):
-    """크롬 북마크의 folder_name 폴더 안에서만 URL을 무작위로 n개 뽑는다. 실패하면 빈 리스트."""
+def _load_random_bookmark_history(folder_name):
+    """폴더별로 이전 주기에 열었던 URL을 읽는다. 손상된 기록은 빈 기록으로 복구한다."""
     try:
-        data = json.loads(open(CHROME_BOOKMARKS_PATH, encoding="utf-8").read())
+        with open(RANDOM_BOOKMARK_HISTORY_FILE, encoding="utf-8") as file:
+            data = json.load(file)
+        history = data.get(folder_name, [])
+        return history if isinstance(history, list) else []
+    except (OSError, ValueError, TypeError):
+        return []
+
+
+def _save_random_bookmark_history(folder_name, visited_urls):
+    """추천 이력을 원자적으로 저장해 앱이 중간 종료돼도 파일이 깨지지 않게 한다."""
+    data = {}
+    try:
+        with open(RANDOM_BOOKMARK_HISTORY_FILE, encoding="utf-8") as file:
+            loaded = json.load(file)
+        if isinstance(loaded, dict):
+            data = loaded
+    except (OSError, ValueError, TypeError):
+        pass
+
+    data[folder_name] = visited_urls
+    temp_path = f"{RANDOM_BOOKMARK_HISTORY_FILE}.tmp"
+    with open(temp_path, "w", encoding="utf-8") as file:
+        json.dump(data, file, ensure_ascii=False, indent=2)
+    os.replace(temp_path, RANDOM_BOOKMARK_HISTORY_FILE)
+
+
+def pick_random_bookmarks(n=3, folder_name=RANDOM_BOOKMARK_FOLDER):
+    """해당 폴더의 모든 URL을 한 번씩 추천하기 전에는 같은 URL을 다시 뽑지 않는다."""
+    try:
+        with open(CHROME_BOOKMARKS_PATH, encoding="utf-8") as file:
+            data = json.load(file)
         roots = data.get("roots", {})
         folder = None
         for key in ("bookmark_bar", "other", "synced"):
@@ -955,10 +988,28 @@ def pick_random_bookmarks(n=3, folder_name=RANDOM_BOOKMARK_FOLDER):
                     break
         if not folder:
             return []
-        urls = _collect_all_bookmark_urls(folder)
+        # 같은 URL이 북마크에 중복 저장돼 있어도 추천은 한 번만 한다.
+        urls = list(dict.fromkeys(_collect_all_bookmark_urls(folder)))
         if not urls:
             return []
-        return random.sample(urls, min(n, len(urls)))
+
+        current_urls = set(urls)
+        visited = [
+            url for url in dict.fromkeys(_load_random_bookmark_history(folder_name))
+            if url in current_urls
+        ]
+        unvisited = [url for url in urls if url not in set(visited)]
+
+        # 이전 클릭에서 전체 목록을 모두 소진했다면 여기서 새 주기를 시작한다.
+        if not unvisited:
+            visited = []
+            unvisited = urls
+
+        # 마지막 묶음은 3개보다 적을 수 있다. 새 주기 URL을 섞어 채우지 않아야
+        # "전체를 다 돌기 전 중복 없음" 규칙이 클릭 단위로도 명확하게 유지된다.
+        selected = random.sample(unvisited, min(n, len(unvisited)))
+        _save_random_bookmark_history(folder_name, visited + selected)
+        return selected
     except Exception:
         return []
 
