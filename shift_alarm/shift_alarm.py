@@ -41,6 +41,12 @@ import concurrent.futures
 import shutil
 import time
 import signal
+import objc
+from AppKit import (
+    NSApp, NSPanel, NSTextField, NSButton, NSMakeRect, NSFont,
+    NSBackingStoreBuffered, NSWindowStyleMaskTitled, NSWindowStyleMaskClosable,
+    NSModalPanelWindowLevel, NSTextAlignmentCenter, NSRoundedBezelStyle,
+)
 
 # ── 설정 파일 경로 ──────────────────────────────────────────
 CONFIG_FILE = os.path.expanduser("~/.shift_alarm_config.json")
@@ -173,6 +179,14 @@ STYLE_TERMINAL_APP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "S
 JP_SUBTITLE_SCRIPT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "일본어자막추출", "whisper_series_stream.sh"
+)
+BGM_PLAYLIST_BATCH_SCRIPT = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "일본어자막추출", "bgm_playlist_batch.py"
+)
+MP3_SHAZAM_RENAME_SCRIPT = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "일본어자막추출", "rename_mp3_with_shazam.py"
 )
 
 # ── 손자병법 해석 파이프라인 (별도 폴더, README의 "완료된 구절" 표 참조) ──
@@ -641,6 +655,128 @@ def choose_ebook_file():
         return None
 
 
+# ── 운동용 영상 분량 입력용 숫자 키패드 팝업 ───────────────────────
+# ★ 2026-07-24: rumps.Window의 텍스트 입력 필드가 이 환경에서 키보드
+# 포커스를 못 받아 타이핑이 안 되는 문제가 있어서, 타이핑 대신 마우스
+# 클릭만으로 숫자를 조합하는 커스텀 키패드 창을 PyObjC로 직접 만든다.
+class _MinutesKeypadHandler(objc.lookUpClass("NSObject")):
+    def initWithDisplay_initialBuffer_(self, display_field, initial_buffer):
+        self = objc.super(_MinutesKeypadHandler, self).init()
+        if self is None:
+            return None
+        self.buffer = initial_buffer
+        self.result = None  # None=취소, str=확인(빈 문자열이면 호출부에서 기본값 처리)
+        self.display = display_field
+        return self
+
+    def digitPressed_(self, sender):
+        if len(self.buffer) < 3:  # 최대 999분
+            self.buffer += sender.title()
+            self.display.setStringValue_(self.buffer)
+
+    def clearPressed_(self, sender):
+        self.buffer = ""
+        self.display.setStringValue_("")
+
+    def backspacePressed_(self, sender):
+        self.buffer = self.buffer[:-1]
+        self.display.setStringValue_(self.buffer)
+
+    def cancelPressed_(self, sender):
+        self.result = None
+        NSApp().stopModal()
+
+    def confirmPressed_(self, sender):
+        self.result = self.buffer
+        NSApp().stopModal()
+
+
+def show_minutes_keypad(title="운동용 영상 분량 설정", default_minutes=30):
+    """숫자 키패드 팝업을 띄워 분(分) 단위 숫자를 마우스 클릭만으로 입력받는다.
+    처음엔 default_minutes가 미리 채워져 있어서 그냥 확인만 눌러도 그 값으로 진행되고,
+    C(지우기)/⌫(백스페이스)로 지우고 다른 숫자를 눌러 바꿀 수 있다.
+    반환: 확인 시 입력한 문자열(빈 문자열이면 호출부에서 default_minutes로 처리), 취소 시 None."""
+    BTN_W, BTN_H, GAP = 56, 44, 8
+    grid_w = 3 * BTN_W + 2 * GAP
+    panel_w = grid_w + 24
+    panel_h = 330
+    initial_buffer = str(default_minutes)
+
+    panel = NSPanel.alloc().initWithContentRect_styleMask_backing_defer_(
+        NSMakeRect(0, 0, panel_w, panel_h),
+        NSWindowStyleMaskTitled | NSWindowStyleMaskClosable,
+        NSBackingStoreBuffered,
+        False,
+    )
+    panel.setTitle_(title)
+    panel.center()
+    # 메뉴바 앱은 일반 앱 창이 없어 activateIgnoringOtherApps_만으로는 패널이
+    # 현재 사용 중인 앱의 창 뒤에 남을 수 있다. 모달 패널 레벨로 올리고
+    # 비활성 상태에서도 숨기지 않아 사용자가 반드시 바로 볼 수 있게 한다.
+    panel.setLevel_(NSModalPanelWindowLevel)
+    panel.setHidesOnDeactivate_(False)
+
+    content = panel.contentView()
+
+    display = NSTextField.alloc().initWithFrame_(NSMakeRect(12, panel_h - 70, grid_w, 44))
+    display.setEditable_(False)
+    display.setSelectable_(False)
+    display.setBezeled_(False)
+    display.setDrawsBackground_(False)
+    display.setAlignment_(NSTextAlignmentCenter)
+    display.setFont_(NSFont.systemFontOfSize_(30))
+    display.setStringValue_(initial_buffer)
+    content.addSubview_(display)
+
+    handler = _MinutesKeypadHandler.alloc().initWithDisplay_initialBuffer_(display, initial_buffer)
+
+    rows = [["7", "8", "9"], ["4", "5", "6"], ["1", "2", "3"], ["C", "0", "⌫"]]
+    grid_top_y = panel_h - 130
+    for r, row in enumerate(rows):
+        y = grid_top_y - r * (BTN_H + GAP)
+        for c, label in enumerate(row):
+            x = 12 + c * (BTN_W + GAP)
+            btn = NSButton.alloc().initWithFrame_(NSMakeRect(x, y, BTN_W, BTN_H))
+            btn.setTitle_(label)
+            btn.setBezelStyle_(NSRoundedBezelStyle)
+            btn.setFont_(NSFont.systemFontOfSize_(18))
+            if label == "C":
+                btn.setTarget_(handler)
+                btn.setAction_("clearPressed:")
+            elif label == "⌫":
+                btn.setTarget_(handler)
+                btn.setAction_("backspacePressed:")
+            else:
+                btn.setTarget_(handler)
+                btn.setAction_("digitPressed:")
+            content.addSubview_(btn)
+
+    bottom_y = grid_top_y - len(rows) * (BTN_H + GAP) - 6
+    cancel_btn = NSButton.alloc().initWithFrame_(NSMakeRect(12, bottom_y, (grid_w - GAP) / 2, BTN_H))
+    cancel_btn.setTitle_("취소")
+    cancel_btn.setBezelStyle_(NSRoundedBezelStyle)
+    cancel_btn.setTarget_(handler)
+    cancel_btn.setAction_("cancelPressed:")
+    content.addSubview_(cancel_btn)
+
+    confirm_btn = NSButton.alloc().initWithFrame_(
+        NSMakeRect(12 + (grid_w - GAP) / 2 + GAP, bottom_y, (grid_w - GAP) / 2, BTN_H)
+    )
+    confirm_btn.setTitle_("확인")
+    confirm_btn.setBezelStyle_(NSRoundedBezelStyle)
+    confirm_btn.setTarget_(handler)
+    confirm_btn.setAction_("confirmPressed:")
+    content.addSubview_(confirm_btn)
+
+    NSApp().activateIgnoringOtherApps_(True)
+    panel.makeKeyAndOrderFront_(None)
+    panel.orderFrontRegardless()
+    NSApp().runModalForWindow_(panel)
+    panel.close()
+
+    return handler.result
+
+
 def choose_jp_subtitle_folder():
     """macOS 폴더 선택 다이얼로그로 일본어 영상 폴더를 고른다. 취소하면 None."""
     apple_script = 'POSIX path of (choose folder with prompt "일본어 영상이 있는 폴더를 선택하세요")'
@@ -652,13 +788,125 @@ def choose_jp_subtitle_folder():
         return None
 
 
-def run_jp_subtitle_extraction(folder_path):
+def run_jp_subtitle_extraction(folder_path, target_minutes=None, highlight_pad=1):
     """일본어자막추출/whisper_series_stream.sh를 백그라운드로 실행한다.
     스크립트 자체가 새 터미널 창(.command + open)을 띄우고 바로 리턴하므로,
-    여기서는 그냥 fire-and-forget으로 실행만 하면 된다."""
+    여기서는 그냥 fire-and-forget으로 실행만 하면 된다.
+    target_minutes를 주면 TARGET_MINUTES 환경변수로 전달 — 스크립트가 운동용 영상을
+    그 길이(분)에 맞춰 만들도록 extract_high_pitch_video.py --target-minutes로 넘긴다."""
     if not os.path.exists(JP_SUBTITLE_SCRIPT):
         return False
-    subprocess.Popen(["zsh", JP_SUBTITLE_SCRIPT, folder_path])
+    env = os.environ.copy()
+    if target_minutes:
+        env["TARGET_MINUTES"] = str(target_minutes)
+    env["HIGHLIGHT_PAD"] = str(highlight_pad)
+    subprocess.Popen(["zsh", JP_SUBTITLE_SCRIPT, folder_path], env=env)
+    return True
+
+
+def choose_bgm_playlist_folder():
+    """곡별 MP3로 나눌 플레이리스트 MP4 폴더를 선택한다."""
+    apple_script = (
+        'POSIX path of (choose folder with prompt '
+        '"플레이리스트 MP4 파일들이 있는 폴더를 선택하세요")'
+    )
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", apple_script],
+            capture_output=True, text=True, timeout=120,
+        )
+        path = result.stdout.strip()
+        return path or None
+    except Exception:
+        return None
+
+
+def choose_mp3_rename_folder():
+    """Shazam으로 제목을 변경할 MP3 폴더를 선택한다."""
+    apple_script = (
+        'POSIX path of (choose folder with prompt '
+        '"제목을 자동 변경할 MP3 폴더를 선택하세요")'
+    )
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", apple_script],
+            capture_output=True, text=True, timeout=120,
+        )
+        path = result.stdout.strip()
+        return path or None
+    except Exception:
+        return None
+
+
+def run_bgm_playlist_batch(folder_path):
+    """선택 폴더의 MP4 전체 자동 인식·분할 작업을 Terminal에서 실행한다."""
+    if not os.path.exists(BGM_PLAYLIST_BATCH_SCRIPT):
+        return False
+    launcher = "/tmp/_bgm_playlist_batch.command"
+    command = (
+        "#!/bin/zsh\n"
+        "export PATH=\"/opt/homebrew/bin:/usr/local/bin:/opt/anaconda3/bin:"
+        "/usr/bin:/bin:/usr/sbin:/sbin:$PATH\"\n"
+        "worker_pid=''\n"
+        "cleanup() {\n"
+        "  if [[ -n \"$worker_pid\" ]] && kill -0 \"$worker_pid\" 2>/dev/null; then\n"
+        "    kill -TERM \"$worker_pid\" 2>/dev/null\n"
+        "    wait \"$worker_pid\" 2>/dev/null\n"
+        "  fi\n"
+        "}\n"
+        "trap cleanup HUP INT TERM EXIT\n"
+        f"/opt/anaconda3/bin/python3 {shlex.quote(BGM_PLAYLIST_BATCH_SCRIPT)} "
+        f"{shlex.quote(folder_path)} &\n"
+        "worker_pid=$!\n"
+        "wait \"$worker_pid\"\n"
+        "status=$?\n"
+        "worker_pid=''\n"
+        "trap - HUP INT TERM EXIT\n"
+        "echo\n"
+        "if [[ $status -eq 0 ]]; then\n"
+        "  echo '✅ 모든 MP4 분할 완료'\n"
+        "else\n"
+        "  echo '⚠️ 일부 파일이 실패했습니다. 위 로그를 확인하세요.'\n"
+        "fi\n"
+        "echo '이 창은 확인 후 닫아도 됩니다.'\n"
+    )
+    with open(launcher, "w", encoding="utf-8") as file:
+        file.write(command)
+    os.chmod(launcher, 0o700)
+    subprocess.Popen(["open", "-a", "Terminal", launcher])
+    return True
+
+
+def run_mp3_shazam_rename(folder_path):
+    """선택 폴더 MP3의 Shazam 제목 변경을 Terminal에서 실행한다."""
+    if not os.path.exists(MP3_SHAZAM_RENAME_SCRIPT):
+        return False
+    python = os.path.join(
+        os.path.dirname(MP3_SHAZAM_RENAME_SCRIPT),
+        ".venv-shazam", "bin", "python",
+    )
+    if not os.path.exists(python):
+        return False
+    launcher = "/tmp/_mp3_shazam_rename.command"
+    command = (
+        "#!/bin/zsh\n"
+        "export PATH=\"/opt/homebrew/bin:/usr/local/bin:/opt/anaconda3/bin:"
+        "/usr/bin:/bin:/usr/sbin:/sbin:$PATH\"\n"
+        f"{shlex.quote(python)} {shlex.quote(MP3_SHAZAM_RENAME_SCRIPT)} "
+        f"{shlex.quote(folder_path)}\n"
+        "status=$?\n"
+        "echo\n"
+        "if [[ $status -eq 0 ]]; then\n"
+        "  echo '✅ MP3 제목 변경 작업 완료'\n"
+        "else\n"
+        "  echo '⚠️ 작업이 실패했습니다. 위 로그를 확인하세요.'\n"
+        "fi\n"
+        "echo '이 창은 확인 후 닫아도 됩니다.'\n"
+    )
+    with open(launcher, "w", encoding="utf-8") as file:
+        file.write(command)
+    os.chmod(launcher, 0o700)
+    subprocess.Popen(["open", "-a", "Terminal", launcher])
     return True
 
 
@@ -1312,6 +1560,14 @@ class ShiftAlarmApp(rumps.App):
         self.menu.add(rumps.MenuItem("🎲 추천 사이트 열기 (天 폴더 랜덤 3개)", callback=self.open_random_bookmarks_now))
         self.menu.add(rumps.MenuItem("🔄 북마크 최신화 (天 폴더)", callback=self.refresh_bookmarks_now))
         self.menu.add(rumps.MenuItem("🎥 일본어 자막 추출 (폴더 선택)", callback=self.run_jp_subtitle_now))
+        self.menu.add(rumps.MenuItem(
+            "🎵 플레이리스트 MP4 → 곡별 MP3 (폴더 선택)",
+            callback=self.run_bgm_playlist_split_now,
+        ))
+        self.menu.add(rumps.MenuItem(
+            "🏷️ MP3 Shazam 제목 변경 (폴더 선택)",
+            callback=self.run_mp3_shazam_rename_now,
+        ))
 
         sunzi_entry = get_latest_sunzi_entry()
         if sunzi_entry:
@@ -1448,11 +1704,117 @@ class ShiftAlarmApp(rumps.App):
         folder = choose_jp_subtitle_folder()
         if not folder:
             return
-        ok = run_jp_subtitle_extraction(folder)
+
+        # ★ 2026-07-24: rumps.Window 텍스트 입력이 안 먹혀서(키보드 포커스 문제)
+        # 타이핑 대신 마우스 클릭 숫자 키패드로 바꿈 — 기본값 30분이 미리 채워져
+        # 있어서 그냥 확인만 눌러도 되고, 지우고 다른 숫자를 눌러 바꿀 수도 있음.
+        DEFAULT_TARGET_MINUTES = self.config.get("jp_target_minutes", 30)
+        text = show_minutes_keypad(default_minutes=DEFAULT_TARGET_MINUTES)
+        if text is None:
+            return  # 취소
+
+        text = text.strip()
+        if not text:
+            target_minutes = DEFAULT_TARGET_MINUTES
+        else:
+            try:
+                target_minutes = float(text)
+                if target_minutes <= 0:
+                    raise ValueError
+            except ValueError:
+                rumps.alert("오류", "분량은 0보다 큰 숫자로 입력하세요.")
+                return
+
+        DEFAULT_HIGHLIGHT_PAD = self.config.get("jp_highlight_pad", 1)
+        pad_text = show_minutes_keypad(
+            title="고음 구간 앞뒤 여유 설정 (초)",
+            default_minutes=DEFAULT_HIGHLIGHT_PAD,
+        )
+        if pad_text is None:
+            return
+        pad_text = pad_text.strip()
+        if not pad_text:
+            highlight_pad = DEFAULT_HIGHLIGHT_PAD
+        else:
+            try:
+                highlight_pad = int(pad_text)
+                if highlight_pad < 0:
+                    raise ValueError
+            except ValueError:
+                rumps.alert("오류", "여유 구간은 0 이상의 정수 초로 입력하세요.")
+                return
+
+        # 마지막 확인값을 메뉴바 앱 설정에 저장해 다음 실행의 키패드 기본값으로 쓴다.
+        self.config["jp_target_minutes"] = target_minutes
+        self.config["jp_highlight_pad"] = highlight_pad
+        save_config(self.config)
+
+        ok = run_jp_subtitle_extraction(
+            folder,
+            target_minutes=target_minutes,
+            highlight_pad=highlight_pad,
+        )
         if not ok:
             rumps.alert("오류", f"스크립트를 찾을 수 없습니다:\n{JP_SUBTITLE_SCRIPT}")
             return
-        rumps.notification("일본어 자막 추출", "시작됨", f"{folder}\n새 터미널 창에서 진행 상황을 확인하세요.")
+        minutes_note = (
+            f" (목표 {target_minutes:.0f}분 · 앞뒤 여유 {highlight_pad}초)"
+            if target_minutes else f" (앞뒤 여유 {highlight_pad}초)"
+        )
+        rumps.notification("일본어 자막 추출", "시작됨", f"{folder}{minutes_note}\n새 터미널 창에서 진행 상황을 확인하세요.")
+
+    def run_bgm_playlist_split_now(self, _):
+        folder = choose_bgm_playlist_folder()
+        if not folder:
+            return
+        mp4_count = sum(
+            1 for name in os.listdir(folder)
+            if os.path.isfile(os.path.join(folder, name))
+            and name.lower().endswith(".mp4")
+        )
+        if mp4_count == 0:
+            rumps.alert("MP4 없음", "선택한 폴더 바로 아래에 MP4 파일이 없습니다.")
+            return
+        if not run_bgm_playlist_batch(folder):
+            rumps.alert(
+                "오류",
+                f"자동 분할 스크립트를 찾을 수 없습니다:\n{BGM_PLAYLIST_BATCH_SCRIPT}",
+            )
+            return
+        rumps.notification(
+            "플레이리스트 자동 분할",
+            f"MP4 {mp4_count}개 처리 시작",
+            "성공한 영상은 곡별 MP3 생성 후 휴지통으로 이동합니다.\n"
+            "iTerm에서 진행 상황을 확인하세요.",
+        )
+
+    def run_mp3_shazam_rename_now(self, _):
+        folder = choose_mp3_rename_folder()
+        if not folder:
+            return
+        mp3_count = sum(
+            1 for name in os.listdir(folder)
+            if os.path.isfile(os.path.join(folder, name))
+            and name.lower().endswith(".mp3")
+            and "분절" in os.path.splitext(name)[0]
+        )
+        if mp3_count == 0:
+            rumps.alert(
+                "분절 MP3 없음",
+                "선택한 폴더 바로 아래에 이름에 '분절'이 들어간 MP3가 없습니다.",
+            )
+            return
+        if not run_mp3_shazam_rename(folder):
+            rumps.alert(
+                "오류",
+                "Shazam 제목 변경 스크립트 또는 전용 환경을 찾을 수 없습니다.",
+            )
+            return
+        rumps.notification(
+            "MP3 Shazam 제목 변경",
+            f"MP3 {mp3_count}개 처리 시작",
+            "인식되는 즉시 아티스트 - 노래제목으로 변경합니다.",
+        )
 
     def open_latest_sunzi(self, _):
         entry = get_latest_sunzi_entry()
