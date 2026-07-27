@@ -68,7 +68,13 @@ def validate(text: str, require_five_sections: bool = False) -> list[str]:
 
     if require_five_sections:
         for number in range(1, 6):
-            count = len(re.findall(rf"<summary>{number}\.", text))
+            count = len(
+                re.findall(
+                    rf"(?:<summary>{number}\.|^##\s+{number}\.)",
+                    text,
+                    re.MULTILINE,
+                )
+            )
             if count != 1:
                 errors.append(f"{number}번 섹션 헤더 개수가 {count}개입니다(정상: 1개)")
 
