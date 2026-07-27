@@ -49,7 +49,7 @@ def arrow(draw, points, color, width=30, head=62, dashed=False):
     )
 
 
-def label(draw, xy, text, color, size=38, anchor="mm"):
+def label(draw, xy, text, color, size=56, anchor="mm"):
     f = font(size, True)
     box = draw.multiline_textbbox(xy, text, font=f, anchor=anchor, align="center", spacing=6, stroke_width=2)
     pad = 14
@@ -80,9 +80,9 @@ def canvas(slug, title, subtitle):
     out.paste(src, (50, 230))
     draw = ImageDraw.Draw(out, "RGBA")
     draw.rectangle((0, 0, 2400, 230), fill="#17130e")
-    draw.text((1200, 76), title, font=font(70, True), fill="#f5d36c", anchor="mm")
-    draw.text((1200, 165), subtitle, font=font(35), fill="#f5f0e8", anchor="mm")
-    draw.text((2270, 255), "N ↑", font=font(34, True), fill="white", anchor="ra",
+    draw.text((1200, 76), title, font=font(76, True), fill="#f5d36c", anchor="mm")
+    draw.text((1200, 165), subtitle, font=font(42), fill="#f5f0e8", anchor="mm")
+    draw.text((2270, 255), "N ↑", font=font(40, True), fill="white", anchor="ra",
               stroke_width=2, stroke_fill="black")
     return out, draw
 
@@ -98,7 +98,7 @@ def footer(draw, left, middle, right):
         draw.multiline_text(
             ((x0 + x1) / 2, y0 + 90),
             text,
-            font=font(31, True),
+            font=font(44, True),
             fill="#1d1a16",
             anchor="mm",
             align="center",
@@ -378,10 +378,10 @@ def build(slug, cfg):
     for xy, text, color in cfg["labels"]:
         label(draw, xy, text, color)
     for xy, text, color in cfg.get("terrain_labels", []):
-        label(draw, xy, text, color, size=34)
+        label(draw, xy, text, color, size=50)
     x0, y0, x1, y1, text = cfg["focus"]
     draw.ellipse((x0, y0, x1, y1), outline=AMBER, width=18)
-    label(draw, ((x0 + x1) / 2, (y0 + y1) / 2), text, AMBER, size=40)
+    label(draw, ((x0 + x1) / 2, (y0 + y1) / 2), text, AMBER, size=58)
     footer(draw, *cfg["foot"])
     image.save(ROOT / f"{slug}_codex_map.png", optimize=True)
 
