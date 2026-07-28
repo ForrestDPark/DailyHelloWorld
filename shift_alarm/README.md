@@ -120,15 +120,17 @@
 
 **참고**: 이 로직을 개발한 세션(Claude Code)의 샌드박스 환경은 `topgirl.co`(루트 도메인)를 DNS로 못 찾는 등 네트워크 제약이 있어서, 실제 사용자 맥에서 메뉴를 눌러 직접 확인이 필요하다.
 
-## 11. 🎥 일본어 자막 추출 연동 (2026-07-23 추가)
+## 11. 🎥 일본어 자막 추출 연동 (2026-07-23 추가, 2026-07-28 버튼 3개로 분리)
 
-메뉴의 `🎥 일본어 자막 추출 (폴더 선택)`을 누르면 macOS 폴더 선택 다이얼로그가 뜨고, 고른 폴더를 대상으로 `일본어자막추출/whisper_series_stream.sh`를 실행한다(자세한 파이프라인 내용·필수 키체인 등록은 `일본어자막추출/README.md` 참조).
+일본어 영상 파이프라인은 메뉴에 버튼 3개로 노출된다 — 운동용 영상 추출과 자막·노션·EPUB 생성을 항상 같이 돌리면 너무 오래 걸려서, 각각 단독으로도 실행할 수 있게 나눴다(자세한 파이프라인 내용·필수 키체인 등록은 `일본어자막추출/README.md` 참조).
 
-- `JP_SUBTITLE_SCRIPT` 상수가 `__file__` 기준으로 형제 폴더(`../일본어자막추출/whisper_series_stream.sh`)를 가리킨다 — `shift_alarm/`과 `일본어자막추출/`이 항상 같은 저장소 루트 밑에 나란히 있어야 함.
-- `run_jp_subtitle_extraction()`은 그 스크립트를 `subprocess.Popen`으로 그냥 실행만 하고 바로 리턴한다(fire-and-forget) — 스크립트 자체가 내부에서 `.command` 파일을 만들어 `open -a Terminal`로 새 터미널 창을 열고 실제 작업을 진행하기 때문에, 여기서 결과를 기다리거나 출력을 파싱할 필요가 없다.
-- 폴더 선택 뒤 뜨는 운동용 영상 분량 숫자 키패드는 PyObjC `NSPanel`로 구현되어 있다. 메뉴바 앱은 일반 앱 창이 없어 단순 앱 활성화만으로는 현재 사용 중인 창 뒤에 패널이 남을 수 있으므로, `NSModalPanelWindowLevel`과 `orderFrontRegardless()`를 사용해 항상 화면 맨 앞에서 키·포커스를 받도록 한다. 비활성화 시에도 패널을 숨기지 않는다.
+- `🎥 일본어 자막 추출 - 연달아 (폴더 선택)` — 기존과 동일, 운동용 영상 → 자막·번역·Notion·EPUB을 한 iTerm 세션에서 순서대로 전부 실행. `JP_SUBTITLE_SCRIPT`(`../일본어자막추출/whisper_series_stream.sh`)를 실행.
+- `🏃 운동용 영상만 추출 (폴더 선택)` — Notion/메모/EPUB 전혀 안 건드리고 운동용 고음 영상(+배경음)만 빠르게 뽑는다. `JP_WORKOUT_VIDEO_SCRIPT`(`extract_high_pitch_video.py`)를 폴더 인자 그대로 넘겨 새 Terminal 창에서 실행 — 이 스크립트가 원래도 폴더를 받아 안의 영상을 전부 순회하므로 별도 셸 반복문이 필요 없다.
+- `📝 자막·노션·EPUB만 (폴더 선택)` — 운동용 영상 단계를 건너뛰고 자막·번역·후리가나·Notion·메모앱·EPUB만 실행. `JP_SUBTITLE_STAGE2_SCRIPT`(`../일본어자막추출/subtitle_notion_epub_only.sh`)를 실행 — 목표 분량/여유초 키패드가 필요 없어 폴더 선택만으로 바로 시작한다.
+- `run_jp_subtitle_extraction()` / `run_jp_subtitle_stage2_only()`는 각 스크립트를 `subprocess.Popen`으로 그냥 실행만 하고 바로 리턴한다(fire-and-forget) — 스크립트 자체가 내부에서 새 iTerm 창을 열고 실제 작업을 진행하기 때문에, 여기서 결과를 기다리거나 출력을 파싱할 필요가 없다. `run_jp_workout_extraction_only()`는 `bgm_playlist_batch` 실행과 같은 패턴으로 `.command` 파일을 만들어 `open -a Terminal`로 연다.
+- 운동용 영상 관련 두 버튼(연달아·운동용만)에서 뜨는 분량·여유초 숫자 키패드는 `_prompt_jp_workout_settings()` 헬퍼 하나를 공유한다. PyObjC `NSPanel`로 구현되어 있다. 메뉴바 앱은 일반 앱 창이 없어 단순 앱 활성화만으로는 현재 사용 중인 창 뒤에 패널이 남을 수 있으므로, `NSModalPanelWindowLevel`과 `orderFrontRegardless()`를 사용해 항상 화면 맨 앞에서 키·포커스를 받도록 한다. 비활성화 시에도 패널을 숨기지 않는다.
 - 목표 분량 확인 뒤 `고음 구간 앞뒤 여유 설정 (초)` 키패드가 한 번 더 열린다. 최초 기본값은 목표 30분·여유 1초이고, 확인한 두 값은 `~/.shift_alarm_config.json`에 저장되어 다음 실행의 키패드 기본값으로 그대로 표시된다. 여유는 0 이상의 정수 초를 입력한다. 선택값은 `HIGHLIGHT_PAD` 환경변수와 `--pad` 옵션으로 전달되고 출력 파일명에도 `여유N초`로 기록된다. BGM 결과 파일명에는 실제 음량도 `BGM28퍼센트`처럼 기록된다.
-- 노션 토큰/freeimage.host API 키를 키체인에 등록해두지 않으면 새로 뜬 터미널 창에서 "❌ 노션 토큰을 키체인에서 찾을 수 없습니다"로 바로 실패한다 — 최초 1회 `일본어자막추출/README.md`의 키체인 등록 명령 실행 필요.
+- 노션 토큰/freeimage.host API 키를 키체인에 등록해두지 않으면 새로 뜬 터미널 창에서 "❌ 노션 토큰을 키체인에서 찾을 수 없습니다"로 바로 실패한다 — 최초 1회 `일본어자막추출/README.md`의 키체인 등록 명령 실행 필요(운동용 영상만 추출하는 버튼은 Notion을 안 쓰므로 이 등록 없이도 동작함).
 
 ## 11-1. 🎵 플레이리스트 MP4 → 곡별 MP3 자동 분할
 

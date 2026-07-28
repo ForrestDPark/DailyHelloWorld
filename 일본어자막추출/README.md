@@ -173,6 +173,34 @@ security add-generic-password -a "$USER" -s "jp_subtitle_notion_token" -w "<노�
 
 ## 알려진 문제 / 수정 이력
 
+### ★★ 운동용 영상 추출 / 자막·노션·EPUB 분리 + 단계별 소요시간 로그 (2026-07-28)
+
+**문제**: `whisper_series_stream.sh`가 항상 1단계(운동용 고음 영상)와 2단계(자막·번역·Notion·EPUB)를 한 iTerm 세션에서 연달아 돌렸다. 둘 다 매번 같이 도니 총 소요시간이 너무 길어서, 급할 땐 운동용 영상만 빨리 뽑거나 반대로 자막 파이프라인만 따로 돌리고 싶어도 방법이 없었다. 또한 자막 파이프라인 자체가 왜 오래 걸리는지(어느 단계가 병목인지) 로그만 봐서는 알 수 없었다.
+
+**해결**:
+1. 2단계(자막·번역·후리가나·Notion·메모앱·MD·EPUB) 로직을 `subtitle_pipeline_body.sh`로 분리했다. `whisper_series_stream.sh`(1단계+2단계 연달아)와 `subtitle_notion_epub_only.sh`(2단계 단독)가 이 파일 하나를 그대로 불러 쓴다 — 로직을 두 곳에 복사해두면 한쪽만 고치고 잊어버리는 문제가 생기기 때문.
+2. 새 진입점 3개(shift_alarm 메뉴바에도 버튼 3개로 반영됨):
+   - `whisper_series_stream.sh [폴더]` — 기존과 동일, 운동용 영상 + 자막·노션·EPUB **연달아** 실행.
+   - `subtitle_notion_epub_only.sh [폴더]` — 운동용 영상 건너뛰고 **자막·번역·Notion·EPUB만** 실행. 새 iTerm 창.
+   - `python3 extract_high_pitch_video.py <폴더>` — **운동용 영상만** 단독 추출(원래도 폴더 인자를 지원했음, 별도 메뉴바 버튼으로 노출한 것뿐). shift_alarm에서는 새 Terminal 창.
+3. `subtitle_pipeline_body.sh` 안에 단계별 소요시간 로그를 추가했다: 오디오 추출(ffmpeg), Whisper 자막 생성, (번역+Notion 기록+메모앱+이미지캡처) 3문장-루프 전체 및 그 내부 세부(번역/Notion/메모앱/이미지 각각 누적 초), Notion 이미지 업로드, pandoc EPUB 빌드까지 전부 `⏱`로 시작하는 줄로 iTerm 로그에 그대로 출력된다. 실제 병목이 Whisper 자체인지, 번역/Notion API 왕복인지, 메모 앱 AppleScript 호출인지는 추측보다 이 로그로 직접 확인하는 게 정확하다 — 다음 실행 로그를 보고 판단할 것.
+
+### ★ Whisper 자막 생성 속도 튜닝 (2026-07-28)
+
+**배경**: 위 타이밍 로그를 넣기 전부터 사용자가 자막 생성이 체감상 오래 걸린다고 지적. 사용 중인 맥은 M2(퍼포먼스 4 + 효율 4 = 8코어)이고 `whisper-cli --help` 출력으로 Metal GPU와 flash-attention이 이미 기본 활성화되어 있는 것 확인함(이 둘은 더 손댈 게 없음).
+
+**바꾼 것** (`subtitle_pipeline_body.sh`의 whisper-cli 호출):
+1. `--beam-size 5` → `--beam-size 1`(greedy). 빔서치는 매 토큰마다 후보 5개를 유지하며 디코딩해 계산량이 greedy 대비 대략 5배 가깝게 든다 — 정확도와 직결되는 트레이드오프라 사용자에게 직접 확인받고 "속도 최우선"으로 결정함. 자막처럼 짧은 발화 단위라 정확도 손실은 크지 않을 것으로 예상.
+2. `-p 4`(프로세스 4개, 스레드는 명시 안 해 기본값 4) → `-p 1 -t 8`. 기존 설정은 4프로세스×4스레드=16스레드가 8코어를 나눠 쓰면서, Metal GPU는 하나뿐이라 4개 프로세스가 같은 GPU를 두고 경쟁하는 구조였다 — 프로세스 1개가 GPU와 8코어를 통째로 쓰는 쪽이 더 빠를 것으로 보고 바꿈. 이 부분은 추측 기반 변경이라, 위 `⏱ Whisper 자막 생성 소요` 로그로 실측해서 오히려 느려지면 되돌릴 것(예: `-p 2 -t 4`도 시도해볼 만함).
+3. **`--vad --vad-model` 추가 (whisper.cpp 내장 VAD, Silero)**. 사용자가 "무음/신음소리 등 사람 목소리가 아닌 구간을 미리 잘라내고 whisper를 돌리면 안 되나"라고 제안함 — 처음엔 ffmpeg `silencedetect`(에너지 임계값)로 무음만 잘라 압축 오디오를 만들고 whisper 출력 타임스탬프를 원본 시간으로 되돌리는 커스텀 파이썬 코드를 짰었는데, 사용자가 "무음의 기준을 사람 목소리가 아니면 무음"으로 정정 — 에너지 임계값으로는 신음소리(에너지는 있지만 말이 아닌 발성)를 못 걸러낸다. 대신 `whisper-cli --help`에서 whisper.cpp에 이미 Silero VAD(실제로 학습된 음성 감지 모델)가 내장돼 있는 걸 발견해서 커스텀 코드를 전부 버리고 이걸로 교체함:
+   - VAD 모델(`ggml-silero-v5.1.2.bin`)은 whisper.cpp 공식 저장소의 `models/download-vad-model.sh`가 가리키는 출처(`https://huggingface.co/ggml-org/whisper-vad`)에서 받아 `/opt/homebrew/share/whisper-cpp/models/`에 둔다. `subtitle_pipeline_body.sh`가 없으면 자동으로 받고, 다운로드 실패(오프라인 등) 시에도 VAD 없이 전체 오디오로 폴백해서 파이프라인이 멈추지 않게 함.
+   - **실측 검증**: 무음(2초) + 220Hz 순음(신음소리를 흉내낸 비언어적 발성, 2초) + 무음(2초) + 실제 일본어 문장("こんにちは、これはテストです。", macOS `say`로 합성) + 무음(2초)으로 합성 테스트 파일을 만들어 `--vad --vad-model`로 실행 — 220Hz 톤 구간은 완전히 무시되고 실제 발화 구간(6.11~8.25초)만 정확히 잡혔다. 로그에 `Reduced audio from 163667 to 34240 samples (79.1% reduction)`로 실제 디코딩량 감소도 확인함.
+   - **타임스탬프 리매핑이 필요 없다**: whisper.cpp가 VAD로 걸러낸 뒤에도 내부적으로 원본⇄VAD 압축 시간 매핑(`vad_segment_info: orig_start/orig_end` 로그)을 자동 처리해서, 최종 SRT 타임스탬프가 이미 원본 오디오 기준으로 나온다. 그래서 처음 짰던 커스텀 트리밍+리매핑 파이썬 코드는 전부 삭제하고 whisper-cli 호출에 플래그 두 개만 추가하는 것으로 끝남 — 장면 캡처(`ORIGINAL_VIDEO` 절대시간 사용)나 최종 자막 병합 등 하위 로직은 전혀 안 건드려도 된다.
+
+**검증 상태**: beam-size/프로세스 튜닝은 이 세션이 whisper-cli를 실제 영상으로 돌려볼 수 없는 환경이라 로직만 반영했고 실측은 다음 실행 때 확인 필요. VAD 기능 자체는 위 합성 테스트로 실측 검증했지만, 실제 AV 영상(진짜 신음소리·배경음·여러 화자)에서도 기대대로 동작하는지는 다음 실제 실행에서 자막 품질(문장 누락·잘림 여부)과 `⏱ Whisper 자막 생성 소요` 로그로 반드시 재확인할 것.
+
+
+
 ### ★★ EPUB 생성 실패 — `--epub-version=3` 옵션이 pandoc 3.x에서 삭제됨 (2026-07-23)
 
 **증상**: 로그에 `⚠️ EPUB 생성 실패`만 뜨고 이유를 알 수 없음.

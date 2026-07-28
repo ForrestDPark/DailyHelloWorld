@@ -180,6 +180,19 @@ JP_SUBTITLE_SCRIPT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "일본어자막추출", "whisper_series_stream.sh"
 )
+# 운동용 고음 영상 추출과 자막·번역·Notion·EPUB 단계를 하나로 묶어서 돌리면
+# (JP_SUBTITLE_SCRIPT) 너무 오래 걸려서, 각각 단독으로도 실행할 수 있게 나눈
+# 진입점 2개. 실제 로직은 일본어자막추출/subtitle_pipeline_body.sh에 있고
+# JP_SUBTITLE_SCRIPT와 JP_SUBTITLE_STAGE2_SCRIPT가 그걸 공유해서 쓴다.
+JP_SUBTITLE_STAGE2_SCRIPT = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "일본어자막추출", "subtitle_notion_epub_only.sh"
+)
+JP_WORKOUT_VIDEO_SCRIPT = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "일본어자막추출", "extract_high_pitch_video.py"
+)
+JP_WORKOUT_BGM_DIR = "/Users/forrestdpark/Desktop/BlogImage/BGM_DIR"
 BGM_PLAYLIST_BATCH_SCRIPT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "일본어자막추출", "bgm_playlist_batch.py"
@@ -801,6 +814,66 @@ def run_jp_subtitle_extraction(folder_path, target_minutes=None, highlight_pad=1
         env["TARGET_MINUTES"] = str(target_minutes)
     env["HIGHLIGHT_PAD"] = str(highlight_pad)
     subprocess.Popen(["zsh", JP_SUBTITLE_SCRIPT, folder_path], env=env)
+    return True
+
+
+def run_jp_subtitle_stage2_only(folder_path):
+    """운동용 영상 추출 없이 자막·번역·Notion·EPUB 단계만 실행한다.
+    subtitle_notion_epub_only.sh가 스스로 새 iTerm 창을 띄우고 바로
+    리턴하므로, 여기서도 fire-and-forget으로 실행만 하면 된다."""
+    if not os.path.exists(JP_SUBTITLE_STAGE2_SCRIPT):
+        return False
+    subprocess.Popen(["zsh", JP_SUBTITLE_STAGE2_SCRIPT, folder_path])
+    return True
+
+
+def run_jp_workout_extraction_only(folder_path, target_minutes=None, highlight_pad=1):
+    """Notion/메모/EPUB 없이 운동용 고음 영상(+배경음)만 추출한다.
+    extract_high_pitch_video.py가 폴더를 그대로 받아 안의 영상을 전부
+    순회하므로, 여기서는 새 Terminal 창에서 그 스크립트 한 번만 돌리면 된다."""
+    if not os.path.exists(JP_WORKOUT_VIDEO_SCRIPT):
+        return False
+    args = [
+        "/opt/anaconda3/bin/python3", shlex.quote(JP_WORKOUT_VIDEO_SCRIPT),
+        shlex.quote(folder_path),
+        "--bgm-dir", shlex.quote(JP_WORKOUT_BGM_DIR),
+        "--bgm-volume", "0.28",
+        "--pad", str(highlight_pad),
+    ]
+    if target_minutes:
+        args += ["--target-minutes", str(target_minutes)]
+
+    launcher = "/tmp/_jp_workout_video_only.command"
+    command = (
+        "#!/bin/zsh\n"
+        "export PATH=\"/opt/homebrew/bin:/usr/local/bin:/opt/anaconda3/bin:"
+        "/usr/bin:/bin:/usr/sbin:/sbin:$PATH\"\n"
+        "worker_pid=''\n"
+        "cleanup() {\n"
+        "  if [[ -n \"$worker_pid\" ]] && kill -0 \"$worker_pid\" 2>/dev/null; then\n"
+        "    kill -TERM \"$worker_pid\" 2>/dev/null\n"
+        "    wait \"$worker_pid\" 2>/dev/null\n"
+        "  fi\n"
+        "}\n"
+        "trap cleanup HUP INT TERM EXIT\n"
+        f"{' '.join(args)} &\n"
+        "worker_pid=$!\n"
+        "wait \"$worker_pid\"\n"
+        "status=$?\n"
+        "worker_pid=''\n"
+        "trap - HUP INT TERM EXIT\n"
+        "echo\n"
+        "if [[ $status -eq 0 ]]; then\n"
+        "  echo '✅ 운동용 영상 추출 완료'\n"
+        "else\n"
+        "  echo '⚠️ 일부 파일이 실패했습니다. 위 로그를 확인하세요.'\n"
+        "fi\n"
+        "echo '이 창은 확인 후 닫아도 됩니다.'\n"
+    )
+    with open(launcher, "w", encoding="utf-8") as file:
+        file.write(command)
+    os.chmod(launcher, 0o700)
+    subprocess.Popen(["open", "-a", "Terminal", launcher])
     return True
 
 
@@ -1610,7 +1683,9 @@ class ShiftAlarmApp(rumps.App):
 
         self.menu.add(rumps.MenuItem("🎲 추천 사이트 열기 (天 폴더 랜덤 3개)", callback=self.open_random_bookmarks_now))
         self.menu.add(rumps.MenuItem("🔄 북마크 최신화 (天 폴더)", callback=self.refresh_bookmarks_now))
-        self.menu.add(rumps.MenuItem("🎥 일본어 자막 추출 (폴더 선택)", callback=self.run_jp_subtitle_now))
+        self.menu.add(rumps.MenuItem("🎥 일본어 자막 추출 - 연달아 (폴더 선택)", callback=self.run_jp_subtitle_now))
+        self.menu.add(rumps.MenuItem("🏃 운동용 영상만 추출 (폴더 선택)", callback=self.run_jp_workout_only_now))
+        self.menu.add(rumps.MenuItem("📝 자막·노션·EPUB만 (폴더 선택)", callback=self.run_jp_subtitle_stage2_now))
         self.menu.add(rumps.MenuItem(
             "🎵 플레이리스트 MP4 → 곡별 MP3 (폴더 선택)",
             callback=self.run_bgm_playlist_split_now,
@@ -1751,18 +1826,16 @@ class ShiftAlarmApp(rumps.App):
             msg += f" ({', '.join(result['failed_domains'])}는 실패)"
         rumps.notification("북마크 최신화 완료", "", msg)
 
-    def run_jp_subtitle_now(self, _):
-        folder = choose_jp_subtitle_folder()
-        if not folder:
-            return
-
-        # ★ 2026-07-24: rumps.Window 텍스트 입력이 안 먹혀서(키보드 포커스 문제)
-        # 타이핑 대신 마우스 클릭 숫자 키패드로 바꿈 — 기본값 30분이 미리 채워져
-        # 있어서 그냥 확인만 눌러도 되고, 지우고 다른 숫자를 눌러 바꿀 수도 있음.
+    def _prompt_jp_workout_settings(self):
+        """운동용 영상 목표 길이(분)와 고음 구간 앞뒤 여유(초)를 키패드로 물어본다.
+        취소하면 None을 반환, 확인하면 (target_minutes, highlight_pad) 튜플을 반환.
+        ★ 2026-07-24: rumps.Window 텍스트 입력이 안 먹혀서(키보드 포커스 문제)
+        타이핑 대신 마우스 클릭 숫자 키패드로 바꿈 — 기본값이 미리 채워져 있어서
+        그냥 확인만 눌러도 되고, 지우고 다른 숫자를 눌러 바꿀 수도 있음."""
         DEFAULT_TARGET_MINUTES = self.config.get("jp_target_minutes", 30)
         text = show_minutes_keypad(default_minutes=DEFAULT_TARGET_MINUTES)
         if text is None:
-            return  # 취소
+            return None  # 취소
 
         text = text.strip()
         if not text:
@@ -1774,7 +1847,7 @@ class ShiftAlarmApp(rumps.App):
                     raise ValueError
             except ValueError:
                 rumps.alert("오류", "분량은 0보다 큰 숫자로 입력하세요.")
-                return
+                return None
 
         DEFAULT_HIGHLIGHT_PAD = self.config.get("jp_highlight_pad", 1)
         pad_text = show_minutes_keypad(
@@ -1782,7 +1855,7 @@ class ShiftAlarmApp(rumps.App):
             default_minutes=DEFAULT_HIGHLIGHT_PAD,
         )
         if pad_text is None:
-            return
+            return None
         pad_text = pad_text.strip()
         if not pad_text:
             highlight_pad = DEFAULT_HIGHLIGHT_PAD
@@ -1793,12 +1866,24 @@ class ShiftAlarmApp(rumps.App):
                     raise ValueError
             except ValueError:
                 rumps.alert("오류", "여유 구간은 0 이상의 정수 초로 입력하세요.")
-                return
+                return None
 
         # 마지막 확인값을 메뉴바 앱 설정에 저장해 다음 실행의 키패드 기본값으로 쓴다.
         self.config["jp_target_minutes"] = target_minutes
         self.config["jp_highlight_pad"] = highlight_pad
         save_config(self.config)
+        return target_minutes, highlight_pad
+
+    def run_jp_subtitle_now(self, _):
+        """운동용 영상 추출 + 자막·번역·Notion·EPUB을 연달아 실행."""
+        folder = choose_jp_subtitle_folder()
+        if not folder:
+            return
+
+        settings = self._prompt_jp_workout_settings()
+        if settings is None:
+            return
+        target_minutes, highlight_pad = settings
 
         ok = run_jp_subtitle_extraction(
             folder,
@@ -1812,7 +1897,44 @@ class ShiftAlarmApp(rumps.App):
             f" (목표 {target_minutes:.0f}분 · 앞뒤 여유 {highlight_pad}초)"
             if target_minutes else f" (앞뒤 여유 {highlight_pad}초)"
         )
-        rumps.notification("일본어 자막 추출", "시작됨", f"{folder}{minutes_note}\n새 터미널 창에서 진행 상황을 확인하세요.")
+        rumps.notification("일본어 자막 추출 (연달아)", "시작됨", f"{folder}{minutes_note}\n새 터미널 창에서 진행 상황을 확인하세요.")
+
+    def run_jp_workout_only_now(self, _):
+        """Notion/메모/EPUB 없이 운동용 고음 영상만 단독으로 추출."""
+        folder = choose_jp_subtitle_folder()
+        if not folder:
+            return
+
+        settings = self._prompt_jp_workout_settings()
+        if settings is None:
+            return
+        target_minutes, highlight_pad = settings
+
+        ok = run_jp_workout_extraction_only(
+            folder,
+            target_minutes=target_minutes,
+            highlight_pad=highlight_pad,
+        )
+        if not ok:
+            rumps.alert("오류", f"스크립트를 찾을 수 없습니다:\n{JP_WORKOUT_VIDEO_SCRIPT}")
+            return
+        minutes_note = (
+            f" (목표 {target_minutes:.0f}분 · 앞뒤 여유 {highlight_pad}초)"
+            if target_minutes else f" (앞뒤 여유 {highlight_pad}초)"
+        )
+        rumps.notification("운동용 영상만 추출", "시작됨", f"{folder}{minutes_note}\n새 터미널 창에서 진행 상황을 확인하세요.")
+
+    def run_jp_subtitle_stage2_now(self, _):
+        """운동용 영상 추출 없이 자막·번역·Notion·EPUB 단계만 단독으로 실행."""
+        folder = choose_jp_subtitle_folder()
+        if not folder:
+            return
+
+        ok = run_jp_subtitle_stage2_only(folder)
+        if not ok:
+            rumps.alert("오류", f"스크립트를 찾을 수 없습니다:\n{JP_SUBTITLE_STAGE2_SCRIPT}")
+            return
+        rumps.notification("자막·노션·EPUB", "시작됨", f"{folder}\n새 iTerm 창에서 진행 상황을 확인하세요.")
 
     def run_bgm_playlist_split_now(self, _):
         folder = choose_bgm_playlist_folder()
