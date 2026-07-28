@@ -22,16 +22,30 @@ mkdir -p "$MYTMP"
 MODEL_PATH="/opt/homebrew/share/whisper-cpp/models/ggml-medium.bin"
 [[ ! -f "$MODEL_PATH" ]] && MODEL_PATH="/opt/homebrew/share/whisper-cpp/models/ggml-small.bin"
 
-# ★★ 2026-07-28: whisper.cpp 내장 VAD(Silero)를 잠깐 켰다가 다시 껐다. 합성 테스트
-# (발화 구간 1개짜리)에서는 원본 시간축 복원이 정확했는데, 실제 영상(SONE-486, 발화
-# 구간이 수십~수백 개)으로 돌려보니 긴 무음/신음 구간 바로 앞 대사의 종료 시각이
-# 다음 발화 시작 지점까지 통째로 늘어나는 버그가 다수 발견됨(예: "いいなぁ" 한 마디가
-# 740초짜리로, "忙しく" 한 마디가 1563초짜리로 기록됨 — part1 150개 중 10개, part2
-# 21개 중 7개가 30초 넘는 이상 구간). VAD 구간 경계에서 원본⇄압축 시간 매핑이 가끔
-# 엉뚱한 다음 구간을 참조하는 것으로 보임. 장면 대표 이미지 캡처와 최종 자막 동기화가
-# 둘 다 이 타임스탬프에 의존하므로 속도보다 정확성을 우선해 VAD를 비활성화한다.
-# 재검토하려면: whisper.cpp 업스트림에 이 버그가 이미 리포트/수정됐는지 먼저 확인할 것.
+# ★★★ 2026-07-28: whisper.cpp 내장 VAD(Silero) — 껐다가 다시 켰다. 실제 영상
+# (SONE-486)에서 긴 무음/신음 구간 직전 대사의 "종료" 시각이 다음 발화 시작
+# 지점까지 늘어나는 버그를 발견해서(예: "いいなぁ" 한 마디가 740초짜리로 기록)
+# 한 번 껐었는데, 확인해보니 이 파이프라인의 실제 산출물(EPUB/Notion/메모앱/
+# 장면 대표 이미지)은 전부 "시작" 시각만 쓰거나 타임스탬프를 아예 안 쓴다
+# (finalize_japanese_book.py·sync_book_to_notion.py에 start/end 참조 없음,
+# capture_representative_image도 start만 사용) — 깨지는 건 "종료" 시각뿐이라
+# 실사용에 전혀 영향이 없다는 걸 사용자가 확인해줘서 다시 켰다. 유일한 영향은
+# 통합 SRT(<파일명>.srt)를 실제 영상 자막으로 재생할 때 그 줄들이 너무 오래
+# 떠 있는 것뿐 — 이 프로젝트는 그 SRT를 자막 재생용이 아니라 EPUB 대사 추출
+# 원본으로만 쓰므로 무시해도 된다.
+VAD_MODEL_PATH="/opt/homebrew/share/whisper-cpp/models/ggml-silero-v5.1.2.bin"
+if [[ ! -f "$VAD_MODEL_PATH" ]]; then
+    echo "⬇️  VAD 모델(Silero) 없음 — 다운로드 중..."
+    curl -sL --output "$VAD_MODEL_PATH" \
+        "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v5.1.2.bin"
+    [[ ! -s "$VAD_MODEL_PATH" ]] && rm -f "$VAD_MODEL_PATH"
+fi
 VAD_ARGS=()
+if [[ -f "$VAD_MODEL_PATH" ]]; then
+    VAD_ARGS=(--vad --vad-model "$VAD_MODEL_PATH")
+else
+    echo "⚠️  VAD 모델을 준비하지 못해 무음/비음성 구간 없이 전체 오디오를 처리합니다."
+fi
 
 WHISPER_EXE="/opt/homebrew/bin/whisper-cli"
 CORRECTIONS_FILE="${SCRIPT_DIR}/whisper_corrections.txt"
@@ -150,9 +164,10 @@ while true; do
             #     하나뿐이라 4개 프로세스가 같은 GPU를 두고 경쟁했다. 프로세스 1개가
             #     GPU와 8코어를 전부 쓰는 쪽이 더 빠를 것으로 예상 — 아래 ⏱ 로그로
             #     실측해서 맞지 않으면 이 값을 다시 조정할 것.
-            #   - VAD_ARGS는 위에서 항상 빈 배열로 고정됨(VAD 비활성화) — 실제 영상
-            #     테스트에서 whisper.cpp VAD의 시간축 복원이 깨지는 버그를 발견해서
-            #     되돌렸다. 자세한 경위는 위 VAD_MODEL_PATH 자리의 주석 참조.
+            #   - VAD_ARGS(--vad --vad-model, 위에서 준비): 무음/비음성 구간은 디코더를
+            #     안 돌려서 크게 빨라진다. 종료 시각이 가끔 깨지는 버그가 있지만 이
+            #     파이프라인은 그 값을 안 쓰므로 무시하고 켜둔다 — 자세한 경위는 위
+            #     VAD_MODEL_PATH 자리의 주석 참조.
             $WHISPER_EXE -m "$MODEL_PATH" -f "./$TEMP_AUDIO" -osrt -l ja -p 1 -t 8 \
                 "${VAD_ARGS[@]}" \
                 --beam-size 1 --no-speech-thold 0.3 \

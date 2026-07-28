@@ -207,7 +207,15 @@ security add-generic-password -a "$USER" -s "jp_subtitle_notion_token" -w "<노�
 
 **영향 범위 확인**: 다행히 깨지는 건 각 자막 항목의 **종료(end) 시각**뿐이고 **시작(start) 시각**은 정상이었다. 장면 대표 이미지 캡처(`representative["start"]`)와 JSONL 기록은 시작 시각만 쓰므로 이번 `SONE-486` 처리분의 번역·이미지·Notion 기록 내용 자체는 영향이 없을 것으로 보인다. 다만 `SONE-486/기타/SONE-486.srt`(통합 자막)를 실제 영상 재생 시 자막 트랙으로 쓰면, 저 17줄 구간에서 자막이 몇 분씩 화면에 남아있게 된다.
 
-**조치**: `subtitle_pipeline_body.sh`에서 VAD를 다시 껐다(`VAD_ARGS=()`로 고정, whisper-cli 호출에서 `--vad`/`--vad-model` 제거). beam-size 1과 `-p 1 -t 8` 튜닝은 이 버그와 무관해서 그대로 유지. 다음에 VAD를 다시 켜보고 싶다면, whisper.cpp 업스트림(GitHub 이슈)에 이 시간축 복원 버그가 이미 보고·수정됐는지부터 확인할 것 — 그 전까지는 정확성을 위해 VAD 없이 전체 오디오를 처리한다.
+**조치(1차, 이후 재수정됨)**: `subtitle_pipeline_body.sh`에서 VAD를 껐다(`VAD_ARGS=()`로 고정) — 하지만 이건 과잉 반응이었다. 아래 항목 참조.
+
+### ★★★★ VAD 다시 켬 — 이 파이프라인은 애초에 종료 시각을 안 쓴다 (2026-07-28)
+
+**사용자 피드백**: "타임스탬프는 필요 없다. EPUB으로 대사만 올바르게 나오면 된다 — 영상이랑 같이 나오는 자막 얘기잖아. 나는 자막에서 대사 추출해서 공부하려고 쓰는 거라 상관없다."
+
+**재확인**: `finalize_japanese_book.py`와 `sync_book_to_notion.py`를 다시 grep해보니 `start`/`end`/타임스탬프를 **아예 참조하지 않는다**(EPUB은 `SUMMARY.md`+대사 텍스트로만 만들고, Notion 동기화는 이미지·요약 텍스트만 다룸). `capture_representative_image()`도 `representative["start"]`만 쓰고 `end`는 어디서도 안 읽는다. 즉 위에서 발견한 버그(종료 시각이 다음 발화 시작점까지 늘어남)는 이 파이프라인의 실제 산출물(EPUB/Notion/메모앱/장면 이미지) 중 단 하나도 건드리지 않는다 — 유일하게 영향받는 건 `<파일명>.srt`(통합 자막 파일)의 화면 표시 지속시간뿐인데, 이 프로젝트는 그 SRT를 영상 자막 재생용이 아니라 **EPUB 대사 추출 원본**으로만 쓰므로 무관하다.
+
+**최종 조치**: VAD를 다시 켰다(`subtitle_pipeline_body.sh`에서 VAD 모델 자동 다운로드 + `--vad --vad-model` 복원). beam-size 1, `-p 1 -t 8`과 함께 그대로 유지. 결론: 이 프로젝트에서는 VAD의 종료-시각 버그를 신경 쓸 필요가 없고, 무음/신음 구간을 건너뛰는 속도 이득만 그대로 누리면 된다. (만약 나중에 `<파일명>.srt`를 실제 영상 자막으로도 쓰고 싶어지면, 그때는 이 버그를 다시 신경 써야 한다 — 그 경우 whisper.cpp 업스트림에 보고/수정 여부부터 확인할 것.)
 
 
 
