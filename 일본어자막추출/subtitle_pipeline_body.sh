@@ -926,6 +926,46 @@ drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese 
         echo "⚠️  MD 파일 없음, EPUB 건너뜀"
     fi
 
+    # ── 자동 요약(Claude) + Notion 요약 반영 + 요약 포함 최종 EPUB ──────
+    # ★ 2026-07-28: 원래 "Codex가 transcript_part*.jsonl과 대표 이미지를 읽고
+    #   SUMMARY.md를 작성한다"는 수동 단계였는데, 여기까지 자동으로 끝난 뒤
+    #   요약만 사람이 따로 세션을 열어야 하는 게 병목이었다. Claude Code CLI의
+    #   헤드리스 --print 모드(generate_summary.py)로 대사 텍스트(ja/ko)만 보고
+    #   "전체 줄거리"+"장면별 목차"를 쓰게 해서 완전 자동화함(이미지는 안 보냄 —
+    #   빠르고 간단한 쪽 선택, OYC-126 1650줄/69장면 실측 96초). 요약이 준비되면
+    #   sync_book_to_notion.py(이미지 전용 아닌 기본 모드)가 Notion 페이지에 요약을
+    #   추가하고 상태를 "완료"로 바꾸며, finalize_japanese_book.py가 SUMMARY.md +
+    #   전체 대사를 합쳐 목차 포함 최종 EPUB을 새로 만든다 — 이 최종본이 이미
+    #   만든 "빠른" EPUB(줄거리 없음)보다 항상 나으므로 $OUTPUT_EPUB을 덮어써서
+    #   교체하고, 옵시디언에도 다시 복사한다.
+    echo "\n🧠 Claude로 줄거리·장면별 목차 자동 생성 중..."
+    _T0=$(date +%s)
+    if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_summary.py" "$BOOK_DIR"; then
+        echo "⏱ 요약 생성 소요: $(( $(date +%s) - _T0 ))초"
+
+        /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/sync_book_to_notion.py" "$BOOK_DIR" \
+            || echo "⚠️ Notion 요약 반영 실패 — 나중에 재실행 가능(sync_book_to_notion.py \"$BOOK_DIR\")"
+
+        FINAL_LIBRARY_EPUB="${BOOK_DIR}/${SAFE_BASE_NAME}.epub"
+        if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/finalize_japanese_book.py" "$BOOK_DIR" \
+            && [[ -f "$FINAL_LIBRARY_EPUB" ]]; then
+            cp "$FINAL_LIBRARY_EPUB" "$OUTPUT_EPUB"
+            echo "✅ 줄거리·목차 포함된 최종 EPUB으로 교체: $OUTPUT_EPUB"
+            [[ -d "$OBSIDIAN_PATH" ]] && cp "$OUTPUT_EPUB" "$OBSIDIAN_PATH/" \
+                && echo "📂 옵시디언 재복사 완료(요약 포함본)"
+            # ★ 2026-07-28: 완성된 EPUB을 한곳에 몰아서 보려고 지정한 폴더.
+            COMPLETED_EPUB_DIR="/Users/forrestdpark/Desktop/BlogImage/av완성작"
+            mkdir -p "$COMPLETED_EPUB_DIR"
+            cp "$OUTPUT_EPUB" "$COMPLETED_EPUB_DIR/" \
+                && echo "📚 완성작 폴더로 복사 완료: ${COMPLETED_EPUB_DIR}/${OUTPUT_EPUB}"
+        else
+            echo "⚠️  최종 EPUB 빌드 실패 — 줄거리 없는 기존 EPUB 유지"
+        fi
+    else
+        echo "⚠️  요약 생성 실패 — SUMMARY.md는 '요약 대기 중' 상태로 남음"
+        echo "    (나중에 수동 재실행: python3 generate_summary.py \"$BOOK_DIR\")"
+    fi
+
     echo "\033[1;32m[$FILENAME_NO_EXT] 전체 완료!\033[0m"
     echo "  📄 자막: $MERGED_SRT"
     echo "  📚 EPUB: $OUTPUT_EPUB"

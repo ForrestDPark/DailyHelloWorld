@@ -160,10 +160,12 @@ security add-generic-password -a "$USER" -s "jp_subtitle_notion_token" -w "<노�
   epub_style.css
 ```
 
-1. Codex가 `transcript_part*.jsonl`과 대표 이미지를 읽고 `SUMMARY.md`의 전체 줄거리와 장면별 목차를 작성한다.
-2. 추출이 끝나면 `sync_book_to_notion.py --images-only`가 대표 이미지 파일을 Notion File Upload API로 직접 올려 기존 작품 페이지에 본문 폭의 이미지 블록으로 추가한다. 외부 임시 URL을 이미지 주소로 저장하지 않으므로 다운로드 URL이 만료되어도 Notion이 파일을 계속 관리한다.
-3. Codex가 요약을 완성한 뒤 `python3 sync_book_to_notion.py library/<작품명>`을 다시 실행하면 요약을 추가하고 상태를 `완료`로 바꾼다.
-4. `python3 finalize_japanese_book.py library/<작품명>`을 실행하면 `SUMMARY.md`와 전체 대사를 합쳐 목차가 포함된 최종 EPUB을 만든다. `SUMMARY.md`가 아직 “요약 대기 중”이면 빌드를 거부한다.
+1. 추출이 끝나면 `sync_book_to_notion.py --images-only`가 대표 이미지 파일을 Notion File Upload API로 직접 올려 기존 작품 페이지에 본문 폭의 이미지 블록으로 추가한다. 외부 임시 URL을 이미지 주소로 저장하지 않으므로 다운로드 URL이 만료되어도 Notion이 파일을 계속 관리한다.
+2. **(2026-07-28부터 자동화)** `generate_summary.py library/<작품명>`이 Claude Code CLI 헤드리스 모드(`claude -p`)로 `transcript_part*.jsonl`의 대사(원문/번역)만 읽고 `SUMMARY.md`의 전체 줄거리와 장면별 목차를 자동으로 작성한다. 이미지는 안 보낸다(텍스트만으로 충분히 정확하고 빠름 — OYC-126 1650줄/69장면 실측 96초).
+3. 요약이 준비되면 `python3 sync_book_to_notion.py library/<작품명>`(images-only 아닌 기본 모드)이 자동으로 실행되어 요약을 Notion에 추가하고 상태를 `완료`로 바꾼다.
+4. `python3 finalize_japanese_book.py library/<작품명>`도 자동으로 실행되어 `SUMMARY.md`와 전체 대사를 합쳐 목차가 포함된 최종 EPUB을 만든다. `SUMMARY.md`가 아직 "요약 대기 중"이면 빌드를 거부한다. 이 최종 EPUB이 앞서 만든 "빠른" EPUB(줄거리 없음)을 덮어쓰고, 옵시디언 및 `/Users/forrestdpark/Desktop/BlogImage/av완성작/`(완성작을 한곳에 몰아보려고 지정한 폴더)에도 복사된다.
+
+위 2~4단계는 `subtitle_pipeline_body.sh`의 각 영상 처리 마지막에 자동으로 실행되므로 더 이상 수동으로 "Codex 요약해줘" 세션을 열 필요가 없다. 실패해도 파이프라인 전체가 멈추지 않고(각 단계 실패 시 경고만 출력) 다음 영상으로 넘어간다 — 실패한 작품은 나중에 위 명령어들을 그대로 수동 재실행하면 된다.
 
 기존 freeimage.host 및 GitHub raw 이미지 방식은 제거했다. 대표 이미지는 Git에 자동 커밋하거나 공개하지 않으며 로컬 원본과 Notion 내부 파일로만 보관한다. Notion API에서 조회되는 다운로드 URL은 일시적으로 만료될 수 있지만, Notion 페이지의 이미지 파일 자체는 유지되며 페이지를 다시 열거나 조회할 때 새 URL이 발급된다.
 
@@ -172,6 +174,17 @@ security add-generic-password -a "$USER" -s "jp_subtitle_notion_token" -w "<노�
 추출된 대사를 구절별로 다시 공부하는 작업은 [`../일본어공부/README.md`](../일본어공부/README.md)를 기준으로 한다. 새 Codex 세션에서 `일본어공부/README.md를 읽고 <작품명>의 다음 구절 공부해`라고 요청하면 원문·독음·한자 뜻풀이·문법·말투·발음·대체 표현·복습 카드 형식으로 작업을 이어갈 수 있다.
 
 ## 알려진 문제 / 수정 이력
+
+### ★★★★★ Codex 요약 단계 자동화 (`generate_summary.py`) + 완성작 폴더 (2026-07-28)
+
+**배경**: "이펍과 노션 업로드 후에 다시 Claude로 공부용 영상 분석이 목표"라는 사용자 요청. 지금까지 "Codex가 transcript_part*.jsonl과 대표 이미지를 읽고 SUMMARY.md를 작성한다"는 단계는 사람이 매번 별도 세션을 열어야 하는 수동 병목이었다.
+
+**추가한 것**:
+1. `generate_summary.py library/<작품명>` (신규) — `transcript_part*.jsonl`의 대사(원문 ja/번역 ko)만 장면 순서대로 모아 `claude -p --tools "" --output-format text`(Claude Code CLI 헤드리스 모드, 도구 접근 없이 순수 텍스트 생성만)에 프롬프트로 넘겨 "전체 줄거리"+"장면별 목차"를 받아 `SUMMARY.md`에 쓴다. 대표 이미지는 안 보낸다(사용자가 "대사 텍스트만" 쪽을 선택 — 빠르고 간단함).
+2. `subtitle_pipeline_body.sh`의 EPUB 생성 직후에 자동 연결: `generate_summary.py` → `sync_book_to_notion.py library/<작품명>`(요약 반영+상태 `완료`) → `finalize_japanese_book.py library/<작품명>`(요약+전체 대사 합친 최종 EPUB) 순서로 자동 실행되고, 이 최종 EPUB이 기존 "빠른" EPUB을 덮어쓴다. 각 단계 실패해도 경고만 찍고 다음 영상으로 계속 진행(파이프라인 전체가 안 멈춤).
+3. 완성된 EPUB을 한곳에 몰아보고 싶다는 요청으로 `/Users/forrestdpark/Desktop/BlogImage/av완성작/`에도 자동 복사(옵시디언 복사와 별개로 추가).
+
+**실측 검증**: 기존에 처리만 되고 요약이 안 된 채 방치돼있던 `library/OYC-126`(1650줄, 69장면, 1편)으로 전체 흐름을 실제로 돌려봄 — 요약 생성 96초, 생성된 줄거리·장면별 목차 내용 확인(장면 1~69 빠짐없이 자연스럽게 요약됨), 실제 Notion 페이지에 요약 반영 및 상태 `완료` 전환 확인, 최종 EPUB(3.98MB, 79개 파일, zip 무결성/mimetype 정상) 빌드 확인, `av완성작/`에 복사까지 전부 확인함.
 
 ### ★★ 운동용 영상 추출 / 자막·노션·EPUB 분리 + 단계별 소요시간 로그 (2026-07-28)
 
