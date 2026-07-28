@@ -715,7 +715,12 @@ for idx in range(0, len(parsed_lines), 3):
                 "ko": ko,
             }
             jf.write(json.dumps(record, ensure_ascii=False) + "\n")
-            mf.write(f"- **{furi}**  \n  {ko}\n")
+            # ★ 2026-07-28: 예전엔 마크다운 볼드(`- **{furi}**`)로만 썼는데, 이러면
+            # CSS 클래스가 없어서 epub_style.css의 p.ja(금색)/p.ko(회색) 색 구분이
+            # 전혀 적용 안 되고 본문 기본색(#dddddd, 사실상 흰색)으로만 보였다 —
+            # save_to_md()가 쓰는 _work 폴더 md와 똑같이 클래스 있는 HTML로 맞춘다.
+            mf.write(f'<p class="ja">{furi}</p>\n')
+            mf.write(f'<p class="ko">{ko}</p>\n\n')
         mf.write("\n")
 
     # 대표 이미지는 전체 추출 뒤 Notion File Upload API로 직접 업로드한다.
