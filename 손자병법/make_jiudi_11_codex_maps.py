@@ -100,7 +100,7 @@ def sherman_strategy():
     site(draw, (790, 520), "오거스타", color="#f6b34f", dx=20, dy=-5, size=28)
     site(draw, (500, 820), "그리스월드빌", color="#e95d4f", dx=22, dy=12, size=27)
     site(draw, (815, 1185), "포트 맥앨리스터", color="#f6e09b", dx=-20, dy=-32, size=26)
-    label(draw, (745, 1050), "오기치강", size=25, fill="#d7edf4", box=False)
+    label(draw, (745, 1050), "오기치강(Ogeechee River)", size=25, fill="#d7edf4", box=False)
     label(draw, (675, 940), "철도·창고 파괴\n현지조달", size=31)
     label(draw, (850, 1450), "대서양 연안·습지", size=27, fill="#d7edf4")
     draw.rounded_rectangle((45, 1350, 705, 1510), 18, fill=(16, 22, 21, 220), outline="#ead7a6", width=3)
