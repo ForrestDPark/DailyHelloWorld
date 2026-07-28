@@ -43,6 +43,8 @@
 
 ![셔먼의 바다로의 진군 Codex 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/sherman_march_codex_map.png)
 
+![셔먼의 바다로의 진군 단계별 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/sherman_march_codex_sequence_map.png)
+
 애틀랜타가 함락된 뒤 남군의 존 벨 후드는 북쪽으로 움직여 셔먼이 뒤쫓아오기를 바랐다. 그러나 셔먼은 그가 내민 길을 따라가지 않았다. 조지 토머스에게 테네시 방어를 맡기고 자신은 약 6만 명을 이끌고 동쪽으로 몸을 돌렸다. 이는 `致人而不致於人`(치인이불치어인, 적을 끌어오되 적에게 끌려가지 않음)의 선택이었다. 11월 중순 전신선과 철도를 끊은 두 날개는 메이컨과 오거스타를 동시에 위협하는 듯 벌어져, 하디로 하여금 목표가 어디인지 끝까지 확신하지 못하게 했다. `形人而我無形`(형인이아무형, 적에게는 형체를 드러내게 하고 나는 형체를 감춤)이 60마일 너비의 행군로 위에서 구현됐다. 하지만 이 기동은 식량이 저절로 생긴다는 뜻이 아니었다. 특별야전명령 제120호는 각 여단이 조직한 현지조달반으로 식량과 사료를 취하게 하되 병사가 민가에 함부로 들어가지 못하도록 규정했다. 명령과 실제 행군 사이에는 약탈과 파괴가 통제를 넘어선 간극도 있었으므로, `掠於饒野`를 민간 피해 없는 낭만적인 자급전으로 미화해서는 안 된다.[^https://history.army.mil/Publications/Publications-Catalog/The-Atlanta-and-Savannah-Campaigns/]
 
 #### 전초 — 후드가 내민 길을 거부하다
@@ -66,6 +68,8 @@
 ![손책의 강동 평정 중국 국가 위치도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/sun_ce_jiangdong_country_map.png)
 
 ![손책의 강동 평정 Codex 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/sun_ce_jiangdong_codex_map.png)
+
+![손책의 강동 평정 단계별 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/sun_ce_jiangdong_codex_sequence_map.png)
 
 손책은 아버지 손견의 옛 군대를 되찾고 싶었지만 원술은 약속을 번번이 미뤘다. 마침내 손책이 받은 것은 병사 천여 명과 기병 수십 기에 불과했다. 그러나 역양으로 가는 길에 사람이 모였고, 주유는 병력뿐 아니라 배와 군량까지 마련해 합류했다. 두 사람이 장강을 건너 횡강과 당리의 나루를 깨뜨리고 우저를 점령하자, 유요가 쌓아둔 곡식과 무기까지 손책의 손에 들어갔다. `因糧於敵`(인량어적, 적에게서 군량을 얻음)이 단숨에 원정군의 다리를 놓은 순간이었다. 유요에게는 태사자라는 칼이 있었지만, 그는 “태사자를 쓰면 허소가 나를 비웃지 않겠는가”라며 중용하지 않았다. 손책은 그 틈을 놓치지 않고 착융·설례의 거점을 차례로 무너뜨려 곡아까지 밀고 들어갔다. 패배한 태사자가 훗날 붙잡혀 오자 손책은 결박부터 풀고, 유요의 남은 병사들을 불러올 수 있겠느냐고 물었다. 태사자가 기한 안에 돌아오자 의심하던 이들은 입을 다물었고, 적의 장수와 병사는 손책의 새 전력이 됐다. 이 전역은 적의 곡식만 취한 약탈전이 아니라 **적지의 물자·인재·민심을 차례로 자기 기반으로 바꾼 창업전**이었다.[^https://ctext.org/sanguozhi/46][^https://ctext.org/sanguozhi/49][^https://ctext.org/sanguozhi/54]
 

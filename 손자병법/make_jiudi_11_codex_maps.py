@@ -47,6 +47,13 @@ def label(draw, xy, text, *, size=42, fill="#fff8df", anchor="mm", box=True):
     draw.text(xy, text, font=font, fill=fill, anchor=anchor, stroke_width=1, stroke_fill="#171815")
 
 
+def site(draw, xy, text, *, color="#f7dd9b", dx=18, dy=-8, size=27):
+    """작은 거점 표식. 서사에 등장하는 지명을 지도에서 빠르게 찾게 한다."""
+    x, y = xy
+    draw.ellipse((x - 9, y - 9, x + 9, y + 9), fill=color, outline="#171815", width=3)
+    label(draw, (x + dx, y + dy), text, size=size, fill="#fff8df", anchor="lm")
+
+
 def arrow(draw, points, color, width=18):
     for a, b in zip(points, points[1:]):
         draw.line((a, b), fill=color, width=width, joint="curve")
@@ -89,7 +96,12 @@ def sherman_strategy():
         ((865, 1280), "사바나\n도착"),
     ]:
         label(draw, xy, txt, size=39)
-    label(draw, (760, 1080), "철도·창고 파괴\n현지 조달", size=35)
+    site(draw, (455, 755), "메이컨", color="#f6b34f", dx=-25, dy=-35, size=28)
+    site(draw, (790, 520), "오거스타", color="#f6b34f", dx=20, dy=-5, size=28)
+    site(draw, (500, 820), "그리스월드빌", color="#e95d4f", dx=22, dy=12, size=27)
+    site(draw, (815, 1185), "포트 맥앨리스터", color="#f6e09b", dx=-20, dy=-32, size=26)
+    label(draw, (745, 1050), "오기치강", size=25, fill="#d7edf4", box=False)
+    label(draw, (675, 940), "철도·창고 파괴\n현지조달", size=31)
     label(draw, (850, 1450), "대서양 연안·습지", size=27, fill="#d7edf4")
     draw.rounded_rectangle((45, 1350, 705, 1510), 18, fill=(16, 22, 21, 220), outline="#ead7a6", width=3)
     draw.text((75, 1380), "읽는 순서", font=pil_font(30), fill="#ffe4a5")
@@ -123,6 +135,10 @@ def sun_ce_strategy():
         label(draw, xy, txt, size=37)
     label(draw, (900, 500), "장강", size=43, fill="#d7edf4", box=False)
     label(draw, (765, 880), "승전 소문 →\n병력·호응 증가", size=35)
+    site(draw, (750, 1130), "고릉 방어선", color="#f6b34f", dx=-18, dy=-28, size=26)
+    site(draw, (820, 1210), "사독 우회로", color="#68c4b5", dx=-18, dy=18, size=26)
+    site(draw, (875, 1310), "회계", color="#e95d4f", dx=-20, dy=-30, size=27)
+    arrow(draw, [(735, 1110), (795, 1190), (875, 1310)], "#68c4b5", 12)
     draw.rounded_rectangle((45, 1350, 780, 1510), 18, fill=(16, 22, 21, 220), outline="#ead7a6", width=3)
     draw.text((75, 1380), "읽는 순서", font=pil_font(30), fill="#ffe4a5")
     draw.text(
@@ -207,8 +223,133 @@ def country_maps():
     )
 
 
+def sequence_panel(draw, box, title):
+    x0, y0, x1, y1 = box
+    draw.rounded_rectangle(box, radius=20, fill="#f7eed9", outline="#554a38", width=4)
+    draw.text((x0 + 24, y0 + 18), title, font=pil_font(34), fill="#211d17")
+    return x0, y0, x1, y1
+
+
+def node(draw, xy, text, color, *, size=26):
+    x, y = xy
+    draw.ellipse((x - 18, y - 18, x + 18, y + 18), fill=color, outline="#201b16", width=3)
+    draw.text((x, y + 28), text, font=pil_font(size), fill="#211d17", anchor="ma")
+
+
+def make_sequence_canvas(title, overview_path):
+    canvas = Image.new("RGB", (2400, 1600), "#e9ddc2")
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    draw.rectangle((0, 0, 2400, 95), fill="#102235")
+    draw.text((40, 43), title, font=pil_font(50), fill="#fff1cf", anchor="lm")
+    overview = Image.open(overview_path).convert("RGB")
+    overview.thumbnail((970, 1460), Image.Resampling.LANCZOS)
+    canvas.paste(overview, (20, 115))
+    return canvas, draw
+
+
+def sherman_sequence():
+    canvas, draw = make_sequence_canvas(
+        "셔먼의 바다로의 진군 단계별 전략지형도",
+        ROOT / "sherman_march_codex_map.png",
+    )
+    panels = [
+        (1015, 115, 1695, 800),
+        (1710, 115, 2390, 800),
+        (1015, 815, 1695, 1500),
+        (1710, 815, 2390, 1500),
+    ]
+    # 1. 후드가 내민 추격전 거부
+    x0, y0, _, _ = sequence_panel(draw, panels[0], "1. 후드 추격 거부")
+    node(draw, (x0 + 175, y0 + 230), "애틀랜타", "#d94a3d")
+    node(draw, (x0 + 485, y0 + 170), "후드·테네시", "#164d86")
+    node(draw, (x0 + 475, y0 + 480), "조지아 내부", "#d94a3d")
+    arrow(draw, [(x0 + 210, y0 + 215), (x0 + 425, y0 + 175)], "#164d86", 13)
+    arrow(draw, [(x0 + 205, y0 + 245), (x0 + 430, y0 + 450)], "#d94a3d", 15)
+    draw.text((x0 + 55, y0 + 570), "토머스는 후드를 맡고\n셔먼은 반대 방향으로 진군", font=pil_font(28), fill="#3b3022")
+
+    # 2. 양익 기만
+    x0, y0, _, _ = sequence_panel(draw, panels[1], "2. 양익 기만·목표 은폐")
+    node(draw, (x0 + 120, y0 + 230), "애틀랜타", "#d94a3d", size=24)
+    node(draw, (x0 + 330, y0 + 430), "메이컨", "#f0a33a", size=24)
+    node(draw, (x0 + 500, y0 + 210), "오거스타", "#f0a33a", size=24)
+    node(draw, (x0 + 560, y0 + 520), "사바나", "#d94a3d", size=24)
+    arrow(draw, [(x0 + 145, y0 + 240), (x0 + 300, y0 + 405), (x0 + 535, y0 + 500)], "#d94a3d", 13)
+    arrow(draw, [(x0 + 145, y0 + 220), (x0 + 460, y0 + 220), (x0 + 550, y0 + 495)], "#f0a33a", 13)
+    draw.text((x0 + 45, y0 + 575), "하디: 메이컨 → 오거스타로 판단 변경\n병력이 움직일수록 사바나가 비었다", font=pil_font(26), fill="#3b3022")
+
+    # 3. 그리스월드빌
+    x0, y0, _, _ = sequence_panel(draw, panels[2], "3. 그리스월드빌의 오판")
+    draw.rectangle((x0 + 355, y0 + 240, x0 + 580, y0 + 285), fill="#164d86")
+    draw.text((x0 + 465, y0 + 310), "월컷 여단·방어진지", font=pil_font(25), fill="#211d17", anchor="ma")
+    for off in (0, 90, 180):
+        arrow(draw, [(x0 + 120 + off, y0 + 500), (x0 + 380 + off // 3, y0 + 300)], "#d94a3d", 12)
+    draw.text((x0 + 75, y0 + 190), "필립스는 숙련 보병을\n소규모 하마 기병으로 오판", font=pil_font(27), fill="#6b2821")
+    draw.text((x0 + 75, y0 + 580), "세 차례 정면 공격\n남군 약 650명 손실", font=pil_font(27), fill="#3b3022")
+
+    # 4. 보급로와 결말
+    x0, y0, _, _ = sequence_panel(draw, panels[3], "4. 포트 맥앨리스터·사바나")
+    node(draw, (x0 + 230, y0 + 400), "포트 맥앨리스터", "#f0a33a", size=23)
+    node(draw, (x0 + 500, y0 + 300), "사바나", "#d94a3d", size=25)
+    arrow(draw, [(x0 + 90, y0 + 500), (x0 + 210, y0 + 420)], "#d94a3d", 14)
+    arrow(draw, [(x0 + 570, y0 + 550), (x0 + 280, y0 + 430)], "#2b91b1", 14)
+    arrow(draw, [(x0 + 505, y0 + 280), (x0 + 590, y0 + 150)], "#164d86", 13)
+    draw.text((x0 + 55, y0 + 145), "하디 철수", font=pil_font(26), fill="#164d86")
+    draw.text((x0 + 55, y0 + 570), "헤이즌이 요새 점령\n함대의 정규 보급로가 열림", font=pil_font(27), fill="#3b3022")
+    canvas.save(ROOT / "sherman_march_codex_sequence_map.png", quality=95)
+
+
+def sun_ce_sequence():
+    canvas, draw = make_sequence_canvas(
+        "손책의 강동 평정 단계별 전략지형도",
+        ROOT / "sun_ce_jiangdong_codex_map.png",
+    )
+    panels = [
+        (1015, 115, 1695, 800),
+        (1710, 115, 2390, 800),
+        (1015, 815, 1695, 1500),
+        (1710, 815, 2390, 1500),
+    ]
+    # 1. 원술의 제한된 지원과 주유의 보강
+    x0, y0, _, _ = sequence_panel(draw, panels[0], "1. 작은 출발·주유 합류")
+    node(draw, (x0 + 150, y0 + 300), "손책 1,000여 명", "#d94a3d", size=24)
+    node(draw, (x0 + 500, y0 + 300), "주유", "#f0a33a", size=25)
+    arrow(draw, [(x0 + 460, y0 + 300), (x0 + 210, y0 + 300)], "#f0a33a", 14)
+    draw.text((x0 + 75, y0 + 450), "병력·선박·군량이 합쳐져\n도강 가능한 원정군이 됐다", font=pil_font(28), fill="#3b3022")
+
+    # 2. 나루와 창고
+    x0, y0, _, _ = sequence_panel(draw, panels[1], "2. 횡강·당리 도하, 우저 장악")
+    draw.line((x0 + 50, y0 + 300, x0 + 630, y0 + 300), fill="#4e9bb2", width=55)
+    node(draw, (x0 + 180, y0 + 300), "횡강", "#f0a33a", size=23)
+    node(draw, (x0 + 360, y0 + 300), "당리", "#f0a33a", size=23)
+    node(draw, (x0 + 540, y0 + 470), "우저 창고", "#d94a3d", size=23)
+    arrow(draw, [(x0 + 90, y0 + 160), (x0 + 210, y0 + 340), (x0 + 510, y0 + 440)], "#d94a3d", 14)
+    draw.text((x0 + 55, y0 + 575), "나루를 연 뒤 유요의 군량·병기를\n다음 공격의 보급으로 전환", font=pil_font(27), fill="#3b3022")
+
+    # 3. 유요와 태사자
+    x0, y0, _, _ = sequence_panel(draw, panels[2], "3. 유요가 쓰지 못한 태사자")
+    node(draw, (x0 + 160, y0 + 310), "유요", "#164d86", size=25)
+    node(draw, (x0 + 500, y0 + 310), "태사자", "#f0a33a", size=25)
+    draw.line((x0 + 220, y0 + 310, x0 + 440, y0 + 310), fill="#7a7368", width=8)
+    draw.line((x0 + 320, y0 + 260, x0 + 340, y0 + 360), fill="#a5322a", width=10)
+    draw.line((x0 + 340, y0 + 260, x0 + 320, y0 + 360), fill="#a5322a", width=10)
+    draw.text((x0 + 65, y0 + 455), "허소의 평판을 의식해\n대장 대신 정찰 임무만 맡김", font=pil_font(28), fill="#3b3022")
+    draw.text((x0 + 65, y0 + 570), "인재가 없었던 것이 아니라\n권한을 주지 못했다", font=pil_font(27), fill="#6b2821")
+
+    # 4. 사독 우회와 흡수
+    x0, y0, _, _ = sequence_panel(draw, panels[3], "4. 손정의 사독 우회·세력 흡수")
+    node(draw, (x0 + 150, y0 + 300), "고릉 방어선", "#164d86", size=23)
+    node(draw, (x0 + 350, y0 + 500), "사독", "#68c4b5", size=24)
+    node(draw, (x0 + 545, y0 + 280), "회계", "#d94a3d", size=25)
+    arrow(draw, [(x0 + 90, y0 + 250), (x0 + 330, y0 + 470), (x0 + 520, y0 + 300)], "#68c4b5", 14)
+    draw.text((x0 + 65, y0 + 120), "횃불로 정면에 남은 듯 속이고\n사독으로 우회해 왕랑의 후방을 공격", font=pil_font(26), fill="#3b3022")
+    draw.text((x0 + 65, y0 + 590), "태사자에게 재량을 줘\n유요 잔병까지 편입", font=pil_font(27), fill="#6b2821")
+    canvas.save(ROOT / "sun_ce_jiangdong_codex_sequence_map.png", quality=95)
+
+
 if __name__ == "__main__":
     sherman_strategy()
     sun_ce_strategy()
     country_maps()
-    print("MAPS_OK: 전략지형도 2장 + 국가 위치도 2장")
+    sherman_sequence()
+    sun_ce_sequence()
+    print("MAPS_OK: 전략지형도 2장 + 국가 위치도 2장 + 단계판 2장")
