@@ -46,6 +46,7 @@ import json
 import os
 import random
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -54,6 +55,19 @@ VIDEO_EXTS = (".mp4", ".webm", ".mkv", ".mov")
 DEFAULT_BGM_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bgm")
 DEFAULT_BGM_VOLUME = 0.28
 HISTORY_VERSION = 1
+# ★ 2026-07-28: 배경음 입힌 운동용 영상을 한곳에 몰아보고 싶다는 요청으로 추가.
+AV_MUSIC_DIR = "/Users/forrestdpark/Desktop/BlogImage/avMusic"
+
+
+def copy_to_av_music(bgm_video_path):
+    """완성된 BGM 운동용 영상을 AV_MUSIC_DIR에도 복사한다(실패해도 조용히 무시 —
+    이 복사는 부가 기능이라 실패해도 메인 파이프라인을 막으면 안 됨)."""
+    try:
+        os.makedirs(AV_MUSIC_DIR, exist_ok=True)
+        shutil.copy2(bgm_video_path, AV_MUSIC_DIR)
+        print(f"🎶 avMusic 폴더로 복사 완료: {os.path.join(AV_MUSIC_DIR, os.path.basename(bgm_video_path))}")
+    except OSError as e:
+        print(f"⚠️  avMusic 폴더 복사 실패(무시하고 계속): {e}")
 
 # ── 고음 판정 기준 (2026-07-24, 실전 비교 후 확정) ──────────────────
 DEFAULT_TOP_PERCENT = 35.0
@@ -809,6 +823,7 @@ def process_video(video_path, args):
         )
     if cached_bgm:
         print(f"♻️  같은 BGM 설정의 완성 영상 재사용: {cached_bgm}")
+        copy_to_av_music(cached_bgm)
         return
 
     print(f"🎵 배경음 입히는 중 (볼륨 {args.bgm_volume:.0%})...")
@@ -828,6 +843,7 @@ def process_video(video_path, args):
         history["bgm_settings"] = current_bgm_settings
         history["bgm"] = {"file": os.path.basename(bgm_out)}
         save_extraction_history(history_path, history)
+        copy_to_av_music(bgm_out)
     else:
         print("❌ 배경음 입히기 실패")
 
