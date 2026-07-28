@@ -6,7 +6,7 @@ from pathlib import Path
 import geopandas as gpd
 import matplotlib.pyplot as plt
 from matplotlib import font_manager
-from matplotlib.patches import FancyArrowPatch, Polygon as MplPolygon
+from matplotlib.patches import Ellipse, FancyArrowPatch, Patch, Polygon as MplPolygon
 from PIL import Image, ImageDraw, ImageFont
 
 
@@ -199,6 +199,78 @@ def plot_country(
     plt.close(fig)
 
 
+def plot_sun_ce_warlord_map():
+    """195년 무렵 후한 말의 군웅 근거지를 개략 세력권으로 보여준다."""
+    world = gpd.read_file(NE)
+    china = world[world["iso_a3"] == "CHN"]
+    fig, ax = plt.subplots(figsize=(14, 10), dpi=220)
+    fig.patch.set_facecolor("#efe7d2")
+    ax.set_facecolor("#dce7e2")
+    china.plot(ax=ax, color="#e3dcc8", edgecolor="#7c725f", linewidth=1.0, alpha=.58)
+
+    # 정확한 행정 경계가 아니라 195년 전후 주요 군벌의 근거지·활동권을 겹쳐 그린 개략도다.
+    powers = [
+        ("원소(袁紹)\n기주·하북", 115.3, 38.1, 7.4, 4.5, "#d7a642"),
+        ("공손찬(公孫瓚)\n유주", 118.0, 40.5, 5.0, 3.2, "#a7c96a"),
+        ("조조(曹操)\n연주·예주", 114.6, 34.8, 5.4, 3.8, "#5a91c8"),
+        ("여포(呂布)\n서주 일대", 118.1, 34.1, 3.2, 2.8, "#9c75b7"),
+        ("원술(袁術)\n회남·수춘", 116.4, 32.0, 4.9, 3.0, "#cf675c"),
+        ("유표(劉表)\n형주", 111.8, 30.8, 6.0, 5.1, "#70a66f"),
+        ("유장(劉璋)\n익주", 104.5, 30.3, 7.4, 6.5, "#b08a62"),
+        ("이각·곽사\n관중", 108.8, 34.5, 5.0, 3.0, "#9a9a72"),
+        ("마등·한수\n양주", 103.0, 36.4, 6.4, 4.5, "#c28caa"),
+        ("유요(劉繇)\n곡아", 119.4, 31.6, 3.4, 2.5, "#6d9e99"),
+        ("왕랑(王朗)\n회계", 120.3, 29.3, 2.6, 2.4, "#8597bd"),
+    ]
+    for name, x, y, w, h, color in powers:
+        ax.add_patch(Ellipse((x, y), w, h, facecolor=color, edgecolor="#4a4032", alpha=.68, linewidth=1.5, zorder=2))
+        ax.text(x, y, name, ha="center", va="center", fontsize=10.5, weight="bold", color="#211d17", zorder=3)
+
+    # 손책의 출발과 강동 진출은 별도의 화살표로 표시한다.
+    route = [(116.9, 31.7), (118.35, 31.72), (118.49, 31.58), (119.58, 32.0), (120.58, 30.0)]
+    ax.add_patch(
+        FancyArrowPatch(
+            route[0], route[-1], arrowstyle="-|>", mutation_scale=25, linewidth=4.0,
+            color="#b3261e", connectionstyle="arc3,rad=.12", zorder=5,
+        )
+    )
+    ax.scatter([p[0] for p in route[1:]], [p[1] for p in route[1:]], s=55, color="#b3261e",
+               edgecolor="white", linewidth=1.3, zorder=6)
+    ax.annotate(
+        "손책(孫策)\n역양 → 우저 → 곡아 → 회계",
+        xy=route[-1], xytext=(116.5, 26.2), fontsize=12.5, weight="bold",
+        color="#8d1d18", ha="center", zorder=7,
+        bbox=dict(boxstyle="round,pad=.4", facecolor="#fff0dc", edgecolor="#b3261e"),
+        arrowprops=dict(arrowstyle="-", color="#b3261e", linewidth=1.8),
+    )
+
+    ax.set_xlim(96, 124.5)
+    ax.set_ylim(20, 43.5)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    ax.set_title("손책의 강동 평정 — 195년 무렵 후한 말 군웅 세력도", fontsize=24, weight="bold", color="#262117", pad=22)
+    ax.text(
+        .5, 1.01,
+        "원술 휘하에서 출발한 손책이 유요·왕랑의 강동으로 진출하던 당시의 정치적 배경",
+        transform=ax.transAxes, ha="center", va="bottom", fontsize=13, color="#574c38",
+    )
+    ax.legend(
+        handles=[
+            Patch(facecolor="#e3dcc8", edgecolor="#7c725f", label="현대 중국 외곽선(위치 참조용)"),
+            Patch(facecolor="#b3261e", edgecolor="#b3261e", label="손책의 강동 진출 방향"),
+        ],
+        loc="upper left", frameon=True, facecolor="#fff7e6", edgecolor="#8e8068", fontsize=10,
+    )
+    ax.text(
+        .5, .012,
+        "색 영역은 195년 무렵의 정확한 국경이 아니라 각 군벌의 근거지·주요 활동권을 단순화한 개략도입니다.",
+        transform=ax.transAxes, ha="center", va="bottom", fontsize=11, color="#6b342b",
+        bbox=dict(boxstyle="round,pad=.45", facecolor="#fff4df", edgecolor="#b48961"),
+    )
+    fig.savefig(ROOT / "sun_ce_jiangdong_country_map.png", bbox_inches="tight", facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+
 def country_maps():
     plot_country(
         "USA",
@@ -209,18 +281,7 @@ def country_maps():
         "sherman_march_country_map.png",
         region_poly=[(-85.6, 35.0), (-80.8, 35.0), (-80.8, 30.4), (-82.1, 30.4), (-85.6, 31.0)],
     )
-    plot_country(
-        "CHN",
-        "손책의 강동 평정 — 중국 내 위치",
-        "장강 하류를 건너 오늘날 장쑤·안후이·저장 일대로 세력을 넓힌 전역",
-        [("역양", 118.35, 31.72), ("우저", 118.49, 31.58), ("말릉", 118.80, 32.06), ("곡아", 119.58, 32.00), ("회계", 120.58, 30.00)],
-        "#c53f35",
-        "sun_ce_jiangdong_country_map.png",
-        region_poly=[(117.5, 33.0), (121.8, 33.0), (122.0, 28.5), (118.0, 28.5)],
-        note="현대 중국 국경선은 전역의 현재 위치를 보여주기 위한 참조이며, 2세기 정치적 경계가 아닙니다.",
-        annotate_points=False,
-        region_label="장강 하류·강동 전역",
-    )
+    plot_sun_ce_warlord_map()
 
 
 def sequence_panel(draw, box, title):
