@@ -223,7 +223,15 @@ def plot_sun_ce_warlord_map():
         ("왕랑(王朗)\n회계", 120.3, 29.3, 2.6, 2.4, "#8597bd"),
     ]
     for name, x, y, w, h, color in powers:
-        ax.add_patch(Ellipse((x, y), w, h, facecolor=color, edgecolor="#4a4032", alpha=.68, linewidth=1.5, zorder=2))
+        # 군벌 세력은 행정 국경처럼 끊기지 않았으므로 중심에서 외곽으로
+        # 여러 겹이 흐려지게 하여 인접 영향권이 자연스럽게 겹치도록 한다.
+        for scale, alpha in ((1.55, .07), (1.35, .10), (1.18, .15), (1.0, .30)):
+            ax.add_patch(
+                Ellipse(
+                    (x, y), w * scale, h * scale,
+                    facecolor=color, edgecolor="none", alpha=alpha, zorder=2,
+                )
+            )
         ax.text(x, y, name, ha="center", va="center", fontsize=10.5, weight="bold", color="#211d17", zorder=3)
 
     # 손책의 출발과 강동 진출은 별도의 화살표로 표시한다.
@@ -263,7 +271,7 @@ def plot_sun_ce_warlord_map():
     )
     ax.text(
         .5, .012,
-        "색 영역은 195년 무렵의 정확한 국경이 아니라 각 군벌의 근거지·주요 활동권을 단순화한 개략도입니다.",
+        "색은 중심 근거지에서 바깥으로 흐려지는 영향권입니다. 겹치는 곳은 경합·중첩 지역이며 정확한 국경이 아닙니다.",
         transform=ax.transAxes, ha="center", va="bottom", fontsize=11, color="#6b342b",
         bbox=dict(boxstyle="round,pad=.45", facecolor="#fff4df", edgecolor="#b48961"),
     )
@@ -271,16 +279,84 @@ def plot_sun_ce_warlord_map():
     plt.close(fig)
 
 
-def country_maps():
-    plot_country(
-        "USA",
-        "셔먼의 바다로의 진군 — 미국 내 위치",
-        "조지아주 애틀랜타에서 대서양 연안 사바나까지, 약 460km의 전역",
-        [("애틀랜타", -84.3880, 33.7490), ("사바나", -81.0998, 32.0809)],
-        "#c53f35",
-        "sherman_march_country_map.png",
-        region_poly=[(-85.6, 35.0), (-80.8, 35.0), (-80.8, 30.4), (-82.1, 30.4), (-85.6, 31.0)],
+def plot_sherman_civil_war_map():
+    """1864년 남북전쟁의 진영과 셔먼·후드의 반대 방향 기동을 함께 보여준다."""
+    from bokeh.sampledata.us_states import data as state_data
+
+    confederacy = {"SC", "MS", "FL", "AL", "GA", "LA", "TX", "VA", "AR", "TN", "NC"}
+    border_union = {"DE", "MD", "KY", "MO", "WV"}
+    union = {
+        "ME", "NH", "VT", "MA", "RI", "CT", "NY", "NJ", "PA", "OH", "IN", "IL",
+        "IA", "WI", "MI", "MN", "KS", "CA", "OR", "NV",
+    }
+    colors = {"union": "#7aa8d2", "border": "#9fc58c", "confederacy": "#d77b70", "other": "#d9d2bf"}
+
+    fig, ax = plt.subplots(figsize=(15, 9), dpi=220)
+    fig.patch.set_facecolor("#efe7d2")
+    ax.set_facecolor("#dce7e2")
+    for abbr, state in state_data.items():
+        if abbr in {"AK", "HI"}:
+            continue
+        category = "confederacy" if abbr in confederacy else "border" if abbr in border_union else "union" if abbr in union else "other"
+        lons, lats = state["lons"], state["lats"]
+        ax.fill(lons, lats, facecolor=colors[category], edgecolor="#554c3d", linewidth=.7, alpha=.88, zorder=1)
+        clean_lon = [v for v in lons if v == v]
+        clean_lat = [v for v in lats if v == v]
+        if clean_lon and clean_lat and abbr not in {"RI", "DE", "MD", "NJ", "MA", "CT"}:
+            ax.text(sum(clean_lon) / len(clean_lon), sum(clean_lat) / len(clean_lat), abbr,
+                    ha="center", va="center", fontsize=7.5, color="#30291f", weight="bold", zorder=2)
+
+    # 셔먼은 조지아를 동서로 횡단하고, 후드는 반대 방향인 테네시로 북상했다.
+    atlanta = (-84.3880, 33.7490)
+    savannah = (-81.0998, 32.0809)
+    nashville = (-86.7816, 36.1627)
+    ax.add_patch(FancyArrowPatch(atlanta, savannah, arrowstyle="-|>", mutation_scale=24, linewidth=4.3,
+                                 color="#145da0", connectionstyle="arc3,rad=.16", zorder=6))
+    ax.add_patch(FancyArrowPatch(atlanta, nashville, arrowstyle="-|>", mutation_scale=24, linewidth=4.0,
+                                 color="#b3261e", connectionstyle="arc3,rad=-.14", zorder=6))
+    ax.scatter(
+        [atlanta[0], savannah[0], nashville[0]], [atlanta[1], savannah[1], nashville[1]],
+        s=70, c=["#f5c04a", "#145da0", "#b3261e"], edgecolors="white", linewidths=1.5, zorder=7,
     )
+    ax.annotate("애틀랜타(Atlanta)\n셔먼 출발·후드 이탈", atlanta, xytext=(-35, -42), textcoords="offset points",
+                fontsize=10.5, weight="bold", ha="center", color="#32291f")
+    ax.annotate("사바나(Savannah)\n셔먼의 목표", savannah, xytext=(20, -30), textcoords="offset points",
+                fontsize=10.5, weight="bold", ha="center", color="#145da0")
+    ax.annotate("내슈빌(Nashville)\n후드의 북상 목표", nashville, xytext=(-5, 24), textcoords="offset points",
+                fontsize=10.5, weight="bold", ha="center", color="#9b1c17")
+
+    ax.set_xlim(-101, -66)
+    ax.set_ylim(24, 49.5)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    ax.set_title("셔먼의 바다로의 진군 — 1864년 미국 남북전쟁 세력도", fontsize=24, weight="bold", color="#262117", pad=24)
+    ax.text(
+        .5, 1.01,
+        "북부연방·남부연합·경계주와, 서로 반대 방향으로 움직인 셔먼·후드의 작전 선택",
+        transform=ax.transAxes, ha="center", va="bottom", fontsize=13, color="#574c38",
+    )
+    ax.legend(
+        handles=[
+            Patch(facecolor=colors["union"], edgecolor="#554c3d", label="북부연방(Union)"),
+            Patch(facecolor=colors["confederacy"], edgecolor="#554c3d", label="남부연합(Confederacy)"),
+            Patch(facecolor=colors["border"], edgecolor="#554c3d", label="경계주·연방 잔류(Border States)"),
+            Patch(facecolor="#145da0", edgecolor="#145da0", label="셔먼: 애틀랜타 → 사바나"),
+            Patch(facecolor="#b3261e", edgecolor="#b3261e", label="후드: 테네시 북상"),
+        ],
+        loc="upper left", frameon=True, facecolor="#fff7e6", edgecolor="#8e8068", fontsize=10,
+    )
+    ax.text(
+        .5, .012,
+        "색은 1861년의 주별 진영을 나타냅니다. 1864년 실제 군사 점령선은 주 경계와 달랐으며, 현재 주 경계선은 위치 참조용입니다.",
+        transform=ax.transAxes, ha="center", va="bottom", fontsize=10.5, color="#6b342b",
+        bbox=dict(boxstyle="round,pad=.45", facecolor="#fff4df", edgecolor="#b48961"),
+    )
+    fig.savefig(ROOT / "sherman_march_country_map.png", bbox_inches="tight", facecolor=fig.get_facecolor())
+    plt.close(fig)
+
+
+def country_maps():
+    plot_sherman_civil_war_map()
     plot_sun_ce_warlord_map()
 
 
