@@ -176,7 +176,7 @@
 
 	![음평 기습 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi10/yinping_commanders_gen.png)
 	![음평 기습 지휘 조직과 작전 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi10/yinping_command_structure_gen.png)
-	![263년 삼국 세력과 촉 정벌의 두 축](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi10/yinping_power_map_gen.png)
+	![263년 삼국 세력과 촉 정벌의 두 축](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi10/yinping_power_map_reading_gen.png)
 	![등애의 음평 기습 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi10/yinping_strategy_map_gen.png)
 	![음평 기습 전역의 흐름](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi10/yinping_sequence_gen.png)
 
