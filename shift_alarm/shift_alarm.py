@@ -878,18 +878,28 @@ def run_jp_workout_extraction_only(folder_path, target_minutes=None, highlight_p
 
 
 def get_trash_size_str():
-    """휴지통 현재 용량을 사람이 읽기 쉬운 문자열로 반환한다(du -sh 기준).
+    """휴지통 현재 용량을 사람이 읽기 쉬운 문자열로 반환한다.
+    ★ 2026-07-31: 처음엔 `du -sh`를 subprocess로 불렀는데, 터미널에서 직접
+    테스트하면 잘 되면서도 launchd가 띄운 실제 메뉴바 프로세스에서는 항상
+    빈 문자열이 나왔다 — launchd GUI 에이전트는 표준 입출력 파일 디스크립터가
+    없는 경우가 많아 capture_output=True가 조용히 실패하는 것으로 추정된다.
+    subprocess 자체를 없애고 순수 파이썬으로 폴더 크기를 합산하도록 바꿔서
+    이 환경 의존성을 없앤다.
     실패하거나 휴지통이 비어있으면 조용히 빈 문자열을 반환 — 메뉴 항목 라벨에
     괄호로 덧붙이는 용도라 실패해도 메뉴 자체는 정상 표시돼야 하기 때문."""
     trash_dir = os.path.expanduser("~/.Trash")
     try:
-        result = subprocess.run(
-            ["du", "-sh", trash_dir], capture_output=True, text=True, timeout=10
-        )
-        if result.returncode != 0:
-            return ""
-        size = result.stdout.split()[0].strip()
-        return size
+        total = 0
+        for root, _dirs, files in os.walk(trash_dir):
+            for name in files:
+                try:
+                    total += os.path.getsize(os.path.join(root, name))
+                except OSError:
+                    continue
+        for unit in ("B", "K", "M", "G", "T"):
+            if total < 1024 or unit == "T":
+                return f"{total:.0f}{unit}" if unit == "B" else f"{total:.1f}{unit}"
+            total /= 1024
     except Exception:
         return ""
 
