@@ -86,14 +86,14 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
     if "prod-files-secure" in text or "X-Amz-Expires" in text:
         errors.append("만료되는 임시 이미지 URL이 남아 있습니다")
 
-    generated_images = re.findall(
+    permanent_images = re.findall(
         r"!\[[^\]]*\]\(https://raw\.githubusercontent\.com/"
-        r"ForrestDPark/DailyHelloWorld/main/[^)]*/generated/[^)]+\)",
+        r"ForrestDPark/DailyHelloWorld/main/[^)]+\)",
         text,
     )
-    if len(generated_images) != 10:
+    if len(permanent_images) != 10:
         errors.append(
-            f"GitHub 영구 URL 생성형 이미지가 {len(generated_images)}개입니다"
+            f"GitHub 영구 URL 이미지가 {len(permanent_images)}개입니다"
             "(정상: 전투별 5종 × 2 = 10개)"
         )
 
@@ -151,7 +151,10 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
     # 이름과 지명은 고유명사 사전 없이는 완전 자동 판별할 수 없어 사람의 전수 확인을 남긴다.
     warnings.append("장수 이름 전수 진영색 검사는 인물 별칭 목록과 사람이 함께 확인해야 합니다")
     warnings.append("자연지형 전수 이모지·배경색 검사는 지명 목록과 사람이 함께 확인해야 합니다")
-    warnings.append("생성형 이미지의 내용·배치·가독성은 실제 이미지를 열어 확인해야 합니다")
+    warnings.append(
+        "이미지의 내용·배치·가독성과 셔먼·손책 기준본 대비 품질은 "
+        "실제 이미지를 나란히 열어 확인해야 합니다"
+    )
     return errors, warnings
 
 
