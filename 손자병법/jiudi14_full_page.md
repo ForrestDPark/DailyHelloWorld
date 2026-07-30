@@ -162,10 +162,10 @@
 
 	### 동양 — 비수대전(淝水之戰, 383)
 	![비수대전 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi14/feiriver_commanders.png)
-	![비수대전 장군 조직도와 작전 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi14/feiriver_command_structure.png)
-	![비수대전 당시 남북 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi14/feiriver_country_map.png)
-	![비수대전 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi14/feiriver_strategy_map.png)
-	![비수대전 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B2%95/generated/jiudi14/feiriver_sequence_map.png)
+	![비수대전 장군 조직도와 작전 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi14/feiriver_command_structure_v2.png)
+	![비수대전 당시 남북 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi14/feiriver_country_map_v2.png)
+	![비수대전 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi14/feiriver_strategy_map_v2.png)
+	![비수대전 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B2%95/generated/jiudi14/feiriver_sequence_map_v2.png)
 
 	#### 북방을 통일한 황제와 장강을 지키는 재상
 	383년 전진 황제 <span color="red">**부견(苻堅)**</span>은 북중국의 여러 정권을 복속한 뒤 동진까지 정복하려 했다. 신하 <span color="red">**왕맹(王猛)**</span>은 생전에 새로 얻은 선비·강족 세력이 완전히 결속되지 않았으니 남정을 서두르지 말라고 경계했지만 이미 세상을 떠난 뒤였다. <span color="red">**부견**</span>은 압도적인 인구와 병력을 믿고 여러 갈래 대군을 남하시켰다.
