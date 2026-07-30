@@ -102,6 +102,20 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
     if text.count("🏆 <span color=\"blue\">**승군 측 결과**</span>") != 2:
         errors.append("승군 측 결과 라벨이 정확히 2개가 아닙니다")
 
+    narrative_headings = re.findall(
+        r"^\s*#### (?:상세 전역 서사|전투의 서사) — (.+)$",
+        text,
+        re.MULTILINE,
+    )
+    if len(narrative_headings) != 2:
+        errors.append(
+            f"인과관계 중심 전투 서사 제목이 {len(narrative_headings)}개입니다"
+            "(정상: 서양 1개 + 동양 1개)"
+        )
+    for heading in narrative_headings:
+        if heading.strip() in {"전투의 흐름", "상세 전역 서사", "승리의 비결"}:
+            errors.append(f"전투 서사 제목이 구체적 분기점을 드러내지 않습니다: {heading}")
+
     # 이름과 지명은 고유명사 사전 없이는 완전 자동 판별할 수 없어 사람의 전수 확인을 남긴다.
     warnings.append("장수 이름 전수 진영색 검사는 인물 별칭 목록과 사람이 함께 확인해야 합니다")
     warnings.append("자연지형 전수 이모지·배경색 검사는 지명 목록과 사람이 함께 확인해야 합니다")
