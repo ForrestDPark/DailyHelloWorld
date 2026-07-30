@@ -17,8 +17,20 @@ ESCAPED_TAG_RE = re.compile(
     r"</?(?:table|tr|td|details|summary)\\>"
 )
 
+LATEST_FIVE_ROWS = (
+    '<td color="orange_bg">🤝 **道**</td>',
+    '<td color="blue_bg">🌤️ **天**</td>',
+    '<td color="green_bg">🧭 **地**</td>',
+    '<td color="purple_bg">🎖️ **將**</td>',
+    '<td color="yellow_bg">⚙️ **法**</td>',
+)
 
-def validate(text: str, require_five_sections: bool = False) -> list[str]:
+
+def validate(
+    text: str,
+    require_five_sections: bool = False,
+    require_latest_five_tables: bool = False,
+) -> list[str]:
     errors: list[str] = []
 
     for match in ESCAPED_TAG_RE.finditer(text):
@@ -78,6 +90,47 @@ def validate(text: str, require_five_sections: bool = False) -> list[str]:
             if count != 1:
                 errors.append(f"{number}번 섹션 헤더 개수가 {count}개입니다(정상: 1개)")
 
+    if require_latest_five_tables:
+        five_tables: list[tuple[int, str]] = []
+        for match in re.finditer(r"<table\b[^>]*>.*?</table>", text, re.DOTALL):
+            table = match.group(0)
+            if any(f"**{axis}**" in table for axis in "道天地將法"):
+                line = text.count("\n", 0, match.start()) + 1
+                five_tables.append((line, table))
+
+        if len(five_tables) != 4:
+            errors.append(
+                f"최신 五事 표가 {len(five_tables)}개입니다"
+                "(정상: 서양 패·승 + 동양 패·승 = 4개)"
+            )
+
+        for line, table in five_tables:
+            if "<td>요소</td>" not in table or "<td>판단</td>" not in table:
+                errors.append(f"{line}행 五事 표: 헤더가 '요소 | 판단'이 아닙니다")
+            positions = [table.find(row) for row in LATEST_FIVE_ROWS]
+            for row, position in zip(LATEST_FIVE_ROWS, positions):
+                if position < 0:
+                    errors.append(f"{line}행 五事 표: 최신 행 서식 누락: {row}")
+            if all(position >= 0 for position in positions) and positions != sorted(positions):
+                errors.append(f"{line}행 五事 표: 道→天→地→將→法 순서가 아닙니다")
+            if len(re.findall(r"<tr\b", table)) != 6:
+                errors.append(f"{line}행 五事 표: 헤더 포함 정확히 6행이어야 합니다")
+
+        legacy_patterns = (
+            r"<td>五事</td>",
+            r"<td>분석</td>",
+            r"<td>道\(",
+            r"<td>天\(",
+            r"<td>地\(",
+            r"<td>將\(",
+            r"<td>法\(",
+        )
+        for pattern in legacy_patterns:
+            match = re.search(pattern, text)
+            if match:
+                line = text.count("\n", 0, match.start()) + 1
+                errors.append(f"{line}행: 폐기된 구형 五事 표 서식이 남아 있습니다")
+
     return errors
 
 
@@ -85,6 +138,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("path", nargs="?", help="검증할 파일. 생략하면 표준입력 사용")
     parser.add_argument("--require-five-sections", action="store_true")
+    parser.add_argument("--require-latest-five-tables", action="store_true")
     args = parser.parse_args()
 
     if args.path:
@@ -92,7 +146,11 @@ def main() -> int:
     else:
         text = sys.stdin.read()
 
-    errors = validate(text, require_five_sections=args.require_five_sections)
+    errors = validate(
+        text,
+        require_five_sections=args.require_five_sections,
+        require_latest_five_tables=args.require_latest_five_tables,
+    )
     if errors:
         print("NOTION_MARKUP_INVALID")
         for error in errors:
