@@ -2,7 +2,7 @@
 <table_of_contents color="gray"/>
 ---
 ## 1. 원문 + 독음 + 직역 + 한자어 뜻풀이
-<details color="orange">
+<details color="orange_bg">
 <summary><span color="red">死</span>焉不得, 士人<span color="red">盡</span>力, 兵士甚<span color="red">陷</span>則不<span color="red">懼</span>, 無所往則<span color="red">固</span>, 深入則<span color="red">拘</span>, 不得已則<span color="red">鬪</span>.<br>사언부득, 사인진력, 병사심함즉불구, 무소왕즉고, 심입즉구, 부득이즉투.</summary>
 	**직역**
 	죽음을 벗어날 수 없는 자리에 이르면 병사는 남김없이 힘을 다한다. 병사는 깊이 위태로운 곳에 빠질수록 오히려 두려워하지 않고, 갈 곳이 없으면 단결이 굳어지며, 적지 깊숙이 들어가면 서로 얽매여 흩어지지 않고, 어쩔 수 없는 처지가 되면 목숨 걸고 싸운다.

@@ -7,8 +7,8 @@
 
 ## 1. 원문 + 독음 + 직역 + 한자어 뜻풀이
 
-<details>
-<summary><span color="orange">敢問, 敵衆整而將來, 待之若何? 曰, 先奪其所愛, 則聽矣.<br>감문, 적중정이장래, 대지약하? 왈, 선탈기소애, 즉청의.</span></summary>
+<details color="orange_bg">
+<summary>敢問, <span color="red">敵衆整</span>而將來, 待之若何? 曰, <span color="red">先奪</span>其<span color="red">所愛</span>, 則<span color="red">聽</span>矣.<br>감문, 적중정이장래, 대지약하? 왈, 선탈기소애, 즉청의.</summary>
 	**직역**
 
 	감히 묻건대, 적의 무리가 대오를 정연히 갖추고 장차 쳐들어오려 하면 어떻게 맞서야 합니까? 답하기를, 먼저 그들이 아끼는 바를 빼앗으면 곧 나의 뜻을 따르게 될 것이다.

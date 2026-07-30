@@ -7,8 +7,8 @@
 
 ## 1. 원문 + 독음 + 직역 + 한자어 뜻풀이
 
-<details>
-<summary><span color="orange">兵之情主速, 乘人之不及, 由不虞之道, 攻其所不戒也.<br>병지정주속, 승인지불급, 유불우지도, 공기소불계야.</span></summary>
+<details color="orange_bg">
+<summary>兵之情<span color="red">主速</span>, <span color="red">乘</span>人之<span color="red">不及</span>, 由<span color="red">不虞</span>之道, 攻其所<span color="red">不戒</span>也.<br>병지정주속, 승인지불급, 유불우지도, 공기소불계야.</summary>
 	**직역**
 
 	용병의 실정은 신속함을 으뜸으로 삼는다. 적이 미처 대응하지 못한 때를 타고, 적이 예상하지 못한 길을 거쳐, 적이 경계하지 않는 곳을 공격한다.
