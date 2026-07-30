@@ -114,12 +114,42 @@ def sequence(slug, title, steps):
     bg.convert("RGB").save(ROOT / f"{slug}_codex_sequence_map.png", quality=95)
 
 
+def country_map(slug, title, regions, sites):
+    out = Image.new("RGB", (1600, 900), "#e9dfc7")
+    d = ImageDraw.Draw(out)
+    d.text((800, 55), title, font=fit(d, title, 1450, 48), fill="#252018", anchor="mm")
+    palette = ["#b94a48", "#4d78ad", "#be8c3c", "#718c52", "#8667a1"]
+    boxes = [(70, 170, 570, 750), (1030, 170, 1530, 750), (590, 170, 1010, 430),
+             (590, 450, 800, 750), (820, 450, 1010, 750)]
+    for i, name in enumerate(regions):
+        box = boxes[i]
+        d.rounded_rectangle(box, 65, fill=palette[i], outline="#f7edd7", width=7)
+        d.text(((box[0] + box[2]) // 2, (box[1] + box[3]) // 2), name,
+               font=fit(d, name, box[2] - box[0] - 40, 38), fill="white", anchor="mm")
+    for name, xy in sites:
+        d.ellipse((xy[0] - 12, xy[1] - 12, xy[0] + 12, xy[1] + 12), fill="#1d1b18")
+        d.text((xy[0] + 18, xy[1] - 4), name, font=font(23, True), fill="#1d1b18")
+    d.text((800, 842), "시대 세력권과 전역의 상대 위치를 한눈에 보기 위한 개략도",
+           font=font(23), fill="#544c40", anchor="mm")
+    out.save(ROOT / f"{slug}_country_map.png", quality=95)
+
+
 def main():
     sheet = Image.open(SOURCE).convert("RGB")
     for i, (slug, title, loser, winner, steps) in enumerate(CASES):
         portrait_board(sheet, i // 2, i % 2, slug, title, loser, winner)
         org_chart(slug, title, loser, winner)
         sequence(slug, title, steps)
+    country_map(
+        "tannenberg", "1914년 동프로이센 전역 세력도",
+        ["독일 제국", "러시아 제국", "동프로이센"],
+        [("쾨니히스베르크", (830, 260)), ("타넨베르크", (780, 540)), ("마주리 호수", (880, 640))],
+    )
+    country_map(
+        "maling", "기원전 341년 전국시대 주요 세력도",
+        ["위(魏)", "제(齊)", "한(韓)", "조(趙)", "초(楚)"],
+        [("대량", (680, 320)), ("임치", (1220, 350)), ("마릉", (900, 540)), ("한단", (720, 570))],
+    )
     print(f"완료: {len(CASES) * 3}개 시각 자료")
 
 
