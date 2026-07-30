@@ -17,6 +17,14 @@ LAW_SECTIONS = (
     ("관도", "누가 명령하고 어떻게 전달했는가"),
     ("주용", "군량·장비·전투 지속 능력을 어떻게 썼는가"),
 )
+COMMENTATORS = (
+    "조조(曹操)", "이전(李筌)", "두목(杜牧)", "매요신(梅堯臣)",
+    "장예(張預)", "왕석(王晳)", "가림(賈林)", "두우(杜佑)", "진호(陳皞)",
+)
+FORBIDDEN_COMMENTARY_PHRASES = (
+    "라고 풀이한다", "라고 본다", "라고 설명한다", "라고 강조한다",
+    "로 풀이한다", "로 읽는다", "을 강조한다", "을 설명한다",
+)
 
 
 def tables(text: str) -> list[str]:
@@ -133,6 +141,60 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         errors.append(
             f"1번 섹션의 핵심 한자 서사 풀이가 {len(key_headings)}개입니다(최소 3개)"
         )
+
+    section_three_start = text.find("## 3.", section_two_start + 1)
+    section_two = (
+        text[section_two_start:section_three_start]
+        if section_two_start >= 0 and section_three_start > section_two_start
+        else ""
+    )
+    for commentator in COMMENTATORS:
+        if f"**{commentator}**" not in section_two:
+            errors.append(f"2번 전통 주석에 {commentator}가 없습니다")
+    commentary_rows = re.findall(
+        r'^\s*-\s+<span color="blue">\*\*[^*]+\*\*</span>\s+—\s+"[^"]+"',
+        section_two,
+        re.MULTILINE,
+    )
+    if len(commentary_rows) != len(COMMENTATORS):
+        errors.append(
+            f"직접화법 큰따옴표 전통 주석이 {len(commentary_rows)}개입니다"
+            f"(정상: {len(COMMENTATORS)}개)"
+        )
+    for phrase in FORBIDDEN_COMMENTARY_PHRASES:
+        if phrase in section_two:
+            errors.append(f"2번 전통 주석에 금지된 3인칭 간접화법이 있습니다: {phrase}")
+
+    section_four_for_cross = text.find("## 4.", section_three_start + 1)
+    section_three = (
+        text[section_three_start:section_four_for_cross]
+        if section_three_start >= 0 and section_four_for_cross > section_three_start
+        else ""
+    )
+    cross_axes = (
+        "① 손자병법", "② 클라우제비츠", "③ 미야모토 무사시",
+        "④ 오자병법", "⑤ 현대",
+    )
+    axis_positions: list[int] = []
+    for axis in cross_axes:
+        position = section_three.find(axis)
+        axis_positions.append(position)
+        if position < 0:
+            errors.append(f"3번 교차 설명에 {axis} 축이 없습니다")
+    if all(position >= 0 for position in axis_positions):
+        for index, start in enumerate(axis_positions):
+            end = axis_positions[index + 1] if index + 1 < len(axis_positions) else len(section_three)
+            axis_block = section_three[start:end]
+            paragraphs = [
+                part.strip()
+                for part in re.split(r"\n\s*\n", axis_block)
+                if part.strip() and not part.lstrip().startswith("- **")
+            ]
+            if len(paragraphs) < 2:
+                errors.append(
+                    f"3번 교차 설명 {cross_axes[index]} 축이 {len(paragraphs)}문단입니다"
+                    "(최소 2문단)"
+                )
 
     section_four_start = text.find("## 4.")
     section_five_start = text.find("## 5.", section_four_start + 1)
