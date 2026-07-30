@@ -441,8 +441,6 @@ def bgm_settings(args):
             continue
     return {
         "volume": args.bgm_volume,
-        "title_enabled": not args.no_bgm_title,
-        "title_seconds": args.bgm_title_seconds,
         "files": files,
     }
 
@@ -521,38 +519,25 @@ def build_bgm_track(bgm_dir, target_duration, tmp_dir):
     이상 되는 오디오 트랙 하나를 만들어 경로를 반환. 파일들을 다 이어붙여도 모자라면
     다시 셔플해서 이어붙이는 걸 반복(재생목록을 반복 순환하는 것과 같은 효과 —
     다만 한 파일을 그대로 반복 재생하는 게 아니라 매번 순서를 바꿔 이어붙임).
-    폴더가 없거나 mp3가 하나도 없으면 (None, []).
-    반환하는 두 번째 값은 영상에 곡 제목을 표시하기 위한 시작 시각 목록."""
+    폴더가 없거나 mp3가 하나도 없으면 None."""
     if not bgm_dir or not os.path.isdir(bgm_dir):
-        return None, []
+        return None
     mp3s = glob.glob(os.path.join(bgm_dir, "*.mp3"))
     if not mp3s:
-        return None, []
+        return None
 
     durations = {p: (get_media_duration(p) or 3.0) for p in mp3s}
 
     pool = list(mp3s)
     random.shuffle(pool)
-    playlist, title_cues, total, idx = [], [], 0.0, 0
+    playlist, total, idx = [], 0.0, 0
     while total < target_duration:
         if idx >= len(pool):
             random.shuffle(pool)
             idx = 0
         p = pool[idx]
         playlist.append(p)
-        clip_duration = durations[p]
-        title = os.path.splitext(os.path.basename(p))[0]
-        # 자동 분할 파일의 "01 - "과 " - A1B2C3" 고유 ID는 화면에서 숨긴다.
-        title = re.sub(r"^\d{2}\s*-\s*", "", title)
-        title = re.sub(r"\s*-\s*[A-Fa-f0-9]{6}$", "", title)
-        if len(title) > 70:
-            title = title[:67].rstrip() + "…"
-        title_cues.append({
-            "start": total,
-            "duration": clip_duration,
-            "title": title,
-        })
-        total += clip_duration
+        total += durations[p]
         idx += 1
 
     inputs = []
@@ -572,102 +557,31 @@ def build_bgm_track(bgm_dir, target_duration, tmp_dir):
         print(f"  🔗 배경음 {len(playlist)}개 클립 이어붙임 (합계 {total:.1f}초): "
               + ", ".join(os.path.basename(p) for p in playlist))
     if not os.path.exists(bgm_track):
-        return None, []
-    return bgm_track, title_cues
+        return None
+    return bgm_track
 
 
-def ass_time(seconds):
-    """ASS 자막 시각 형식 H:MM:SS.cc."""
-    centiseconds = max(0, int(round(seconds * 100)))
-    hours, remainder = divmod(centiseconds, 360000)
-    minutes, remainder = divmod(remainder, 6000)
-    secs, cents = divmod(remainder, 100)
-    return f"{hours}:{minutes:02d}:{secs:02d}.{cents:02d}"
-
-
-def write_bgm_title_ass(title_cues, path, display_seconds=4.0):
-    """BGM이 바뀔 때 잠깐 표시할 제목 ASS 자막을 만든다."""
-    header = """[Script Info]
-ScriptType: v4.00+
-PlayResX: 1920
-PlayResY: 1080
-WrapStyle: 2
-
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: BGM,Apple SD Gothic Neo,52,&H00FFFFFF,&H00FFFFFF,&H00000000,&H90000000,0,0,0,0,100,100,0,0,3,1,0,2,80,80,65,1
-
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-"""
-    lines = [header]
-    for cue in title_cues:
-        start = cue["start"]
-        end = start + min(display_seconds, cue["duration"])
-        title = cue["title"].replace("\\", r"\\")
-        title = title.replace("{", r"\{").replace("}", r"\}")
-        title = title.replace("\n", r"\N")
-        # ★ 2026-07-31: 이모지(🎵 등, U+10000 이상 유니코드) 대부분은 "Apple SD
-        # Gothic Neo" 폰트에 글리프가 없다. libass의 CoreText 폰트 매칭이 이걸
-        # 제대로 이모지 폰트로 폴백 못 하고 내부 예약 폰트 ".LastResort"를 이름으로
-        # 직접 요청해버려서, 프레임마다 "CoreText note: ... .LastResort ..."
-        # 경고가 반복 출력된다(격리 테스트로 확인 — 이모지 있을 때만 재현). 실제
-        # mp3 파일명에 이모지가 섞여 들어오는 경우가 있어 미리 걸러낸다.
-        title = "".join(c for c in title if ord(c) <= 0xFFFF)
-        lines.append(
-            f"Dialogue: 0,{ass_time(start)},{ass_time(end)},"
-            f"BGM,,0,0,0,,♫ {title}\n"
-        )
-    with open(path, "w", encoding="utf-8") as file:
-        file.writelines(lines)
-
-
-def mix_background_audio(
-    video_path, bgm_track_path, out_path, bgm_volume=DEFAULT_BGM_VOLUME,
-    title_cues=None, title_seconds=4.0,
-):
+def mix_background_audio(video_path, bgm_track_path, out_path, bgm_volume=DEFAULT_BGM_VOLUME):
     """video_path의 기존 오디오는 100%로 두고 bgm_track_path를 얹어 out_path에 저장.
     amix의 duration=first로 영상 길이에 맞춰 잘림(bgm_track_path는 build_bgm_track에서
     이미 영상 길이 이상으로 만들어둔 상태). amix 자동 정규화는 원본 음성까지 낮추므로
-    끄고, 마지막에 limiter로 합산 피크의 클리핑만 방지한다."""
-    title_cues = title_cues or []
-    filter_parts = []
-    video_map = "0:v"
-    video_codec = ["-c:v", "copy"]
-    ffmpeg_exe = "ffmpeg"
-    if title_cues and title_seconds > 0:
-        ass_path = os.path.join(
-            os.path.dirname(os.path.abspath(bgm_track_path)),
-            "bgm_titles.ass",
-        )
-        write_bgm_title_ass(title_cues, ass_path, title_seconds)
-        escaped_ass = ass_path.replace("\\", r"\\").replace(":", r"\:")
-        escaped_ass = escaped_ass.replace("'", r"\'")
-        filter_parts.append(f"[0:v]ass=filename='{escaped_ass}'[vout]")
-        video_map = "[vout]"
-        # ★ 2026-07-31: 원래 libx264(-preset medium -crf 18) 소프트웨어 인코딩을
-        # 썼는데, 자막을 태우려면 영상 전체를 다시 인코딩해야 해서 30~40분짜리
-        # 영상 기준 CPU를 크게 잡아먹고 오래 걸렸다(사용자 지적). Apple Silicon
-        # 하드웨어 인코더 h264_videotoolbox로 바꾸니 같은 조건 실측(10초 테스트
-        # 클립)에서 CPU 시간 약 5배 감소(5.22s→0.98s user), 실행 시간도 2.4배
-        # 단축(2.73s→1.12s wall) 확인함.
-        video_codec = ["-c:v", "h264_videotoolbox", "-q:v", "65"]
-        # Homebrew 기본 빌드에는 libass/drawtext가 빠져 있다. Anaconda판은
-        # libass가 포함되어 있으므로 제목 합성 단계에서만 이 실행 파일을 쓴다.
-        ffmpeg_exe = "/opt/anaconda3/bin/ffmpeg"
-    filter_parts.append(
+    끄고, 마지막에 limiter로 합산 피크의 클리핑만 방지한다.
+    ★ 2026-07-31: BGM이 바뀔 때 곡 제목을 영상에 자막으로 태우던 기능은 제거했다
+    (사용자가 안 쓴다고 확인). 그 기능은 libass로 영상 전체를 재인코딩해야 해서
+    -c:v copy(스트림 복사, 재인코딩 없음)만 쓰는 지금보다 훨씬 느리고 CPU도
+    많이 먹었다 — 제목 없이 오디오만 합치면 되므로 video는 항상 그냥 복사한다."""
+    filter_complex = (
         f"[1:a]volume={bgm_volume}[bgm];"
         f"[0:a][bgm]amix=inputs=2:duration=first:dropout_transition=0:"
         f"normalize=0,alimiter=limit=0.95[aout]"
     )
     subprocess.run(
-        [ffmpeg_exe, "-y",
+        ["ffmpeg", "-y",
          "-i", video_path,
          "-i", bgm_track_path,
-         "-filter_complex",
-         ";".join(filter_parts),
-         "-map", video_map, "-map", "[aout]",
-         *video_codec, "-c:a", "aac",
+         "-filter_complex", filter_complex,
+         "-map", "0:v", "-map", "[aout]",
+         "-c:v", "copy", "-c:a", "aac",
          out_path, "-loglevel", "error"],
         check=True,
     )
@@ -841,14 +755,9 @@ def process_video(video_path, args):
 
     print(f"🎵 배경음 입히는 중 (볼륨 {args.bgm_volume:.0%})...")
     with tempfile.TemporaryDirectory() as tmp_dir:
-        bgm_track, title_cues = build_bgm_track(
-            args.bgm_dir, video_duration, tmp_dir
-        )
+        bgm_track = build_bgm_track(args.bgm_dir, video_duration, tmp_dir)
         bgm_ok = bool(bgm_track) and mix_background_audio(
-            out_path, bgm_track, bgm_out,
-            bgm_volume=args.bgm_volume,
-            title_cues=[] if args.no_bgm_title else title_cues,
-            title_seconds=args.bgm_title_seconds,
+            out_path, bgm_track, bgm_out, bgm_volume=args.bgm_volume,
         )
     if bgm_ok:
         size_mb2 = os.path.getsize(bgm_out) / (1024 * 1024)
@@ -890,10 +799,6 @@ def main():
                      help="배경음 볼륨 배율, 0~1 (기본 0.28 — 원본 대사 오디오는 100% 유지)")
     ap.add_argument("--no-bgm", action="store_true",
                      help="배경음 입히기 건너뛰고 운동용 영상만 생성")
-    ap.add_argument("--bgm-title-seconds", type=float, default=4.0,
-                    help="새 BGM 제목을 영상 하단에 표시할 시간(초, 기본 4)")
-    ap.add_argument("--no-bgm-title", action="store_true",
-                    help="BGM 제목 화면 표시를 끔")
     args = ap.parse_args()
 
     videos = collect_videos(args.path)
