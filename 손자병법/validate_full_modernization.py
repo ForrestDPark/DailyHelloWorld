@@ -102,6 +102,38 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
     if text.count("🏆 <span color=\"blue\">**승군 측 결과**</span>") != 2:
         errors.append("승군 측 결과 라벨이 정확히 2개가 아닙니다")
 
+    section_one_start = text.find("## 1.")
+    section_two_start = text.find("## 2.", section_one_start + 1)
+    section_one = (
+        text[section_one_start:section_two_start]
+        if section_one_start >= 0 and section_two_start > section_one_start
+        else ""
+    )
+    if '<details color="orange_bg">' not in section_one:
+        errors.append("1번 섹션 원문·독음 토글의 주황 배경이 없습니다")
+    summary_match = re.search(
+        r"<summary>(.*?)<br>(.*?)</summary>",
+        section_one,
+        re.DOTALL,
+    )
+    if not summary_match:
+        errors.append("1번 섹션 토글 제목에 원문과 독음이 <br>로 결합돼 있지 않습니다")
+    elif '<span color="red">' not in summary_match.group(1):
+        errors.append("1번 섹션 원문의 핵심 한자가 붉은색으로 표시돼 있지 않습니다")
+    if "**직역**" not in section_one:
+        errors.append("1번 섹션에 직역이 없습니다")
+    if "#### 글자들이 완성하는 한 장면" not in section_one:
+        errors.append("1번 섹션 끝에 '글자들이 완성하는 한 장면'이 없습니다")
+    key_headings = re.findall(
+        r"^\s*#### (?!글자들이 완성하는 한 장면)(.+)$",
+        section_one,
+        re.MULTILINE,
+    )
+    if len(key_headings) < 3:
+        errors.append(
+            f"1번 섹션의 핵심 한자 서사 풀이가 {len(key_headings)}개입니다(최소 3개)"
+        )
+
     narrative_headings = re.findall(
         r"^\s*#### (?:상세 전역 서사|전투의 서사) — (.+)$",
         text,
