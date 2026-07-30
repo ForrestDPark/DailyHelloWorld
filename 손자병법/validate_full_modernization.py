@@ -11,7 +11,7 @@ from pathlib import Path
 from validate_notion_markup import validate as validate_markup
 
 
-LAW_TITLE = "##### 法을 압축하지 않고 보기 — 곡제·관도·주용"
+LAW_TITLE_TEXT = "法을 압축하지 않고 보기 — 곡제·관도·주용"
 LAW_SECTIONS = (
     ("곡제", "부대를 어떻게 나누고 결합했는가"),
     ("관도", "누가 명령하고 어떻게 전달했는가"),
@@ -33,7 +33,14 @@ def tables(text: str) -> list[str]:
 
 def validate_law_comparisons(text: str) -> list[str]:
     errors: list[str] = []
-    title_positions = [m.start() for m in re.finditer(re.escape(LAW_TITLE), text)]
+    title_positions = [
+        m.start()
+        for m in re.finditer(
+            rf"^\s*#{{4,5}}\s+{re.escape(LAW_TITLE_TEXT)}\s*$",
+            text,
+            re.MULTILINE,
+        )
+    ]
     if len(title_positions) != 2:
         errors.append(
             f"法 상세 비교 묶음이 {len(title_positions)}개입니다"
@@ -185,10 +192,14 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         for index, start in enumerate(axis_positions):
             end = axis_positions[index + 1] if index + 1 < len(axis_positions) else len(section_three)
             axis_block = section_three[start:end]
+            # Notion은 저장 과정에서 빈 줄을 제거하지만 서로 다른 문단은
+            # 별도 블록/줄로 유지한다. 로컬 초안의 빈 줄과 저장 후 본문을
+            # 같은 기준으로 검사하기 위해 비어 있지 않은 본문 줄을 센다.
             paragraphs = [
-                part.strip()
-                for part in re.split(r"\n\s*\n", axis_block)
-                if part.strip() and not part.lstrip().startswith("- **")
+                line.strip()
+                for line in axis_block.splitlines()[1:]
+                if line.strip()
+                and not re.match(r"^\s*(?:#{1,4}\s+|-\s+\*\*)", line)
             ]
             if len(paragraphs) < 2:
                 errors.append(
