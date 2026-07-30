@@ -877,6 +877,23 @@ def run_jp_workout_extraction_only(folder_path, target_minutes=None, highlight_p
     return True
 
 
+def get_trash_size_str():
+    """휴지통 현재 용량을 사람이 읽기 쉬운 문자열로 반환한다(du -sh 기준).
+    실패하거나 휴지통이 비어있으면 조용히 빈 문자열을 반환 — 메뉴 항목 라벨에
+    괄호로 덧붙이는 용도라 실패해도 메뉴 자체는 정상 표시돼야 하기 때문."""
+    trash_dir = os.path.expanduser("~/.Trash")
+    try:
+        result = subprocess.run(
+            ["du", "-sh", trash_dir], capture_output=True, text=True, timeout=10
+        )
+        if result.returncode != 0:
+            return ""
+        size = result.stdout.split()[0].strip()
+        return size
+    except Exception:
+        return ""
+
+
 def empty_trash_forcefully():
     """휴지통을 비우기 전에, 휴지통 디렉토리를 물고 있는 프로세스(Finder 자신은 제외)가
     있으면 강제 종료한 뒤 Finder로 휴지통을 비운다.
@@ -1733,7 +1750,9 @@ class ShiftAlarmApp(rumps.App):
             short_title = truncate_title(sunzi_entry["title"])
             self.menu.add(rumps.MenuItem(f"⚔️ 손자병법 최신: {short_title}", callback=self.open_latest_sunzi))
 
-        self.menu.add(rumps.MenuItem("🗑️ 휴지통 비우기 (막고 있는 프로세스도 정리)", callback=self.empty_trash_now))
+        trash_size = get_trash_size_str()
+        trash_label = f"🗑️ 휴지통 비우기 ({trash_size})" if trash_size else "🗑️ 휴지통 비우기"
+        self.menu.add(rumps.MenuItem(trash_label, callback=self.empty_trash_now))
         self.menu.add(rumps.MenuItem("현재 설정 확인", callback=self.show_status))
         self.menu.add(None)
         self.menu.add(rumps.MenuItem("종료", callback=self.quit_app))
@@ -2040,6 +2059,7 @@ class ShiftAlarmApp(rumps.App):
         if ok:
             note = f"{', '.join(killed)} 종료 후 비움" if killed else "비움"
             rumps.notification("휴지통 비우기", "완료", note)
+            self.build_menu()  # 메뉴 항목의 휴지통 용량 표시를 바로 최신화
         else:
             rumps.alert("오류", f"휴지통 비우기 실패:\n{err}")
 
