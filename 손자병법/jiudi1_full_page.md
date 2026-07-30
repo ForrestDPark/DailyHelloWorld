@@ -83,8 +83,6 @@
 	![아쟁쿠르 전투 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi1/agincourt_strategy_map_gen.png)
 	![아쟁쿠르 전투 단계별 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi1/agincourt_sequence_gen.png)
 	
-	> 주요 인물의 얼굴은 실제 초상을 복원한 것이 아니라 역할과 진영을 이해하기 위한 생성형 삽화다.
-	
 	#### 누가 어디서 무엇을 놓고 싸웠는가
 	
 	- <span color="blue">**헨리 5세(Henry V)**</span> — 잉글랜드 국왕이자 원정군의 단일 지휘관이다. 아르플뢰르(Harfleur)를 점령한 뒤 병력과 보급이 크게 줄어든 군대를 이끌고 칼레(Calais)로 이동했다.
@@ -163,8 +161,6 @@
 	![기원전 205년 초한쟁패 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi1/jingxing_power_map_gen.png)
 	![정형 전투 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi1/jingxing_strategy_map_gen.png)
 	![정형 전투 단계별 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi1/jingxing_sequence_gen.png)
-	
-	> 주요 인물의 얼굴은 실제 초상을 복원한 것이 아니라 역할과 진영을 이해하기 위한 생성형 삽화다.
 	
 	#### 누가 어디서 무엇을 놓고 싸웠는가
 	

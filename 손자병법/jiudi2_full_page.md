@@ -66,8 +66,6 @@
 	![게티즈버그 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi2/gettysburg_strategy_map_gen.png)
 	![게티즈버그 단계별 전쟁 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi2/gettysburg_sequence_gen.png)
 	
-	> 주요 인물의 얼굴은 실제 사진을 그대로 복원한 것이 아니라 역할과 진영을 빠르게 이해하기 위한 생성형 삽화다.
-	
 	#### 누가 어디서 무엇을 놓고 싸웠는가
 	
 	- <span color="blue">**조지 미드(George G. Meade)**</span> — 전투 직전 포토맥군 사령관이 됐다. 모든 장면을 직접 설계한 영웅이라기보다, 여러 군단이 우연히 맞닥뜨린 전투를 하나의 방어선과 지휘체계로 묶어 낸 총사령관이었다.
@@ -392,8 +390,6 @@
 	![기원전 260년 전국칠웅 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi2/changping_power_map_gen.png)
 	![장평대전 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi2/changping_strategy_map_gen.png)
 	![장평대전 단계별 전쟁 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi2/changping_sequence_gen.png)
-	
-	> 주요 인물의 얼굴은 실제 초상을 복원한 것이 아니라 역할과 진영을 이해하기 위한 생성형 삽화다.
 	
 	#### 누가 어디서 무엇을 놓고 싸웠는가
 	
