@@ -134,19 +134,37 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
             f"1번 섹션의 핵심 한자 서사 풀이가 {len(key_headings)}개입니다(최소 3개)"
         )
 
-    narrative_headings = re.findall(
-        r"^\s*#### (?:상세 전역 서사|전투의 서사) — (.+)$",
-        text,
-        re.MULTILINE,
+    section_four_start = text.find("## 4.")
+    section_five_start = text.find("## 5.", section_four_start + 1)
+    section_four = (
+        text[section_four_start:section_five_start]
+        if section_four_start >= 0 and section_five_start > section_four_start
+        else ""
     )
-    if len(narrative_headings) != 2:
-        errors.append(
-            f"인과관계 중심 전투 서사 제목이 {len(narrative_headings)}개입니다"
-            "(정상: 서양 1개 + 동양 1개)"
-        )
-    for heading in narrative_headings:
-        if heading.strip() in {"전투의 흐름", "상세 전역 서사", "승리의 비결"}:
-            errors.append(f"전투 서사 제목이 구체적 분기점을 드러내지 않습니다: {heading}")
+    case_starts = [m.start() for m in re.finditer(r"^\s*### (?:서양|동양) — ", section_four, re.MULTILINE)]
+    if len(case_starts) != 2:
+        errors.append(f"서양·동양 역사 사례가 {len(case_starts)}개입니다(정상: 2개)")
+    for index, start in enumerate(case_starts):
+        end = case_starts[index + 1] if index + 1 < len(case_starts) else len(section_four)
+        case = section_four[start:end]
+        scene_headings = re.findall(r"^\s*#### (.+)$", case, re.MULTILINE)
+        narrative_headings = [
+            heading for heading in scene_headings
+            if not heading.startswith(("法 한눈 비교", "참고자료"))
+        ]
+        if len(narrative_headings) < 3:
+            errors.append(
+                f"{index + 1}번째 역사 사례의 구체적 장면 소제목이 "
+                f"{len(narrative_headings)}개입니다(최소 3개)"
+            )
+        for heading in narrative_headings:
+            if heading.strip() in {
+                "전투의 흐름", "상세 전역 서사", "승리의 비결",
+                "하나의 장면", "전역의 뼈대",
+            }:
+                errors.append(
+                    f"전투 서사 제목이 구체적 분기점을 드러내지 않습니다: {heading}"
+                )
 
     if text.count("#### 法 한눈 비교 — 곡제·관도·주용") != 2:
         errors.append("전투별 法 한눈 비교표 제목이 정확히 2개가 아닙니다")
