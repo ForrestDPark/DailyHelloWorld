@@ -607,6 +607,13 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         title = cue["title"].replace("\\", r"\\")
         title = title.replace("{", r"\{").replace("}", r"\}")
         title = title.replace("\n", r"\N")
+        # ★ 2026-07-31: 이모지(🎵 등, U+10000 이상 유니코드) 대부분은 "Apple SD
+        # Gothic Neo" 폰트에 글리프가 없다. libass의 CoreText 폰트 매칭이 이걸
+        # 제대로 이모지 폰트로 폴백 못 하고 내부 예약 폰트 ".LastResort"를 이름으로
+        # 직접 요청해버려서, 프레임마다 "CoreText note: ... .LastResort ..."
+        # 경고가 반복 출력된다(격리 테스트로 확인 — 이모지 있을 때만 재현). 실제
+        # mp3 파일명에 이모지가 섞여 들어오는 경우가 있어 미리 걸러낸다.
+        title = "".join(c for c in title if ord(c) <= 0xFFFF)
         lines.append(
             f"Dialogue: 0,{ass_time(start)},{ass_time(end)},"
             f"BGM,,0,0,0,,♫ {title}\n"
@@ -638,7 +645,13 @@ def mix_background_audio(
         escaped_ass = escaped_ass.replace("'", r"\'")
         filter_parts.append(f"[0:v]ass=filename='{escaped_ass}'[vout]")
         video_map = "[vout]"
-        video_codec = ["-c:v", "libx264", "-preset", "medium", "-crf", "18"]
+        # ★ 2026-07-31: 원래 libx264(-preset medium -crf 18) 소프트웨어 인코딩을
+        # 썼는데, 자막을 태우려면 영상 전체를 다시 인코딩해야 해서 30~40분짜리
+        # 영상 기준 CPU를 크게 잡아먹고 오래 걸렸다(사용자 지적). Apple Silicon
+        # 하드웨어 인코더 h264_videotoolbox로 바꾸니 같은 조건 실측(10초 테스트
+        # 클립)에서 CPU 시간 약 5배 감소(5.22s→0.98s user), 실행 시간도 2.4배
+        # 단축(2.73s→1.12s wall) 확인함.
+        video_codec = ["-c:v", "h264_videotoolbox", "-q:v", "65"]
         # Homebrew 기본 빌드에는 libass/drawtext가 빠져 있다. Anaconda판은
         # libass가 포함되어 있으므로 제목 합성 단계에서만 이 실행 파일을 쓴다.
         ffmpeg_exe = "/opt/anaconda3/bin/ffmpeg"
