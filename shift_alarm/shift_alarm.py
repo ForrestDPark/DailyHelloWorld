@@ -877,6 +877,39 @@ def run_jp_workout_extraction_only(folder_path, target_minutes=None, highlight_p
     return True
 
 
+def empty_trash_forcefully():
+    """휴지통을 비우기 전에, 휴지통 디렉토리를 물고 있는 프로세스(Finder 자신은 제외)가
+    있으면 강제 종료한 뒤 Finder로 휴지통을 비운다.
+    ★ 2026-07-31: "Uninstaller sensei"(com.katrych.uninstaller-sensei-watcher) 같은
+    서드파티 백그라운드 감시 프로세스가 ~/.Trash 디렉토리를 계속 열어두고 있어서
+    휴지통 비우기 버튼을 눌러도 반응이 없던 것을 진단하며 추가한 기능 — 매번 수동으로
+    lsof/kill을 안 해도 되게 자동화함.
+    반환값: (성공 여부, 종료한 프로세스 이름 목록, 실패 시 에러 메시지)."""
+    trash_dir = os.path.expanduser("~/.Trash")
+    killed = []
+    try:
+        result = subprocess.run(
+            ["lsof", "+D", trash_dir], capture_output=True, text=True, timeout=15
+        )
+        for line in result.stdout.strip().splitlines()[1:]:  # 헤더 줄 제외
+            parts = line.split()
+            if len(parts) < 2:
+                continue
+            command, pid = parts[0], parts[1]
+            if command == "Finder" or not pid.isdigit() or int(pid) == os.getpid():
+                continue
+            subprocess.run(["kill", "-9", pid], check=False)
+            killed.append(f"{command}({pid})")
+    except Exception:
+        pass
+
+    result = subprocess.run(
+        ["osascript", "-e", 'tell application "Finder" to empty trash'],
+        capture_output=True, text=True, timeout=120,
+    )
+    return result.returncode == 0, killed, result.stderr.strip()
+
+
 def choose_bgm_playlist_folder():
     """곡별 MP3로 나눌 플레이리스트 MP4 폴더를 선택한다."""
     apple_script = (
@@ -1700,6 +1733,7 @@ class ShiftAlarmApp(rumps.App):
             short_title = truncate_title(sunzi_entry["title"])
             self.menu.add(rumps.MenuItem(f"⚔️ 손자병법 최신: {short_title}", callback=self.open_latest_sunzi))
 
+        self.menu.add(rumps.MenuItem("🗑️ 휴지통 비우기 (막고 있는 프로세스도 정리)", callback=self.empty_trash_now))
         self.menu.add(rumps.MenuItem("현재 설정 확인", callback=self.show_status))
         self.menu.add(None)
         self.menu.add(rumps.MenuItem("종료", callback=self.quit_app))
@@ -1995,6 +2029,19 @@ class ShiftAlarmApp(rumps.App):
             rumps.alert("오류", "손자병법 완료 구절 정보를 찾을 수 없습니다.")
             return
         subprocess.Popen(["open", entry["url"]])
+
+    # ── 휴지통 비우기 ────────────────────────────────────────────
+
+    def empty_trash_now(self, _):
+        threading.Thread(target=self._empty_trash_thread, daemon=True).start()
+
+    def _empty_trash_thread(self):
+        ok, killed, err = empty_trash_forcefully()
+        if ok:
+            note = f"{', '.join(killed)} 종료 후 비움" if killed else "비움"
+            rumps.notification("휴지통 비우기", "완료", note)
+        else:
+            rumps.alert("오류", f"휴지통 비우기 실패:\n{err}")
 
     # ── 상태 확인 ────────────────────────────────────────────
 
