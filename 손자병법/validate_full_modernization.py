@@ -110,13 +110,12 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         image for image in permanent_images
         if "/generated/jiudi" in image
     ]
-    has_soldier_life_guides = "_soldier_life_" in text
-    expected_generated_images = 12 if has_soldier_life_guides else 10
+    expected_generated_images = 12
     if len(generated_images) != expected_generated_images:
         errors.append(
             f"신규 핵심 이미지가 {len(generated_images)}개입니다"
-            f"(정상: 전투별 {'6종' if has_soldier_life_guides else '5종'} × 2 = "
-            f"{expected_generated_images}개; 보존 참고 이미지는 별도 허용)"
+            f"(정상: 전투별 6종 × 2 = {expected_generated_images}개; "
+            "보존 참고 이미지는 별도 허용)"
         )
 
     if text.count("🏳️ <span color=\"red\">**패군 측 결과**</span>") != 2:

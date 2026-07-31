@@ -83,6 +83,7 @@
 ## 4. 역사적 실증 사례 {toggle="true"}
 	### 서양 — 알레시아 공방전(Siege of Alesia, BCE 52)
 	![알레시아 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi14/alesia_commanders.png)
+	![알레시아 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi14/alesia_soldiers_weapons_life.png)
 	![알레시아 장군 조직도와 작전 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi14/alesia_command_structure_v2.png)
 	![알레시아 갈리아 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi14/alesia_country_map_v2.png)
 	![알레시아 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi14/alesia_strategy_map_v2.png)
@@ -162,6 +163,7 @@
 
 	### 동양 — 비수대전(淝水之戰, 383)
 	![비수대전 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi14/feiriver_commanders.png)
+	![비수대전 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi14/feiriver_soldiers_weapons_life.png)
 	![비수대전 장군 조직도와 작전 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi14/feiriver_command_structure_v2.png)
 	![비수대전 당시 남북 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi14/feiriver_country_map_v2.png)
 	![비수대전 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi14/feiriver_strategy_map_v2.png)
