@@ -131,6 +131,10 @@
 #### 패배를 피할 분기점
 바루스가 경고를 독립적으로 확인하고 우회로 진입 전에 수송대와 전투부대를 분리했더라면 결과는 달라질 수 있었습니다. 최소한 협로 밖에 예비대와 집결점을 남기고, 선두·후미의 연락이 끊기면 즉시 원래 길로 복귀한다는 기준이 필요했습니다.
 
+#### 참고자료
+![실제 역사지도 — 로마의 게르마니아 전역로](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/reference_maps/germania_9ce_roman_campaign_map.jpg)
+![로마 제국 군기(Vexillum)](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/reference_maps/roman_empire_vexillum_flag.jpg)
+
 ### 동양 — 부차·심하전투(1619, 사르후 전역)
 ![부차심하 주요 인물](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi4/fucha_commanders_v2.png)
 ![부차심하 지휘 구조](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi4/fucha_command_structure_v2.png)
@@ -198,6 +202,9 @@
 
 #### 패배를 피할 분기점
 네 방면군이 상호 지원 가능한 거리와 확인 시각을 기준으로 단계적으로 전진했어야 합니다. 연락 두절이나 어느 한 로군의 지연이 발생하면 나머지가 정지·집결하도록 했고, 동로군도 선봉과 조선군·보급대의 간격을 먼저 줄였어야 합니다.
+
+#### 참고자료
+![실제 역사지도 — 사르후 전투 1619년 명 4로군·후금군 진격로](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/reference_maps/sarhu_1619_battle_map.jpg)
 ---
 ## 5. 내 삶의 적용 — 깊이 들어가기 전에 출구를 만들기
 **사실**: 피로가 쌓인 교대 시점에 에러 대응과 역할 논쟁이 겹치면, 이미 여러 판단을 거친 뒤라 문제에서 빠져나오기가 어렵습니다.

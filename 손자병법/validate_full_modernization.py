@@ -106,10 +106,14 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         r"ForrestDPark/DailyHelloWorld/main/[^)]+\)",
         text,
     )
-    if len(permanent_images) != 10:
+    generated_images = [
+        image for image in permanent_images
+        if "/generated/jiudi" in image
+    ]
+    if len(generated_images) != 10:
         errors.append(
-            f"GitHub 영구 URL 이미지가 {len(permanent_images)}개입니다"
-            "(정상: 전투별 5종 × 2 = 10개)"
+            f"신규 핵심 이미지가 {len(generated_images)}개입니다"
+            "(정상: 전투별 5종 × 2 = 10개; 보존 참고 이미지는 별도 허용)"
         )
 
     if text.count("🏳️ <span color=\"red\">**패군 측 결과**</span>") != 2:
