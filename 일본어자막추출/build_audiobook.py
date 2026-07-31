@@ -74,7 +74,11 @@ def main():
 
     lines = load_lines(book_dir)
     if not lines:
-        sys.exit(f"❌ transcript_part*.jsonl이 없습니다: {book_dir}")
+        sys.exit(
+            f"❌ transcript_part*.jsonl이 없습니다: {book_dir}\n"
+            f"   완성된 EPUB이 모여있는 av완성작 폴더가 아니라, "
+            f"일본어자막추출/library/<작품명> 폴더를 선택해야 합니다."
+        )
 
     descriptions = load_scene_descriptions(book_dir)
 
@@ -146,14 +150,14 @@ def main():
         print("⚠️  AtomicParsley가 없어 오디오북 전용 표시(stik)를 못 붙였습니다 "
               "— brew install atomicparsley 후 다시 실행하면 붙습니다.")
 
-    # av완성작(EPUB)/avMusic(운동용 BGM 영상)과 같은 패턴 — 완성 오디오북도
-    # 한곳에 몰아보고 싶을 것 같아 전용 폴더를 만들어 자동 복사한다.
-    completed_dir = "/Users/forrestdpark/Desktop/BlogImage/av오디오북"
+    # ★ 2026-07-31: 처음엔 별도 av오디오북 폴더를 만들었는데, 사용자가 EPUB이
+    # 이미 모여있는 av완성작 폴더에 오디오북도 같이 저장해달라고 요청해서 통일.
+    completed_dir = "/Users/forrestdpark/Desktop/BlogImage/av완성작"
     os.makedirs(completed_dir, exist_ok=True)
     shutil.copy2(output, completed_dir)
 
     print(f"✅ 오디오북 생성 완료: {output} ({len(scene_keys)}챕터)")
-    print(f"📚 av오디오북 폴더로 복사 완료: {os.path.join(completed_dir, os.path.basename(output))}")
+    print(f"📚 av완성작 폴더로 복사 완료: {os.path.join(completed_dir, os.path.basename(output))}")
 
 
 if __name__ == "__main__":

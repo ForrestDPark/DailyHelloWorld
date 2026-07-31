@@ -816,10 +816,10 @@ def choose_jp_subtitle_folder():
         return None
 
 
-def choose_jp_library_folder():
-    """Notion 요약을 반영할 library/<작품명> 폴더를 고른다. 취소하면 None."""
+def choose_jp_library_folder(prompt="일본어자막추출/library/<작품명> 폴더를 선택하세요"):
+    """library/<작품명> 폴더를 고른다(기본 위치는 항상 library/ 폴더). 취소하면 None."""
     apple_script = (
-        f'POSIX path of (choose folder with prompt "Notion 요약을 반영할 작품 폴더를 선택하세요" '
+        f'POSIX path of (choose folder with prompt "{prompt}" '
         f'default location (POSIX file "{JP_LIBRARY_DIR}"))'
     )
     try:
@@ -872,11 +872,11 @@ def run_build_audiobook(book_dir):
         f"{shlex.quote(book_dir)} &\n"
         "worker_pid=$!\n"
         "wait \"$worker_pid\"\n"
-        "status=$?\n"
+        "job_status=$?\n"
         "worker_pid=''\n"
         "trap - HUP INT TERM EXIT\n"
         "echo\n"
-        "if [[ $status -eq 0 ]]; then\n"
+        "if [[ $job_status -eq 0 ]]; then\n"
         "  echo '✅ 오디오북 생성 완료'\n"
         "else\n"
         "  echo '⚠️ 오디오북 생성 실패. 위 로그를 확인하세요.'\n"
@@ -948,11 +948,11 @@ def run_jp_workout_extraction_only(folder_path, target_minutes=None, highlight_p
         f"{' '.join(args)} &\n"
         "worker_pid=$!\n"
         "wait \"$worker_pid\"\n"
-        "status=$?\n"
+        "job_status=$?\n"
         "worker_pid=''\n"
         "trap - HUP INT TERM EXIT\n"
         "echo\n"
-        "if [[ $status -eq 0 ]]; then\n"
+        "if [[ $job_status -eq 0 ]]; then\n"
         "  echo '✅ 운동용 영상 추출 완료'\n"
         "else\n"
         "  echo '⚠️ 일부 파일이 실패했습니다. 위 로그를 확인하세요.'\n"
@@ -1081,11 +1081,11 @@ def run_bgm_playlist_batch(folder_path):
         f"{shlex.quote(folder_path)} &\n"
         "worker_pid=$!\n"
         "wait \"$worker_pid\"\n"
-        "status=$?\n"
+        "job_status=$?\n"
         "worker_pid=''\n"
         "trap - HUP INT TERM EXIT\n"
         "echo\n"
-        "if [[ $status -eq 0 ]]; then\n"
+        "if [[ $job_status -eq 0 ]]; then\n"
         "  echo '✅ 모든 MP4 분할 완료'\n"
         "else\n"
         "  echo '⚠️ 일부 파일이 실패했습니다. 위 로그를 확인하세요.'\n"
@@ -1116,9 +1116,9 @@ def run_mp3_shazam_rename(folder_path):
         "/usr/bin:/bin:/usr/sbin:/sbin:$PATH\"\n"
         f"{shlex.quote(python)} {shlex.quote(MP3_SHAZAM_RENAME_SCRIPT)} "
         f"{shlex.quote(folder_path)}\n"
-        "status=$?\n"
+        "job_status=$?\n"
         "echo\n"
-        "if [[ $status -eq 0 ]]; then\n"
+        "if [[ $job_status -eq 0 ]]; then\n"
         "  echo '✅ MP3 제목 변경 작업 완료'\n"
         "else\n"
         "  echo '⚠️ 작업이 실패했습니다. 위 로그를 확인하세요.'\n"
@@ -2109,7 +2109,9 @@ class ShiftAlarmApp(rumps.App):
 
     def pull_jp_notion_summary_now(self, _):
         """Notion에 직접 적어둔 요약 내용을 SUMMARY.md/EPUB에 반영하고 av완성작에 복사."""
-        book_dir = choose_jp_library_folder()
+        book_dir = choose_jp_library_folder(
+            "Notion 요약을 반영할 작품 폴더(library/<작품명>)를 선택하세요"
+        )
         if not book_dir:
             return
         threading.Thread(
@@ -2124,7 +2126,10 @@ class ShiftAlarmApp(rumps.App):
             rumps.alert("오류", f"Notion 요약 반영 실패:\n{msg}")
 
     def build_jp_audiobook_now(self, _):
-        book_dir = choose_jp_library_folder()
+        book_dir = choose_jp_library_folder(
+            "오디오북(.m4b)을 만들 작품 폴더(library/<작품명>)를 선택하세요 — "
+            "av완성작이 아니라 library 폴더 안의 작품 폴더입니다"
+        )
         if not book_dir:
             return
         ok = run_build_audiobook(book_dir)
