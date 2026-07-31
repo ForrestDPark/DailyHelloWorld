@@ -28,7 +28,7 @@
 	군대가 적지 깊이 들어가자(深) 지나온 성읍이 등 뒤(背)에 겹칩니다. 보급과 퇴로가 무거워진 순간(重), 산림·험로·늪이 대열을 토막 냅니다. 마침내 무너지는 것(圮)은 흙길만이 아니라 지휘·보급·사기입니다. **중지는 깊이의 부담이고, 비지는 통행이 만드는 붕괴이며, 둘이 겹치면 오래 머무는 행위 자체가 패배가 됩니다.**
 </details>
 ---
-## 2. 전통 주석 기반 분석 {toggle="true" color="blue"}
+## 2. 전통 주석 기반 분석
 - <span color="blue">**조조(曹操)**</span> — "적지 깊이 들어가면 군량을 현지에서 마련하고, 험한 길에서는 머물지 말고 지나가라."
 - <span color="blue">**이전(李筌)**</span> — "퇴로가 멀어진 중지에서는 병사의 뜻을 하나로 모으고, 비지에서는 대오가 끊기기 전에 빠져나가라."
 - <span color="blue">**두목(杜牧)**</span> — "깊이 들어갔다는 사실과 길이 험하다는 사실을 섞지 마라. 하나는 보급의 문제이고 다른 하나는 행군의 문제다."
@@ -41,7 +41,7 @@
 
 아홉 주석의 공통점은 단순합니다. <span color="red">**중지에서는 지속 능력을 만들고, 비지에서는 체류 시간을 줄여야 합니다.**</span> 용맹으로 두 문제를 한꺼번에 해결하려 하면 보급과 대오가 먼저 무너집니다.
 ---
-## 3. 교차 설명 {toggle="true" color="green"}
+## 3. 교차 설명
 ### ① 손자병법 — 重地則掠과 圮地則行
 뒤의 `重地則掠`은 무차별 약탈의 찬양이 아니라 깊어진 작전선이 본국 보급만으로 버티지 못한다는 현실 인식입니다. 현대적으로는 현지 조달·분산 비축·후송 계획을 포함한 지속 능력으로 읽어야 합니다.
 `圮地則行`과 「구변편」의 `圮地無舍`는 같은 명령입니다. 험지에서 완벽한 진형을 복구하느라 멈추기보다 통과에 필요한 최소 편제를 유지하고 위험 구역 밖에서 재편해야 합니다.
@@ -62,9 +62,10 @@
 피로와 높은 인지부하는 주의 폭을 좁히고 새로운 단서를 기존 가정에 억지로 맞추게 합니다. 깊이 들어간 팀일수록 매몰비용 때문에 철수 신호를 과소평가하므로, 중단 기준을 진입 전에 숫자와 시각으로 정해야 합니다.
 현대 군수 교리는 길고 취약한 보급망 대신 분산 비축·다중 경로·현장 지휘권을 강조합니다. 핵심은 더 많은 물자를 쌓는 일이 아니라 한 경로가 끊겨도 임무가 계속되게 만드는 것입니다. 이는 중지의 무게를 구조적으로 낮추는 방법입니다.
 ---
-## 4. 역사적 실증 사례 {toggle="true" color="purple"}
+## 4. 역사적 실증 사례
 ### 서양 — 토이토부르크 숲 전투(서기 9년)
 ![토이토부르크 주요 인물](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi4/teutoburg_commanders_v2.png)
+![토이토부르크 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi4/teutoburg_soldier_life_v2.png)
 ![토이토부르크 지휘 구조](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi4/teutoburg_command_structure_v2.png)
 ![토이토부르크 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi4/teutoburg_country_map_v2.png)
 ![토이토부르크 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi4/teutoburg_strategy_map_v2.png)
@@ -137,6 +138,7 @@
 
 ### 동양 — 부차·심하전투(1619, 사르후 전역)
 ![부차심하 주요 인물](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi4/fucha_commanders_v2.png)
+![부차·심하 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi4/fucha_soldier_life_v2.png)
 ![부차심하 지휘 구조](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi4/fucha_command_structure_v2.png)
 ![사르후 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi4/fucha_country_map_v2.png)
 ![부차심하 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi4/fucha_strategy_map_v2.png)
