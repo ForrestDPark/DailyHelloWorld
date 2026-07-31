@@ -70,6 +70,7 @@
 	衢地(구지)의 핵심은 "군사력이 아니라 접경지의 신의(외교)를 먼저 확보하는 쪽이 이긴다"는 것이다. 서양·동양 각 1건을 시대를 달리하여 검증한다.
 	### 서양 — 브라이텐펠트 전투(Battle of Breitenfeld, 1631, 30년전쟁)
 ![브라이텐펠트 전투 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi3/breitenfeld_commanders_v2.png)
+![브라이텐펠트 전투 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi3/breitenfeld_soldier_life_v2.png)
 ![브라이텐펠트 전투 장군 조직도와 작전 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi3/breitenfeld_command_structure_v2.png)
 ![breitenfeld 시대 국가·세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi3/breitenfeld_country_map_v2.png)
 ![breitenfeld 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi3/breitenfeld_strategy_map_v2.png)
@@ -428,6 +429,7 @@
 
 ### 동양 — 필(邲) 전투(邲之戰/两棠之役, BCE 597, 춘추시대)
 ![bi 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi3/bi_commanders_v2.png)
+![필 전투 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi3/bi_soldier_life_v2.png)
 ![bi 장군 조직도·편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi3/bi_command_structure_v2.png)
 ![bi 시대 국가·세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi3/bi_country_map_v2.png)
 ![bi 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi3/bi_strategy_map_v2.png)
