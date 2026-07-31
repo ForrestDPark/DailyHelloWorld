@@ -5,6 +5,16 @@
 - 로컬 경로: `/Users/forrestdpark/Desktop/PDG/DailyHelloWorld_/일본어자막추출/whisper_series_stream.sh`
 - 원래는 macOS 단축어(Shortcuts)로 실행하던 스크립트를 그대로 저장소에 옮긴 것. 단축어 없이 터미널에서 직접 실행하거나, shift_alarm 메뉴바 앱에서도 실행 가능(아래 참조).
 
+## ★★★★★ 절대 규칙 — EPUB 일본어/한국어 색상 구분 (2026-07-31, 반드시 지킬 것)
+
+**EPUB 본문에서 일본어(원문)와 한국어(번역)는 항상 색으로 구분되어야 한다 — 사용자가 둘 다 흰색이면 "자꾸 한국어만 읽고 일본어를 안 읽게 된다"고 명시적으로 요구한 핵심 요구사항이다.**
+
+- 일본어 줄: `<p class="ja">...</p>`, CSS `color: #f5c842`(금색), `font-weight: bold`
+- 한국어 줄: `<p class="ko">...</p>`, CSS `color: #777777`(회색)
+- 이 CSS는 `epub_style.css`(`create_epub_css()`가 생성)에 이미 정의되어 있다. **핵심은 대사 텍스트를 마크다운으로 쓰는 모든 곳이 반드시 `class="ja"`/`class="ko"`가 붙은 raw HTML `<p>` 태그를 써야 한다는 것** — 일반 마크다운 볼드(`**text**`)나 클래스 없는 문단으로 쓰면 pandoc이 클래스를 안 붙여서 색 구분이 통째로 사라진다(2026-07-28에 `transcript_part*.md` 생성 코드가 이 실수를 했다가 발견되어 수정된 전례가 있음 — 아래 수정 이력 참조).
+- **새로운 EPUB 생성 경로를 추가하거나 수정할 때마다 반드시 확인**: 만든 EPUB을 unzip해서 XHTML 안에 `class="ja"`가 실제로 존재하는지, CSS에 `p.ja { color: #f5c842 ... }` 규칙이 있는지 확인할 것.
+- **2026-07-31 전수조사 결과**: `/Users/forrestdpark/Desktop/BlogImage/av완성작/`의 EPUB 26개를 전부 unzip해서 확인한 결과, 전부 이 규칙을 정확히 지키고 있었다(문제없음). 그런데도 색이 안 보인다면 파일 문제가 아니라 **읽는 앱(Apple Books 등)의 테마/야간모드가 책 자체 CSS 색상을 강제로 덮어쓰는 경우**이거나, **이미 그 앱에 임포트해둔 예전 사본을 보고 있어서 파일을 새로 덮어써도 반영이 안 되는 경우**다 — 이럴 땐 앱에서 테마를 "원본"/기본으로 바꾸거나, 기존에 추가해둔 책을 삭제하고 최신 파일을 다시 추가해야 한다.
+
 ## 사용법
 
 ```bash
@@ -166,6 +176,18 @@ security add-generic-password -a "$USER" -s "jp_subtitle_notion_token" -w "<노�
 4. `python3 finalize_japanese_book.py library/<작품명>`도 자동으로 실행되어 `SUMMARY.md`와 전체 대사를 합쳐 목차가 포함된 최종 EPUB을 만든다. `SUMMARY.md`가 아직 "요약 대기 중"이면 빌드를 거부한다. 이 최종 EPUB이 앞서 만든 "빠른" EPUB(줄거리 없음)을 덮어쓰고, 옵시디언 및 `/Users/forrestdpark/Desktop/BlogImage/av완성작/`(완성작을 한곳에 몰아보려고 지정한 폴더)에도 복사된다.
 
 위 2~4단계는 `subtitle_pipeline_body.sh`의 각 영상 처리 마지막에 자동으로 실행되므로 더 이상 수동으로 "Codex 요약해줘" 세션을 열 필요가 없다. 실패해도 파이프라인 전체가 멈추지 않고(각 단계 실패 시 경고만 출력) 다음 영상으로 넘어간다 — 실패한 작품은 나중에 위 명령어들을 그대로 수동 재실행하면 된다.
+
+### 반대 방향: Notion에서 고친 내용을 EPUB에 반영 (`pull_notion_summary_to_epub.py`, 2026-07-31)
+
+`generate_summary.py`가 자동으로 쓴 요약을 사용자가 Notion 페이지에서 직접 고치거나 내용을 더 보탤 수 있다. 이렇게 Notion 쪽이 최신 상태가 됐을 때, 그 내용을 로컬 `SUMMARY.md`로 가져와 EPUB을 다시 빌드하려면:
+
+```bash
+python3 pull_notion_summary_to_epub.py library/<작품명>
+```
+
+동작 방식: `notion_part1.json`의 페이지에서 전체 블록을 가져와 "책 요약" 제목 블록 다음부터 끝까지(이미지·대사 구간은 그보다 앞에 있으므로 안 걸림)를 마크다운으로 변환해 `SUMMARY.md`를 덮어쓰고, `finalize_japanese_book.py`로 EPUB을 재빌드한다. shift_alarm 메뉴바의 `🔄 Notion 요약 → EPUB 반영 (작품 폴더 선택)` 버튼으로도 실행 가능 — 완성된 EPUB을 `av완성작/`에도 자동 복사한다.
+
+**알려진 제약**: `sync_book_to_notion.py`의 `summary_blocks()`가 2026-07-31 이전에는 "- 장면 N: ..." 불릿 줄을 Notion `paragraph` 블록으로 만들었다(불릿 마커 정보가 사라짐). 그 이후로는 `bulleted_list_item`으로 만들어 왕복이 손실 없이 되지만, **그 이전에 이미 Notion에 올라간 요약**을 지금 풀백하면 장면 목록이 불릿 없는 밋밋한 문단으로 나온다(내용 자체는 정확함). 새로 생성되는 요약부터는 이 문제가 없다.
 
 기존 freeimage.host 및 GitHub raw 이미지 방식은 제거했다. 대표 이미지는 Git에 자동 커밋하거나 공개하지 않으며 로컬 원본과 Notion 내부 파일로만 보관한다. Notion API에서 조회되는 다운로드 URL은 일시적으로 만료될 수 있지만, Notion 페이지의 이미지 파일 자체는 유지되며 페이지를 다시 열거나 조회할 때 새 URL이 발급된다.
 

@@ -193,6 +193,17 @@ JP_WORKOUT_VIDEO_SCRIPT = os.path.join(
     "일본어자막추출", "extract_high_pitch_video.py"
 )
 JP_WORKOUT_BGM_DIR = "/Users/forrestdpark/Desktop/BlogImage/BGM_DIR"
+# ★ 2026-07-31: 사용자가 Notion에서 직접 요약을 고치거나 덧붙인 뒤 그 내용을
+# EPUB에 반영하고 싶을 때 쓰는 역방향(Notion → 로컬) 동기화 스크립트.
+JP_PULL_NOTION_SCRIPT = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "일본어자막추출", "pull_notion_summary_to_epub.py"
+)
+JP_LIBRARY_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "일본어자막추출", "library"
+)
+JP_COMPLETED_EPUB_DIR = "/Users/forrestdpark/Desktop/BlogImage/av완성작"
 BGM_PLAYLIST_BATCH_SCRIPT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "일본어자막추출", "bgm_playlist_batch.py"
@@ -799,6 +810,40 @@ def choose_jp_subtitle_folder():
         return path or None
     except Exception:
         return None
+
+
+def choose_jp_library_folder():
+    """Notion 요약을 반영할 library/<작품명> 폴더를 고른다. 취소하면 None."""
+    apple_script = (
+        f'POSIX path of (choose folder with prompt "Notion 요약을 반영할 작품 폴더를 선택하세요" '
+        f'default location (POSIX file "{JP_LIBRARY_DIR}"))'
+    )
+    try:
+        result = subprocess.run(["osascript", "-e", apple_script], capture_output=True, text=True, timeout=120)
+        path = result.stdout.strip()
+        return path or None
+    except Exception:
+        return None
+
+
+def pull_notion_summary_and_distribute(book_dir):
+    """Notion의 책 요약을 SUMMARY.md/EPUB에 반영하고, 완성된 EPUB을 av완성작
+    폴더에도 복사한다. 반환값: (성공 여부, 메시지)."""
+    result = subprocess.run(
+        ["/opt/anaconda3/bin/python3", JP_PULL_NOTION_SCRIPT, book_dir],
+        capture_output=True, text=True, timeout=120,
+    )
+    if result.returncode != 0:
+        return False, result.stderr.strip() or result.stdout.strip()
+
+    epub_path = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else ""
+    if epub_path and os.path.isfile(epub_path):
+        try:
+            os.makedirs(JP_COMPLETED_EPUB_DIR, exist_ok=True)
+            shutil.copy2(epub_path, JP_COMPLETED_EPUB_DIR)
+        except OSError:
+            pass
+    return True, epub_path
 
 
 def run_jp_subtitle_extraction(folder_path, target_minutes=None, highlight_pad=1):
@@ -1746,6 +1791,7 @@ class ShiftAlarmApp(rumps.App):
         self.menu.add(rumps.MenuItem("🎥 일본어 자막 추출 - 연달아 (폴더 선택)", callback=self.run_jp_subtitle_now))
         self.menu.add(rumps.MenuItem("🏃 운동용 영상만 추출 (폴더 선택)", callback=self.run_jp_workout_only_now))
         self.menu.add(rumps.MenuItem("📝 자막·노션·EPUB만 (폴더 선택)", callback=self.run_jp_subtitle_stage2_now))
+        self.menu.add(rumps.MenuItem("🔄 Notion 요약 → EPUB 반영 (작품 폴더 선택)", callback=self.pull_jp_notion_summary_now))
         self.menu.add(rumps.MenuItem(
             "🎵 플레이리스트 MP4 → 곡별 MP3 (폴더 선택)",
             callback=self.run_bgm_playlist_split_now,
@@ -1998,6 +2044,22 @@ class ShiftAlarmApp(rumps.App):
             rumps.alert("오류", f"스크립트를 찾을 수 없습니다:\n{JP_SUBTITLE_STAGE2_SCRIPT}")
             return
         rumps.notification("자막·노션·EPUB", "시작됨", f"{folder}\n새 iTerm 창에서 진행 상황을 확인하세요.")
+
+    def pull_jp_notion_summary_now(self, _):
+        """Notion에 직접 적어둔 요약 내용을 SUMMARY.md/EPUB에 반영하고 av완성작에 복사."""
+        book_dir = choose_jp_library_folder()
+        if not book_dir:
+            return
+        threading.Thread(
+            target=self._pull_jp_notion_summary_thread, args=(book_dir,), daemon=True
+        ).start()
+
+    def _pull_jp_notion_summary_thread(self, book_dir):
+        ok, msg = pull_notion_summary_and_distribute(book_dir)
+        if ok:
+            rumps.notification("Notion 요약 → EPUB 반영", "완료", msg or book_dir)
+        else:
+            rumps.alert("오류", f"Notion 요약 반영 실패:\n{msg}")
 
     def run_bgm_playlist_split_now(self, _):
         folder = choose_bgm_playlist_folder()

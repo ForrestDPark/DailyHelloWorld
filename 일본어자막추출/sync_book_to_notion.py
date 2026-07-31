@@ -30,6 +30,12 @@ def load_token():
 
 
 def summary_blocks(text):
+    """SUMMARY.md 텍스트를 Notion 블록으로 변환한다.
+    ★ 2026-07-31: "- 장면 N: ..." 불릿 줄을 예전엔 "-"를 떼어내고 그냥 paragraph로
+    만들었는데, 이러면 나중에 Notion 내용을 다시 읽어와 EPUB에 반영할 때(pull_
+    notion_summary_to_epub.py) 원래 불릿 목록이었다는 정보가 사라져 있다.
+    bulleted_list_item으로 만들어야 Notion 화면에서도 목록으로 보이고,
+    되돌릴 때도 "- "를 그대로 복원할 수 있다."""
     blocks = []
     for raw in text.splitlines():
         line = raw.strip()
@@ -41,8 +47,10 @@ def summary_blocks(text):
             block_type, content = "heading_2", line[3:]
         elif line.startswith("### "):
             block_type, content = "heading_3", line[4:]
+        elif line.startswith("- "):
+            block_type, content = "bulleted_list_item", line[2:].strip()
         else:
-            block_type, content = "paragraph", line.lstrip("- ").strip()
+            block_type, content = "paragraph", line
         blocks.append({
             "object": "block",
             "type": block_type,
