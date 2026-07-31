@@ -9,11 +9,13 @@
 
 **EPUB 본문에서 일본어(원문)와 한국어(번역)는 항상 색으로 구분되어야 한다 — 사용자가 둘 다 흰색이면 "자꾸 한국어만 읽고 일본어를 안 읽게 된다"고 명시적으로 요구한 핵심 요구사항이다.**
 
-- 일본어 줄: `<p class="ja">...</p>`, CSS `color: #f5c842`(금색), `font-weight: bold`
-- 한국어 줄: `<p class="ko">...</p>`, CSS `color: #777777`(회색)
-- 이 CSS는 `epub_style.css`(`create_epub_css()`가 생성)에 이미 정의되어 있다. **핵심은 대사 텍스트를 마크다운으로 쓰는 모든 곳이 반드시 `class="ja"`/`class="ko"`가 붙은 raw HTML `<p>` 태그를 써야 한다는 것** — 일반 마크다운 볼드(`**text**`)나 클래스 없는 문단으로 쓰면 pandoc이 클래스를 안 붙여서 색 구분이 통째로 사라진다(2026-07-28에 `transcript_part*.md` 생성 코드가 이 실수를 했다가 발견되어 수정된 전례가 있음 — 아래 수정 이력 참조).
-- **새로운 EPUB 생성 경로를 추가하거나 수정할 때마다 반드시 확인**: 만든 EPUB을 unzip해서 XHTML 안에 `class="ja"`가 실제로 존재하는지, CSS에 `p.ja { color: #f5c842 ... }` 규칙이 있는지 확인할 것.
-- **2026-07-31 전수조사 결과**: `/Users/forrestdpark/Desktop/BlogImage/av완성작/`의 EPUB 26개를 전부 unzip해서 확인한 결과, 전부 이 규칙을 정확히 지키고 있었다(문제없음). 그런데도 색이 안 보인다면 파일 문제가 아니라 **읽는 앱(Apple Books 등)의 테마/야간모드가 책 자체 CSS 색상을 강제로 덮어쓰는 경우**이거나, **이미 그 앱에 임포트해둔 예전 사본을 보고 있어서 파일을 새로 덮어써도 반영이 안 되는 경우**다 — 이럴 땐 앱에서 테마를 "원본"/기본으로 바꾸거나, 기존에 추가해둔 책을 삭제하고 최신 파일을 다시 추가해야 한다.
+- 일본어 줄: `<p class="ja ibooks-dark-theme-use-custom-text-color">...</p>` — 라이트모드 `#000000`(검정), 다크모드 `#f5c842`(금색), 둘 다 `font-weight: bold`.
+- 한국어 줄: `<p class="ko ibooks-dark-theme-use-custom-text-color">...</p>` — 라이트모드 `#808080`, 다크모드 `#777777`(둘 다 회색, 흐리게).
+- CSS(`epub_style.css`, `create_epub_css()`가 생성)는 라이트 스타일을 기본으로 두고 `@media (prefers-color-scheme: dark) { ... }` 블록으로 다크모드 값만 덮어쓴다. `:root { color-scheme: light dark; }` 선언도 필수.
+- **`ibooks-dark-theme-use-custom-text-color` 클래스가 핵심이다** — Apple Books 공식 EPUB 스타일 가이드(Presentation and Styling)에 따르면, 이 클래스가 없으면 Apple Books가 다크 테마에서 **모든 커스텀 글자색을 무시하고 강제로 흰색 하나로 덮어써버린다.** 색 구분용 커스텀 색을 쓰는 요소(`p.ja`, `p.ko`, `h1`, `h2.scene`, `p.scene-desc`, `div.overview h2` 등)에는 **전부** 이 클래스를 같이 붙여야 한다. pandoc 헤더는 `{.클래스1 .클래스2}` 속성 문법으로 붙인다(예: `## 장면 1 {.scene .ibooks-dark-theme-use-custom-text-color}`).
+- **핵심은 대사 텍스트를 마크다운으로 쓰는 모든 곳이 반드시 이 클래스들이 붙은 raw HTML `<p>` 태그를 써야 한다는 것** — 일반 마크다운 볼드(`**text**`)나 클래스 없는 문단으로 쓰면 pandoc이 클래스를 안 붙여서 색 구분이 통째로 사라진다(2026-07-28에 `transcript_part*.md` 생성 코드가 이 실수를 했다가 발견되어 수정된 전례가 있음 — 아래 수정 이력 참조).
+- **새로운 EPUB 생성 경로를 추가하거나 수정할 때마다 반드시 확인**: 만든 EPUB을 unzip해서 XHTML 안에 `class="ja ibooks-dark-theme-use-custom-text-color"`가 실제로 존재하는지, CSS에 라이트/다크 두 버전 색 규칙이 다 있는지 확인할 것. 가능하면 Apple Books에서 라이트/다크 둘 다 켜보고 눈으로 확인.
+- **경위**: 2026-07-31 전수조사(`av완성작/` EPUB 26개 unzip 확인) 때는 `class="ja"`/금색 CSS가 다 있어서 "파일은 문제없다"고 결론 냈었는데, 사용자가 "Apple Books인데 Original 테마인데도 안 된다"고 재확인해줘서 더 파보니 위 Apple Books 다크모드 특수 클래스 요구사항을 놓치고 있었다. 사용자가 라이트모드로 바꾸니 정상적으로 보인 것으로 원인이 확정됨 — 이후 "라이트/다크 각각 다른 배색"을 요청받아 지금 구조로 재설계함.
 
 ## 사용법
 
@@ -171,7 +173,10 @@ security add-generic-password -a "$USER" -s "jp_subtitle_notion_token" -w "<노�
 ```
 
 1. 추출이 끝나면 `sync_book_to_notion.py --images-only`가 대표 이미지 파일을 Notion File Upload API로 직접 올려 기존 작품 페이지에 본문 폭의 이미지 블록으로 추가한다. 외부 임시 URL을 이미지 주소로 저장하지 않으므로 다운로드 URL이 만료되어도 Notion이 파일을 계속 관리한다.
-2. **(2026-07-28부터 자동화)** `generate_summary.py library/<작품명>`이 Claude Code CLI 헤드리스 모드(`claude -p`)로 `transcript_part*.jsonl`의 대사(원문/번역)만 읽고 `SUMMARY.md`의 전체 줄거리와 장면별 목차를 자동으로 작성한다. 이미지는 안 보낸다(텍스트만으로 충분히 정확하고 빠름 — OYC-126 1650줄/69장면 실측 96초).
+2. **(2026-07-28부터 자동화, 2026-07-31 구조 변경)** `generate_summary.py library/<작품명>`이 Claude Code CLI 헤드리스 모드(`claude -p`)로 `transcript_part*.jsonl`의 대사(원문/번역)만 읽고 "전체 줄거리"와 "장면별 한 줄 설명"을 자동으로 작성한다. 이미지는 안 보낸다(텍스트만으로 충분히 정확하고 빠름 — OYC-126 1650줄/69장면 실측 96초).
+   - **★★★ 장면별 설명은 SUMMARY.md에 목차로 몰아넣지 않는다.** `SUMMARY.md`에는 "전체 줄거리"만 남고, 장면별 한 줄 설명은 `inject_scene_descriptions()`가 각 장면의 **제목 + 대표 이미지 바로 다음, 대사 시작 전** 위치에 직접 끼워 넣는다(`<p class="scene-desc ibooks-dark-theme-use-custom-text-color">`). 사용자가 "장면 1, 사진 나오고, 그 다음 설명" 순서를 명시적으로 요구해서 바꾼 구조 — 앞으로도 이 순서(제목 → 이미지 → 설명 → 대사)를 반드시 지킬 것, 절대로 모든 장면 설명을 앞쪽에 목차처럼 모아놓지 말 것.
+   - Claude 응답에서 장면별 설명은 입력에 준 태그를 그대로 쓴 `[N편 장면 M] 설명` 형식으로 받아 정규식으로 파싱한다 — 태그 형식을 안 지키면(실제로 몇 번 발생) 한 번 더 강조해서 자동 재시도한다. 그래도 실패하면(예: Claude가 콘텐츠 성격상 응답을 거부하는 경우도 있었음 — PRED-879) 장면 설명 없이 EPUB이 만들어진다.
+   - 장면별 설명은 `library/<작품명>/scene_descriptions.json`(`{"part-scene": "설명"}`)에도 저장된다 — 오디오북 챕터 제목 등 다른 스크립트가 재사용.
 3. 요약이 준비되면 `python3 sync_book_to_notion.py library/<작품명>`(images-only 아닌 기본 모드)이 자동으로 실행되어 요약을 Notion에 추가하고 상태를 `완료`로 바꾼다.
 4. `python3 finalize_japanese_book.py library/<작품명>`도 자동으로 실행되어 `SUMMARY.md`와 전체 대사를 합쳐 목차가 포함된 최종 EPUB을 만든다. `SUMMARY.md`가 아직 "요약 대기 중"이면 빌드를 거부한다. 이 최종 EPUB이 앞서 만든 "빠른" EPUB(줄거리 없음)을 덮어쓰고, 옵시디언 및 `/Users/forrestdpark/Desktop/BlogImage/av완성작/`(완성작을 한곳에 몰아보려고 지정한 폴더)에도 복사된다.
 
@@ -187,9 +192,28 @@ python3 pull_notion_summary_to_epub.py library/<작품명>
 
 동작 방식: `notion_part1.json`의 페이지에서 전체 블록을 가져와 "책 요약" 제목 블록 다음부터 끝까지(이미지·대사 구간은 그보다 앞에 있으므로 안 걸림)를 마크다운으로 변환해 `SUMMARY.md`를 덮어쓰고, `finalize_japanese_book.py`로 EPUB을 재빌드한다. shift_alarm 메뉴바의 `🔄 Notion 요약 → EPUB 반영 (작품 폴더 선택)` 버튼으로도 실행 가능 — 완성된 EPUB을 `av완성작/`에도 자동 복사한다.
 
-**알려진 제약**: `sync_book_to_notion.py`의 `summary_blocks()`가 2026-07-31 이전에는 "- 장면 N: ..." 불릿 줄을 Notion `paragraph` 블록으로 만들었다(불릿 마커 정보가 사라짐). 그 이후로는 `bulleted_list_item`으로 만들어 왕복이 손실 없이 되지만, **그 이전에 이미 Notion에 올라간 요약**을 지금 풀백하면 장면 목록이 불릿 없는 밋밋한 문단으로 나온다(내용 자체는 정확함). 새로 생성되는 요약부터는 이 문제가 없다.
+**알려진 제약**: `SUMMARY.md`가 2026-07-31부터 "전체 줄거리"만 담고(장면별 설명은 EPUB 본문에 인라인으로만 들어감 — 위 참조), Notion "책 요약" 섹션도 이 내용만 반영된다. 즉 **장면별 설명은 Notion에는 안 올라가고 EPUB에만 존재**한다 — Notion에서 요약을 고쳐서 풀백해도 장면별 인라인 설명까지 바뀌진 않는다(전체 줄거리만 갱신됨). `sync_book_to_notion.py`의 `summary_blocks()`는 `bulleted_list_item`도 지원하지만 현재 SUMMARY.md 구조상 쓰일 일이 거의 없다.
 
 기존 freeimage.host 및 GitHub raw 이미지 방식은 제거했다. 대표 이미지는 Git에 자동 커밋하거나 공개하지 않으며 로컬 원본과 Notion 내부 파일로만 보관한다. Notion API에서 조회되는 다운로드 URL은 일시적으로 만료될 수 있지만, Notion 페이지의 이미지 파일 자체는 유지되며 페이지를 다시 열거나 조회할 때 새 URL이 발급된다.
+
+### 표지(cover) — 최종 EPUB에서 빠지는 버그 수정 (2026-07-31)
+
+`subtitle_pipeline_body.sh`가 만드는 "빠른" EPUB은 원본 영상에서 세로 표지를 캡처해 pandoc `--epub-cover-image`로 넣지만, 그 표지 파일(`<파일명>_work/cover.jpg`)은 원본 영상이 있는 작업 폴더에만 있고 `library/<작품명>/`에는 없었다. `finalize_japanese_book.py`(요약 자동화가 만드는 최종 EPUB)는 애초에 표지 관련 코드가 전혀 없었고, 이 최종 EPUB이 "빠른" EPUB을 덮어쓰면서 **표지가 통째로 사라지는 버그**가 있었다(사용자가 Apple Books에 표지가 안 보인다고 지적해서 발견).
+
+수정: `subtitle_pipeline_body.sh`가 표지를 만들 때 `library/<작품명>/cover.jpg`에도 복사해두고, `finalize_japanese_book.py`가 그 경로에 파일이 있으면 `--epub-cover-image`로 붙인다. **주의**: 이미 처리가 끝난 뒤 원본 영상 파일을 지워버리면 표지를 새로 만들 수 없다 — 표지가 필요하면 원본 영상이 있을 때(자막 파이프라인이 도는 시점)만 만들어질 수 있다는 걸 기억할 것.
+
+### 오디오북(.m4b) 생성 — `build_audiobook.py` (2026-07-31)
+
+일본어 대사(원문만, 번역은 안 읽음)를 edge-tts(`ja-JP-NanamiNeural`, 이전에 있다가 제거된 TTS 기능과 같은 목소리)로 읽어서, 장면마다 챕터가 나뉜 진짜 오디오북(.m4b)을 만든다. EPUB과는 별개 파일이며, Apple Books/Music에 추가하면 오디오북 전용 카테고리(배속 조절·수면 타이머·챕터 이동)로 들어간다.
+
+```bash
+python3 build_audiobook.py library/<작품명>
+# 출력: library/<작품명>/<작품명>_오디오북.m4b
+```
+
+동작 방식: 장면 단위로 대사를 이어붙여 한 번에 TTS 합성(장면당 API 호출 1번, 자연스러운 억양 유지) → ffmpeg concat으로 이어붙임 → `scene_descriptions.json`의 장면별 설명을 챕터 제목으로 써서 FFMETADATA 챕터 삽입 → `AtomicParsley`(`brew install atomicparsley`)로 `stik` 아톰을 Audiobook으로 설정(이게 없으면 Apple Books가 그냥 일반 오디오 파일로 취급해서 챕터 이동 등이 안 됨). `scene_descriptions.json`이 없으면 챕터 제목이 "N편 장면 M"으로만 나온다 — `generate_summary.py`를 먼저 돌려야 제대로 된 제목이 붙는다.
+
+실측 검증: `SONE-486`(8장면)으로 전체 파이프라인 실행 — 36초 소요, 8챕터 정상 생성, `ffprobe -show_chapters`로 챕터 타임스탬프 확인, `AtomicParsley -t`로 `stik: Audiobook` 확인.
 
 ## 일본어 구절 공부 후속 파이프라인
 

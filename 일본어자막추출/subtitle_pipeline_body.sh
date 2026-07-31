@@ -350,34 +350,46 @@ def build_monitor_blocks(img_url, ja_list, ko_list):
     return blocks
 
 def create_epub_css(work_dir):
-    """대표 이미지 한 장 주위로 대사가 흐르는 소설형 EPUB CSS."""
+    """대표 이미지 한 장 주위로 대사가 흐르는 소설형 EPUB CSS.
+    ★ 2026-07-31: 라이트/다크 모드에 따라 다른 배색을 쓰도록 재설계했다(사용자
+    요청 — 라이트모드는 흰 배경에 검은/회색 글씨, 다크모드는 검은 배경에
+    금색/회색 글씨). 기본(라이트) 스타일을 밖에 두고 `@media (prefers-color-
+    scheme: dark)`로 다크모드 전용 값을 덮어쓴다. `:root { color-scheme: light
+    dark; }`와 각 요소의 `ibooks-dark-theme-use-custom-text-color` 클래스는
+    Apple Books 공식 가이드(Presentation and Styling)에 나온 요구사항 —
+    이게 없으면 Apple Books가 다크 테마에서 커스텀 글자색을 전부 무시하고
+    강제로 흰색 한 가지로 덮어써버린다(실제로 이 문제 때문에 일본어/한국어
+    색 구분이 안 보인다는 사용자 리포트로 발견함)."""
     css_path = os.path.join(work_dir, "epub_style.css")
     css = """\
+:root {
+    color-scheme: light dark;
+}
 body {
     font-family: "Hiragino Kaku Gothic Pro", "ヒラギノ角ゴ Pro", sans-serif;
-    background-color: #111111;
-    color: #dddddd;
+    background-color: #ffffff;
+    color: #1a1a1a;
     line-height: 1.6;
     padding: 1em;
 }
 h1 {
-    color: #f5c842;
-    border-bottom: 2px solid #f5c842;
+    color: #9a6a00;
+    border-bottom: 2px solid #9a6a00;
     padding-bottom: 0.3em;
 }
 h2.scene {
-    color: #f5c842;
+    color: #9a6a00;
     font-size: 1.15em;
     margin-top: 1.8em;
     margin-bottom: 0.6em;
     padding: 0.3em 0.6em;
-    background-color: #1c1c1c;
-    border-left: 4px solid #f5c842;
+    background-color: #f2f2f2;
+    border-left: 4px solid #9a6a00;
 }
 div.set {
     margin-bottom: 0.9em;
     padding-bottom: 0.7em;
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: 1px solid #e0e0e0;
 }
 img.scene-thumb {
     width: 60%;
@@ -390,31 +402,38 @@ img.scene-thumb {
 .scene-end {
     clear: both;
 }
+p.scene-desc {
+    font-style: italic;
+    font-size: 0.92em;
+    color: #555555;
+    margin-top: 0.3em;
+    margin-bottom: 1em;
+}
 p.ja {
     font-size: 1.2em;
     font-weight: bold;
-    color: #f5c842;
+    color: #000000;
     letter-spacing: 0.03em;
     margin-bottom: 0.1em;
     margin-top: 0.5em;
 }
 p.ko {
     font-size: 0.82em;
-    color: #777777;
+    color: #808080;
     margin-top: 0;
     margin-bottom: 0.15em;
     padding-left: 0.5em;
-    border-left: 2px solid #333333;
+    border-left: 2px solid #cccccc;
 }
 div.overview {
-    background-color: #1a1a1a;
-    border: 1px solid #333333;
+    background-color: #f5f5f5;
+    border: 1px solid #dddddd;
     border-radius: 8px;
     padding: 1.2em 1.4em;
     margin-bottom: 1.5em;
 }
 div.overview h2 {
-    color: #f5c842;
+    color: #9a6a00;
     margin-top: 0;
 }
 div.overview table {
@@ -423,13 +442,56 @@ div.overview table {
 }
 div.overview td {
     padding: 0.3em 0.5em;
-    border-bottom: 1px solid #2a2a2a;
+    border-bottom: 1px solid #e0e0e0;
 }
 div.overview td:first-child {
-    color: #999999;
+    color: #666666;
     width: 40%;
 }
-nav#toc a { color: #f5c842; text-decoration: none; }
+nav#toc a { color: #9a6a00; text-decoration: none; }
+
+@media (prefers-color-scheme: dark) {
+    body {
+        background-color: #111111;
+        color: #dddddd;
+    }
+    h1 {
+        color: #f5c842;
+        border-bottom-color: #f5c842;
+    }
+    h2.scene {
+        color: #f5c842;
+        background-color: #1c1c1c;
+        border-left-color: #f5c842;
+    }
+    div.set {
+        border-bottom-color: #2a2a2a;
+    }
+    p.scene-desc {
+        color: #aaaaaa;
+    }
+    p.ja {
+        color: #f5c842;
+    }
+    p.ko {
+        color: #777777;
+        border-left-color: #333333;
+    }
+    div.overview {
+        background-color: #1a1a1a;
+        border-color: #333333;
+    }
+    div.overview h2 {
+        color: #f5c842;
+    }
+    div.overview td {
+        border-bottom-color: #2a2a2a;
+    }
+    div.overview td:first-child {
+        color: #999999;
+    }
+    nav#toc a { color: #f5c842; }
+}
 """
     with open(css_path, "w", encoding="utf-8") as f:
         f.write(css)
@@ -455,10 +517,10 @@ def save_to_md(work_dir, note_title, representative_img_path, ja_list, ko_list,
         total_lines = len(parsed_lines)
         total_sets  = TOTAL_SETS
         scene_count = (total_sets + SCENE_SIZE - 1) // SCENE_SIZE
-        overview = f"""# {note_title}
+        overview = f"""# {note_title} {{.ibooks-dark-theme-use-custom-text-color}}
 
 <div class="overview">
-<h2>📋 개요</h2>
+<h2 class="ibooks-dark-theme-use-custom-text-color">📋 개요</h2>
 <table>
 <tr><td>파트</td><td>{part_num} / {total_parts}편</td></tr>
 <tr><td>대사 문장 수</td><td>{total_lines}줄</td></tr>
@@ -478,14 +540,17 @@ def save_to_md(work_dir, note_title, representative_img_path, ja_list, ko_list,
             # ★ 마크다운 네이티브 헤더 문법({.scene}은 pandoc 헤더 속성 확장)을
             # 써야 --toc가 이걸 목차 항목으로 잡는다. <h2> raw HTML로 쓰면
             # pandoc이 그냥 불투명한 블록으로 취급해서 목차에 안 잡힌다(확인됨).
-            f.write(f'## 🎬 장면 {scene_num} {{.scene}}\n\n')
+            # ibooks-dark-theme-use-custom-text-color: Apple Books가 다크
+            # 테마에서 커스텀 글자색을 무시하지 않게 하는 공식 클래스(아래
+            # p.ja/p.ko에도 동일하게 적용).
+            f.write(f'## 🎬 장면 {scene_num} {{.scene .ibooks-dark-theme-use-custom-text-color}}\n\n')
             if img_filename:
                 f.write(f'<img class="scene-thumb" src="{base_name}_work/images/{img_filename}" alt="장면 {scene_num}" />\n\n')
         f.write('<div class="set">\n\n')
         for ja, ko in zip(ja_list, ko_list):
             furi = generate_furigana(ja)
-            f.write(f'<p class="ja">{furi}</p>\n')
-            f.write(f'<p class="ko">{ko}</p>\n\n')
+            f.write(f'<p class="ja ibooks-dark-theme-use-custom-text-color">{furi}</p>\n')
+            f.write(f'<p class="ko ibooks-dark-theme-use-custom-text-color">{ko}</p>\n\n')
         f.write("</div>\n\n")
         if chunk_idx % SCENE_SIZE == 0:
             f.write('<div class="scene-end"></div>\n\n')
@@ -660,13 +725,13 @@ transcript_md = os.path.join(book_dir, f"transcript_part{part_num}.md")
 with open(transcript_jsonl, "w", encoding="utf-8") as f:
     pass
 with open(transcript_md, "w", encoding="utf-8") as f:
-    f.write(f"# {base_name} 제{part_num}편 전체 대사\n\n")
+    f.write(f"# {base_name} 제{part_num}편 전체 대사 {{.ibooks-dark-theme-use-custom-text-color}}\n\n")
 
 summary_path = os.path.join(book_dir, "SUMMARY.md")
 if not os.path.exists(summary_path):
     with open(summary_path, "w", encoding="utf-8") as f:
         f.write(
-            f"# {base_name} 줄거리·목차\n\n"
+            f"# {base_name} 줄거리·목차 {{.ibooks-dark-theme-use-custom-text-color}}\n\n"
             "> Codex 요약 대기 중 — transcript_part*.jsonl과 대표 이미지를 읽고 작성한다.\n\n"
             "## 전체 줄거리\n\n"
             "요약 대기 중\n\n"
@@ -701,7 +766,10 @@ for idx in range(0, len(parsed_lines), 3):
     with open(transcript_jsonl, "a", encoding="utf-8") as jf, \
          open(transcript_md, "a", encoding="utf-8") as mf:
         if (chunk_idx - 1) % SCENE_SIZE == 0:
-            mf.write(f"## 장면 {scene_num}\n\n")
+            # {.scene}이 있어야 h2.scene CSS(금색/배경)가 적용되고 --toc 목차에도
+            # 잡힌다. ibooks-dark-theme-use-custom-text-color는 Apple Books
+            # 다크 테마에서 이 색이 흰색으로 강제 대체되지 않게 하는 공식 클래스.
+            mf.write(f"## 장면 {scene_num} {{.scene .ibooks-dark-theme-use-custom-text-color}}\n\n")
             mf.write(f'<img class="scene-thumb" src="images/part{part_num}_scene{scene_num:03d}.jpg" alt="장면 {scene_num}" />\n\n')
         for c, ja, ko in zip(chunk, ja_list, ko_list):
             furi = generate_furigana(ja)
@@ -717,10 +785,10 @@ for idx in range(0, len(parsed_lines), 3):
             jf.write(json.dumps(record, ensure_ascii=False) + "\n")
             # ★ 2026-07-28: 예전엔 마크다운 볼드(`- **{furi}**`)로만 썼는데, 이러면
             # CSS 클래스가 없어서 epub_style.css의 p.ja(금색)/p.ko(회색) 색 구분이
-            # 전혀 적용 안 되고 본문 기본색(#dddddd, 사실상 흰색)으로만 보였다 —
-            # save_to_md()가 쓰는 _work 폴더 md와 똑같이 클래스 있는 HTML로 맞춘다.
-            mf.write(f'<p class="ja">{furi}</p>\n')
-            mf.write(f'<p class="ko">{ko}</p>\n\n')
+            # 전혀 적용 안 되고 본문 기본색으로만 보였다 — save_to_md()가 쓰는
+            # _work 폴더 md와 똑같이 클래스 있는 HTML로 맞춘다.
+            mf.write(f'<p class="ja ibooks-dark-theme-use-custom-text-color">{furi}</p>\n')
+            mf.write(f'<p class="ko ibooks-dark-theme-use-custom-text-color">{ko}</p>\n\n')
         mf.write("\n")
 
     # 대표 이미지는 전체 추출 뒤 Notion File Upload API로 직접 업로드한다.
@@ -874,6 +942,12 @@ drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese 
     if [[ -f "$COVER_FILE" ]]; then
         sips -s format jpeg "$COVER_FILE" --out "$COVER_FILE" &>/dev/null
         echo "🎨 표지 준비 완료 (${SNAP_AT}초 지점, 세로 960x1440)"
+        # ★ 2026-07-31: library/<작품명>/에도 복사해둔다 — finalize_japanese_book.py가
+        # 나중에(요약 자동화 단계에서) 만드는 최종 EPUB은 여기서 만든 "빠른" EPUB과
+        # 별도 pandoc 호출이라, 표지를 안 챙기면 최종 EPUB에서 표지가 사라진다
+        # (실제로 이 버그가 발견되어 추가함).
+        mkdir -p "$BOOK_DIR"
+        cp "$COVER_FILE" "${BOOK_DIR}/cover.jpg"
     else
         COVER_FILE=""
         echo "⚠️  표지 캡처 실패 — 로그: $COVER_LOG"

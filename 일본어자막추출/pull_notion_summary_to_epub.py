@@ -58,7 +58,9 @@ def block_to_markdown(block):
         return None
     text = "".join(rt.get("plain_text", "") for rt in block[t]["rich_text"])
     if t == "heading_1":
-        return f"# {text}"
+        # {.ibooks-dark-theme-use-custom-text-color}: h1 CSS의 금색이 Apple
+        # Books 다크 테마에서 흰색으로 강제 대체되지 않게 하는 공식 클래스.
+        return f"# {text} {{.ibooks-dark-theme-use-custom-text-color}}"
     if t == "heading_2":
         return f"## {text}"
     if t == "heading_3":

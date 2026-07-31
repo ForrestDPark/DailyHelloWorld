@@ -203,6 +203,10 @@ JP_LIBRARY_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "일본어자막추출", "library"
 )
+JP_BUILD_AUDIOBOOK_SCRIPT = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "일본어자막추출", "build_audiobook.py"
+)
 JP_COMPLETED_EPUB_DIR = "/Users/forrestdpark/Desktop/BlogImage/av완성작"
 BGM_PLAYLIST_BATCH_SCRIPT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -844,6 +848,46 @@ def pull_notion_summary_and_distribute(book_dir):
         except OSError:
             pass
     return True, epub_path
+
+
+def run_build_audiobook(book_dir):
+    """오디오북(.m4b) 생성을 Terminal에서 실행한다(TTS 합성이 장면 수만큼 걸려서
+    진행 상황을 눈으로 보는 게 나음 — bgm_playlist_batch와 같은 패턴)."""
+    if not os.path.exists(JP_BUILD_AUDIOBOOK_SCRIPT):
+        return False
+    launcher = "/tmp/_jp_build_audiobook.command"
+    command = (
+        "#!/bin/zsh\n"
+        "export PATH=\"/opt/homebrew/bin:/usr/local/bin:/opt/anaconda3/bin:"
+        "/usr/bin:/bin:/usr/sbin:/sbin:$PATH\"\n"
+        "worker_pid=''\n"
+        "cleanup() {\n"
+        "  if [[ -n \"$worker_pid\" ]] && kill -0 \"$worker_pid\" 2>/dev/null; then\n"
+        "    kill -TERM \"$worker_pid\" 2>/dev/null\n"
+        "    wait \"$worker_pid\" 2>/dev/null\n"
+        "  fi\n"
+        "}\n"
+        "trap cleanup HUP INT TERM EXIT\n"
+        f"/opt/anaconda3/bin/python3 {shlex.quote(JP_BUILD_AUDIOBOOK_SCRIPT)} "
+        f"{shlex.quote(book_dir)} &\n"
+        "worker_pid=$!\n"
+        "wait \"$worker_pid\"\n"
+        "status=$?\n"
+        "worker_pid=''\n"
+        "trap - HUP INT TERM EXIT\n"
+        "echo\n"
+        "if [[ $status -eq 0 ]]; then\n"
+        "  echo '✅ 오디오북 생성 완료'\n"
+        "else\n"
+        "  echo '⚠️ 오디오북 생성 실패. 위 로그를 확인하세요.'\n"
+        "fi\n"
+        "echo '이 창은 확인 후 닫아도 됩니다.'\n"
+    )
+    with open(launcher, "w", encoding="utf-8") as file:
+        file.write(command)
+    os.chmod(launcher, 0o700)
+    subprocess.Popen(["open", "-a", "Terminal", launcher])
+    return True
 
 
 def run_jp_subtitle_extraction(folder_path, target_minutes=None, highlight_pad=1):
@@ -1582,6 +1626,14 @@ class ShiftAlarmApp(rumps.App):
     # ── 근무 전후 절전 방지 (SSH 접속용) ───────────────────────
 
     def _check_stay_awake(self, _):
+        # ★ 2026-07-31: 근무 전후 1시간만 절전 방지하던 기존 방식과 별개로,
+        # 휴일에 밖에서도 원격 접속하고 싶을 때를 위한 수동 "항상 켜기" 토글을
+        # 추가했다 — 켜져 있으면 근무표 일정과 무관하게 무조건 caffeinate.
+        if self.config.get("stay_awake_always", False):
+            start_caffeinate()
+            self.stay_awake_item.title = "🌙 절전 방지 켜짐 (수동, 항상)"
+            return
+
         now = datetime.datetime.now()
         window = get_stay_awake_window(self.schedule, now, today_override=self._today_override())
         if window:
@@ -1593,6 +1645,12 @@ class ShiftAlarmApp(rumps.App):
         else:
             stop_caffeinate()
             self.stay_awake_item.title = "🌙 절전 방지 꺼짐 (근무 전후 1시간 아님)"
+
+    def toggle_stay_awake_always(self, _):
+        self.config["stay_awake_always"] = not self.config.get("stay_awake_always", False)
+        save_config(self.config)
+        self.build_menu()
+        self._check_stay_awake(None)
 
     # ── 근무표 자동 적용 ────────────────────────────────────
 
@@ -1750,6 +1808,9 @@ class ShiftAlarmApp(rumps.App):
         self.menu.add(rumps.MenuItem(f"시급 설정 (현재 {HOURLY_WAGE:,}원)", callback=self.change_hourly_wage))
         self.menu.add(self.weather_item)
         self.menu.add(self.stay_awake_item)
+        always_awake_on = self.config.get("stay_awake_always", False)
+        always_awake_label = f"{'✓ ' if always_awake_on else ''}🌙 절전 방지 항상 켜기 (원격 접속용)"
+        self.menu.add(rumps.MenuItem(always_awake_label, callback=self.toggle_stay_awake_always))
 
         self.menu.add(None)
 
@@ -1792,6 +1853,7 @@ class ShiftAlarmApp(rumps.App):
         self.menu.add(rumps.MenuItem("🏃 운동용 영상만 추출 (폴더 선택)", callback=self.run_jp_workout_only_now))
         self.menu.add(rumps.MenuItem("📝 자막·노션·EPUB만 (폴더 선택)", callback=self.run_jp_subtitle_stage2_now))
         self.menu.add(rumps.MenuItem("🔄 Notion 요약 → EPUB 반영 (작품 폴더 선택)", callback=self.pull_jp_notion_summary_now))
+        self.menu.add(rumps.MenuItem("🎧 오디오북(.m4b) 생성 (작품 폴더 선택)", callback=self.build_jp_audiobook_now))
         self.menu.add(rumps.MenuItem(
             "🎵 플레이리스트 MP4 → 곡별 MP3 (폴더 선택)",
             callback=self.run_bgm_playlist_split_now,
@@ -2060,6 +2122,16 @@ class ShiftAlarmApp(rumps.App):
             rumps.notification("Notion 요약 → EPUB 반영", "완료", msg or book_dir)
         else:
             rumps.alert("오류", f"Notion 요약 반영 실패:\n{msg}")
+
+    def build_jp_audiobook_now(self, _):
+        book_dir = choose_jp_library_folder()
+        if not book_dir:
+            return
+        ok = run_build_audiobook(book_dir)
+        if not ok:
+            rumps.alert("오류", f"스크립트를 찾을 수 없습니다:\n{JP_BUILD_AUDIOBOOK_SCRIPT}")
+            return
+        rumps.notification("오디오북 생성", "시작됨", f"{book_dir}\n새 터미널 창에서 진행 상황을 확인하세요.")
 
     def run_bgm_playlist_split_now(self, _):
         folder = choose_bgm_playlist_folder()

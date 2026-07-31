@@ -18,6 +18,11 @@ def main():
     summary = os.path.join(book_dir, "SUMMARY.md")
     transcripts = sorted(glob.glob(os.path.join(book_dir, "transcript_part*.md")))
     css = os.path.join(book_dir, "epub_style.css")
+    # ★ 2026-07-31: subtitle_pipeline_body.sh가 만드는 "빠른" EPUB에는 표지가
+    # 있었는데, 이 스크립트가 그걸 덮어쓰면서 표지 관련 옵션이 아예 없어서
+    # 최종 EPUB에서 표지가 사라지는 버그가 있었다(사용자 리포트로 발견) —
+    # subtitle_pipeline_body.sh가 book_dir에 복사해두는 cover.jpg를 그대로 쓴다.
+    cover = os.path.join(book_dir, "cover.jpg")
 
     if not os.path.isfile(summary):
         sys.exit(f"SUMMARY.md가 없습니다: {summary}")
@@ -43,6 +48,8 @@ def main():
         "--metadata", f"title={os.path.basename(book_dir)}",
         "-o", output,
     ]
+    if os.path.isfile(cover):
+        command.append(f"--epub-cover-image={cover}")
     subprocess.run(command, check=True, cwd=book_dir)
     print(output)
 
