@@ -411,7 +411,7 @@
 <tr><td>怒而撓之</td><td>노이요지 — 노하게 해 흔듦</td><td>확인되지 않음</td><td><span color="red">**원소**</span>나 <span color="red">**문추**</span>의 분노를 의도적으로 자극했다는 확실한 장면은 없습니다.</td></tr>
 <tr><td>卑而驕之</td><td>비이교지 — 낮추어 교만하게 함</td><td>부분 적용</td><td><span color="blue">**조조**</span>군의 열세와 철수 모습이 <span color="red">**문추**</span>와 <span color="red">**원소**</span> 측의 과신을 키웠지만 전부 연출된 약세는 아닙니다.</td></tr>
 <tr><td>佚而勞之</td><td>일이로지 — 편안한 적을 수고롭게 함</td><td>부분 적용</td><td>🏙️ **백마(白馬)**·🏙️ **연진(延津)**의 전환과 관도 교착으로 <span color="red">**원소**</span> 대군의 긴 보급선을 계속 소모시켰습니다.</td></tr>
-<tr><td>親而離之</td><td>친이리지 — 친한 세력을 갈라놓음</td><td>부분 적용</td><td><span color="blue">**허유**</span>의 귀순 정보를 활용하고 🏙️ **오소(烏巢)** 피습 뒤 <span color="blue">**장합**</span>·<span color="blue">**고람**</span>과 <span color="red">**원소**</span> 지휘부의 신뢰 붕괴를 증폭시켰습니다. 다만 이 이탈을 처음부터 조조가 설계했다고 보기는 어렵습니다.</td></tr>
+<tr><td>親而離之</td><td>친이리지 — 친한 세력을 갈라놓음</td><td>부분 적용</td><td><span color="blue">**허유**</span>의 귀순 정보를 활용하고 🏙️ **오소(烏巢)** 피습 뒤 <span color="blue">**장합**</span>·<span color="blue">**고람**</span>과 <span color="red">**원소**</span> 지휘부의 신뢰 붕괴를 증폭시켰습니다. 다만 이 이탈을 처음부터 <span color="blue">**조조**</span>가 설계했다고 보기는 어렵습니다.</td></tr>
 </table>
 
 #### 法 한눈 비교 — 곡제·관도·주용
