@@ -71,9 +71,8 @@ DECEPTION_QUESTIONS = (
     "속은 사람은 어떤 독립 확인을 생략했는가?",
     "신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?",
 )
-DECEPTION_TABLE_ROWS = (
-    "기만 주체", "실제 의도", "상대에게 보인 신호", "상대가 믿은 이유",
-    "유발된 행동", "실제 타격·결과", "사료상 확실성",
+DECEPTION_NARRATIVE_BEATS = (
+    "주체와 의도", "보인 신호와 믿은 이유", "유발된 행동과 결과", "사료의 경계",
 )
 DECEPTION_TWELVE = (
     "能而示之不能", "用而示之不用", "近而示之遠", "遠而示之近",
@@ -397,17 +396,16 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
                 structure_headings[0].end():questions_headings[0].start()
             ]
             structure_tables = tables(structure_block)
-            if len(structure_tables) != 1:
+            if structure_tables:
                 errors.append(
-                    f"{index + 1}번째 역사 사례의 속임수 작동 구조표가 "
-                    f"{len(structure_tables)}개입니다(정상: 1개)"
+                    f"{index + 1}번째 역사 사례의 속임수 작동 구조에 "
+                    f"폐기된 표가 {len(structure_tables)}개 남아 있습니다"
                 )
-            else:
-                for row_name in DECEPTION_TABLE_ROWS:
-                    if structure_tables[0].count(f"<td>{row_name}</td>") != 1:
-                        errors.append(
-                            f"{index + 1}번째 속임수 작동 구조표의 필수 행 누락: {row_name}"
-                        )
+            for beat in DECEPTION_NARRATIVE_BEATS:
+                if structure_block.count(f"**{beat}.**") != 1:
+                    errors.append(
+                        f"{index + 1}번째 속임수 작동 구조 서사의 필수 문단 누락: {beat}"
+                    )
         for question in DECEPTION_QUESTIONS:
             if case.count(f"**{question}**") != 1:
                 errors.append(
@@ -422,10 +420,7 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
                     f"{len(selected_tables)}개입니다(정상: 1개)"
                 )
             else:
-                selected_maxims = re.findall(
-                    r"<td>([^<]+)</td>", selected_tables[0]
-                )
-                selected_maxims = [m for m in selected_maxims if m in DECEPTION_TWELVE]
+                selected_maxims = [m for m in DECEPTION_TWELVE if m in selected_tables[0]]
                 if not selected_maxims:
                     errors.append(f"{index + 1}번째 시계편 표에 실제 적용 항목이 없습니다")
                 if len(selected_maxims) >= len(DECEPTION_TWELVE):
@@ -434,6 +429,19 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
                     errors.append(f"{index + 1}번째 시계편 표에 중복 항목이 있습니다")
                 if "확인되지 않음" in selected_tables[0] or "방어 원칙" in selected_tables[0]:
                     errors.append(f"{index + 1}번째 시계편 표에 미사용·일반 원칙이 포함됐습니다")
+                selected_rows = re.findall(r"<tr\b[^>]*>(.*?)</tr>", selected_tables[0], re.DOTALL)
+                for row_number, row in enumerate(selected_rows, start=1):
+                    cell_count = len(re.findall(r"<td\b[^>]*>", row))
+                    if cell_count != 2:
+                        errors.append(
+                            f"{index + 1}번째 시계편 표 {row_number}행이 {cell_count}열입니다(정상: 2열)"
+                        )
+                    if row_number > 1:
+                        first_cell = re.search(r"<td\b[^>]*>(.*?)</td>", row, re.DOTALL)
+                        if not first_cell or "<br>" not in first_cell.group(1):
+                            errors.append(
+                                f"{index + 1}번째 시계편 표 {row_number}행 첫 칸에 한문과 독음·뜻을 잇는 <br>가 없습니다"
+                            )
         terrain_marker = "**뒤에서 반복될 지형을 먼저 잡아두기**"
         marker_count = case.count(terrain_marker)
         if marker_count != 1:
