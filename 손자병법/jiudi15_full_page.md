@@ -2,7 +2,7 @@
 <table_of_contents color="gray"/>
 ---
 ## 1. 원문 + 독음 + 직역 + 한자어 뜻풀이
-<details color="orange_bg">
+<details>
 <summary>吾士<span color="red">無余財</span>, 非惡貨也, <span color="red">無余命</span>, 非惡壽也.<br>오사무여재, 비오화야, 무여명, 비오수야.</summary>
 	**직역**
 	우리 병사에게 남은 재물이 없는 것은 재화를 싫어해서가 아니며, 남겨 둔 목숨이 없는 것은 오래 살기를 싫어해서가 아니다.

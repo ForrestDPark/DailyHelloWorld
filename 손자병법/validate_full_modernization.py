@@ -185,8 +185,11 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         if section_one_start >= 0 and section_two_start > section_one_start
         else ""
     )
-    if '<details color="orange_bg">' not in section_one:
-        errors.append("1번 섹션 원문·독음 토글의 주황 배경이 없습니다")
+    details_match = re.search(r"<details(?P<attrs>[^>]*)>", section_one)
+    if not details_match:
+        errors.append("1번 섹션에 원문·독음 토글이 없습니다")
+    elif re.search(r"\bcolor\s*=", details_match.group("attrs")):
+        errors.append("1번 섹션 원문·독음 토글에 금지된 색상 속성이 있습니다")
     summary_match = re.search(
         r"<summary>(.*?)<br>(.*?)</summary>",
         section_one,
