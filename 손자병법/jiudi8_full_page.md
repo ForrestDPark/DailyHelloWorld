@@ -56,6 +56,13 @@
 ![tannenberg 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi8/tannenberg_strategy_map_v2.png)
 ![tannenberg 전투 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi8/tannenberg_sequence_map_v2.png)
 
+**뒤에서 반복될 지형을 먼저 잡아두기**
+- 🌊 <span color="blue_bg">**마수리안 호수대(Masurian Lakes)**</span> — 동프로이센 동남부의 여러 호수와 좁은 통로가 러시아 제1군과 제2군의 진격축을 갈라놓았습니다. 두 군이 서로 지원하려면 제한된 길목과 긴 우회로를 통과해야 했으므로, 지도상의 거리보다 합류 시간이 훨씬 길었습니다.
+- 🌲 <span color="green_bg">**동프로이센 숲(East Prussian forests)**</span> — 호수 사이의 숲과 구릉은 관측·연락·횡적 이동을 어렵게 했습니다. 이 지형에서 군단 간격이 벌어지면 이웃 부대가 보이지 않을 뿐 아니라 측면이 무너졌다는 사실도 늦게 알게 됩니다.
+- **알렌슈타인–호엔슈타인 축(Allenstein–Hohenstein axis)** — 러시아 제2군 중앙이 북쪽으로 밀고 올라간 핵심 진격축이었습니다. 독일 제20군단이 이 중앙을 붙잡는 동안 양익 군단이 돌아 들어갈 시간을 벌었습니다.
+- **나이덴부르크–빌렌베르크 통로(Neidenburg–Willenberg corridor)** — 제2군 후방과 남쪽 국경을 잇는 퇴로·보급 통로였습니다. 독일군이 양쪽에서 이 통로를 압박하자 삼소노프군은 남쪽으로 빠질 출구와 군단 간 연결을 함께 잃었습니다.
+- **독일 철도망(German rail network)** — 내선 철도는 동프로이센 북동쪽의 병력을 남쪽 결전장으로 옮기는 작전 통로였습니다. 러시아군이 이 재배치를 제때 확인하지 못한 사이 독일군은 분산된 두 적 가운데 제2군에 먼저 우세를 만들었습니다.
+
 #### 두 러시아군은 지도에서는 이웃이었지만 하나의 군대가 아니었다
 러시아 서북전선군은 렌넨캄프의 제1군과 삼소노프의 제2군으로 동프로이센을 협공하려 했습니다. 그러나 마수리안 호수대와 숲, 서로 다른 진격축, 불완전한 참모 협조 때문에 두 군은 제때 서로를 구할 수 없었습니다. 제2군 내부에서도 군단 간격이 벌어지고 보급이 뒤처져, `上下不相收`와 `卒離而不集`이 동시에 진행됐습니다.
 
@@ -501,6 +508,13 @@
 ![maling 시대 국가·세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi8/maling_country_map_v2.png)
 ![maling 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi8/maling_strategy_map_v2.png)
 ![maling 전투 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi8/maling_sequence_map_v2.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+- **한나라 전선(韓國戰線)** — 위군이 한나라를 압박하던 출발점으로, 방연의 주력이 본국에서 떨어져 있던 곳입니다. 제나라가 이 주력과 정면으로 맞서지 않고 위의 배후를 위협하면서 방연은 공격을 계속할지 귀환할지 선택해야 했습니다.
+- ▰ <span color="red">**대량(大梁)**</span> — 위나라의 수도이자 제군이 위협한 전략 목표였습니다. 대량이 위험해지자 위군은 한나라 전선에서 물러나 본국으로 향했고, 손빈은 싸움의 축을 자신이 고른 길로 돌렸습니다.
+- **제군의 계획된 퇴로** — 제군은 대량 방면에서 물러나며 매일 아궁이 수를 줄여 추격대가 같은 길을 더 빠르게 따라오도록 유도했습니다. 이 길은 단순한 철수로가 아니라 방연의 속도와 본대 이탈 정도를 조절하는 기만 장치였습니다.
+- ⛰️ <span color="green_bg">**마릉 협로(馬陵道)**</span> — 전승에서 좁고 험한 길과 양쪽 매복 지형이 결합된 종착점입니다. 정확한 위치에는 논쟁이 있지만, 위군 선두가 본대·정찰·보급과 떨어진 밤에 이 병목에 들어왔다는 작전 구조가 핵심입니다.
+- **매복 사격 구역** — 손빈은 위군의 예상 도착 시각을 계산해 협로 주변에 쇠뇌병과 정예병을 숨겼습니다. 선두가 이 구역에 들어오면 좁은 길 때문에 뒤따르는 병력이 즉시 전개하거나 우회해 구원하기 어려웠습니다.
 
 #### 손빈은 위군을 한나라 전선에서 떼어 내고 추격이라는 선택을 스스로 하게 했다
 위군이 한나라를 공격하자 제나라는 위군 주력과 정면으로 맞붙지 않고 위의 중심부를 위협했습니다. 방연은 본국을 구하기 위해 돌아섰고, 제군이 물러나는 모습을 보자 추격에 들어갔습니다. 제군은 싸울 수 없어서 도망친 것이 아니라, 싸움의 장소와 시간을 자신이 고르기 위해 움직였습니다.

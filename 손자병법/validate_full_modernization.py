@@ -228,6 +228,24 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
     for index, start in enumerate(case_starts):
         end = case_starts[index + 1] if index + 1 < len(case_starts) else len(section_four)
         case = section_four[start:end]
+        terrain_marker = "**뒤에서 반복될 지형을 먼저 잡아두기**"
+        marker_count = case.count(terrain_marker)
+        if marker_count != 1:
+            errors.append(
+                f"{index + 1}번째 역사 사례의 지형 예고 제목이 "
+                f"{marker_count}개입니다(정상: 1개)"
+            )
+        else:
+            terrain_start = case.find(terrain_marker) + len(terrain_marker)
+            terrain_tail = case[terrain_start:]
+            next_heading = re.search(r"^\s*#{3,4}\s+", terrain_tail, re.MULTILINE)
+            terrain_block = terrain_tail[:next_heading.start()] if next_heading else terrain_tail
+            terrain_items = re.findall(r"^\s*-\s+\S.+$", terrain_block, re.MULTILINE)
+            if len(terrain_items) < 3:
+                errors.append(
+                    f"{index + 1}번째 역사 사례의 지형 예고 목록이 "
+                    f"{len(terrain_items)}개입니다(최소 3개)"
+                )
         scene_headings = re.findall(r"^\s*#### (.+)$", case, re.MULTILINE)
         narrative_headings = [
             heading for heading in scene_headings
