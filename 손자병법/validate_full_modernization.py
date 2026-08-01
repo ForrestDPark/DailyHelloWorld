@@ -232,6 +232,16 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
             f"직접화법 큰따옴표 전통 주석이 {len(commentary_rows)}개입니다"
             f"(정상: {len(COMMENTATORS)}개)"
         )
+    emphasized_commentary_rows = [
+        row for row in commentary_rows
+        if re.search(r'—\s+"[^"\n]*\*\*[^*\n]+\*\*[^"\n]*"', row)
+    ]
+    if len(emphasized_commentary_rows) != len(COMMENTATORS):
+        errors.append(
+            f"핵심 구절이 굵게 강조된 전통 주석이 "
+            f"{len(emphasized_commentary_rows)}개입니다"
+            f"(정상: {len(COMMENTATORS)}개)"
+        )
     if '<span color="blue">' in section_two:
         errors.append("2번 전통 주석에 폐기된 파란색 글자 강조가 남아 있습니다")
     for phrase in FORBIDDEN_COMMENTARY_PHRASES:
