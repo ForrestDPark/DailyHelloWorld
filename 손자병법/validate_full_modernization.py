@@ -80,6 +80,11 @@ DECEPTION_TWELVE = (
     "利而誘之", "亂而取之", "實而備之", "強而避之",
     "怒而撓之", "卑而驕之", "佚而勞之", "親而離之",
 )
+COUNTRY_EMOJI_MANIFESTS = {
+    "jiudi15_full_page.md": (
+        "🇲🇹 몰타", "🏛️ 오스만 제국", "🏛️ 시칠리아 왕국", "🏛️ 신(新) 왕조",
+    ),
+}
 
 
 def tables(text: str) -> list[str]:
@@ -150,6 +155,10 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
     )
     warnings: list[str] = []
     errors.extend(validate_law_comparisons(text))
+
+    for label in COUNTRY_EMOJI_MANIFESTS.get(path.name, ()):
+        if label not in text:
+            errors.append(f"국가·역사 세력 식별 이모지 표기 누락: {label}")
 
     if "<table_of_contents" not in text:
         errors.append("페이지 맨 위 자동 목차가 없습니다")

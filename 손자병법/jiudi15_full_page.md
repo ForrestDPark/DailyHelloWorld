@@ -58,14 +58,14 @@
 		현대 임무형 지휘는 지휘관 의도와 공유된 이해를 강조한다. 무엇을 반드시 지키고 무엇을 현장에서 포기할 수 있는지 알려 주어야 하급자가 통신 없이 판단한다. 반대 의견을 충성심 부족으로 몰아붙이면 집단사고가 생기므로, 희생 요구에는 근거·한계·철회 조건이 함께 있어야 한다. 카너먼식 교정법을 더하면 결전 전에는 `현재 붙든 시나리오 / 대안 시나리오 / 각 시나리오의 기저율과 실패 조건`을 별도로 적어야 한다.
 ---
 ## 4. 역사적 실증 사례
-	### 서양 — 몰타 대공방전(Great Siege of Malta, 1565)
+	### 서양 — 🇲🇹 몰타 대공방전(Great Siege of Malta, 1565)
 	![몰타 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi15/malta_commanders.png)
 	![몰타 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi15/malta_soldiers_weapons_life.png)
 	![몰타 지휘·작전 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi15/malta_command_structure.png)
 	![몰타 지중해 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi15/malta_country_map.png)
 	![몰타 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi15/malta_strategy_map.png)
 	![몰타 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi15/malta_sequence_map.png)
-	1565년 몰타는 시칠리아와 북아프리카 사이 항로를 감시할 수 있는 전진기지였다. 오스만 제국은 성 요한 기사단을 몰아내려 했고, 기사단장 <span color="blue">**장 파리조 드 발레트(Jean Parisot de Valette)**</span>는 기사·용병·몰타 민병을 항구 요새에 나눠 배치했다. 공격군의 육군 사령관은 <span color="red">**무스타파 파샤(Mustafa Pasha)**</span>, 함대 사령관은 <span color="red">**피얄레 파샤(Piyale Pasha)**</span>였다. 쟁점은 작은 요새 하나가 아니라 오스만군이 본공격 전에 시간과 정예를 어디에 소비하느냐였다.[[1]](https://www.orderofmalta.int/wp-content/uploads/2010/05/storia_3.pdf)
+	1565년 🇲🇹 몰타는 🏛️ 시칠리아 왕국과 북아프리카 사이 항로를 감시할 수 있는 전진기지였다. 🏛️ 오스만 제국은 성 요한 기사단을 몰아내려 했고, 기사단장 <span color="blue">**장 파리조 드 발레트(Jean Parisot de Valette)**</span>는 기사·용병·몰타 민병을 항구 요새에 나눠 배치했다. 공격군의 육군 사령관은 <span color="red">**무스타파 파샤(Mustafa Pasha)**</span>, 함대 사령관은 <span color="red">**피얄레 파샤(Piyale Pasha)**</span>였다. 쟁점은 작은 요새 하나가 아니라 오스만군이 본공격 전에 시간과 정예를 어디에 소비하느냐였다.[[1]](https://www.orderofmalta.int/wp-content/uploads/2010/05/storia_3.pdf)
 
 	**뒤에서 반복될 지형을 먼저 잡아두기**
 	- <span color="blue">**▰**</span> <span color="yellow_bg">**비르구(Birgu)**</span>: 기사단 본부가 있던 방어 중심지다.
@@ -166,7 +166,7 @@
 	![곤양 신말 군웅 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi15/kunyang_country_map.png)
 	![곤양 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi15/kunyang_strategy_map.png)
 	![곤양 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi15/kunyang_sequence_map.png)
-	23년 왕망의 신(新) 왕조는 녹림 계열 반란군이 완성을 공격하자 대군을 남쪽으로 보냈다. 길목의 작은 곤양에는 반란군 일부가 들어가 있었다. <span color="red">**왕읍(王邑)**</span>과 <span color="red">**왕심(王尋)**</span>은 먼저 곤양을 지워 후방을 정리하려 했고, <span color="red">**엄우(嚴尤)**</span>는 곤양을 지나 완성의 주력을 치라고 간언했다. 성 밖으로 빠져나온 <span color="blue">**유수(劉秀)**</span>는 지원군을 모아 돌아와 포위군 지휘부를 직접 찔렀다. 『후한서』가 신군을 42만이라 적지만 고대 병력 수는 과장 가능성이 있으므로, 정확한 숫자보다 압도적 규모 차이와 지휘 구조에 초점을 둔다.[[3]](https://www.gushiwen.cn/guwen/bookv_46653FD803893E4F62F1B6D652AA73BC.aspx)
+	23년 왕망의 🏛️ 신(新) 왕조는 녹림 계열 반란군이 완성을 공격하자 대군을 남쪽으로 보냈다. 길목의 작은 곤양에는 반란군 일부가 들어가 있었다. <span color="red">**왕읍(王邑)**</span>과 <span color="red">**왕심(王尋)**</span>은 먼저 곤양을 지워 후방을 정리하려 했고, <span color="red">**엄우(嚴尤)**</span>는 곤양을 지나 완성의 주력을 치라고 간언했다. 성 밖으로 빠져나온 <span color="blue">**유수(劉秀)**</span>는 지원군을 모아 돌아와 포위군 지휘부를 직접 찔렀다. 『후한서』가 신군을 42만이라 적지만 고대 병력 수는 과장 가능성이 있으므로, 정확한 숫자보다 압도적 규모 차이와 지휘 구조에 초점을 둔다.[[3]](https://www.gushiwen.cn/guwen/bookv_46653FD803893E4F62F1B6D652AA73BC.aspx)
 
 	**뒤에서 반복될 지형을 먼저 잡아두기**
 	- <span color="blue">**▰**</span> <span color="yellow_bg">**곤양(昆陽)**</span>: 현재 허난성 예현 부근의 작은 성으로 신군 남진로의 후방에 놓였다.
