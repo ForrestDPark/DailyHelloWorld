@@ -346,6 +346,16 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
     for index, start in enumerate(case_starts):
         end = case_starts[index + 1] if index + 1 < len(case_starts) else len(section_four)
         case = section_four[start:end]
+        case_title = case.splitlines()[0].strip()
+        if " vs " not in case_title or " │ " not in case_title:
+            errors.append(
+                f"{index + 1}번째 역사 사례 제목에 'A 진영 vs B 진영 │ 전투명' 구조가 없습니다"
+            )
+        else:
+            matchup = case_title.split("—", 1)[-1].split("│", 1)[0]
+            sides = [side.strip() for side in matchup.split(" vs ")]
+            if len(sides) != 2 or any(len(side) < 2 for side in sides):
+                errors.append(f"{index + 1}번째 역사 사례 제목의 양측 집단명이 불완전합니다")
         deception_headings = list(re.finditer(
             r"^\s*#### 전투에서 사용된 속임수 — \S.+$", case, re.MULTILINE
         ))
@@ -367,7 +377,7 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
             errors.append(f"{index + 1}번째 역사 사례에 속임수 전투서사가 없습니다")
         if len(structure_headings) != 1:
             errors.append(
-                f"{index + 1}번째 역사 사례의 속임수 작동 구조표 제목이 "
+                f"{index + 1}번째 역사 사례의 속임수 작동 구조 제목이 "
                 f"{len(structure_headings)}개입니다(정상: 1개)"
             )
         if len(questions_headings) != 1:

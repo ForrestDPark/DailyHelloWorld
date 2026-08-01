@@ -58,7 +58,7 @@
 		현대 임무형 지휘는 지휘관 의도와 공유된 이해를 강조한다. 무엇을 반드시 지키고 무엇을 현장에서 포기할 수 있는지 알려 주어야 하급자가 통신 없이 판단한다. 반대 의견을 충성심 부족으로 몰아붙이면 집단사고가 생기므로, 희생 요구에는 근거·한계·철회 조건이 함께 있어야 한다. 카너먼식 교정법을 더하면 결전 전에는 `현재 붙든 시나리오 / 대안 시나리오 / 각 시나리오의 기저율과 실패 조건`을 별도로 적어야 한다.
 ---
 ## 4. 역사적 실증 사례
-	### 서양 — 🇲🇹 몰타 대공방전(Great Siege of Malta, 1565)
+	### 서양 — 🏛️ 성 요한 기사단·🇲🇹 몰타 수비군 vs 🏛️ 오스만 제국 │ 몰타 대공방전(Great Siege of Malta, 1565)
 	![몰타 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi15/malta_commanders.png)
 	![몰타 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi15/malta_soldiers_weapons_life.png)
 	![몰타 지휘·작전 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi15/malta_command_structure.png)
@@ -156,7 +156,7 @@
 		<tr><td><span color="blue">**몰타 수비군**</span></td><td>비축·야간 수송·구원 기대를 지속 능력으로 썼다.</td></tr>
 		<tr><td><span color="red">**오스만군**</span></td><td>포탄·인명·시간을 세인트 엘모에 과다 투입했다.</td></tr>
 	</table>
-	### 동양 — 곤양대전(昆陽之戰, 23)
+	### 동양 — ⚔️ 녹림군·유수군 vs 🏛️ 신(新) 왕조 │ 곤양대전(昆陽之戰, 23)
 	![곤양 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi15/kunyang_commanders.png)
 	![곤양 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi15/kunyang_soldiers_weapons_life.png)
 	![곤양 지휘·작전 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi15/kunyang_command_structure.png)
