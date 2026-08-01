@@ -43,6 +43,19 @@ CITY_EMOJI_MANIFESTS = {
         "알렌슈타인", "호엔슈타인", "나이덴부르크", "빌렌베르크", "대량",
     ),
 }
+DECEPTION_QUESTIONS = (
+    "누가 누구를 속였는가?",
+    "어떤 사실이 거짓이었는가?",
+    "어떤 사실은 진실이지만 오해를 유도했는가?",
+    "상대는 왜 그것을 믿고 싶어 했는가?",
+    "속임수가 없었어도 같은 오판이 발생했을까?",
+    "속은 사람은 어떤 독립 확인을 생략했는가?",
+    "신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?",
+)
+DECEPTION_TABLE_ROWS = (
+    "기만 주체", "실제 의도", "상대에게 보인 신호", "상대가 믿은 이유",
+    "유발된 행동", "실제 타격·결과", "사료상 확실성",
+)
 
 
 def tables(text: str) -> list[str]:
@@ -270,6 +283,61 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
     for index, start in enumerate(case_starts):
         end = case_starts[index + 1] if index + 1 < len(case_starts) else len(section_four)
         case = section_four[start:end]
+        deception_headings = list(re.finditer(
+            r"^\s*#### 전투에서 사용된 속임수 — \S.+$", case, re.MULTILINE
+        ))
+        structure_headings = list(re.finditer(
+            r"^\s*#### 속임수 작동 구조\s*$", case, re.MULTILINE
+        ))
+        questions_headings = list(re.finditer(
+            r"^\s*#### 속임수 일곱 질문\s*$", case, re.MULTILINE
+        ))
+        law_heading = re.search(
+            r"^\s*#### 法 한눈 비교 — 곡제·관도·주용\s*$", case, re.MULTILINE
+        )
+        if len(deception_headings) < 1:
+            errors.append(f"{index + 1}번째 역사 사례에 속임수 전투서사가 없습니다")
+        if len(structure_headings) != 1:
+            errors.append(
+                f"{index + 1}번째 역사 사례의 속임수 작동 구조표 제목이 "
+                f"{len(structure_headings)}개입니다(정상: 1개)"
+            )
+        if len(questions_headings) != 1:
+            errors.append(
+                f"{index + 1}번째 역사 사례의 속임수 일곱 질문 제목이 "
+                f"{len(questions_headings)}개입니다(정상: 1개)"
+            )
+        if deception_headings and structure_headings and questions_headings and law_heading:
+            if not (
+                deception_headings[-1].start()
+                < structure_headings[0].start()
+                < questions_headings[0].start()
+                < law_heading.start()
+            ):
+                errors.append(
+                    f"{index + 1}번째 역사 사례의 순서가 "
+                    "속임수 서사→작동 구조→일곱 질문→法 비교가 아닙니다"
+                )
+            structure_block = case[
+                structure_headings[0].end():questions_headings[0].start()
+            ]
+            structure_tables = tables(structure_block)
+            if len(structure_tables) != 1:
+                errors.append(
+                    f"{index + 1}번째 역사 사례의 속임수 작동 구조표가 "
+                    f"{len(structure_tables)}개입니다(정상: 1개)"
+                )
+            else:
+                for row_name in DECEPTION_TABLE_ROWS:
+                    if structure_tables[0].count(f"<td>{row_name}</td>") != 1:
+                        errors.append(
+                            f"{index + 1}번째 속임수 작동 구조표의 필수 행 누락: {row_name}"
+                        )
+        for question in DECEPTION_QUESTIONS:
+            if case.count(f"**{question}**") != 1:
+                errors.append(
+                    f"{index + 1}번째 역사 사례의 속임수 질문 누락·중복: {question}"
+                )
         terrain_marker = "**뒤에서 반복될 지형을 먼저 잡아두기**"
         marker_count = case.count(terrain_marker)
         if marker_count != 1:
