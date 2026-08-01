@@ -1558,6 +1558,16 @@ ax.annotate('', xy=(rx_c[260], ry[260]), xytext=(rx_c[80], ry[80]),
 ---
 
 ## 출력 경로 및 GitHub 업로드
+
+### 로컬 이미지 보관 정책
+
+- Notion에 사용하는 최종 도판은 GitHub `main`의 `손자병법/generated/`를 영구 원본으로 삼는다.
+- 이미지 생성·육안 검수 중에는 로컬 파일을 사용하되, **커밋·푸시 성공과 GitHub raw URL 접근을 확인한 뒤 `git sparse-checkout reapply`로 로컬 작업 사본을 제거**한다.
+- 이 저장소는 `손자병법/generated/`를 희소 체크아웃 제외 대상으로 유지한다. 이후 새 이미지를 커밋할 때는 해당 경로가 희소 제외 상태임을 확인하고 `git add --sparse 손자병법/generated/<작업 폴더>`로 선별 추가한다.
+- 로컬 파일을 단순 삭제한 상태로 커밋하지 않는다. 반드시 `git status --short -- 손자병법/generated`에서 삭제(`D`)가 없음을 확인한 뒤 다음 작업을 진행한다.
+- 생성 중간본·접촉시트·임시 확대본은 GitHub에 올리지 않고 검수 완료 뒤 정리한다. 최종 PNG와 재현 원고·검증 프로그램만 GitHub에 남긴다.
+- 과거 이미지가 다시 필요하면 희소 체크아웃 규칙을 잠시 해제하기보다 `git show origin/main:<경로>` 또는 GitHub raw URL로 필요한 파일만 가져온다.
+
 ```python
 # 출력
 plt.savefig('/mnt/user-data/outputs/[전투명]_map.png',
