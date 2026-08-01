@@ -86,7 +86,7 @@
 
 ## 4. 역사적 실증 사례
 
-### 서양 — <span color="yellow_bg">**빅스버그(Vicksburg)**</span> 전역(Vicksburg Campaign), 1863
+### 서양 — <span color="red">**▰**</span> <span color="yellow_bg">**빅스버그(Vicksburg)**</span> 전역(Vicksburg Campaign), 1863
 
 ![빅스버그 주요 인물](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi9/vicksburg_commanders_gen.png)
 ![빅스버그 병사·무기·생활](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi9/vicksburg_soldier_life_v2.png)
@@ -97,35 +97,35 @@
 
 #### 누가 어디서 무엇을 놓고 싸웠는가
 
-<span color="blue">**율리시스 S. 그랜트(Ulysses S. Grant)**</span>가 노린 <span color="yellow_bg">**빅스버그(Vicksburg)**</span>는 단순한 요새도시가 아니었다. 높은 황토 절벽 위의 포대가 🌊 <span color="blue_bg">**미시시피강(Mississippi River)**</span>을 통제했고, 강 건너 서부 남부연합과 동부 전선을 연결하는 교통의 경첩이었다. 북군이 이곳을 얻으면 강 전체를 사용하고 남부를 동서로 가를 수 있었다.
+<span color="blue">**율리시스 S. 그랜트(Ulysses S. Grant)**</span>가 노린 <span color="red">**▰**</span> <span color="yellow_bg">**빅스버그(Vicksburg)**</span>는 단순한 요새도시가 아니었다. 높은 황토 절벽 위의 포대가 🌊 <span color="blue_bg">**미시시피강(Mississippi River)**</span>을 통제했고, 강 건너 서부 남부연합과 동부 전선을 연결하는 교통의 경첩이었다. 북군이 이곳을 얻으면 강 전체를 사용하고 남부를 동서로 가를 수 있었다.
 
 남부 대통령 <span color="red">**제퍼슨 데이비스(Jefferson Davis)**</span>는 도시를 사수하라고 했고, 방면사령관 <span color="red">**조지프 E. 존스턴(Joseph E. Johnston)**</span>은 야전군을 보존하기 위해 포기하고 합류하라고 했다. 현장사령관 <span color="red">**존 C. 펨버턴(John C. Pemberton)**</span>은 충돌하는 두 요구 사이에서 결단을 늦췄다. 양측이 놓고 싸운 것은 도시의 성벽만이 아니라 **강의 통제권**, **남부의 동서 연결**, <span color="red">**펨버턴**</span>군의 퇴로와 <span color="red">**존스턴**</span>군의 합류 가능성이었다.
 
 **뒤에서 반복될 지형을 먼저 잡아두기**
 
-- 🌊 <span color="blue_bg">**미시시피강(Mississippi River)**</span> — 전역의 보급로이자 전략 목표다. 북군 해군이 강을 장악하면서 <span color="yellow_bg">**빅스버그(Vicksburg)**</span>는 강을 방패로 쓰면서도 강 건너 보급을 자유롭게 받기 어려워졌다.
-- <span color="yellow_bg">**빅스버그(Vicksburg)**</span> — 강 굽이와 황토 절벽 위에 놓인 요새다. 정면 도하와 강습에는 강했지만 육상 후방이 잘리면 거대한 감옥으로 변한다.
-- <span color="yellow_bg">**브루인즈버그(Bruinsburg)**</span> — <span color="blue">**그랜트**</span>가 <span color="yellow_bg">**빅스버그(Vicksburg)**</span> 남쪽에서 강을 건넌 상륙지다. 강변 포대의 강한 정면을 피하고 방비가 약한 남쪽에서 내륙으로 들어갔다.
-- <span color="yellow_bg">**잭슨(Jackson)**</span> — 미시시피주의 철도·행정 거점이다. <span color="blue">**그랜트**</span>가 이곳을 먼저 쳐 <span color="red">**존스턴**</span>의 구원군과 <span color="red">**펨버턴**</span>을 분리했다.
-- ⛰️ <span color="green_bg">**챔피언 힐(Champion Hill)**</span> — <span color="red">**펨버턴**</span>군이 <span color="yellow_bg">**빅스버그(Vicksburg)**</span>로 돌아가기 전 벌어진 결정적 야전이다. 패배 뒤 <span color="red">**펨버턴**</span>은 도시 안으로 밀려났다.
-- 🌊 <span color="blue_bg">**빅블랙강(Big Black River)**</span> — 마지막 육상 장애물이다. 다리와 방어선이 무너지면서 <span color="yellow_bg">**빅스버그(Vicksburg)**</span>의 동쪽 문이 닫혔다.
+- 🌊 <span color="blue_bg">**미시시피강(Mississippi River)**</span> — 전역의 보급로이자 전략 목표다. 북군 해군이 강을 장악하면서 <span color="red">**▰**</span> <span color="yellow_bg">**빅스버그(Vicksburg)**</span>는 강을 방패로 쓰면서도 강 건너 보급을 자유롭게 받기 어려워졌다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**빅스버그(Vicksburg)**</span> — 강 굽이와 황토 절벽 위에 놓인 요새다. 정면 도하와 강습에는 강했지만 육상 후방이 잘리면 거대한 감옥으로 변한다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**브루인즈버그(Bruinsburg)**</span> — <span color="blue">**그랜트**</span>가 <span color="red">**▰**</span> <span color="yellow_bg">**빅스버그(Vicksburg)**</span> 남쪽에서 강을 건넌 상륙지다. 강변 포대의 강한 정면을 피하고 방비가 약한 남쪽에서 내륙으로 들어갔다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**잭슨(Jackson)**</span> — 미시시피주의 철도·행정 거점이다. <span color="blue">**그랜트**</span>가 이곳을 먼저 쳐 <span color="red">**존스턴**</span>의 구원군과 <span color="red">**펨버턴**</span>을 분리했다.
+- ⛰️ <span color="green_bg">**챔피언 힐(Champion Hill)**</span> — <span color="red">**펨버턴**</span>군이 <span color="red">**▰**</span> <span color="yellow_bg">**빅스버그(Vicksburg)**</span>로 돌아가기 전 벌어진 결정적 야전이다. 패배 뒤 <span color="red">**펨버턴**</span>은 도시 안으로 밀려났다.
+- 🌊 <span color="blue_bg">**빅블랙강(Big Black River)**</span> — 마지막 육상 장애물이다. 다리와 방어선이 무너지면서 <span color="red">**▰**</span> <span color="yellow_bg">**빅스버그(Vicksburg)**</span>의 동쪽 문이 닫혔다.
 
 #### 상세 전역 서사 — 요새를 때리던 군대가 요새가 살아가는 길을 빼앗다
 
-<span color="blue">**그랜트**</span>는 처음부터 정답을 알고 있지 않았다. 북쪽 습지와 운하를 통한 여러 우회가 실패했고, <span color="yellow_bg">**빅스버그(Vicksburg)**</span> 포대는 강 정면에서 접근하는 북군을 계속 막았다. 그는 실패한 축선을 고집하지 않고 군대를 강 서안으로 남하시켰다. <span color="blue">**데이비드 딕슨 포터(David Dixon Porter)**</span>의 함대가 포대 아래를 통과한 뒤 수송선을 지원하면서 <span color="yellow_bg">**브루인즈버그(Bruinsburg)**</span> 도하가 가능해졌다.
+<span color="blue">**그랜트**</span>는 처음부터 정답을 알고 있지 않았다. 북쪽 습지와 운하를 통한 여러 우회가 실패했고, <span color="red">**▰**</span> <span color="yellow_bg">**빅스버그(Vicksburg)**</span> 포대는 강 정면에서 접근하는 북군을 계속 막았다. 그는 실패한 축선을 고집하지 않고 군대를 강 서안으로 남하시켰다. <span color="blue">**데이비드 딕슨 포터(David Dixon Porter)**</span>의 함대가 포대 아래를 통과한 뒤 수송선을 지원하면서 <span color="blue">**▰**</span> <span color="yellow_bg">**브루인즈버그(Bruinsburg)**</span> 도하가 가능해졌다.
 
-도하 뒤 <span color="blue">**그랜트**</span>는 곧장 <span color="yellow_bg">**빅스버그(Vicksburg)**</span>만 바라보지 않았다. 먼저 <span color="yellow_bg">**잭슨(Jackson)**</span>으로 방향을 틀어 철도와 <span color="red">**존스턴**</span>의 집결 가능성을 끊었다. 이어 ⛰️ <span color="green_bg">**챔피언 힐**</span>에서 <span color="red">**펨버턴**</span>군을 격파하고 빅블랙강을 넘어 도시 안으로 몰아넣었다. 이 순서가 중요하다. <span color="yellow_bg">**빅스버그(Vicksburg)**</span>라는 所愛를 취하기 전에 **도시가 구원을 받을 길과 수비군이 빠져나갈 길을 먼저 빼앗았다.**
+도하 뒤 <span color="blue">**그랜트**</span>는 곧장 <span color="red">**▰**</span> <span color="yellow_bg">**빅스버그(Vicksburg)**</span>만 바라보지 않았다. 먼저 <span color="red">**▰**</span> <span color="yellow_bg">**잭슨(Jackson)**</span>으로 방향을 틀어 철도와 <span color="red">**존스턴**</span>의 집결 가능성을 끊었다. 이어 ⛰️ <span color="green_bg">**챔피언 힐**</span>에서 <span color="red">**펨버턴**</span>군을 격파하고 빅블랙강을 넘어 도시 안으로 몰아넣었다. 이 순서가 중요하다. <span color="red">**▰**</span> <span color="yellow_bg">**빅스버그(Vicksburg)**</span>라는 所愛를 취하기 전에 **도시가 구원을 받을 길과 수비군이 빠져나갈 길을 먼저 빼앗았다.**
 
 5월 19일과 22일 두 차례 정면강습은 실패했다. <span color="blue">**그랜트**</span>는 여기서 강한 요새를 더 세게 치는 실수를 반복하지 않고 포위로 전환했다. 참호와 포대가 조금씩 가까워지는 동안 <span color="blue">**포터**</span>의 함대는 강을 막고, 육군은 동쪽을 봉쇄했다. 식량과 탄약이 줄고 시민들은 포격을 피해 황토 절벽에 굴을 팠다. 47일 뒤 <span color="red">**펨버턴**</span>은 약 2만9천 명과 함께 항복했다. 북군은 남부 야전군을 전면에서 모두 죽여 없앤 것이 아니라, **군대가 계속 싸우기 위해 반드시 필요한 보급·퇴로·구원 가능성을 먼저 거두어 굴복시켰다.**
 
 #### 전투에서 사용된 속임수 — 복수의 위협축으로 실제 도하와 진격 방향을 감추다
-<span color="blue">**그랜트**</span>는 북쪽 우회, 강변 활동, 기병 습격을 병행해 남군이 실제 도하지를 확정하지 못하게 했습니다. <span color="yellow_bg">**브루인즈버그(Bruinsburg)**</span>에 상륙한 뒤에도 곧장 <span color="yellow_bg">**빅스버그(Vicksburg)**</span>로 가지 않고 <span color="yellow_bg">**잭슨(Jackson)**</span>을 먼저 쳤습니다. 단일 허위 발언보다 **여러 가능성을 보인 채 실제 주공을 늦게 드러낸 작전적 기만**이었습니다.
+<span color="blue">**그랜트**</span>는 북쪽 우회, 강변 활동, 기병 습격을 병행해 남군이 실제 도하지를 확정하지 못하게 했습니다. <span color="blue">**▰**</span> <span color="yellow_bg">**브루인즈버그(Bruinsburg)**</span>에 상륙한 뒤에도 곧장 <span color="red">**▰**</span> <span color="yellow_bg">**빅스버그(Vicksburg)**</span>로 가지 않고 <span color="red">**▰**</span> <span color="yellow_bg">**잭슨(Jackson)**</span>을 먼저 쳤습니다. 단일 허위 발언보다 **여러 가능성을 보인 채 실제 주공을 늦게 드러낸 작전적 기만**이었습니다.
 
 #### 속임수 작동 구조
 <table fit-page-width="true" header-row="true">
 <tr>
 <td>항목</td>
-<td><span color="yellow_bg">**빅스버그(Vicksburg)**</span>에서 작동한 구조</td>
+<td><span color="red">**▰**</span> <span color="yellow_bg">**빅스버그(Vicksburg)**</span>에서 작동한 구조</td>
 </tr>
 <tr>
 <td>기만 주체</td>
@@ -133,7 +133,7 @@
 </tr>
 <tr>
 <td>실제 의도</td>
-<td>남쪽으로 도하해 <span color="yellow_bg">**빅스버그(Vicksburg)**</span>의 동쪽 구원로와 퇴로를 차단하는 것</td>
+<td>남쪽으로 도하해 <span color="red">**▰**</span> <span color="yellow_bg">**빅스버그(Vicksburg)**</span>의 동쪽 구원로와 퇴로를 차단하는 것</td>
 </tr>
 <tr>
 <td>상대에게 보인 신호</td>
@@ -149,7 +149,7 @@
 </tr>
 <tr>
 <td>실제 타격·결과</td>
-<td><span color="yellow_bg">**잭슨(Jackson)**</span>·챔피언 힐·빅블랙강을 장악해 <span color="yellow_bg">**빅스버그(Vicksburg)**</span>를 고립시켰습니다.</td>
+<td><span color="red">**▰**</span> <span color="yellow_bg">**잭슨(Jackson)**</span>·챔피언 힐·빅블랙강을 장악해 <span color="red">**▰**</span> <span color="yellow_bg">**빅스버그(Vicksburg)**</span>를 고립시켰습니다.</td>
 </tr>
 <tr>
 <td>사료상 확실성</td>
@@ -163,16 +163,16 @@
 3. **어떤 사실은 진실이지만 오해를 유도했는가?** 북군의 여러 우회와 기병 활동은 실제였지만 최종 도하축 전체를 보여주지는 않았습니다.
 4. **상대는 왜 그것을 믿고 싶어 했는가?** 남군은 기존의 강한 정면 방어로 다시 막을 수 있다고 믿고 싶어 했습니다.
 5. **속임수가 없었어도 같은 오판이 발생했을까?** 상충 명령 때문에 가능했지만 도하지가 일찍 확인됐다면 남군의 집중 가능성은 커졌을 것입니다.
-6. **속은 사람은 어떤 독립 확인을 생략했는가?** 수송선 집결·남쪽 도하·<span color="yellow_bg">**잭슨(Jackson)**</span> 방면 도로 정찰을 하나의 상황도로 교차 확인하지 못했습니다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 수송선 집결·남쪽 도하·<span color="red">**▰**</span> <span color="yellow_bg">**잭슨(Jackson)**</span> 방면 도로 정찰을 하나의 상황도로 교차 확인하지 못했습니다.
 7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 스포츠 페인트, 체스의 양동, 공개 규칙의 워게임이 적절합니다.
 
 #### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
 <table fit-page-width="true" header-row="true">
 <tr><td>해당하는 길</td><td>독음·뜻</td><td>이 전장에서의 작동</td></tr>
-<tr><td>亂而取之</td><td>난이취지 — 혼란한 틈에 취함</td><td>남부 대통령의 도시 사수 명령과 <span color="red">**존스턴**</span>의 야전군 보존 명령이 충돌한 틈을 이용해 <span color="yellow_bg">**잭슨(Jackson)**</span>과 동쪽 연결을 먼저 끊었습니다.</td></tr>
-<tr><td>強而避之</td><td>강이피지 — 강한 곳을 피함</td><td>절벽 포대가 버틴 강 정면을 되풀이해 치지 않고 남쪽 <span color="yellow_bg">**브루인즈버그(Bruinsburg)**</span>로 도하해 육상 후방으로 돌아갔습니다.</td></tr>
-<tr><td>佚而勞之</td><td>일이로지 — 편안한 적을 수고롭게 함</td><td>복수의 위협축과 빠른 내륙 기동으로 남군을 이동·분산시키고, 고립된 <span color="yellow_bg">**빅스버그(Vicksburg)**</span>를 포위해 계속 소모시켰습니다.</td></tr>
-<tr><td>親而離之</td><td>친이리지 — 결합한 세력을 갈라놓음</td><td><span color="yellow_bg">**잭슨(Jackson)**</span>을 먼저 쳐 <span color="red">**펨버턴**</span>군과 <span color="red">**존스턴**</span> 구원군이 합류하지 못하게 했습니다.</td></tr>
+<tr><td>亂而取之</td><td>난이취지 — 혼란한 틈에 취함</td><td>남부 대통령의 도시 사수 명령과 <span color="red">**존스턴**</span>의 야전군 보존 명령이 충돌한 틈을 이용해 <span color="red">**▰**</span> <span color="yellow_bg">**잭슨(Jackson)**</span>과 동쪽 연결을 먼저 끊었습니다.</td></tr>
+<tr><td>強而避之</td><td>강이피지 — 강한 곳을 피함</td><td>절벽 포대가 버틴 강 정면을 되풀이해 치지 않고 남쪽 <span color="blue">**▰**</span> <span color="yellow_bg">**브루인즈버그(Bruinsburg)**</span>로 도하해 육상 후방으로 돌아갔습니다.</td></tr>
+<tr><td>佚而勞之</td><td>일이로지 — 편안한 적을 수고롭게 함</td><td>복수의 위협축과 빠른 내륙 기동으로 남군을 이동·분산시키고, 고립된 <span color="red">**▰**</span> <span color="yellow_bg">**빅스버그(Vicksburg)**</span>를 포위해 계속 소모시켰습니다.</td></tr>
+<tr><td>親而離之</td><td>친이리지 — 결합한 세력을 갈라놓음</td><td><span color="red">**▰**</span> <span color="yellow_bg">**잭슨(Jackson)**</span>을 먼저 쳐 <span color="red">**펨버턴**</span>군과 <span color="red">**존스턴**</span> 구원군이 합류하지 못하게 했습니다.</td></tr>
 </table>
 
 #### 法 한눈 비교 — 곡제·관도·주용
@@ -180,7 +180,7 @@
 <tr>
 <td>진영</td>
 <td>곡제(편제)</td>
-<td><span color="yellow_bg">**관도(官渡)**</span>(지휘)</td>
+<td><span color="blue">**▰**</span> <span color="yellow_bg">**관도(官渡)**</span>(지휘)</td>
 <td>주용(보급·지속)</td>
 </tr>
 <tr color="blue">
@@ -222,13 +222,13 @@
 </tr>
 	<tr>
 <td color="yellow_bg">⚙️ **法**</td>
-<td>🏰 사단별 방어선과 포대는 강했다. (곡제) <span color="red">**존스턴**</span>과 <span color="red">**펨버턴**</span> 사이의 명령·군량 전달 경로가 북군의 <span color="yellow_bg">**잭슨(Jackson)**</span> 점령으로 절단됐다. (관도) 📦 외부 군량·탄약·식수 보급로도 모두 끊겼다. (주용)</td>
+<td>🏰 사단별 방어선과 포대는 강했다. (곡제) <span color="red">**존스턴**</span>과 <span color="red">**펨버턴**</span> 사이의 명령·군량 전달 경로가 북군의 <span color="red">**▰**</span> <span color="yellow_bg">**잭슨(Jackson)**</span> 점령으로 절단됐다. (관도) 📦 외부 군량·탄약·식수 보급로도 모두 끊겼다. (주용)</td>
 </tr>
 </table>
 
-🏳️ <span color="red">**패군 측 결과**</span> — <span color="yellow_bg">**빅스버그(Vicksburg)**</span>와 약 2만9천 명이 항복했고, 곧 <span color="yellow_bg">**포트 허드슨(Port Hudson)**</span>도 무너져 미시시피강 전체가 북군에 열렸다. 남부연합의 동서 연결이 끊겼다.
+🏳️ <span color="red">**패군 측 결과**</span> — <span color="red">**▰**</span> <span color="yellow_bg">**빅스버그(Vicksburg)**</span>와 약 2만9천 명이 항복했고, 곧 <span color="red">**▰**</span> <span color="yellow_bg">**포트 허드슨(Port Hudson)**</span>도 무너져 미시시피강 전체가 북군에 열렸다. 남부연합의 동서 연결이 끊겼다.
 
-🔀 <span color="orange">**패배 회피 분기점**</span> — <span color="blue">**그랜트**</span>가 <span color="yellow_bg">**브루인즈버그(Bruinsburg)**</span>에 상륙한 직후 <span color="red">**펨버턴**</span>이 도시 사수보다 야전군 보존을 우선해 <span color="red">**존스턴**</span>과 합류했거나, 늦어도 ⛰️ <span color="green_bg">**챔피언 힐**</span> 이전에 빅블랙강 건너 퇴로를 확보했다면 전군 포위는 피할 수 있었다. 도시를 지키더라도 장기 포위를 전제로 군량을 더 비축하고 <span color="red">**존스턴**</span>과 구원 시점·축선을 단일화해야 했다.
+🔀 <span color="orange">**패배 회피 분기점**</span> — <span color="blue">**그랜트**</span>가 <span color="blue">**▰**</span> <span color="yellow_bg">**브루인즈버그(Bruinsburg)**</span>에 상륙한 직후 <span color="red">**펨버턴**</span>이 도시 사수보다 야전군 보존을 우선해 <span color="red">**존스턴**</span>과 합류했거나, 늦어도 ⛰️ <span color="green_bg">**챔피언 힐**</span> 이전에 빅블랙강 건너 퇴로를 확보했다면 전군 포위는 피할 수 있었다. 도시를 지키더라도 장기 포위를 전제로 군량을 더 비축하고 <span color="red">**존스턴**</span>과 구원 시점·축선을 단일화해야 했다.
 
 #### <span color="blue">**그랜트와 북군 — 승군**</span>
 
@@ -243,7 +243,7 @@
 </tr>
 	<tr>
 <td color="blue_bg">🌤️ **天**</td>
-<td>도하 뒤 <span color="red">**존스턴**</span>이 병력을 모으기 전에 <span color="yellow_bg">**잭슨(Jackson)**</span>을 먼저 쳤다. (지피·타이밍) <span color="red">**펨버턴**</span>이 방향을 정하지 못한 시간에 ⛰️ <span color="green_bg">**챔피언 힐**</span> 결전을 만들었다. (상대 실수·시기)</td>
+<td>도하 뒤 <span color="red">**존스턴**</span>이 병력을 모으기 전에 <span color="red">**▰**</span> <span color="yellow_bg">**잭슨(Jackson)**</span>을 먼저 쳤다. (지피·타이밍) <span color="red">**펨버턴**</span>이 방향을 정하지 못한 시간에 ⛰️ <span color="green_bg">**챔피언 힐**</span> 결전을 만들었다. (상대 실수·시기)</td>
 </tr>
 	<tr>
 <td color="green_bg">🧭 **地**</td>
@@ -259,7 +259,7 @@
 </tr>
 </table>
 
-🏆 <span color="blue">**승군 측 결과**</span> — <span color="blue">**그랜트**</span>는 <span color="yellow_bg">**빅스버그(Vicksburg)**</span>를 점령했을 뿐 아니라 남부가 그곳을 반드시 지켜야 하는 이유였던 강 통제와 동서 연결을 함께 빼앗았다. 所愛를 정확히 고른 승리였다.
+🏆 <span color="blue">**승군 측 결과**</span> — <span color="blue">**그랜트**</span>는 <span color="red">**▰**</span> <span color="yellow_bg">**빅스버그(Vicksburg)**</span>를 점령했을 뿐 아니라 남부가 그곳을 반드시 지켜야 하는 이유였던 강 통제와 동서 연결을 함께 빼앗았다. 所愛를 정확히 고른 승리였다.
 
 #### 法을 압축하지 않고 보기 — 곡제·관도·주용
 **곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
@@ -308,7 +308,7 @@
 </tr>
 </table>
 
-### 동양 — <span color="yellow_bg">**관도(官渡)**</span>대전(官渡之戰, <span color="yellow_bg">**관도(官渡)**</span>지전), 200
+### 동양 — <span color="blue">**▰**</span> <span color="yellow_bg">**관도(官渡)**</span>대전(官渡之戰, <span color="blue">**▰**</span> <span color="yellow_bg">**관도(官渡)**</span>지전), 200
 
 ![관도대전 주요 인물](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi9/guandu_commanders_gen.png)
 ![관도대전 병사·무기·생활](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi9/guandu_soldier_life_v2.png)
@@ -319,36 +319,36 @@
 
 #### 누가 어디서 무엇을 놓고 싸웠는가
 
-<span color="red">**원소(袁紹)**</span>는 기주를 중심으로 북방의 넓은 인구·농업 기반과 대군을 거느렸고, <span color="blue">**조조(曹操)**</span>는 헌제를 받들어 <span color="yellow_bg">**허(許)**</span>를 수도로 삼았지만 병력과 군량에서는 열세였다. 정면의 숫자만 보면 <span color="red">**원소**</span>군은 이 구절의 **敵衆整(적중정)**에 가까웠다.
+<span color="red">**원소(袁紹)**</span>는 기주를 중심으로 북방의 넓은 인구·농업 기반과 대군을 거느렸고, <span color="blue">**조조(曹操)**</span>는 헌제를 받들어 <span color="blue">**▰**</span> <span color="yellow_bg">**허(許)**</span>를 수도로 삼았지만 병력과 군량에서는 열세였다. 정면의 숫자만 보면 <span color="red">**원소**</span>군은 이 구절의 **敵衆整(적중정)**에 가까웠다.
 
-전역의 핵심 지형은 🌊 <span color="blue_bg">**황하(黃河)**</span>의 도하점인 <span color="yellow_bg">**백마(白馬)**</span>와 <span color="yellow_bg">**연진(延津)**</span>, 남쪽의 <span color="yellow_bg">**관도(官渡)**</span>, <span color="red">**원소**</span>군 후방의 <span color="yellow_bg">**오소(烏巢)**</span>였다. <span color="yellow_bg">**백마(白馬)**</span>·<span color="yellow_bg">**연진(延津)**</span>은 서전의 문을 여는 도하축, <span color="yellow_bg">**관도(官渡)**</span>는 <span color="blue">**조조**</span>가 대군의 폭을 좁힌 방어 거점, <span color="yellow_bg">**오소(烏巢)**</span>는 <span color="red">**원소**</span>의 군대를 먹이는 창고였다.
+전역의 핵심 지형은 🌊 <span color="blue_bg">**황하(黃河)**</span>의 도하점인 <span color="blue">**▰**</span> <span color="yellow_bg">**백마(白馬)**</span>와 <span color="blue">**▰**</span> <span color="yellow_bg">**연진(延津)**</span>, 남쪽의 <span color="blue">**▰**</span> <span color="yellow_bg">**관도(官渡)**</span>, <span color="red">**원소**</span>군 후방의 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span>였다. <span color="blue">**▰**</span> <span color="yellow_bg">**백마(白馬)**</span>·<span color="blue">**▰**</span> <span color="yellow_bg">**연진(延津)**</span>은 서전의 문을 여는 도하축, <span color="blue">**▰**</span> <span color="yellow_bg">**관도(官渡)**</span>는 <span color="blue">**조조**</span>가 대군의 폭을 좁힌 방어 거점, <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span>는 <span color="red">**원소**</span>의 군대를 먹이는 창고였다.
 
 **뒤에서 반복될 지형을 먼저 잡아두기**
 
 - 🌊 <span color="blue_bg">**황하(黃河, 황하)**</span> — <span color="red">**원소**</span>군이 남하하려면 넘어야 하는 대하이자 긴 병참선의 시작이었다.
-- <span color="yellow_bg">**백마(白馬)**</span> — <span color="red">**원소**</span>의 장수 <span color="red">**안량**</span>이 포위한 황하 남안 거점이다. <span color="blue">**관우**</span>가 <span color="red">**안량**</span>을 베면서 <span color="red">**원소**</span>의 선봉이 무너졌다.
-- <span color="yellow_bg">**연진(延津)**</span> — <span color="blue">**조조**</span>가 <span color="yellow_bg">**백마(白馬)**</span> 주민과 철수하며 치중을 미끼로 <span color="red">**문추**</span>의 추격대를 무너뜨린 곳이다.
-- <span color="yellow_bg">**관도(官渡)**</span> — 허로 이어지는 길목이다. <span color="blue">**조조**</span>는 토루·참호·망루를 세워 <span color="red">**원소**</span>의 수적 우세를 좁은 정면에 묶었다.
-- <span color="yellow_bg">**오소(烏巢)**</span> — <span color="red">**원소**</span>군의 대규모 군량 집적지다. 전선에서 떨어져 있었지만 대군 전체가 의존한 진짜 所愛였다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**백마(白馬)**</span> — <span color="red">**원소**</span>의 장수 <span color="red">**안량**</span>이 포위한 황하 남안 거점이다. <span color="blue">**관우**</span>가 <span color="red">**안량**</span>을 베면서 <span color="red">**원소**</span>의 선봉이 무너졌다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**연진(延津)**</span> — <span color="blue">**조조**</span>가 <span color="blue">**▰**</span> <span color="yellow_bg">**백마(白馬)**</span> 주민과 철수하며 치중을 미끼로 <span color="red">**문추**</span>의 추격대를 무너뜨린 곳이다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**관도(官渡)**</span> — 허로 이어지는 길목이다. <span color="blue">**조조**</span>는 토루·참호·망루를 세워 <span color="red">**원소**</span>의 수적 우세를 좁은 정면에 묶었다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> — <span color="red">**원소**</span>군의 대규모 군량 집적지다. 전선에서 떨어져 있었지만 대군 전체가 의존한 진짜 所愛였다.
 
 #### 상세 전역 서사 — <span color="red">**안량**</span>과 <span color="red">**문추**</span>를 잃고도 버틴 대군이, 군량 한곳이 타자 무너졌다
 
-<span color="yellow_bg">**백마(白馬)**</span>에서 <span color="blue">**조조**</span>는 먼저 <span color="yellow_bg">**연진(延津)**</span> 방면을 위협하는 척해 <span color="red">**원소**</span>군의 주의를 갈랐다. 이어 <span color="blue">**관우(關羽)**</span>가 <span color="red">**안량**</span>의 지휘부를 급습해 그를 베었다. <span color="yellow_bg">**백마(白馬)**</span>의 포위를 푼 <span color="blue">**조조**</span>가 주민과 함께 물러나자 <span color="red">**문추**</span>와 <span color="red">**유비**</span>가 추격했다. 이때 <span color="blue">**순유(荀攸)**</span>는 치중을 길에 풀어놓게 했다. <span color="red">**원소**</span> 기병이 약탈에 매달려 대오가 흩어지자 <span color="blue">**조조**</span>군이 반격해 <span color="red">**문추**</span>를 죽였다. 이 장면은 **餌兵勿食(이병물식, 미끼 병력은 먹지 말라)**의 경고에 <span color="red">**문추**</span>가 걸린 사례이며, 적이 눈앞에서 아끼는 이익을 이용해 정연한 대오를 스스로 버리게 한 작은 先奪其所愛였다.
+<span color="blue">**▰**</span> <span color="yellow_bg">**백마(白馬)**</span>에서 <span color="blue">**조조**</span>는 먼저 <span color="blue">**▰**</span> <span color="yellow_bg">**연진(延津)**</span> 방면을 위협하는 척해 <span color="red">**원소**</span>군의 주의를 갈랐다. 이어 <span color="blue">**관우(關羽)**</span>가 <span color="red">**안량**</span>의 지휘부를 급습해 그를 베었다. <span color="blue">**▰**</span> <span color="yellow_bg">**백마(白馬)**</span>의 포위를 푼 <span color="blue">**조조**</span>가 주민과 함께 물러나자 <span color="red">**문추**</span>와 <span color="red">**유비**</span>가 추격했다. 이때 <span color="blue">**순유(荀攸)**</span>는 치중을 길에 풀어놓게 했다. <span color="red">**원소**</span> 기병이 약탈에 매달려 대오가 흩어지자 <span color="blue">**조조**</span>군이 반격해 <span color="red">**문추**</span>를 죽였다. 이 장면은 **餌兵勿食(이병물식, 미끼 병력은 먹지 말라)**의 경고에 <span color="red">**문추**</span>가 걸린 사례이며, 적이 눈앞에서 아끼는 이익을 이용해 정연한 대오를 스스로 버리게 한 작은 先奪其所愛였다.
 
-그러나 <span color="red">**안량**</span>과 <span color="red">**문추**</span>의 죽음만으로 전쟁은 끝나지 않았다. <span color="red">**원소**</span>의 대군은 <span color="yellow_bg">**관도(官渡)**</span>까지 내려왔고 <span color="blue">**조조**</span>는 축성한 진영에서 수개월을 버텼다. 양측이 함부로 나가지 않는 支形의 교착 속에서 <span color="blue">**조조**</span>의 군량도 바닥나 철군을 고민했다. 후방의 <span color="blue">**순욱(荀彧)**</span>은 지금 물러나면 <span color="red">**원소**</span>에게 형세를 완전히 내준다며 버티라고 했다. <span color="yellow_bg">**관도(官渡)**</span> 본전의 승리는 <span color="yellow_bg">**연진(延津)**</span>의 유인전을 반복해서 난 것이 아니다. 정면 교착을 유지하다 **전혀 다른 급소를 찌른 것**에서 나왔다.
+그러나 <span color="red">**안량**</span>과 <span color="red">**문추**</span>의 죽음만으로 전쟁은 끝나지 않았다. <span color="red">**원소**</span>의 대군은 <span color="blue">**▰**</span> <span color="yellow_bg">**관도(官渡)**</span>까지 내려왔고 <span color="blue">**조조**</span>는 축성한 진영에서 수개월을 버텼다. 양측이 함부로 나가지 않는 支形의 교착 속에서 <span color="blue">**조조**</span>의 군량도 바닥나 철군을 고민했다. 후방의 <span color="blue">**순욱(荀彧)**</span>은 지금 물러나면 <span color="red">**원소**</span>에게 형세를 완전히 내준다며 버티라고 했다. <span color="blue">**▰**</span> <span color="yellow_bg">**관도(官渡)**</span> 본전의 승리는 <span color="blue">**▰**</span> <span color="yellow_bg">**연진(延津)**</span>의 유인전을 반복해서 난 것이 아니다. 정면 교착을 유지하다 **전혀 다른 급소를 찌른 것**에서 나왔다.
 
-<span color="red">**원소**</span> 진영에서는 직언한 <span color="red">**전풍**</span>이 투옥되고 <span color="red">**저수**</span>의 병권이 깎였으며, <span color="red">**곽도**</span>·<span color="red">**심배**</span>·<span color="blue">**허유**</span> 등 참모 파벌이 충돌했다. <span color="blue">**허유**</span>의 가족이 체포되자 <span color="blue">**허유**</span>가 <span color="blue">**조조**</span>에게 투항해 <span color="yellow_bg">**오소(烏巢)**</span>의 위치와 방비를 알렸다. <span color="blue">**조조**</span>는 정예를 직접 이끌고 <span color="red">**원소**</span>군으로 위장하여 <span color="yellow_bg">**오소(烏巢)**</span>를 급습했다. <span color="red">**순우경**</span>의 수비대와 군량이 불타자 <span color="red">**원소**</span>는 <span color="yellow_bg">**오소(烏巢)**</span> 구원과 <span color="blue">**조조**</span> 본영 공격 사이에서 병력을 어정쩡하게 나눴다.
+<span color="red">**원소**</span> 진영에서는 직언한 <span color="red">**전풍**</span>이 투옥되고 <span color="red">**저수**</span>의 병권이 깎였으며, <span color="red">**곽도**</span>·<span color="red">**심배**</span>·<span color="blue">**허유**</span> 등 참모 파벌이 충돌했다. <span color="blue">**허유**</span>의 가족이 체포되자 <span color="blue">**허유**</span>가 <span color="blue">**조조**</span>에게 투항해 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span>의 위치와 방비를 알렸다. <span color="blue">**조조**</span>는 정예를 직접 이끌고 <span color="red">**원소**</span>군으로 위장하여 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span>를 급습했다. <span color="red">**순우경**</span>의 수비대와 군량이 불타자 <span color="red">**원소**</span>는 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 구원과 <span color="blue">**조조**</span> 본영 공격 사이에서 병력을 어정쩡하게 나눴다.
 
-<span color="yellow_bg">**오소(烏巢)**</span>의 불길은 곡식만 태우지 않았다. <span color="red">**장합**</span>은 <span color="yellow_bg">**오소(烏巢)**</span>를 구해야 한다고 했지만 <span color="red">**곽도**</span>는 <span color="blue">**조조**</span> 본영 공격을 주장했고, 공격이 실패하자 책임을 <span color="red">**장합**</span>에게 돌리려 했다. <span color="blue">**장합**</span>과 <span color="blue">**고람**</span>은 처벌을 두려워해 <span color="blue">**조조**</span>에게 투항했다. <span color="red">**원소**</span>의 대군은 아직 수가 남아 있었지만 먹을 것, 지휘부의 신뢰, 퇴각 질서가 함께 무너졌다. <span color="blue">**조조**</span>는 <span color="red">**원소**</span>의 주력 자체보다 **그 주력이 계속 대군일 수 있게 해주던** <span color="yellow_bg">**오소(烏巢)**</span>를 먼저 빼앗았다.
+<span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span>의 불길은 곡식만 태우지 않았다. <span color="red">**장합**</span>은 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span>를 구해야 한다고 했지만 <span color="red">**곽도**</span>는 <span color="blue">**조조**</span> 본영 공격을 주장했고, 공격이 실패하자 책임을 <span color="red">**장합**</span>에게 돌리려 했다. <span color="blue">**장합**</span>과 <span color="blue">**고람**</span>은 처벌을 두려워해 <span color="blue">**조조**</span>에게 투항했다. <span color="red">**원소**</span>의 대군은 아직 수가 남아 있었지만 먹을 것, 지휘부의 신뢰, 퇴각 질서가 함께 무너졌다. <span color="blue">**조조**</span>는 <span color="red">**원소**</span>의 주력 자체보다 **그 주력이 계속 대군일 수 있게 해주던** <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span>를 먼저 빼앗았다.
 
-#### 전투에서 사용된 속임수 — <span color="yellow_bg">**연진(延津)**</span>의 미끼와 <span color="yellow_bg">**오소(烏巢)**</span> 야습의 위장
-<span color="blue">**조조**</span>는 <span color="yellow_bg">**연진(延津)**</span>을 치는 듯 보여 <span color="red">**원소**</span>군을 갈랐고, 철수 때 치중을 노출해 <span color="red">**문추**</span> 기병이 약탈하느라 대오를 풀게 했습니다. <span color="yellow_bg">**오소(烏巢)**</span> 기습대는 <span color="red">**원소**</span>군처럼 꾸미고 야간에 후방으로 들어갔습니다. **진짜 물자를 미끼로 쓴 유인과 신분을 감춘 침투**가 서로 다른 시점에 작동했습니다.
+#### 전투에서 사용된 속임수 — <span color="blue">**▰**</span> <span color="yellow_bg">**연진(延津)**</span>의 미끼와 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 야습의 위장
+<span color="blue">**조조**</span>는 <span color="blue">**▰**</span> <span color="yellow_bg">**연진(延津)**</span>을 치는 듯 보여 <span color="red">**원소**</span>군을 갈랐고, 철수 때 치중을 노출해 <span color="red">**문추**</span> 기병이 약탈하느라 대오를 풀게 했습니다. <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 기습대는 <span color="red">**원소**</span>군처럼 꾸미고 야간에 후방으로 들어갔습니다. **진짜 물자를 미끼로 쓴 유인과 신분을 감춘 침투**가 서로 다른 시점에 작동했습니다.
 
 #### 속임수 작동 구조
 <table fit-page-width="true" header-row="true">
 <tr>
 <td>항목</td>
-<td><span color="yellow_bg">**관도(官渡)**</span>에서 작동한 구조</td>
+<td><span color="blue">**▰**</span> <span color="yellow_bg">**관도(官渡)**</span>에서 작동한 구조</td>
 </tr>
 <tr>
 <td>기만 주체</td>
@@ -356,23 +356,23 @@
 </tr>
 <tr>
 <td>실제 의도</td>
-<td>선봉을 분산시키고 <span color="yellow_bg">**오소(烏巢)**</span> 군량을 태워 대군의 지속 능력을 끊는 것</td>
+<td>선봉을 분산시키고 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 군량을 태워 대군의 지속 능력을 끊는 것</td>
 </tr>
 <tr>
 <td>상대에게 보인 신호</td>
-<td><span color="yellow_bg">**연진(延津)**</span> 공격 가능성·버려진 치중·<span color="red">**원소**</span>군처럼 보이는 야간 행렬</td>
+<td><span color="blue">**▰**</span> <span color="yellow_bg">**연진(延津)**</span> 공격 가능성·버려진 치중·<span color="red">**원소**</span>군처럼 보이는 야간 행렬</td>
 </tr>
 <tr>
 <td>상대가 믿은 이유</td>
-<td><span color="red">**문추**</span>는 빠른 전과를 원했고 <span color="yellow_bg">**오소(烏巢)**</span> 수비대는 후방이 안전하다고 여겼습니다.</td>
+<td><span color="red">**문추**</span>는 빠른 전과를 원했고 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 수비대는 후방이 안전하다고 여겼습니다.</td>
 </tr>
 <tr>
 <td>유발된 행동</td>
-<td>기병이 대오를 풀고 <span color="yellow_bg">**오소(烏巢)**</span> 수비대의 신원 확인이 늦었습니다.</td>
+<td>기병이 대오를 풀고 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 수비대의 신원 확인이 늦었습니다.</td>
 </tr>
 <tr>
 <td>실제 타격·결과</td>
-<td><span color="red">**문추**</span>가 전사하고 <span color="yellow_bg">**오소(烏巢)**</span> 군량이 불타 보급·신뢰·퇴각 질서가 붕괴했습니다.</td>
+<td><span color="red">**문추**</span>가 전사하고 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 군량이 불타 보급·신뢰·퇴각 질서가 붕괴했습니다.</td>
 </tr>
 <tr>
 <td>사료상 확실성</td>
@@ -381,22 +381,22 @@
 </table>
 
 #### 속임수 일곱 질문
-1. **누가 누구를 속였는가?** <span color="blue">**조조**</span>·<span color="blue">**순유**</span>와 <span color="blue">**조조**</span>군이 <span color="red">**문추**</span>의 추격대와 <span color="yellow_bg">**오소(烏巢)**</span> 수비대를 속였습니다.
+1. **누가 누구를 속였는가?** <span color="blue">**조조**</span>·<span color="blue">**순유**</span>와 <span color="blue">**조조**</span>군이 <span color="red">**문추**</span>의 추격대와 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 수비대를 속였습니다.
 2. **어떤 사실이 거짓이었는가?** 치중이 안전한 전리품이라는 판단과 야간 행렬이 <span color="red">**원소**</span>군이라는 외형이 거짓이었습니다.
 3. **어떤 사실은 진실이지만 오해를 유도했는가?** 치중은 실제 물자였고 부대는 실제 이동했지만 노출과 복장은 상대의 오독을 노렸습니다.
 4. **상대는 왜 그것을 믿고 싶어 했는가?** <span color="red">**문추**</span>는 빠른 전과를 원했고 수비대는 후방이 안전하다고 믿었습니다.
-5. **속임수가 없었어도 같은 오판이 발생했을까?** 파벌과 보급 집중은 위험했지만 <span color="blue">**조조**</span>군의 <span color="yellow_bg">**오소(烏巢)**</span> 접근 가능성은 낮아졌을 것입니다.
-6. **속은 사람은 어떤 독립 확인을 생략했는가?** <span color="red">**문추**</span>는 매복을, <span color="yellow_bg">**오소(烏巢)**</span> 수비대는 야간 부대의 명령·암구호·출발지를 교차 확인하지 않았습니다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 파벌과 보급 집중은 위험했지만 <span color="blue">**조조**</span>군의 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 접근 가능성은 낮아졌을 것입니다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** <span color="red">**문추**</span>는 매복을, <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 수비대는 야간 부대의 명령·암구호·출발지를 교차 확인하지 않았습니다.
 7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 축구의 패스 페이크, 바둑의 미끼돌, 합의된 보안 모의훈련이 적절합니다.
 
 #### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
 <table fit-page-width="true" header-row="true">
 <tr><td>해당하는 길</td><td>독음·뜻</td><td>이 전장에서의 작동</td></tr>
 <tr><td>用而示之不用</td><td>용이시지불용 — 쓰면서 쓰지 않는 듯 보임</td><td>치중을 버린 듯 놓아두었지만 실제로는 <span color="red">**문추**</span> 기병의 대오를 풀어버리는 유인 수단으로 사용했습니다.</td></tr>
-<tr><td>近而示之遠</td><td>근이시지원 — 가까이 있으면서 멀리 있는 듯 보임</td><td><span color="yellow_bg">**오소(烏巢)**</span> 기습대가 <span color="red">**원소**</span>군처럼 위장해 가까이 접근할 때까지 당장의 위협으로 식별되지 않았습니다.</td></tr>
+<tr><td>近而示之遠</td><td>근이시지원 — 가까이 있으면서 멀리 있는 듯 보임</td><td><span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 기습대가 <span color="red">**원소**</span>군처럼 위장해 가까이 접근할 때까지 당장의 위협으로 식별되지 않았습니다.</td></tr>
 <tr><td>利而誘之</td><td>이이유지 — 이익으로 유인함</td><td>길에 드러낸 실제 치중을 미끼로 삼아 <span color="red">**문추**</span>의 기병이 전리품을 차지하려고 대오를 흩뜨리게 했습니다.</td></tr>
-<tr><td>亂而取之</td><td>난이취지 — 혼란한 틈에 취함</td><td>약탈로 흐트러진 선봉을 치고, <span color="yellow_bg">**오소(烏巢)**</span> 피습 뒤 지휘부의 책임 공방과 투항이 겹친 순간 <span color="red">**원소**</span>군을 붕괴시켰습니다.</td></tr>
-<tr><td>強而避之</td><td>강이피지 — 강한 곳을 피함</td><td><span color="red">**원소**</span> 대군의 강한 정면을 최종 승부처로 삼지 않고, 후방의 군량 결절인 <span color="yellow_bg">**오소(烏巢)**</span>를 공격했습니다.</td></tr>
+<tr><td>亂而取之</td><td>난이취지 — 혼란한 틈에 취함</td><td>약탈로 흐트러진 선봉을 치고, <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 피습 뒤 지휘부의 책임 공방과 투항이 겹친 순간 <span color="red">**원소**</span>군을 붕괴시켰습니다.</td></tr>
+<tr><td>強而避之</td><td>강이피지 — 강한 곳을 피함</td><td><span color="red">**원소**</span> 대군의 강한 정면을 최종 승부처로 삼지 않고, 후방의 군량 결절인 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span>를 공격했습니다.</td></tr>
 </table>
 
 #### 法 한눈 비교 — 곡제·관도·주용
@@ -404,12 +404,12 @@
 <tr>
 <td>진영</td>
 <td>곡제(편제)</td>
-<td><span color="yellow_bg">**관도(官渡)**</span>(지휘)</td>
+<td><span color="blue">**▰**</span> <span color="yellow_bg">**관도(官渡)**</span>(지휘)</td>
 <td>주용(보급·지속)</td>
 </tr>
 <tr color="blue">
 <td><span color="blue">**조조**</span>군</td>
-<td><span color="yellow_bg">**관도(官渡)**</span> 본대·<span color="yellow_bg">**오소(烏巢)**</span> 정예대 분리</td>
+<td><span color="blue">**▰**</span> <span color="yellow_bg">**관도(官渡)**</span> 본대·<span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 정예대 분리</td>
 <td><span color="blue">**조조**</span>·<span color="blue">**순유**</span>·<span color="blue">**순욱**</span> 역할 결합</td>
 <td>짧은 후방·적 군량 파괴</td>
 </tr>
@@ -417,7 +417,7 @@
 <td><span color="red">**원소**</span>군</td>
 <td>대군·군량기지 분리</td>
 <td>참모 파벌·상충 명령</td>
-<td><span color="yellow_bg">**오소(烏巢)**</span> 한곳에 군량 집중</td>
+<td><span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 한곳에 군량 집중</td>
 </tr>
 </table>
 
@@ -430,29 +430,29 @@
 </tr>
 	<tr>
 <td color="orange_bg">🤝 **道**</td>
-<td><span color="red">**전풍**</span>을 투옥하고 <span color="red">**저수**</span>를 억누르며 참모 파벌을 조정하지 못했다. (지기·충성) <span color="yellow_bg">**오소(烏巢)**</span> 피습 뒤 장합·고람이 투항할 만큼 지휘관과 군주의 신뢰와 사기가 깨졌다. (사기)</td>
+<td><span color="red">**전풍**</span>을 투옥하고 <span color="red">**저수**</span>를 억누르며 참모 파벌을 조정하지 못했다. (지기·충성) <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 피습 뒤 장합·고람이 투항할 만큼 지휘관과 군주의 신뢰와 사기가 깨졌다. (사기)</td>
 </tr>
 	<tr>
 <td color="blue_bg">🌤️ **天**</td>
-<td>병력 우위를 곧 승리로 보고 <span color="blue">**허유**</span> 이탈과 <span color="yellow_bg">**오소(烏巢)**</span> 노출이라는 낮은 확률의 큰 손실을 대비하지 않았다. (지피·확률 관점) 건조한 가을과 야습의 시간은 화공에 유리했다. (기후·타이밍)</td>
+<td>병력 우위를 곧 승리로 보고 <span color="blue">**허유**</span> 이탈과 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 노출이라는 낮은 확률의 큰 손실을 대비하지 않았다. (지피·확률 관점) 건조한 가을과 야습의 시간은 화공에 유리했다. (기후·타이밍)</td>
 </tr>
 	<tr>
 <td color="green_bg">🧭 **地**</td>
-<td>황하를 건넌 원정군이라 병참선이 길었다. (원근) 넓은 전선에 대군을 펼치면서 후방 <span color="yellow_bg">**오소(烏巢)**</span>의 방어가 얇아졌고, <span color="yellow_bg">**관도(官渡)**</span>의 좁은 길목에서는 숫자의 이점도 줄었다. (광협·육지형 대응)</td>
+<td>황하를 건넌 원정군이라 병참선이 길었다. (원근) 넓은 전선에 대군을 펼치면서 후방 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span>의 방어가 얇아졌고, <span color="blue">**▰**</span> <span color="yellow_bg">**관도(官渡)**</span>의 좁은 길목에서는 숫자의 이점도 줄었다. (광협·육지형 대응)</td>
 </tr>
 	<tr>
 <td color="purple_bg">🎖️ **將**</td>
-<td><span color="red">**원소**</span>는 용기나 자원보다 우선순위 판단에서 실패했고 직언을 싫어했다. (지신인용엄) 상충한 조언 사이에서 <span color="yellow_bg">**오소(烏巢)**</span>와 본영 어느 쪽에도 충분한 힘을 주지 못했다. (장유오위 타입: 분속가모·염결가욕의 복합)</td>
+<td><span color="red">**원소**</span>는 용기나 자원보다 우선순위 판단에서 실패했고 직언을 싫어했다. (지신인용엄) 상충한 조언 사이에서 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span>와 본영 어느 쪽에도 충분한 힘을 주지 못했다. (장유오위 타입: 분속가모·염결가욕의 복합)</td>
 </tr>
 	<tr>
 <td color="yellow_bg">⚙️ **法**</td>
-<td>🐎 기병·🪖 보병의 대군을 운용했다. (곡제) 지휘계통은 참모 파벌로 갈라져 명령과 책임의 공식 경로가 기능하지 못했다. (관도) 충분한 군량을 가졌지만 📦 <span color="yellow_bg">**오소(烏巢)**</span> 한곳에 보급을 집중했다. (주용)</td>
+<td>🐎 기병·🪖 보병의 대군을 운용했다. (곡제) 지휘계통은 참모 파벌로 갈라져 명령과 책임의 공식 경로가 기능하지 못했다. (관도) 충분한 군량을 가졌지만 📦 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 한곳에 보급을 집중했다. (주용)</td>
 </tr>
 </table>
 
-🏳️ <span color="red">**패군 측 결과**</span> — <span color="yellow_bg">**오소(烏巢)**</span> 상실 뒤 대군이 붕괴하고 <span color="red">**원소**</span>는 황하 북쪽으로 물러났다. 이 패배는 <span color="blue">**조조**</span>가 화북의 주도권을 잡는 출발점이 되었다.
+🏳️ <span color="red">**패군 측 결과**</span> — <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 상실 뒤 대군이 붕괴하고 <span color="red">**원소**</span>는 황하 북쪽으로 물러났다. 이 패배는 <span color="blue">**조조**</span>가 화북의 주도권을 잡는 출발점이 되었다.
 
-🔀 <span color="orange">**패배 회피 분기점**</span> — 군량을 여러 거점으로 분산하고 <span color="yellow_bg">**오소(烏巢)**</span>에 정예 수비·봉화·기동예비대를 두었어야 한다. <span color="blue">**허유**</span>의 이탈 가능성을 만든 가족 체포와 파벌정치를 막고, 피습 뒤에는 <span color="blue">**조조**</span> 본영 공격과 <span color="yellow_bg">**오소(烏巢)**</span> 구원 중 하나를 분명히 선택해야 했다. 특히 장합의 구원론을 채택해 야습대의 퇴로를 끊었다면 <span color="blue">**조조**</span>의 모험은 역으로 전군 고립이 될 수 있었다.
+🔀 <span color="orange">**패배 회피 분기점**</span> — 군량을 여러 거점으로 분산하고 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span>에 정예 수비·봉화·기동예비대를 두었어야 한다. <span color="blue">**허유**</span>의 이탈 가능성을 만든 가족 체포와 파벌정치를 막고, 피습 뒤에는 <span color="blue">**조조**</span> 본영 공격과 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 구원 중 하나를 분명히 선택해야 했다. 특히 장합의 구원론을 채택해 야습대의 퇴로를 끊었다면 <span color="blue">**조조**</span>의 모험은 역으로 전군 고립이 될 수 있었다.
 
 #### <span color="blue">**조조군 — 승군**</span>
 
@@ -467,11 +467,11 @@
 </tr>
 	<tr>
 <td color="blue_bg">🌤️ **天**</td>
-<td>자군 군량도 거의 다한 위험한 순간에 적의 더 큰 의존점인 <span color="yellow_bg">**오소(烏巢)**</span>를 발견했다. (지피·상황) <span color="blue">**허유**</span>의 투항이라는 우연을 즉시 결단으로 바꾸었다. (타이밍·확률 관점)</td>
+<td>자군 군량도 거의 다한 위험한 순간에 적의 더 큰 의존점인 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span>를 발견했다. (지피·상황) <span color="blue">**허유**</span>의 투항이라는 우연을 즉시 결단으로 바꾸었다. (타이밍·확률 관점)</td>
 </tr>
 	<tr>
 <td color="green_bg">🧭 **地**</td>
-<td><span color="yellow_bg">**관도(官渡)**</span> 길목을 축성해 대군을 정면에 고정했다. (광협·육지형 대응) 황하를 건넌 <span color="red">**원소**</span>의 긴 후방에서 <span color="yellow_bg">**오소(烏巢)**</span>를 골랐고, <span color="yellow_bg">**연진(延津)**</span>에서는 평지와 치중을 이용해 추격 🐎 기병을 흩뜨렸다. (원근·험이)</td>
+<td><span color="blue">**▰**</span> <span color="yellow_bg">**관도(官渡)**</span> 길목을 축성해 대군을 정면에 고정했다. (광협·육지형 대응) 황하를 건넌 <span color="red">**원소**</span>의 긴 후방에서 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span>를 골랐고, <span color="blue">**▰**</span> <span color="yellow_bg">**연진(延津)**</span>에서는 평지와 치중을 이용해 추격 🐎 기병을 흩뜨렸다. (원근·험이)</td>
 </tr>
 	<tr>
 <td color="purple_bg">🎖️ **將**</td>
@@ -479,7 +479,7 @@
 </tr>
 	<tr>
 <td color="yellow_bg">⚙️ **法**</td>
-<td>🏰 <span color="yellow_bg">**관도(官渡)**</span> 본대와 🐎 <span color="yellow_bg">**오소(烏巢)**</span> 기습대를 분리하고 소수 정예에 기동성을 집중했다. (곡제) 본대 방어와 기습대 지휘를 분리해 운용했다. (관도) 짧은 후방과 축성 진영으로 본대를 지키면서 적의 대규모 보급체계 한곳을 태웠다. (주용)</td>
+<td>🏰 <span color="blue">**▰**</span> <span color="yellow_bg">**관도(官渡)**</span> 본대와 🐎 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 기습대를 분리하고 소수 정예에 기동성을 집중했다. (곡제) 본대 방어와 기습대 지휘를 분리해 운용했다. (관도) 짧은 후방과 축성 진영으로 본대를 지키면서 적의 대규모 보급체계 한곳을 태웠다. (주용)</td>
 </tr>
 </table>
 
@@ -494,7 +494,7 @@
 </tr>
 <tr color="blue">
 <td><span color="blue">**조조**</span>군</td>
-<td><span color="yellow_bg">**관도(官渡)**</span> 본대는 방어를 유지하고 소수 정예는 <span color="yellow_bg">**오소(烏巢)**</span> 기습에 집중했습니다.</td>
+<td><span color="blue">**▰**</span> <span color="yellow_bg">**관도(官渡)**</span> 본대는 방어를 유지하고 소수 정예는 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> 기습에 집중했습니다.</td>
 </tr>
 <tr color="red">
 <td><span color="red">**원소**</span>군</td>
@@ -528,7 +528,7 @@
 </tr>
 <tr color="red">
 <td><span color="red">**원소**</span>군</td>
-<td>대군의 군량을 <span color="yellow_bg">**오소(烏巢)**</span>에 집중해 한 번의 화공이 전군 지속 능력으로 번졌습니다.</td>
+<td>대군의 군량을 <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span>에 집중해 한 번의 화공이 전군 지속 능력으로 번졌습니다.</td>
 </tr>
 </table>
 

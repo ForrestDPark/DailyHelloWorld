@@ -56,6 +56,12 @@ CITY_HIGHLIGHT_MANIFESTS = {
         "허(許)", "백마", "연진", "오소",
     ),
 }
+CITY_CAMP_MANIFESTS = {
+    "jiudi9_full_page.md": {
+        "blue": ("브루인즈버그", "허(許)", "백마", "연진", "관도"),
+        "red": ("빅스버그", "잭슨", "포트 허드슨", "오소"),
+    },
+}
 DECEPTION_QUESTIONS = (
     "누가 누구를 속였는가?",
     "어떤 사실이 거짓이었는가?",
@@ -297,6 +303,21 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         for city in city_manifest:
             if re.search(re.escape(city), city_audit):
                 errors.append(f"도시·마을 이름의 노란 배경 굵은 표기 누락: {city}")
+
+    city_camp_manifest = CITY_CAMP_MANIFESTS.get(path.name)
+    if city_camp_manifest:
+        for color, cities in city_camp_manifest.items():
+            for city in cities:
+                city_spans = list(re.finditer(
+                    rf'<span color="yellow_bg">\*\*[^*\n]*{re.escape(city)}[^*\n]*\*\*</span>',
+                    audit_section,
+                ))
+                required_prefix = f'<span color="{color}">**▰**</span> '
+                if any(
+                    not audit_section[:match.start()].endswith(required_prefix)
+                    for match in city_spans
+                ):
+                    errors.append(f"도시·마을의 {color} 진영색 ▰ 누락 또는 오색: {city}")
 
     case_starts = [m.start() for m in re.finditer(r"^\s*### (?:서양|동양) — ", section_four, re.MULTILINE)]
     if len(case_starts) != 2:
