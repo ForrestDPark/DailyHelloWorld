@@ -309,8 +309,8 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         questions_headings = list(re.finditer(
             r"^\s*#### 속임수 일곱 질문\s*$", case, re.MULTILINE
         ))
-        twelve_headings = list(re.finditer(
-            r"^\s*#### 시계편 兵者詭道也 — 열두 가지 속이는 길 대조\s*$",
+        selected_deception_headings = list(re.finditer(
+            r"^\s*#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길\s*$",
             case,
             re.MULTILINE,
         ))
@@ -329,22 +329,22 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
                 f"{index + 1}번째 역사 사례의 속임수 일곱 질문 제목이 "
                 f"{len(questions_headings)}개입니다(정상: 1개)"
             )
-        if len(twelve_headings) != 1:
+        if len(selected_deception_headings) != 1:
             errors.append(
-                f"{index + 1}번째 역사 사례의 시계편 열두 길 대조표 제목이 "
-                f"{len(twelve_headings)}개입니다(정상: 1개)"
+                f"{index + 1}번째 역사 사례의 시계편 해당 길 선별 제목이 "
+                f"{len(selected_deception_headings)}개입니다(정상: 1개)"
             )
-        if deception_headings and structure_headings and questions_headings and twelve_headings and law_heading:
+        if deception_headings and structure_headings and questions_headings and selected_deception_headings and law_heading:
             if not (
                 deception_headings[-1].start()
                 < structure_headings[0].start()
                 < questions_headings[0].start()
-                < twelve_headings[0].start()
+                < selected_deception_headings[0].start()
                 < law_heading.start()
             ):
                 errors.append(
                     f"{index + 1}번째 역사 사례의 순서가 "
-                    "속임수 서사→작동 구조→일곱 질문→시계편 열두 길→法 비교가 아닙니다"
+                    "속임수 서사→작동 구조→일곱 질문→시계편 해당 길 선별→法 비교가 아닙니다"
                 )
             structure_block = case[
                 structure_headings[0].end():questions_headings[0].start()
@@ -366,20 +366,27 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
                 errors.append(
                     f"{index + 1}번째 역사 사례의 속임수 질문 누락·중복: {question}"
                 )
-        if twelve_headings and law_heading:
-            twelve_block = case[twelve_headings[0].end():law_heading.start()]
-            twelve_tables = tables(twelve_block)
-            if len(twelve_tables) != 1:
+        if selected_deception_headings and law_heading:
+            selected_block = case[selected_deception_headings[0].end():law_heading.start()]
+            selected_tables = tables(selected_block)
+            if len(selected_tables) != 1:
                 errors.append(
-                    f"{index + 1}번째 역사 사례의 시계편 열두 길 표가 "
-                    f"{len(twelve_tables)}개입니다(정상: 1개)"
+                    f"{index + 1}번째 역사 사례의 시계편 해당 길 표가 "
+                    f"{len(selected_tables)}개입니다(정상: 1개)"
                 )
             else:
-                for maxim in DECEPTION_TWELVE:
-                    if twelve_tables[0].count(f"<td>{maxim}</td>") != 1:
-                        errors.append(
-                            f"{index + 1}번째 시계편 열두 길 표의 필수 행 누락: {maxim}"
-                        )
+                selected_maxims = re.findall(
+                    r"<td>([^<]+)</td>", selected_tables[0]
+                )
+                selected_maxims = [m for m in selected_maxims if m in DECEPTION_TWELVE]
+                if not selected_maxims:
+                    errors.append(f"{index + 1}번째 시계편 표에 실제 적용 항목이 없습니다")
+                if len(selected_maxims) >= len(DECEPTION_TWELVE):
+                    errors.append(f"{index + 1}번째 시계편 표가 열두 길을 전부 나열했습니다")
+                if len(selected_maxims) != len(set(selected_maxims)):
+                    errors.append(f"{index + 1}번째 시계편 표에 중복 항목이 있습니다")
+                if "확인되지 않음" in selected_tables[0] or "방어 원칙" in selected_tables[0]:
+                    errors.append(f"{index + 1}번째 시계편 표에 미사용·일반 원칙이 포함됐습니다")
         terrain_marker = "**뒤에서 반복될 지형을 먼저 잡아두기**"
         marker_count = case.count(terrain_marker)
         if marker_count != 1:
