@@ -68,6 +68,11 @@ DECEPTION_TABLE_ROWS = (
     "기만 주체", "실제 의도", "상대에게 보인 신호", "상대가 믿은 이유",
     "유발된 행동", "실제 타격·결과", "사료상 확실성",
 )
+DECEPTION_TWELVE = (
+    "能而示之不能", "用而示之不用", "近而示之遠", "遠而示之近",
+    "利而誘之", "亂而取之", "實而備之", "強而避之",
+    "怒而撓之", "卑而驕之", "佚而勞之", "親而離之",
+)
 
 
 def tables(text: str) -> list[str]:
@@ -304,6 +309,11 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         questions_headings = list(re.finditer(
             r"^\s*#### 속임수 일곱 질문\s*$", case, re.MULTILINE
         ))
+        twelve_headings = list(re.finditer(
+            r"^\s*#### 시계편 兵者詭道也 — 열두 가지 속이는 길 대조\s*$",
+            case,
+            re.MULTILINE,
+        ))
         law_heading = re.search(
             r"^\s*#### 法 한눈 비교 — 곡제·관도·주용\s*$", case, re.MULTILINE
         )
@@ -319,16 +329,22 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
                 f"{index + 1}번째 역사 사례의 속임수 일곱 질문 제목이 "
                 f"{len(questions_headings)}개입니다(정상: 1개)"
             )
-        if deception_headings and structure_headings and questions_headings and law_heading:
+        if len(twelve_headings) != 1:
+            errors.append(
+                f"{index + 1}번째 역사 사례의 시계편 열두 길 대조표 제목이 "
+                f"{len(twelve_headings)}개입니다(정상: 1개)"
+            )
+        if deception_headings and structure_headings and questions_headings and twelve_headings and law_heading:
             if not (
                 deception_headings[-1].start()
                 < structure_headings[0].start()
                 < questions_headings[0].start()
+                < twelve_headings[0].start()
                 < law_heading.start()
             ):
                 errors.append(
                     f"{index + 1}번째 역사 사례의 순서가 "
-                    "속임수 서사→작동 구조→일곱 질문→法 비교가 아닙니다"
+                    "속임수 서사→작동 구조→일곱 질문→시계편 열두 길→法 비교가 아닙니다"
                 )
             structure_block = case[
                 structure_headings[0].end():questions_headings[0].start()
@@ -350,6 +366,20 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
                 errors.append(
                     f"{index + 1}번째 역사 사례의 속임수 질문 누락·중복: {question}"
                 )
+        if twelve_headings and law_heading:
+            twelve_block = case[twelve_headings[0].end():law_heading.start()]
+            twelve_tables = tables(twelve_block)
+            if len(twelve_tables) != 1:
+                errors.append(
+                    f"{index + 1}번째 역사 사례의 시계편 열두 길 표가 "
+                    f"{len(twelve_tables)}개입니다(정상: 1개)"
+                )
+            else:
+                for maxim in DECEPTION_TWELVE:
+                    if twelve_tables[0].count(f"<td>{maxim}</td>") != 1:
+                        errors.append(
+                            f"{index + 1}번째 시계편 열두 길 표의 필수 행 누락: {maxim}"
+                        )
         terrain_marker = "**뒤에서 반복될 지형을 먼저 잡아두기**"
         marker_count = case.count(terrain_marker)
         if marker_count != 1:
