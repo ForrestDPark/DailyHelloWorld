@@ -165,7 +165,7 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         if f"**{commentator}**" not in section_two:
             errors.append(f"2번 전통 주석에 {commentator}가 없습니다")
     commentary_rows = re.findall(
-        r'^\s*-\s+<span color="blue">\*\*[^*]+\*\*</span>\s+—\s+"[^"]+"',
+        r'^\s*-\s+\*\*[^*]+\*\*\s+—\s+"[^"]+"',
         section_two,
         re.MULTILINE,
     )
@@ -174,6 +174,8 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
             f"직접화법 큰따옴표 전통 주석이 {len(commentary_rows)}개입니다"
             f"(정상: {len(COMMENTATORS)}개)"
         )
+    if '<span color="blue">' in section_two:
+        errors.append("2번 전통 주석에 폐기된 파란색 글자 강조가 남아 있습니다")
     for phrase in FORBIDDEN_COMMENTARY_PHRASES:
         if phrase in section_two:
             errors.append(f"2번 전통 주석에 금지된 3인칭 간접화법이 있습니다: {phrase}")

@@ -90,6 +90,12 @@ def validate(
             if count != 1:
                 errors.append(f"{number}번 섹션 헤더 개수가 {count}개입니다(정상: 1개)")
 
+        for match in re.finditer(r"^##\s+[1-5]\.\s+.*?(?:\{[^}]+\})?$", text, re.MULTILINE):
+            heading = match.group(0)
+            if 'toggle="true"' in heading or re.search(r'color="(?:blue|green|purple|orange|yellow|red)(?:_bg)?"', heading):
+                line = text.count("\n", 0, match.start()) + 1
+                errors.append(f"{line}행: 1~5번 섹션 제목은 일반 제목·기본 검은색이어야 합니다")
+
     if require_latest_five_tables:
         five_tables: list[tuple[int, str]] = []
         for match in re.finditer(r"<table\b[^>]*>.*?</table>", text, re.DOTALL):
