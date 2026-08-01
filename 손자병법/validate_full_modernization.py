@@ -47,12 +47,13 @@ PERSON_COLOR_MANIFESTS = {
         ),
     },
 }
-CITY_EMOJI_MANIFESTS = {
+CITY_HIGHLIGHT_MANIFESTS = {
     "jiudi8_full_page.md": (
         "알렌슈타인", "호엔슈타인", "나이덴부르크", "빌렌베르크", "대량",
     ),
     "jiudi9_full_page.md": (
-        "빅스버그", "브루인즈버그", "잭슨", "백마", "연진", "오소",
+        "빅스버그", "브루인즈버그", "잭슨", "포트 허드슨",
+        "허(許)", "백마", "연진", "오소",
     ),
 }
 DECEPTION_QUESTIONS = (
@@ -282,17 +283,20 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
                 if re.search(re.escape(name), without_correct):
                     errors.append(f"장수 이름의 {color} 진영색 누락 또는 오색: {name}")
 
-    city_manifest = CITY_EMOJI_MANIFESTS.get(path.name)
+    if "🏙️" in text:
+        errors.append("폐지된 도시 이모지 🏙️가 남아 있습니다")
+
+    city_manifest = CITY_HIGHLIGHT_MANIFESTS.get(path.name)
     if city_manifest:
         city_audit = audit_section
         for city in city_manifest:
             correctly_marked = re.compile(
-                rf"🏙️\s+\*\*[^*\n]*{re.escape(city)}[^*\n]*\*\*"
+                rf'<span color="yellow_bg">\*\*[^*\n]*{re.escape(city)}[^*\n]*\*\*</span>'
             )
             city_audit = correctly_marked.sub("", city_audit)
         for city in city_manifest:
             if re.search(re.escape(city), city_audit):
-                errors.append(f"도시·마을 이름의 🏙️ 이모지 누락: {city}")
+                errors.append(f"도시·마을 이름의 노란 배경 굵은 표기 누락: {city}")
 
     case_starts = [m.start() for m in re.finditer(r"^\s*### (?:서양|동양) — ", section_four, re.MULTILINE)]
     if len(case_starts) != 2:
