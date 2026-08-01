@@ -25,6 +25,24 @@ FORBIDDEN_COMMENTARY_PHRASES = (
     "라고 풀이한다", "라고 본다", "라고 설명한다", "라고 강조한다",
     "로 풀이한다", "로 읽는다", "을 강조한다", "을 설명한다",
 )
+PERSON_COLOR_MANIFESTS = {
+    "jiudi8_full_page.md": {
+        "red": (
+            "삼소노프", "렌넨캄프", "질린스키", "클리우예프",
+            "아르타모노프", "블라고베셴스키", "방연", "태자 신",
+            "위 혜왕",
+        ),
+        "blue": (
+            "힌덴부르크", "루덴도르프", "호프만", "프랑수아", "숄츠",
+            "마켄젠", "벨로", "몰트케", "손빈", "전기", "제 위왕",
+        ),
+    },
+}
+CITY_EMOJI_MANIFESTS = {
+    "jiudi8_full_page.md": (
+        "알렌슈타인", "호엔슈타인", "나이덴부르크", "빌렌베르크", "대량",
+    ),
+}
 
 
 def tables(text: str) -> list[str]:
@@ -222,6 +240,30 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         if section_four_start >= 0 and section_five_start > section_four_start
         else ""
     )
+    audit_section = re.sub(r"^!\[[^\]]*\]\([^\n]+\)$", "", section_four, flags=re.MULTILINE)
+    person_manifest = PERSON_COLOR_MANIFESTS.get(path.name)
+    if person_manifest:
+        for color, names in person_manifest.items():
+            for name in names:
+                correctly_colored = re.compile(
+                    rf'<span color="{color}">\*\*[^*\n]*{re.escape(name)}[^*\n]*\*\*</span>'
+                )
+                without_correct = correctly_colored.sub("", audit_section)
+                if re.search(re.escape(name), without_correct):
+                    errors.append(f"장수 이름의 {color} 진영색 누락 또는 오색: {name}")
+
+    city_manifest = CITY_EMOJI_MANIFESTS.get(path.name)
+    if city_manifest:
+        city_audit = audit_section
+        for city in city_manifest:
+            correctly_marked = re.compile(
+                rf"🏙️\s+\*\*[^*\n]*{re.escape(city)}[^*\n]*\*\*"
+            )
+            city_audit = correctly_marked.sub("", city_audit)
+        for city in city_manifest:
+            if re.search(re.escape(city), city_audit):
+                errors.append(f"도시·마을 이름의 🏙️ 이모지 누락: {city}")
+
     case_starts = [m.start() for m in re.finditer(r"^\s*### (?:서양|동양) — ", section_four, re.MULTILINE)]
     if len(case_starts) != 2:
         errors.append(f"서양·동양 역사 사례가 {len(case_starts)}개입니다(정상: 2개)")
@@ -269,7 +311,8 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         errors.append("전투별 法 한눈 비교표 제목이 정확히 2개가 아닙니다")
 
     # 이름과 지명은 고유명사 사전 없이는 완전 자동 판별할 수 없어 사람의 전수 확인을 남긴다.
-    warnings.append("장수 이름 전수 진영색 검사는 인물 별칭 목록과 사람이 함께 확인해야 합니다")
+    if not person_manifest:
+        warnings.append("장수 이름 전수 진영색 검사는 인물 별칭 목록과 사람이 함께 확인해야 합니다")
     warnings.append("자연지형 전수 이모지·배경색 검사는 지명 목록과 사람이 함께 확인해야 합니다")
     warnings.append(
         "이미지의 내용·배치·가독성과 셔먼·손책 기준본 대비 품질은 "
