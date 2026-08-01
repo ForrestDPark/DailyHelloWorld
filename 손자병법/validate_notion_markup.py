@@ -96,6 +96,22 @@ def validate(
                 line = text.count("\n", 0, match.start()) + 1
                 errors.append(f"{line}행: 1~5번 섹션 제목은 일반 제목·기본 검은색이어야 합니다")
 
+        for match in re.finditer(r"<details\b[^>]*>(.*?)</details>", text, re.DOTALL):
+            if re.search(r"^##\s+[1-5]\.\s+", match.group(1), re.MULTILINE):
+                line = text.count("\n", 0, match.start()) + 1
+                errors.append(f"{line}행: 1~5번 섹션 전체를 감싼 토글이 남아 있습니다")
+
+        section_two_start = text.find("## 2.")
+        section_three_start = text.find("## 3.", section_two_start + 1)
+        section_four_start = text.find("## 4.", section_three_start + 1)
+        section_two = text[section_two_start:section_three_start]
+        section_three = text[section_three_start:section_four_start]
+        for number, section in ((2, section_two), (3, section_three)):
+            color_match = re.search(r'<span\s+color="[^"]+">|\{[^}]*color="[^"]+"[^}]*\}', section)
+            if color_match:
+                line = text.count("\n", 0, (section_two_start if number == 2 else section_three_start) + color_match.start()) + 1
+                errors.append(f"{line}행: {number}번 섹션에 불필요한 색상 강조가 남아 있습니다")
+
     if require_latest_five_tables:
         five_tables: list[tuple[int, str]] = []
         for match in re.finditer(r"<table\b[^>]*>.*?</table>", text, re.DOTALL):
