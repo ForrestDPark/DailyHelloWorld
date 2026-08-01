@@ -9,12 +9,13 @@ import sys
 from pathlib import Path
 
 
-STRUCTURAL_TAGS = ("table", "tr", "td", "details", "summary")
-TAG_RE = re.compile(r"<(/?)(table|tr|td|details|summary)\b[^>]*>")
+STRUCTURAL_TAGS = ("table", "tr", "td", "details", "summary", "span")
+TAG_RE = re.compile(r"<(/?)(table|tr|td|details|summary|span)\b[^>]*>")
 ESCAPED_TAG_RE = re.compile(
-    r"\\</?(?:table|tr|td|details|summary)\b|"
-    r"\\<(?:table|tr|td|details|summary)\b|"
-    r"</?(?:table|tr|td|details|summary)\\>"
+    r"\\</?(?:table|tr|td|details|summary|span)\b|"
+    r"\\<(?:table|tr|td|details|summary|span)\b|"
+    r"</?(?:table|tr|td|details|summary|span)\\>|"
+    r"&lt;/?(?:table|tr|td|details|summary|span)\b"
 )
 
 LATEST_FIVE_ROWS = (
@@ -36,6 +37,18 @@ def validate(
     for match in ESCAPED_TAG_RE.finditer(text):
         line = text.count("\n", 0, match.start()) + 1
         errors.append(f"{line}행: 구조 태그에 역슬래시가 있습니다: {match.group(0)!r}")
+
+    inline_token_re = re.compile(r"\*\*|</?span\b[^>]*>")
+    for line_number, line_text in enumerate(text.splitlines(), 1):
+        bold_open = False
+        for token in inline_token_re.finditer(line_text):
+            if token.group(0) == "**":
+                bold_open = not bold_open
+            elif bold_open:
+                errors.append(
+                    f"{line_number}행: 굵은 글씨가 <span> 경계를 가로지릅니다"
+                )
+                break
 
     stack: list[tuple[str, int]] = []
     for match in TAG_RE.finditer(text):

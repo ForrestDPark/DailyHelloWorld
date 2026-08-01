@@ -99,14 +99,14 @@
 
 <span color="blue">**율리시스 S. 그랜트(Ulysses S. Grant)**</span>가 노린 <span color="red">**▰**</span> 🏙️ **빅스버그(Vicksburg)**는 단순한 요새도시가 아니었다. 높은 황토 절벽 위의 포대가 🌊 <span color="blue_bg">**미시시피강(Mississippi River)**</span>을 통제했고, 강 건너 서부 남부연합과 동부 전선을 연결하는 교통의 경첩이었다. 북군이 이곳을 얻으면 강 전체를 사용하고 남부를 동서로 가를 수 있었다.
 
-남부 대통령 <span color="red">**제퍼슨 데이비스(Jefferson Davis)**</span>는 도시를 사수하라고 했고, 방면사령관 <span color="red">**조지프 E. 존스턴(Joseph E. Johnston)**</span>은 야전군을 보존하기 위해 포기하고 합류하라고 했다. 현장사령관 <span color="red">**존 C. 펨버턴(John C. Pemberton)**</span>은 충돌하는 두 요구 사이에서 결단을 늦췄다. 양측이 놓고 싸운 것은 도시의 성벽만이 아니라 **강의 통제권, 남부의 동서 연결, <span color="red">**펨버턴**</span>군의 퇴로와 <span color="red">**존스턴**</span>군의 합류 가능성**이었다.
+남부 대통령 <span color="red">**제퍼슨 데이비스(Jefferson Davis)**</span>는 도시를 사수하라고 했고, 방면사령관 <span color="red">**조지프 E. 존스턴(Joseph E. Johnston)**</span>은 야전군을 보존하기 위해 포기하고 합류하라고 했다. 현장사령관 <span color="red">**존 C. 펨버턴(John C. Pemberton)**</span>은 충돌하는 두 요구 사이에서 결단을 늦췄다. 양측이 놓고 싸운 것은 도시의 성벽만이 아니라 **강의 통제권**, **남부의 동서 연결**, <span color="red">**펨버턴**</span>군의 퇴로와 <span color="red">**존스턴**</span>군의 합류 가능성이었다.
 
 **뒤에서 반복될 지형을 먼저 잡아두기**
 
 - 🌊 <span color="blue_bg">**미시시피강(Mississippi River)**</span> — 전역의 보급로이자 전략 목표다. 북군 해군이 강을 장악하면서 🏙️ **빅스버그(Vicksburg)**는 강을 방패로 쓰면서도 강 건너 보급을 자유롭게 받기 어려워졌다.
 - <span color="red">**▰**</span> 🏙️ **빅스버그(Vicksburg)** — 강 굽이와 황토 절벽 위에 놓인 요새다. 정면 도하와 강습에는 강했지만 육상 후방이 잘리면 거대한 감옥으로 변한다.
 - 🏙️ **브루인즈버그(Bruinsburg)** — <span color="blue">**그랜트**</span>가 🏙️ **빅스버그(Vicksburg)** 남쪽에서 강을 건넌 상륙지다. 강변 포대의 강한 정면을 피하고 방비가 약한 남쪽에서 내륙으로 들어갔다.
-- 🏙️ **잭슨(Jackson)**(Jackson)** — 미시시피주의 철도·행정 거점이다. <span color="blue">**그랜트**</span>가 이곳을 먼저 쳐 <span color="red">**존스턴**</span>의 구원군과 <span color="red">**펨버턴**</span>을 분리했다.
+- 🏙️ **잭슨(Jackson)** — 미시시피주의 철도·행정 거점이다. <span color="blue">**그랜트**</span>가 이곳을 먼저 쳐 <span color="red">**존스턴**</span>의 구원군과 <span color="red">**펨버턴**</span>을 분리했다.
 - ⛰️ <span color="green_bg">**챔피언 힐(Champion Hill)**</span> — <span color="red">**펨버턴**</span>군이 🏙️ **빅스버그(Vicksburg)**로 돌아가기 전 벌어진 결정적 야전이다. 패배 뒤 <span color="red">**펨버턴**</span>은 도시 안으로 밀려났다.
 - 🌊 <span color="blue_bg">**빅블랙강(Big Black River)**</span> — 마지막 육상 장애물이다. 다리와 방어선이 무너지면서 🏙️ **빅스버그(Vicksburg)**의 동쪽 문이 닫혔다.
 
