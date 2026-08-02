@@ -11,15 +11,27 @@ mkdir -p "$LOG_DIR"
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
   exit 0
 fi
-trap 'rmdir "$LOCK_DIR" 2>/dev/null || true' EXIT
 
 STAMP=$(date '+%Y-%m-%d_%H-%M-%S')
 LOG_FILE="$LOG_DIR/$STAMP.log"
 LAST_LOG="$LOG_DIR/latest.log"
 
+finalize_run() {
+  local status=$?
+  rmdir "$LOCK_DIR" 2>/dev/null || true
+  if [[ -f "$LOG_FILE" ]]; then
+    cp "$LOG_FILE" "$LAST_LOG"
+  fi
+  if (( status == 0 )); then
+    /usr/bin/osascript -e 'display notification "야간 병법 해석을 완료했습니다. 결과 로그를 확인하세요." with title "Codex 손자병법"' >/dev/null 2>&1 || true
+  else
+    /usr/bin/osascript -e 'display notification "야간 병법 해석이 중단되었습니다. 실패 로그를 확인하세요." with title "Codex 손자병법"' >/dev/null 2>&1 || true
+  fi
+}
+trap finalize_run EXIT
+
 if [[ ! -d "$REPO_DIR/.git" ]]; then
   print -r -- "전용 저장소가 없습니다: $REPO_DIR" > "$LOG_FILE"
-  cp "$LOG_FILE" "$LAST_LOG"
   exit 1
 fi
 
@@ -27,7 +39,6 @@ cd "$REPO_DIR"
 if [[ -n "$(git status --porcelain)" ]]; then
   print -r -- "이전 실행의 미완료 변경이 남아 있어 안전하게 중단합니다." > "$LOG_FILE"
   git status --short >> "$LOG_FILE"
-  cp "$LOG_FILE" "$LAST_LOG"
   exit 1
 fi
 
@@ -41,5 +52,3 @@ git merge --ff-only origin/main >> "$LOG_FILE" 2>&1
   --search \
   --output-last-message "$LOG_DIR/latest-message.txt" \
   - < "$SOURCE_PROMPT" >> "$LOG_FILE" 2>&1
-
-cp "$LOG_FILE" "$LAST_LOG"
