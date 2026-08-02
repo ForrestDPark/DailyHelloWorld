@@ -1,5 +1,15 @@
 # 손자병법 구절 해석 파이프라인
 
+## Codex 야간 자동 해석
+
+- 매일 **새벽 2시(Asia/Seoul)**에 `launchd`의 `com.forrest.codex-sunzi-nightly`가 실행된다.
+- 진입점은 `손자병법/run_nightly_codex.sh`, 영구 작업 지시는 `손자병법/nightly_codex_prompt.md`, 등록 원본은 `손자병법/com.forrest.codex-sunzi-nightly.plist`다.
+- 사용자의 다른 미완료 변경과 섞이지 않도록 `/Users/forrestdpark/.codex-worktrees/sunzi-nightly` 전용 부분 클론에서 작업한다.
+- 한 번에 다음 미완료 구절 하나만 처리한다. 시작 전에 README와 Notion을 다시 읽고, 이미지 12장·로컬 검증·GitHub main·Notion 재조회까지 성공해야 완료로 기록한다.
+- 백그라운드 실행은 승인을 기다릴 수 없으므로 `approval_policy=never`, `workspace-write`로 실행한다. 인증 만료·원격 충돌·잔여 변경이 있으면 강제 해결하지 않고 안전하게 중단한다.
+- 로그는 `~/Library/Logs/CodexSunzi/latest.log`, 최종 메시지는 `~/Library/Logs/CodexSunzi/latest-message.txt`에서 확인한다.
+- 맥이 꺼져 있으면 정시에 시작할 수 없다. 자동 작업 시간에는 맥이 켜져 있고 네트워크에 연결되어 있어야 한다.
+
 이 문서는 **새 세션(다른 기기·다른 클라이언트 포함)에서도 이전 대화 맥락 없이 바로 같은 작업을 이어할 수 있도록** 지금까지 확정된 프롬프트와 작업 조건을 전부 기록해둔 것이다. 사용자가 "OO구절 해석해"라고 말하면 아래 내용만 보고 그대로 실행하면 된다.
 
 > 참고: 이 저장소를 로컬에서 다루는 이 세션(맥의 Claude Code CLI 터미널 세션)은 이 맥 컴퓨터에서만 열리는 로컬 프로세스라, 휴대폰의 Claude 앱에는 뜨지 않는다. 대화 기록도 서로 동기화되지 않는다. 다만 이 README와 코드, 노션 페이지는 전부 클라우드(GitHub·Notion)에 있으므로, 휴대폰이든 다른 맥이든 **이 저장소에 접근 가능한 새 세션**이라면 이 문서만으로 동일한 작업을 이어갈 수 있다.
