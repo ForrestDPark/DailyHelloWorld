@@ -10,7 +10,7 @@
 - 마지막으로 읽은 파일/페이지는 ~/.ebook_reader_last.json 에 기록해서
   shift_alarm.py 메뉴에서 "이어서 읽기" 여부를 물어볼 때 사용한다.
 """
-import os, subprocess, sys, time, signal, json, asyncio
+import os, subprocess, sys, time, signal, json, asyncio, tempfile, uuid
 import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup
@@ -43,16 +43,18 @@ NOTION_TOKEN = load_notion_token()
 # --- [TTS 설정] ---
 VOICE = "en-US-JennyNeural"
 RATE  = "-10%"
-TMP_AUDIO = "/tmp/tts_chunk.mp3"
+TMP_AUDIO = os.path.join(tempfile.gettempdir(), f"ebook_reader_tts_{os.getpid()}.mp3")
 
 # --- [진행 상태 공유 파일] (shift_alarm.py 메뉴에서 "이어서 읽기"용) ---
 LAST_STATE_FILE = os.path.expanduser("~/.ebook_reader_last.json")
+SESSION_DIR = os.path.expanduser("~/.ebook_reader/sessions")
 
 FILE_PATH = sys.argv[1]
 FILE_NAME = os.path.basename(FILE_PATH)
 PROGRESS_FILE = f"{os.path.splitext(FILE_PATH)[0]}.progress"
 read_buffer = []
 start_page_val = 0
+end_page_val = 0
 is_exiting = False
 
 # ── ANSI 컬러 ──────────────────────────────────────
@@ -147,53 +149,141 @@ async def speak(text):
     proc.wait()
     time.sleep(0.2)
 
-def upload_bundle_to_notion(all_text, s_p):
+
+def split_text(text, limit=1800):
+    """Notion 글자 제한 안에서 원문을 하나도 버리지 않고 순서대로 나눈다."""
+    text = text.strip()
+    chunks = []
+    while text:
+        if len(text) <= limit:
+            chunks.append(text)
+            break
+        cut = max(text.rfind("\n", 0, limit), text.rfind(". ", 0, limit))
+        if cut < limit // 2:
+            cut = limit
+        elif text[cut:cut + 2] == ". ":
+            cut += 1
+        chunks.append(text[:cut].strip())
+        text = text[cut:].strip()
+    return [chunk for chunk in chunks if chunk]
+
+
+def translate_all(text):
+    """googletrans 요청도 나눠 보내 전체 원문에 대응하는 번역을 만든다."""
+    translator = Translator()
+    translated = []
+    for chunk in split_text(text, 2800):
+        translated.append(translator.translate(chunk, src="auto", dest="ko").text)
+    return "\n\n".join(translated)
+
+
+def save_local_session(original, translated, start_page, end_page, notion_status):
+    """Notion 성공 여부와 무관하게 매일 읽은 원문·번역을 로컬 JSON으로 보존한다."""
+    os.makedirs(SESSION_DIR, exist_ok=True)
+    session_id = time.strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:8]
+    path = os.path.join(SESSION_DIR, f"{session_id}.json")
+    record = {
+        "schema_version": 1,
+        "session_id": session_id,
+        "created_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
+        "book_file": os.path.abspath(FILE_PATH),
+        "book_name": FILE_NAME,
+        "start_page": start_page,
+        "end_page": end_page,
+        "original": original,
+        "translation_ko": translated,
+        "notion_status": notion_status,
+    }
+    with open(path, "w", encoding="utf-8") as file:
+        json.dump(record, file, ensure_ascii=False, indent=2)
+    return path, record
+
+
+def update_local_session(path, record, **changes):
+    record.update(changes)
+    with open(path, "w", encoding="utf-8") as file:
+        json.dump(record, file, ensure_ascii=False, indent=2)
+
+
+def notion_paragraphs(text, prefix=""):
+    blocks = []
+    for index, chunk in enumerate(split_text(text), 1):
+        label = f"{prefix} {index}\n" if prefix else ""
+        blocks.append({
+            "object": "block",
+            "type": "paragraph",
+            "paragraph": {"rich_text": [{"text": {"content": label + chunk}}]},
+        })
+    return blocks
+
+
+def append_notion_blocks(page_id, headers, blocks):
+    """Notion의 요청당 children 100개 제한을 지키며 전부 추가한다."""
+    for index in range(0, len(blocks), 100):
+        response = requests.patch(
+            f"https://api.notion.com/v1/blocks/{page_id}/children",
+            headers=headers,
+            json={"children": blocks[index:index + 100]},
+            timeout=30,
+        )
+        response.raise_for_status()
+
+def upload_bundle_to_notion(all_text, s_p, e_p):
     if not all_text:
         print_status("⚠️  읽은 내용이 없어 전송을 취소합니다.", YELLOW)
         return
+    today = time.strftime("%Y-%m-%d")
+    combined_text = "\n\n".join(all_text).strip()
+
+    try:
+        ko_text = translate_all(combined_text)
+        print_status("✅  번역 완료!", GREEN)
+    except Exception as error:
+        ko_text = ""
+        print_status(f"⚠️  번역 실패 — 원문은 보존합니다: {error}", ORANGE)
+
+    local_path, local_record = save_local_session(
+        combined_text, ko_text, s_p, e_p, "pending" if NOTION_TOKEN else "token_missing"
+    )
+    print_status(f"💾  로컬 학습 기록 저장: {local_path}", GREEN)
+
     if not NOTION_TOKEN:
-        print_status("❌  노션 토큰을 키체인에서 찾을 수 없어 전송을 취소합니다.", ORANGE)
+        print_status("⚠️  노션 토큰이 없어 로컬에만 저장했습니다.", YELLOW)
         return
 
-    print_status("☁️  번역 및 노션 전송 시작...", CYAN)
+    print_status("☁️  노션 전송 시작...", CYAN)
     headers = {
         "Authorization": f"Bearer {NOTION_TOKEN}",
         "Content-Type": "application/json",
         "Notion-Version": "2022-06-28"
     }
-    today = time.strftime("%Y-%m-%d")
-    combined_text = "\n\n".join(all_text).strip()
-
-    try:
-        translator = Translator()
-        translated = translator.translate(combined_text[:2800], src='en', dest='ko')
-        ko_text = translated.text
-        print_status("✅  번역 완료!", GREEN)
-    except:
-        ko_text = "번역 지연으로 원문만 저장됨."
-        print_status("❌  번역 실패", ORANGE)
 
     query_url = f"https://api.notion.com/v1/databases/{DATABASE_ID}/query"
     page_id = None
     try:
-        res = requests.post(query_url, headers=headers, json={"filter": {"property": TITLE_COL, "title": {"equals": f"📚 {FILE_NAME}"}}})
-        results = res.json().get("results")
+        res = requests.post(query_url, headers=headers, json={"filter": {"property": TITLE_COL, "title": {"equals": f"📚 {FILE_NAME}"}}}, timeout=30)
+        res.raise_for_status()
+        results = res.json().get("results", [])
         if results: page_id = results[0]["id"]
-    except: pass
+    except Exception as error:
+        update_local_session(local_path, local_record, notion_status="query_failed", notion_error=str(error))
+        print_status(f"❌  노션 조회 실패: {error}", ORANGE)
+        return
 
     new_blocks = [
-        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": f"📅 {today} 학습 (P.{s_p}~)"}}]}},
-        {"object": "block", "type": "callout", "callout": {"rich_text": [{"text": {"content": f"🇺🇸 [Original]\n\n{combined_text[:1900]}"}}], "icon": {"emoji": "📖"}, "color": "gray_background"}},
-        {"object": "block", "type": "toggle", "toggle": {"rich_text": [{"text": {"content": "🇰🇷 한국어 번역본 (클릭)"}}], "color": "blue_background", "children": [
-            {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"text": {"content": ko_text[:1900]}}]}}
-        ]}},
-        {"object": "block", "type": "divider", "divider": {}}
+        {"object": "block", "type": "heading_2", "heading_2": {"rich_text": [{"text": {"content": f"📅 {today} 학습 (P.{s_p}~P.{e_p})"}}]}},
+        {"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "📖 원문"}}]}},
     ]
+    new_blocks.extend(notion_paragraphs(combined_text, "Original"))
+    if ko_text:
+        new_blocks.append({"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"text": {"content": "🇰🇷 한국어 번역"}}]}})
+        new_blocks.extend(notion_paragraphs(ko_text, "번역"))
+    new_blocks.append({"object": "block", "type": "divider", "divider": {}})
 
     try:
         if page_id:
             print_status("♻️  기존 페이지에 추가 중...", CYAN)
-            res = requests.patch(f"https://api.notion.com/v1/blocks/{page_id}/children", headers=headers, json={"children": new_blocks})
+            append_notion_blocks(page_id, headers, new_blocks)
         else:
             print_status("🆕  새 페이지 생성 중...", CYAN)
             payload = {
@@ -203,15 +293,17 @@ def upload_bundle_to_notion(all_text, s_p):
                     DATE_COL: {"date": {"start": today}},
                     PAGE_COL: {"rich_text": [{"text": {"content": f"P.{s_p} ~"}}]}
                 },
-                "children": new_blocks
+                "children": []
             }
-            res = requests.post("https://api.notion.com/v1/pages", headers=headers, json=payload)
+            res = requests.post("https://api.notion.com/v1/pages", headers=headers, json=payload, timeout=30)
+            res.raise_for_status()
+            page_id = res.json()["id"]
+            append_notion_blocks(page_id, headers, new_blocks)
 
-        if res.status_code in [200, 201]:
-            print_status("🚀  노션 저장 성공!", GREEN)
-        else:
-            print_status(f"❌  노션 에러: {res.status_code}", ORANGE)
+        update_local_session(local_path, local_record, notion_status="uploaded", notion_page_id=page_id)
+        print_status("🚀  노션 저장 성공! 원문과 번역을 모두 보존했습니다.", GREEN)
     except Exception as e:
+        update_local_session(local_path, local_record, notion_status="upload_failed", notion_error=str(e))
         print_status(f"❌  오류: {e}", ORANGE)
 
 def signal_handler(sig, frame):
@@ -219,7 +311,11 @@ def signal_handler(sig, frame):
     if is_exiting: return
     is_exiting = True
     print(f"\n\n{YELLOW}{BOLD}  ⏹  학습을 종료합니다...{RESET}\n")
-    upload_bundle_to_notion(read_buffer, start_page_val)
+    upload_bundle_to_notion(read_buffer, start_page_val, end_page_val or start_page_val)
+    try:
+        os.remove(TMP_AUDIO)
+    except OSError:
+        pass
     sys.exit(0)
 
 signal.signal(signal.SIGINT, signal_handler)
@@ -282,7 +378,7 @@ def combine_into_sentences(line_data_list):
     return sentences
 
 def main():
-    global read_buffer, start_page_val
+    global read_buffer, start_page_val, end_page_val
 
     os.system("clear")
     print_header(FILE_NAME)
@@ -326,6 +422,7 @@ def main():
     for i, data in enumerate(to_read):
         current_idx = start_idx + i
         page = data['pages'][0]
+        end_page_val = data['pages'][-1]
 
         os.system("clear")
         print_header(FILE_NAME)
@@ -339,6 +436,12 @@ def main():
 
         read_buffer.append(data['content'])
         asyncio.run(speak(data['content']))
+
+    upload_bundle_to_notion(read_buffer, start_page_val, end_page_val)
+    try:
+        os.remove(TMP_AUDIO)
+    except OSError:
+        pass
 
 if __name__ == "__main__":
     main()

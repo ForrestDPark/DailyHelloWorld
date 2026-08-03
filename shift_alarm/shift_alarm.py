@@ -175,8 +175,10 @@ PLIST_PATH        = os.path.expanduser("~/Library/LaunchAgents/com.shfitalarm.mu
 ALARM_SCRIPT_PATH = os.path.expanduser("~/Library/Scripts/shift_alarm_run.sh")
 
 # ── 아침 학습(ebook_reader.py) 관련 경로 ────────────────────────
-EBOOK_PY_PATH = "/opt/anaconda3/bin/python3"
 EBOOK_READER_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ebook_reader.py")
+EBOOK_READER_LAUNCHER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "run_ebook_reader.sh")
+EBOOK_NOTION_SYNC_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sync_ebook_notion.py")
+EBOOK_STUDY_EPUB_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "build_ebook_study_epub.py")
 EBOOK_LAST_STATE_FILE = os.path.expanduser("~/.ebook_reader_last.json")
 # 터미널 창 스타일링(배경/폰트/전체화면) 전용 미니 앱. launchd로 뜨는 python3는
 # 자동화 권한 팝업 자체가 뜨지 않아서, 독립 .app으로 분리해 Finder에서 연 것처럼
@@ -1791,7 +1793,7 @@ def open_ebook_reader_terminal(file_path):
     뜨면 허용해야 그 뒤로 계속 스타일링이 적용된다 (허용 안 해도 리더 실행 자체는
     영향 없음 — 위 .command 부분은 이미 완료된 뒤라 항상 창은 뜬다).
     """
-    py_cmd = f"{EBOOK_PY_PATH} {shlex.quote(EBOOK_READER_SCRIPT)} {shlex.quote(file_path)}"
+    py_cmd = f"{shlex.quote(EBOOK_READER_LAUNCHER)} {shlex.quote(file_path)}"
     launcher_path = "/tmp/_ebook_reader_launch.command"
     with open(launcher_path, "w", encoding="utf-8") as f:
         f.write("#!/bin/bash\n")
@@ -1802,6 +1804,33 @@ def open_ebook_reader_terminal(file_path):
 
     if os.path.exists(STYLE_TERMINAL_APP):
         subprocess.Popen(["open", "-a", STYLE_TERMINAL_APP])
+
+
+def open_ebook_notion_sync_terminal():
+    """기존 Notion 독서 기록을 로컬 캐시로 내려받는 터미널 작업을 연다."""
+    launcher_path = "/tmp/_ebook_notion_sync.command"
+    command = f"/opt/anaconda3/bin/python3 {shlex.quote(EBOOK_NOTION_SYNC_SCRIPT)}"
+    with open(launcher_path, "w", encoding="utf-8") as file:
+        file.write("#!/bin/zsh\n")
+        file.write(command + "\n")
+        file.write("echo '이 창은 확인 후 닫아도 됩니다.'\n")
+    os.chmod(launcher_path, 0o755)
+    subprocess.Popen(["open", "-a", "Terminal", launcher_path])
+
+
+def open_ebook_study_build_terminal(book_path):
+    """선택한 책의 로컬·Notion 기록으로 학습판 EPUB을 생성한다."""
+    launcher_path = "/tmp/_ebook_study_build.command"
+    command = (
+        f"/opt/anaconda3/bin/python3 {shlex.quote(EBOOK_STUDY_EPUB_SCRIPT)} "
+        f"{shlex.quote(book_path)}"
+    )
+    with open(launcher_path, "w", encoding="utf-8") as file:
+        file.write("#!/bin/zsh\n")
+        file.write(command + "\n")
+        file.write("echo '이 창은 확인 후 닫아도 됩니다.'\n")
+    os.chmod(launcher_path, 0o755)
+    subprocess.Popen(["open", "-a", "Terminal", launcher_path])
 
 
 # ════════════════════════════════════════════════════════════
@@ -2277,6 +2306,8 @@ class ShiftAlarmApp(rumps.App):
             resume_label = f"📖 이어하기: {short_name} (P.{last_ebook['page']})"
             self.menu.add(rumps.MenuItem(resume_label, callback=self.resume_ebook_now))
         self.menu.add(rumps.MenuItem("📖 다른 책 선택해서 읽기", callback=self.choose_ebook_now))
+        self.menu.add(rumps.MenuItem("☁️ 독서 Notion 기록 동기화", callback=self.sync_ebook_notion_now))
+        self.menu.add(rumps.MenuItem("📘 독서 기록 → 학습판 EPUB", callback=self.build_ebook_study_now))
         self.menu.add(rumps.MenuItem("🎲 추천 사이트 열기 (天 폴더 랜덤 3개)", callback=self.open_random_bookmarks_now))
 
         self.menu.add(rumps.MenuItem("🎥 일본어 자막 추출 - 연달아 (폴더 선택)", callback=self.run_jp_subtitle_now))
@@ -2385,6 +2416,14 @@ class ShiftAlarmApp(rumps.App):
         path = choose_ebook_file()
         if path:
             open_ebook_reader_terminal(path)
+
+    def sync_ebook_notion_now(self, _):
+        open_ebook_notion_sync_terminal()
+
+    def build_ebook_study_now(self, _):
+        path = choose_ebook_file()
+        if path:
+            open_ebook_study_build_terminal(path)
 
     def open_random_bookmarks_now(self, _):
         urls = open_random_bookmarks(3)

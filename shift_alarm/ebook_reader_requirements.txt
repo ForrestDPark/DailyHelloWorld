@@ -1,0 +1,6 @@
+pymupdf
+requests
+googletrans==3.1.0a0
+edge-tts
+ebooklib
+beautifulsoup4
