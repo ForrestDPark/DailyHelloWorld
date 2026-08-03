@@ -116,6 +116,7 @@ def get_free_storage_gb(path="/"):
 # - 엄마한테 전화: 휴무 블록의 첫날 (근무 마치고 쉬기 시작하는 날)
 # - 허민준한테 전화: 한 달에 한 번. 그 달의 첫 번째 휴무 블록 시작일
 # - 동찬이형한테 전화: 2026-08-03을 기준으로 21일마다 한 번
+# - 코털 정리: 근무표와 무관하게 2026-08-03을 기준으로 7일마다 한 번
 # - 카톡 정리: 휴무 블록의 마지막날 (다시 출근하기 전날)
 # - 아울렛 쇼핑: 한 달에 한 번. 그 달의 첫 번째 휴무 블록 시작일에 알림
 # - 2만보 걷기: 휴무 블록의 첫날과 마지막날(기존 마지막날 1회에서 약 2배로 확대).
@@ -127,6 +128,7 @@ REMINDERS = {
     "call_mom":        {"label": "📞 엄마한테 전화하는 날",   "enabled": True},
     "call_heo_minjun": {"label": "📞 허민준한테 전화하는 날", "enabled": True},
     "call_dongchan":   {"label": "📞 동찬이형한테 전화하는 날", "enabled": True},
+    "nose_hair_trim":  {"label": "🪒 코털 정리하는 날",       "enabled": True},
     "kakao_cleanup":   {"label": "🧹 카톡 정리하는 날",       "enabled": True},
     "outlet_shopping": {"label": "🛍️ 아울렛 쇼핑하는 날",    "enabled": True},
     "walk_20k":        {"label": "🚶 2만보 걷는 날",         "enabled": True},
@@ -474,6 +476,8 @@ GYM_WEEKEND_CLOSE = datetime.time(17, 0)
 GYM_CYCLE_ANCHOR = datetime.date(2026, 8, 3)
 CALL_DONGCHAN_ANCHOR = datetime.date(2026, 8, 3)
 CALL_DONGCHAN_INTERVAL_DAYS = 21
+NOSE_HAIR_TRIM_ANCHOR = datetime.date(2026, 8, 3)
+NOSE_HAIR_TRIM_INTERVAL_DAYS = 7
 
 
 def is_gym_open(dt):
@@ -516,6 +520,12 @@ def _is_dongchan_call_day(d):
     return days >= 0 and days % CALL_DONGCHAN_INTERVAL_DAYS == 0
 
 
+def _is_nose_hair_trim_day(d):
+    """기준일부터 7일마다 돌아오는 코털 정리일인지 반환."""
+    days = (d - NOSE_HAIR_TRIM_ANCHOR).days
+    return days >= 0 and days % NOSE_HAIR_TRIM_INTERVAL_DAYS == 0
+
+
 def _is_first_off_block_start_of_month(schedule, d):
     """d가 이번 달의 '첫 번째' 휴무 블록 시작일인지 반환 (한 달에 한 번 리마인더용)."""
     if not _is_off_block_start(schedule, d):
@@ -556,6 +566,7 @@ def get_today_reminders(schedule, now=None):
     - 엄마한테 전화: 오늘이 휴무 블록의 첫날 (어제는 근무였음)
     - 허민준한테 전화: 월 1회, 이번 달의 첫 번째 휴무 블록 시작일
     - 동찬이형한테 전화: 2026-08-03부터 21일마다 한 번
+    - 코털 정리: 근무표와 무관하게 2026-08-03부터 7일마다 한 번
     - 카톡 정리: 오늘이 휴무 블록의 마지막날 (내일은 근무)
     - 2만보 걷기: 휴무 블록의 첫날과 마지막날. 하루짜리 휴무는 한 번만 뜬다.
       (2026-08-03: 기존 마지막날 1회에서 빈도를 약 2배로 확대)
@@ -595,6 +606,9 @@ def get_today_reminders(schedule, now=None):
 
     if REMINDERS["call_dongchan"]["enabled"] and _is_dongchan_call_day(today):
         reminders.append(REMINDERS["call_dongchan"]["label"])
+
+    if REMINDERS["nose_hair_trim"]["enabled"] and _is_nose_hair_trim_day(today):
+        reminders.append(REMINDERS["nose_hair_trim"]["label"])
 
     if REMINDERS["outing"]["enabled"] and _is_last_off_block_start_of_month(schedule, today):
         place = pick_monthly_outing_place(today)
