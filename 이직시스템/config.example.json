@@ -1,0 +1,26 @@
+{
+  "queries": [
+    "Python 백엔드",
+    "AI 자동화",
+    "데이터 엔지니어"
+  ],
+  "include_keywords": [
+    "Python",
+    "FastAPI",
+    "Django",
+    "SQL",
+    "AI",
+    "LLM",
+    "자동화",
+    "데이터"
+  ],
+  "exclude_keywords": [
+    "영업",
+    "인턴",
+    "퍼블리셔"
+  ],
+  "locations": [],
+  "results_per_query": 30,
+  "sort": "pd"
+}
+
