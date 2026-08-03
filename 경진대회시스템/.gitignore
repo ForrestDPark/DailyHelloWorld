@@ -1,5 +1,5 @@
-config.json
 data/
 exports/
+config.json
 __pycache__/
 *.pyc
