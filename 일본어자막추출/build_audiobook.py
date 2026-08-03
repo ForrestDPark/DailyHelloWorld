@@ -12,6 +12,7 @@ import asyncio
 import glob
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -63,22 +64,11 @@ def get_duration(path):
         return 0.0
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("book_dir", help="일본어자막추출/library/<작품명> 폴더")
-    parser.add_argument("--output", help="출력 .m4b 경로")
-    args = parser.parse_args()
-
-    book_dir = os.path.abspath(args.book_dir)
+def build_book(book_dir, output):
     base_name = os.path.basename(book_dir)
-
     lines = load_lines(book_dir)
     if not lines:
-        sys.exit(
-            f"❌ transcript_part*.jsonl이 없습니다: {book_dir}\n"
-            f"   완성된 EPUB이 모여있는 av완성작 폴더가 아니라, "
-            f"일본어자막추출/library/<작품명> 폴더를 선택해야 합니다."
-        )
+        raise RuntimeError(f"대사 원본이 없습니다: {book_dir}")
 
     descriptions = load_scene_descriptions(book_dir)
 
@@ -87,7 +77,8 @@ def main():
         scenes.setdefault((r["part"], r["scene"]), []).append(r["ja"])
     scene_keys = sorted(scenes.keys())
 
-    output = args.output or os.path.join(book_dir, f"{base_name}_오디오북.m4b")
+    output = os.path.abspath(output)
+    os.makedirs(os.path.dirname(output), exist_ok=True)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         clip_paths = []
@@ -149,15 +140,106 @@ def main():
     else:
         print("⚠️  AtomicParsley가 없어 오디오북 전용 표시(stik)를 못 붙였습니다 "
               "— brew install atomicparsley 후 다시 실행하면 붙습니다.")
-
-    # ★ 2026-07-31: 처음엔 별도 av오디오북 폴더를 만들었는데, 사용자가 EPUB이
-    # 이미 모여있는 av완성작 폴더에 오디오북도 같이 저장해달라고 요청해서 통일.
-    completed_dir = "/Users/forrestdpark/Desktop/BlogImage/av완성작"
-    os.makedirs(completed_dir, exist_ok=True)
-    shutil.copy2(output, completed_dir)
-
     print(f"✅ 오디오북 생성 완료: {output} ({len(scene_keys)}챕터)")
-    print(f"📚 av완성작 폴더로 복사 완료: {os.path.join(completed_dir, os.path.basename(output))}")
+    return output
+
+
+def resolve_books(selected_path):
+    """사용자가 고른 완성 EPUB 폴더를 내부 library 원본과 자동 연결한다."""
+    selected_path = os.path.abspath(selected_path)
+    if glob.glob(os.path.join(selected_path, "transcript_part*.jsonl")):
+        return [(selected_path, os.path.basename(selected_path))]
+
+    if not os.path.isdir(selected_path):
+        raise RuntimeError(f"폴더가 아닙니다: {selected_path}")
+
+    epub_paths = sorted(glob.glob(os.path.join(selected_path, "*.epub")))
+    if not epub_paths:
+        raise RuntimeError(f"선택한 폴더에 EPUB 파일이 없습니다: {selected_path}")
+
+    library_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), "library")
+    jobs = {}
+    unmatched = []
+    for epub_path in epub_paths:
+        stem = os.path.splitext(os.path.basename(epub_path))[0]
+        if stem.endswith(("읽어주기", "낭독판")):
+            continue
+        candidates = [
+            stem,
+            stem.replace(" ", "_"),
+            re.sub(r"\s+J$", "_J", stem),
+        ]
+        book_dir = next(
+            (
+                os.path.join(library_root, candidate)
+                for candidate in candidates
+                if os.path.isdir(os.path.join(library_root, candidate))
+                and glob.glob(
+                    os.path.join(library_root, candidate, "transcript_part*.jsonl")
+                )
+            ),
+            None,
+        )
+        if book_dir:
+            # 같은 작품의 구형/신형 EPUB이 둘 다 있어도 TTS는 한 번만 만든다.
+            jobs[os.path.realpath(book_dir)] = (book_dir, os.path.basename(book_dir))
+        else:
+            unmatched.append(stem)
+
+    if unmatched:
+        print(
+            "ℹ️  대사 원본이 없어 오디오북을 만들 수 없는 EPUB "
+            f"{len(unmatched)}개는 건너뜁니다: {', '.join(unmatched)}"
+        )
+    if not jobs:
+        raise RuntimeError(
+            "선택한 EPUB들과 연결되는 대사 원본이 없습니다. "
+            "이 EPUB들은 예전 방식으로 만들어져 오디오북용 일본어 대사 데이터가 남아있지 않습니다."
+        )
+    return list(jobs.values())
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "source",
+        help="완성 EPUB이 들어 있는 폴더(권장) 또는 내부 작품 원본 폴더",
+    )
+    parser.add_argument("--output", help="단일 작품일 때 출력 .m4b 경로")
+    parser.add_argument("--output-dir", help="오디오북을 저장할 폴더")
+    args = parser.parse_args()
+
+    source = os.path.abspath(args.source)
+    jobs = resolve_books(source)
+    if args.output and len(jobs) != 1:
+        sys.exit("❌ --output은 단일 작품을 처리할 때만 사용할 수 있습니다.")
+
+    if args.output_dir:
+        output_dir = os.path.abspath(args.output_dir)
+    elif glob.glob(os.path.join(source, "*.epub")):
+        output_dir = source
+    else:
+        output_dir = jobs[0][0]
+
+    failures = []
+    for index, (book_dir, output_name) in enumerate(jobs, 1):
+        output = (
+            os.path.abspath(args.output)
+            if args.output else
+            os.path.join(output_dir, f"{output_name}_오디오북.m4b")
+        )
+        print(f"\n📚 [{index}/{len(jobs)}] {output_name} 오디오북 생성 시작")
+        try:
+            build_book(book_dir, output)
+        except Exception as exc:
+            failures.append((output_name, str(exc)))
+            print(f"❌ {output_name} 실패: {exc}")
+
+    if failures:
+        print("\n⚠️ 실패 목록:")
+        for name, reason in failures:
+            print(f"  - {name}: {reason}")
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

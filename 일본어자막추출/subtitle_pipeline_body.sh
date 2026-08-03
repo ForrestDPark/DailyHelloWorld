@@ -76,6 +76,9 @@ echo "\033[1;35m📝 자막·번역·Notion·EPUB 순차 처리 시작\033[0m"
 echo "\033[1;35m==================================================\033[0m"
 
 while true; do
+    # 어떤 하위 명령이 현재 디렉터리를 바꾸더라도 다음 작품이 직전 작품 폴더
+    # 안에 중첩되지 않도록 매 반복마다 사용자가 선택한 루트로 강제 복귀한다.
+    cd "$WORKING_DIR" || exit 1
     CURRENT_FILES=(*.(mp4|webm|mkv|mov)(N))
     CURRENT_FILES=(${CURRENT_FILES:#*_운동용*})
     CURRENT_FILES=(${CURRENT_FILES:#*_고음영상*})
@@ -191,41 +194,16 @@ while true; do
         export MYTMP="$MYTMP"
 
         cat << 'PYEOF' > "$PY_WORKER"
-import os, sys, re, json, requests, time, subprocess, warnings, shutil
+import os, sys, re, json, requests, time, subprocess, warnings, shutil, html
 from datetime import datetime
+from PIL import Image, ImageChops, ImageStat
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 from pykakasi import kakasi
 kks = kakasi()
 
-# ── 시크릿은 코드에 하드코딩하지 않고 macOS 키체인에서 읽는다 ──────────
-# 등록: security add-generic-password -a "$USER" -s "jp_subtitle_notion_token" -w "<토큰>" -U
-def load_secret(service_name):
-    try:
-        result = subprocess.run(
-            ["security", "find-generic-password", "-a", os.environ.get("USER", ""),
-             "-s", service_name, "-w"],
-            capture_output=True, text=True, check=True,
-        )
-        return result.stdout.strip()
-    except subprocess.CalledProcessError:
-        return None
-
-NOTION_TOKEN      = load_secret("jp_subtitle_notion_token")
-DATABASE_ID       = "35f32a1eae808058a38af59076445e42"
-
-if not NOTION_TOKEN:
-    print("❌ 노션 토큰을 키체인에서 찾을 수 없습니다. README의 키체인 등록 명령을 먼저 실행하세요.")
-    sys.exit(1)
-
-headers = {
-    "Authorization": f"Bearer {NOTION_TOKEN}",
-    "Content-Type": "application/json",
-    "Notion-Version": "2022-06-28"
-}
-
 # ── 단계별 소요시간 누적(어디서 시간이 제일 드는지 실행이 끝나면 바로 보여줌) ──
-TIMING = {"translate": 0.0, "notion": 0.0, "note": 0.0, "image": 0.0}
+TIMING = {"translate": 0.0, "note": 0.0, "image": 0.0}
 
 def clean_text(text):
     text = re.sub(r'\[.*?\]|\(.*?\)|\*.*?\*', '', text)
@@ -304,50 +282,78 @@ def capture_representative_image(video_path, timestamp, out_path):
     finally:
         TIMING["image"] += time.time() - _t0
 
-def notion_append(url, children, retries=3):
-    _t0 = time.time()
+def image_difference(path_a, path_b):
+    """두 프레임의 밝기·구도 차이를 0~255 점수로 계산한다."""
     try:
-        for attempt in range(retries):
-            try:
-                r = requests.patch(url, headers=headers,
-                                   json={"children": children}, timeout=15)
-                if r.status_code == 200:
-                    return True
-            except Exception:
-                pass
-            time.sleep(1.5 * (attempt + 1))
-        return False
-    finally:
-        TIMING["notion"] += time.time() - _t0
+        with Image.open(path_a) as a, Image.open(path_b) as b:
+            a = a.convert("L").resize((96, 54))
+            b = b.convert("L").resize((96, 54))
+            return ImageStat.Stat(ImageChops.difference(a, b)).rms[0]
+    except Exception:
+        return 0.0
 
-def build_monitor_blocks(img_url, ja_list, ko_list):
-    blocks = []
-    LABEL_COLORS = ["orange", "yellow", "green"]
-    if img_url:
-        blocks.append({
-            "object": "block", "type": "image",
-            "image": {"type": "external", "external": {"url": img_url}}
-        })
-    for i, (ja, ko) in enumerate(zip(ja_list, ko_list)):
-        color = LABEL_COLORS[i] if i < len(LABEL_COLORS) else "default"
-        furi  = generate_furigana(ja)
-        blocks.append({
-            "object": "block", "type": "quote",
-            "quote": {
-                "rich_text": [
-                    {"type": "text",
-                     "text": {"content": f"▶ {furi}"},
-                     "annotations": {"bold": True, "color": color}},
-                    {"type": "text",
-                     "text": {"content": f"  →  {ko}"},
-                     "annotations": {"bold": False, "color": "gray"}}
-                ],
-                "color": "default"
-            }
-        })
-    blocks.append({"object": "block", "type": "paragraph",
-                   "paragraph": {"rich_text": []}})
-    return blocks
+def prepare_scene_images(video_path, scene_lines, part_num, scene_num,
+                         image_dir, scratch_dir):
+    """앞쪽 대표 화면과, 충분히 다른 후반 화면을 최대 한 장 더 고른다.
+
+    일정 간격으로 무조건 두 장을 넣지 않고 후반 후보 3장을 비교한다. 차이가
+    작으면 보조 이미지를 생략하므로 같은 구도의 사진이 연달아 들어가지 않는다.
+    """
+    primary = os.path.join(
+        image_dir, f"part{part_num}_scene{scene_num:03d}.jpg"
+    )
+    secondary = os.path.join(
+        image_dir, f"part{part_num}_scene{scene_num:03d}_alt.jpg"
+    )
+    if not scene_lines:
+        return primary, secondary if os.path.isfile(secondary) else None
+
+    primary_idx = min(len(scene_lines) - 1, max(0, len(scene_lines) // 4))
+    capture_representative_image(
+        video_path, offset_sec + scene_lines[primary_idx]["start"] + 0.1, primary
+    )
+    if os.path.isfile(secondary):
+        return primary, secondary
+
+    candidate_indices = sorted(set([
+        len(scene_lines) // 2,
+        (len(scene_lines) * 3) // 4,
+        max(0, len(scene_lines) - 2),
+    ]))
+    best_score, best_path = 0.0, None
+    temp_paths = []
+    os.makedirs(scratch_dir, exist_ok=True)
+    for candidate_idx in candidate_indices:
+        if candidate_idx <= primary_idx or candidate_idx >= len(scene_lines):
+            continue
+        temp_path = os.path.join(
+            scratch_dir,
+            f"part{part_num}_scene{scene_num:03d}_candidate{candidate_idx:03d}.jpg",
+        )
+        temp_paths.append(temp_path)
+        capture_representative_image(
+            video_path,
+            offset_sec + scene_lines[candidate_idx]["start"] + 0.1,
+            temp_path,
+        )
+        score = image_difference(primary, temp_path)
+        if score > best_score:
+            best_score, best_path = score, temp_path
+
+    # 0~255 RMS 중 24 이상일 때만 상황 변화로 인정한다. 실제 신규 작업을
+    # 보며 필요하면 JP_SECOND_IMAGE_THRESHOLD 환경변수로 조절할 수 있다.
+    threshold = float(os.environ.get("JP_SECOND_IMAGE_THRESHOLD", "24"))
+    if best_path and best_score >= threshold:
+        shutil.copy2(best_path, secondary)
+        print(f"   🖼️ 장면 {scene_num}: 다른 상황 이미지 추가 (차이 {best_score:.1f})")
+    else:
+        print(f"   🖼️ 장면 {scene_num}: 화면 변화가 작아 보조 이미지 생략 (차이 {best_score:.1f})")
+    for temp_path in temp_paths:
+        try:
+            os.remove(temp_path)
+        except OSError:
+            pass
+    return primary, secondary if os.path.isfile(secondary) else None
 
 def create_epub_css(work_dir):
     """대표 이미지 한 장 주위로 대사가 흐르는 소설형 EPUB CSS.
@@ -497,11 +503,12 @@ nav#toc a { color: #9a6a00; text-decoration: none; }
         f.write(css)
     return css_path
 
-# 장면 하나는 대사 24줄이며 대표 이미지는 장면마다 단 한 장만 사용한다.
+# 장면 하나는 대사 24줄이다. 대표 이미지 1장과, 상황이 충분히 달라질 때만
+# 후반 보조 이미지 1장을 추가한다.
 SCENE_SIZE = 8
 
-def save_to_md(work_dir, note_title, representative_img_path, ja_list, ko_list,
-               part_num="1", chunk_idx=0):
+def save_to_md(work_dir, note_title, representative_img_path, secondary_img_path,
+               ja_list, ko_list, part_num="1", chunk_idx=0):
     base_name  = os.environ.get("FILENAME_NO_EXT", "result")
     result_dir = os.path.join(work_dir, f"{base_name}_work")
     img_dir    = os.path.join(result_dir, "images")
@@ -511,6 +518,10 @@ def save_to_md(work_dir, note_title, representative_img_path, ja_list, ko_list,
     if representative_img_path and os.path.exists(representative_img_path):
         img_filename = os.path.basename(representative_img_path)
         shutil.copy2(representative_img_path, os.path.join(img_dir, img_filename))
+    secondary_filename = None
+    if secondary_img_path and os.path.exists(secondary_img_path):
+        secondary_filename = os.path.basename(secondary_img_path)
+        shutil.copy2(secondary_img_path, os.path.join(img_dir, secondary_filename))
 
     md_path = os.path.join(work_dir, f"{note_title}.md")
     if not os.path.exists(md_path):
@@ -526,7 +537,7 @@ def save_to_md(work_dir, note_title, representative_img_path, ja_list, ko_list,
 <tr><td>대사 문장 수</td><td>{total_lines}줄</td></tr>
 <tr><td>장면 수</td><td>{scene_count}개 (장면당 대사 약 {SCENE_SIZE * 3}줄)</td></tr>
 <tr><td>표기 방식</td><td>원문 위(금색, 한자엔 후리가나 병기) / 번역 아래(회색)</td></tr>
-<tr><td>이미지</td><td>장면마다 대표 이미지 1장, 대사가 이미지 주위로 흐르는 책형 배치</td></tr>
+<tr><td>이미지</td><td>장면마다 대표 이미지 1장 + 상황 변화가 클 때 보조 이미지 1장</td></tr>
 </table>
 </div>
 
@@ -534,9 +545,9 @@ def save_to_md(work_dir, note_title, representative_img_path, ja_list, ko_list,
         with open(md_path, "w", encoding="utf-8") as f:
             f.write(overview)
 
+    scene_num = (chunk_idx - 1) // SCENE_SIZE + 1
     with open(md_path, "a", encoding="utf-8") as f:
         if (chunk_idx - 1) % SCENE_SIZE == 0:
-            scene_num = (chunk_idx - 1) // SCENE_SIZE + 1
             # ★ 마크다운 네이티브 헤더 문법({.scene}은 pandoc 헤더 속성 확장)을
             # 써야 --toc가 이걸 목차 항목으로 잡는다. <h2> raw HTML로 쓰면
             # pandoc이 그냥 불투명한 블록으로 취급해서 목차에 안 잡힌다(확인됨).
@@ -546,11 +557,13 @@ def save_to_md(work_dir, note_title, representative_img_path, ja_list, ko_list,
             f.write(f'## 🎬 장면 {scene_num} {{.scene .ibooks-dark-theme-use-custom-text-color}}\n\n')
             if img_filename:
                 f.write(f'<img class="scene-thumb" src="{base_name}_work/images/{img_filename}" alt="장면 {scene_num}" />\n\n')
+        elif (chunk_idx - 1) % SCENE_SIZE == SCENE_SIZE // 2 and secondary_filename:
+            f.write(f'<div class="scene-end"></div>\n\n<img class="scene-thumb" src="{base_name}_work/images/{secondary_filename}" alt="장면 {scene_num} 상황 변화" />\n\n')
         f.write('<div class="set">\n\n')
         for ja, ko in zip(ja_list, ko_list):
             furi = generate_furigana(ja)
-            f.write(f'<p class="ja ibooks-dark-theme-use-custom-text-color">{furi}</p>\n')
-            f.write(f'<p class="ko ibooks-dark-theme-use-custom-text-color">{ko}</p>\n\n')
+            f.write(f'<p class="ja ibooks-dark-theme-use-custom-text-color">{html.escape(furi)}</p>\n')
+            f.write(f'<p class="ko ibooks-dark-theme-use-custom-text-color">{html.escape(ko)}</p>\n\n')
         f.write("</div>\n\n")
         if chunk_idx % SCENE_SIZE == 0:
             f.write('<div class="scene-end"></div>\n\n')
@@ -663,62 +676,44 @@ if not parsed_lines:
     print("⚠️  유효한 자막 없음")
     sys.exit(0)
 
-# ── Notion 페이지 생성 ────────────────────────────────────────────
+# 낭독판 EPUB은 페이지당 4문장이므로 각 고정 페이지에 대응하는 화면을
+# 미리 캡처한다. 파일명에 장면 안 페이지 번호를 넣어 재빌드할 때도 재사용한다.
+READALOUD_LINES_PER_PAGE = 4
+for scene_start in range(0, len(parsed_lines), SCENE_SIZE * 3):
+    scene_num = scene_start // (SCENE_SIZE * 3) + 1
+    scene_lines = parsed_lines[scene_start:scene_start + SCENE_SIZE * 3]
+    page_groups = [scene_lines[:2]] + [
+        scene_lines[i:i + READALOUD_LINES_PER_PAGE]
+        for i in range(2, len(scene_lines), READALOUD_LINES_PER_PAGE)
+    ]
+    for page_num, page_lines in enumerate(page_groups, 1):
+        representative = page_lines[len(page_lines) // 2]
+        page_image = os.path.join(
+            book_images_dir,
+            f"part{part_num}_scene{scene_num:03d}_page{page_num:02d}.jpg",
+        )
+        capture_representative_image(
+            video_path, offset_sec + representative["start"] + 0.1, page_image
+        )
+print(
+    f"🖼️ 낭독판 EPUB 페이지 이미지 준비 완료 "
+    f"(장면 첫 페이지 2문장+학습 카드, 이후 페이지당 {READALOUD_LINES_PER_PAGE}문장)",
+    flush=True,
+)
+
+# ── 로컬 책 자료 생성 (Notion 연동은 사용하지 않음) ───────────────
 now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 if total_parts == "1":
-    title        = f"📖 {base_name} ({now_str})"
-    callout_text = f"🍿  {base_name}"
     note_title   = base_name
 else:
-    title        = f"📖 {base_name} [제 {part_num}편] ({now_str})"
-    callout_text = f"🍿  {base_name}  제 {part_num}편"
     note_title   = f"{base_name} 제{part_num}편"
-
-page_res = requests.post("https://api.notion.com/v1/pages", headers=headers, json={
-    "parent": {"database_id": DATABASE_ID},
-    "icon":   {"type": "emoji", "emoji": "🎬"},
-    "properties": {
-        "내용": {"title": [{"text": {"content": title}}]},
-        "상태": {"select": {"name": "추출 중"}},
-        "요약 상태": {"select": {"name": "대기"}},
-        "Git 경로": {"rich_text": [{"text": {
-            "content": f"일본어자막추출/library/{safe_base_name}"
-        }}]},
-    },
-    "children": [{
-        "object": "block", "type": "callout",
-        "callout": {
-            "rich_text": [{"type": "text", "text": {"content": callout_text}}],
-            "icon":  {"type": "emoji", "emoji": "📺"},
-            "color": "orange_background"
-        }
-    }]
-})
-
-if page_res.status_code != 200:
-    print(f"❌ Notion 페이지 생성 실패: {page_res.status_code}")
-    sys.exit(1)
-
-page_id   = page_res.json()["id"]
-child_url = f"https://api.notion.com/v1/blocks/{page_id}/children"
 TOTAL_SETS = (len(parsed_lines) + 2) // 3
-print(f"🚀 [{base_name}] Notion 연동 완료 │ 총 {len(parsed_lines)}줄 / {TOTAL_SETS}세트")
+print(f"🚀 [{base_name}] 로컬 EPUB 자료 준비 │ 총 {len(parsed_lines)}줄 / {TOTAL_SETS}세트")
 print(f"📚 Git 책 자료 폴더: {book_dir}\n")
 
 create_epub_css(work_dir)
 create_epub_css(book_dir)
 create_apple_note(note_title)
-
-with open(os.path.join(book_dir, f"notion_part{part_num}.json"), "w", encoding="utf-8") as f:
-    json.dump({
-        "database_id": DATABASE_ID,
-        "page_id": page_id,
-        "page_url": f"https://www.notion.so/{page_id.replace('-', '')}",
-        "title": title,
-        "git_relative_path": f"일본어자막추출/library/{safe_base_name}",
-        "image_status": "Notion 파일 직접 업로드 대기",
-        "summary_status": "Codex 요약 대기",
-    }, f, ensure_ascii=False, indent=2)
 
 transcript_jsonl = os.path.join(book_dir, f"transcript_part{part_num}.jsonl")
 transcript_md = os.path.join(book_dir, f"transcript_part{part_num}.md")
@@ -741,6 +736,8 @@ if not os.path.exists(summary_path):
 
 # ── 3문장씩 처리 ─────────────────────────────────────────────────
 _PIPELINE_START = time.time()
+scene_primary_path = None
+scene_secondary_path = None
 for idx in range(0, len(parsed_lines), 3):
     chunk     = parsed_lines[idx:idx + 3]
     chunk_idx = idx // 3 + 1
@@ -753,15 +750,11 @@ for idx in range(0, len(parsed_lines), 3):
     representative_path = None
     if (chunk_idx - 1) % SCENE_SIZE == 0:
         scene_lines = parsed_lines[idx:idx + SCENE_SIZE * 3]
-        representative = scene_lines[len(scene_lines) // 2]
-        representative_path = os.path.join(
-            book_images_dir, f"part{part_num}_scene{scene_num:03d}.jpg"
+        scene_primary_path, scene_secondary_path = prepare_scene_images(
+            video_path, scene_lines, part_num, scene_num,
+            book_images_dir, img_folder,
         )
-        capture_representative_image(
-            video_path,
-            offset_sec + representative["start"] + 0.1,
-            representative_path,
-        )
+        representative_path = scene_primary_path
 
     with open(transcript_jsonl, "a", encoding="utf-8") as jf, \
          open(transcript_md, "a", encoding="utf-8") as mf:
@@ -771,6 +764,13 @@ for idx in range(0, len(parsed_lines), 3):
             # 다크 테마에서 이 색이 흰색으로 강제 대체되지 않게 하는 공식 클래스.
             mf.write(f"## 장면 {scene_num} {{.scene .ibooks-dark-theme-use-custom-text-color}}\n\n")
             mf.write(f'<img class="scene-thumb" src="images/part{part_num}_scene{scene_num:03d}.jpg" alt="장면 {scene_num}" />\n\n')
+        elif ((chunk_idx - 1) % SCENE_SIZE == SCENE_SIZE // 2
+              and scene_secondary_path and os.path.isfile(scene_secondary_path)):
+            mf.write(
+                '<div class="scene-end"></div>\n\n'
+                f'<img class="scene-thumb" src="images/{os.path.basename(scene_secondary_path)}" '
+                f'alt="장면 {scene_num} 상황 변화" />\n\n'
+            )
         for c, ja, ko in zip(chunk, ja_list, ko_list):
             furi = generate_furigana(ja)
             record = {
@@ -787,23 +787,14 @@ for idx in range(0, len(parsed_lines), 3):
             # CSS 클래스가 없어서 epub_style.css의 p.ja(금색)/p.ko(회색) 색 구분이
             # 전혀 적용 안 되고 본문 기본색으로만 보였다 — save_to_md()가 쓰는
             # _work 폴더 md와 똑같이 클래스 있는 HTML로 맞춘다.
-            mf.write(f'<p class="ja ibooks-dark-theme-use-custom-text-color">{furi}</p>\n')
-            mf.write(f'<p class="ko ibooks-dark-theme-use-custom-text-color">{ko}</p>\n\n')
+            mf.write(f'<p class="ja ibooks-dark-theme-use-custom-text-color">{html.escape(furi)}</p>\n')
+            mf.write(f'<p class="ko ibooks-dark-theme-use-custom-text-color">{html.escape(ko)}</p>\n\n')
         mf.write("\n")
-
-    # 대표 이미지는 전체 추출 뒤 Notion File Upload API로 직접 업로드한다.
-    # 추출 단계에서는 텍스트만 기록하고, Codex 후처리 단계가 줄거리·목차를
-    # 완성한다.
-    uploaded_url  = None
-    notion_blocks = build_monitor_blocks(uploaded_url, ja_list, ko_list)
-    for i in range(0, len(notion_blocks), 20):
-        notion_append(child_url, notion_blocks[i:i+20])
-        time.sleep(0.3)
 
     append_to_apple_note(note_title, ja_list)
 
-    save_to_md(work_dir, note_title, representative_path, ja_list, ko_list,
-               part_num=part_num, chunk_idx=chunk_idx)
+    save_to_md(work_dir, note_title, representative_path, scene_secondary_path,
+               ja_list, ko_list, part_num=part_num, chunk_idx=chunk_idx)
 
     processed_lines = min(idx + n, len(parsed_lines))
     if chunk_idx % SCENE_SIZE == 0 or processed_lines == len(parsed_lines):
@@ -816,42 +807,37 @@ for idx in range(0, len(parsed_lines), 3):
         )
 
 scene_count = (TOTAL_SETS + SCENE_SIZE - 1) // SCENE_SIZE
-requests.patch(
-    f"https://api.notion.com/v1/pages/{page_id}",
-    headers=headers,
-    json={"properties": {
-        "상태": {"select": {"name": "요약 대기"}},
-        "요약 상태": {"select": {"name": "대기"}},
-        "대표 이미지 수": {"number": scene_count},
-    }},
-    timeout=15,
-)
 print(f"\n✅ [{base_name}] {part_num}/{total_parts}편 완료 │ "
       f"{scene_count}장면 / 대표 이미지 {scene_count}장")
 
 _pipeline_elapsed = time.time() - _PIPELINE_START
 print(
     f"⏱ [{base_name}] {part_num}편 3문장-루프 소요 세부 — "
-    f"번역 {TIMING['translate']:.1f}초 · Notion 기록 {TIMING['notion']:.1f}초 · "
+    f"번역 {TIMING['translate']:.1f}초 · "
     f"메모앱 {TIMING['note']:.1f}초 · 이미지캡처 {TIMING['image']:.1f}초 "
     f"(루프 전체 {_pipeline_elapsed:.1f}초)"
 )
 PYEOF
         _T0=$(date +%s)
-        /opt/anaconda3/bin/python3 "$PY_WORKER"
-        echo "⏱ 번역/Notion/메모앱 처리(전체) 소요: $(( $(date +%s) - _T0 ))초"
+        if ! /opt/anaconda3/bin/python3 "$PY_WORKER"; then
+            echo "❌ [$FILENAME_NO_EXT] 제 $PART편 처리 실패 — 이 영상의 후속 EPUB 작업을 중단합니다."
+            rm -f "$PY_WORKER"
+            PART_PIPELINE_FAILED=1
+            break
+        fi
+        echo "⏱ 번역/메모앱 처리(전체) 소요: $(( $(date +%s) - _T0 ))초"
         rm -f "$PY_WORKER"
         echo "✅ [$FILENAME_NO_EXT] 제 $PART편 완료."
     done
 
-    # ── 대표 이미지 Notion 저장소 직접 업로드 ──────────────────────
+    if [[ "${PART_PIPELINE_FAILED:-0}" -eq 1 ]]; then
+        unset PART_PIPELINE_FAILED
+        echo "⚠️  [$FILENAME_NO_EXT] 실패한 원본은 현재 위치에 유지합니다. 다음 영상으로 넘어갑니다."
+        continue
+    fi
+
     SAFE_BASE_NAME=$(printf '%s' "$FILENAME_NO_EXT" | sed -E 's/[^0-9A-Za-z가-힣._-]+/_/g; s/^_+//; s/_+$//')
     BOOK_DIR="${SCRIPT_DIR}/library/${SAFE_BASE_NAME}"
-    echo "\n🖼️ 대표 이미지 Notion 직접 업로드 중..."
-    _T0=$(date +%s)
-    /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/sync_book_to_notion.py" \
-        --images-only "$BOOK_DIR" || echo "⚠️ Notion 이미지 업로드 실패 — 나중에 재실행 가능"
-    echo "⏱ Notion 이미지 업로드 소요: $(( $(date +%s) - _T0 ))초"
 
     # ── 통합 자막 생성 ─────────────────────────────────────────────
     MERGED_SRT="${FILENAME_NO_EXT}.srt"
@@ -932,12 +918,19 @@ PYMERGE
     # 실패하는 경우가 있었다(원인 미확정 — 리소스 경합으로 추정). 원인을
     # 못 찾았으니 최소한 재발 시 바로 알 수 있게 stderr를 로그 파일로 남긴다.
     COVER_LOG="${MYTMP}/cover_${FILENAME_NO_EXT}.log"
-    ffmpeg -y -ss "$SNAP_AT" -i "$FILENAME" -vframes 1 \
+    /opt/anaconda3/bin/ffmpeg -y -ss "$SNAP_AT" -i "$FILENAME" -vframes 1 \
         -vf "crop=ih*2/3:ih:(iw-ih*2/3)/2:0,scale=960:1440,\
 drawbox=x=0:y=1150:w=960:h=290:color=black@0.55:t=fill,\
 drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial Bold.ttf':text='${FILENAME_NO_EXT}':fontcolor=white:fontsize=90:x=(w-text_w)/2:y=1230,\
 drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese Subtitle Study':fontcolor=#cccccc:fontsize=34:x=(w-text_w)/2:y=1340" \
         -q:v 3 "$COVER_FILE" > "$COVER_LOG" 2>&1
+
+    if [[ ! -s "$COVER_FILE" ]]; then
+        echo "⚠️ 영상 표지 캡처 실패 — 추출된 장면 이미지로 대체 표지 생성"
+        /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/create_fallback_cover.py" \
+            "$BOOK_DIR" "$COVER_FILE" "$FILENAME_NO_EXT" \
+            || echo "⚠️ 장면 이미지 대체 표지도 생성하지 못했습니다"
+    fi
 
     if [[ -f "$COVER_FILE" ]]; then
         sips -s format jpeg "$COVER_FILE" --out "$COVER_FILE" &>/dev/null
@@ -995,8 +988,6 @@ drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese 
             echo "✅ EPUB 생성 완료: $OUTPUT_EPUB (${SIZE})"
 
             OBSIDIAN_PATH="/Users/forrestdpark/Library/Mobile Documents/iCloud~md~obsidian/Documents/Study"
-            [[ -d "$OBSIDIAN_PATH" ]] && cp "$OUTPUT_EPUB" "$OBSIDIAN_PATH/" \
-                && echo "📂 옵시디언 복사 완료"
         else
             echo "⚠️  EPUB 생성 실패 — 아래 pandoc 오류 로그 확인:"
             cat "$EPUB_LOG"
@@ -1005,38 +996,79 @@ drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese 
         echo "⚠️  MD 파일 없음, EPUB 건너뜀"
     fi
 
-    # ── 자동 요약(Claude) + Notion 요약 반영 + 요약 포함 최종 EPUB ──────
+    # ── 자동 요약·학습 카드 + 최종 낭독판 EPUB ──────────────────────
+    # Google 번역 전체를 AI로 다시 번역하지 않는다. 코드가 오역 가능성이 높다고
+    # 판정한 일부 문장만 앞뒤 일본어 문맥과 함께 작품당 한 번 Codex로 검수하고,
+    # 확정 결과는 translation_memory.json에 저장해 다음 작품에서 즉시 재사용한다.
+    echo "\n🔎 Google 번역 이상 문장 선택 검수 중..."
+    if ! /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/refine_translations.py" "$BOOK_DIR" --no-ai; then
+        echo "⚠️  선택 번역 검수 실패 — 기존 Google 번역으로 계속 진행합니다."
+    fi
+
     # ★ 2026-07-28: 원래 "Codex가 transcript_part*.jsonl과 대표 이미지를 읽고
     #   SUMMARY.md를 작성한다"는 수동 단계였는데, 여기까지 자동으로 끝난 뒤
     #   요약만 사람이 따로 세션을 열어야 하는 게 병목이었다. Claude Code CLI의
     #   헤드리스 --print 모드(generate_summary.py)로 대사 텍스트(ja/ko)만 보고
-    #   "전체 줄거리"+"장면별 목차"를 쓰게 해서 완전 자동화함(이미지는 안 보냄 —
-    #   빠르고 간단한 쪽 선택, OYC-126 1650줄/69장면 실측 96초). 요약이 준비되면
-    #   sync_book_to_notion.py(이미지 전용 아닌 기본 모드)가 Notion 페이지에 요약을
-    #   추가하고 상태를 "완료"로 바꾸며, finalize_japanese_book.py가 SUMMARY.md +
+    #   "전체 줄거리"+"장면별 목차"+"장면별 학습 카드"를 쓰게 해서 자동화함.
+    #   요약이 준비되면 finalize_japanese_book.py가 SUMMARY.md +
     #   전체 대사를 합쳐 목차 포함 최종 EPUB을 새로 만든다 — 이 최종본이 이미
     #   만든 "빠른" EPUB(줄거리 없음)보다 항상 나으므로 $OUTPUT_EPUB을 덮어써서
     #   교체하고, 옵시디언에도 다시 복사한다.
-    echo "\n🧠 Claude로 줄거리·장면별 목차 자동 생성 중..."
+    echo "\n🧠 Codex로 줄거리·장면별 학습 카드 자동 생성 중..."
+    READALOUD_SUCCESS=0
+    READALOUD_EPUB=""
+    COMPLETED_EPUB_DIR="/Users/forrestdpark/Desktop/BlogImage/av완성작"
+    mkdir -p "$COMPLETED_EPUB_DIR"
     _T0=$(date +%s)
     if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_summary.py" "$BOOK_DIR"; then
         echo "⏱ 요약 생성 소요: $(( $(date +%s) - _T0 ))초"
-
-        /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/sync_book_to_notion.py" "$BOOK_DIR" \
-            || echo "⚠️ Notion 요약 반영 실패 — 나중에 재실행 가능(sync_book_to_notion.py \"$BOOK_DIR\")"
 
         FINAL_LIBRARY_EPUB="${BOOK_DIR}/${SAFE_BASE_NAME}.epub"
         if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/finalize_japanese_book.py" "$BOOK_DIR" \
             && [[ -f "$FINAL_LIBRARY_EPUB" ]]; then
             cp "$FINAL_LIBRARY_EPUB" "$OUTPUT_EPUB"
             echo "✅ 줄거리·목차 포함된 최종 EPUB으로 교체: $OUTPUT_EPUB"
-            [[ -d "$OBSIDIAN_PATH" ]] && cp "$OUTPUT_EPUB" "$OBSIDIAN_PATH/" \
-                && echo "📂 옵시디언 재복사 완료(요약 포함본)"
-            # ★ 2026-07-28: 완성된 EPUB을 한곳에 몰아서 보려고 지정한 폴더.
-            COMPLETED_EPUB_DIR="/Users/forrestdpark/Desktop/BlogImage/av완성작"
-            mkdir -p "$COMPLETED_EPUB_DIR"
-            cp "$OUTPUT_EPUB" "$COMPLETED_EPUB_DIR/" \
-                && echo "📚 완성작 폴더로 복사 완료: ${COMPLETED_EPUB_DIR}/${OUTPUT_EPUB}"
+
+            # ★ 2026-08-01: Read Aloud EPUB을 유일한 최종 배포본으로 만든다.
+            # 일반 EPUB은 생성 실패 시 비상 결과물 및 내부 재빌드용이다.
+            # 일본어 42px,
+            # 페이지당 4문장, 두 페이지 펼침(auto), 문장별 SMIL 강조,
+            # 페이지 내 '자동 읽기' 버튼의 자동 넘김이 표준 양식이다.
+            EPUB_DISPLAY_TITLE=$(
+                /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/book_title.py" \
+                    "$BOOK_DIR" --base-name "$FILENAME_NO_EXT" --filename
+            )
+            [[ -z "$EPUB_DISPLAY_TITLE" ]] && EPUB_DISPLAY_TITLE="$FILENAME_NO_EXT"
+            READALOUD_EPUB="${EPUB_DISPLAY_TITLE}_낭독판.epub"
+            echo "\n📖 Apple Books 문장 동기화·자동 넘김 EPUB 생성 중..."
+            _T0=$(date +%s)
+            if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/build_readaloud_epub.py" \
+                "$BOOK_DIR" --output "$READALOUD_EPUB"; then
+                echo "⏱ 낭독판 EPUB 생성 소요: $(( $(date +%s) - _T0 ))초"
+                FINAL_BOOKS_EPUB="${COMPLETED_EPUB_DIR}/${READALOUD_EPUB:t}"
+                if cp "$READALOUD_EPUB" "$FINAL_BOOKS_EPUB"; then
+                    echo "📖 낭독판 EPUB 완성작 폴더 복사 완료"
+                    # 작업 폴더와 배포 위치에는 낭독판 EPUB 하나만 남긴다.
+                    # library 안의 일반 EPUB은 재빌드용 내부 자료로 보존한다.
+                    rm -f "$OUTPUT_EPUB"
+                    rm -f "${COMPLETED_EPUB_DIR}/${FILENAME_NO_EXT}.epub"
+                    [[ -d "$OBSIDIAN_PATH" ]] && rm -f \
+                        "${OBSIDIAN_PATH}/${FILENAME_NO_EXT}.epub" \
+                        "${OBSIDIAN_PATH}/${READALOUD_EPUB:t}"
+                    READALOUD_SUCCESS=1
+                    if [[ "${JP_OPEN_BOOKS:-1}" != "0" ]]; then
+                        if open -a Books "$FINAL_BOOKS_EPUB"; then
+                            echo "📖 Apple Books에서 최종 EPUB을 열었습니다."
+                        else
+                            echo "⚠️  EPUB은 정상 생성됐지만 Apple Books 자동 열기에 실패했습니다."
+                        fi
+                    fi
+                else
+                    echo "⚠️  낭독판 EPUB 완성작 폴더 복사 실패 — 자동 열기를 건너뜁니다."
+                fi
+            else
+                echo "⚠️  낭독판 EPUB 생성 실패 — 일반 EPUB은 정상 보존하며, 나중에 재실행 가능"
+            fi
         else
             echo "⚠️  최종 EPUB 빌드 실패 — 줄거리 없는 기존 EPUB 유지"
         fi
@@ -1045,18 +1077,49 @@ drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese 
         echo "    (나중에 수동 재실행: python3 generate_summary.py \"$BOOK_DIR\")"
     fi
 
+    # 낭독판 EPUB이 실패했을 때만 일반 EPUB을 비상 결과물로 배포한다.
+    if (( READALOUD_SUCCESS == 0 )) && [[ -f "$OUTPUT_EPUB" ]]; then
+        cp "$OUTPUT_EPUB" "$COMPLETED_EPUB_DIR/" \
+            && echo "📚 낭독판 실패로 일반 EPUB을 비상 보존"
+    fi
+
     echo "\033[1;32m[$FILENAME_NO_EXT] 전체 완료!\033[0m"
     echo "  📄 자막: $MERGED_SRT"
-    echo "  📚 EPUB: $OUTPUT_EPUB"
+    if (( READALOUD_SUCCESS == 1 )); then
+        echo "  📖 최종 EPUB: $READALOUD_EPUB"
+    else
+        echo "  📚 비상 EPUB: $OUTPUT_EPUB"
+    fi
 
     # ── 최종 폴더 정리 ────────────────────────────────────────────
     # 최상위(<파일명>/)에는 원본 영상 + EPUB + BGM 운동용 영상 3개만
     # 보이게 하고, 나머지 작업 파일(자막/후리가나 md/썸네일/캐시 등)은
     # <파일명>/기타/ 로 몰아서 정리한다.
-    FINAL_DIR="$FILENAME_NO_EXT"
+    FINAL_DIR="${WORKING_DIR}/${FILENAME_NO_EXT}"
     mkdir -p "${FINAL_DIR}/기타"
 
     HIGHLIGHT_BGM=$(ls "${FILENAME_NO_EXT}_운동용_"*"_bgm.mp4"(N) 2>/dev/null | head -1)
+    EXTRACTION_HISTORY="${FILENAME_NO_EXT}_운동용_추출기록.json"
+    AVMUSIC_EXPORT_RECORDED=0
+    AVMUSIC_EXPORTED_NAME=""
+    if [[ -f "$EXTRACTION_HISTORY" ]]; then
+        AVMUSIC_EXPORT_INFO=$(python3 -c '
+import json, sys
+try:
+    data = json.load(open(sys.argv[1], encoding="utf-8"))
+    item = data.get("avmusic_export") or {}
+    size = int(item.get("size") or 0)
+    name = str(item.get("file") or "")
+    if size > 0 and name:
+        print(f"{size}\t{name}")
+except Exception:
+    pass
+' "$EXTRACTION_HISTORY")
+        if [[ -n "$AVMUSIC_EXPORT_INFO" ]]; then
+            AVMUSIC_EXPORT_RECORDED=1
+            AVMUSIC_EXPORTED_NAME="${AVMUSIC_EXPORT_INFO#*$'\t'}"
+        fi
+    fi
     HIGHLIGHT_PLAIN_ALL=("${FILENAME_NO_EXT}_운동용_"*.mp4(N))
     HIGHLIGHT_PLAIN=""
     for hf in "${HIGHLIGHT_PLAIN_ALL[@]}"; do
@@ -1065,6 +1128,8 @@ drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese 
 
     [[ -f "$FILENAME" ]] && mv "$FILENAME" "$FINAL_DIR/"
     [[ -f "$OUTPUT_EPUB" ]] && mv "$OUTPUT_EPUB" "$FINAL_DIR/"
+    [[ -n "$READALOUD_EPUB" && -f "$READALOUD_EPUB" ]] \
+        && mv "$READALOUD_EPUB" "$FINAL_DIR/"
     [[ -n "$HIGHLIGHT_BGM" ]] && mv "$HIGHLIGHT_BGM" "$FINAL_DIR/"
 
     [[ -n "$HIGHLIGHT_PLAIN" ]] && mv "$HIGHLIGHT_PLAIN" "$FINAL_DIR/기타/"
@@ -1078,9 +1143,50 @@ drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese 
         mv "$f" "$FINAL_DIR/기타/"
     done
 
-    echo "📦 최종 폴더 정리 완료:"
-    echo "   $FINAL_DIR/  (원본 영상 + EPUB + BGM 운동용 영상)"
-    echo "   $FINAL_DIR/기타/  (자막/md/썸네일/캐시 등 나머지)"
+    # 최종 낭독판이 존재하고, BGM 영상이 avMusic에 현재 있거나 이번 실행에서
+    # 크기 검증까지 마친 복사 기록이 있을 때 중간 작업물을 삭제한다. 사용자가
+    # 복사 직후 avMusic 파일을 다른 곳으로 옮겨도 불필요한 대용량 캐시를 남기지 않는다.
+    AV_MUSIC_DIR="/Users/forrestdpark/Desktop/BlogImage/avMusic"
+    FINAL_EPUB_COPY="${COMPLETED_EPUB_DIR}/${READALOUD_EPUB:t}"
+    AV_MUSIC_MATCHES=("${AV_MUSIC_DIR}/${FILENAME_NO_EXT}_운동용_"*"_bgm.mp4"(N))
+    if (( READALOUD_SUCCESS == 1 )) \
+        && [[ -s "$FINAL_EPUB_COPY" ]] \
+        && (( ${#AV_MUSIC_MATCHES[@]} > 0 || AVMUSIC_EXPORT_RECORDED == 1 )); then
+        echo "🧹 최종 파일 2종 확인 — 원본은 보존하고 중간 작업물 삭제"
+        echo "   📖 $FINAL_EPUB_COPY"
+        if (( ${#AV_MUSIC_MATCHES[@]} > 0 )); then
+            echo "   🎵 ${AV_MUSIC_MATCHES[1]}"
+        else
+            echo "   🎵 avMusic 복사 완료 기록 확인(현재 파일은 이동됨): $AVMUSIC_EXPORTED_NAME"
+        fi
+        ORIGINAL_IN_FINAL="${FINAL_DIR}/${FILENAME:t}"
+        ORIGINAL_PRESERVED=0
+        if [[ -f "$ORIGINAL_IN_FINAL" ]]; then
+            mv "$ORIGINAL_IN_FINAL" "./${FILENAME:t}"
+            echo "   🎬 원본 영상 보존: ./${FILENAME:t}"
+            ORIGINAL_PRESERVED=1
+        elif [[ -f "./${FILENAME:t}" ]]; then
+            echo "   🎬 원본 영상 확인: ./${FILENAME:t}"
+            ORIGINAL_PRESERVED=1
+        fi
+        if (( ORIGINAL_PRESERVED == 1 )); then
+            if [[ -n "$FINAL_DIR" && "$FINAL_DIR" != "." && -d "$FINAL_DIR" ]]; then
+                rm -rf -- "$FINAL_DIR"
+            fi
+            if [[ -n "$BOOK_DIR" && "$BOOK_DIR" == "${SCRIPT_DIR}/library/"* \
+                  && -d "$BOOK_DIR" ]]; then
+                rm -rf -- "$BOOK_DIR"
+            fi
+            echo "✅ 정리 완료 — 원본 영상 + av완성작 낭독판 + avMusic BGM 영상 보존"
+        else
+            echo "⚠️ 원본 영상 보존을 확인하지 못해 중간 작업물을 삭제하지 않음"
+        fi
+    else
+        echo "⚠️ 최종 파일 확인 불완전 — 원본과 중간 작업물을 삭제하지 않음"
+        echo "   낭독판: $FINAL_EPUB_COPY"
+        echo "   avMusic BGM 후보: ${#AV_MUSIC_MATCHES[@]}개"
+        echo "   avMusic 복사 완료 기록: $AVMUSIC_EXPORT_RECORDED"
+    fi
     COMPLETED_COUNT=$(( COMPLETED_COUNT + 1 ))
     echo "✅ 현재 실행에서 완료한 원본: ${COMPLETED_COUNT}개"
 done

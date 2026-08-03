@@ -1,10 +1,9 @@
 #!/bin/zsh
-# 일본어 영상 → 자막(Whisper) + 번역(구글) + 후리가나 + 노션 기록 + 메모 앱 + MD + EPUB
+# 일본어 영상 → 자막(Whisper) + 번역(구글) + 후리가나 + 메모 앱 + 낭독판 EPUB
 # 사용법: ./whisper_series_stream.sh [영상 폴더 경로]  (생략하면 현재 폴더)
 #
 # 필요 시크릿(macOS 키체인, 평문 하드코딩 금지):
-#   security add-generic-password -a "$USER" -s "jp_subtitle_notion_token" -w "<노션 통합 토큰>" -U
-# 대표 이미지는 외부 이미지 호스팅 없이 Notion File Upload API로 직접 저장한다.
+# Notion 단계는 2026-08-01부터 완전히 사용하지 않는다.
 
 TARGET_DIR="${1:-.}"
 TARGET_PATH=$(cd "$TARGET_DIR" && pwd)
@@ -97,7 +96,7 @@ if [[ ${#HIGHLIGHT_FAILED[@]} -gt 0 ]]; then
     echo "⚠️  운동용 영상 추출 실패 ${#HIGHLIGHT_FAILED[@]}개: ${HIGHLIGHT_FAILED[@]}"
 fi
 echo "\n\033[1;35m==================================================\033[0m"
-echo "\033[1;35m📝 2단계: 자막·번역·Notion·EPUB 순차 처리 시작\033[0m"
+echo "\033[1;35m📝 2단계: 자막·번역·학습 카드·낭독판 EPUB 순차 처리 시작\033[0m"
 echo "\033[1;35m==================================================\033[0m"
 
 # ── 2단계는 subtitle_pipeline_body.sh와 subtitle_notion_epub_only.sh(단독 실행)가

@@ -41,6 +41,7 @@ Notion/메모 앱/EPUB 없이 ffmpeg + 음높이 분석만으로 끝나는 별�
 """
 
 import argparse
+from datetime import datetime
 import glob
 import json
 import os
@@ -50,6 +51,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
 VIDEO_EXTS = (".mp4", ".webm", ".mkv", ".mov")
 DEFAULT_BGM_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bgm")
@@ -57,17 +59,96 @@ DEFAULT_BGM_VOLUME = 0.28
 HISTORY_VERSION = 1
 # ★ 2026-07-28: 배경음 입힌 운동용 영상을 한곳에 몰아보고 싶다는 요청으로 추가.
 AV_MUSIC_DIR = "/Users/forrestdpark/Desktop/BlogImage/avMusic"
+_TRASH_RECOVERY_ATTEMPTED = False
+
+
+def format_elapsed(seconds):
+    """로그에서 바로 읽기 좋은 `1시간 2분 3초` 형식."""
+    seconds = max(0, int(round(seconds)))
+    hours, remainder = divmod(seconds, 3600)
+    minutes, secs = divmod(remainder, 60)
+    parts = []
+    if hours:
+        parts.append(f"{hours}시간")
+    if minutes or hours:
+        parts.append(f"{minutes}분")
+    parts.append(f"{secs}초")
+    return " ".join(parts)
+
+
+def empty_user_trash():
+    """현재 사용자의 macOS 휴지통을 영구 비우고 삭제 항목 수를 반환한다."""
+    trash_dir = os.path.expanduser("~/.Trash")
+    removed = 0
+    try:
+        entries = list(os.scandir(trash_dir))
+    except OSError as exc:
+        print(f"⚠️ 휴지통을 열 수 없어 자동 비우기 실패: {exc}")
+        return 0
+    for entry in entries:
+        try:
+            if entry.is_dir(follow_symlinks=False):
+                shutil.rmtree(entry.path)
+            else:
+                os.unlink(entry.path)
+            removed += 1
+        except OSError as exc:
+            print(f"⚠️ 휴지통 항목 삭제 실패: {entry.name}: {exc}")
+    return removed
+
+
+def run_ffmpeg_with_disk_recovery(command, partial_output):
+    """디스크 부족일 때만 휴지통을 비우고 같은 ffmpeg 명령을 한 번 재시도한다."""
+    global _TRASH_RECOVERY_ATTEMPTED
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode == 0:
+        return
+    error_text = (result.stderr or "") + (result.stdout or "")
+    print(error_text.rstrip(), file=sys.stderr)
+    no_space = "No space left on device" in error_text or result.returncode == 228
+    if no_space and not _TRASH_RECOVERY_ATTEMPTED:
+        _TRASH_RECOVERY_ATTEMPTED = True
+        print("🗑️ 저장 공간 부족 감지 — macOS 휴지통 자동 비우기")
+        removed = empty_user_trash()
+        print(f"🗑️ 휴지통 {removed}개 항목 영구 삭제 완료")
+        try:
+            if partial_output and os.path.exists(partial_output):
+                os.unlink(partial_output)
+        except OSError:
+            pass
+        retry = subprocess.run(command, capture_output=True, text=True)
+        if retry.returncode == 0:
+            print("✅ 공간 확보 후 ffmpeg 자동 재시도 성공")
+            return
+        retry_text = (retry.stderr or "") + (retry.stdout or "")
+        print(retry_text.rstrip(), file=sys.stderr)
+        raise subprocess.CalledProcessError(
+            retry.returncode, command, output=retry.stdout, stderr=retry.stderr
+        )
+    raise subprocess.CalledProcessError(
+        result.returncode, command, output=result.stdout, stderr=result.stderr
+    )
 
 
 def copy_to_av_music(bgm_video_path):
-    """완성된 BGM 운동용 영상을 AV_MUSIC_DIR에도 복사한다(실패해도 조용히 무시 —
-    이 복사는 부가 기능이라 실패해도 메인 파이프라인을 막으면 안 됨)."""
+    """완성 영상을 avMusic에 복사하고 검증된 대상 정보 반환. 실패 시 None."""
     try:
         os.makedirs(AV_MUSIC_DIR, exist_ok=True)
-        shutil.copy2(bgm_video_path, AV_MUSIC_DIR)
-        print(f"🎶 avMusic 폴더로 복사 완료: {os.path.join(AV_MUSIC_DIR, os.path.basename(bgm_video_path))}")
+        target = os.path.join(AV_MUSIC_DIR, os.path.basename(bgm_video_path))
+        shutil.copy2(bgm_video_path, target)
+        source_size = os.path.getsize(bgm_video_path)
+        target_size = os.path.getsize(target)
+        if source_size <= 0 or target_size != source_size:
+            raise OSError(f"복사 크기 불일치: 원본 {source_size}, 대상 {target_size}")
+        print(f"🎶 avMusic 폴더로 복사 완료: {target}")
+        return {
+            "file": os.path.basename(target),
+            "size": target_size,
+            "completed_at": datetime.now().isoformat(timespec="seconds"),
+        }
     except OSError as e:
         print(f"⚠️  avMusic 폴더 복사 실패(무시하고 계속): {e}")
+        return None
 
 # ── 고음 판정 기준 (2026-07-24, 실전 비교 후 확정) ──────────────────
 DEFAULT_TOP_PERCENT = 35.0
@@ -329,19 +410,51 @@ def find_top_percent_for_duration(times, f0, voiced_flag, target_min_sec, target
 
 
 def build_highlight_video(video_path, segments, out_path, tmp_dir):
-    """segments 구간들을 원본 영상에서 잘라 이어붙여 out_path로 저장."""
+    """segments를 Apple 하드웨어 인코더로 잘라 이어붙인다.
+
+    VideoToolbox를 짧게 사전 시험해 실제로 작동할 때만 전체 구간에 사용한다.
+    지원하지 않는 Mac/ffmpeg 조합에서는 CPU x264의 빠른 preset으로 자동 복귀한다.
+    한 결과물 안에서 서로 다른 인코더의 조각이 섞이지 않게 인코더 선택은 시작 전에
+    한 번만 확정한다.
+    """
+    # 이전 실행이 디스크 부족 등으로 남긴 불완전 합본은 새 임시 조각을 만들기
+    # 전에 지워야 그 파일이 차지하던 공간을 즉시 회수할 수 있다.
+    if os.path.exists(out_path):
+        os.unlink(out_path)
+        print(f"🧹 이전 실패로 남은 불완전 출력 삭제: {out_path}")
+    encoder_test = os.path.join(tmp_dir, "videotoolbox_test.mp4")
+    hardware_test = subprocess.run(
+        ["ffmpeg", "-y", "-ss", f"{segments[0]['start']:.3f}",
+         "-i", video_path, "-t", "0.5", "-an",
+         "-c:v", "h264_videotoolbox", "-q:v", "65",
+         "-pix_fmt", "yuv420p", encoder_test, "-loglevel", "error"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    if (hardware_test.returncode == 0 and os.path.isfile(encoder_test)
+            and os.path.getsize(encoder_test) > 0):
+        video_encoder = [
+            "-c:v", "h264_videotoolbox", "-q:v", "65",
+            "-pix_fmt", "yuv420p",
+        ]
+        print("⚡ Apple VideoToolbox 하드웨어 인코딩 사용 (발열·CPU 부하 절감)")
+    else:
+        video_encoder = [
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
+            "-threads", "2", "-pix_fmt", "yuv420p",
+        ]
+        print("⚠️ VideoToolbox를 사용할 수 없어 CPU 2개로 제한해 저발열 인코딩")
+
     clip_paths = []
     for i, seg in enumerate(segments):
         clip_path = os.path.join(tmp_dir, f"clip_{i:03d}.mp4")
         duration = seg["end"] - seg["start"]
-        subprocess.run(
-            ["ffmpeg", "-y",
+        clip_command = ["ffmpeg", "-y",
              "-ss", f"{seg['start']:.3f}", "-i", video_path,
              "-t", f"{duration:.3f}",
-             "-c:v", "libx264", "-c:a", "aac", "-avoid_negative_ts", "make_zero",
-             clip_path, "-loglevel", "error"],
-            check=True,
-        )
+             *video_encoder, "-c:a", "aac", "-b:a", "160k",
+             "-avoid_negative_ts", "make_zero",
+             clip_path, "-loglevel", "error"]
+        run_ffmpeg_with_disk_recovery(clip_command, clip_path)
         if os.path.exists(clip_path):
             clip_paths.append(clip_path)
 
@@ -353,11 +466,11 @@ def build_highlight_video(video_path, segments, out_path, tmp_dir):
         for p in clip_paths:
             f.write(f"file '{os.path.abspath(p)}'\n")
 
-    subprocess.run(
-        ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_path,
-         "-c", "copy", out_path, "-loglevel", "error"],
-        check=True,
-    )
+    concat_command = [
+        "ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_path,
+        "-c", "copy", out_path, "-loglevel", "error",
+    ]
+    run_ffmpeg_with_disk_recovery(concat_command, out_path)
     return os.path.exists(out_path)
 
 
@@ -588,12 +701,16 @@ def mix_background_audio(video_path, bgm_track_path, out_path, bgm_volume=DEFAUL
     return os.path.exists(out_path)
 
 
-def process_video(video_path, args):
+def _process_video(video_path, args):
     base = os.path.splitext(os.path.basename(video_path))[0]
     work_dir = os.path.dirname(os.path.abspath(video_path)) or "."
     tmp_wav = os.path.join(work_dir, f"temp_{base}_pitch.wav")
     history_path = extraction_history_path(work_dir, base)
     history = load_extraction_history(history_path)
+    # 정리 단계는 반드시 '이번 실행'의 복사 성공만 인정한다. 이전 실행의 낡은
+    # 성공 기록이 남아 있다가 이번 복사 실패를 가리는 일을 막는다.
+    if history.pop("avmusic_export", None) is not None:
+        save_extraction_history(history_path, history)
     current_source = source_fingerprint(video_path)
     current_settings = highlight_settings(args)
 
@@ -637,10 +754,14 @@ def process_video(video_path, args):
         print(f"♻️  동일한 목표 분량·여유 초의 성공 기록 발견: {history_path}")
         print(f"♻️  음높이 분석과 고음 영상 재인코딩 생략: {out_path}")
     else:
+        stage_start = time.perf_counter()
         extract_audio(video_path, tmp_wav)
+        print(f"⏱️ 오디오 추출: {format_elapsed(time.perf_counter() - stage_start)}")
 
         print("📈 음높이(pitch) 분석 중...")
+        stage_start = time.perf_counter()
         times, f0, voiced_flag = analyze_pitch(tmp_wav)
+        print(f"⏱️ 음높이 분석: {format_elapsed(time.perf_counter() - stage_start)}")
 
         if args.target_minutes is not None:
         # ★ 2026-07-24: "퍼센트"가 아니라 "결과 길이(분)"를 직접 지정하고 싶다는 요청 —
@@ -705,8 +826,10 @@ def process_video(video_path, args):
         )
         out_path = os.path.join(work_dir, f"{base}{OWN_OUTPUT_MARKER}_{stats_tag}.mp4")
         print(f"✂️  구간 잘라 이어붙이는 중 → {out_path}")
+        stage_start = time.perf_counter()
         with tempfile.TemporaryDirectory() as tmp_dir:
             ok = build_highlight_video(video_path, segments, out_path, tmp_dir)
+        print(f"⏱️ 구간 인코딩·이어붙이기: {format_elapsed(time.perf_counter() - stage_start)}")
 
         if not ok:
             print("❌ 운동용 영상 생성 실패")
@@ -750,10 +873,14 @@ def process_video(video_path, args):
         )
     if cached_bgm:
         print(f"♻️  같은 BGM 설정의 완성 영상 재사용: {cached_bgm}")
-        copy_to_av_music(cached_bgm)
+        exported = copy_to_av_music(cached_bgm)
+        if exported:
+            history["avmusic_export"] = exported
+            save_extraction_history(history_path, history)
         return
 
     print(f"🎵 배경음 입히는 중 (볼륨 {args.bgm_volume:.0%})...")
+    stage_start = time.perf_counter()
     with tempfile.TemporaryDirectory() as tmp_dir:
         bgm_track = build_bgm_track(args.bgm_dir, video_duration, tmp_dir)
         bgm_ok = bool(bgm_track) and mix_background_audio(
@@ -765,9 +892,26 @@ def process_video(video_path, args):
         history["bgm_settings"] = current_bgm_settings
         history["bgm"] = {"file": os.path.basename(bgm_out)}
         save_extraction_history(history_path, history)
-        copy_to_av_music(bgm_out)
+        exported = copy_to_av_music(bgm_out)
+        if exported:
+            history["avmusic_export"] = exported
+            save_extraction_history(history_path, history)
+        print(f"⏱️ BGM 생성·합성·복사: {format_elapsed(time.perf_counter() - stage_start)}")
     else:
         print("❌ 배경음 입히기 실패")
+        print(f"⏱️ BGM 생성·합성 시도: {format_elapsed(time.perf_counter() - stage_start)}")
+
+
+def process_video(video_path, args):
+    """성공·재사용·중간 종료 여부와 관계없이 영상별 총시간을 항상 표시한다."""
+    global _TRASH_RECOVERY_ATTEMPTED
+    _TRASH_RECOVERY_ATTEMPTED = False
+    started = time.perf_counter()
+    try:
+        return _process_video(video_path, args)
+    finally:
+        base = os.path.splitext(os.path.basename(video_path))[0]
+        print(f"⏱️ {base} 전체 처리시간: {format_elapsed(time.perf_counter() - started)}")
 
 
 def main():
@@ -806,11 +950,13 @@ def main():
         sys.exit(f"처리할 영상을 찾을 수 없습니다: {args.path}")
 
     print(f"📋 대상 영상 {len(videos)}개: {[os.path.basename(v) for v in videos]}")
+    batch_started = time.perf_counter()
     for video_path in videos:
         process_video(video_path, args)
 
     print(f"\n{'='*54}")
     print("🎉 모든 영상 처리 완료!")
+    print(f"⏱️ 전체 {len(videos)}개 영상 작업시간: {format_elapsed(time.perf_counter() - batch_started)}")
     print(f"{'='*54}")
 
 

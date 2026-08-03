@@ -15,12 +15,10 @@
   - 주간(Day)/오후(Swing): 통상시급 그대로
   - 야간(GY, 22:00~06:00): 통상시급 x 1.5 (야간수당 50% 가산분 반영)
   - 자정을 넘기는 야간 근무도 정확히 계산 (어제 시작한 근무를 오늘도 이어서 카운트)
-  - 이 값은 "추정치"예요. 정확한 통상시급은 매달 급여명세서 나올 때마다
-    메뉴의 "시급 설정"에서 갱신해주면 더 정확해져요.
-- 주간 리마인더 (헬스장/엄마 전화/카톡 정리/아울렛 쇼핑): 요일이 아니라 근무표의 "휴무 블록"을
-  기준으로 판단해서 "오늘이 그 날"이면 알림이 뜬다 (교대근무자라 요일이 매번 바뀌므로).
-  헬스장은 주 2회(휴무 시작일 + 그로부터 이틀 뒤, 단 근무 종료 시각에 헬스장이 닫혀있으면 그날은 건너뜀 —
-  헬스장이 토/일 06:00~17:00만 운영이라 주말 저녁 이후 퇴근이면 스킵), 엄마 전화는 휴무 시작일, 카톡 정리는 휴무 마지막날,
+  - 이 값은 급여명세서를 역산한 고정 추정치다.
+- 주간 리마인더 (헬스장/엄마 전화/카톡 정리/아울렛 쇼핑): 대부분 근무표의 "휴무 블록"을
+  기준으로 판단한다. 헬스장은 예외로 근무·휴무와 무관하게 3일→2일 간격을 반복하며,
+  엄마 전화는 휴무 시작일, 카톡 정리는 휴무 마지막날,
   아울렛 쇼핑은 한 달에 한 번(그 달의 첫 번째 휴무 블록 시작일).
   메뉴의 "🔔 리마인더 켜기/끄기"에서 각 항목을 개별적으로 켜고 끌 수 있음.
 """
@@ -33,7 +31,7 @@ import re
 import shlex
 import urllib.request
 import urllib.error
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 import threading
 import datetime
 import random
@@ -93,8 +91,7 @@ SHIFT_WORK_HOURS = {
 
 # ── 급여 계산용 시급 설정 ────────────────────────────────────
 # 급여명세서의 "야간근로수당 = 야간시간 x 통상시급 x 50%" 식을
-# 역산해서 얻은 값을 기본값으로 사용. 매달 명세서 나오면
-# 메뉴 "시급 설정"에서 이 값을 갱신하면 됨 (설정은 CONFIG_FILE에 저장되어 재실행해도 유지됨).
+# 역산해서 얻은 값을 기본값으로 사용한다. 메뉴에서는 변경하지 않는다.
 HOURLY_WAGE = 14861
 
 SHIFT_WAGE_MULTIPLIER = {
@@ -103,22 +100,33 @@ SHIFT_WAGE_MULTIPLIER = {
     "GY":    1.5,   # 야간수당 50% 가산
 }
 
+LOW_STORAGE_WARNING_GB = 5
+
+
+def get_free_storage_gb(path="/"):
+    """지정 볼륨의 실제 가용 공간을 소수점 없는 GiB 정수로 반환."""
+    try:
+        return int(shutil.disk_usage(path).free // (1024 ** 3))
+    except OSError:
+        return None
+
 # ── 주간 리마인더 설정 ───────────────────────────────────────
-# 교대근무자는 요일이 아니라 근무표의 "휴무 블록"을 기준으로 리마인더를 잡는다.
-# - 헬스장: 주 2회. 휴무 블록 연속 이틀을 몰아가면 복귀 근무가 힘드므로,
-#   휴무 시작일 + 그로부터 이틀 뒤(근무 복귀 후여도 무방)로 분산.
-#   헬스장은 24시간이지만 토/일은 06:00~17:00만 운영이라, 근무 끝나는 시각에
-#   헬스장이 닫혀있으면(주말 저녁~다음날 새벽) 그날은 리마인더를 건너뜀
+# 대부분 요일이 아니라 근무표의 "휴무 블록"을 기준으로 잡는다.
+# - 헬스장: 근무·휴무와 무관하게 3일→2일 간격 반복. 상체/하체를 번갈아 표시
 # - 엄마한테 전화: 휴무 블록의 첫날 (근무 마치고 쉬기 시작하는 날)
+# - 허민준한테 전화: 한 달에 한 번. 그 달의 첫 번째 휴무 블록 시작일
+# - 동찬이형한테 전화: 2026-08-03을 기준으로 21일마다 한 번
 # - 카톡 정리: 휴무 블록의 마지막날 (다시 출근하기 전날)
 # - 아울렛 쇼핑: 한 달에 한 번. 그 달의 첫 번째 휴무 블록 시작일에 알림
-# - 2만보 걷기: 주 1회, 휴무 블록의 마지막날. 단 헬스장 가는 날과 겹치면(휴무가 하루뿐인 주)
-#   그 주는 건너뜀 — 절대 같은 날에 겹치지 않게
+# - 2만보 걷기: 휴무 블록의 첫날과 마지막날(기존 마지막날 1회에서 약 2배로 확대).
+#   하루짜리 휴무 블록은 같은 날이 첫날이자 마지막날이므로 한 번만 알림
 # - 빨래: 휴무일마다 매번
 # 각 항목은 메뉴의 "🔔 리마인더 켜기/끄기"에서 개별적으로 켜고 끌 수 있음.
 REMINDERS = {
     "gym":             {"label": "🏋️ 헬스장 가는 날(상체/하체)", "enabled": True},
     "call_mom":        {"label": "📞 엄마한테 전화하는 날",   "enabled": True},
+    "call_heo_minjun": {"label": "📞 허민준한테 전화하는 날", "enabled": True},
+    "call_dongchan":   {"label": "📞 동찬이형한테 전화하는 날", "enabled": True},
     "kakao_cleanup":   {"label": "🧹 카톡 정리하는 날",       "enabled": True},
     "outlet_shopping": {"label": "🛍️ 아울렛 쇼핑하는 날",    "enabled": True},
     "walk_20k":        {"label": "🚶 2만보 걷는 날",         "enabled": True},
@@ -193,19 +201,13 @@ JP_WORKOUT_VIDEO_SCRIPT = os.path.join(
     "일본어자막추출", "extract_high_pitch_video.py"
 )
 JP_WORKOUT_BGM_DIR = "/Users/forrestdpark/Desktop/BlogImage/BGM_DIR"
-# ★ 2026-07-31: 사용자가 Notion에서 직접 요약을 고치거나 덧붙인 뒤 그 내용을
-# EPUB에 반영하고 싶을 때 쓰는 역방향(Notion → 로컬) 동기화 스크립트.
-JP_PULL_NOTION_SCRIPT = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "일본어자막추출", "pull_notion_summary_to_epub.py"
-)
 JP_LIBRARY_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "일본어자막추출", "library"
 )
-JP_BUILD_AUDIOBOOK_SCRIPT = os.path.join(
+JP_BUILD_READALOUD_EPUB_SCRIPT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "일본어자막추출", "build_audiobook.py"
+    "일본어자막추출", "build_readaloud_epub.py"
 )
 JP_COMPLETED_EPUB_DIR = "/Users/forrestdpark/Desktop/BlogImage/av완성작"
 BGM_PLAYLIST_BATCH_SCRIPT = os.path.join(
@@ -467,6 +469,9 @@ def _is_off_block_start(schedule, d):
 # 평일(월~금)은 24시간, 토/일은 06:00~17:00만 운영.
 GYM_WEEKEND_OPEN  = datetime.time(6, 0)
 GYM_WEEKEND_CLOSE = datetime.time(17, 0)
+GYM_CYCLE_ANCHOR = datetime.date(2026, 8, 3)
+CALL_DONGCHAN_ANCHOR = datetime.date(2026, 8, 3)
+CALL_DONGCHAN_INTERVAL_DAYS = 21
 
 
 def is_gym_open(dt):
@@ -488,6 +493,25 @@ def _gym_time_ok(schedule, d):
     end_date = d + datetime.timedelta(days=1) if info["crosses_midnight"] else d
     end_dt = datetime.datetime.combine(end_date, datetime.time(*info["end"]))
     return is_gym_open(end_dt)
+
+
+def _gym_cycle_index(d):
+    """3일→2일 간격 운동 주기의 회차. 운동일이 아니면 None."""
+    days = (d - GYM_CYCLE_ANCHOR).days
+    if days < 0:
+        return None
+    cycles, remainder = divmod(days, 5)
+    if remainder == 0:
+        return cycles * 2
+    if remainder == 3:
+        return cycles * 2 + 1
+    return None
+
+
+def _is_dongchan_call_day(d):
+    """기준일부터 21일마다 돌아오는 동찬이형 연락일인지 반환."""
+    days = (d - CALL_DONGCHAN_ANCHOR).days
+    return days >= 0 and days % CALL_DONGCHAN_INTERVAL_DAYS == 0
 
 
 def _is_first_off_block_start_of_month(schedule, d):
@@ -525,14 +549,14 @@ def get_today_reminders(schedule, now=None):
     """
     오늘 근무표 기준으로 해당하는 리마인더 라벨 목록을 반환.
 
-    - 헬스장: 주 2회. 휴무 블록 첫날 = 상체, 그로부터 이틀 뒤 = 하체로 구분
-      (근무 복귀 후라도 상관없음, 연속 휴무일에 몰아가면 다음 근무가 힘드므로 분산).
-      단, 그날 "근무 끝나고" 헬스장에 가는 시각에 헬스장이 닫혀있으면(주말 저녁~새벽)
-      그날은 리마인더를 띄우지 않는다. (2026-07-24: 상체/하체 구분 추가)
+    - 헬스장: 근무·휴무와 무관하게 2026-08-03부터 3일→2일 간격을 반복한다.
+      상체/하체는 매회 번갈아 표시하며 운영시간 때문에 알림을 생략하지 않는다.
     - 엄마한테 전화: 오늘이 휴무 블록의 첫날 (어제는 근무였음)
+    - 허민준한테 전화: 월 1회, 이번 달의 첫 번째 휴무 블록 시작일
+    - 동찬이형한테 전화: 2026-08-03부터 21일마다 한 번
     - 카톡 정리: 오늘이 휴무 블록의 마지막날 (내일은 근무)
-    - 2만보 걷기: 주 1회, 휴무 블록의 마지막날. (2026-07-24: 너무 안 뜬다는 피드백으로
-      헬스장 날과 겹쳐도 더 이상 건너뛰지 않음 — 그냥 매 휴무 블록 마지막날마다 뜸)
+    - 2만보 걷기: 휴무 블록의 첫날과 마지막날. 하루짜리 휴무는 한 번만 뜬다.
+      (2026-08-03: 기존 마지막날 1회에서 빈도를 약 2배로 확대)
     - 빨래: 휴무일마다 매번
     - 나들이 추천: 월 1회, 이번 달의 '마지막' 휴무 블록 시작일(아울렛 쇼핑=첫 번째 블록과
       겹치지 않게). 아산시 기준 근교 명소를 매달 순환 추천. (2026-07-24 추가)
@@ -541,15 +565,11 @@ def get_today_reminders(schedule, now=None):
     today = now.date()
 
     reminders = []
-    is_gym_upper = REMINDERS["gym"]["enabled"] and _gym_time_ok(schedule, today) and \
-        _is_off_block_start(schedule, today)
-    is_gym_lower = REMINDERS["gym"]["enabled"] and _gym_time_ok(schedule, today) and \
-        not is_gym_upper and _is_off_block_start(schedule, today - datetime.timedelta(days=2))
-    is_gym_day = is_gym_upper or is_gym_lower
-    if is_gym_upper:
-        reminders.append("🏋️ 상체 운동 하는 날")
-    elif is_gym_lower:
-        reminders.append("🏋️ 하체 운동 하는 날")
+    gym_index = _gym_cycle_index(today) if REMINDERS["gym"]["enabled"] else None
+    if gym_index is not None:
+        # 실제 운동 순서 기준: 2026-08-03은 하체, 다음 회차부터 상체/하체 교대.
+        workout = "하체" if gym_index % 2 == 0 else "상체"
+        reminders.append(f"🏋️ {workout} 운동 하는 날")
 
     if get_shift_for_date(schedule, today) == "휴무":
         yesterday = today - datetime.timedelta(days=1)
@@ -560,13 +580,19 @@ def get_today_reminders(schedule, now=None):
             reminders.append(REMINDERS["call_mom"]["label"])
         if is_block_end and REMINDERS["kakao_cleanup"]["enabled"]:
             reminders.append(REMINDERS["kakao_cleanup"]["label"])
-        if is_block_end and REMINDERS["walk_20k"]["enabled"]:
+        if (is_block_start or is_block_end) and REMINDERS["walk_20k"]["enabled"]:
             reminders.append(REMINDERS["walk_20k"]["label"])
         if REMINDERS["laundry"]["enabled"]:
             reminders.append(REMINDERS["laundry"]["label"])
 
     if REMINDERS["outlet_shopping"]["enabled"] and _is_first_off_block_start_of_month(schedule, today):
         reminders.append(REMINDERS["outlet_shopping"]["label"])
+
+    if REMINDERS["call_heo_minjun"]["enabled"] and _is_first_off_block_start_of_month(schedule, today):
+        reminders.append(REMINDERS["call_heo_minjun"]["label"])
+
+    if REMINDERS["call_dongchan"]["enabled"] and _is_dongchan_call_day(today):
+        reminders.append(REMINDERS["call_dongchan"]["label"])
 
     if REMINDERS["outing"]["enabled"] and _is_last_off_block_start_of_month(schedule, today):
         place = pick_monthly_outing_place(today)
@@ -575,9 +601,24 @@ def get_today_reminders(schedule, now=None):
     return reminders
 
 
-def get_today_reminder_icons(schedule, now=None):
-    """메뉴바 타이틀용: 오늘의 리마인더 라벨에서 이모지만 뽑아 반환."""
-    return [label.split(" ", 1)[0] for label in get_today_reminders(schedule, now=now)]
+def get_today_reminder_title_tokens(schedule, now=None):
+    """메뉴바 타이틀용으로 운동 부위와 통화 대상을 짧게 표시한다."""
+    tokens = []
+    call_tokens = {
+        REMINDERS["call_mom"]["label"]: "📞엄마",
+        REMINDERS["call_heo_minjun"]["label"]: "📞민준",
+        REMINDERS["call_dongchan"]["label"]: "📞동찬",
+    }
+    for label in get_today_reminders(schedule, now=now):
+        if label.startswith("🏋️ 상체"):
+            tokens.append("🏋️상")
+        elif label.startswith("🏋️ 하체"):
+            tokens.append("🏋️하")
+        elif label in call_tokens:
+            tokens.append(call_tokens[label])
+        else:
+            tokens.append(label.split(" ", 1)[0])
+    return tokens
 
 
 # ════════════════════════════════════════════════════════════
@@ -805,6 +846,81 @@ def show_minutes_keypad(title="운동용 영상 분량 설정", default_minutes=
     return handler.result
 
 
+class _TextInputHandler(objc.lookUpClass("NSObject")):
+    def initWithField_(self, text_field):
+        self = objc.super(_TextInputHandler, self).init()
+        if self is None:
+            return None
+        self.field = text_field
+        self.result = None
+        return self
+
+    def cancelPressed_(self, sender):
+        self.result = None
+        NSApp().stopModal()
+
+    def confirmPressed_(self, sender):
+        self.result = self.field.stringValue()
+        NSApp().stopModal()
+
+
+def show_text_input_panel(title, message, default_text=""):
+    """키보드 입력과 ⌘V가 확실히 동작하는 AppKit 모달 입력창."""
+    panel_w, panel_h = 600, 170
+    panel = NSPanel.alloc().initWithContentRect_styleMask_backing_defer_(
+        NSMakeRect(0, 0, panel_w, panel_h),
+        NSWindowStyleMaskTitled | NSWindowStyleMaskClosable,
+        NSBackingStoreBuffered,
+        False,
+    )
+    panel.setTitle_(title)
+    panel.center()
+    panel.setLevel_(NSModalPanelWindowLevel)
+    panel.setHidesOnDeactivate_(False)
+    content = panel.contentView()
+
+    label = NSTextField.alloc().initWithFrame_(NSMakeRect(20, 118, 560, 24))
+    label.setEditable_(False)
+    label.setSelectable_(False)
+    label.setBezeled_(False)
+    label.setDrawsBackground_(False)
+    label.setStringValue_(message)
+    content.addSubview_(label)
+
+    field = NSTextField.alloc().initWithFrame_(NSMakeRect(20, 72, 560, 32))
+    field.setEditable_(True)
+    field.setSelectable_(True)
+    field.setStringValue_(default_text)
+    content.addSubview_(field)
+
+    handler = _TextInputHandler.alloc().initWithField_(field)
+    cancel_btn = NSButton.alloc().initWithFrame_(NSMakeRect(380, 18, 95, 36))
+    cancel_btn.setTitle_("취소")
+    cancel_btn.setBezelStyle_(NSRoundedBezelStyle)
+    cancel_btn.setTarget_(handler)
+    cancel_btn.setAction_("cancelPressed:")
+    cancel_btn.setKeyEquivalent_("\033")
+    content.addSubview_(cancel_btn)
+
+    confirm_btn = NSButton.alloc().initWithFrame_(NSMakeRect(485, 18, 95, 36))
+    confirm_btn.setTitle_("확인")
+    confirm_btn.setBezelStyle_(NSRoundedBezelStyle)
+    confirm_btn.setTarget_(handler)
+    confirm_btn.setAction_("confirmPressed:")
+    confirm_btn.setKeyEquivalent_("\r")
+    content.addSubview_(confirm_btn)
+
+    NSApp().activateIgnoringOtherApps_(True)
+    panel.setInitialFirstResponder_(field)
+    panel.makeKeyAndOrderFront_(None)
+    panel.makeFirstResponder_(field)
+    panel.orderFrontRegardless()
+    field.selectText_(None)
+    NSApp().runModalForWindow_(panel)
+    panel.close()
+    return handler.result
+
+
 def choose_jp_subtitle_folder():
     """macOS 폴더 선택 다이얼로그로 일본어 영상 폴더를 고른다. 취소하면 None."""
     apple_script = 'POSIX path of (choose folder with prompt "일본어 영상이 있는 폴더를 선택하세요")'
@@ -830,32 +946,31 @@ def choose_jp_library_folder(prompt="일본어자막추출/library/<작품명> �
         return None
 
 
-def pull_notion_summary_and_distribute(book_dir):
-    """Notion의 책 요약을 SUMMARY.md/EPUB에 반영하고, 완성된 EPUB을 av완성작
-    폴더에도 복사한다. 반환값: (성공 여부, 메시지)."""
-    result = subprocess.run(
-        ["/opt/anaconda3/bin/python3", JP_PULL_NOTION_SCRIPT, book_dir],
-        capture_output=True, text=True, timeout=120,
+def choose_jp_epub_folder(
+    prompt="EPUB 파일이 들어 있는 폴더를 선택하세요. 완성 파일도 이 폴더에 저장됩니다."
+):
+    """사용자가 실제로 보는 완성 EPUB 폴더를 고른다. 내부 library 경로는 노출하지 않는다."""
+    apple_script = (
+        'POSIX path of (choose folder with prompt '
+        f'"{prompt}" '
+        f'default location (POSIX file "{JP_COMPLETED_EPUB_DIR}"))'
     )
-    if result.returncode != 0:
-        return False, result.stderr.strip() or result.stdout.strip()
-
-    epub_path = result.stdout.strip().splitlines()[-1] if result.stdout.strip() else ""
-    if epub_path and os.path.isfile(epub_path):
-        try:
-            os.makedirs(JP_COMPLETED_EPUB_DIR, exist_ok=True)
-            shutil.copy2(epub_path, JP_COMPLETED_EPUB_DIR)
-        except OSError:
-            pass
-    return True, epub_path
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", apple_script],
+            capture_output=True, text=True, timeout=120,
+        )
+        path = result.stdout.strip()
+        return path or None
+    except Exception:
+        return None
 
 
-def run_build_audiobook(book_dir):
-    """오디오북(.m4b) 생성을 Terminal에서 실행한다(TTS 합성이 장면 수만큼 걸려서
-    진행 상황을 눈으로 보는 게 나음 — bgm_playlist_batch와 같은 패턴)."""
-    if not os.path.exists(JP_BUILD_AUDIOBOOK_SCRIPT):
+def run_build_readaloud_epub(epub_dir):
+    """Apple Books 문장 강조·자동 페이지 넘김용 Read Aloud EPUB 생성을 실행한다."""
+    if not os.path.exists(JP_BUILD_READALOUD_EPUB_SCRIPT):
         return False
-    launcher = "/tmp/_jp_build_audiobook.command"
+    launcher = "/tmp/_jp_build_readaloud_epub.command"
     command = (
         "#!/bin/zsh\n"
         "export PATH=\"/opt/homebrew/bin:/usr/local/bin:/opt/anaconda3/bin:"
@@ -868,8 +983,8 @@ def run_build_audiobook(book_dir):
         "  fi\n"
         "}\n"
         "trap cleanup HUP INT TERM EXIT\n"
-        f"/opt/anaconda3/bin/python3 {shlex.quote(JP_BUILD_AUDIOBOOK_SCRIPT)} "
-        f"{shlex.quote(book_dir)} &\n"
+        f"/opt/anaconda3/bin/python3 {shlex.quote(JP_BUILD_READALOUD_EPUB_SCRIPT)} "
+        f"{shlex.quote(epub_dir)} --output-dir {shlex.quote(epub_dir)} &\n"
         "worker_pid=$!\n"
         "wait \"$worker_pid\"\n"
         "job_status=$?\n"
@@ -877,9 +992,9 @@ def run_build_audiobook(book_dir):
         "trap - HUP INT TERM EXIT\n"
         "echo\n"
         "if [[ $job_status -eq 0 ]]; then\n"
-        "  echo '✅ 오디오북 생성 완료'\n"
+        "  echo '✅ 낭독판 EPUB 생성 완료'\n"
         "else\n"
-        "  echo '⚠️ 오디오북 생성 실패. 위 로그를 확인하세요.'\n"
+        "  echo '⚠️ 낭독판 EPUB 생성 실패. 위 로그를 확인하세요.'\n"
         "fi\n"
         "echo '이 창은 확인 후 닫아도 됩니다.'\n"
     )
@@ -966,6 +1081,31 @@ def run_jp_workout_extraction_only(folder_path, target_minutes=None, highlight_p
     return True
 
 
+def get_trash_size_bytes():
+    """휴지통 파일들의 합계 바이트를 반환한다. 읽기 실패 시 None."""
+    trash_dir = os.path.expanduser("~/.Trash")
+    try:
+        total = 0
+        for root, _dirs, files in os.walk(trash_dir):
+            for name in files:
+                try:
+                    total += os.path.getsize(os.path.join(root, name))
+                except OSError:
+                    continue
+        return total
+    except Exception:
+        return None
+
+
+def format_file_size(total):
+    """바이트 수를 알림에 적합한 B/KB/MB/GB/TB 문자열로 바꾼다."""
+    value = float(max(0, total))
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if value < 1024 or unit == "TB":
+            return f"{value:.0f}{unit}" if unit == "B" else f"{value:.1f}{unit}"
+        value /= 1024
+
+
 def get_trash_size_str():
     """휴지통 현재 용량을 사람이 읽기 쉬운 문자열로 반환한다.
     ★ 2026-07-31: 처음엔 `du -sh`를 subprocess로 불렀는데, 터미널에서 직접
@@ -976,21 +1116,10 @@ def get_trash_size_str():
     이 환경 의존성을 없앤다.
     실패하거나 휴지통이 비어있으면 조용히 빈 문자열을 반환 — 메뉴 항목 라벨에
     괄호로 덧붙이는 용도라 실패해도 메뉴 자체는 정상 표시돼야 하기 때문."""
-    trash_dir = os.path.expanduser("~/.Trash")
-    try:
-        total = 0
-        for root, _dirs, files in os.walk(trash_dir):
-            for name in files:
-                try:
-                    total += os.path.getsize(os.path.join(root, name))
-                except OSError:
-                    continue
-        for unit in ("B", "K", "M", "G", "T"):
-            if total < 1024 or unit == "T":
-                return f"{total:.0f}{unit}" if unit == "B" else f"{total:.1f}{unit}"
-            total /= 1024
-    except Exception:
+    total = get_trash_size_bytes()
+    if total is None or total == 0:
         return ""
+    return format_file_size(total)
 
 
 def empty_trash_forcefully():
@@ -1058,6 +1187,277 @@ def choose_mp3_rename_folder():
         return path or None
     except Exception:
         return None
+
+
+def choose_youtube_mp3_folder():
+    """YouTube에서 내려받은 MP3를 저장할 폴더를 선택한다."""
+    apple_script = (
+        'POSIX path of (choose folder with prompt '
+        '"YouTube MP3를 저장할 폴더를 선택하세요")'
+    )
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", apple_script],
+            capture_output=True, text=True, timeout=120,
+        )
+        path = result.stdout.strip()
+        return path or None
+    except Exception:
+        return None
+
+
+def run_youtube_mp3_download(url, folder_path):
+    """단일 영상 또는 재생목록을 최고 음질 MP3로 내려받는다."""
+    yt_dlp = "/opt/homebrew/bin/yt-dlp"
+    if not os.path.isfile(yt_dlp):
+        return False, f"yt-dlp를 찾을 수 없습니다: {yt_dlp}"
+
+    parsed_url = urlparse(url)
+    playlist_ids = parse_qs(parsed_url.query).get("list", [])
+    playlist_id = playlist_ids[0] if playlist_ids else ""
+    is_liked_playlist = playlist_id == "LL"
+    if playlist_id == "LL":
+        # watch?v=...&list=LL은 재생 화면용 축약 목록(약 100개)만 돌려줄 수 있다.
+        # 전체 좋아요 보관함을 읽도록 반드시 playlist 전용 URL로 정규화한다.
+        download_url = "https://www.youtube.com/playlist?list=LL"
+        source_label = "좋아요 표시한 동영상 전체"
+    elif playlist_id:
+        download_url = f"https://www.youtube.com/playlist?list={playlist_id}"
+        source_label = f"재생목록 전체 ({playlist_id})"
+    else:
+        download_url = url
+        source_label = "단일 영상"
+
+    # 기존에 정상 동작하던 Automator 명령과 동일하게 로그인된 Chrome에서
+    # 쿠키를 직접 읽는다. 수동 export 파일은 좋아요 목록용 로그인 쿠키가
+    # 일부 빠져 있어 공개 영상 한 개는 되지만 list=LL 전체 조회에는 실패했다.
+    # 좋아요 목록은 주소만 먼저 스냅샷한 뒤 영상마다 yt-dlp를 새로 실행한다.
+    # 매 실행마다 Chrome의 최신 쿠키를 다시 읽어 장시간 배치 중 세션 회전을 피한다.
+    cookie_args = ["--cookies-from-browser", "chrome"]
+    target_args = (
+        ["$item_url"]
+        if is_liked_playlist else [download_url]
+    )
+    # 저장 폴더에 영구 기록을 둬 앱을 재실행해도 이미 받은 영상은 다시 받지 않는다.
+    # 이전 버전으로 내려받은 MP3도 파일명의 [YouTube ID]를 읽어 기록에 편입한다.
+    archive_path = os.path.join(folder_path, ".shiftalarm-youtube-download-archive.txt")
+    known_ids = set()
+    highest_sequence = 0
+    if os.path.isfile(archive_path):
+        with open(archive_path, "r", encoding="utf-8", errors="ignore") as archive_file:
+            for line in archive_file:
+                match = re.search(r"(?:^|\s)([\w-]{11})\s*$", line)
+                if match:
+                    known_ids.add(match.group(1))
+    try:
+        for name in os.listdir(folder_path):
+            sequence_match = re.match(r"^(\d+)\s*-\s*", name)
+            if sequence_match:
+                highest_sequence = max(highest_sequence, int(sequence_match.group(1)))
+            match = re.search(r"\[([\w-]{11})\]\.mp3$", name, re.IGNORECASE)
+            if match:
+                known_ids.add(match.group(1))
+        with open(archive_path, "w", encoding="utf-8") as archive_file:
+            for video_id in sorted(known_ids):
+                archive_file.write(f"youtube {video_id}\n")
+    except OSError as exc:
+        return False, f"다운로드 기록을 만들 수 없습니다: {exc}"
+    archive_args = ["--download-archive", archive_path]
+
+    launcher = "/tmp/_youtube_mp3_download.command"
+    filename_template = (
+        "$sequence_number - %(title)s [%(id)s].%(ext)s"
+        if is_liked_playlist else
+        "%(playlist_index&{} - |)s%(title)s [%(id)s].%(ext)s"
+    )
+    output_template = os.path.join(folder_path, filename_template)
+    common_args = [
+        yt_dlp, *cookie_args, *archive_args,
+        "--format", "bestaudio[protocol=m3u8_native]/bestaudio/best",
+        "--extract-audio", "--audio-format", "mp3", "--audio-quality", "0",
+        "--embed-metadata", "--embed-thumbnail", "--convert-thumbnails", "jpg",
+        "--yes-playlist", "--newline", "--sleep-requests", "1",
+        "--retries", "10",
+        "--fragment-retries", "10", "--output", output_template,
+    ]
+
+    def quoted_command(client):
+        args = common_args + [
+            "--paths", "temp:$job_tmp",
+            "--extractor-args", f"youtube:player_client={client}",
+            *target_args,
+        ]
+        # $job_tmp만 셸에서 확장되어야 하므로 이 인자만 따로 조립한다.
+        pieces = []
+        for index, arg in enumerate(args):
+            if arg == "$item_url":
+                pieces.append('"$item_url"')
+            elif "$sequence_number" in arg:
+                before, after = arg.split("$sequence_number", 1)
+                pieces.append(shlex.quote(before) + '"$sequence_number"' + shlex.quote(after))
+            elif arg.startswith("$job_tmp/"):
+                pieces.append('"' + arg + '"')
+            elif index and args[index - 1] == "--paths":
+                pieces.append('"temp:$job_tmp"')
+            else:
+                pieces.append(shlex.quote(arg))
+        return " ".join(pieces)
+
+    safari_command = quoted_command("web_safari")
+    embedded_command = quoted_command("web_embedded")
+    video_args = [
+        # MP4를 받은 뒤 MP3 변환까지 성공해야 완료 기록을 남겨야 하므로
+        # 이 단계에는 --download-archive를 넣지 않는다.
+        yt_dlp, *cookie_args,
+        "--format", "bestvideo+bestaudio/best",
+        "--merge-output-format", "mp4",
+        "--write-thumbnail", "--convert-thumbnails", "jpg",
+        "--extractor-args", "youtube:player_client=web",
+        "--yes-playlist", "--newline", "--sleep-requests", "1",
+        "--retries", "10",
+        "--fragment-retries", "10",
+        "--output", "$job_tmp/" + filename_template,
+        *target_args,
+    ]
+    video_pieces = []
+    for arg in video_args:
+        if arg == "$item_url":
+            video_pieces.append('"$item_url"')
+        elif arg.startswith("$job_tmp/"):
+            video_pieces.append('"$job_tmp/' + arg[len("$job_tmp/"):] + '"')
+        else:
+            video_pieces.append(shlex.quote(arg))
+    video_command = " ".join(video_pieces)
+    quoted_target = shlex.quote(os.path.abspath(folder_path))
+    if is_liked_playlist:
+        snapshot_command = " ".join(shlex.quote(arg) for arg in [
+            yt_dlp, "--cookies-from-browser", "chrome", "--flat-playlist",
+            "--print", "%(webpage_url)s", download_url,
+        ])
+        snapshot_block = (
+            "echo '📋 로그인 쿠키로 좋아요 목록 주소를 한 번만 가져옵니다.'\n"
+            f"{snapshot_command} > \"$job_tmp/liked_urls.txt\"\n"
+            "if [[ $? -ne 0 || ! -s \"$job_tmp/liked_urls.txt\" ]]; then\n"
+            "  echo '❌ 좋아요 목록을 읽지 못했습니다. Chrome에서 YouTube에 다시 로그인하세요.'\n"
+            "  exit 1\n"
+            "fi\n"
+            "discovered_total=$(wc -l < \"$job_tmp/liked_urls.txt\" | tr -d ' ')\n"
+            "echo \"📚 YouTube 좋아요 전체 목록: ${discovered_total}개\"\n"
+            "while IFS= read -r saved_url; do\n"
+            "  saved_id=${saved_url#*v=}; saved_id=${saved_id%%&*}\n"
+            f"  if ! grep -Fqx \"youtube $saved_id\" {shlex.quote(archive_path)}; then\n"
+            "    echo \"$saved_url\" >> \"$job_tmp/pending_urls.txt\"\n"
+            "  fi\n"
+            "done < \"$job_tmp/liked_urls.txt\"\n"
+            "mv \"$job_tmp/pending_urls.txt\" \"$job_tmp/liked_urls.txt\" 2>/dev/null || : > \"$job_tmp/liked_urls.txt\"\n"
+            "total_urls=$(wc -l < \"$job_tmp/liked_urls.txt\" | tr -d ' ')\n"
+            "echo \"✅ 기존 MP3 제외 완료 — 새로 받을 영상 ${total_urls}개\"\n"
+            "if [[ $total_urls -eq 0 ]]; then echo '🎉 이미 전부 다운로드되어 있습니다.'; exit 0; fi\n"
+        )
+    else:
+        snapshot_block = ""
+    loop_open = (
+        "success_count=0\nfailed_count=0\nitem_index=0\n"
+        "while IFS= read -r item_url; do\n"
+        "  [[ -z \"$item_url\" ]] && continue\n"
+        "  ((item_index++))\n"
+        f"  sequence_number=$(({highest_sequence} + success_count + 1))\n"
+        "  echo\n"
+        "  echo \"══════════ [${item_index}/${total_urls}] 새 쿠키로 개별 다운로드 ══════════\"\n"
+        if is_liked_playlist else ""
+    )
+    loop_close = (
+        "  if [[ $job_status -eq 0 ]]; then\n"
+        f"    video_id=${{item_url#*v=}}; video_id=${{video_id%%&*}}; "
+        f"[[ ${{#video_id}} -eq 11 ]] && echo \"youtube $video_id\" >> {shlex.quote(archive_path)}\n"
+        "    ((success_count++))\n"
+        "  else\n"
+        "    ((failed_count++))\n"
+        "  fi\n"
+        "  sleep 1\n"
+        "done < \"$job_tmp/liked_urls.txt\"\n"
+        "echo \"📊 개별 처리 결과: 성공 ${success_count}개 · 실패 ${failed_count}개\"\n"
+        "(( success_count > 0 )) && job_status=0\n"
+        if is_liked_playlist else ""
+    )
+    command = (
+        "#!/bin/zsh\n"
+        "export PATH=\"/opt/homebrew/bin:/usr/local/bin:/opt/anaconda3/bin:"
+        "/usr/bin:/bin:/usr/sbin:/sbin:$PATH\"\n"
+        "job_tmp=$(mktemp -d /tmp/shiftalarm-youtube-mp3.XXXXXX)\n"
+        "cleanup() { /bin/rm -rf -- \"$job_tmp\"; }\n"
+        "trap cleanup EXIT\n"
+        "trap 'cleanup; exit 130' HUP INT TERM\n"
+        "echo '🎵 YouTube MP3 다운로드를 시작합니다.'\n"
+        f"echo {shlex.quote('📚 대상: ' + source_label)}\n"
+        f"echo '📁 저장 폴더: {folder_path.replace(chr(39), chr(39) + chr(92) + chr(39) + chr(39))}'\n"
+        f"{snapshot_block}"
+        f"{loop_open}"
+        "echo '🌐 web_safari 방식으로 시도합니다.'\n"
+        f"{safari_command}\n"
+        "job_status=$?\n"
+        "if [[ $job_status -ne 0 ]]; then\n"
+        "  echo\n"
+        "  echo '↻ 첫 시도 실패 — web_embedded 방식으로 한 번 더 시도합니다.'\n"
+        f"  {embedded_command}\n"
+        "  job_status=$?\n"
+        "fi\n"
+        "if [[ $job_status -ne 0 ]]; then\n"
+        "  echo\n"
+        "  echo '🎬 오디오 직접 다운로드 실패 — 영상을 받은 뒤 MP3로 변환합니다.'\n"
+        "  find \"$job_tmp\" -maxdepth 1 -type f "
+        "\\( -iname '*.part' -o -iname '*.jpg' -o -iname '*.webp' "
+        "-o -iname '*.mp4' -o -iname '*.webm' -o -iname '*.mkv' \\) -delete 2>/dev/null\n"
+        f"  {video_command}\n"
+        "  job_status=$?\n"
+        "  if [[ $job_status -eq 0 ]]; then\n"
+        "    converted=0\n"
+        "    convert_failed=0\n"
+        "    while IFS= read -r -d '' media; do\n"
+        "      base_name=${media:t:r}\n"
+        "      cover=${media:r}.jpg\n"
+        f"      destination={quoted_target}/\"$base_name.mp3\"\n"
+        "      echo \"🎧 MP3 변환 중: ${media:t}\"\n"
+        "      if [[ -s \"$cover\" ]]; then\n"
+        "        echo '🖼️ 유튜브 썸네일을 MP3 앨범 표지로 삽입합니다.'\n"
+        "        ffmpeg -y -i \"$media\" -i \"$cover\" -map 0:a:0 -map 1:v:0 "
+        "-codec:a libmp3lame -q:a 2 -codec:v mjpeg -id3v2_version 3 "
+        "-metadata:s:v title='Album cover' -metadata:s:v comment='Cover (front)' "
+        "-disposition:v attached_pic -map_metadata 0 -threads 0 \"$destination\"\n"
+        "      else\n"
+        "        ffmpeg -y -i \"$media\" -vn -codec:a libmp3lame -q:a 2 "
+        "-map_metadata 0 -threads 0 \"$destination\"\n"
+        "      fi\n"
+        "      convert_status=$?\n"
+        "      if [[ $convert_status -eq 0 && -s \"$destination\" ]]; then\n"
+        "        ((converted++))\n"
+        "        /bin/rm -f -- "
+        f"{quoted_target}/\"$base_name.jpg\" {quoted_target}/\"$base_name.webp\"\n"
+        "      else\n"
+        "        ((convert_failed++))\n"
+        "        /bin/rm -f -- \"$destination\"\n"
+        "      fi\n"
+        "    done < <(find \"$job_tmp\" -maxdepth 1 -type f "
+        "\\( -iname '*.mp4' -o -iname '*.webm' -o -iname '*.mkv' \\) -print0)\n"
+        "    if [[ $converted -eq 0 || $convert_failed -gt 0 ]]; then\n"
+        "      job_status=1\n"
+        "    fi\n"
+        "  fi\n"
+        "fi\n"
+        f"{loop_close}"
+        "echo\n"
+        "if [[ $job_status -eq 0 ]]; then\n"
+        "  echo '✅ YouTube MP3 다운로드 완료'\n"
+        "else\n"
+        "  echo '⚠️ 다운로드가 실패했습니다. 위 오류를 확인하세요.'\n"
+        "fi\n"
+        "echo '이 창은 확인 후 닫아도 됩니다.'\n"
+    )
+    with open(launcher, "w", encoding="utf-8") as file:
+        file.write(command)
+    os.chmod(launcher, 0o700)
+    subprocess.Popen(["open", "-a", "Terminal", launcher])
+    return True, ""
 
 
 def run_bgm_playlist_batch(folder_path):
@@ -1510,6 +1910,8 @@ class ShiftAlarmApp(rumps.App):
 
         self.config = config
         self.schedule = load_schedule()
+        self.storage_free_gb = get_free_storage_gb()
+        self._last_storage_warning_date = None
 
         current = config.get("current_shift")
         title = f"⏰ {current}" if current else "⏰ 근무미설정"
@@ -1545,6 +1947,20 @@ class ShiftAlarmApp(rumps.App):
         # 외부(클라우드 루틴 등)에서 파일이 갱신돼도 자정까지 기다리지 않고 반영되게
         self.menu_refresh_timer = rumps.Timer(self._periodic_menu_refresh, 300)
         self.menu_refresh_timer.start()
+
+        # 저장공간은 5분마다 확인하고 메뉴바에 정수 GB로 표시한다.
+        self.storage_timer = rumps.Timer(self._check_storage, 300)
+        self.storage_timer.start()
+        self._check_storage(None)
+
+        # 북마크 krNN 서브도메인은 앱 시작 시와 6시간마다
+        # 백그라운드에서 확인한다. 실제 변경이 있을 때만 알림한다.
+        self._bookmark_refresh_running = False
+        self.bookmark_refresh_timer = rumps.Timer(
+            self._auto_refresh_bookmarks, 6 * 60 * 60
+        )
+        self.bookmark_refresh_timer.start()
+        self._auto_refresh_bookmarks(None)
 
         # 급여 실시간 갱신 (30초마다)
         self.earnings_timer = rumps.Timer(self._refresh_earnings, 30)
@@ -1590,20 +2006,35 @@ class ShiftAlarmApp(rumps.App):
         current = self.config.get("current_shift")
         code = SHIFT_TO_SHORT_CODE.get(current, current or "?")
 
-        money = ""
-        if self.config.get("show_earnings", True):
-            status = get_earnings_status(self.schedule, today_override=self._today_override())
-            if status["state"] == "active":
-                money = format_won_short(status["earned_so_far"])
-            elif status["state"] == "waiting":
-                money = format_won_short(status["total_when_done"])
-
         # ★ 2026-07-24: 공백 없이 이어붙이면(특히 휴무일처럼 리마인더가 여러 개
         # 동시에 뜨는 날) 이모지들이 서로 겹쳐 보여 찌그러진 것처럼 보였다.
-        reminder_icons = " ".join(get_today_reminder_icons(self.schedule))
+        reminder_icons = " ".join(get_today_reminder_title_tokens(self.schedule))
 
-        parts = [code, money, reminder_icons, self.weather_icon]
-        self.title = " ".join(p for p in parts if p) if current else "미설정"
+        storage = (
+            f"💾{self.storage_free_gb}"
+            if self.storage_free_gb is not None else ""
+        )
+        shift_text = code if current else "미설정"
+        parts = [shift_text, storage, reminder_icons, self.weather_icon]
+        self.title = " ".join(p for p in parts if p)
+
+    # ── 저장공간 ─────────────────────────────────────────────
+
+    def _check_storage(self, _):
+        self.storage_free_gb = get_free_storage_gb()
+        self._update_title()
+        today = datetime.date.today()
+        if (
+            self.storage_free_gb is not None
+            and self.storage_free_gb <= LOW_STORAGE_WARNING_GB
+            and self._last_storage_warning_date != today
+        ):
+            self._last_storage_warning_date = today
+            rumps.notification(
+                "💾 저장공간 부족",
+                f"남은 용량 {self.storage_free_gb}GB",
+                "5GB 이하입니다. Shift Alarm 메뉴에서 휴지통을 비워주세요.",
+            )
 
     # ── 급여 갱신 ────────────────────────────────────────────
 
@@ -1785,7 +2216,6 @@ class ShiftAlarmApp(rumps.App):
         self.menu.clear()
         current = self.config.get("current_shift")
         auto_on = self.config.get("auto_mode", True)
-        earnings_on = self.config.get("show_earnings", True)
 
         for shift, time in SHIFT_TIMES.items():
             if time:
@@ -1803,10 +2233,12 @@ class ShiftAlarmApp(rumps.App):
         self.menu.add(None)
 
         self.menu.add(self.earnings_item)
-        earnings_label = f"{'✓ ' if earnings_on else ''}메뉴바에 급여 표시"
-        self.menu.add(rumps.MenuItem(earnings_label, callback=self.toggle_earnings_display))
-        self.menu.add(rumps.MenuItem(f"시급 설정 (현재 {HOURLY_WAGE:,}원)", callback=self.change_hourly_wage))
         self.menu.add(self.weather_item)
+        storage_text = (
+            f"💾 저장공간: {self.storage_free_gb}GB 남음"
+            if self.storage_free_gb is not None else "💾 저장공간: 확인 실패"
+        )
+        self.menu.add(rumps.MenuItem(storage_text))
         self.menu.add(self.stay_awake_item)
         always_awake_on = self.config.get("stay_awake_always", False)
         always_awake_label = f"{'✓ ' if always_awake_on else ''}🌙 절전 방지 항상 켜기 (원격 접속용)"
@@ -1829,7 +2261,7 @@ class ShiftAlarmApp(rumps.App):
 
         self.menu.add(None)
 
-        time_menu = rumps.MenuItem("⚙️ 알람 시간 설정")
+        time_menu = rumps.MenuItem("⏰ 알람 시간 설정")
         for shift in ["Day", "Swing", "GY"]:
             t = SHIFT_TIMES[shift]
             time_menu.add(rumps.MenuItem(
@@ -1837,7 +2269,6 @@ class ShiftAlarmApp(rumps.App):
                 callback=self.make_time_change_callback(shift)
             ))
         self.menu.add(time_menu)
-
         self.menu.add(rumps.MenuItem("🎬 Elmedia 지금 바로 재생", callback=self.play_elmedia_now))
 
         last_ebook = load_last_ebook_state()
@@ -1846,14 +2277,15 @@ class ShiftAlarmApp(rumps.App):
             resume_label = f"📖 이어하기: {short_name} (P.{last_ebook['page']})"
             self.menu.add(rumps.MenuItem(resume_label, callback=self.resume_ebook_now))
         self.menu.add(rumps.MenuItem("📖 다른 책 선택해서 읽기", callback=self.choose_ebook_now))
-
         self.menu.add(rumps.MenuItem("🎲 추천 사이트 열기 (天 폴더 랜덤 3개)", callback=self.open_random_bookmarks_now))
-        self.menu.add(rumps.MenuItem("🔄 북마크 최신화 (天 폴더)", callback=self.refresh_bookmarks_now))
+
         self.menu.add(rumps.MenuItem("🎥 일본어 자막 추출 - 연달아 (폴더 선택)", callback=self.run_jp_subtitle_now))
         self.menu.add(rumps.MenuItem("🏃 운동용 영상만 추출 (폴더 선택)", callback=self.run_jp_workout_only_now))
-        self.menu.add(rumps.MenuItem("📝 자막·노션·EPUB만 (폴더 선택)", callback=self.run_jp_subtitle_stage2_now))
-        self.menu.add(rumps.MenuItem("🔄 Notion 요약 → EPUB 반영 (작품 폴더 선택)", callback=self.pull_jp_notion_summary_now))
-        self.menu.add(rumps.MenuItem("🎧 오디오북(.m4b) 생성 (작품 폴더 선택)", callback=self.build_jp_audiobook_now))
+        self.menu.add(rumps.MenuItem("📝 자막·번역·낭독판만 (폴더 선택)", callback=self.run_jp_subtitle_stage2_now))
+        self.menu.add(rumps.MenuItem(
+            "📖 EPUB 폴더 → 낭독판 EPUB (문장 강조)",
+            callback=self.build_jp_readaloud_epub_now,
+        ))
         self.menu.add(rumps.MenuItem(
             "🎵 플레이리스트 MP4 → 곡별 MP3 (폴더 선택)",
             callback=self.run_bgm_playlist_split_now,
@@ -1862,11 +2294,17 @@ class ShiftAlarmApp(rumps.App):
             "🏷️ MP3 Shazam 제목 변경 (폴더 선택)",
             callback=self.run_mp3_shazam_rename_now,
         ))
+        self.menu.add(rumps.MenuItem(
+            "🎵 YouTube → MP3 다운로드",
+            callback=self.download_youtube_mp3_now,
+        ))
 
         sunzi_entry = get_latest_sunzi_entry()
         if sunzi_entry:
             short_title = truncate_title(sunzi_entry["title"])
-            self.menu.add(rumps.MenuItem(f"⚔️ 손자병법 최신: {short_title}", callback=self.open_latest_sunzi))
+            self.menu.add(rumps.MenuItem(
+                f"⚔️ 손자병법 최신: {short_title}", callback=self.open_latest_sunzi
+            ))
 
         trash_size = get_trash_size_str()
         trash_label = f"🗑️ 휴지통 비우기 ({trash_size})" if trash_size else "🗑️ 휴지통 비우기"
@@ -1874,28 +2312,6 @@ class ShiftAlarmApp(rumps.App):
         self.menu.add(rumps.MenuItem("현재 설정 확인", callback=self.show_status))
         self.menu.add(None)
         self.menu.add(rumps.MenuItem("종료", callback=self.quit_app))
-
-    # ── 시급 수정 ────────────────────────────────────────────
-
-    def change_hourly_wage(self, _):
-        threading.Thread(target=self._change_hourly_wage_thread, daemon=True).start()
-
-    def _change_hourly_wage_thread(self):
-        global HOURLY_WAGE
-        val = ask_input("시급 설정", "통상시급을 입력하세요 (원)\\n※ 급여명세서 나올 때마다 업데이트 권장", str(HOURLY_WAGE))
-        if val is None:
-            return
-        try:
-            new_wage = int(val.strip().replace(",", ""))
-            assert new_wage > 0
-        except Exception:
-            subprocess.run(["osascript", "-e", 'display alert "오류" message "숫자만 입력하세요."'])
-            return
-        HOURLY_WAGE = new_wage
-        self.config["hourly_wage"] = new_wage
-        save_config(self.config)
-        self._refresh_earnings(None)
-        self.build_menu()
 
     # ── 시간 변경 (osascript 입력창) ─────────────────────────
 
@@ -1977,25 +2393,33 @@ class ShiftAlarmApp(rumps.App):
             return
         rumps.notification("추천 사이트", f"{len(urls)}개 열었습니다", "\n".join(urls))
 
-    def refresh_bookmarks_now(self, _):
-        rumps.notification("북마크 최신화", "확인 중...", "서브도메인 상태를 확인하고 있습니다 (몇 초 걸릴 수 있음)")
-        threading.Thread(target=self._refresh_bookmarks_thread, daemon=True).start()
+    def _auto_refresh_bookmarks(self, _):
+        if self._bookmark_refresh_running:
+            return
+        self._bookmark_refresh_running = True
+        threading.Thread(
+            target=self._auto_refresh_bookmarks_thread, daemon=True
+        ).start()
 
-    def _refresh_bookmarks_thread(self):
-        result = refresh_kr_subdomains()
-        if "error" in result:
-            rumps.notification("북마크 최신화 실패", "", result["error"])
-            return
-        if result["updated"] == 0:
-            msg = "이미 전부 최신 상태입니다."
+    def _auto_refresh_bookmarks_thread(self):
+        try:
+            result = refresh_kr_subdomains()
+            if "error" in result:
+                print(f"⚠️ 북마크 자동 최신화 실패: {result['error']}")
+                return
+            if result["updated"] == 0:
+                if result["failed_domains"]:
+                    print(
+                        "⚠️ 북마크 자동 최신화 탐색 실패: "
+                        + ", ".join(result["failed_domains"])
+                    )
+                return
+            msg = f"{result['updated']}개 주소를 최신 서브도메인으로 교체했습니다."
             if result["failed_domains"]:
-                msg = f"{', '.join(result['failed_domains'])}: 현재 살아있는 서브도메인을 못 찾았습니다."
-            rumps.notification("북마크 최신화", "변경 없음", msg)
-            return
-        msg = f"{result['updated']}개 주소를 최신 서브도메인으로 교체했습니다."
-        if result["failed_domains"]:
-            msg += f" ({', '.join(result['failed_domains'])}는 실패)"
-        rumps.notification("북마크 최신화 완료", "", msg)
+                msg += f" ({', '.join(result['failed_domains'])}는 탐색 실패)"
+            rumps.notification("북마크 자동 최신화 완료", "", msg)
+        finally:
+            self._bookmark_refresh_running = False
 
     def _prompt_jp_workout_settings(self):
         """운동용 영상 목표 길이(분)와 고음 구간 앞뒤 여유(초)를 키패드로 물어본다.
@@ -2096,7 +2520,7 @@ class ShiftAlarmApp(rumps.App):
         rumps.notification("운동용 영상만 추출", "시작됨", f"{folder}{minutes_note}\n새 터미널 창에서 진행 상황을 확인하세요.")
 
     def run_jp_subtitle_stage2_now(self, _):
-        """운동용 영상 추출 없이 자막·번역·Notion·EPUB 단계만 단독으로 실행."""
+        """운동용 영상 추출 없이 자막·번역·낭독판 EPUB만 단독으로 실행."""
         folder = choose_jp_subtitle_folder()
         if not folder:
             return
@@ -2105,38 +2529,25 @@ class ShiftAlarmApp(rumps.App):
         if not ok:
             rumps.alert("오류", f"스크립트를 찾을 수 없습니다:\n{JP_SUBTITLE_STAGE2_SCRIPT}")
             return
-        rumps.notification("자막·노션·EPUB", "시작됨", f"{folder}\n새 iTerm 창에서 진행 상황을 확인하세요.")
+        rumps.notification("자막·번역·낭독판", "시작됨", f"{folder}\n새 iTerm 창에서 진행 상황을 확인하세요.")
 
-    def pull_jp_notion_summary_now(self, _):
-        """Notion에 직접 적어둔 요약 내용을 SUMMARY.md/EPUB에 반영하고 av완성작에 복사."""
-        book_dir = choose_jp_library_folder(
-            "Notion 요약을 반영할 작품 폴더(library/<작품명>)를 선택하세요"
+    def build_jp_readaloud_epub_now(self, _):
+        epub_dir = choose_jp_epub_folder(
+            "문장 강조·자동 넘김 책을 만들 EPUB 폴더를 선택하세요. "
+            "완성된 낭독판 EPUB도 이 폴더에 저장됩니다."
         )
-        if not book_dir:
+        if not epub_dir:
             return
-        threading.Thread(
-            target=self._pull_jp_notion_summary_thread, args=(book_dir,), daemon=True
-        ).start()
-
-    def _pull_jp_notion_summary_thread(self, book_dir):
-        ok, msg = pull_notion_summary_and_distribute(book_dir)
-        if ok:
-            rumps.notification("Notion 요약 → EPUB 반영", "완료", msg or book_dir)
-        else:
-            rumps.alert("오류", f"Notion 요약 반영 실패:\n{msg}")
-
-    def build_jp_audiobook_now(self, _):
-        book_dir = choose_jp_library_folder(
-            "오디오북(.m4b)을 만들 작품 폴더(library/<작품명>)를 선택하세요 — "
-            "av완성작이 아니라 library 폴더 안의 작품 폴더입니다"
-        )
-        if not book_dir:
-            return
-        ok = run_build_audiobook(book_dir)
+        ok = run_build_readaloud_epub(epub_dir)
         if not ok:
-            rumps.alert("오류", f"스크립트를 찾을 수 없습니다:\n{JP_BUILD_AUDIOBOOK_SCRIPT}")
+            rumps.alert(
+                "오류", f"스크립트를 찾을 수 없습니다:\n{JP_BUILD_READALOUD_EPUB_SCRIPT}"
+            )
             return
-        rumps.notification("오디오북 생성", "시작됨", f"{book_dir}\n새 터미널 창에서 진행 상황을 확인하세요.")
+        rumps.notification(
+            "낭독판 EPUB 생성", "시작됨",
+            f"{epub_dir}\n일본어 문장 강조와 자동 페이지 넘김용 EPUB을 같은 폴더에 저장합니다.",
+        )
 
     def run_bgm_playlist_split_now(self, _):
         folder = choose_bgm_playlist_folder()
@@ -2191,6 +2602,38 @@ class ShiftAlarmApp(rumps.App):
             "인식되는 즉시 아티스트 - 노래제목으로 변경합니다.",
         )
 
+    def download_youtube_mp3_now(self, _):
+        try:
+            clipboard = subprocess.run(
+                ["pbpaste"], capture_output=True, text=True, timeout=2
+            ).stdout.strip()
+        except Exception:
+            clipboard = ""
+        default_url = clipboard if re.match(r"^https?://", clipboard) else "https://"
+        url = show_text_input_panel(
+            "YouTube MP3 다운로드",
+            "단일 영상 또는 재생목록 링크 주소를 입력하세요.",
+            default_url,
+        )
+        if url is None:
+            return
+        url = url.strip()
+        if not re.match(r"^https?://", url):
+            rumps.alert("주소 확인", "http:// 또는 https://로 시작하는 YouTube 주소를 입력하세요.")
+            return
+        folder = choose_youtube_mp3_folder()
+        if not folder:
+            return
+        ok, error = run_youtube_mp3_download(url, folder)
+        if not ok:
+            rumps.alert("YouTube MP3 다운로드 오류", error)
+            return
+        rumps.notification(
+            "YouTube → MP3",
+            "다운로드 시작",
+            f"{folder}\n새 터미널 창에서 진행 상황을 확인하세요.",
+        )
+
     def open_latest_sunzi(self, _):
         entry = get_latest_sunzi_entry()
         if not entry:
@@ -2204,10 +2647,24 @@ class ShiftAlarmApp(rumps.App):
         threading.Thread(target=self._empty_trash_thread, daemon=True).start()
 
     def _empty_trash_thread(self):
+        before = get_trash_size_bytes()
         ok, killed, err = empty_trash_forcefully()
         if ok:
-            note = f"{', '.join(killed)} 종료 후 비움" if killed else "비움"
-            rumps.notification("휴지통 비우기", "완료", note)
+            after = get_trash_size_bytes()
+            if before is None:
+                note = "휴지통을 비웠습니다. 삭제 용량은 계산하지 못했습니다."
+            elif before == 0:
+                note = "휴지통이 이미 비어 있습니다."
+            else:
+                remaining = after if after is not None else 0
+                deleted = max(0, before - remaining)
+                note = f"휴지통에서 {format_file_size(deleted)}를 삭제했습니다."
+                if remaining:
+                    note += f" 삭제하지 못한 항목 {format_file_size(remaining)}가 남아 있습니다."
+            if killed:
+                note += f" 사용 중이던 프로세스 {', '.join(killed)}도 종료했습니다."
+            rumps.notification("휴지통 비우기 완료", "", note)
+            self._check_storage(None)
             self.build_menu()  # 메뉴 항목의 휴지통 용량 표시를 바로 최신화
         else:
             rumps.alert("오류", f"휴지통 비우기 실패:\n{err}")
