@@ -1687,40 +1687,49 @@ def open_random_bookmarks(n=3):
 KR_SUBDOMAIN_RE = re.compile(r'^kr(\d+)\.(.+)$')
 
 
-def _host_alive(host, timeout=3):
-    """DNS+TCP+TLS까지 붙어서 뭐라도 HTTP 응답이 왔으면 살아있는 걸로 친다.
-    403/503 등 에러 응답도 '서버가 응답했다'는 뜻이라 살아있음으로 간주한다
-    (Cloudflare 봇 차단으로 403이 오는 경우가 실제로 있었음, 2026-07-23 확인).
-    DNS 실패/연결 거부/타임아웃일 때만 죽은 것으로 판단한다 — 로테이션이 끝난
-    옛 서브도메인은 이렇게 응답 자체가 없는 걸로 확인됨(kr42.topgirl.co 사례)."""
+def _resolve_kr_number(host, timeout=3):
+    """host에 접속해 최종적으로 도착하는 kr번호를 반환한다. 리다이렉트를 따라가서
+    실제 서비스 중인 번호까지 확인한다 — 예전엔 301 등 '뭐라도 응답만 오면' 살아있는
+    걸로만 쳤는데, kr44.topgirl.co가 완전히 죽지 않고 301로 kr45.topgirl.co로
+    리다이렉트하는 채로 계속 응답하는 케이스가 있어서(2026-08-04 확인) 자동 갱신이
+    영영 안 걸리는 문제가 있었다. 403/503 등 에러 응답도 '서버가 응답했다'는 뜻이라
+    살아있음으로 간주한다(Cloudflare 봇 차단으로 403이 오는 경우가 실제로 있었음,
+    2026-07-23 확인) — 이때는 리다이렉트가 없으므로 원래 번호를 그대로 반환한다.
+    DNS 실패/연결 거부/타임아웃일 때만 None(죽은 것으로 판단) — 로테이션이 끝난 옛
+    서브도메인은 이렇게 응답 자체가 없는 걸로 확인됨(kr42.topgirl.co 사례)."""
+    orig_match = KR_SUBDOMAIN_RE.match(host)
+    orig_number = int(orig_match.group(1)) if orig_match else None
     try:
         req = urllib.request.Request(f"https://{host}", method="HEAD",
                                       headers={"User-Agent": "Mozilla/5.0"})
-        urllib.request.urlopen(req, timeout=timeout)
-        return True
-    except urllib.error.HTTPError:
-        return True
+        resp = urllib.request.urlopen(req, timeout=timeout)
+        final_url = resp.geturl()
+    except urllib.error.HTTPError as e:
+        final_url = e.geturl() if e.geturl() else f"https://{host}"
     except Exception:
-        return False
+        return None
+    final_host = urlparse(final_url).hostname or host
+    m = KR_SUBDOMAIN_RE.match(final_host)
+    return int(m.group(1)) if m else orig_number
 
 
 def _detect_current_kr_subdomain(base_domain, known_numbers, probe_ahead=30):
-    """known_numbers 중 지금도 살아있는 것의 최댓값을 우선 채택.
-    전부 죽어있으면 그 다음 번호대(known 최댓값+1 ~ +probe_ahead)를 탐색한다.
-    못 찾으면 None."""
+    """known_numbers 중 지금도 살아있는(리다이렉트 최종 도착지 포함) 것의 최댓값을
+    우선 채택. 전부 죽어있으면 그 다음 번호대(known 최댓값+1 ~ +probe_ahead)를
+    탐색한다. 못 찾으면 None."""
     candidates = sorted(set(known_numbers), reverse=True)
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
-        alive_flags = list(ex.map(lambda n: _host_alive(f"kr{n}.{base_domain}"), candidates))
-    alive = [n for n, ok in zip(candidates, alive_flags) if ok]
-    if alive:
-        return max(alive)
+        resolved = list(ex.map(lambda n: _resolve_kr_number(f"kr{n}.{base_domain}"), candidates))
+    found = {n for n in resolved if n is not None}
+    if found:
+        return max(found)
 
     start = max(known_numbers) + 1
     probe_nums = list(range(start, start + probe_ahead))
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
-        probe_flags = list(ex.map(lambda n: _host_alive(f"kr{n}.{base_domain}"), probe_nums))
-    found = [n for n, ok in zip(probe_nums, probe_flags) if ok]
-    return max(found) if found else None
+        probe_resolved = list(ex.map(lambda n: _resolve_kr_number(f"kr{n}.{base_domain}"), probe_nums))
+    probe_found = {n for n in probe_resolved if n is not None}
+    return max(probe_found) if probe_found else None
 
 
 def refresh_kr_subdomains(folder_name=RANDOM_BOOKMARK_FOLDER):
@@ -2338,7 +2347,10 @@ class ShiftAlarmApp(rumps.App):
         self.menu.add(rumps.MenuItem("📖 다른 책 선택해서 읽기", callback=self.choose_ebook_now))
         self.menu.add(rumps.MenuItem("☁️ 독서 Notion 기록 동기화", callback=self.sync_ebook_notion_now))
         self.menu.add(rumps.MenuItem("📘 독서 기록 → 학습판 EPUB", callback=self.build_ebook_study_now))
+
+        self.menu.add(None)
         self.menu.add(rumps.MenuItem("🎲 추천 사이트 열기 (天 폴더 랜덤 3개)", callback=self.open_random_bookmarks_now))
+        self.menu.add(None)
 
         self.menu.add(rumps.MenuItem("🎥 일본어 자막 추출 - 연달아 (폴더 선택)", callback=self.run_jp_subtitle_now))
         self.menu.add(rumps.MenuItem("🏃 운동용 영상만 추출 (폴더 선택)", callback=self.run_jp_workout_only_now))
