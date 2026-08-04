@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Google 일본어→한국어 결과 중 이상 가능성이 높은 문장만 Codex로 보정한다."""
+"""Google 일본어→한국어 결과 중 이상 가능성이 높은 문장만 Codex(실패 시 Claude)로 보정한다."""
 
 import argparse
 import json
 import os
 import re
-import subprocess
 import sys
 from pathlib import Path
 
+from ai_exec import run_ai_exec
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 MEMORY_PATH = SCRIPT_DIR / "translation_memory.json"
@@ -92,18 +92,10 @@ def codex_refine(book_dir, candidates):
 입력:
 {json.dumps(payload, ensure_ascii=False, separators=(',', ':'))}
 """
-    result = subprocess.run(
-        [
-            "/opt/homebrew/bin/codex", "exec", "--ephemeral", "--sandbox", "read-only",
-            "--skip-git-repo-check", "-C", str(book_dir), "-",
-        ],
-        input=prompt, capture_output=True, text=True, timeout=600,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or f"Codex 종료 코드 {result.returncode}")
-    match = re.search(r"\{.*\}", result.stdout, re.S)
+    stdout, engine = run_ai_exec(prompt, book_dir, timeout=600)
+    match = re.search(r"\{.*\}", stdout, re.S)
     if not match:
-        raise RuntimeError("Codex 응답에서 JSON 객체를 찾지 못함")
+        raise RuntimeError(f"{engine} 응답에서 JSON 객체를 찾지 못함")
     data = json.loads(match.group(0))
     return {str(key): str(value).strip() for key, value in data.items() if str(value).strip()}
 
@@ -112,7 +104,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("book_dir")
     parser.add_argument("--dry-run", action="store_true", help="탐지만 하고 파일과 메모리를 바꾸지 않음")
-    parser.add_argument("--no-ai", action="store_true", help="영구 메모리만 적용하고 Codex 검수는 생략")
+    parser.add_argument("--no-ai", action="store_true", help="영구 메모리만 적용하고 Codex/Claude 검수는 생략")
     parser.add_argument("--max-review", type=int, default=int(os.environ.get("JP_TRANSLATION_REVIEW_MAX", "60")))
     args = parser.parse_args()
 
@@ -155,7 +147,7 @@ def main():
         try:
             refined = codex_refine(book_dir, candidates)
         except Exception as exc:
-            print(f"⚠️ Codex 선택 검수 실패 — Google 번역 유지: {exc}")
+            print(f"⚠️ Codex/Claude 선택 검수 모두 실패 — Google 번역 유지: {exc}")
             refined = {}
         for item in candidates:
             corrected = refined.get(item["id"], "")

@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-"""transcript_part*.jsonl을 Codex CLI 비대화형 모드로 요약한다.
+"""transcript_part*.jsonl을 Codex(실패 시 Claude) CLI 비대화형 모드로 요약한다.
 
 원래 이 자리는 "Codex가 transcript_part*.jsonl과 대표 이미지를 읽고 SUMMARY.md를
 작성한다"는 수동 단계였는데, 자막·번역·Notion·EPUB까지 자동으로 끝난 뒤 이 요약만
 사람이 별도 세션을 열어 해줘야 하는 게 병목이라 자동화했다. 대사 텍스트(ja/ko)만
 보고 요약하며, 이미지는 넣지 않는다(빠르고 간단한 쪽을 선택 — 필요해지면 나중에
 멀티모달로 확장 가능).
+
+★ 2026-08-04: Codex 토큰/쿼터 소진으로 파이프라인이 멈추는 걸 막기 위해, AI 호출을
+ai_exec.run_ai_exec()로 통일했다. codex를 1순위로 먼저 시도하고 실패하면(usage
+limit 등 이유 불문) 자동으로 claude로 전환해서 같은 프롬프트를 재시도한다.
 
 ★ 2026-07-31: 장면별 한 줄 설명을 "전체 줄거리" 뒤에 목차처럼 몰아서 SUMMARY.md에
 넣던 걸, 각 장면의 실제 위치(제목+대표 이미지 다음, 대사 시작 전)에 바로 끼워
@@ -22,9 +26,9 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import sys
 
+from ai_exec import run_ai_exec
 from book_title import clean_subtitle, display_title, load_book_subtitle
 
 
@@ -156,17 +160,13 @@ vocabulary 각 항목은 ja, reading, ko, hanja_sound, hanja_hun을 넣고, 한�
         batch = None
         last_error = ""
         for attempt in range(3):
-            result = subprocess.run(
-                [
-                    "/opt/homebrew/bin/codex", "exec", "--ephemeral", "--sandbox", "read-only",
-                    "--skip-git-repo-check", "-C", book_dir, "-",
-                ],
-                input=prompt, capture_output=True, text=True, timeout=600,
-            )
-            if result.returncode != 0:
-                last_error = result.stderr.strip()
-            else:
-                match = re.search(r"\{.*\}", result.stdout, re.S)
+            try:
+                stdout, engine = run_ai_exec(prompt, book_dir, timeout=600)
+            except RuntimeError as exc:
+                last_error = str(exc)
+                stdout = None
+            if stdout is not None:
+                match = re.search(r"\{.*\}", stdout, re.S)
                 try:
                     candidate = json.loads(match.group(0)) if match else None
                 except json.JSONDecodeError as exc:
@@ -175,7 +175,7 @@ vocabulary 각 항목은 ja, reading, ko, hanja_sound, hanja_hun을 넣고, 한�
                 if candidate is not None and valid_cards(candidate, batch_scenes):
                     batch = candidate
                     break
-                last_error = last_error or "필수 필드·표현 개수·장면 키 형식 오류"
+                last_error = last_error or f"{engine} 응답의 필수 필드·표현 개수·장면 키 형식 오류"
             prompt += (
                 "\n\n★ 이전 결과가 형식 검사를 통과하지 못했다. 각 장면 expressions는 반드시 "
                 "6~10개이고 모든 필수 필드가 비어 있지 않아야 하며, 지정한 키만 빠짐없이 넣어 전체 JSON을 다시 출력하라."
@@ -196,7 +196,7 @@ vocabulary 각 항목은 ja, reading, ko, hanja_sound, hanja_hun을 넣고, 한�
 
 
 def parse_response(body):
-    """Claude 응답에서 부제목·줄거리·장면별 설명을 분리한다."""
+    """Codex/Claude 응답에서 부제목·줄거리·장면별 설명을 분리한다."""
     subtitle_match = re.search(
         r"## 추천 부제목\s*\n([^\n]+)", body
     )
@@ -409,20 +409,13 @@ def main():
     # 재시도한다.
     generated_subtitle, overview, descriptions, cards, corrections = "", None, {}, {}, {}
     for attempt in range(2):
-        result = subprocess.run(
-            [
-                "/opt/homebrew/bin/codex", "exec",
-                "--ephemeral", "--sandbox", "read-only",
-                "--skip-git-repo-check", "-C", book_dir, "-",
-            ],
-            input=prompt,
-            capture_output=True,
-            text=True,
-            timeout=600,
-        )
-        body = result.stdout.strip()
-        if result.returncode != 0 or not body:
-            sys.exit(f"❌ Codex 요약 생성 실패({result.returncode}): {result.stderr.strip()}")
+        try:
+            stdout, engine = run_ai_exec(prompt, book_dir, timeout=600)
+        except RuntimeError as exc:
+            sys.exit(f"❌ Codex/Claude 요약 생성 모두 실패: {exc}")
+        body = stdout.strip()
+        if not body:
+            sys.exit(f"❌ {engine} 요약 생성 실패: 빈 응답")
 
         generated_subtitle, overview, descriptions, cards, corrections = parse_response(body)
         missing_scenes = expected_scenes - set(descriptions)
@@ -461,7 +454,7 @@ def main():
         print(f"🗂️ 장면 {len(expected_scenes)}개 — 학습카드를 6장면씩 나눠 생성합니다.")
         try:
             cards = generate_cards_batched(book_dir, base_name, lines)
-        except (RuntimeError, subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
+        except (RuntimeError, json.JSONDecodeError) as exc:
             sys.exit(f"❌ 분할 학습 카드 생성 실패: {exc}")
     if not valid_cards(cards, expected_scenes):
         sys.exit("❌ 장면별 학습 카드가 누락됐거나 형식이 잘못되었습니다(재시도 포함).")

@@ -11,7 +11,7 @@
 - 핵심 표현과 쉐도잉 문장은 `일본어 — 한국어`를 같은 줄에 붙이지 않는다. **일본어를 위 줄, 한국어 해석을 바로 아래 줄**에 회색 들여쓰기와 왼쪽 구분선으로 표시한다.
 - `주요 단어와 뜻`의 한자 단어에는 일본어 읽기와 뜻뿐 아니라 **한글 한자음과 각 한자의 훈**도 함께 적는다. 한자가 없는 단어에는 억지로 붙이지 않는다.
 - 학습카드는 별도 페이지로 구성하고 모든 대사 페이지는 4문장을 기본으로 한다. 장면 첫 대사가 학습카드 아래에 숨거나 잘리는 구성을 금지하며 기존 낭독·문장 강조·자동 페이지 넘김은 그대로 유지한다.
-- 줄거리·부제목·장면별 학습 카드는 **Claude가 아니라 로컬 Codex CLI의 비대화형 실행**으로 생성한다. Codex는 읽기 전용·임시 세션으로 실행하며 파이프라인 파일을 직접 수정하지 않고 결과 텍스트만 반환한다.
+- 줄거리·부제목·장면별 학습 카드는 **로컬 Codex CLI의 비대화형 실행**으로 생성한다. Codex는 읽기 전용·임시 세션으로 실행하며 파이프라인 파일을 직접 수정하지 않고 결과 텍스트만 반환한다. ★ 2026-08-04: Codex가 토큰/쿼터 소진 등 어떤 이유로든 실패하면 `ai_exec.run_ai_exec()`가 같은 프롬프트로 **로컬 Claude CLI(`claude -p --tools ""`)** 로 자동 전환해서 재시도한다(1순위 Codex, 2순위 Claude). 두 엔진 다 실패해야 그 단계가 진짜로 실패 처리된다.
 - 장면이 12개를 넘는 작품은 출력 한도 때문에 카드 전체를 한 응답에 요구하지 않는다. 줄거리·장면 설명·번역 교정을 먼저 생성한 뒤 학습카드는 **6장면씩 분할 생성**하고, 각 묶음을 즉시 검증한다. 형식 오류는 해당 묶음만 최대 3회 재시도하며 `scene_study_cards.partial.json`에 완료분을 중간 저장해 재실행 때 이어간다.
 - 한국어 대사는 Google 번역을 기본으로 유지하고 `refine_translations.py --no-ai`가 실패·일본어 잔존·누적 오역 표현 등 코드로 확정 가능한 항목과 영구 메모리를 먼저 적용한다. 의미상 오역 판정은 **별도 AI 호출을 추가하지 않고**, 어차피 전체 대사를 읽는 `generate_summary.py`의 기존 작품당 1회 Codex 호출에 `번역 교정 JSON` 출력을 함께 요청한다. 확정 교정은 `translation_memory.json`에 영구 저장하는 동시에 해당 작품의 `transcript_part*.jsonl`에도 즉시 반영한다. 낭독판 빌더는 이 JSONL의 `ko`를 직접 읽으므로 교정된 한국어가 실제 EPUB 본문에도 반드시 들어간다. 같은 일본어 표현에는 이후 메모리를 재사용해 다시 토큰을 쓰지 않는다. 검수가 실패하면 Google 번역을 그대로 유지하고 파이프라인을 중단하지 않는다.
 
@@ -354,12 +354,24 @@ Claude가 동시에 만든 가변형 EPUB 후처리 프로토타입은 Apple Boo
 
 **변경 내용**: `mix_background_audio()`에서 `title_cues`/`title_seconds` 파라미터, `write_bgm_title_ass()`/`ass_time()` 함수, `build_bgm_track()`의 제목 시각 추적 로직, `--bgm-title-seconds`/`--no-bgm-title` CLI 옵션을 모두 제거. 영상은 항상 `-c:v copy`(스트림 복사)만 쓴다. 실측: 10초 테스트 클립 기준 0.26초(기존 소프트웨어 인코딩 2.73초 대비 10배 이상 단축).
 
+### ★★★★★ Codex 실패 시 Claude 자동 대체 (`ai_exec.py`, 2026-08-04)
+
+**배경**: Codex 사용량 한도가 소진되면(`ERROR: You've hit your usage limit...`, 종료 코드 1) `generate_summary.py`(요약·부제목·학습카드)와 `refine_translations.py`(번역 선택 검수)가 전부 멈췄다. shift_alarm 메뉴로 파이프라인을 돌리다 이 상태에서 걸리면 사람이 원인을 몰라 헤맬 수 있어서, 실패 시 자동으로 로컬 Claude CLI로 넘어가도록 만들었다.
+
+**구조**: 세 곳의 Codex 직접 호출(`generate_summary.py`의 학습카드 분할 생성·전체 요약 생성 2곳, `refine_translations.py`의 번역 검수 1곳)을 공용 모듈 `ai_exec.py`의 `run_ai_exec(prompt, cwd, timeout=600, primary="codex")`로 통합했다.
+- 1순위 Codex(`codex exec --ephemeral --sandbox read-only --skip-git-repo-check -C <cwd> -`)를 먼저 시도한다.
+- 종료 코드가 0이 아니거나 응답이 비어있으면(사유 불문 — usage limit 메시지가 버전마다 바뀔 수 있어 특정 문자열을 찾지 않음) 2순위 Claude(`claude -p --output-format text --tools "" --no-session-persistence`, cwd는 subprocess의 `cwd` 인자로 전달)로 같은 프롬프트를 그대로 재시도한다. `--tools ""`로 도구 접근을 꺼서 Codex의 `--sandbox read-only`와 동등하게 순수 텍스트 생성만 하도록 맞췄다.
+- 성공한 엔진의 stdout과 엔진 이름(`"codex"`/`"claude"`)을 `(stdout, engine)`으로 반환한다. 대체가 일어나면 `↪️ codex 실패로 claude(으)로 전환해서 처리함`을 터미널에 출력해서 어느 쪽이 실제로 응답했는지 항상 알 수 있게 했다.
+- 두 엔진 다 실패해야(각각의 에러를 합쳐) `RuntimeError`를 낸다 — 이때 호출부는 기존과 동일하게 검수 생략(번역 보정)이나 `sys.exit`(요약 생성)로 처리한다.
+- `primary` 인자로 우선순위를 뒤집을 수 있게 열어뒀지만(반대로 Claude 우선·Codex 대체), 지금은 항상 기본값 `"codex"`를 그대로 씀 — 사용자가 명시적으로 "1순위 Codex, 2순위 Claude"를 요청함.
+- 실측: Codex가 실제로 usage limit 상태일 때 `run_ai_exec()`가 예외 없이 Claude로 넘어가 정상 응답을 반환하는 것 확인함(2026-08-04, `echo '숫자만 "42"라고 답해.' | ...` 형태의 최소 프롬프트로 검증).
+
 ### ★★★★★ Codex 요약 단계 자동화 (`generate_summary.py`) + 완성작 폴더 (2026-07-28)
 
 **배경**: "이펍과 노션 업로드 후에 다시 Claude로 공부용 영상 분석이 목표"라는 사용자 요청. 지금까지 "Codex가 transcript_part*.jsonl과 대표 이미지를 읽고 SUMMARY.md를 작성한다"는 단계는 사람이 매번 별도 세션을 열어야 하는 수동 병목이었다.
 
 **추가한 것**:
-1. `generate_summary.py library/<작품명>` (신규) — `transcript_part*.jsonl`의 대사(원문 ja/번역 ko)만 장면 순서대로 모아 `claude -p --tools "" --output-format text`(Claude Code CLI 헤드리스 모드, 도구 접근 없이 순수 텍스트 생성만)에 프롬프트로 넘겨 "전체 줄거리"+"장면별 목차"를 받아 `SUMMARY.md`에 쓴다. 대표 이미지는 안 보낸다(사용자가 "대사 텍스트만" 쪽을 선택 — 빠르고 간단함).
+1. `generate_summary.py library/<작품명>` (신규, 2026-08-04부터 `ai_exec.run_ai_exec()` 경유 — 아래 절 참조) — `transcript_part*.jsonl`의 대사(원문 ja/번역 ko)만 장면 순서대로 모아 로컬 Codex CLI 헤드리스 모드(실패 시 Claude CLI로 자동 전환)에 프롬프트로 넘겨 "전체 줄거리"+"장면별 목차"를 받아 `SUMMARY.md`에 쓴다. 대표 이미지는 안 보낸다(사용자가 "대사 텍스트만" 쪽을 선택 — 빠르고 간단함).
 2. `subtitle_pipeline_body.sh`의 EPUB 생성 직후에 자동 연결: `generate_summary.py` → `sync_book_to_notion.py library/<작품명>`(요약 반영+상태 `완료`) → `finalize_japanese_book.py library/<작품명>`(요약+전체 대사 합친 최종 EPUB) 순서로 자동 실행되고, 이 최종 EPUB이 기존 "빠른" EPUB을 덮어쓴다. 각 단계 실패해도 경고만 찍고 다음 영상으로 계속 진행(파이프라인 전체가 안 멈춤).
 3. 완성된 EPUB을 한곳에 몰아보고 싶다는 요청으로 `/Users/forrestdpark/Desktop/BlogImage/av완성작/`에도 자동 복사(옵시디언 복사와 별개로 추가).
 
