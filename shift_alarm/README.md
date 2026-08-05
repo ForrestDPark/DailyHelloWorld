@@ -261,9 +261,12 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
 
 iOS 단축어의 "파일 가져오기" 액션은 **보안 스코프 북마크**가 있어야 특정 파일을 자동으로 읽을 수 있는데, 이 북마크는 사용자가 최초 1회 실제로 파일 선택기에서 골라야만 생성된다(iOS 샌드박스 제약 — 다른 프로세스가 미리 대신 채워줄 수 없음). Pythonista는 자기 앱의 iCloud Documents 폴더 안 파일은 **파일 선택기 없이 항상 그냥 읽을 수 있어서** 이 문제 자체가 없다.
 
-- `shift_alarm/shift_status_pythonista.py`(git 추적됨)를 Pythonista의 iCloud Documents 폴더(`iCloud~com~omz-software~Pythonista3/Documents/`)에 복사해두면, 같은 폴더의 `status.json`(Mac이 자동으로 갱신)을 별도 설정 없이 바로 읽어서 `console` 모듈로 보기 좋게 출력한다(근무·며칠째·날씨·저장공간(5GB 이하면 빨간색)·오늘의 리마인더·갱신시각).
-- 아이폰에서 할 일: Pythonista 3 앱 실행 → Documents 목록에 `shift_status_pythonista.py`가 iCloud 동기화로 자동으로 나타남 → 탭 → 재생(▶) 버튼. **파일 선택기 설정이 전혀 필요 없다.**
-- Mac 쪽에서 스크립트를 수정하면 `shift_alarm/shift_status_pythonista.py`를 Pythonista iCloud Documents 폴더에 다시 복사해줘야 아이폰에 반영된다(자동 동기화는 안 됨 — 별도 파일이라 수동 복사 필요).
+두 가지 스크립트를 함께 제공한다(둘 다 git 추적됨, 둘 다 Pythonista iCloud Documents 폴더 `iCloud~com~omz-software~Pythonista3/Documents/`에 복사해서 씀 — Mac에서 수정 후에는 재복사해야 아이폰에 반영됨, 자동 동기화 아님):
+
+- **`shift_alarm/shift_status_pythonista.py`** — 앱 안에서 재생(▶)으로 직접 실행할 때용. `console` 모듈로 텍스트를 그대로 출력(근무·며칠째·날씨·저장공간(5GB 이하 빨강)·오늘의 리마인더·갱신시각).
+- **`shift_alarm/shift_status_widget.py`** — ★ 2026-08-06 추가, **Today 위젯용**(사용자가 선택). Pythonista의 `appex`/`ui` 모듈로 `ui.View`를 그려서 `appex.set_widget_view()`에 등록한다. Today 위젯은 홈 화면에 고정하는 최신 WidgetKit 타일이 아니라 **잠금화면에서 오른쪽으로 스와이프하거나 홈 화면 첫 페이지에서 왼쪽으로 스와이프하면 나오는 패널**이다(iOS 14+ 홈 화면 위젯 그리드에 직접 놓이는 게 아님 — Pythonista 자체가 최신 WidgetKit 홈 화면 위젯은 지원하지 않고 이 구형 Today Widget 확장만 제공함, 2026-08-06 웹 검색으로 확인). 앱 안에서 그냥 실행하면(위젯이 아닐 때) `view.present("sheet")`로 미리보기가 뜬다(디버깅용).
+  - **추가 방법**: Today View 화면(잠금화면에서 우측 스와이프, 또는 홈 화면 첫 페이지에서 좌측 스와이프) 맨 아래로 스크롤 → "편집" → "위젯 더 보기"에서 **Pythonista** 찾아 추가 → 그 위젯을 길게 눌러 편집 → 실행할 스크립트로 `shift_status_widget.py` 선택.
+  - 위젯 메모리 제약이 커서(Pythonista 공식 문서 확인) 다이얼로그·`ui.View.present()` 등은 위젯 안에서 못 쓴다 — `appex.set_widget_view()`만 사용. `view.height`를 설정한 값이 위젯의 펼쳐진 높이로 쓰인다.
 
 ### 15-2. 아이폰 확인 방법 B — iOS 단축어 (수동 설정 1회 필요)
 
