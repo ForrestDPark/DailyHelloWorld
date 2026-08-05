@@ -259,7 +259,11 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
     "codex_percent": 94.0,
     "codex_critical": true,
     "claude_percent": 41.0,
-    "claude_critical": false
+    "claude_critical": false,
+    "sunzi_title": "9편 구지 15구절 「吾士無余財, 非惡貨也, 無余命, 非惡壽也」",
+    "sunzi_url": "https://app.notion.com/p/3ae32a1eae8081c58fe3c047920dca07",
+    "job_total": 90,
+    "job_best_score": 70
   }
   ```
 
@@ -268,11 +272,15 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
 **진짜 홈 화면 위젯(아이콘들 사이에 고정되는 타일)을 원하면 이 방법만 쓴다.** 처음엔 Pythonista로 위젯을 만들었었는데, Pythonista의 위젯 기능은 iOS 14 이전 방식인 Today Widget(NCWidget 확장)이고 **iOS 18부터 애플이 이 확장 방식 자체를 완전히 제거해서 더 이상 동작하지 않는다**(2026-08-06 웹 검색으로 확인 — 위젯 목록에 Pythonista가 아예 안 뜨는 게 정상). Scriptable은 최신 WidgetKit을 지원하는 앱이라 진짜 홈 화면 위젯이 가능하다.
 
 - **`shift_alarm/ShiftAlarmWidget.js`**(git 추적됨) — Scriptable의 `FileManager.iCloud()`로 같은 폴더의 `status.json`을 읽어(iCloud 미다운로드 상태면 `downloadFileFromiCloud()`로 먼저 받음) `ListWidget`으로 그린다. Mac 쪽에서 수정하면 Scriptable iCloud Documents 폴더(`iCloud~dk~simonbs~Scriptable/Documents/`)에 다시 복사해야 아이폰에 반영됨(자동 동기화 아님).
-- **추가 방법**: 홈 화면 길게 눌러 편집 모드 → 왼쪽 위 **"+"** → **Scriptable** 검색 → 크기 선택(**미디엄 필수** — 2단 레이아웃이라 스몰은 오른쪽 컬럼이 잘림) → 추가 → 그 위젯을 길게 눌러 **"위젯 편집"** → **Script**를 **`ShiftAlarmWidget`**으로 지정.
-- **레이아웃(★ 2026-08-06 2단 구성으로 변경)**: 위젯 안을 `addStack()` + `layoutHorizontally()`로 좌우 2단으로 나눈다 — 처음엔 왼쪽 컬럼만 채워서 오른쪽이 비어 보인다는 피드백을 받아 이렇게 고쳤다.
-  - **왼쪽**: 근무·며칠째, 날씨, 저장공간(5GB 이하 빨강), 오늘의 리마인더 최대 3개(초과분은 "외 N건")
-  - **오른쪽**: 오늘 급여(근무 중이면 지금까지 번 금액, 근무 전이면 예상 금액), 🪙 AI 사용량 — Codex/Claude 각각 %(주간 90% 이상이면 빨강, 아니면 Codex=초록/Claude=오렌지 — 메뉴바 타이틀 색상 규칙과 동일)
-  - 맨 아래에 갱신시각
+- **추가 방법**: 홈 화면 길게 눌러 편집 모드 → 왼쪽 위 **"+"** → **Scriptable** 검색 → 크기 선택 → 추가 → 그 위젯을 길게 눌러 **"위젯 편집"** → **Script**를 **`ShiftAlarmWidget`**으로 지정.
+- **레이아웃은 `config.widgetFamily`로 위젯 크기에 따라 분기한다(★ 2026-08-06)** — Scriptable은 내용이 위젯 프레임을 넘으면 자동으로 줄여주지 않고 그냥 잘라버리므로, 크기별로 보여줄 내용 자체를 다르게 짰다:
+  - **스몰**: 근무·며칠째, 날씨만 (한 줄씩, 최소한만 — 정보 다 넣으면 잘림)
+  - **미디엄**: `addStack()` + `layoutHorizontally()`로 좌우 2단
+    - 왼쪽: 근무·며칠째, 날씨, 저장공간(5GB 이하 빨강), 오늘의 리마인더 최대 3개(초과분은 "외 N건")
+    - 오른쪽: 오늘 급여(근무 중이면 지금까지 번 금액, 근무 전이면 예상 금액), 🪙 AI 사용량 — Codex/Claude 각각 %(주간 90% 이상이면 빨강, 아니면 Codex=초록/Claude=오렌지 — 메뉴바 타이틀 색상 규칙과 동일)
+  - **라지(★ 권장)**: 미디엄 레이아웃 그대로 + 아래에 **⚔️ 손자병법 최신 구절**(`손자병법/README.md`의 "완료된 구절" 표 마지막 줄 — 구절 인용문 「」 포함)과 **💼 이직시스템 N건 저장됨 (최고 M점)** 한 줄씩 추가
+  - 앱 안에서 재생(▶)으로 직접 실행하면(위젯이 아닐 때) `config.widgetFamily`가 없어서 large로 간주하고 `presentLarge()`로 미리보기를 보여준다.
+  - 맨 아래에 갱신시각(스몰 제외)
 - Scriptable 앱 안에서 스크립트를 직접 실행하면(위젯이 아닐 때) `presentMedium()`으로 같은 내용을 미리보기로 보여준다(디버깅용).
 - status.json에 `earnings_short`(`_earnings_short_text()`)·`codex_percent`/`codex_critical`·`claude_percent`/`claude_critical` 필드가 이때 추가됐다(★ 2026-08-06) — `codex_critical`/`claude_critical`은 메뉴바 타이틀 색상과 같은 `_codex_weekly_critical()`/`_claude_weekly_critical()` 판정을 그대로 재사용해서, 위젯 쪽에서 임계값 로직을 따로 구현할 필요가 없게 했다.
 

@@ -5,12 +5,15 @@
 // status.json을 갱신해둔다.
 //
 // 홈 화면에 추가하는 법: 홈 화면 길게 눌러 편집 → "+" → Scriptable 검색 →
-// 크기 선택(미디엄 권장 — 좌우 2단 레이아웃이라 스몰은 오른쪽 컬럼이 잘림) →
-// 추가 → 위젯 길게 눌러 "위젯 편집" → Script를 "ShiftAlarmWidget"으로 지정.
+// 크기 선택 → 추가 → 위젯 길게 눌러 "위젯 편집" → Script를 "ShiftAlarmWidget"
+// 으로 지정.
 //
-// 레이아웃: 왼쪽 컬럼 = 근무/날씨/저장공간/리마인더, 오른쪽 컬럼 = 급여·AI
-// 사용량(Codex/Claude). ★ 2026-08-06: 처음엔 왼쪽만 채워서 오른쪽이 비어
-// 보인다는 피드백을 받아 2단 구성으로 바꿈.
+// 크기별 레이아웃(★ 2026-08-06, config.widgetFamily로 분기):
+//   small  — 근무·며칠째·날씨만 (한 줄, 잘리지 않게 최소한만)
+//   medium — 왼쪽(근무·날씨·저장공간·리마인더) / 오른쪽(급여·AI 사용량) 2단
+//   large  — medium 레이아웃 + 아래에 손자병법 최신 구절 + 이직시스템 요약 추가
+// medium/small에 손자병법·이직시스템까지 욱여넣으면 위젯 프레임을 넘어가서
+// 잘리므로(Scriptable은 내용을 자동으로 줄여주지 않음) large 전용으로 뺐다.
 
 const fm = FileManager.iCloud();
 const statusPath = fm.joinPath(fm.documentsDirectory(), "status.json");
@@ -31,6 +34,7 @@ const COLOR_SUB = new Color("#d1d1d6");
 const COLOR_WARN = new Color("#ff6961");
 const COLOR_GREEN = new Color("#34c759");
 const COLOR_ORANGE = new Color("#ff9f0a");
+const COLOR_PURPLE = new Color("#bf5af2");
 
 async function loadStatus() {
   if (!fm.fileExists(statusPath)) return null;
@@ -53,13 +57,14 @@ function addLine(stack, text, { color = COLOR_TEXT, size = 12, bold = false, lin
   return t;
 }
 
-function buildLeftColumn(stack, status) {
-  const shift = status.shift;
-  const shiftLabel = SHIFT_LABELS[shift] || shift || "미설정";
+function shiftTitle(status) {
+  const shiftLabel = SHIFT_LABELS[status.shift] || status.shift || "미설정";
   const dayNum = status.shift_day_number;
-  const title = dayNum ? `${shiftLabel} (${dayNum}일째)` : shiftLabel;
+  return dayNum ? `${shiftLabel} (${dayNum}일째)` : shiftLabel;
+}
 
-  addLine(stack, title, { color: COLOR_TITLE, size: 16, bold: true });
+function buildLeftColumn(stack, status) {
+  addLine(stack, shiftTitle(status), { color: COLOR_TITLE, size: 16, bold: true });
   stack.addSpacer(6);
 
   if (status.weather) {
@@ -121,7 +126,36 @@ function buildRightColumn(stack, status) {
   }
 }
 
-function buildWidget(status) {
+function buildBottomSection(widget, status) {
+  widget.addSpacer(10);
+
+  if (status.sunzi_title) {
+    addLine(widget, `⚔️ 손자병법 최신`, { color: COLOR_DIM, size: 11, bold: true });
+    widget.addSpacer(2);
+    addLine(widget, status.sunzi_title, { color: COLOR_PURPLE, size: 12, lineLimit: 2 });
+    widget.addSpacer(8);
+  }
+
+  if (status.job_total !== null && status.job_total !== undefined) {
+    const bestText = status.job_best_score !== null && status.job_best_score !== undefined
+      ? ` (최고 ${status.job_best_score}점)`
+      : "";
+    addLine(widget, `💼 이직시스템 ${status.job_total}건 저장됨${bestText}`, {
+      color: COLOR_SUB,
+      size: 11,
+    });
+  }
+}
+
+function buildSmall(widget, status) {
+  addLine(widget, shiftTitle(status), { color: COLOR_TITLE, size: 16, bold: true });
+  widget.addSpacer(6);
+  if (status.weather) {
+    addLine(widget, `🌤 ${status.weather}`, { size: 12 });
+  }
+}
+
+function buildWidget(status, family) {
   const widget = new ListWidget();
   widget.backgroundColor = new Color("#1c1c1e");
   widget.setPadding(14, 14, 14, 14);
@@ -130,6 +164,11 @@ function buildWidget(status) {
     addLine(widget, "⚠️ status.json을 찾을 수 없습니다", { color: COLOR_WARN, size: 13 });
     widget.addSpacer(4);
     addLine(widget, "Mac의 shift_alarm 확인 필요", { color: COLOR_DIM, size: 11 });
+    return widget;
+  }
+
+  if (family === "small") {
+    buildSmall(widget, status);
     return widget;
   }
 
@@ -146,8 +185,12 @@ function buildWidget(status) {
   right.layoutVertically();
   buildRightColumn(right, status);
 
+  if (family === "large") {
+    buildBottomSection(widget, status);
+  }
+
+  widget.addSpacer();
   if (status.updated_at) {
-    widget.addSpacer();
     addLine(widget, `업데이트 ${status.updated_at.replace("T", " ")}`, {
       color: new Color("#636366"),
       size: 9,
@@ -159,12 +202,17 @@ function buildWidget(status) {
 
 async function run() {
   const status = await loadStatus();
-  const widget = buildWidget(status);
+  const family = config.widgetFamily || "large"; // 앱 안에서 미리보기 실행할 땐 large로 가정
+  const widget = buildWidget(status, family);
 
   if (config.runsInWidget) {
     Script.setWidget(widget);
-  } else {
+  } else if (family === "small") {
+    await widget.presentSmall();
+  } else if (family === "medium") {
     await widget.presentMedium();
+  } else {
+    await widget.presentLarge();
   }
   Script.complete();
 }

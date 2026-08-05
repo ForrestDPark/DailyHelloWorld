@@ -2502,6 +2502,8 @@ class ShiftAlarmApp(rumps.App):
         day_num = (
             _shift_block_day_number(self.schedule, today, current) if current else None
         )
+        sunzi_entry = get_latest_sunzi_entry()
+        job_summary = get_job_collector_summary()
         status = {
             "updated_at": datetime.datetime.now().isoformat(timespec="seconds"),
             "date": today.isoformat(),
@@ -2515,6 +2517,10 @@ class ShiftAlarmApp(rumps.App):
             "codex_critical": _codex_weekly_critical(self._codex_quota),
             "claude_percent": _claude_five_hour_percent(self._claude_live_quota),
             "claude_critical": _claude_weekly_critical(self._claude_live_quota),
+            "sunzi_title": sunzi_entry["title"] if sunzi_entry else None,
+            "sunzi_url": sunzi_entry["url"] if sunzi_entry else None,
+            "job_total": job_summary[0] if job_summary else None,
+            "job_best_score": job_summary[1] if job_summary else None,
         }
         for target_dir, target_file in (
             (MOBILE_STATUS_DIR, MOBILE_STATUS_FILE),
