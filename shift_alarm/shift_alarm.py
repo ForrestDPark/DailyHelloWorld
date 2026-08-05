@@ -29,6 +29,7 @@ import os
 import json
 import re
 import shlex
+import sys
 import urllib.request
 import urllib.error
 from urllib.parse import urlparse, parse_qs
@@ -41,6 +42,7 @@ import time
 import signal
 import ai_usage
 import objc
+from PyObjCTools import AppHelper
 from AppKit import (
     NSApp, NSPanel, NSTextField, NSButton, NSMakeRect, NSFont,
     NSBackingStoreBuffered, NSWindowStyleMaskTitled, NSWindowStyleMaskClosable,
@@ -64,6 +66,13 @@ MOBILE_STATUS_FILE = os.path.join(MOBILE_STATUS_DIR, "status.json")
 # 스크립트와 같은 폴더에 d_team_schedule_2026.json 을 두거나,
 # 아래 경로를 실제 위치로 바꿔주세요.
 SCHEDULE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "d_team_schedule_2026.json")
+
+# ── 이직시스템(job_collector.py) 연동 ──────────────────────────
+JOB_COLLECTOR_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "이직시스템"
+)
+JOB_COLLECTOR_SCRIPT = os.path.join(JOB_COLLECTOR_DIR, "job_collector.py")
+JOB_COLLECTOR_REFRESH_SECONDS = 24 * 60 * 60  # 하루 1번
 
 # ── 근무표 코드(D/S/G/휴) → 앱 내부 근무 이름 매핑 ───────────────
 CODE_TO_SHIFT = {
@@ -2133,7 +2142,11 @@ def _claude_five_hour_percent(data):
 
 def _set_menu_item_color(menu_item, text, color):
     """MenuItem 표시 텍스트에 색을 입힌다(NSMenuItem.attributedTitle 직접 조작).
-    color가 None이면 기본색(plain title)으로 표시."""
+    color가 None이면 기본색(plain title)으로 표시.
+    NSMenuItem을 건드리므로 반드시 메인 스레드에서 실행돼야 한다(2026-08-05 실측 크래시)."""
+    if threading.current_thread() is not threading.main_thread():
+        AppHelper.callAfter(_set_menu_item_color, menu_item, text, color)
+        return
     menu_item.title = text
     if color is None:
         return
@@ -2241,10 +2254,27 @@ class ShiftAlarmApp(rumps.App):
         self.ai_usage_timer.start()
         self._refresh_ai_usage(None)
 
+        # 이직시스템(job_collector.py) 공고 수집을 하루 1번 자동 실행한다.
+        # 마지막 실행 시각을 config에 저장해두고 그로부터 24시간이 안 지났으면
+        # 건너뛴다 — 앱을 자주 재시작해도 사람인 서버에 매번 요청하지 않게.
+        self._job_collector_running = False
+        self.job_collector_timer = rumps.Timer(
+            self._refresh_job_collector, JOB_COLLECTOR_REFRESH_SECONDS
+        )
+        self.job_collector_timer.start()
+        self._refresh_job_collector(None)
+
     # ── 날씨 ────────────────────────────────────────────────
 
     def _init_weather(self):
+        # 네트워크 조회는 백그라운드 스레드에서, AppKit(메뉴/타이틀) 갱신은 반드시
+        # 메인 스레드에서 — 백그라운드 스레드가 NSStatusItem/NSMenuItem의
+        # attributedTitle을 직접 건드리면 CALayer 커밋 시점에 EXC_BREAKPOINT로
+        # 크래시할 수 있다(2026-08-05 실측 확인).
         weather = fetch_weather()
+        AppHelper.callAfter(self._apply_weather, weather)
+
+    def _apply_weather(self, weather):
         if weather:
             self.weather_str = weather["text"]
             self.weather_icon = weather["icon"]
@@ -2264,21 +2294,27 @@ class ShiftAlarmApp(rumps.App):
         threading.Thread(target=self._fetch_ai_usage, daemon=True).start()
 
     def _fetch_ai_usage(self):
+        # 네트워크/파일 조회는 백그라운드 스레드에서, AppKit(메뉴 항목) 갱신은
+        # 반드시 메인 스레드에서 — _apply_ai_usage로 넘겨서 처리한다.
         codex_quota = ai_usage.get_codex_quota()
+        claude_live = ai_usage.get_claude_live_quota()
+        claude_local = ai_usage.get_claude_local_stats()
+        AppHelper.callAfter(self._apply_ai_usage, codex_quota, claude_live, claude_local)
+
+    def _apply_ai_usage(self, codex_quota, claude_live, claude_local):
         codex_color = (
             NSColor.systemRedColor() if _codex_weekly_critical(codex_quota)
             else NSColor.systemGreenColor()
         )
         _set_menu_item_color(self.codex_usage_item, format_codex_usage(codex_quota), codex_color)
 
-        claude_live = ai_usage.get_claude_live_quota()
         claude_color = (
             NSColor.systemRedColor() if _claude_weekly_critical(claude_live)
             else NSColor.systemOrangeColor()
         )
         _set_menu_item_color(self.claude_usage_item, format_claude_live_usage(claude_live), claude_color)
 
-        self.claude_stats_item.title = format_claude_local_stats(ai_usage.get_claude_local_stats())
+        self.claude_stats_item.title = format_claude_local_stats(claude_local)
 
         # 메뉴바 타이틀 자체에도 "코94% 클61%" 형태로 바로 보이게 캐시해서 반영한다.
         self._codex_quota = codex_quota
@@ -2292,6 +2328,14 @@ class ShiftAlarmApp(rumps.App):
         return self.config.get("current_shift")
 
     def _update_title(self):
+        # NSStatusItem의 attributedTitle을 건드리므로 반드시 메인 스레드에서 실행돼야
+        # 한다(백그라운드 스레드에서 부르면 CALayer 커밋 시점에 EXC_BREAKPOINT로
+        # 크래시할 수 있음 — 2026-08-05 실측). 백그라운드 스레드에서 호출됐으면
+        # 메인 스레드로 다시 스케줄링하고 즉시 반환.
+        if threading.current_thread() is not threading.main_thread():
+            AppHelper.callAfter(self._update_title)
+            return
+
         # 메뉴바 아이콘이 많으면 macOS가 긴 타이틀을 통째로 숨겨버릴 수 있으므로
         # 타이틀은 최대한 짧게 유지한다. 자동모드 여부/정확한 금액 등 자세한 정보는
         # 메뉴 항목(드롭다운)과 "현재 설정 확인"에서 확인.
@@ -2837,6 +2881,50 @@ class ShiftAlarmApp(rumps.App):
             rumps.notification("북마크 자동 최신화 완료", "", msg)
         finally:
             self._bookmark_refresh_running = False
+
+    # ── 이직시스템(job_collector.py) 자동 수집 ─────────────────
+
+    def _refresh_job_collector(self, _):
+        if self._job_collector_running:
+            return
+        last_run = self.config.get("job_collector_last_run")
+        if last_run:
+            try:
+                elapsed = (
+                    datetime.datetime.now() - datetime.datetime.fromisoformat(last_run)
+                ).total_seconds()
+            except ValueError:
+                elapsed = JOB_COLLECTOR_REFRESH_SECONDS
+            if elapsed < JOB_COLLECTOR_REFRESH_SECONDS:
+                return
+        self._job_collector_running = True
+        threading.Thread(target=self._run_job_collector_thread, daemon=True).start()
+
+    def _run_job_collector_thread(self):
+        try:
+            result = subprocess.run(
+                [sys.executable, JOB_COLLECTOR_SCRIPT, "collect"],
+                cwd=JOB_COLLECTOR_DIR,
+                capture_output=True, text=True, timeout=300,
+            )
+            self.config["job_collector_last_run"] = datetime.datetime.now().isoformat(timespec="seconds")
+            save_config(self.config)
+
+            match = re.search(r"신규 (\d+)건 / 기존 갱신 (\d+)건", result.stdout)
+            if match:
+                inserted, updated = int(match.group(1)), int(match.group(2))
+                if inserted > 0:
+                    rumps.notification(
+                        "💼 이직시스템 새 공고",
+                        f"신규 {inserted}건 / 갱신 {updated}건 수집됨",
+                        "터미널에서 job_collector.py list로 확인하세요.",
+                    )
+            elif result.returncode != 0:
+                print(f"⚠️ 이직시스템 수집 실패: {result.stderr.strip()[:300]}")
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            print(f"⚠️ 이직시스템 수집 실행 오류: {exc}")
+        finally:
+            self._job_collector_running = False
 
     def _prompt_jp_workout_settings(self):
         """운동용 영상 목표 길이(분)와 고음 구간 앞뒤 여유(초)를 키패드로 물어본다.

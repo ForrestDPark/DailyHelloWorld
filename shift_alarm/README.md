@@ -263,3 +263,27 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
 4. "사전 값 가져오기"로 `shift`, `shift_day_number`, `weather`, `reminders`, `storage_free_gb` 등 원하는 키를 꺼내 텍스트로 조합.
 5. "결과 표시" 또는 위젯에서 보고 싶으면 홈 화면에 단축어 위젯을 추가하고 자동화(Automation)로 주기적 실행을 걸어두면 위젯이 최신 값을 보여준다.
 - Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으므로, `updated_at` 값으로 최신 정보인지 아이폰에서 확인할 수 있다.
+
+## 16. 💼 이직시스템(job_collector.py) 자동 수집 + 알림 (★ 2026-08-05 추가)
+
+`이직시스템/job_collector.py`(사람인·워크넷 API + 사람인 크롤링, 자세한 내용은 `이직시스템/README.md` 참조)를 shift_alarm이 하루 1번 자동으로 실행하고, 신규 공고가 있으면 macOS 알림으로 알려준다.
+
+- `JOB_COLLECTOR_DIR`/`JOB_COLLECTOR_SCRIPT`: `shift_alarm.py`의 부모 폴더(`DailyHelloWorld_/`) 기준으로 `이직시스템/job_collector.py`를 가리킨다(상대경로, 폴더 이동에도 안전).
+- 실행은 `subprocess.run([sys.executable, JOB_COLLECTOR_SCRIPT, "collect"], cwd=JOB_COLLECTOR_DIR, ...)` — shift_alarm과 같은 파이썬 인터프리터(`/opt/anaconda3/bin/python3`)로 돌린다. `job_collector.py`가 표준 라이브러리만 쓰므로 별도 venv 없이도 그대로 동작.
+- **마지막 실행 시각을 `~/.shift_alarm_config.json`의 `job_collector_last_run`에 저장하고, 그로부터 24시간(`JOB_COLLECTOR_REFRESH_SECONDS`)이 안 지났으면 건너뛴다.** 앱을 자주 재시작해도(코드 수정 후 매번 kickstart) 사람인 서버에 매번 크롤링 요청을 보내지 않기 위한 안전장치 — 타이머 자체는 24시간 주기지만, 앱이 그보다 자주 재시작되는 경우를 이 저장된 타임스탬프가 실질적으로 막아준다.
+- `collect` 명령의 표준출력에서 `신규 (\d+)건 / 기존 갱신 (\d+)건` 패턴을 정규식으로 파싱해서, **신규 공고가 1건이라도 있을 때만** `rumps.notification("💼 이직시스템 새 공고", ...)`을 띄운다. 갱신만 있고 신규가 없으면 알림 없이 조용히 넘어간다(알림 피로 방지).
+- `이직시스템/config.json`에 사람인/워크넷 API 키가 없어도 `enable_saramin_crawl: true`면 계속 동작한다(현재 사람인 API 승인 대기 중이라 크롤링만으로 운영 중). **launchd로 뜨는 shift_alarm 프로세스는 사용자의 대화형 셸 환경변수(`export SARAMIN_ACCESS_KEY=...`)를 상속받지 않으므로**, API 키를 실제로 쓰게 하려면 `~/Library/LaunchAgents/com.shiftalarm.menubar.plist`에 `EnvironmentVariables`로 등록하거나 다른 영구 저장 방식이 필요하다 — 아직 미구현, 지금은 크롤링만으로 동작.
+- 메뉴 항목은 따로 추가하지 않았다(알림만). 결과를 직접 보려면 터미널에서 `이직시스템/job_collector.py list` 실행.
+
+### 16-1. ★★ 백그라운드 스레드에서 AppKit 직접 호출 → EXC_BREAKPOINT 크래시 (2026-08-05, 근본 원인 확정)
+
+이 기능을 추가하면서 앱이 재시작 후 20초 안팎으로 죽는 크래시가 실제로 발생했다(`~/Library/Logs/DiagnosticReports/python3.11-*.ips`에 `EXC_BREAKPOINT`/`SIGTRAP`, 스택트레이스는 `NSViewBackingLayer display` → `CA::Transaction::commit` → 백그라운드 pthread 종료 시점).
+
+**근본 원인**: `_init_weather()`(날씨 조회)와 `_fetch_ai_usage()`(Codex/Claude 사용량 조회)가 `threading.Thread`로 띄운 **백그라운드 스레드 안에서** `self._update_title()`(`NSStatusItem.setAttributedTitle_`)과 `_set_menu_item_color()`(`NSMenuItem.setAttributedTitle_`)를 직접 호출하고 있었다. AppKit/Core Animation은 메인 스레드에서만 안전하게 호출할 수 있는데, 이 위반이 지금까지는 "운 좋게" 크래시 없이 넘어갔던 것뿐이었다. 이번에 이직시스템 자동 수집 스레드가 추가되면서 앱 시작 시 동시에 도는 백그라운드 스레드 수가 늘었고(날씨 + AI 사용량 + 이직시스템), 그 동시성이 임계점을 넘겨 실제 크래시로 이어졌다.
+
+**해결**: `PyObjCTools.AppHelper.callAfter()`로 메인 스레드에 작업을 다시 스케줄링하는 패턴을 도입했다.
+- `_update_title()`과 `_set_menu_item_color()` 맨 앞에 `threading.current_thread() is not threading.main_thread()` 가드를 넣어, 백그라운드 스레드에서 불리면 `AppHelper.callAfter(...)`로 자기 자신을 메인 스레드에 재스케줄하고 즉시 반환한다.
+- `_init_weather()`/`_fetch_ai_usage()`는 이제 네트워크 조회만 백그라운드에서 하고, UI 반영은 각각 `_apply_weather()`/`_apply_ai_usage()`로 분리해서 `AppHelper.callAfter()`로 메인 스레드에 넘긴다.
+- 검증: `job_collector_last_run`을 지워서 앱 시작 시 날씨·AI 사용량·이직시스템 스레드가 동시에 뜨는 크래시 재현 조건을 그대로 만든 뒤 재시작 → 55초 이상 안정적으로 생존, 이직시스템 수집도 정상 완료됨을 확인.
+
+**교훈(다른 백그라운드 스레드 추가 시에도 적용)**: `threading.Thread(target=self.XXX)`로 새 백그라운드 작업을 추가할 때, 그 함수가 끝에서 `self.title =`, `self._update_title()`, `MenuItem.title =`, `setAttributedTitle_` 등 AppKit을 직접 건드리면 반드시 `AppHelper.callAfter()`로 메인 스레드에 넘겨야 한다. `rumps.notification()`과 파일 I/O(`save_config` 등)는 AppKit 뷰 레이어를 직접 안 건드리므로 백그라운드 스레드에서 그대로 호출해도 안전하다(기존 북마크 자동 최신화 스레드도 이 패턴).
