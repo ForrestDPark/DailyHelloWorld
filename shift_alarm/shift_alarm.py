@@ -2109,6 +2109,28 @@ def _claude_weekly_critical(data):
     return False
 
 
+def _codex_primary_percent(quota):
+    """메뉴바 타이틀에 바로 찍을 Codex 대표 숫자(주간 primary 사용률)."""
+    if not quota:
+        return None
+    primary = quota.get("primary")
+    if not primary:
+        return None
+    return primary.get("used_percent")
+
+
+def _claude_five_hour_percent(data):
+    """메뉴바 타이틀에 바로 찍을 Claude 대표 숫자(5시간 윈도우 사용률)."""
+    if not data:
+        return None
+    for key, val in data.items():
+        if isinstance(val, dict) and "hour" in key.lower():
+            util = val.get("utilization")
+            if util is not None:
+                return util
+    return None
+
+
 def _set_menu_item_color(menu_item, text, color):
     """MenuItem 표시 텍스트에 색을 입힌다(NSMenuItem.attributedTitle 직접 조작).
     color가 None이면 기본색(plain title)으로 표시."""
@@ -2152,6 +2174,8 @@ class ShiftAlarmApp(rumps.App):
 
         self.weather_str = ""
         self.weather_icon = ""
+        self._codex_quota = None
+        self._claude_live_quota = None
         self.earnings_item = rumps.MenuItem("오늘 급여: -")
         self.weather_item = rumps.MenuItem("날씨: 로딩 중")
         self.stay_awake_item = rumps.MenuItem("🌙 절전 방지: 확인 중...")
@@ -2256,6 +2280,11 @@ class ShiftAlarmApp(rumps.App):
 
         self.claude_stats_item.title = format_claude_local_stats(ai_usage.get_claude_local_stats())
 
+        # 메뉴바 타이틀 자체에도 "코94% 클61%" 형태로 바로 보이게 캐시해서 반영한다.
+        self._codex_quota = codex_quota
+        self._claude_live_quota = claude_live
+        self._update_title()
+
     def _today_override(self):
         """자동 모드가 꺼져있으면(연차 등으로 수동 지정) 근무표 대신 쓸 오늘 근무값."""
         if self.config.get("auto_mode", True):
@@ -2264,8 +2293,8 @@ class ShiftAlarmApp(rumps.App):
 
     def _update_title(self):
         # 메뉴바 아이콘이 많으면 macOS가 긴 타이틀을 통째로 숨겨버릴 수 있으므로
-        # 타이틀은 최대한 짧게 유지한다. 날씨/자동모드 여부/정확한 금액 등
-        # 자세한 정보는 메뉴 항목(드롭다운)과 "현재 설정 확인"에서 확인.
+        # 타이틀은 최대한 짧게 유지한다. 자동모드 여부/정확한 금액 등 자세한 정보는
+        # 메뉴 항목(드롭다운)과 "현재 설정 확인"에서 확인.
         current = self.config.get("current_shift")
         code = SHIFT_TO_SHORT_CODE.get(current, current or "?")
 
@@ -2284,29 +2313,62 @@ class ShiftAlarmApp(rumps.App):
         # 날씨 한자는 근무 표기 바로 뒤에 "-"로 이어붙인다 (예: "G3-雨").
         shift_text = f"{shift_code_text}-{self.weather_icon}" if self.weather_icon else shift_code_text
 
-        parts = [shift_text, storage, reminder_icons]
-        self.title = " ".join(p for p in parts if p)
-
-        # 근무 며칠째 숫자(GY=노랑/휴무=빨강), 비 오는 날 날씨 한자(파랑),
-        # 저장공간 부족 시(빨강) 숫자에만 색을 입힌다. rumps의 title setter가
-        # setTitle_()을 호출해 attributedTitle을 초기화시키므로, 반드시 위에서
-        # plain title을 먼저 설정한 뒤 아래에서 setAttributedTitle_()로 덮어써야 한다.
+        # 근무 며칠째 숫자(GY=노랑/휴무=빨강), 비 오는 날 날씨 한자(파랑) 색.
         shift_color = None
         if day_num is not None:
             if current == "GY":
                 shift_color = NSColor.systemYellowColor()
             elif current == "휴무":
                 shift_color = NSColor.systemRedColor()
-
         weather_color = NSColor.systemBlueColor() if self.weather_icon == "雨" else None
 
-        storage_color = (
-            NSColor.systemRedColor()
-            if storage_num is not None and storage_num <= LOW_STORAGE_WARNING_GB
-            else None
+        shift_inner = []
+        if shift_color is not None:
+            num_str = str(day_num)
+            start = _utf16_len(shift_code_text) - _utf16_len(num_str)
+            shift_inner.append((start, _utf16_len(num_str), shift_color))
+        if weather_color is not None:
+            start = _utf16_len(shift_code_text) + 1  # "-" 건너뛰기
+            shift_inner.append((start, _utf16_len(self.weather_icon), weather_color))
+
+        # 저장공간 부족 시(5GB 이하)만 숫자를 빨강으로.
+        storage_inner = []
+        if storage_num is not None and storage_num <= LOW_STORAGE_WARNING_GB:
+            num_str = str(storage_num)
+            start = _utf16_len(storage) - _utf16_len(num_str)
+            storage_inner.append((start, _utf16_len(num_str), NSColor.systemRedColor()))
+
+        # Codex/Claude 사용량을 드롭다운을 열지 않아도 보이도록 상태창 타이틀에 바로
+        # "코94% 클61%" 형태로 표시한다. 기본은 Codex=초록/Claude=오렌지, 각자의
+        # 주간(7일) 윈도우가 90% 이상이면 빨강으로 덮어써 경고한다.
+        codex_pct = _codex_primary_percent(self._codex_quota)
+        codex_token = f"코{codex_pct:.0f}%" if codex_pct is not None else ""
+        codex_color = (
+            NSColor.systemRedColor() if _codex_weekly_critical(self._codex_quota)
+            else NSColor.systemGreenColor()
         )
 
-        if shift_color is None and weather_color is None and storage_color is None:
+        claude_pct = _claude_five_hour_percent(self._claude_live_quota)
+        claude_token = f"클{claude_pct:.0f}%" if claude_pct is not None else ""
+        claude_color = (
+            NSColor.systemRedColor() if _claude_weekly_critical(self._claude_live_quota)
+            else NSColor.systemOrangeColor()
+        )
+
+        segments = [
+            (shift_text, shift_inner),
+            (storage, storage_inner),
+            (reminder_icons, []),
+            (codex_token, [(0, _utf16_len(codex_token), codex_color)] if codex_token else []),
+            (claude_token, [(0, _utf16_len(claude_token), claude_color)] if claude_token else []),
+        ]
+
+        self.title = " ".join(text for text, _ in segments if text)
+
+        # rumps의 title setter가 setTitle_()을 호출해 attributedTitle을 초기화시키므로,
+        # 반드시 plain title을 먼저 설정한 뒤 setAttributedTitle_()로 덮어써야 한다.
+        if not any(inner for _, inner in segments):
+            self._write_mobile_status()
             return
 
         # NSRange는 UTF-16 코드 유닛 기준이라, 💾 같은 서로게이트 페어 문자는
@@ -2314,28 +2376,14 @@ class ShiftAlarmApp(rumps.App):
         full_title = self.title
         attributed = NSMutableAttributedString.alloc().initWithString_(full_title)
         offset = 0
-        for idx, part in enumerate(parts):
-            if not part:
+        for text, inner_ranges in segments:
+            if not text:
                 continue
-            if idx == 0:
-                if shift_color is not None:
-                    num_str = str(day_num)
-                    start = offset + _utf16_len(shift_code_text) - _utf16_len(num_str)
-                    attributed.addAttribute_value_range_(
-                        NSForegroundColorAttributeName, shift_color, NSRange(start, _utf16_len(num_str))
-                    )
-                if weather_color is not None:
-                    start = offset + _utf16_len(shift_code_text) + 1  # "-" 건너뛰기
-                    attributed.addAttribute_value_range_(
-                        NSForegroundColorAttributeName, weather_color, NSRange(start, _utf16_len(self.weather_icon))
-                    )
-            elif idx == 1 and storage_color is not None:
-                num_str = str(storage_num)
-                start = offset + _utf16_len(part) - _utf16_len(num_str)
+            for local_start, local_len, color in inner_ranges:
                 attributed.addAttribute_value_range_(
-                    NSForegroundColorAttributeName, storage_color, NSRange(start, _utf16_len(num_str))
+                    NSForegroundColorAttributeName, color, NSRange(offset + local_start, local_len)
                 )
-            offset += _utf16_len(part) + 1
+            offset += _utf16_len(text) + 1
         try:
             self._nsapp.nsstatusitem.setAttributedTitle_(attributed)
         except AttributeError:
