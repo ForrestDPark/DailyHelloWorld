@@ -29,6 +29,7 @@ import os
 import json
 import re
 import shlex
+import sqlite3
 import sys
 import urllib.request
 import urllib.error
@@ -72,7 +73,9 @@ JOB_COLLECTOR_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "이직시스템"
 )
 JOB_COLLECTOR_SCRIPT = os.path.join(JOB_COLLECTOR_DIR, "job_collector.py")
+JOB_COLLECTOR_DB = os.path.join(JOB_COLLECTOR_DIR, "data", "jobs.db")
 JOB_COLLECTOR_REFRESH_SECONDS = 24 * 60 * 60  # 하루 1번
+JOB_COLLECTOR_MENU_LIMIT = 10
 
 # ── 근무표 코드(D/S/G/휴) → 앱 내부 근무 이름 매핑 ───────────────
 CODE_TO_SHIFT = {
@@ -2017,6 +2020,39 @@ def unregister_alarm():
 # 날씨
 # ════════════════════════════════════════════════════════════
 
+def get_job_collector_summary():
+    """이직시스템 DB에서 (총건수, 최고점수)를 반환. DB가 없거나 비어있으면 None."""
+    if not os.path.exists(JOB_COLLECTOR_DB):
+        return None
+    try:
+        conn = sqlite3.connect(JOB_COLLECTOR_DB)
+        row = conn.execute("SELECT COUNT(*), MAX(score) FROM jobs").fetchone()
+        conn.close()
+    except sqlite3.Error:
+        return None
+    if not row or not row[0]:
+        return None
+    return row[0], row[1]
+
+
+def get_job_collector_top(limit=JOB_COLLECTOR_MENU_LIMIT):
+    """점수 높은 순으로 공고 목록을 반환. 각 항목은
+    {"source","score","company","title","deadline","url"} 딕셔너리. DB 없으면 빈 리스트."""
+    if not os.path.exists(JOB_COLLECTOR_DB):
+        return []
+    try:
+        conn = sqlite3.connect(JOB_COLLECTOR_DB)
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT source, score, company, title, deadline, url FROM jobs "
+            "ORDER BY score DESC, deadline ASC LIMIT ?", (limit,)
+        ).fetchall()
+        conn.close()
+    except sqlite3.Error:
+        return []
+    return [dict(row) for row in rows]
+
+
 def fetch_weather():
     try:
         url = (
@@ -2592,6 +2628,11 @@ class ShiftAlarmApp(rumps.App):
         if todays:
             rumps.notification("오늘의 리마인더", "", "\n".join(todays))
 
+    def make_open_url_callback(self, url):
+        def callback(_):
+            subprocess.Popen(["open", url])
+        return callback
+
     def make_reminder_toggle_callback(self, key):
         def callback(_):
             REMINDERS[key]["enabled"] = not REMINDERS[key]["enabled"]
@@ -2691,6 +2732,23 @@ class ShiftAlarmApp(rumps.App):
         self.menu.add(self.codex_usage_item)
         self.menu.add(self.claude_usage_item)
         self.menu.add(self.claude_stats_item)
+
+        self.menu.add(None)
+        job_summary = get_job_collector_summary()
+        if job_summary:
+            total, best = job_summary
+            self.menu.add(rumps.MenuItem(f"💼 이직시스템: {total}건 저장됨 (최고 {best}점)"))
+        else:
+            self.menu.add(rumps.MenuItem("💼 이직시스템: 수집된 공고 없음"))
+        job_top_menu = rumps.MenuItem("💼 상위 공고 보기 (클릭하면 브라우저로 열림)")
+        top_jobs = get_job_collector_top()
+        if top_jobs:
+            for job in top_jobs:
+                label = f"[{job['score']:>3}] ({job['source']}) {job['company']} | {truncate_title(job['title'], 40)}"
+                job_top_menu.add(rumps.MenuItem(label, callback=self.make_open_url_callback(job["url"])))
+        else:
+            job_top_menu.add(rumps.MenuItem("아직 수집된 공고가 없습니다"))
+        self.menu.add(job_top_menu)
 
         self.menu.add(None)
 

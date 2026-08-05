@@ -273,7 +273,10 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
 - **마지막 실행 시각을 `~/.shift_alarm_config.json`의 `job_collector_last_run`에 저장하고, 그로부터 24시간(`JOB_COLLECTOR_REFRESH_SECONDS`)이 안 지났으면 건너뛴다.** 앱을 자주 재시작해도(코드 수정 후 매번 kickstart) 사람인 서버에 매번 크롤링 요청을 보내지 않기 위한 안전장치 — 타이머 자체는 24시간 주기지만, 앱이 그보다 자주 재시작되는 경우를 이 저장된 타임스탬프가 실질적으로 막아준다.
 - `collect` 명령의 표준출력에서 `신규 (\d+)건 / 기존 갱신 (\d+)건` 패턴을 정규식으로 파싱해서, **신규 공고가 1건이라도 있을 때만** `rumps.notification("💼 이직시스템 새 공고", ...)`을 띄운다. 갱신만 있고 신규가 없으면 알림 없이 조용히 넘어간다(알림 피로 방지).
 - `이직시스템/config.json`에 사람인/워크넷 API 키가 없어도 `enable_saramin_crawl: true`면 계속 동작한다(현재 사람인 API 승인 대기 중이라 크롤링만으로 운영 중). **launchd로 뜨는 shift_alarm 프로세스는 사용자의 대화형 셸 환경변수(`export SARAMIN_ACCESS_KEY=...`)를 상속받지 않으므로**, API 키를 실제로 쓰게 하려면 `~/Library/LaunchAgents/com.shiftalarm.menubar.plist`에 `EnvironmentVariables`로 등록하거나 다른 영구 저장 방식이 필요하다 — 아직 미구현, 지금은 크롤링만으로 동작.
-- 메뉴 항목은 따로 추가하지 않았다(알림만). 결과를 직접 보려면 터미널에서 `이직시스템/job_collector.py list` 실행.
+- **메뉴바 드롭다운에서 바로 확인 가능(★ 2026-08-05 추가)**: AI 사용량 항목들 바로 아래에
+  - `💼 이직시스템: N건 저장됨 (최고 M점)` — `get_job_collector_summary()`가 `이직시스템/data/jobs.db`를 sqlite3로 직접 읽어(별도 프로세스 실행 없이) 총 건수와 최고 점수만 보여주는 정보 항목(클릭 불가).
+  - `💼 상위 공고 보기 (클릭하면 브라우저로 열림)` 하위 메뉴 — `get_job_collector_top()`이 점수 높은 순 최대 10건(`JOB_COLLECTOR_MENU_LIMIT`)을 `[점수] (소스) 회사 | 제목`으로 나열하고, 클릭하면 `make_open_url_callback()`이 `open <url>`로 기본 브라우저에서 바로 연다. 수집된 공고가 없으면 "아직 수집된 공고가 없습니다" 한 줄만 표시.
+  - 둘 다 `build_menu()`가 매번 다시 그릴 때(5분마다 자동 새로고침 포함) DB를 다시 읽으므로 최신 상태를 유지한다.
 
 ### 16-1. ★★ 백그라운드 스레드에서 AppKit 직접 호출 → EXC_BREAKPOINT 크래시 (2026-08-05, 근본 원인 확정)
 
