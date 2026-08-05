@@ -40,8 +40,11 @@
 - **연차 등 근무표와 다르게 수동으로 오늘 근무를 바꾼 경우**(메뉴에서 직접 근무 선택 → `auto_mode` 꺼짐), 급여 계산도 그 수동값을 따라간다 (`today_override` 파라미터로 근무표 대신 config의 `current_shift`를 씀) — 알람만 꺼지고 급여는 근무표 기준으로 계속 올라가던 버그를 고친 것.
 
 ## 4. 메뉴바 타이틀 구성
-`{근무코드} {저장공간} {오늘의 리마인더} {날씨 아이콘}` 형태로 표시한다(예: `S 💾14 🏋️상 📞동찬 ☀️`). 운동은 `🏋️상`/`🏋️하`, 전화는 `📞엄마`/`📞민준`/`📞동찬`으로 대상을 바로 표시한다. 급여는 제목에 넣지 않는다.
-- 날씨 아이콘: 강수확률 기준 ☀️(20% 미만) / ⛅(20~50%) / 🌧️(50%+). Open-Meteo API, 아산시 좌표(`LATITUDE=36.78, LONGITUDE=127.00`) 사용.
+`{근무코드+며칠째}-{날씨 한자} {저장공간} {오늘의 리마인더}` 형태로 표시한다(예: `G3-雨 💾14 🏋️상 📞동찬`). 운동은 `🏋️상`/`🏋️하`, 전화는 `📞엄마`/`📞민준`/`📞동찬`/`📞동주`로 대상을 바로 표시한다. 급여는 제목에 넣지 않는다.
+- 날씨 아이콘(★ 2026-08-05 이모지→한자로 교체): 강수확률 기준 晴(20% 미만) / 曇(20~50%) / 雨(50%+). 임계값은 기존과 동일, Open-Meteo API·아산시 좌표(`LATITUDE=36.78, LONGITUDE=127.00`) 사용. 근무 표기 바로 뒤에 `-`로 이어붙인다(`_update_title()`).
+- **근무 며칠째 표기 + 색상 (★ 2026-08-05 추가)**: `_shift_block_day_number()`가 오늘 근무 코드가 며칠째 연속인지(과거는 근무표 원본 기준) 세서 코드 뒤에 붙인다(`G3`, `D1`, `휴2` 등). GY 숫자는 노란색(`NSColor.systemYellowColor`), 휴무 숫자는 빨간색(`systemRedColor`)으로 표시하고 Day/Swing 숫자는 기본색. 비 오는 날(雨)은 파란색(`systemBlueColor`)으로 표시. 저장공간 숫자는 `LOW_STORAGE_WARNING_GB`(5GB) 이하일 때만 빨간색.
+  - 구현은 `rumps.App.title`(plain 문자열)을 먼저 설정한 뒤 `NSMutableAttributedString` + `setAttributedTitle_()`로 특정 range에만 색을 덮어씌우는 방식이다. rumps의 `title` setter가 내부적으로 `setTitle_()`을 호출해 attributedTitle을 초기화시키므로, **반드시 plain title 설정 → attributedTitle 설정 순서**를 지켜야 한다.
+  - **★ 주의(UTF-16 서로게이트 페어)**: `NSRange`는 UTF-16 코드 유닛 기준인데 `💾` 같은 이모지는 서로게이트 페어라 2유닛을 차지하는 반면 Python `len()`은 1글자로 센다. 색상 범위 계산에 Python `len()`을 그대로 쓰면 💾 뒤에 오는 글자의 색이 한 칸씩 밀리는 버그가 생긴다 — `_utf16_len(s)`(`len(s.encode("utf-16-le"))//2`)로 반드시 UTF-16 유닛 길이를 재서 range를 계산한다.
 - **★ 2026-07-24 버그 수정**: 오늘의 리마인더 이모지들을 공백 없이(`"".join`) 이어붙이고 있었는데, 휴무일처럼 리마인더가 여러 개 동시에 뜨는 날은 이모지가 다닥다닥 붙어서 찌그러진 것처럼 보였다 — `" ".join`으로 공백을 넣어 고침.
 
 ## 5. 주간/월간 리마인더 (`REMINDERS`)
@@ -53,6 +56,8 @@
 | 📞 엄마한테 전화 | 휴무 블록 첫날 |
 | 📞 허민준한테 전화 | 월 1회: 그 달의 **첫 번째** 휴무 블록 시작일 |
 | 📞 동찬이형한테 전화 | 근무표와 무관하게 2026-08-03부터 **21일마다 한 번** |
+| 📞 손동주한테 전화 | 근무표와 무관하게 2026-08-05부터 **7일마다(주 1회) 한 번** (★ 2026-08-05 추가) |
+| 🎉 손동주 쉬는 날 | 동주 본인 근무표(내 근무표와 무관, 별도 계산) 기준 — 아래 5-1 참조 (★ 2026-08-05 추가) |
 | 🪒 코털 정리하는 날 | 근무표와 무관하게 2026-08-03부터 **7일마다 한 번** |
 | 🎧 이어폰 충전하는 날 | 근무표와 무관하게 2026-08-03부터 **4일마다 한 번** |
 | 🧹 카톡 정리 | 휴무 블록 마지막날 |
@@ -61,6 +66,15 @@
 | 🗺️ 월 1회 나들이 추천 | 월 1회: 그 달의 **마지막** 휴무 블록 시작일(아울렛 쇼핑=첫 번째 블록과 겹치지 않게 배정). `NEARBY_PLACES`(아산시 기준 근교 명소 15곳 — 현충사·외암민속마을·신정호·독립기념관·공산성 등)를 `(연,월)` 기준으로 순환 추천해서 매달 다른 곳이 뜸. 2026-07-24 신규 추가 |
 
 당일 해당하는 리마인더는 앱 시작 시 1회 + 매일 자정 넘어갈 때 1회, macOS 알림(`rumps.notification`)으로 뜨고, 메뉴바 드롭다운에도 `🔔 오늘: ...` 항목으로 표시됨.
+
+### 5-1. 🎉 손동주 쉬는 날 계산 (★ 2026-08-05 추가)
+
+손동주 본인의 실제 근무표(사용자의 D조 근무표와는 완전히 별개)를 기준으로 계산한다. 사용자가 전달받은 정보: **주간 2주 → 야간 2주 로테이션**, **5일 근무 + 2일 휴무** 패턴, **2026-08-04이 야간 첫날**.
+
+- `SONDONGJU_SCHEDULE_ANCHOR = 2026-08-04`(야간 블록 1일째), `SONDONGJU_CYCLE_DAYS = 14`.
+- 14일 블록 하나가 정확히 "5일 근무 + 2일 휴무"를 두 번 반복한 것과 같다(5+2+5+2=14)이므로, 주/야간 구분과 무관하게 블록 내 6·7일째(0-idx 5,6)와 13·14일째(0-idx 12,13)가 항상 휴무일이 된다 — `SONDONGJU_OFF_DAY_OFFSETS = (5, 6, 12, 13)`.
+- 결과적으로 앵커일부터 **7일 간격으로 이틀씩** 휴무가 반복되는 패턴과 동일하다(주/야간 전환 시점과 무관하게 연속). `_is_sondongju_off_day(d)`가 이 계산을 담당.
+- 근무표가 바뀌면(동주가 다른 로테이션으로 이동 등) `SONDONGJU_SCHEDULE_ANCHOR`만 그 시점의 "새 야간(또는 기준) 블록 1일째" 날짜로 갱신하면 된다.
 
 ## 저장공간 표시·부족 알림 (2026-08-03)
 
@@ -207,3 +221,43 @@
 - `~/Downloads/shift_alarm.py`에도 항상 최신 사본을 동기화해둠 (사용자가 그쪽에서도 참조하는 습관이 있어서).
 - 이 저장소(`DailyHelloWorld`)는 shift_alarm 외에도 손자병법 해석 파이프라인 등 전혀 다른 프로젝트들이 같이 들어있는 개인 모음 저장소라, `git status`에 관련 없는 변경사항(다른 폴더의 M/D/??)이 항상 잔뜩 떠 있다 — shift_alarm.py/ebook_reader.py만 `git add`해서 커밋할 것.
 - 여러 세션(로컬 CLI + 웹/모바일 "claude remote-control")이 같은 저장소에 동시에 커밋할 수 있으므로, push 전에 `git fetch && git log HEAD..origin/main --oneline`으로 원격에 새 커밋이 있는지 항상 확인하고, 있으면 merge 후 push할 것.
+
+## 14. 🪙 AI(Codex/Claude) 사용량 표시 (★ 2026-08-05 추가)
+
+Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드롭다운에서 확인할 수 있다. 별도 파일 `shift_alarm/ai_usage.py`에 데이터 조회 로직을 분리해두고 `shift_alarm.py`가 import한다. aut(github.com/likewoody/aut, Swift 메뉴바 앱)의 데이터 소스 방식을 참고해 구현했다.
+
+드롭다운에 3개 항목이 뜬다(`_check_stay_awake` 토글 항목 바로 아래):
+- `🪙 Codex: {윈도우} {사용률}%` — `get_codex_quota()`가 가장 최근 수정된 `~/.codex/sessions/**/*.jsonl`에서 마지막 `payload.rate_limits`(primary/secondary)를 읽는다. 네트워크·인증 불필요, 순수 로컬 파일 읽기.
+- `🪙 Claude: {윈도우} {사용률}%` — `get_claude_live_quota()`가 macOS 키체인의 `Claude Code-credentials`(Claude Code 자신이 이미 저장해둔 OAuth 토큰)로 `GET https://api.anthropic.com/api/oauth/usage`를 호출한다. 비공개 엔드포인트지만 자기 계정 조회에만 쓴다. **토큰 값은 절대 print/log에 노출하지 않는다** — Authorization 헤더로만 사용하고 즉시 스코프에서 제거.
+- `🪙 Claude 로컬: {모델} · 턴 N · 요청 N · 캐시 N%` — `get_claude_local_stats()`가 최근 24시간 이내 수정된 `~/.claude/projects/**/*.jsonl`을 집계해 모델명·유저 턴수·모델 요청수·프롬프트 캐시 적중률을 계산.
+- 값을 못 가져오면(로그 없음, API 실패, 키체인 없음 등) **추측하지 않고 "확인 불가"로 표시**한다.
+- 12분마다 백그라운드 스레드(`_refresh_ai_usage`)로 갱신 + 앱 시작 시 1회.
+- Gemini CLI는 이 기기에 설치돼 있지 않아(`~/.gemini` 없음) 데이터 소스에서 제외했다.
+
+## 15. 📱 모바일 접근 (iCloud Drive + iOS 단축어, ★ 2026-08-05 추가)
+
+복잡한 영상 작업 등은 제외하고, 오늘의 근무/리마인더/날씨처럼 기초적인 정보만 아이폰에서도 확인할 수 있게 iCloud Drive를 매개로 연결한다. Notion 동기화나 자체 웹서버(Tailscale 등) 대신, 이미 켜져 있는 iCloud Drive 동기화만 이용하는 가장 단순한 방식을 택했다.
+
+- `shift_alarm.py`가 `_update_title()`이 호출될 때마다(근무/저장공간/리마인더/날씨 등 뭔가 바뀔 때마다) `_write_mobile_status()`로 iCloud Drive에 JSON을 갱신 기록한다.
+- 경로: `~/Library/Mobile Documents/com~apple~CloudDocs/ShiftAlarmStatus/status.json` (Finder/Files 앱에서는 "iCloud Drive → ShiftAlarmStatus → status.json"으로 보임). 임시 파일에 쓴 뒤 `os.replace()`로 원자적 교체하므로, 동기화 도중 아이폰이 파일을 읽어도 반쪽짜리 JSON을 받을 일이 없다.
+- 파일 내용 예시:
+  ```json
+  {
+    "updated_at": "2026-08-05T19:02:55",
+    "date": "2026-08-05",
+    "shift": "GY",
+    "shift_day_number": 3,
+    "weather": "31°C 🌧53%",
+    "reminders": ["📞 손동주한테 전화하는 날"],
+    "storage_free_gb": 13
+  }
+  ```
+- 파일 쓰기가 실패해도(iCloud Drive 접근 불가 등) 메뉴바 앱 자체 동작에는 영향 없음(`OSError`만 조용히 무시).
+
+**아이폰 쪽 설정(사용자가 iOS 단축어 앱에서 직접 만들어야 함 — Claude는 iOS에 접근할 수 없음)**:
+1. 단축어(Shortcuts) 앱 → 새 단축어 생성.
+2. "파일 가져오기" 동작 추가 → iCloud Drive → `ShiftAlarmStatus/status.json` 지정.
+3. "사전 열기(Get Dictionary from Input)" 동작 추가.
+4. "사전 값 가져오기"로 `shift`, `shift_day_number`, `weather`, `reminders`, `storage_free_gb` 등 원하는 키를 꺼내 텍스트로 조합.
+5. "결과 표시" 또는 위젯에서 보고 싶으면 홈 화면에 단축어 위젯을 추가하고 자동화(Automation)로 주기적 실행을 걸어두면 위젯이 최신 값을 보여준다.
+- Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으므로, `updated_at` 값으로 최신 정보인지 아이폰에서 확인할 수 있다.

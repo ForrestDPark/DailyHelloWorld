@@ -39,15 +39,26 @@ import concurrent.futures
 import shutil
 import time
 import signal
+import ai_usage
 import objc
 from AppKit import (
     NSApp, NSPanel, NSTextField, NSButton, NSMakeRect, NSFont,
     NSBackingStoreBuffered, NSWindowStyleMaskTitled, NSWindowStyleMaskClosable,
     NSModalPanelWindowLevel, NSTextAlignmentCenter, NSRoundedBezelStyle,
+    NSColor, NSForegroundColorAttributeName,
 )
+from Foundation import NSMutableAttributedString, NSRange
 
 # ── 설정 파일 경로 ──────────────────────────────────────────
 CONFIG_FILE = os.path.expanduser("~/.shift_alarm_config.json")
+
+# ── 모바일(iOS 단축어) 접근용 상태 파일 ───────────────────────
+# iCloud Drive에 오늘의 근무/리마인더/날씨를 JSON으로 써두면, 아이폰 단축어에서
+# "iCloud Drive에서 파일 가져오기"로 읽어 위젯/알림에 쓸 수 있다.
+MOBILE_STATUS_DIR = os.path.expanduser(
+    "~/Library/Mobile Documents/com~apple~CloudDocs/ShiftAlarmStatus"
+)
+MOBILE_STATUS_FILE = os.path.join(MOBILE_STATUS_DIR, "status.json")
 
 # ── 근무표 JSON 경로 (엑셀에서 추출한 D조 날짜별 근무) ─────────────
 # 스크립트와 같은 폴더에 d_team_schedule_2026.json 을 두거나,
@@ -116,6 +127,10 @@ def get_free_storage_gb(path="/"):
 # - 엄마한테 전화: 휴무 블록의 첫날 (근무 마치고 쉬기 시작하는 날)
 # - 허민준한테 전화: 한 달에 한 번. 그 달의 첫 번째 휴무 블록 시작일
 # - 동찬이형한테 전화: 2026-08-03을 기준으로 21일마다 한 번
+# - 손동주한테 전화: 2026-08-05를 기준으로 7일마다(주 1회) 한 번
+# - 손동주 쉬는 날: 동주 본인 근무표(주간 2주/야간 2주 로테이션, 5일 근무+2일 휴무
+#   반복) 기준. 2026-08-04(야간 첫날)를 14일 주기 1일째로 놓으면, 주/야간 구분과
+#   무관하게 각 14일 블록 내 6·7일째와 13·14일째가 항상 휴무일이 된다.
 # - 코털 정리: 근무표와 무관하게 2026-08-03을 기준으로 7일마다 한 번
 # - 이어폰 충전: 근무표와 무관하게 2026-08-03을 기준으로 4일마다 한 번
 # - 카톡 정리: 휴무 블록의 마지막날 (다시 출근하기 전날)
@@ -129,6 +144,8 @@ REMINDERS = {
     "call_mom":        {"label": "📞 엄마한테 전화하는 날",   "enabled": True},
     "call_heo_minjun": {"label": "📞 허민준한테 전화하는 날", "enabled": True},
     "call_dongchan":   {"label": "📞 동찬이형한테 전화하는 날", "enabled": True},
+    "call_sondongju":  {"label": "📞 손동주한테 전화하는 날",   "enabled": True},
+    "sondongju_off":   {"label": "🎉 손동주 쉬는 날",         "enabled": True},
     "nose_hair_trim":  {"label": "🪒 코털 정리하는 날",       "enabled": True},
     "earphone_charge": {"label": "🎧 이어폰 충전하는 날",     "enabled": True},
     "kakao_cleanup":   {"label": "🧹 카톡 정리하는 날",       "enabled": True},
@@ -270,6 +287,26 @@ def get_shift_for_date(schedule, date: datetime.date):
     if code is None:
         return None
     return CODE_TO_SHIFT.get(code)
+
+
+def _utf16_len(s):
+    """NSRange는 UTF-16 코드 유닛 기준이라, 💾 등 서로게이트 페어를 쓰는 문자는
+    Python len()(코드포인트 1개)과 어긋난다(실제 2유닛). attributedTitle 색상
+    범위 계산에는 항상 이 함수로 잰 길이를 써야 한다."""
+    return len(s.encode("utf-16-le")) // 2
+
+
+def _shift_block_day_number(schedule, d, shift):
+    """d를 포함해 shift(수동 오버라이드 반영한 오늘 표시값)가 며칠째 연속인지(1부터) 반환.
+    과거 날짜는 근무표 원본(get_shift_for_date) 기준으로 센다."""
+    if shift not in ("Day", "Swing", "GY", "휴무"):
+        return None
+    count = 1
+    cursor = d - datetime.timedelta(days=1)
+    while get_shift_for_date(schedule, cursor) == shift:
+        count += 1
+        cursor -= datetime.timedelta(days=1)
+    return count
 
 
 # ════════════════════════════════════════════════════════════
@@ -478,6 +515,15 @@ GYM_WEEKEND_CLOSE = datetime.time(17, 0)
 GYM_CYCLE_ANCHOR = datetime.date(2026, 8, 3)
 CALL_DONGCHAN_ANCHOR = datetime.date(2026, 8, 3)
 CALL_DONGCHAN_INTERVAL_DAYS = 21
+CALL_SONDONGJU_ANCHOR = datetime.date(2026, 8, 5)
+CALL_SONDONGJU_INTERVAL_DAYS = 7
+# 동주 본인 근무표: 야간 2주(14일) → 주간 2주(14일) 로테이션, 각 14일 블록 안에서
+# 5일 근무 + 2일 휴무가 두 번 반복(5+2+5+2=14). 2026-08-04이 야간 블록의 1일째이므로
+# 그 날을 14일 주기의 0번째 오프셋으로 놓으면, 주/야간 구분과 무관하게
+# 블록 내 6·7일째(0-idx 5,6)와 13·14일째(0-idx 12,13)가 항상 휴무일이 된다.
+SONDONGJU_SCHEDULE_ANCHOR = datetime.date(2026, 8, 4)
+SONDONGJU_CYCLE_DAYS = 14
+SONDONGJU_OFF_DAY_OFFSETS = (5, 6, 12, 13)
 NOSE_HAIR_TRIM_ANCHOR = datetime.date(2026, 8, 3)
 NOSE_HAIR_TRIM_INTERVAL_DAYS = 7
 EARPHONE_CHARGE_ANCHOR = datetime.date(2026, 8, 3)
@@ -522,6 +568,19 @@ def _is_dongchan_call_day(d):
     """기준일부터 21일마다 돌아오는 동찬이형 연락일인지 반환."""
     days = (d - CALL_DONGCHAN_ANCHOR).days
     return days >= 0 and days % CALL_DONGCHAN_INTERVAL_DAYS == 0
+
+
+def _is_sondongju_call_day(d):
+    """기준일부터 7일마다(주 1회) 돌아오는 손동주 연락일인지 반환."""
+    days = (d - CALL_SONDONGJU_ANCHOR).days
+    return days >= 0 and days % CALL_SONDONGJU_INTERVAL_DAYS == 0
+
+
+def _is_sondongju_off_day(d):
+    """동주 본인 근무표 기준 휴무일인지 반환(주/야간 로테이션과 무관하게
+    14일 주기 내 6·7일째, 13·14일째)."""
+    days = (d - SONDONGJU_SCHEDULE_ANCHOR).days
+    return (days % SONDONGJU_CYCLE_DAYS) in SONDONGJU_OFF_DAY_OFFSETS
 
 
 def _is_nose_hair_trim_day(d):
@@ -576,6 +635,9 @@ def get_today_reminders(schedule, now=None):
     - 엄마한테 전화: 오늘이 휴무 블록의 첫날 (어제는 근무였음)
     - 허민준한테 전화: 월 1회, 이번 달의 첫 번째 휴무 블록 시작일
     - 동찬이형한테 전화: 2026-08-03부터 21일마다 한 번
+    - 손동주한테 전화: 2026-08-05부터 7일마다(주 1회) 한 번
+    - 손동주 쉬는 날: 동주 본인 근무표(야간 2주/주간 2주 로테이션, 5일 근무+2일 휴무
+      반복) 기준. 2026-08-04(야간 첫날)를 14일 주기 1일째로 놓고 계산.
     - 코털 정리: 근무표와 무관하게 2026-08-03부터 7일마다 한 번
     - 이어폰 충전: 근무표와 무관하게 2026-08-03부터 4일마다 한 번
     - 카톡 정리: 오늘이 휴무 블록의 마지막날 (내일은 근무)
@@ -618,6 +680,12 @@ def get_today_reminders(schedule, now=None):
     if REMINDERS["call_dongchan"]["enabled"] and _is_dongchan_call_day(today):
         reminders.append(REMINDERS["call_dongchan"]["label"])
 
+    if REMINDERS["call_sondongju"]["enabled"] and _is_sondongju_call_day(today):
+        reminders.append(REMINDERS["call_sondongju"]["label"])
+
+    if REMINDERS["sondongju_off"]["enabled"] and _is_sondongju_off_day(today):
+        reminders.append(REMINDERS["sondongju_off"]["label"])
+
     if REMINDERS["nose_hair_trim"]["enabled"] and _is_nose_hair_trim_day(today):
         reminders.append(REMINDERS["nose_hair_trim"]["label"])
 
@@ -638,6 +706,7 @@ def get_today_reminder_title_tokens(schedule, now=None):
         REMINDERS["call_mom"]["label"]: "📞엄마",
         REMINDERS["call_heo_minjun"]["label"]: "📞민준",
         REMINDERS["call_dongchan"]["label"]: "📞동찬",
+        REMINDERS["call_sondongju"]["label"]: "📞동주",
     }
     for label in get_today_reminders(schedule, now=now):
         if label.startswith("🏋️ 상체"):
@@ -1951,10 +2020,62 @@ def fetch_weather():
             data = json.loads(res.read())
         temp = round(data["current"]["temperature_2m"])
         rain = data["current"]["precipitation_probability"]
-        icon = "🌧️" if rain >= 50 else "⛅" if rain >= 20 else "☀️"
+        icon = "雨" if rain >= 50 else "曇" if rain >= 20 else "晴"
         return {"icon": icon, "text": f"{temp}°C 🌧{rain}%"}
     except Exception:
         return None
+
+
+# ════════════════════════════════════════════════════════════
+# AI(Codex/Claude) 사용량 표시용 포맷팅
+# ════════════════════════════════════════════════════════════
+
+def _ai_window_label(window_minutes):
+    if not window_minutes:
+        return "?"
+    hours = window_minutes / 60
+    if hours < 24:
+        return f"{hours:.0f}시간" if hours == int(hours) else f"{hours:.1f}시간"
+    days = hours / 24
+    return f"{days:.0f}일" if days == int(days) else f"{days:.1f}일"
+
+
+def format_codex_usage(quota):
+    """값을 못 가져오면 추측하지 않고 '확인 불가'로 표시."""
+    if not quota:
+        return "🪙 Codex: 확인 불가"
+    parts = []
+    for key in ("primary", "secondary"):
+        info = quota.get(key)
+        if not info or info.get("used_percent") is None:
+            continue
+        parts.append(f"{_ai_window_label(info.get('window_minutes'))} {info['used_percent']:.0f}%")
+    return f"🪙 Codex: {' · '.join(parts)}" if parts else "🪙 Codex: 확인 불가"
+
+
+def format_claude_live_usage(data):
+    """값을 못 가져오면 추측하지 않고 '확인 불가'로 표시."""
+    if not data:
+        return "🪙 Claude: 확인 불가"
+    parts = []
+    for key, val in data.items():
+        if not isinstance(val, dict):
+            continue
+        util = val.get("utilization")
+        if util is None:
+            continue
+        parts.append(f"{key.replace('_', ' ')} {util:.0f}%")
+    return f"🪙 Claude: {' · '.join(parts)}" if parts else "🪙 Claude: 확인 불가"
+
+
+def format_claude_local_stats(stats):
+    """값을 못 가져오면 추측하지 않고 '확인 불가'로 표시."""
+    if not stats:
+        return "🪙 Claude 로컬: 확인 불가"
+    parts = [stats["model"] or "모델 미상", f"턴 {stats['user_turns']}", f"요청 {stats['model_requests']}"]
+    if stats.get("cache_hit_percent") is not None:
+        parts.append(f"캐시 {stats['cache_hit_percent']}%")
+    return f"🪙 Claude 로컬: {' · '.join(parts)}"
 
 
 # ════════════════════════════════════════════════════════════
@@ -1990,6 +2111,9 @@ class ShiftAlarmApp(rumps.App):
         self.earnings_item = rumps.MenuItem("오늘 급여: -")
         self.weather_item = rumps.MenuItem("날씨: 로딩 중")
         self.stay_awake_item = rumps.MenuItem("🌙 절전 방지: 확인 중...")
+        self.codex_usage_item = rumps.MenuItem("🪙 Codex: 확인 중...")
+        self.claude_usage_item = rumps.MenuItem("🪙 Claude: 확인 중...")
+        self.claude_stats_item = rumps.MenuItem("🪙 Claude 로컬: 확인 중...")
         self.build_menu()
 
         # 날씨 10분마다 갱신
@@ -2044,6 +2168,11 @@ class ShiftAlarmApp(rumps.App):
         self._last_reminder_notified = None
         self._maybe_notify_reminders()
 
+        # Codex/Claude 사용량(quota) 12분마다 갱신 + 앱 시작 시 1회
+        self.ai_usage_timer = rumps.Timer(self._refresh_ai_usage, 12 * 60)
+        self.ai_usage_timer.start()
+        self._refresh_ai_usage(None)
+
     # ── 날씨 ────────────────────────────────────────────────
 
     def _init_weather(self):
@@ -2060,6 +2189,16 @@ class ShiftAlarmApp(rumps.App):
 
     def _refresh_weather(self, _):
         threading.Thread(target=self._init_weather, daemon=True).start()
+
+    # ── AI(Codex/Claude) 사용량 ──────────────────────────────
+
+    def _refresh_ai_usage(self, _):
+        threading.Thread(target=self._fetch_ai_usage, daemon=True).start()
+
+    def _fetch_ai_usage(self):
+        self.codex_usage_item.title = format_codex_usage(ai_usage.get_codex_quota())
+        self.claude_usage_item.title = format_claude_live_usage(ai_usage.get_claude_live_quota())
+        self.claude_stats_item.title = format_claude_local_stats(ai_usage.get_claude_local_stats())
 
     def _today_override(self):
         """자동 모드가 꺼져있으면(연차 등으로 수동 지정) 근무표 대신 쓸 오늘 근무값."""
@@ -2078,13 +2217,101 @@ class ShiftAlarmApp(rumps.App):
         # 동시에 뜨는 날) 이모지들이 서로 겹쳐 보여 찌그러진 것처럼 보였다.
         reminder_icons = " ".join(get_today_reminder_title_tokens(self.schedule))
 
-        storage = (
-            f"💾{self.storage_free_gb}"
-            if self.storage_free_gb is not None else ""
+        storage_num = self.storage_free_gb
+        storage = f"💾{storage_num}" if storage_num is not None else ""
+
+        day_num = (
+            _shift_block_day_number(self.schedule, datetime.date.today(), current)
+            if current else None
         )
-        shift_text = code if current else "미설정"
-        parts = [shift_text, storage, reminder_icons, self.weather_icon]
+        shift_code_text = f"{code}{day_num}" if day_num is not None else (code if current else "미설정")
+        # 날씨 한자는 근무 표기 바로 뒤에 "-"로 이어붙인다 (예: "G3-雨").
+        shift_text = f"{shift_code_text}-{self.weather_icon}" if self.weather_icon else shift_code_text
+
+        parts = [shift_text, storage, reminder_icons]
         self.title = " ".join(p for p in parts if p)
+
+        # 근무 며칠째 숫자(GY=노랑/휴무=빨강), 비 오는 날 날씨 한자(파랑),
+        # 저장공간 부족 시(빨강) 숫자에만 색을 입힌다. rumps의 title setter가
+        # setTitle_()을 호출해 attributedTitle을 초기화시키므로, 반드시 위에서
+        # plain title을 먼저 설정한 뒤 아래에서 setAttributedTitle_()로 덮어써야 한다.
+        shift_color = None
+        if day_num is not None:
+            if current == "GY":
+                shift_color = NSColor.systemYellowColor()
+            elif current == "휴무":
+                shift_color = NSColor.systemRedColor()
+
+        weather_color = NSColor.systemBlueColor() if self.weather_icon == "雨" else None
+
+        storage_color = (
+            NSColor.systemRedColor()
+            if storage_num is not None and storage_num <= LOW_STORAGE_WARNING_GB
+            else None
+        )
+
+        if shift_color is None and weather_color is None and storage_color is None:
+            return
+
+        # NSRange는 UTF-16 코드 유닛 기준이라, 💾 같은 서로게이트 페어 문자는
+        # Python len()과 어긋난다(1글자인데 2유닛). 반드시 _utf16_len()으로 잰다.
+        full_title = self.title
+        attributed = NSMutableAttributedString.alloc().initWithString_(full_title)
+        offset = 0
+        for idx, part in enumerate(parts):
+            if not part:
+                continue
+            if idx == 0:
+                if shift_color is not None:
+                    num_str = str(day_num)
+                    start = offset + _utf16_len(shift_code_text) - _utf16_len(num_str)
+                    attributed.addAttribute_value_range_(
+                        NSForegroundColorAttributeName, shift_color, NSRange(start, _utf16_len(num_str))
+                    )
+                if weather_color is not None:
+                    start = offset + _utf16_len(shift_code_text) + 1  # "-" 건너뛰기
+                    attributed.addAttribute_value_range_(
+                        NSForegroundColorAttributeName, weather_color, NSRange(start, _utf16_len(self.weather_icon))
+                    )
+            elif idx == 1 and storage_color is not None:
+                num_str = str(storage_num)
+                start = offset + _utf16_len(part) - _utf16_len(num_str)
+                attributed.addAttribute_value_range_(
+                    NSForegroundColorAttributeName, storage_color, NSRange(start, _utf16_len(num_str))
+                )
+            offset += _utf16_len(part) + 1
+        try:
+            self._nsapp.nsstatusitem.setAttributedTitle_(attributed)
+        except AttributeError:
+            pass
+
+        self._write_mobile_status()
+
+    def _write_mobile_status(self):
+        """오늘의 근무/리마인더/날씨 요약을 iCloud Drive에 JSON으로 써서
+        iOS 단축어에서 읽어갈 수 있게 한다. 실패해도 메뉴바 앱 동작에는 영향 없음."""
+        try:
+            os.makedirs(MOBILE_STATUS_DIR, exist_ok=True)
+            current = self.config.get("current_shift")
+            today = datetime.date.today()
+            day_num = (
+                _shift_block_day_number(self.schedule, today, current) if current else None
+            )
+            status = {
+                "updated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+                "date": today.isoformat(),
+                "shift": current,
+                "shift_day_number": day_num,
+                "weather": self.weather_str or None,
+                "reminders": get_today_reminders(self.schedule),
+                "storage_free_gb": self.storage_free_gb,
+            }
+            tmp_path = MOBILE_STATUS_FILE + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(status, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_path, MOBILE_STATUS_FILE)
+        except OSError:
+            pass
 
     # ── 저장공간 ─────────────────────────────────────────────
 
@@ -2311,6 +2538,11 @@ class ShiftAlarmApp(rumps.App):
         always_awake_on = self.config.get("stay_awake_always", False)
         always_awake_label = f"{'✓ ' if always_awake_on else ''}🌙 절전 방지 항상 켜기 (원격 접속용)"
         self.menu.add(rumps.MenuItem(always_awake_label, callback=self.toggle_stay_awake_always))
+
+        self.menu.add(None)
+        self.menu.add(self.codex_usage_item)
+        self.menu.add(self.claude_usage_item)
+        self.menu.add(self.claude_stats_item)
 
         self.menu.add(None)
 
