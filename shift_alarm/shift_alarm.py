@@ -55,13 +55,23 @@ from Foundation import NSMutableAttributedString, NSRange
 # ── 설정 파일 경로 ──────────────────────────────────────────
 CONFIG_FILE = os.path.expanduser("~/.shift_alarm_config.json")
 
-# ── 모바일(iOS 단축어) 접근용 상태 파일 ───────────────────────
-# iCloud Drive에 오늘의 근무/리마인더/날씨를 JSON으로 써두면, 아이폰 단축어에서
-# "iCloud Drive에서 파일 가져오기"로 읽어 위젯/알림에 쓸 수 있다.
+# ── 모바일 접근용 상태 파일 ───────────────────────────────────
+# iCloud Drive에 오늘의 근무/리마인더/날씨를 JSON으로 써두면 아이폰에서 읽을 수
+# 있다. 두 군데에 동시에 쓴다:
+# 1) ShiftAlarmStatus 폴더 — iOS 단축어의 "파일 가져오기"에서 수동으로 지정해
+#    쓰는 범용 경로(최초 1회 파일 선택 필요, iOS 샌드박스 제약 때문에 불가피).
+# 2) Pythonista 3 앱의 iCloud Documents 폴더 — Pythonista는 자기 iCloud
+#    Documents를 파일 선택기 없이 항상 바로 읽을 수 있어서, shift_status_pythonista.py
+#    를 이 폴더에 같이 넣어두면 파일 선택기 설정 자체가 필요 없다(★ 2026-08-05).
 MOBILE_STATUS_DIR = os.path.expanduser(
     "~/Library/Mobile Documents/com~apple~CloudDocs/ShiftAlarmStatus"
 )
 MOBILE_STATUS_FILE = os.path.join(MOBILE_STATUS_DIR, "status.json")
+
+PYTHONISTA_ICLOUD_DIR = os.path.expanduser(
+    "~/Library/Mobile Documents/iCloud~com~omz-software~Pythonista3/Documents"
+)
+PYTHONISTA_STATUS_FILE = os.path.join(PYTHONISTA_ICLOUD_DIR, "status.json")
 
 # ── 근무표 JSON 경로 (엑셀에서 추출한 D조 날짜별 근무) ─────────────
 # 스크립트와 같은 폴더에 d_team_schedule_2026.json 을 두거나,
@@ -2472,30 +2482,35 @@ class ShiftAlarmApp(rumps.App):
         self._write_mobile_status()
 
     def _write_mobile_status(self):
-        """오늘의 근무/리마인더/날씨 요약을 iCloud Drive에 JSON으로 써서
-        iOS 단축어에서 읽어갈 수 있게 한다. 실패해도 메뉴바 앱 동작에는 영향 없음."""
-        try:
-            os.makedirs(MOBILE_STATUS_DIR, exist_ok=True)
-            current = self.config.get("current_shift")
-            today = datetime.date.today()
-            day_num = (
-                _shift_block_day_number(self.schedule, today, current) if current else None
-            )
-            status = {
-                "updated_at": datetime.datetime.now().isoformat(timespec="seconds"),
-                "date": today.isoformat(),
-                "shift": current,
-                "shift_day_number": day_num,
-                "weather": self.weather_str or None,
-                "reminders": get_today_reminders(self.schedule),
-                "storage_free_gb": self.storage_free_gb,
-            }
-            tmp_path = MOBILE_STATUS_FILE + ".tmp"
-            with open(tmp_path, "w", encoding="utf-8") as f:
-                json.dump(status, f, ensure_ascii=False, indent=2)
-            os.replace(tmp_path, MOBILE_STATUS_FILE)
-        except OSError:
-            pass
+        """오늘의 근무/리마인더/날씨 요약을 iCloud Drive(ShiftAlarmStatus 폴더 +
+        Pythonista iCloud Documents 폴더)에 JSON으로 써서 아이폰에서 읽어갈 수
+        있게 한다. 실패해도 메뉴바 앱 동작에는 영향 없음."""
+        current = self.config.get("current_shift")
+        today = datetime.date.today()
+        day_num = (
+            _shift_block_day_number(self.schedule, today, current) if current else None
+        )
+        status = {
+            "updated_at": datetime.datetime.now().isoformat(timespec="seconds"),
+            "date": today.isoformat(),
+            "shift": current,
+            "shift_day_number": day_num,
+            "weather": self.weather_str or None,
+            "reminders": get_today_reminders(self.schedule),
+            "storage_free_gb": self.storage_free_gb,
+        }
+        for target_dir, target_file in (
+            (MOBILE_STATUS_DIR, MOBILE_STATUS_FILE),
+            (PYTHONISTA_ICLOUD_DIR, PYTHONISTA_STATUS_FILE),
+        ):
+            try:
+                os.makedirs(target_dir, exist_ok=True)
+                tmp_path = target_file + ".tmp"
+                with open(tmp_path, "w", encoding="utf-8") as f:
+                    json.dump(status, f, ensure_ascii=False, indent=2)
+                os.replace(tmp_path, target_file)
+            except OSError:
+                continue
 
     # ── 저장공간 ─────────────────────────────────────────────
 

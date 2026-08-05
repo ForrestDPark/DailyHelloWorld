@@ -236,12 +236,14 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
 - 12분마다 백그라운드 스레드(`_refresh_ai_usage`)로 갱신 + 앱 시작 시 1회.
 - Gemini CLI는 이 기기에 설치돼 있지 않아(`~/.gemini` 없음) 데이터 소스에서 제외했다.
 
-## 15. 📱 모바일 접근 (iCloud Drive + iOS 단축어, ★ 2026-08-05 추가)
+## 15. 📱 모바일 접근 (iCloud Drive, ★ 2026-08-05 추가/2026-08-05 Pythonista 경로 추가)
 
 복잡한 영상 작업 등은 제외하고, 오늘의 근무/리마인더/날씨처럼 기초적인 정보만 아이폰에서도 확인할 수 있게 iCloud Drive를 매개로 연결한다. Notion 동기화나 자체 웹서버(Tailscale 등) 대신, 이미 켜져 있는 iCloud Drive 동기화만 이용하는 가장 단순한 방식을 택했다.
 
-- `shift_alarm.py`가 `_update_title()`이 호출될 때마다(근무/저장공간/리마인더/날씨 등 뭔가 바뀔 때마다) `_write_mobile_status()`로 iCloud Drive에 JSON을 갱신 기록한다.
-- 경로: `~/Library/Mobile Documents/com~apple~CloudDocs/ShiftAlarmStatus/status.json` (Finder/Files 앱에서는 "iCloud Drive → ShiftAlarmStatus → status.json"으로 보임). 임시 파일에 쓴 뒤 `os.replace()`로 원자적 교체하므로, 동기화 도중 아이폰이 파일을 읽어도 반쪽짜리 JSON을 받을 일이 없다.
+- `shift_alarm.py`가 `_update_title()`이 호출될 때마다(근무/저장공간/리마인더/날씨 등 뭔가 바뀔 때마다) `_write_mobile_status()`로 **두 곳에 동시에** JSON을 갱신 기록한다:
+  1. `~/Library/Mobile Documents/com~apple~CloudDocs/ShiftAlarmStatus/status.json` (Finder/Files 앱에서는 "iCloud Drive → ShiftAlarmStatus")
+  2. `~/Library/Mobile Documents/iCloud~com~omz-software~Pythonista3/Documents/status.json` (Pythonista 3 앱의 iCloud Documents 폴더)
+- 둘 다 임시 파일에 쓴 뒤 `os.replace()`로 원자적 교체하므로, 동기화 도중 아이폰이 파일을 읽어도 반쪽짜리 JSON을 받을 일이 없다. 한쪽 경로 쓰기가 실패해도(폴더 없음 등) 다른 쪽과 메뉴바 앱 자체 동작에는 영향 없음.
 - 파일 내용 예시:
   ```json
   {
@@ -254,15 +256,25 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
     "storage_free_gb": 13
   }
   ```
-- 파일 쓰기가 실패해도(iCloud Drive 접근 불가 등) 메뉴바 앱 자체 동작에는 영향 없음(`OSError`만 조용히 무시).
 
-**아이폰 쪽 설정(사용자가 iOS 단축어 앱에서 직접 만들어야 함 — Claude는 iOS에 접근할 수 없음)**:
-1. 단축어(Shortcuts) 앱 → 새 단축어 생성.
-2. "파일 가져오기" 동작 추가 → iCloud Drive → `ShiftAlarmStatus/status.json` 지정.
+### 15-1. 아이폰 확인 방법 A — Pythonista 3 (★ 권장, 2026-08-05)
+
+iOS 단축어의 "파일 가져오기" 액션은 **보안 스코프 북마크**가 있어야 특정 파일을 자동으로 읽을 수 있는데, 이 북마크는 사용자가 최초 1회 실제로 파일 선택기에서 골라야만 생성된다(iOS 샌드박스 제약 — 다른 프로세스가 미리 대신 채워줄 수 없음). Pythonista는 자기 앱의 iCloud Documents 폴더 안 파일은 **파일 선택기 없이 항상 그냥 읽을 수 있어서** 이 문제 자체가 없다.
+
+- `shift_alarm/shift_status_pythonista.py`(git 추적됨)를 Pythonista의 iCloud Documents 폴더(`iCloud~com~omz-software~Pythonista3/Documents/`)에 복사해두면, 같은 폴더의 `status.json`(Mac이 자동으로 갱신)을 별도 설정 없이 바로 읽어서 `console` 모듈로 보기 좋게 출력한다(근무·며칠째·날씨·저장공간(5GB 이하면 빨간색)·오늘의 리마인더·갱신시각).
+- 아이폰에서 할 일: Pythonista 3 앱 실행 → Documents 목록에 `shift_status_pythonista.py`가 iCloud 동기화로 자동으로 나타남 → 탭 → 재생(▶) 버튼. **파일 선택기 설정이 전혀 필요 없다.**
+- Mac 쪽에서 스크립트를 수정하면 `shift_alarm/shift_status_pythonista.py`를 Pythonista iCloud Documents 폴더에 다시 복사해줘야 아이폰에 반영된다(자동 동기화는 안 됨 — 별도 파일이라 수동 복사 필요).
+
+### 15-2. 아이폰 확인 방법 B — iOS 단축어 (수동 설정 1회 필요)
+
+1. 단축어(Shortcuts) 앱 → 새 단축어 생성(또는 `ShiftAlarmStatus` 폴더의 `ShiftAlarm 상태 확인.shortcut`을 Files 앱에서 탭해 가져오기 — 액션 3개(파일 가져오기·사전 열기·Quick Look)가 이미 구성돼 있음, 단 첫 액션은 정식 "파일 가져오기" 액션으로 한 번 교체·재지정 필요했음, 아래 참고).
+2. "파일 가져오기" 동작 추가 → iCloud Drive → `ShiftAlarmStatus/status.json` 지정(**이 1회 선택이 보안 스코프 북마크를 만드는 필수 단계 — 건너뛸 수 없음**).
 3. "사전 열기(Get Dictionary from Input)" 동작 추가.
-4. "사전 값 가져오기"로 `shift`, `shift_day_number`, `weather`, `reminders`, `storage_free_gb` 등 원하는 키를 꺼내 텍스트로 조합.
-5. "결과 표시" 또는 위젯에서 보고 싶으면 홈 화면에 단축어 위젯을 추가하고 자동화(Automation)로 주기적 실행을 걸어두면 위젯이 최신 값을 보여준다.
-- Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으므로, `updated_at` 값으로 최신 정보인지 아이폰에서 확인할 수 있다.
+4. "사전 값 가져오기"로 `shift`, `shift_day_number`, `weather`, `reminders`, `storage_free_gb` 등 원하는 키를 꺼내 텍스트로 조합하거나, 단순히 "Quick Look로 보기"로 사전 전체를 바로 확인.
+5. 위젯으로 보고 싶으면 홈 화면에 단축어 위젯을 추가.
+- **미리 만들어둔 `.shortcut` 파일의 한계**: Claude가 macOS `shortcuts sign`으로 미리 서명해 만든 파일은 액션 3개 구조까지는 정상 인식되지만(맥 단축어 앱에서 직접 열어 검증함), 첫 "파일 가져오기" 액션에 정상적인 파일 선택기 연결까지는 자동으로 못 채워 넣는다(탭하면 텍스트 입력만 뜨는 자리표시자 상태). 이 액션을 지우고 앱의 액션 라이브러리에서 정식 "파일 가져오기"를 새로 추가해서 교체해야 한다.
+
+Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으므로, `updated_at` 값으로 최신 정보인지 아이폰에서 확인할 수 있다.
 
 ## 16. 💼 이직시스템(job_collector.py) 자동 수집 + 알림 (★ 2026-08-05 추가)
 
