@@ -1,6 +1,6 @@
-# 이직시스템 — 사람인 채용공고 수집기
+# 이직시스템 — 사람인·워크넷 채용공고 수집기
 
-사람인 공식 채용정보 API로 공고를 모으고 SQLite에 누적한다. 동일한 공고는 중복 저장하지 않고 마감일·조건만 갱신한다. 공고의 기술 키워드를 자동 태그하고, 내가 정한 포함·제외 키워드로 0~100점의 적합도를 계산한다.
+사람인·워크넷(고용24) 공식 채용정보 API로 공고를 모으고, 필요하면 사람인 공개 검색결과 페이지 크롤링(로그인/CAPTCHA 우회 없음)을 보조 수단으로 병행해 SQLite에 누적한다. 동일한 공고는 `(source, source_id)` 기준으로 중복 저장하지 않고 마감일·조건만 갱신한다. 공고의 기술 키워드를 자동 태그하고, 내가 정한 포함·제외 키워드로 0~100점의 적합도를 계산한다.
 
 ## 운영 원칙 — 공고를 학습 커리큘럼으로 쓴다
 
@@ -14,10 +14,12 @@
 
 ## 현재 구축 상태
 
-- 사람인 API 이용 신청 완료, **사용 승인 대기 중**
-- 검색어별 수집, SQLite 저장, 중복 제거·갱신 구현 완료
+- 사람인 API 이용 신청 완료, **사용 승인 대기 중**(2026-08-03 신청, 거절 확정 아님)
+- **워크넷(고용24) API 연동 완료(★ 2026-08-05)**: `openapi.work.go.kr`가 `work24.go.kr`로 통합됨에 따라 `WORK24_ACCESS_KEY` 기반으로 별도 수집원 추가. 사람인과 별개로 `source="워크넷"`으로 저장
+- **사람인 공개 검색결과 크롤링 구현 완료(★ 2026-08-05)**: API 승인 대기 중에도 수집이 끊기지 않도록, 로그인·CAPTCHA 우회 없이 `zf_user/search/recruit` 검색결과 페이지를 표준 라이브러리(`re`)만으로 파싱하는 보조 수집원 추가. 기본은 꺼져 있고 `config.json`의 `"enable_saramin_crawl": true`로 옵트인. `source="사람인(크롤링)"`으로 API 수집분과 구분 저장(같은 공고라도 ID 체계가 달라 정확한 병합 보장이 안 되므로 소스를 분리함)
+- 검색어별 수집, SQLite 저장, `(source, source_id)` 기준 중복 제거·갱신 구현 완료
 - 기술 태그·포함/제외 키워드 적합도·CSV 내보내기 구현 완료
-- API 승인 후 실데이터 수집을 검증하고, 지원 가능성 분류·부족 역량 분석·Notion DB 동기화를 연결할 예정
+- 사람인 API 승인 후 실데이터 수집을 검증하고, 지원 가능성 분류·부족 역량 분석·Notion DB 동기화를 연결할 예정
 
 ## Codex·Git·Notion 동기화 규칙
 
@@ -32,7 +34,7 @@
 
 ## 1. 최초 설정
 
-1. [사람인 채용정보 API](https://oapi.saramin.co.kr/guide/job-search)에서 Access Key를 발급받는다.
+1. [사람인 채용정보 API](https://oapi.saramin.co.kr/guide/job-search)에서 Access Key를 발급받는다. 워크넷도 쓰려면 [고용24 오픈API](https://www.work24.go.kr)에서 인증키를 발급받는다(舊 openapi.work.go.kr가 work24.go.kr로 통합됨).
 2. 설정 파일을 만든다.
 
    ```bash
@@ -41,11 +43,14 @@
    ```
 
 3. `config.json`의 `queries`, `include_keywords`, `exclude_keywords`를 내 조건에 맞게 수정한다. `config.json`과 수집 DB는 Git에 올라가지 않는다.
-4. API 키는 현재 터미널에만 설정한다.
+4. API 키는 현재 터미널에만 설정한다. 둘 다 없으면(사람인 승인 대기 등) `enable_saramin_crawl`이 켜져 있을 때만 수집이 진행된다.
 
    ```bash
    export SARAMIN_ACCESS_KEY='발급받은_키'
+   export WORK24_ACCESS_KEY='발급받은_키'
    ```
+
+5. (선택) API 키 없이도 수집을 계속하고 싶으면 `config.json`에 `"enable_saramin_crawl": true`를 추가한다 — 사람인 공개 검색결과 페이지를 크롤링해서 `source="사람인(크롤링)"`으로 저장한다(3-1 참조).
 
 ## 2. 실행
 
@@ -62,7 +67,16 @@ python3 job_collector.py export
 
 ## 3. API 호출량
 
-`queries`의 검색어 하나당 API를 한 번 호출한다. 예제처럼 검색어가 3개면 수집 한 번에 3회다. `results_per_query`는 호출 횟수가 아니라 검색어별로 받을 공고 수다.
+`queries`의 검색어 하나당 각 API(사람인/워크넷)를 한 번씩 호출한다. 예제처럼 검색어가 3개면 수집 한 번에 사람인 3회 + 워크넷 3회(둘 다 키가 있을 때)다. `results_per_query`는 호출 횟수가 아니라 검색어별로 받을 공고 수다(사람인 API 최대 110건/워크넷 최대 100건/크롤링 최대 100건으로 각각 상한).
+
+## 3-1. 사람인 공개 검색결과 크롤링 (보조 수집원, ★ 2026-08-05)
+
+`enable_saramin_crawl: true`일 때만 동작하는 보조 수집원. **로그인·CAPTCHA 우회 없이** `https://www.saramin.co.kr/zf_user/search/recruit` 검색결과 페이지(공개, robots.txt 허용 범위)를 가져와 표준 라이브러리 `re`만으로 `item_recruit` 공고 블록을 잘라 파싱한다(`job_collector.py`의 `fetch_saramin_crawl_query`/`parse_saramin_crawl_block`).
+
+- 요청 사이 `SARAMIN_CRAWL_DELAY_SECONDS`(1.5초) 딜레이를 넣어 과도한 요청을 피한다.
+- 결과는 `source="사람인(크롤링)"`으로 저장한다. API 결과(`source="사람인"`)와 ID 체계가 다를 수 있어 같은 공고라도 자동 병합을 보장할 수 없으므로 소스를 분리했다 — 같은 공고가 두 줄로 보일 수 있다는 뜻.
+- **잡코리아는 크롤링하지 않는다.** `jobkorea.co.kr/robots.txt`가 `/Search/?stext=`를 일반 크롤러 전체(`User-agent: *`)에 Disallow하고, ClaudeBot 등 AI 크롤러는 사이트 전체를 차단하고 있어 이 방침을 존중한다(2026-08-05 확인).
+- 필드 파싱은 최선 노력(best-effort) 방식이다 — 사람인이 마크업을 바꾸면 일부 필드가 빈 값으로 떨어질 수 있고, 그때는 정규식(`_SARAMIN_*_RE`)을 실제 HTML에 맞춰 다시 조정해야 한다.
 
 ## 4. 다음 확장
 
@@ -71,4 +85,4 @@ python3 job_collector.py export
 - 이력서와 공고를 비교해 `즉시 지원 / 준비 후 지원 / 제외`로 분류
 - 마감 3일 전 macOS 알림
 
-지금 단계에서는 사람인 공식 API만 사용한다. 로그인 우회, CAPTCHA 우회, 비공개 정보 수집은 하지 않는다.
+공식 API(사람인·워크넷)를 우선 사용하고, 로그인·CAPTCHA 우회 없는 공개 검색결과 페이지 크롤링(사람인만, 잡코리아는 robots.txt로 제외)을 보조 수단으로 병행한다. 로그인 우회, CAPTCHA 우회, 비공개 정보 수집은 여전히 하지 않는다.

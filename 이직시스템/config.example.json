@@ -21,6 +21,7 @@
   ],
   "locations": [],
   "results_per_query": 30,
-  "sort": "pd"
+  "sort": "pd",
+  "enable_saramin_crawl": false
 }
 

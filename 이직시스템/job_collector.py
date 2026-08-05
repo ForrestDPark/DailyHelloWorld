@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""사람인 공식 채용정보 API 수집기.
+"""사람인·워크넷 공식 채용정보 API 수집기.
 
 표준 라이브러리만 사용하며, API 키는 파일에 저장하지 않고
-SARAMIN_ACCESS_KEY 환경변수에서만 읽는다.
+SARAMIN_ACCESS_KEY / WORK24_ACCESS_KEY 환경변수에서만 읽는다.
+두 키 중 있는 것만 사용해서 수집한다(둘 다 없으면 실행 중단).
 """
 
 from __future__ import annotations
@@ -16,9 +17,11 @@ import os
 import re
 import sqlite3
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,7 +31,25 @@ from typing import Any, Iterable
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG = BASE_DIR / "config.json"
 DEFAULT_DB = BASE_DIR / "data" / "jobs.db"
-API_URL = "https://oapi.saramin.co.kr/job-search"
+SARAMIN_API_URL = "https://oapi.saramin.co.kr/job-search"
+SARAMIN_MAX_RESULTS = 110
+WORK24_API_URL = "https://www.work24.go.kr/cm/openApi/call/wk/callOpenApiSvcInfo210L01.do"
+WORK24_MAX_RESULTS = 100
+WORK24_EMP_TP_NAMES = {
+    "4": "파견근로",
+    "10": "기간의 정함이 없는 근로계약",
+    "11": "기간의 정함이 없는 근로계약(시간(선택)제)",
+    "20": "기간의 정함이 있는 근로계약",
+    "21": "기간의 정함이 있는 근로계약(시간(선택)제)",
+    "Y": "대체인력채용",
+}
+# 사람인 공개 검색결과 페이지 크롤링(로그인/CAPTCHA 우회 없음, robots.txt 허용 범위).
+# 잡코리아는 robots.txt가 검색결과 경로를 일반 크롤러 전체에 Disallow하고 있어 제외.
+SARAMIN_CRAWL_URL = "https://www.saramin.co.kr/zf_user/search/recruit"
+SARAMIN_CRAWL_PAGE_SIZE = 20
+SARAMIN_CRAWL_MAX_RESULTS = 100
+SARAMIN_CRAWL_DELAY_SECONDS = 1.5
+SARAMIN_CRAWL_SOURCE = "사람인(크롤링)"
 USER_AGENT = "DailyHelloWorld-JobCollector/1.0 (personal job search)"
 
 SKILL_ALIASES = {
@@ -53,6 +74,7 @@ class Job:
     title: str
     company: str
     url: str
+    source: str = "사람인"
     location: str = ""
     experience: str = ""
     education: str = ""
@@ -136,7 +158,7 @@ def score_job(text: str, config: dict[str, Any]) -> int:
     return max(0, min(100, 40 + includes * 10 - excludes * 25))
 
 
-def parse_job(raw: dict[str, Any], query: str, config: dict[str, Any]) -> Job:
+def parse_saramin_job(raw: dict[str, Any], query: str, config: dict[str, Any]) -> Job:
     position = raw.get("position") or {}
     company = raw.get("company") or {}
     detail = position.get("industry") or {}
@@ -147,6 +169,7 @@ def parse_job(raw: dict[str, Any], query: str, config: dict[str, Any]) -> Job:
     combined = " ".join((title, company_name, keywords, plain(raw.get("keyword"))))
     skills = detect_skills(combined)
     return Job(
+        source="사람인",
         source_id=plain(raw.get("id")),
         title=title,
         company=company_name,
@@ -165,18 +188,18 @@ def parse_job(raw: dict[str, Any], query: str, config: dict[str, Any]) -> Job:
     )
 
 
-def fetch_query(access_key: str, query: str, config: dict[str, Any]) -> list[Job]:
+def fetch_saramin_query(access_key: str, query: str, config: dict[str, Any]) -> list[Job]:
     params: dict[str, Any] = {
         "access-key": access_key,
         "keywords": query,
-        "count": min(int(config.get("results_per_query", 30)), 110),
+        "count": min(int(config.get("results_per_query", 30)), SARAMIN_MAX_RESULTS),
         "start": 0,
         "sort": config.get("sort", "pd"),
     }
     if config.get("locations"):
         params["loc_cd"] = ",".join(config["locations"])
     request = urllib.request.Request(
-        f"{API_URL}?{urllib.parse.urlencode(params)}",
+        f"{SARAMIN_API_URL}?{urllib.parse.urlencode(params)}",
         headers={"Accept": "application/json", "User-Agent": USER_AGENT},
     )
     try:
@@ -194,7 +217,180 @@ def fetch_query(access_key: str, query: str, config: dict[str, Any]) -> list[Job
     raw_jobs = jobs_node.get("job", []) if isinstance(jobs_node, dict) else []
     if isinstance(raw_jobs, dict):
         raw_jobs = [raw_jobs]
-    return [parse_job(item, query, config) for item in raw_jobs if isinstance(item, dict)]
+    return [parse_saramin_job(item, query, config) for item in raw_jobs if isinstance(item, dict)]
+
+
+def fetch_worknet_query(access_key: str, query: str, config: dict[str, Any]) -> list[Job]:
+    params = {
+        "authKey": access_key,
+        "callTp": "L",
+        "returnType": "XML",
+        "startPage": 1,
+        "display": min(int(config.get("results_per_query", 30)), WORK24_MAX_RESULTS),
+        "keyword": query,
+    }
+    request = urllib.request.Request(
+        f"{WORK24_API_URL}?{urllib.parse.urlencode(params)}",
+        headers={"Accept": "application/xml", "User-Agent": USER_AGENT},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            body = response.read()
+    except urllib.error.HTTPError as exc:
+        detail = exc.read(1000).decode("utf-8", "replace")
+        raise RuntimeError(f"워크넷 API HTTP {exc.code}: {detail}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"워크넷 API 연결 실패: {exc.reason}") from exc
+
+    try:
+        root = ET.fromstring(body)
+    except ET.ParseError as exc:
+        raise RuntimeError(f"워크넷 API 응답 파싱 실패: {exc}") from exc
+
+    error = root.findtext("error")
+    if error:
+        raise RuntimeError(f"워크넷 API 오류: {error}")
+
+    return [parse_worknet_job(node, query, config) for node in root.findall("wanted")]
+
+
+def parse_worknet_job(node: ET.Element, query: str, config: dict[str, Any]) -> Job:
+    def text(tag: str) -> str:
+        return plain(node.findtext(tag))
+
+    title = text("title")
+    company = text("company")
+    industry = text("indTpNm")
+    combined = " ".join((title, company, industry))
+    skills = detect_skills(combined)
+    emp_tp_code = text("empTpCd")
+    return Job(
+        source="워크넷",
+        source_id=text("wantedAuthNo"),
+        title=title,
+        company=company,
+        url=text("wantedInfoUrl"),
+        location=text("region"),
+        experience=text("career"),
+        education=text("maxEdubg") or text("minEdubg"),
+        employment_type=WORK24_EMP_TP_NAMES.get(emp_tp_code, emp_tp_code),
+        salary=text("sal") or " ~ ".join(filter(None, (text("minSal"), text("maxSal")))),
+        posted_at=text("regDt"),
+        deadline=text("closeDt"),
+        keywords=industry,
+        skills=", ".join(skills),
+        score=score_job(combined, config),
+        matched_query=query,
+    )
+
+
+_SARAMIN_ITEM_START_RE = re.compile(r'<div class="item_recruit"')
+_SARAMIN_VALUE_RE = re.compile(r'<div class="item_recruit" value="(\d+)"')
+_SARAMIN_TITLE_LINK_RE = re.compile(r'<h2 class="job_tit">.*?<a[^>]*title="([^"]*)"[^>]*href="([^"]*)"', re.S)
+_SARAMIN_DEADLINE_RE = re.compile(r'<span class="date">([^<]*)</span>')
+_SARAMIN_CONDITION_RE = re.compile(r'<div class="job_condition">(.*?)</div>', re.S)
+_SARAMIN_SPAN_RE = re.compile(r'<span[^>]*>(.*?)</span>', re.S)
+_SARAMIN_CORP_NAME_RE = re.compile(r'<strong class="corp_name">\s*<a[^>]*>(.*?)</a>', re.S)
+
+
+def _split_saramin_recruit_blocks(page_html: str) -> list[str]:
+    """검색결과 HTML을 `item_recruit` 공고 블록 단위로 자른다(다음 마커 직전까지)."""
+    starts = [m.start() for m in _SARAMIN_ITEM_START_RE.finditer(page_html)]
+    return [
+        page_html[start : starts[i + 1] if i + 1 < len(starts) else len(page_html)]
+        for i, start in enumerate(starts)
+    ]
+
+
+def parse_saramin_crawl_block(block: str, query: str, config: dict[str, Any]) -> Job | None:
+    """공고 블록 하나를 파싱. 필수 필드(공고ID·제목·링크)를 못 찾으면 None."""
+    value_match = _SARAMIN_VALUE_RE.search(block)
+    title_match = _SARAMIN_TITLE_LINK_RE.search(block)
+    if not value_match or not title_match:
+        return None
+    source_id = value_match.group(1)
+    title = html.unescape(title_match.group(1))
+    href = html.unescape(title_match.group(2))
+    url = href if href.startswith("http") else f"https://www.saramin.co.kr{href}"
+
+    corp_match = _SARAMIN_CORP_NAME_RE.search(block)
+    company = plain(corp_match.group(1)) if corp_match else ""
+
+    deadline_match = _SARAMIN_DEADLINE_RE.search(block)
+    deadline = plain(deadline_match.group(1)) if deadline_match else ""
+
+    location = experience = education = employment_type = ""
+    condition_match = _SARAMIN_CONDITION_RE.search(block)
+    if condition_match:
+        spans = [plain(s) for s in _SARAMIN_SPAN_RE.findall(condition_match.group(1))]
+        if spans:
+            location, rest = spans[0], spans[1:]
+            experience = rest[0] if len(rest) > 0 else ""
+            education = rest[1] if len(rest) > 1 else ""
+            employment_type = rest[2] if len(rest) > 2 else ""
+
+    combined = " ".join((title, company))
+    skills = detect_skills(combined)
+    return Job(
+        source=SARAMIN_CRAWL_SOURCE,
+        source_id=source_id,
+        title=title,
+        company=company,
+        url=url,
+        location=location,
+        experience=experience,
+        education=education,
+        employment_type=employment_type,
+        deadline=deadline,
+        skills=", ".join(skills),
+        score=score_job(combined, config),
+        matched_query=query,
+    )
+
+
+def fetch_saramin_crawl_page(query: str, page: int, config: dict[str, Any]) -> list[Job]:
+    """사람인 공개 검색결과 페이지 1장을 가져와 파싱. 로그인/CAPTCHA 우회 없음."""
+    params = {
+        "searchword": query,
+        "recruitPage": page,
+        "recruitSort": "relation",
+        "recruitPageCount": SARAMIN_CRAWL_PAGE_SIZE,
+    }
+    request = urllib.request.Request(
+        f"{SARAMIN_CRAWL_URL}?{urllib.parse.urlencode(params)}",
+        headers={"Accept": "text/html", "User-Agent": USER_AGENT},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            body = response.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"사람인 검색결과 페이지 HTTP {exc.code}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"사람인 검색결과 페이지 연결 실패: {exc.reason}") from exc
+
+    jobs = []
+    for block in _split_saramin_recruit_blocks(body):
+        job = parse_saramin_crawl_block(block, query, config)
+        if job is not None:
+            jobs.append(job)
+    return jobs
+
+
+def fetch_saramin_crawl_query(query: str, config: dict[str, Any]) -> list[Job]:
+    """검색어 하나에 대해 필요한 만큼 페이지를 넘기며 수집(페이지 사이 딜레이 포함)."""
+    max_results = min(int(config.get("results_per_query", 30)), SARAMIN_CRAWL_MAX_RESULTS)
+    max_pages = max(1, -(-max_results // SARAMIN_CRAWL_PAGE_SIZE))  # ceil
+    jobs: list[Job] = []
+    for page in range(1, max_pages + 1):
+        page_jobs = fetch_saramin_crawl_page(query, page, config)
+        if not page_jobs:
+            break
+        jobs.extend(page_jobs)
+        if len(jobs) >= max_results:
+            break
+        if page < max_pages:
+            time.sleep(SARAMIN_CRAWL_DELAY_SECONDS)
+    return jobs[:max_results]
 
 
 def fingerprint(job: Job) -> str:
@@ -207,7 +403,7 @@ def upsert_jobs(conn: sqlite3.Connection, jobs: Iterable[Job]) -> tuple[int, int
     stamp = now_iso()
     for job in jobs:
         exists = conn.execute(
-            "SELECT id, fingerprint FROM jobs WHERE source = '사람인' AND source_id = ?", (job.source_id,)
+            "SELECT id, fingerprint FROM jobs WHERE source = ? AND source_id = ?", (job.source, job.source_id)
         ).fetchone()
         fp = fingerprint(job)
         values = asdict(job)
@@ -223,10 +419,10 @@ def upsert_jobs(conn: sqlite3.Connection, jobs: Iterable[Job]) -> tuple[int, int
             updated += 1
         else:
             conn.execute("""
-                INSERT INTO jobs (source_id,title,company,url,location,experience,education,
+                INSERT INTO jobs (source,source_id,title,company,url,location,experience,education,
                     employment_type,salary,posted_at,deadline,keywords,skills,score,matched_query,
                     first_seen_at,last_seen_at,fingerprint)
-                VALUES (:source_id,:title,:company,:url,:location,:experience,:education,
+                VALUES (:source,:source_id,:title,:company,:url,:location,:experience,:education,
                     :employment_type,:salary,:posted_at,:deadline,:keywords,:skills,:score,:matched_query,
                     :stamp,:stamp,:fingerprint)
             """, {**values, "stamp": stamp, "fingerprint": fp})
@@ -236,22 +432,48 @@ def upsert_jobs(conn: sqlite3.Connection, jobs: Iterable[Job]) -> tuple[int, int
 
 
 def collect(args: argparse.Namespace) -> None:
-    key = os.environ.get("SARAMIN_ACCESS_KEY", "").strip()
-    if not key:
-        raise SystemExit("SARAMIN_ACCESS_KEY가 없습니다. README의 API 키 설정 방법을 따르세요.")
+    saramin_key = os.environ.get("SARAMIN_ACCESS_KEY", "").strip()
+    worknet_key = os.environ.get("WORK24_ACCESS_KEY", "").strip()
     config = load_config(args.config)
+    crawl_enabled = bool(config.get("enable_saramin_crawl", False))
+    if not saramin_key and not worknet_key and not crawl_enabled:
+        raise SystemExit(
+            "SARAMIN_ACCESS_KEY/WORK24_ACCESS_KEY가 모두 없고 사람인 크롤링도 꺼져 있습니다. "
+            "README의 API 키 설정 방법을 따르거나 config.json에 \"enable_saramin_crawl\": true를 추가하세요."
+        )
     conn = connect(args.db)
-    collected: dict[str, Job] = {}
-    for index, query in enumerate(config["queries"], 1):
-        print(f"[{index}/{len(config['queries'])}] '{query}' 검색 중…", flush=True)
-        jobs = fetch_query(key, query, config)
-        print(f"  {len(jobs)}건 수신")
+    collected: dict[tuple[str, str], Job] = {}
+
+    def merge(jobs: list[Job], query: str) -> None:
         for job in jobs:
-            previous = collected.get(job.source_id)
+            key = (job.source, job.source_id)
+            previous = collected.get(key)
             if previous:
                 previous.matched_query = ", ".join(dict.fromkeys((previous.matched_query + ", " + query).split(", ")))
             else:
-                collected[job.source_id] = job
+                collected[key] = job
+
+    for index, query in enumerate(config["queries"], 1):
+        print(f"[{index}/{len(config['queries'])}] '{query}' 검색 중…", flush=True)
+        if saramin_key:
+            jobs = fetch_saramin_query(saramin_key, query, config)
+            print(f"  사람인(API) {len(jobs)}건 수신")
+            merge(jobs, query)
+        else:
+            print("  ⚠️ SARAMIN_ACCESS_KEY 없음 — 사람인(API) 건너뜀")
+        if worknet_key:
+            jobs = fetch_worknet_query(worknet_key, query, config)
+            print(f"  워크넷 {len(jobs)}건 수신")
+            merge(jobs, query)
+        else:
+            print("  ⚠️ WORK24_ACCESS_KEY 없음 — 워크넷 건너뜀")
+        if crawl_enabled:
+            jobs = fetch_saramin_crawl_query(query, config)
+            print(f"  사람인(크롤링) {len(jobs)}건 수신")
+            merge(jobs, query)
+            if index < len(config["queries"]):
+                time.sleep(SARAMIN_CRAWL_DELAY_SECONDS)
+
     inserted, updated = upsert_jobs(conn, collected.values())
     print(f"\n완료: 신규 {inserted}건 / 기존 갱신 {updated}건 / 중복 제거 후 {len(collected)}건")
 
@@ -259,14 +481,14 @@ def collect(args: argparse.Namespace) -> None:
 def list_jobs(args: argparse.Namespace) -> None:
     conn = connect(args.db)
     rows = conn.execute("""
-        SELECT score, company, title, location, deadline, url
+        SELECT source, score, company, title, location, deadline, url
         FROM jobs ORDER BY score DESC, deadline ASC LIMIT ?
     """, (args.limit,)).fetchall()
     if not rows:
         print("저장된 공고가 없습니다. collect를 먼저 실행하세요.")
         return
     for row in rows:
-        print(f"[{row['score']:>3}] {row['company']} | {row['title']}")
+        print(f"[{row['score']:>3}] ({row['source']}) {row['company']} | {row['title']}")
         print(f"      {row['location']} | 마감 {row['deadline']} | {row['url']}")
 
 
@@ -284,13 +506,17 @@ def export_csv(args: argparse.Namespace) -> None:
 
 def doctor(args: argparse.Namespace) -> None:
     print(f"Python: {sys.version.split()[0]}")
-    print(f"API 키: {'설정됨' if os.environ.get('SARAMIN_ACCESS_KEY') else '미설정'}")
+    print(f"사람인 API 키: {'설정됨' if os.environ.get('SARAMIN_ACCESS_KEY') else '미설정'}")
+    print(f"워크넷 API 키: {'설정됨' if os.environ.get('WORK24_ACCESS_KEY') else '미설정'}")
     print(f"설정: {args.config} ({'있음' if args.config.exists() else '없음'})")
+    if args.config.exists():
+        crawl_enabled = bool(load_config(args.config).get("enable_saramin_crawl", False))
+        print(f"사람인 크롤링(공개 검색결과): {'켜짐' if crawl_enabled else '꺼짐 (config.json enable_saramin_crawl)'}")
     print(f"DB: {args.db} ({'있음' if args.db.exists() else '아직 없음'})")
 
 
 def parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="사람인 공식 API 채용공고 수집기")
+    p = argparse.ArgumentParser(description="사람인·워크넷 공식 API 채용공고 수집기")
     p.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     p.add_argument("--db", type=Path, default=DEFAULT_DB)
     sub = p.add_subparsers(dest="command", required=True)

@@ -28,7 +28,7 @@ class JobCollectorTest(unittest.TestCase):
             },
             "expiration-date": "2026-08-31",
         }
-        job = jc.parse_job(raw, "Python", self.config)
+        job = jc.parse_saramin_job(raw, "Python", self.config)
         self.assertEqual(job.company, "테스트사")
         self.assertIn("Python", job.skills)
         self.assertIn("SQL", job.skills)
