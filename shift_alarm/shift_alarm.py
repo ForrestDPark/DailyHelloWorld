@@ -57,12 +57,19 @@ CONFIG_FILE = os.path.expanduser("~/.shift_alarm_config.json")
 
 # ── 모바일 접근용 상태 파일 ───────────────────────────────────
 # iCloud Drive에 오늘의 근무/리마인더/날씨를 JSON으로 써두면 아이폰에서 읽을 수
-# 있다. 두 군데에 동시에 쓴다:
+# 있다. 세 군데에 동시에 쓴다:
 # 1) ShiftAlarmStatus 폴더 — iOS 단축어의 "파일 가져오기"에서 수동으로 지정해
 #    쓰는 범용 경로(최초 1회 파일 선택 필요, iOS 샌드박스 제약 때문에 불가피).
 # 2) Pythonista 3 앱의 iCloud Documents 폴더 — Pythonista는 자기 iCloud
 #    Documents를 파일 선택기 없이 항상 바로 읽을 수 있어서, shift_status_pythonista.py
 #    를 이 폴더에 같이 넣어두면 파일 선택기 설정 자체가 필요 없다(★ 2026-08-05).
+#    단, Pythonista의 위젯(Today Widget/NCWidget)은 iOS 18에서 애플이 완전히
+#    제거해서 더 이상 홈 화면/Today View 어디에도 못 놓는다(★ 2026-08-06 확인)
+#    — 위젯 용도로는 3)을 쓴다. shift_status_pythonista.py는 앱 안에서 직접
+#    실행하는 용도로는 여전히 유효.
+# 3) Scriptable 앱의 iCloud Documents 폴더 — 최신 WidgetKit 홈 화면 위젯을
+#    지원하는 앱이라 ShiftAlarmWidget.js를 이 폴더에 넣어두면 진짜 홈 화면
+#    위젯 타일로 쓸 수 있다(★ 2026-08-06 추가).
 MOBILE_STATUS_DIR = os.path.expanduser(
     "~/Library/Mobile Documents/com~apple~CloudDocs/ShiftAlarmStatus"
 )
@@ -72,6 +79,11 @@ PYTHONISTA_ICLOUD_DIR = os.path.expanduser(
     "~/Library/Mobile Documents/iCloud~com~omz-software~Pythonista3/Documents"
 )
 PYTHONISTA_STATUS_FILE = os.path.join(PYTHONISTA_ICLOUD_DIR, "status.json")
+
+SCRIPTABLE_ICLOUD_DIR = os.path.expanduser(
+    "~/Library/Mobile Documents/iCloud~dk~simonbs~Scriptable/Documents"
+)
+SCRIPTABLE_STATUS_FILE = os.path.join(SCRIPTABLE_ICLOUD_DIR, "status.json")
 
 # ── 근무표 JSON 경로 (엑셀에서 추출한 D조 날짜별 근무) ─────────────
 # 스크립트와 같은 폴더에 d_team_schedule_2026.json 을 두거나,
@@ -2483,8 +2495,8 @@ class ShiftAlarmApp(rumps.App):
 
     def _write_mobile_status(self):
         """오늘의 근무/리마인더/날씨 요약을 iCloud Drive(ShiftAlarmStatus 폴더 +
-        Pythonista iCloud Documents 폴더)에 JSON으로 써서 아이폰에서 읽어갈 수
-        있게 한다. 실패해도 메뉴바 앱 동작에는 영향 없음."""
+        Pythonista + Scriptable iCloud Documents 폴더)에 JSON으로 써서 아이폰에서
+        읽어갈 수 있게 한다. 실패해도 메뉴바 앱 동작에는 영향 없음."""
         current = self.config.get("current_shift")
         today = datetime.date.today()
         day_num = (
@@ -2502,6 +2514,7 @@ class ShiftAlarmApp(rumps.App):
         for target_dir, target_file in (
             (MOBILE_STATUS_DIR, MOBILE_STATUS_FILE),
             (PYTHONISTA_ICLOUD_DIR, PYTHONISTA_STATUS_FILE),
+            (SCRIPTABLE_ICLOUD_DIR, SCRIPTABLE_STATUS_FILE),
         ):
             try:
                 os.makedirs(target_dir, exist_ok=True)

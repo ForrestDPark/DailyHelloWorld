@@ -1,6 +1,12 @@
 # coding: utf-8
 """ShiftAlarm 상태 확인 — Pythonista Today 위젯용.
 
+★★ 2026-08-06: iOS 18부터 애플이 이 스크립트가 쓰는 Today Widget(NCWidget
+확장) 방식을 완전히 제거했다. iOS 18 이상 기기에서는 위젯 목록에 Pythonista
+자체가 뜨지 않아 이 스크립트를 위젯으로 쓸 수 없다 — 홈 화면 위젯이 필요하면
+`shift_alarm/ShiftAlarmWidget.js`(Scriptable용, WidgetKit 지원)를 대신 쓸 것.
+iOS 17 이하 기기에서만 아래 방식이 유효하다.
+
 같은 폴더(iCloud 동기화)의 status.json을 읽어 근무/날씨/저장공간/리마인더를
 위젯 뷰(ui.View)로 그린다. 잠금화면에서 오른쪽으로 스와이프하거나, 홈 화면
 첫 페이지에서 왼쪽으로 스와이프하면 나오는 "Today View"에 추가해서 쓴다.
