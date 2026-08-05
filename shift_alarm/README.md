@@ -231,6 +231,7 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
 - `🪙 Claude: {윈도우} {사용률}%` — `get_claude_live_quota()`가 macOS 키체인의 `Claude Code-credentials`(Claude Code 자신이 이미 저장해둔 OAuth 토큰)로 `GET https://api.anthropic.com/api/oauth/usage`를 호출한다. 비공개 엔드포인트지만 자기 계정 조회에만 쓴다. **토큰 값은 절대 print/log에 노출하지 않는다** — Authorization 헤더로만 사용하고 즉시 스코프에서 제거.
 - `🪙 Claude 로컬: {모델} · 턴 N · 요청 N · 캐시 N%` — `get_claude_local_stats()`가 최근 24시간 이내 수정된 `~/.claude/projects/**/*.jsonl`을 집계해 모델명·유저 턴수·모델 요청수·프롬프트 캐시 적중률을 계산.
 - 값을 못 가져오면(로그 없음, API 실패, 키체인 없음 등) **추측하지 않고 "확인 불가"로 표시**한다.
+- **★ 2026-08-05 색상 추가**: `Codex`/`Claude` 두 항목 텍스트 전체에 브랜드 색을 입힌다 — Codex는 초록(`systemGreenColor`), Claude(라이브 quota)는 오렌지(`systemOrangeColor`). 단, **주간(7일) 윈도우 사용률이 90% 이상이면 두 항목 모두 빨간색(`systemRedColor`)으로 덮어쓴다**(`AI_USAGE_CRITICAL_PERCENT = 90`) — Codex는 `primary`(window_minutes≈10080)를, Claude는 키 이름에 `day`가 들어간 윈도우(예: `seven_day`)를 주간으로 취급. `_set_menu_item_color()`가 `NSMenuItem.attributedTitle`을 직접 설정하는 방식이라 rumps `MenuItem.title`이 아니라 `menu_item._menuitem`을 직접 다룬다. `🪙 Claude 로컬` 항목은 색상 없이 기본색 그대로 둔다(quota가 아니라 통계라 임계값 개념이 없음).
 - 12분마다 백그라운드 스레드(`_refresh_ai_usage`)로 갱신 + 앱 시작 시 1회.
 - Gemini CLI는 이 기기에 설치돼 있지 않아(`~/.gemini` 없음) 데이터 소스에서 제외했다.
 

@@ -2078,6 +2078,50 @@ def format_claude_local_stats(stats):
     return f"🪙 Claude 로컬: {' · '.join(parts)}"
 
 
+AI_USAGE_CRITICAL_PERCENT = 90
+
+
+def _codex_weekly_critical(quota):
+    """Codex의 주간(primary, window_minutes≈10080) 사용률이 90% 이상인지."""
+    if not quota:
+        return False
+    primary = quota.get("primary")
+    if not primary:
+        return False
+    window = primary.get("window_minutes")
+    pct = primary.get("used_percent")
+    if window is None or pct is None:
+        return False
+    return window >= 10000 and pct >= AI_USAGE_CRITICAL_PERCENT
+
+
+def _claude_weekly_critical(data):
+    """Claude 라이브 quota 중 주간(키 이름에 'day' 포함, 예: seven_day) 윈도우가
+    90% 이상인지."""
+    if not data:
+        return False
+    for key, val in data.items():
+        if not isinstance(val, dict) or "day" not in key.lower():
+            continue
+        util = val.get("utilization")
+        if util is not None and util >= AI_USAGE_CRITICAL_PERCENT:
+            return True
+    return False
+
+
+def _set_menu_item_color(menu_item, text, color):
+    """MenuItem 표시 텍스트에 색을 입힌다(NSMenuItem.attributedTitle 직접 조작).
+    color가 None이면 기본색(plain title)으로 표시."""
+    menu_item.title = text
+    if color is None:
+        return
+    attributed = NSMutableAttributedString.alloc().initWithString_(text)
+    attributed.addAttribute_value_range_(
+        NSForegroundColorAttributeName, color, NSRange(0, _utf16_len(text))
+    )
+    menu_item._menuitem.setAttributedTitle_(attributed)
+
+
 # ════════════════════════════════════════════════════════════
 # 메뉴바 앱
 # ════════════════════════════════════════════════════════════
@@ -2196,8 +2240,20 @@ class ShiftAlarmApp(rumps.App):
         threading.Thread(target=self._fetch_ai_usage, daemon=True).start()
 
     def _fetch_ai_usage(self):
-        self.codex_usage_item.title = format_codex_usage(ai_usage.get_codex_quota())
-        self.claude_usage_item.title = format_claude_live_usage(ai_usage.get_claude_live_quota())
+        codex_quota = ai_usage.get_codex_quota()
+        codex_color = (
+            NSColor.systemRedColor() if _codex_weekly_critical(codex_quota)
+            else NSColor.systemGreenColor()
+        )
+        _set_menu_item_color(self.codex_usage_item, format_codex_usage(codex_quota), codex_color)
+
+        claude_live = ai_usage.get_claude_live_quota()
+        claude_color = (
+            NSColor.systemRedColor() if _claude_weekly_critical(claude_live)
+            else NSColor.systemOrangeColor()
+        )
+        _set_menu_item_color(self.claude_usage_item, format_claude_live_usage(claude_live), claude_color)
+
         self.claude_stats_item.title = format_claude_local_stats(ai_usage.get_claude_local_stats())
 
     def _today_override(self):
