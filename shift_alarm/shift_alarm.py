@@ -2510,6 +2510,11 @@ class ShiftAlarmApp(rumps.App):
             "weather": self.weather_str or None,
             "reminders": get_today_reminders(self.schedule),
             "storage_free_gb": self.storage_free_gb,
+            "earnings_short": self._earnings_short_text(),
+            "codex_percent": _codex_primary_percent(self._codex_quota),
+            "codex_critical": _codex_weekly_critical(self._codex_quota),
+            "claude_percent": _claude_five_hour_percent(self._claude_live_quota),
+            "claude_critical": _claude_weekly_critical(self._claude_live_quota),
         }
         for target_dir, target_file in (
             (MOBILE_STATUS_DIR, MOBILE_STATUS_FILE),
@@ -2560,6 +2565,15 @@ class ShiftAlarmApp(rumps.App):
         else:
             self.earnings_item.title = "💰 오늘은 휴무입니다"
         self._update_title()
+
+    def _earnings_short_text(self):
+        """모바일 위젯용 짧은 급여 표시. 휴무면 None(위젯에서 그냥 생략)."""
+        status = get_earnings_status(self.schedule, today_override=self._today_override())
+        if status["state"] == "active":
+            return f"💰 {status['earned_so_far']:,}원"
+        if status["state"] == "waiting":
+            return f"💰 시작 전 (예상 {status['total_when_done']:,}원)"
+        return None
 
     # ── 근무 전후 절전 방지 (SSH 접속용) ───────────────────────
 
