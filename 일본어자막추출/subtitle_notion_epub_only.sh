@@ -22,6 +22,7 @@ cat > "$LAUNCHER" <<LAUNCHEREOF
 #!/bin/zsh
 export WORKING_DIR='$TARGET_PATH'
 export SCRIPT_DIR='$SCRIPT_DIR'
+export WORKOUT_EXTRACTION_ENABLED=0
 zsh "${SCRIPT_DIR}/subtitle_pipeline_body.sh"
 LAUNCHEREOF
 chmod +x "$LAUNCHER"

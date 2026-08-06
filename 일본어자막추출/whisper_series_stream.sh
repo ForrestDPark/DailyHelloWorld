@@ -103,6 +103,7 @@ echo "\033[1;35m==================================================\033[0m"
 #   똑같이 공유하는 로직이라 여기서는 그 파일을 그대로 불러 쓴다(중복 유지 방지).
 export WORKING_DIR="$WORKING_DIR"
 export SCRIPT_DIR="$SCRIPT_DIR"
+export WORKOUT_EXTRACTION_ENABLED=1
 source "${SCRIPT_DIR}/subtitle_pipeline_body.sh"
 exit 0
 

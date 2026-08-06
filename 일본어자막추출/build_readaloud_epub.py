@@ -300,7 +300,16 @@ def render_study_card(study_card, heading="장면 학습 카드"):
     )
     if expressions:
         sections.append(f'<div class="card-section"><h3 class="{DARK}">핵심 일본어 표현</h3><ol class="expressions">{expressions}</ol></div>')
-    grammar = " / ".join(html.escape(str(item)) for item in study_card.get("grammar", []))
+    def _grammar_text(item):
+        # 보통 문자열이지만, 모델이 {"pattern":..,"explanation":..} 형태의 dict로
+        # 보낼 때도 있어(★ 2026-08-07 실사용 중 확인) 깔끔한 문자열로 풀어준다.
+        if isinstance(item, dict):
+            pattern = item.get("pattern", "")
+            explanation = item.get("explanation", "")
+            return f"{pattern}: {explanation}" if pattern and explanation else str(pattern or explanation or item)
+        return str(item)
+
+    grammar = " / ".join(html.escape(_grammar_text(item)) for item in study_card.get("grammar", []))
     if grammar:
         sections.append(f'<div class="card-section"><h3 class="{DARK}">문법·어미·뉘앙스</h3><p>{grammar}</p></div>')
     shadow = study_card.get("shadowing", {})

@@ -5,6 +5,10 @@
 # 로직을 두 곳에 복사해두면 한쪽만 고치고 잊어버리는 문제가 생기므로 파일 하나로 합침.
 #
 # 호출자가 미리 export해야 하는 값: WORKING_DIR, SCRIPT_DIR
+# WORKOUT_EXTRACTION_ENABLED: 이번 실행에 운동용 고음 영상 추출 단계가 있었는지.
+# whisper_series_stream.sh=1, subtitle_notion_epub_only.sh=0. 미지정(단독 테스트
+# 등)이면 안전하게 "있었다"고 가정해 기존 avMusic 확인 절차를 그대로 요구한다.
+WORKOUT_EXTRACTION_ENABLED="${WORKOUT_EXTRACTION_ENABLED:-1}"
 
 export PATH="/opt/homebrew/bin:/usr/local/bin:/opt/anaconda3/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
 
@@ -1161,12 +1165,23 @@ except Exception:
     AV_MUSIC_DIR="/Users/forrestdpark/Desktop/BlogImage/avMusic"
     FINAL_EPUB_COPY="${COMPLETED_EPUB_DIR}/${READALOUD_EPUB:t}"
     AV_MUSIC_MATCHES=("${AV_MUSIC_DIR}/${FILENAME_NO_EXT}_운동용_"*"_bgm.mp4"(N))
+    # subtitle_notion_epub_only.sh로 단독 실행했을 땐 운동용 영상 추출 자체가
+    # 없으므로(WORKOUT_EXTRACTION_ENABLED=0) avMusic 확인을 요구하지 않는다 —
+    # 안 그러면 이 경로로 처리한 원본은 영원히 정리 조건을 못 채워 폴더에 계속 쌓인다.
+    WORKOUT_CONFIRMED=0
+    if (( WORKOUT_EXTRACTION_ENABLED == 0 )); then
+        WORKOUT_CONFIRMED=1
+    elif (( ${#AV_MUSIC_MATCHES[@]} > 0 || AVMUSIC_EXPORT_RECORDED == 1 )); then
+        WORKOUT_CONFIRMED=1
+    fi
     if (( READALOUD_SUCCESS == 1 )) \
         && [[ -s "$FINAL_EPUB_COPY" ]] \
-        && (( ${#AV_MUSIC_MATCHES[@]} > 0 || AVMUSIC_EXPORT_RECORDED == 1 )); then
-        echo "🧹 최종 파일 2종 확인 — 원본은 보존하고 중간 작업물 삭제"
+        && (( WORKOUT_CONFIRMED == 1 )); then
+        echo "🧹 최종 파일 확인 — 원본은 보존하고 중간 작업물 삭제"
         echo "   📖 $FINAL_EPUB_COPY"
-        if (( ${#AV_MUSIC_MATCHES[@]} > 0 )); then
+        if (( WORKOUT_EXTRACTION_ENABLED == 0 )); then
+            echo "   🎵 이번 실행은 운동용 영상 추출 없음(자막·번역·EPUB 단독 실행)"
+        elif (( ${#AV_MUSIC_MATCHES[@]} > 0 )); then
             echo "   🎵 ${AV_MUSIC_MATCHES[1]}"
         else
             echo "   🎵 avMusic 복사 완료 기록 확인(현재 파일은 이동됨): $AVMUSIC_EXPORTED_NAME"

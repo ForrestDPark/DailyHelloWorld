@@ -2398,7 +2398,17 @@ class ShiftAlarmApp(rumps.App):
 
         # ★ 2026-07-24: 공백 없이 이어붙이면(특히 휴무일처럼 리마인더가 여러 개
         # 동시에 뜨는 날) 이모지들이 서로 겹쳐 보여 찌그러진 것처럼 보였다.
-        reminder_icons = " ".join(get_today_reminder_title_tokens(self.schedule))
+        # ★ 2026-08-07: 리마인더가 몰리는 날(월초 휴무 시작일 등)은 최대 8개까지
+        # 겹쳐서 타이틀 전체가 macOS에 의해 통째로 숨겨지는 문제가 실제로 발생함
+        # (예: 2026-08-09에 8개 동시 발생 확인). 타이틀에는 최대 3개만 보여주고
+        # 나머지는 "+N"으로 압축한다 — 전체 목록은 드롭다운 메뉴에서 계속 확인 가능.
+        _reminder_tokens = get_today_reminder_title_tokens(self.schedule)
+        _REMINDER_TITLE_LIMIT = 3
+        if len(_reminder_tokens) > _REMINDER_TITLE_LIMIT:
+            _reminder_tokens = _reminder_tokens[:_REMINDER_TITLE_LIMIT] + [
+                f"+{len(_reminder_tokens) - _REMINDER_TITLE_LIMIT}"
+            ]
+        reminder_icons = " ".join(_reminder_tokens)
 
         storage_num = self.storage_free_gb
         storage = f"💾{storage_num}" if storage_num is not None else ""

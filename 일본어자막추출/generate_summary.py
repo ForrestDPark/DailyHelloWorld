@@ -283,17 +283,18 @@ def apply_translation_corrections(book_dir, lines, corrections):
 
 
 def normalize_cards(cards):
-    """일부 모델(특히 Claude 폴백)이 단일 객체여야 할 shadowing을 원소 1개짜리
-    리스트로 감싸 보내는 경우가 있다 — 실사용 중 MIDA-154_J에서 재현·확인.
-    검증 전에 dict로 펴서, 내용 자체는 정상인데 포맷 차이로 재시도 3회를
-    낭비하는 걸 막는다."""
+    """일부 모델(특히 Claude 폴백)이 단일 객체여야 할 shadowing을 리스트로 감싸
+    보내는 경우가 있다(원소 1개일 때도, expressions 개수만큼 여러 개일 때도
+    있음 — 실사용 중 MIDA-154_J에서 둘 다 재현·확인). 검증 전에 첫 원소만
+    남겨 dict로 펴서, 내용 자체는 정상인데 포맷 차이로 재시도를 낭비하는
+    걸 막는다."""
     if not isinstance(cards, dict):
         return cards
     for card in cards.values():
         if not isinstance(card, dict):
             continue
         shadow = card.get("shadowing")
-        if isinstance(shadow, list) and len(shadow) == 1 and isinstance(shadow[0], dict):
+        if isinstance(shadow, list) and shadow and isinstance(shadow[0], dict):
             card["shadowing"] = shadow[0]
     return cards
 
@@ -493,13 +494,22 @@ def main():
             )
         )
     corrected_count = apply_translation_corrections(book_dir, lines, corrections)
+    min_expr_all = None
     if use_batched_cards:
         print(f"🗂️ 장면 {len(expected_scenes)}개 — 학습카드를 6장면씩 나눠 생성합니다.")
         try:
             cards = generate_cards_batched(book_dir, base_name, lines)
         except (RuntimeError, json.JSONDecodeError) as exc:
             sys.exit(f"❌ 분할 학습 카드 생성 실패: {exc}")
-    if not valid_cards(cards, expected_scenes):
+        # 배치 내부 검증과 동일한 장면별 적응형 최소 표현 개수를 써야
+        # 짧은 장면(대사 6줄 미만)이 배치 통과 후 여기서 다시 탈락하지 않는다.
+        grouped_all = {}
+        for record in lines:
+            grouped_all.setdefault((int(record["part"]), int(record["scene"])), []).append(record)
+        min_expr_all = {
+            f"{part}-{scene}": len(records) for (part, scene), records in grouped_all.items()
+        }
+    if not valid_cards(cards, expected_scenes, min_expr_all):
         sys.exit("❌ 장면별 학습 카드가 누락됐거나 형식이 잘못되었습니다(재시도 포함).")
 
     subtitle = existing_subtitle or generated_subtitle
