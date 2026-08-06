@@ -175,17 +175,18 @@ h1 { margin: 0 0 18px; color: #9a6a00; font-size: 34px; }
 .scene-toc li { margin-bottom: 14px; }
 .scene-toc a { color: #765300; text-decoration: none; }
 .study-card { margin: 6px 0 10px; padding: 14px 18px; border: 2px solid #d8b84b; border-radius: 12px; background: #fff9df; }
-.study-card h2 { margin: 0 0 12px; font-size: 38px; color: #765300; }
-.study-card h3 { margin: 10px 0 7px; font-size: 34px; color: #765300; }
-.study-card p, .study-card li, .study-card .vocab-line { margin: 7px 0; font-size: 32px; line-height: 1.38; }
+.study-card h2 { margin: 0 0 12px; font-size: 46px; color: #765300; }
+.study-card h3 { margin: 10px 0 7px; font-size: 40px; color: #765300; }
+.study-card p, .study-card li, .study-card .vocab-line { margin: 7px 0; font-size: 38px; line-height: 1.4; }
 .study-card ul, .study-card ol { margin: 3px 0 7px; padding-left: 30px; }
 .study-card .expressions { columns: 1; }
 .study-card .expressions li { margin-bottom: 9px; }
-.study-card ruby rt { font-size: 18px; color: #765300; }
+.study-card ruby rt { font-size: 22px; color: #765300; }
 .study-card .card-ja { font-weight: bold; }
 .study-card .card-ko {
     display: block; margin: 5px 0 12px 14px; padding-left: 12px;
     border-left: 3px solid #d8b84b; color: #666666; font-weight: normal;
+    font-size: 34px;
 }
 .study-page h1 { margin-bottom: 22px; text-align: center; }
 .study-page .study-card { margin-top: 18px; padding: 24px 28px; }
@@ -205,6 +206,8 @@ h1 { margin: 0 0 18px; color: #9a6a00; font-size: 34px; }
     .scene-toc a { color: #f5c842; }
     .study-card { background: #211e12; border-color: #f5c842; }
     .study-card h2, .study-card h3 { color: #f5c842; }
+    .study-card ruby rt { color: #f5c842; }
+    .study-card .card-ko { color: #999999; border-left-color: #444444; }
     .-epub-media-overlay-active {
         color: #111111 !important; background-color: #ffe36e !important;
         box-shadow: 0 0 0 5px #ffe36e;
@@ -265,6 +268,13 @@ def kanji_only_ruby(ja, reading):
 
 
 def render_study_card(study_card, heading="장면 학습 카드"):
+    # ★ 2026-08-06: h2/h3/card-ja/card-ko가 커스텀 색상(color:...)을 쓰는데
+    # ibooks-dark-theme-use-custom-text-color 마커가 빠져 있었다. Apple Books는
+    # 이 마커가 없는 커스텀 색상 텍스트를 다크모드에서 검정으로 강제 override해서
+    # 어두운 카드 배경 위에 글자가 안 보이는 버그가 있었다(.ja/.ko 문단은 이미
+    # 마커가 붙어있어서 정상이었는데 학습카드만 빠짐 — 실사용 중 발견).
+    DARK = "ibooks-dark-theme-use-custom-text-color"
+
     def ruby_text(item):
         return kanji_only_ruby(item.get("ja", ""), item.get("reading", ""))
 
@@ -278,29 +288,29 @@ def render_study_card(study_card, heading="장면 학습 카드"):
                 f' / 훈: {html.escape(item.get("hanja_hun", ""))}'
             )
         vocabulary_items.append(
-            f'<div class="vocab-line"><span class="card-ja">{ruby_text(item)}</span>'
+            f'<div class="vocab-line"><span class="card-ja {DARK}">{ruby_text(item)}</span>'
             f' — {html.escape(item.get("ko", ""))}{hanja}</div>'
         )
     if vocabulary_items:
-        sections.append('<div class="card-section"><h3>주요 단어와 뜻</h3>' + "".join(vocabulary_items) + '</div>')
+        sections.append(f'<div class="card-section"><h3 class="{DARK}">주요 단어와 뜻</h3>' + "".join(vocabulary_items) + '</div>')
     expressions = "".join(
-        f'<li><span class="card-ja">{ruby_text(item)}</span>'
-        f'<span class="card-ko">{html.escape(item.get("ko", ""))}</span></li>'
+        f'<li><span class="card-ja {DARK}">{ruby_text(item)}</span>'
+        f'<span class="card-ko {DARK}">{html.escape(item.get("ko", ""))}</span></li>'
         for item in study_card.get("expressions", [])
     )
     if expressions:
-        sections.append(f'<div class="card-section"><h3>핵심 일본어 표현</h3><ol class="expressions">{expressions}</ol></div>')
+        sections.append(f'<div class="card-section"><h3 class="{DARK}">핵심 일본어 표현</h3><ol class="expressions">{expressions}</ol></div>')
     grammar = " / ".join(html.escape(str(item)) for item in study_card.get("grammar", []))
     if grammar:
-        sections.append(f'<div class="card-section"><h3>문법·어미·뉘앙스</h3><p>{grammar}</p></div>')
+        sections.append(f'<div class="card-section"><h3 class="{DARK}">문법·어미·뉘앙스</h3><p>{grammar}</p></div>')
     shadow = study_card.get("shadowing", {})
     if shadow:
         sections.append(
-            f'<div class="card-section"><h3>쉐도잉 추천 문장</h3><p><span class="card-ja">'
-            f'{ruby_text(shadow)}</span><span class="card-ko">'
+            f'<div class="card-section"><h3 class="{DARK}">쉐도잉 추천 문장</h3><p><span class="card-ja {DARK}">'
+            f'{ruby_text(shadow)}</span><span class="card-ko {DARK}">'
             f'{html.escape(shadow.get("ko", ""))}</span></p></div>'
         )
-    return f'<aside class="study-card"><h2>{html.escape(heading)}</h2>{"".join(sections)}</aside>'
+    return f'<aside class="study-card {DARK}"><h2 class="{DARK}">{html.escape(heading)}</h2>{"".join(sections)}</aside>'
 
 
 def split_study_card(card, budget=6):

@@ -292,10 +292,12 @@ def valid_cards(cards, expected_scenes):
         for word in card["vocabulary"]:
             if not isinstance(word, dict) or not all(word.get(field) for field in ("ja", "reading", "ko")):
                 return False
-            if re.search(r"[一-鿿]", word.get("ja", "")) and not all(
-                word.get(field) for field in ("reading", "hanja_sound", "hanja_hun")
-            ):
-                return False
+            # ★ 2026-08-06: hanja_sound/hanja_hun은 필수에서 제외했다. 匂い·頑張る처럼
+            # 고유 훈독 어휘는 한글 한자음이 딱 떨어지지 않아 모델이 빈 채로 두는 게
+            # 오히려 정확한데, 예전엔 이걸 무조건 필수로 검증해서 Codex가 쿼터
+            # 소진으로 Claude로 폴백될 때마다(Claude는 억지로 지어내지 않음)
+            # 파이프라인 전체가 실패했다(MIDA-729/MIDA-154_J에서 실제 재현·확인).
+            # build_readaloud_epub.py도 이미 빈 값을 안전하게 처리한다.
     return True
 
 
