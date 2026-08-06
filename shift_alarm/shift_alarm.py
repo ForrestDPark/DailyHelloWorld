@@ -174,19 +174,19 @@ def get_free_storage_gb(path="/"):
 # - 빨래: 휴무일마다 매번
 # 각 항목은 메뉴의 "🔔 리마인더 켜기/끄기"에서 개별적으로 켜고 끌 수 있음.
 REMINDERS = {
-    "gym":             {"label": "🏋️ 헬스장 가는 날(상체/하체)", "enabled": True},
-    "call_mom":        {"label": "📞 엄마한테 전화하는 날",   "enabled": True},
-    "call_heo_minjun": {"label": "📞 허민준한테 전화하는 날", "enabled": True},
-    "call_dongchan":   {"label": "📞 동찬이형한테 전화하는 날", "enabled": True},
-    "call_sondongju":  {"label": "📞 손동주한테 전화하는 날",   "enabled": True},
-    "sondongju_off":   {"label": "🎉 손동주 쉬는 날",         "enabled": True},
-    "nose_hair_trim":  {"label": "🪒 코털 정리하는 날",       "enabled": True},
-    "earphone_charge": {"label": "🎧 이어폰 충전하는 날",     "enabled": True},
-    "kakao_cleanup":   {"label": "🧹 카톡 정리하는 날",       "enabled": True},
-    "outlet_shopping": {"label": "🛍️ 아울렛 쇼핑하는 날",    "enabled": True},
-    "walk_20k":        {"label": "🚶 2만보 걷는 날",         "enabled": True},
-    "laundry":         {"label": "🧺 빨래 돌리는 날",         "enabled": True},
-    "outing":          {"label": "🗺️ 월 1회 나들이 추천",    "enabled": True},
+    "gym":             {"label": "🏋️ 헬스장 가는 날(상체/하체·격일)", "enabled": True},
+    "call_mom":        {"label": "📞 엄마한테 전화하는 날(휴무 시작일)",   "enabled": True},
+    "call_heo_minjun": {"label": "📞 허민준한테 전화하는 날(월 1회)", "enabled": True},
+    "call_dongchan":   {"label": "📞 동찬이형한테 전화하는 날(21일에 1회)", "enabled": True},
+    "call_sondongju":  {"label": "📞 손동주한테 전화하는 날(1주일에 1회)",   "enabled": True},
+    "sondongju_off":   {"label": "🎉 손동주 쉬는 날(동주 근무 주기 기준)",         "enabled": True},
+    "nose_hair_trim":  {"label": "🪒 코털 정리하는 날(14일에 1회)",       "enabled": True},
+    "earphone_charge": {"label": "🎧 이어폰 충전하는 날(4일에 1회)",     "enabled": True},
+    "kakao_cleanup":   {"label": "🧹 카톡 정리하는 날(휴무 마지막날)",       "enabled": True},
+    "outlet_shopping": {"label": "🛍️ 아울렛 쇼핑하는 날(월 1회)",    "enabled": True},
+    "walk_20k":        {"label": "🚶 2만보 걷는 날(휴무 시작·마지막날)",         "enabled": True},
+    "laundry":         {"label": "🧺 빨래 돌리는 날(휴무일마다)",         "enabled": True},
+    "outing":          {"label": "🗺️ 나들이 추천(월 1회)",    "enabled": True},
 }
 
 # ── 월 1회 나들이 추천 장소 (아산시 기준 + 근교) ────────────────────
