@@ -165,7 +165,7 @@ def get_free_storage_gb(path="/"):
 # - 손동주 쉬는 날: 동주 본인 근무표(주간 2주/야간 2주 로테이션, 5일 근무+2일 휴무
 #   반복) 기준. 2026-08-04(야간 첫날)를 14일 주기 1일째로 놓으면, 주/야간 구분과
 #   무관하게 각 14일 블록 내 6·7일째와 13·14일째가 항상 휴무일이 된다.
-# - 코털 정리: 근무표와 무관하게 2026-08-03을 기준으로 14일마다 한 번
+# - 코털 정리: 근무표와 무관하게 2026-08-03을 기준으로 4일마다 한 번
 # - 이어폰 충전: 근무표와 무관하게 2026-08-03을 기준으로 4일마다 한 번
 # - 카톡 정리: 휴무 블록의 마지막날 (다시 출근하기 전날)
 # - 아울렛 쇼핑: 한 달에 한 번. 그 달의 첫 번째 휴무 블록 시작일에 알림
@@ -180,7 +180,7 @@ REMINDERS = {
     "call_dongchan":   {"label": "📞 동찬이형한테 전화하는 날(21일에 1회)", "enabled": True},
     "call_sondongju":  {"label": "📞 손동주한테 전화하는 날(1주일에 1회)",   "enabled": True},
     "sondongju_off":   {"label": "🎉 손동주 쉬는 날(동주 근무 주기 기준)",         "enabled": True},
-    "nose_hair_trim":  {"label": "🪒 코털 정리하는 날(14일에 1회)",       "enabled": True},
+    "nose_hair_trim":  {"label": "🪒 코털 정리하는 날(4일에 1회)",       "enabled": True},
     "earphone_charge": {"label": "🎧 이어폰 충전하는 날(4일에 1회)",     "enabled": True},
     "kakao_cleanup":   {"label": "🧹 카톡 정리하는 날(휴무 마지막날)",       "enabled": True},
     "outlet_shopping": {"label": "🛍️ 아울렛 쇼핑하는 날(월 1회)",    "enabled": True},
@@ -559,7 +559,7 @@ SONDONGJU_SCHEDULE_ANCHOR = datetime.date(2026, 8, 4)
 SONDONGJU_CYCLE_DAYS = 14
 SONDONGJU_OFF_DAY_OFFSETS = (5, 6, 12, 13)
 NOSE_HAIR_TRIM_ANCHOR = datetime.date(2026, 8, 3)
-NOSE_HAIR_TRIM_INTERVAL_DAYS = 14  # ★ 2026-08-07: 7일→14일로 2배 확대(사용자 요청)
+NOSE_HAIR_TRIM_INTERVAL_DAYS = 4  # ★ 2026-08-07: 7일→14일→4일로 재조정(사용자 요청)
 EARPHONE_CHARGE_ANCHOR = datetime.date(2026, 8, 3)
 EARPHONE_CHARGE_INTERVAL_DAYS = 4
 
@@ -614,7 +614,7 @@ def _is_sondongju_off_day(d):
 
 
 def _is_nose_hair_trim_day(d):
-    """기준일부터 14일마다 돌아오는 코털 정리일인지 반환."""
+    """기준일부터 4일마다 돌아오는 코털 정리일인지 반환."""
     days = (d - NOSE_HAIR_TRIM_ANCHOR).days
     return days >= 0 and days % NOSE_HAIR_TRIM_INTERVAL_DAYS == 0
 
@@ -668,7 +668,7 @@ def get_today_reminders(schedule, now=None):
     - 손동주한테 전화: 2026-08-05부터 7일마다(주 1회) 한 번
     - 손동주 쉬는 날: 동주 본인 근무표(야간 2주/주간 2주 로테이션, 5일 근무+2일 휴무
       반복) 기준. 2026-08-04(야간 첫날)를 14일 주기 1일째로 놓고 계산.
-    - 코털 정리: 근무표와 무관하게 2026-08-03부터 14일마다 한 번
+    - 코털 정리: 근무표와 무관하게 2026-08-03부터 4일마다 한 번
     - 이어폰 충전: 근무표와 무관하게 2026-08-03부터 4일마다 한 번
     - 카톡 정리: 오늘이 휴무 블록의 마지막날 (내일은 근무)
     - 2만보 걷기: 휴무 블록의 첫날과 마지막날. 하루짜리 휴무는 한 번만 뜬다.
