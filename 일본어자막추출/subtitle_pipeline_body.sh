@@ -1017,10 +1017,12 @@ drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese 
     echo "\n🧠 Codex로 줄거리·장면별 학습 카드 자동 생성 중..."
     READALOUD_SUCCESS=0
     READALOUD_EPUB=""
+    SUMMARY_OK=0
     COMPLETED_EPUB_DIR="/Users/forrestdpark/Desktop/BlogImage/av완성작"
     mkdir -p "$COMPLETED_EPUB_DIR"
     _T0=$(date +%s)
     if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_summary.py" "$BOOK_DIR"; then
+        SUMMARY_OK=1
         echo "⏱ 요약 생성 소요: $(( $(date +%s) - _T0 ))초"
 
         FINAL_LIBRARY_EPUB="${BOOK_DIR}/${SAFE_BASE_NAME}.epub"
@@ -1028,53 +1030,63 @@ drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese 
             && [[ -f "$FINAL_LIBRARY_EPUB" ]]; then
             cp "$FINAL_LIBRARY_EPUB" "$OUTPUT_EPUB"
             echo "✅ 줄거리·목차 포함된 최종 EPUB으로 교체: $OUTPUT_EPUB"
-
-            # ★ 2026-08-01: Read Aloud EPUB을 유일한 최종 배포본으로 만든다.
-            # 일반 EPUB은 생성 실패 시 비상 결과물 및 내부 재빌드용이다.
-            # 일본어 42px,
-            # 페이지당 4문장, 두 페이지 펼침(auto), 문장별 SMIL 강조,
-            # 페이지 내 '자동 읽기' 버튼의 자동 넘김이 표준 양식이다.
-            EPUB_DISPLAY_TITLE=$(
-                /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/book_title.py" \
-                    "$BOOK_DIR" --base-name "$FILENAME_NO_EXT" --filename
-            )
-            [[ -z "$EPUB_DISPLAY_TITLE" ]] && EPUB_DISPLAY_TITLE="$FILENAME_NO_EXT"
-            READALOUD_EPUB="${EPUB_DISPLAY_TITLE}_낭독판.epub"
-            echo "\n📖 Apple Books 문장 동기화·자동 넘김 EPUB 생성 중..."
-            _T0=$(date +%s)
-            if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/build_readaloud_epub.py" \
-                "$BOOK_DIR" --output "$READALOUD_EPUB"; then
-                echo "⏱ 낭독판 EPUB 생성 소요: $(( $(date +%s) - _T0 ))초"
-                FINAL_BOOKS_EPUB="${COMPLETED_EPUB_DIR}/${READALOUD_EPUB:t}"
-                if cp "$READALOUD_EPUB" "$FINAL_BOOKS_EPUB"; then
-                    echo "📖 낭독판 EPUB 완성작 폴더 복사 완료"
-                    # 작업 폴더와 배포 위치에는 낭독판 EPUB 하나만 남긴다.
-                    # library 안의 일반 EPUB은 재빌드용 내부 자료로 보존한다.
-                    rm -f "$OUTPUT_EPUB"
-                    rm -f "${COMPLETED_EPUB_DIR}/${FILENAME_NO_EXT}.epub"
-                    [[ -d "$OBSIDIAN_PATH" ]] && rm -f \
-                        "${OBSIDIAN_PATH}/${FILENAME_NO_EXT}.epub" \
-                        "${OBSIDIAN_PATH}/${READALOUD_EPUB:t}"
-                    READALOUD_SUCCESS=1
-                    if [[ "${JP_OPEN_BOOKS:-1}" != "0" ]]; then
-                        if open -a Books "$FINAL_BOOKS_EPUB"; then
-                            echo "📖 Apple Books에서 최종 EPUB을 열었습니다."
-                        else
-                            echo "⚠️  EPUB은 정상 생성됐지만 Apple Books 자동 열기에 실패했습니다."
-                        fi
-                    fi
-                else
-                    echo "⚠️  낭독판 EPUB 완성작 폴더 복사 실패 — 자동 열기를 건너뜁니다."
-                fi
-            else
-                echo "⚠️  낭독판 EPUB 생성 실패 — 일반 EPUB은 정상 보존하며, 나중에 재실행 가능"
-            fi
         else
             echo "⚠️  최종 EPUB 빌드 실패 — 줄거리 없는 기존 EPUB 유지"
         fi
     else
-        echo "⚠️  요약 생성 실패 — SUMMARY.md는 '요약 대기 중' 상태로 남음"
-        echo "    (나중에 수동 재실행: python3 generate_summary.py \"$BOOK_DIR\")"
+        echo "⚠️  요약 생성 실패(AI 토큰/쿼터 소진 등) — SUMMARY.md는 '요약 대기 중' 상태로 남음"
+        echo "    낭독판은 학습카드·줄거리 없이 TTS 낭독만으로 계속 만듭니다."
+        echo "    (나중에 요약만 재생성: python3 generate_summary.py \"$BOOK_DIR\")"
+    fi
+
+    # ★ 2026-08-07: 낭독판(TTS) EPUB은 whisper 대사 텍스트만 있으면 만들 수 있고
+    # AI(Codex/Claude)가 필요 없다 — 학습카드·줄거리만 AI가 필요하다. 예전엔
+    # generate_summary.py 실패 시 이 블록 전체를 건너뛰어서 AI 쿼터가 없으면
+    # 낭독판 자체가 하나도 안 만들어졌다. 이제 요약 성공 여부와 무관하게 항상
+    # 시도한다 — 성공하면 학습카드 포함, 실패하면 학습카드 없이 TTS 낭독만.
+    # Read Aloud EPUB을 유일한 최종 배포본으로 만든다. 일반 EPUB은 낭독판
+    # 생성 실패 시 비상 결과물 및 내부 재빌드용이다. 일본어 42px, 페이지당
+    # 4문장, 두 페이지 펼침(auto), 문장별 SMIL 강조, 페이지 내 '자동 읽기'
+    # 버튼의 자동 넘김이 표준 양식이다.
+    EPUB_DISPLAY_TITLE=$(
+        /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/book_title.py" \
+            "$BOOK_DIR" --base-name "$FILENAME_NO_EXT" --filename
+    )
+    [[ -z "$EPUB_DISPLAY_TITLE" ]] && EPUB_DISPLAY_TITLE="$FILENAME_NO_EXT"
+    READALOUD_EPUB="${EPUB_DISPLAY_TITLE}_낭독판.epub"
+    echo "\n📖 Apple Books 문장 동기화·자동 넘김 EPUB 생성 중..."
+    _T0=$(date +%s)
+    if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/build_readaloud_epub.py" \
+        "$BOOK_DIR" --output "$READALOUD_EPUB"; then
+        echo "⏱ 낭독판 EPUB 생성 소요: $(( $(date +%s) - _T0 ))초"
+        FINAL_BOOKS_EPUB="${COMPLETED_EPUB_DIR}/${READALOUD_EPUB:t}"
+        if cp "$READALOUD_EPUB" "$FINAL_BOOKS_EPUB"; then
+            echo "📖 낭독판 EPUB 완성작 폴더 복사 완료"
+            # 작업 폴더와 배포 위치에는 낭독판 EPUB 하나만 남긴다.
+            # library 안의 일반 EPUB은 재빌드용 내부 자료로 보존한다.
+            rm -f "$OUTPUT_EPUB"
+            rm -f "${COMPLETED_EPUB_DIR}/${FILENAME_NO_EXT}.epub"
+            [[ -d "$OBSIDIAN_PATH" ]] && rm -f \
+                "${OBSIDIAN_PATH}/${FILENAME_NO_EXT}.epub" \
+                "${OBSIDIAN_PATH}/${READALOUD_EPUB:t}"
+            READALOUD_SUCCESS=1
+            if (( SUMMARY_OK == 0 )); then
+                echo "⚠️  주의: 이 낭독판에는 AI 요약·학습카드가 빠져 있습니다(쿼터 소진 등)."
+                echo "    나중에 python3 generate_summary.py \"$BOOK_DIR\" 로 요약만 채운 뒤"
+                echo "    이 스크립트를 재실행하면 학습카드가 포함된 낭독판으로 교체됩니다."
+            fi
+            if [[ "${JP_OPEN_BOOKS:-1}" != "0" ]]; then
+                if open -a Books "$FINAL_BOOKS_EPUB"; then
+                    echo "📖 Apple Books에서 최종 EPUB을 열었습니다."
+                else
+                    echo "⚠️  EPUB은 정상 생성됐지만 Apple Books 자동 열기에 실패했습니다."
+                fi
+            fi
+        else
+            echo "⚠️  낭독판 EPUB 완성작 폴더 복사 실패 — 자동 열기를 건너뜁니다."
+        fi
+    else
+        echo "⚠️  낭독판 EPUB 생성 실패 — 일반 EPUB은 정상 보존하며, 나중에 재실행 가능"
     fi
 
     # 낭독판 EPUB이 실패했을 때만 일반 EPUB을 비상 결과물로 배포한다.

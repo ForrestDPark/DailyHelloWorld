@@ -145,20 +145,26 @@ def generate_cards_batched(book_dir, base_name, lines, batch_size=6):
         )
         expected = {f"{part}-{scene}" for part, scene in keys}
         batch_scenes = {(part, scene) for part, scene in keys}
+        # 대사가 원래 6줄이 안 되는 짧은 장면은 최소 표현 개수를 그만큼 낮춘다
+        # (지어내지 않는 원칙과 "6~10개" 요구가 동시에 불가능해지는 걸 방지).
+        min_expr = {f"{part}-{scene}": len(grouped[(part, scene)]) for part, scene in keys}
         cached = {key: all_cards.get(key) for key in expected if key in all_cards}
-        if valid_cards(cached, batch_scenes):
+        if valid_cards(cached, batch_scenes, min_expr):
             print(f"   ↪️ 학습카드 묶음 {start // batch_size + 1} 중간 저장본 재사용")
             continue
         prompt = f"""다음은 {base_name}의 일부 장면 대사다. 이 묶음의 장면별 일본어 학습 카드만 만든다.
 설명이나 코드 펜스 없이 JSON 객체 하나만 출력하라. 키는 {sorted(expected)}를 정확히 모두 사용한다.
-각 카드 형식은 expressions(실제 대사에서 6~10개), vocabulary, grammar, shadowing이다.
+각 카드 형식은 expressions(실제 대사에서 최대 10개, 목표 6~10개), vocabulary, grammar, shadowing이다.
+장면의 실제 대사 줄 수가 6줄보다 적으면 그 줄 수만큼만 expressions를 만들어라 —
+표현을 지어내거나 중복해서 개수를 채우지 마라. 절대 지어내지 마라.
 expressions 각 항목과 shadowing은 ja, reading(자연스러운 히라가나), ko를 반드시 넣는다.
 vocabulary 각 항목은 ja, reading, ko, hanja_sound, hanja_hun을 넣고, 한자 단어의 한글 한자음과 훈을 정확히 쓴다.
-표현을 지어내거나 중복하지 않는다.
 
 {dialogue}"""
         batch = None
         last_error = ""
+        last_candidate = None
+        last_stdout = None
         for attempt in range(3):
             try:
                 stdout, engine = run_ai_exec(prompt, book_dir, timeout=600)
@@ -166,23 +172,34 @@ vocabulary 각 항목은 ja, reading, ko, hanja_sound, hanja_hun을 넣고, 한�
                 last_error = str(exc)
                 stdout = None
             if stdout is not None:
+                last_stdout = stdout
                 match = re.search(r"\{.*\}", stdout, re.S)
                 try:
                     candidate = json.loads(match.group(0)) if match else None
+                    candidate = normalize_cards(candidate)
                 except json.JSONDecodeError as exc:
                     candidate = None
                     last_error = str(exc)
-                if candidate is not None and valid_cards(candidate, batch_scenes):
+                last_candidate = candidate
+                if candidate is not None and valid_cards(candidate, batch_scenes, min_expr):
                     batch = candidate
                     break
                 last_error = last_error or f"{engine} 응답의 필수 필드·표현 개수·장면 키 형식 오류"
             prompt += (
-                "\n\n★ 이전 결과가 형식 검사를 통과하지 못했다. 각 장면 expressions는 반드시 "
-                "6~10개이고 모든 필수 필드가 비어 있지 않아야 하며, 지정한 키만 빠짐없이 넣어 전체 JSON을 다시 출력하라."
+                "\n\n★ 이전 결과가 형식 검사를 통과하지 못했다. 각 장면 expressions는 대사가 6줄 "
+                "이상이면 6~10개, 6줄 미만이면 그 줄 수만큼(지어내지 말 것)이어야 하고, 모든 "
+                "필수 필드가 비어 있지 않아야 하며, 지정한 키만 빠짐없이 넣어 전체 JSON을 다시 출력하라."
             )
             if attempt < 2:
                 print(f"   ↻ 학습카드 묶음 {start // batch_size + 1} 재시도 {attempt + 2}/3")
         if batch is None:
+            with open(os.path.join(book_dir, "_debug_batch_stdout.txt"), "w", encoding="utf-8") as f:
+                f.write(last_stdout or "")
+            with open(os.path.join(book_dir, "_debug_batch_cards.json"), "w", encoding="utf-8") as f:
+                json.dump(
+                    {"expected": sorted(expected), "candidate": last_candidate},
+                    f, ensure_ascii=False, indent=2,
+                )
             raise RuntimeError(f"카드 묶음 {start // batch_size + 1} 3회 실패: {last_error}")
         all_cards.update(batch)
         with open(partial_path, "w", encoding="utf-8") as file:
@@ -227,7 +244,7 @@ def parse_response(body):
     card_match = re.search(r"## 학습 카드 JSON\s*\n(\{.*\})\s*$", body, re.S)
     if card_match:
         try:
-            cards = json.loads(card_match.group(1))
+            cards = normalize_cards(json.loads(card_match.group(1)))
         except json.JSONDecodeError:
             cards = {}
     return subtitle, overview, descriptions, cards, corrections
@@ -265,13 +282,37 @@ def apply_translation_corrections(book_dir, lines, corrections):
     return changed
 
 
-def valid_cards(cards, expected_scenes):
+def normalize_cards(cards):
+    """일부 모델(특히 Claude 폴백)이 단일 객체여야 할 shadowing을 원소 1개짜리
+    리스트로 감싸 보내는 경우가 있다 — 실사용 중 MIDA-154_J에서 재현·확인.
+    검증 전에 dict로 펴서, 내용 자체는 정상인데 포맷 차이로 재시도 3회를
+    낭비하는 걸 막는다."""
+    if not isinstance(cards, dict):
+        return cards
+    for card in cards.values():
+        if not isinstance(card, dict):
+            continue
+        shadow = card.get("shadowing")
+        if isinstance(shadow, list) and len(shadow) == 1 and isinstance(shadow[0], dict):
+            card["shadowing"] = shadow[0]
+    return cards
+
+
+def valid_cards(cards, expected_scenes, min_expressions=None):
+    """min_expressions: {"part-scene": 실제 대사 줄 수} 형태로 주면, 대사가 원래
+    6줄이 안 되는 짧은 장면은 최소 표현 개수를 그만큼 낮춰서 허용한다(★
+    2026-08-07: MIDA-154_J 2-4 장면 — 대사 3줄뿐이라 "6~10개, 지어내지 않음"을
+    Claude가 동시에 만족 못 해 확인을 요청하며 정상적으로 실패하던 문제 수정).
+    안 주면 기존처럼 전 장면 6개 고정."""
     expected_keys = {f"{part}-{scene}" for part, scene in expected_scenes}
     if set(cards) != expected_keys:
         return False
-    for card in cards.values():
+    for key, card in cards.items():
+        floor = 6
+        if min_expressions is not None:
+            floor = max(1, min(6, min_expressions.get(key, 6)))
         expressions = card.get("expressions", []) if isinstance(card, dict) else []
-        if not 6 <= len(expressions) <= 10:
+        if not floor <= len(expressions) <= 10:
             return False
         if (
             not isinstance(card.get("vocabulary"), list)
