@@ -43,6 +43,14 @@ LINKAREER_MAX_PAGES = 5
 LINKAREER_DELAY_SECONDS = 1.5
 LINKAREER_SOURCE = "링커리어"
 
+# 전국민 AI 경진대회(aichallenge4all.or.kr, 정부 주관) — robots.txt Allow:/.
+# 목록 페이지(/competitions/all)는 Next.js App Router라 __NEXT_DATA__가 아니라
+# React Server Component 스트리밍 페이로드로 데이터가 오는데(파싱하기 까다로움),
+# 브라우저가 실제로 호출하는 REST API를 찾아서 그걸 바로 쓴다(2026-08-08 확인).
+AICHALLENGE4ALL_API_URL = "https://aichallenge4all.or.kr/api/competitions"
+AICHALLENGE4ALL_SOURCE = "AI경진대회(정부)"
+AICHALLENGE4ALL_CLOSED_STATUS = "closed"
+
 NOTION_VERSION = "2026-03-11"
 # "🎴 이직시스템" 페이지 — job_collector.py의 분석 페이지와 같은 부모 밑에 만든다.
 NOTION_JOBSYSTEM_PAGE_ID = "3b132a1e-ae80-805d-ad0e-d4f2cae02709"
@@ -178,6 +186,50 @@ def fetch_linkareer_all(config: dict[str, Any], max_pages: int = LINKAREER_MAX_P
     return contests
 
 
+def fetch_aichallenge4all(config: dict[str, Any]) -> list[Contest]:
+    """전국민 AI 경진대회 API에서 전체 대회 목록(실측 33건, 페이지네이션 없음)을
+    받아 종료(closed)된 것만 걸러내고 나머지는 로컬 키워드 점수로 평가한다."""
+    request = urllib.request.Request(
+        AICHALLENGE4ALL_API_URL, headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            data = json.load(response)
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"AI경진대회 API HTTP {exc.code}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"AI경진대회 API 연결 실패: {exc.reason}") from exc
+
+    contests = []
+    for item in data:
+        if not isinstance(item, dict):
+            continue
+        if item.get("badgeStatus") == AICHALLENGE4ALL_CLOSED_STATUS:
+            continue
+        title = plain(item.get("name"))
+        source_id = plain(item.get("id") or item.get("slug"))
+        if not title or not source_id:
+            continue
+        slug = plain(item.get("slug"))
+        url = (
+            plain(item.get("detailUrl")) or plain(item.get("externalUrl"))
+            or (f"https://aichallenge4all.or.kr/competitions/{slug}" if slug else "")
+        )
+        combined = " ".join((title, plain(item.get("description"))))
+        # applyPeriod는 "<br/>"이 섞인 HTML 조각을 그대로 담고 있는 필드라(실측
+        # 확인) plain()만으로는 안 지워진다 — 태그를 걷어내고 여러 시즌 정보를
+        # 줄바꿈 대신 " / "로 이어붙인다.
+        deadline_raw = str(item.get("applyPeriod") or "")
+        deadline = plain(re.sub(r"<br\s*/?>", " / ", deadline_raw))
+        contests.append(Contest(
+            source_id=source_id, title=title, organizer="전국민 AI 경진대회(정부 주관)",
+            url=url, source=AICHALLENGE4ALL_SOURCE,
+            deadline=deadline,
+            score=score_text(combined, config),
+        ))
+    return contests
+
+
 def fingerprint(contest: Contest) -> str:
     body = "\x1f".join((contest.title, contest.organizer, contest.deadline))
     return hashlib.sha256(body.encode()).hexdigest()
@@ -217,8 +269,17 @@ def collect(args: argparse.Namespace) -> None:
     config = load_config(args.config)
     conn = connect(args.db)
     print(f"링커리어 공모전 목록 수집 중(최대 {LINKAREER_MAX_PAGES}페이지)...")
-    contests = fetch_linkareer_all(config)
+    contests = list(fetch_linkareer_all(config))
     print(f"  {len(contests)}건 수신")
+
+    print("전국민 AI 경진대회 목록 수집 중...")
+    try:
+        ai_contests = fetch_aichallenge4all(config)
+        print(f"  {len(ai_contests)}건 수신")
+        contests.extend(ai_contests)
+    except RuntimeError as exc:
+        print(f"  ⚠️ 전국민 AI 경진대회 수집 실패: {exc}")
+
     inserted, updated = upsert_contests(conn, contests)
     print(f"\n완료: 신규 {inserted}건 / 기존 갱신 {updated}건")
 

@@ -103,14 +103,14 @@ python3 job_collector.py analyze <source_id> [--source "사람인(크롤링)"]
 - 상세 페이지 하나당 요청 1건이라(최대 100건) 만료·삭제된 공고 하나가 전체 배치를 죽이지 않게, 개별 조회 실패는 `RuntimeError`를 잡아 건너뛴다(`fetch_alba_crawl`).
 - 요청 사이 `ALBA_CRAWL_DELAY_SECONDS`(1초) 딜레이.
 
-## 3-3. 링커리어 공모전·경진대회 수집 (`contest_collector.py`, ★ 2026-08-07 추가)
+## 3-3. 공모전·경진대회 수집 (`contest_collector.py`, ★ 2026-08-07 추가, ★ 2026-08-08 다중 소스로 확장)
 
 채용공고와 별개로 공모전·경진대회를 같은 철학("공고를 학습 커리큘럼으로 쓴다")으로 다룬다 — 실력 검증 기회이자, 참가하지 않더라도 "이 대회가 뭘 원하는지" 분석 자체가 학습 재료다. `data/contests.db`에 별도 저장하며, `job_collector.py`와 완전히 분리된 파일이다(도메인이 달라 스키마도 다름).
 
 ```bash
-python3 contest_collector.py collect        # 링커리어 공모전 목록 최대 5페이지(100건) 수집
+python3 contest_collector.py collect        # 링커리어(최대 100건) + 전국민 AI 경진대회(전체) 수집
 python3 contest_collector.py list --limit 20
-python3 contest_collector.py analyze-top     # 적합도 1위를 AI로 분석해 Notion에 발행
+python3 contest_collector.py analyze-top     # 적합도 1위를 AI로 분석해 Notion에 발행(모든 소스 통합 순위)
 ```
 
 - **링커리어(linkareer.com)만 우선 구현**했다(2026-08-07, 사용자 요청으로 여러 후보 사이트 중 하나씩 순차 추가하기로 함). `/list/contest` 페이지가 Next.js SSR이라 `__NEXT_DATA__`의 `activityItems`(제목·URL)와 `__APOLLO_STATE__`의 `Activity:{id}`(주최·마감일 등 정규화 캐시)를 조합해서 읽는다 — 알바몬 크롤러와 같은 패턴.
@@ -118,7 +118,15 @@ python3 contest_collector.py analyze-top     # 적합도 1위를 AI로 분석해
 - 공모전 상세 페이지(`https://linkareer.com/activity/{id}`)는 서버 렌더링이라 curl로 본문(참여대상/시상규모/접수기간/상세내용)이 바로 잡힌다.
 - AI 분석은 4개 항목: ①참여자격/공모분야/평가기준 요약 ②이 대회가 검증하려는 역량 추론 ③참가 시 접근 전략 ④1인 사업자 관점 상품화(이 문제를 사업 아이템으로 본다면).
 - Notion 발행은 `job_collector.py`와 같은 "🎴 이직시스템" 페이지 밑, 페이지 하나만 매일 갱신하는 방식을 그대로 재사용(`_notion_publish`가 두 파일에 거의 동일하게 존재 — 도메인별 파일 분리 원칙을 지키려고 공용 모듈로 합치지 않음).
-- **아직 미구현(후속 예정)**: 데이콘(dacon.io, 순수 클라이언트 렌더링이라 실제 API 엔드포인트 발견 필요), aichallenge4all.or.kr, 콘테스트코리아(contestkorea.com), allforyoung.com, 위비티(wevity.com), 씽굿(thinkcontest.com), 해외 플랫폼(Devpost 등).
+- **아직 미구현(후속 예정)**: 데이콘(dacon.io, 순수 클라이언트 렌더링이라 실제 API 엔드포인트 발견 필요), 콘테스트코리아(contestkorea.com), allforyoung.com, 위비티(wevity.com), 씽굿(thinkcontest.com), 해외 플랫폼(Devpost 등).
+
+### 3-3-1. 전국민 AI 경진대회(aichallenge4all.or.kr, 정부 주관) (★ 2026-08-08 추가)
+
+`collect()`가 링커리어 다음으로 이어서 수집하는 두 번째 소스. 목록 페이지(`/competitions/all`)는 Next.js **App Router**라 `__NEXT_DATA__`가 없고 React Server Component 스트리밍 페이로드(`self.__next_f.push(...)`)로 데이터가 오는데, 이건 파싱하기 까다로운 비표준 포맷이다 — 대신 브라우저가 실제로 호출하는 REST API `https://aichallenge4all.or.kr/api/competitions`를 그대로 쓴다(인증 불필요, 페이지네이션 없이 전체 목록 한 번에 반환, 실측 33건).
+
+- `fetch_aichallenge4all()`이 `badgeStatus == "closed"`(종료)만 걸러내고 나머지(모집중/참가중/상시/준비중)는 전부 후보로 남긴다 — 정부 주관 큐레이션 플랫폼이라 33건 전체가 이미 AI 관련이라서 링커리어처럼 페이지를 여러 장 넘길 필요가 없다.
+- 응모기간(`applyPeriod`)에 `<br/>` 같은 HTML 태그가 그대로 섞여 있는 경우가 있어(실측 확인) 태그를 `" / "`로 치환해 여러 시즌 정보를 한 줄로 정리한다.
+- `organizer`는 API에 별도 필드가 없어 `"전국민 AI 경진대회(정부 주관)"` 고정값을 쓴다. `url`은 `detailUrl` → `externalUrl` → 없으면 `aichallenge4all.or.kr/competitions/{slug}` 순으로 폴백.
 
 ## 3-4. 기업 경영 분석 (`company_profile.py`, ★ 2026-08-07 추가)
 
