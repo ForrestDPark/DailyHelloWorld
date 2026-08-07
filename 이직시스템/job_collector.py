@@ -50,6 +50,15 @@ SARAMIN_CRAWL_PAGE_SIZE = 20
 SARAMIN_CRAWL_MAX_RESULTS = 100
 SARAMIN_CRAWL_DELAY_SECONDS = 1.5
 SARAMIN_CRAWL_SOURCE = "사람인(크롤링)"
+# 알바몬 공개 검색결과 크롤링(robots.txt가 ClaudeBot 등에 "Allow: /jobs" 명시).
+# 검색 결과 페이지가 Next.js SSR이라 __NEXT_DATA__ script 안에 구조화된 JSON으로
+# 공고 목록이 그대로 들어있어 HTML 파싱 없이 바로 읽을 수 있다(2026-08-07 확인:
+# 실제 URL은 /jobs?keyword=가 아니라 /total-search?keyword=, sitemap.xml에서 확인).
+ALBAMON_SEARCH_URL = "https://www.albamon.com/total-search"
+ALBAMON_CRAWL_PAGE_SIZE = 20
+ALBAMON_CRAWL_MAX_RESULTS = 100
+ALBAMON_CRAWL_DELAY_SECONDS = 1.5
+ALBAMON_SOURCE = "알바몬(크롤링)"
 USER_AGENT = "DailyHelloWorld-JobCollector/1.0 (personal job search)"
 
 SKILL_ALIASES = {
@@ -393,6 +402,99 @@ def fetch_saramin_crawl_query(query: str, config: dict[str, Any]) -> list[Job]:
     return jobs[:max_results]
 
 
+_ALBAMON_NEXT_DATA_RE = re.compile(
+    r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', re.S
+)
+
+
+def parse_albamon_job(raw: dict[str, Any], query: str, config: dict[str, Any]) -> Job:
+    title = plain(raw.get("recruitTitle"))
+    company = plain(raw.get("companyName"))
+    recruit_no = plain(raw.get("recruitNo"))
+    # payType은 {"key":"HOURLY_WAGE","value":"A000","description":"시급"} 형태라
+    # scalar()의 name/code/value 우선순위로는 내부 코드("A000")가 잡힌다 — 사람이
+    # 읽을 텍스트는 description 필드에 있으므로 직접 꺼낸다.
+    pay_type = plain((raw.get("payType") or {}).get("description"))
+    pay = plain(raw.get("pay"))
+    salary = f"{pay_type} {pay}".strip() if pay else pay_type
+    parts = [plain(p) for p in (raw.get("parts") or []) if p]
+    keywords = ", ".join(parts)
+    combined = " ".join((title, company, keywords, plain(raw.get("filterTotal"))))
+    skills = detect_skills(combined)
+    return Job(
+        source=ALBAMON_SOURCE,
+        source_id=recruit_no,
+        title=title,
+        company=company,
+        url=f"https://www.albamon.com/jobs/detail/{recruit_no}",
+        location=plain(raw.get("workplaceArea") or raw.get("workplaceAddress")),
+        experience=plain(raw.get("age")),
+        education="",
+        employment_type=plain(raw.get("workingWeek")) or "아르바이트",
+        salary=salary,
+        posted_at=plain(raw.get("postedDate")),
+        deadline=plain(raw.get("closingDate")),
+        keywords=keywords,
+        skills=", ".join(skills),
+        score=score_job(combined, config),
+        matched_query=query,
+    )
+
+
+def fetch_albamon_crawl_page(query: str, page: int, config: dict[str, Any]) -> list[Job]:
+    """알바몬 공개 검색결과 페이지 1장을 가져와 파싱. 로그인/CAPTCHA 우회 없음.
+    Next.js SSR 페이지의 __NEXT_DATA__ JSON에서 react-query 캐시 중
+    queryKey가 "SEARCH_RECRUIT_LIST"인 항목의 공고 목록을 그대로 읽는다."""
+    params = {"keyword": query, "page": page}
+    request = urllib.request.Request(
+        f"{ALBAMON_SEARCH_URL}?{urllib.parse.urlencode(params)}",
+        headers={"Accept": "text/html", "User-Agent": USER_AGENT},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            body = response.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"알바몬 검색결과 페이지 HTTP {exc.code}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"알바몬 검색결과 페이지 연결 실패: {exc.reason}") from exc
+
+    match = _ALBAMON_NEXT_DATA_RE.search(body)
+    if not match:
+        return []
+    try:
+        data = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return []
+    queries = (
+        data.get("props", {}).get("pageProps", {}).get("dehydratedState", {}).get("queries", [])
+    )
+    for entry in queries:
+        key = entry.get("queryKey")
+        if isinstance(key, list) and key and key[0] == "SEARCH_RECRUIT_LIST":
+            collection = (
+                entry.get("state", {}).get("data", {}).get("base", {}).get("normal", {}).get("collection", [])
+            )
+            return [parse_albamon_job(item, query, config) for item in collection if isinstance(item, dict)]
+    return []
+
+
+def fetch_albamon_crawl_query(query: str, config: dict[str, Any]) -> list[Job]:
+    """검색어 하나에 대해 필요한 만큼 페이지를 넘기며 수집(페이지 사이 딜레이 포함)."""
+    max_results = min(int(config.get("results_per_query", 30)), ALBAMON_CRAWL_MAX_RESULTS)
+    max_pages = max(1, -(-max_results // ALBAMON_CRAWL_PAGE_SIZE))  # ceil
+    jobs: list[Job] = []
+    for page in range(1, max_pages + 1):
+        page_jobs = fetch_albamon_crawl_page(query, page, config)
+        if not page_jobs:
+            break
+        jobs.extend(page_jobs)
+        if len(jobs) >= max_results:
+            break
+        if page < max_pages:
+            time.sleep(ALBAMON_CRAWL_DELAY_SECONDS)
+    return jobs[:max_results]
+
+
 def fingerprint(job: Job) -> str:
     body = "\x1f".join((job.title, job.company, job.location, job.deadline, job.salary))
     return hashlib.sha256(body.encode()).hexdigest()
@@ -436,10 +538,11 @@ def collect(args: argparse.Namespace) -> None:
     worknet_key = os.environ.get("WORK24_ACCESS_KEY", "").strip()
     config = load_config(args.config)
     crawl_enabled = bool(config.get("enable_saramin_crawl", False))
-    if not saramin_key and not worknet_key and not crawl_enabled:
+    albamon_crawl_enabled = bool(config.get("enable_albamon_crawl", False))
+    if not saramin_key and not worknet_key and not crawl_enabled and not albamon_crawl_enabled:
         raise SystemExit(
-            "SARAMIN_ACCESS_KEY/WORK24_ACCESS_KEY가 모두 없고 사람인 크롤링도 꺼져 있습니다. "
-            "README의 API 키 설정 방법을 따르거나 config.json에 \"enable_saramin_crawl\": true를 추가하세요."
+            "SARAMIN_ACCESS_KEY/WORK24_ACCESS_KEY가 모두 없고 사람인·알바몬 크롤링도 꺼져 있습니다. "
+            "README의 API 키 설정 방법을 따르거나 config.json에 \"enable_saramin_crawl\"/\"enable_albamon_crawl\": true를 추가하세요."
         )
     conn = connect(args.db)
     collected: dict[tuple[str, str], Job] = {}
@@ -473,6 +576,12 @@ def collect(args: argparse.Namespace) -> None:
             merge(jobs, query)
             if index < len(config["queries"]):
                 time.sleep(SARAMIN_CRAWL_DELAY_SECONDS)
+        if albamon_crawl_enabled:
+            jobs = fetch_albamon_crawl_query(query, config)
+            print(f"  알바몬(크롤링) {len(jobs)}건 수신")
+            merge(jobs, query)
+            if index < len(config["queries"]):
+                time.sleep(ALBAMON_CRAWL_DELAY_SECONDS)
 
     inserted, updated = upsert_jobs(conn, collected.values())
     print(f"\n완료: 신규 {inserted}건 / 기존 갱신 {updated}건 / 중복 제거 후 {len(collected)}건")
@@ -510,8 +619,11 @@ def doctor(args: argparse.Namespace) -> None:
     print(f"워크넷 API 키: {'설정됨' if os.environ.get('WORK24_ACCESS_KEY') else '미설정'}")
     print(f"설정: {args.config} ({'있음' if args.config.exists() else '없음'})")
     if args.config.exists():
-        crawl_enabled = bool(load_config(args.config).get("enable_saramin_crawl", False))
+        cfg = load_config(args.config)
+        crawl_enabled = bool(cfg.get("enable_saramin_crawl", False))
+        albamon_crawl_enabled = bool(cfg.get("enable_albamon_crawl", False))
         print(f"사람인 크롤링(공개 검색결과): {'켜짐' if crawl_enabled else '꺼짐 (config.json enable_saramin_crawl)'}")
+        print(f"알바몬 크롤링(공개 검색결과): {'켜짐' if albamon_crawl_enabled else '꺼짐 (config.json enable_albamon_crawl)'}")
     print(f"DB: {args.db} ({'있음' if args.db.exists() else '아직 없음'})")
 
 

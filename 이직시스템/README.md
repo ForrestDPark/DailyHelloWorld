@@ -1,6 +1,6 @@
 # 이직시스템 — 사람인·워크넷 채용공고 수집기
 
-사람인·워크넷(고용24) 공식 채용정보 API로 공고를 모으고, 필요하면 사람인 공개 검색결과 페이지 크롤링(로그인/CAPTCHA 우회 없음)을 보조 수단으로 병행해 SQLite에 누적한다. 동일한 공고는 `(source, source_id)` 기준으로 중복 저장하지 않고 마감일·조건만 갱신한다. 공고의 기술 키워드를 자동 태그하고, 내가 정한 포함·제외 키워드로 0~100점의 적합도를 계산한다.
+사람인·워크넷(고용24) 공식 채용정보 API로 공고를 모으고, 필요하면 사람인·알바몬 공개 검색결과 페이지 크롤링(로그인/CAPTCHA 우회 없음)을 보조 수단으로 병행해 SQLite에 누적한다. 동일한 공고는 `(source, source_id)` 기준으로 중복 저장하지 않고 마감일·조건만 갱신한다. 공고의 기술 키워드를 자동 태그하고, 내가 정한 포함·제외 키워드로 0~100점의 적합도를 계산한다.
 
 ## 운영 원칙 — 공고를 학습 커리큘럼으로 쓴다
 
@@ -78,11 +78,23 @@ python3 job_collector.py export
 - **잡코리아는 크롤링하지 않는다.** `jobkorea.co.kr/robots.txt`가 `/Search/?stext=`를 일반 크롤러 전체(`User-agent: *`)에 Disallow하고, ClaudeBot 등 AI 크롤러는 사이트 전체를 차단하고 있어 이 방침을 존중한다(2026-08-05 확인).
 - 필드 파싱은 최선 노력(best-effort) 방식이다 — 사람인이 마크업을 바꾸면 일부 필드가 빈 값으로 떨어질 수 있고, 그때는 정규식(`_SARAMIN_*_RE`)을 실제 HTML에 맞춰 다시 조정해야 한다.
 
+## 3-2. 알바몬 공개 검색결과 크롤링 (단기계약직·알바, ★ 2026-08-07)
+
+`enable_albamon_crawl: true`일 때만 동작하는 보조 수집원. 알바몬 검색결과 페이지(`https://www.albamon.com/total-search?keyword=...`)는 Next.js SSR이라 `<script id="__NEXT_DATA__">` 안에 공고 목록이 이미 구조화된 JSON(react-query 캐시)으로 들어있어, HTML 마크업 파싱 없이 표준 라이브러리(`json`)만으로 그대로 읽는다(`job_collector.py`의 `fetch_albamon_crawl_query`/`parse_albamon_job`).
+
+- **실제 검색 URL은 `/jobs?keyword=`가 아니라 `/total-search?keyword=`다** — `/jobs`는 robots.txt에 ClaudeBot 등 AI 크롤러에 `Allow`로 명시돼 있지만 그 자체가 검색 결과 페이지 경로는 아니었다(처음 시도한 `/jobs?keyword=`는 HTTP 404). `sitemap.xml → total-search/sitemap.xml`에서 실제 URL 패턴을 확인했다.
+- `queries[].queryKey[0] == "SEARCH_RECRUIT_LIST"`인 react-query 캐시 항목의 `state.data.base.normal.collection` 배열이 공고 목록이다. 페이지당 20건, `&page=N`으로 페이지네이션.
+- 공고 상세 URL은 `https://www.albamon.com/jobs/detail/{recruitNo}`.
+- 결과는 `source="알바몬(크롤링)"`으로 저장한다. 급여는 `payType.description`(예: "시급"/"월급") + `pay`를 합쳐서 쓴다 — `payType`에는 `value`에 내부 코드("A000")가 들어있어 그쪽을 쓰면 사람이 못 읽는 값이 나온다.
+- 요청 사이 `ALBAMON_CRAWL_DELAY_SECONDS`(1.5초) 딜레이. `queries`는 사람인/워크넷과 동일한 목록을 그대로 재사용한다 — 반도체/TCAD 같은 검색어는 알바몬에서 결과가 0건이어도 그냥 넘어가고, 서빙·물류·판매 계열 공고는 자연히 걸린다.
+- **알바천국(alba.co.kr)은 아직 미구현이다.** robots.txt(`User-agent: *`)는 `/search/`를 명시적으로 허용하지만, 실제로 `/search/?keyword=`에 요청하면 정상 UA·Referer를 붙여도 "일시적인 장애가 발생하였습니다"라는 안내 페이지(HTTP 200)만 돌아온다 — 알바몬처럼 SSR로 데이터가 박혀 있지 않고 클라이언트 렌더링(SPA) 방식이라 실제 검색 API 경로를 아직 못 찾았다. 나중에 브라우저 개발자도구로 실제 API 호출을 확인해서 추가해야 한다.
+
 ## 4. 다음 확장
 
 - macOS에서 매일 1회 자동 실행
 - 노션 `이직시스템`의 공고 DB로 신규·변경 공고만 동기화
 - 이력서와 공고를 비교해 `즉시 지원 / 준비 후 지원 / 제외`로 분류
 - 마감 3일 전 macOS 알림
+- 알바천국(alba.co.kr) 실제 검색 API 경로 파악 후 크롤러 추가
 
-공식 API(사람인·워크넷)를 우선 사용하고, 로그인·CAPTCHA 우회 없는 공개 검색결과 페이지 크롤링(사람인만, 잡코리아는 robots.txt로 제외)을 보조 수단으로 병행한다. 로그인 우회, CAPTCHA 우회, 비공개 정보 수집은 여전히 하지 않는다.
+공식 API(사람인·워크넷)를 우선 사용하고, 로그인·CAPTCHA 우회 없는 공개 검색결과 페이지 크롤링(사람인·알바몬, 잡코리아는 robots.txt로 제외)을 보조 수단으로 병행한다. 로그인 우회, CAPTCHA 우회, 비공개 정보 수집은 여전히 하지 않는다.
