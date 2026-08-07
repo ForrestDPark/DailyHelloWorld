@@ -613,6 +613,103 @@ def export_csv(args: argparse.Namespace) -> None:
     print(f"{len(rows)}건 내보내기 완료: {args.output}")
 
 
+def fetch_job_detail_text(url: str, source: str = "", source_id: str = "") -> str:
+    """공고 상세 페이지를 가져와 태그를 걷어낸 순수 텍스트로 반환한다(내비게이션·광고
+    등 잡음이 섞여도 무방 — analyze_job()의 AI 프롬프트가 실제 공고 본문만 골라
+    읽도록 지시한다). AI 프롬프트에 그대로 넣을 것이므로 과도하게 길어지지 않게
+    앞부분 8000자만 쓴다.
+
+    ★ 2026-08-07: 사람인 공고 URL(저장된 relay/view 형태)은 본문이 JS로 나중에
+    로드돼 curl로는 사이트 메뉴/푸터만 잡히고 실제 자격요건·우대사항은 0글자로
+    떨어진다(실사용 중 확인). 반면 구버전 URL `zf_user/jobs/view?rec_idx=`는
+    서버 렌더링이라 같은 공고의 본문이 그대로 잡힌다 — 사람인 소스면 저장된 URL
+    대신 이 구버전 URL을 우선 시도한다."""
+    if source.startswith("사람인") and source_id:
+        url = f"https://www.saramin.co.kr/zf_user/jobs/view?rec_idx={source_id}"
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            body = response.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"공고 상세 페이지 HTTP {exc.code}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"공고 상세 페이지 연결 실패: {exc.reason}") from exc
+    body = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", body, flags=re.S | re.I)
+    text = html.unescape(re.sub(r"<[^>]+>", " ", body))
+    text = re.sub(r"\s+", " ", text).strip()
+    return text[:8000]
+
+
+def analyze_job(args: argparse.Namespace) -> None:
+    """공고 하나의 요구사항·우대사항을 AI로 읽어, 회사가 실제로 뭘 만들려는지
+    추론하고 그걸 뒷받침할 연습 프로젝트를 추천받는다(2026-08-07 추가)."""
+    conn = connect(args.db)
+    if args.source:
+        rows = conn.execute(
+            "SELECT * FROM jobs WHERE source = ? AND source_id = ?", (args.source, args.source_id)
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM jobs WHERE source_id = ?", (args.source_id,)).fetchall()
+    if not rows:
+        raise SystemExit(f"source_id={args.source_id}인 공고를 찾을 수 없습니다. list로 먼저 확인하세요.")
+    if len(rows) > 1:
+        print(f"같은 source_id가 여러 소스에 있습니다. --source로 지정하세요:")
+        for row in rows:
+            print(f"  --source \"{row['source']}\"  ({row['company']} | {row['title']})")
+        return
+    row = rows[0]
+
+    print(f"[{row['source']}] {row['company']} — {row['title']}")
+    print(f"공고 페이지 가져오는 중: {row['url']}")
+    detail_text = fetch_job_detail_text(row["url"], source=row["source"], source_id=row["source_id"])
+
+    # ★ 2026-08-07: 사람인 상세 페이지 일부(relay/view 등)는 본문이 JS로 나중에
+    # 로드되거나 회사가 직접 만든 이미지 공고라, curl로는 사이트 내비게이션/푸터
+    # 텍스트(수천 자 분량일 수 있음 — 단순 길이로는 못 걸러냄)만 잡히고 실제
+    # 요구사항은 0글자로 떨어지는 경우를 실사용 중 확인했다(예: rec_idx=54484811,
+    # 추출 1886자 전부가 메뉴/푸터). 표준 채용공고 섹션 제목이 하나도 없으면 실제
+    # 본문을 못 가져온 것으로 보고, 이걸 모른 채 AI에 넘겨 근거 없는 추측을
+    # 만들어내지 않도록 경고하고 중단한다.
+    _CONTENT_MARKERS = ("자격요건", "우대사항", "주요업무", "담당업무", "근무조건", "지원자격", "모집분야")
+    if len(detail_text) < 300 or not any(marker in detail_text for marker in _CONTENT_MARKERS):
+        print(
+            f"\n⚠️  공고 본문을 못 가져온 것으로 보입니다(추출 {len(detail_text)}자, "
+            "채용공고 섹션 제목이 하나도 없음 — 사이트 메뉴/푸터만 잡혔을 가능성). "
+            "이 페이지는 JS로 본문을 나중에 불러오거나(정적 크롤링 한계) 이미지형 "
+            "채용공고일 가능성이 높습니다. 해당 URL을 직접 열어 요구사항을 확인해 "
+            "주세요. 이 상태로 분석을 계속하면 AI가 근거 없이 추측할 수 있습니다.\n"
+        )
+        return
+
+    prompt = f"""다음은 채용공고 상세 페이지에서 그대로 긁어온 텍스트다(내비게이션·광고·
+푸터 같은 잡음이 섞여 있을 수 있으니 실제 공고 본문(요구사항/우대사항 등)만 골라
+판단하라).
+
+회사: {row['company']}
+공고 제목: {row['title']}
+
+--- 공고 원문(잡음 포함 가능) ---
+{detail_text}
+--- 끝 ---
+
+한국어로 아래 세 항목에 답하라:
+1. **요구사항/우대사항 요약**: 실제 기술 스택·자격요건을 간단히 정리.
+2. **이 회사가 지금 만들려는/겪고 있는 것 추론**: 요구사항과 우대사항의 조합에서
+   이 팀이 실제로 하려는 일을 구체적으로 추론하라(예: "Python 기반 code
+   interpreter + C++ 우대 → 실행 성능이 중요한 샌드박스/커널 구현 가능성"). 막연한
+   일반론이 아니라, 왜 그 항목들이 함께 요구되는지 연결고리를 짚어라.
+3. **연습 프로젝트 추천 1~2개**: 지원자가 위 추론을 뒷받침하려고 짧게 만들어볼 수
+   있는 프로젝트를 구체적으로 제안하고, 어떤 요구사항 항목과 연결되는지 명시하라."""
+
+    print("\nAI로 분석 중... (codex 실패 시 claude로 자동 전환)\n")
+    from ai_exec import run_ai_exec
+    try:
+        stdout, engine = run_ai_exec(prompt, BASE_DIR, timeout=300)
+    except RuntimeError as exc:
+        raise SystemExit(f"AI 분석 실패: {exc}")
+    print(stdout.strip())
+
+
 def doctor(args: argparse.Namespace) -> None:
     print(f"Python: {sys.version.split()[0]}")
     print(f"사람인 API 키: {'설정됨' if os.environ.get('SARAMIN_ACCESS_KEY') else '미설정'}")
@@ -640,6 +737,10 @@ def parser() -> argparse.ArgumentParser:
     exp.add_argument("--output", type=Path, default=BASE_DIR / "exports" / "jobs.csv")
     exp.set_defaults(func=export_csv)
     sub.add_parser("doctor", help="실행 환경 점검").set_defaults(func=doctor)
+    an = sub.add_parser("analyze", help="공고 하나의 요구사항을 AI로 읽어 프로젝트 아이디어 추천")
+    an.add_argument("source_id", help="list/export에서 확인한 공고의 source_id")
+    an.add_argument("--source", help="같은 source_id가 여러 소스에 있을 때만 지정 (예: \"사람인(크롤링)\")")
+    an.set_defaults(func=analyze_job)
     return p
 
 

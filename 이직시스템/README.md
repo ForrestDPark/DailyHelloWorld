@@ -59,11 +59,16 @@ python3 job_collector.py doctor
 python3 job_collector.py collect
 python3 job_collector.py list --limit 30
 python3 job_collector.py export
+python3 job_collector.py analyze <source_id> [--source "사람인(크롤링)"]
 ```
 
 - `collect`: 검색어를 차례로 조회하고 `data/jobs.db`에 저장한다.
-- `list`: 적합도가 높은 공고부터 터미널에 보여준다.
+- `list`: 적합도가 높은 공고부터 터미널에 보여준다(각 줄의 URL 옆에 붙은 값이 아니라 별도로 source_id를 확인하려면 `export`나 DB를 직접 조회).
 - `export`: 전체 공고를 엑셀에서도 열 수 있는 `exports/jobs.csv`로 내보낸다.
+- **`analyze` (★ 2026-08-07 추가, "운영 원칙" 실전 도구)**: 공고 하나의 요구사항·우대사항을 AI로 읽어서 ①요약 ②이 회사가 실제로 뭘 만들려는지 추론 ③그걸 뒷받침할 연습 프로젝트 1~2개를 추천받는다. `job_collector.py`의 `analyze_job()`/`fetch_job_detail_text()`, AI 호출은 `ai_exec.py`(일본어자막추출과 동일한 codex→claude 폴백 패턴, 파일 복사해서 이 폴더에도 둠).
+  - 같은 `source_id`가 여러 소스에 있으면 `--source`로 지정해야 한다(예: `"사람인"` API와 `"사람인(크롤링)"`은 ID 체계가 다를 수 있어 별도 소스로 저장됨).
+  - **사람인 URL 함정(실사용 중 발견)**: DB에 저장된 사람인 URL(`zf_user/jobs/relay/view?...`)은 본문이 JS로 나중에 로드돼 curl로는 사이트 메뉴/푸터만 잡히고 실제 요구사항은 0글자다. 구버전 URL `zf_user/jobs/view?rec_idx={source_id}`는 서버 렌더링이라 본문이 그대로 잡히므로, 사람인 소스일 때는 자동으로 이 URL을 대신 쓴다.
+  - **이미지형 공고 감지**: 위 대체 URL을 써도 "자격요건/우대사항/주요업무" 같은 표준 섹션 제목이 하나도 안 잡히면(회사가 요구사항을 이미지로만 올린 경우 등) AI를 부르지 않고 경고만 띄운다 — 본문 없이 AI에 넘기면 근거 없는 추측을 만들어내기 때문.
 
 ## 3. API 호출량
 
