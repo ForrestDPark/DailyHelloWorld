@@ -60,6 +60,18 @@ ALBAMON_CRAWL_PAGE_SIZE = 20
 ALBAMON_CRAWL_MAX_RESULTS = 100
 ALBAMON_CRAWL_DELAY_SECONDS = 1.5
 ALBAMON_SOURCE = "알바몬(크롤링)"
+# 알바천국(alba.co.kr) — robots.txt가 /job/을 명시적으로 허용. 검색결과 페이지
+# (/Job/List, /job/Total 등)는 뭘 시도해도 "일시적인 장애가 발생하였습니다"라는
+# 안내 페이지(HTTP 200)만 돌아와 실제 검색 API를 못 찾았다(2026-08-08 재시도해도
+# 동일). 대신 sitemap.xml에 공고 상세 URL(/job/Detail?adid=)이 그대로 나열돼
+# 있고, 그 상세 페이지는 서버 렌더링이라 og:title/og:description 메타 태그에
+# "[알바천국] 지역 / 회사명 / 공고명 / 급여" 형식으로 필요한 정보가 이미 정리돼
+# 있다 — 검색 대신 최신 사이트맵에서 상세 URL을 모아 하나씩 가져오는 방식으로 우회.
+ALBA_SITEMAP_INDEX_URL = "https://www.alba.co.kr/sitemap.xml"
+ALBA_DETAIL_URL_RE = re.compile(r"https://www\.alba\.co\.kr/job/Detail\?adid=(\d+)")
+ALBA_CRAWL_MAX_RESULTS = 100
+ALBA_CRAWL_DELAY_SECONDS = 1.0
+ALBA_SOURCE = "알바천국(크롤링)"
 USER_AGENT = "DailyHelloWorld-JobCollector/1.0 (personal job search)"
 
 SKILL_ALIASES = {
@@ -496,6 +508,127 @@ def fetch_albamon_crawl_query(query: str, config: dict[str, Any]) -> list[Job]:
     return jobs[:max_results]
 
 
+_ALBA_SITEMAP_ENTRY_RE = re.compile(
+    r"<loc>(https://www\.alba\.co\.kr/sitemap/sitemap\d*\.xml)</loc>\s*<lastmod>([^<]*)</lastmod>"
+)
+_ALBA_OG_TITLE_RE = re.compile(r'<meta property="og:title" content="([^"]*)"')
+_ALBA_OG_DESC_RE = re.compile(r'<meta property="og:description" content="([^"]*)"')
+ALBA_MATCHED_QUERY_LABEL = "알바천국 최신 공고(사이트맵)"
+
+
+def fetch_alba_sitemap_urls(limit=ALBA_CRAWL_MAX_RESULTS):
+    """사이트맵 인덱스에서 가장 최근 갱신된 하위 사이트맵 하나를 골라, 그 안의
+    공고 상세 URL에서 adid를 순서를 유지하며 최대 limit개 모은다."""
+    request = urllib.request.Request(ALBA_SITEMAP_INDEX_URL, headers={"User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            index_body = response.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"알바천국 사이트맵 인덱스 HTTP {exc.code}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"알바천국 사이트맵 인덱스 연결 실패: {exc.reason}") from exc
+
+    entries = _ALBA_SITEMAP_ENTRY_RE.findall(index_body)
+    if not entries:
+        return []
+    entries.sort(key=lambda pair: pair[1], reverse=True)  # lastmod 최신 우선
+    chosen_url = entries[0][0]
+
+    request = urllib.request.Request(chosen_url, headers={"User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            body = response.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"알바천국 사이트맵 HTTP {exc.code}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"알바천국 사이트맵 연결 실패: {exc.reason}") from exc
+
+    adids = []
+    seen = set()
+    for adid in ALBA_DETAIL_URL_RE.findall(body):
+        if adid in seen:
+            continue
+        seen.add(adid)
+        adids.append(adid)
+        if len(adids) >= limit:
+            break
+    return adids
+
+
+def fetch_alba_detail(adid: str, config: dict[str, Any]) -> Job | None:
+    """공고 상세 페이지 하나를 가져와 og:title/og:description 메타 태그로 파싱한다.
+    "[알바천국] 지역 / 회사명 / 공고명 / 급여" 형식(실사용 확인, 2026-08-08)."""
+    url = f"https://www.alba.co.kr/job/Detail?adid={adid}"
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            body = response.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"알바천국 상세 페이지 HTTP {exc.code}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"알바천국 상세 페이지 연결 실패: {exc.reason}") from exc
+
+    desc_match = _ALBA_OG_DESC_RE.search(body)
+    if not desc_match:
+        return None
+    # ★ 2026-08-08 실사용 중 확인: og:description 안에 급여 단위를 강조하려고
+    # &lt;span class=&#39;detail-pay__unit&#39;&gt;원&lt;/span&gt;처럼 이스케이프된
+    # HTML 태그가 통째로 섞여 나오는 공고가 있다(사이트 버그로 보임) — 엔티티를
+    # 먼저 풀어야 실제 "<span>" 형태가 되므로, 태그 제거보다 unescape가 먼저다.
+    desc = re.sub(r"<[^>]+>", "", html.unescape(desc_match.group(1)))
+    desc_body = desc[len("[알바천국]"):].strip() if desc.startswith("[알바천국]") else desc
+    parts = [p.strip() for p in desc_body.split(" / ")]
+    location = parts[0] if len(parts) > 0 else ""
+    company = parts[1] if len(parts) > 1 else ""
+    job_title = parts[2] if len(parts) > 2 else ""
+    salary = parts[3] if len(parts) > 3 else ""
+    if not job_title:
+        title_match = _ALBA_OG_TITLE_RE.search(body)
+        title_full = html.unescape(title_match.group(1)) if title_match else ""
+        job_title = title_full.split(":", 1)[-1].strip() if ":" in title_full else title_full
+    if not job_title:
+        return None
+
+    combined = " ".join((job_title, company))
+    skills = detect_skills(combined)
+    return Job(
+        source=ALBA_SOURCE,
+        source_id=adid,
+        title=job_title,
+        company=company,
+        url=url,
+        location=location,
+        salary=salary,
+        skills=", ".join(skills),
+        score=score_job(combined, config),
+        matched_query=ALBA_MATCHED_QUERY_LABEL,
+    )
+
+
+def fetch_alba_crawl(config: dict[str, Any]) -> list[Job]:
+    """검색 API가 없어(README 3-5 참고) 최신 사이트맵에서 공고 상세 URL을 모은 뒤
+    각각을 로컬 키워드 점수로 평가한다. 사람인/알바몬처럼 검색어별로 호출하는
+    구조가 아니라, collect() 안에서 검색어 루프와 무관하게 한 번만 실행된다."""
+    adids = fetch_alba_sitemap_urls(limit=ALBA_CRAWL_MAX_RESULTS)
+    jobs = []
+    failed = 0
+    for i, adid in enumerate(adids):
+        # 상세 페이지 하나당 요청 1건이라(100건까지) 만료/삭제된 공고 하나가
+        # 통째로 배치를 죽이지 않게 개별 실패는 건너뛴다.
+        try:
+            job = fetch_alba_detail(adid, config)
+        except RuntimeError:
+            failed += 1
+            job = None
+        if job:
+            jobs.append(job)
+        if i < len(adids) - 1:
+            time.sleep(ALBA_CRAWL_DELAY_SECONDS)
+    if failed:
+        print(f"  ⚠️ 알바천국 상세 페이지 {failed}건 조회 실패(만료/삭제된 공고일 수 있음) — 건너뜀")
+    return jobs
+
+
 def fingerprint(job: Job) -> str:
     body = "\x1f".join((job.title, job.company, job.location, job.deadline, job.salary))
     return hashlib.sha256(body.encode()).hexdigest()
@@ -540,10 +673,11 @@ def collect(args: argparse.Namespace) -> None:
     config = load_config(args.config)
     crawl_enabled = bool(config.get("enable_saramin_crawl", False))
     albamon_crawl_enabled = bool(config.get("enable_albamon_crawl", False))
-    if not saramin_key and not worknet_key and not crawl_enabled and not albamon_crawl_enabled:
+    alba_crawl_enabled = bool(config.get("enable_alba_crawl", False))
+    if not saramin_key and not worknet_key and not crawl_enabled and not albamon_crawl_enabled and not alba_crawl_enabled:
         raise SystemExit(
-            "SARAMIN_ACCESS_KEY/WORK24_ACCESS_KEY가 모두 없고 사람인·알바몬 크롤링도 꺼져 있습니다. "
-            "README의 API 키 설정 방법을 따르거나 config.json에 \"enable_saramin_crawl\"/\"enable_albamon_crawl\": true를 추가하세요."
+            "SARAMIN_ACCESS_KEY/WORK24_ACCESS_KEY가 모두 없고 사람인·알바몬·알바천국 크롤링도 꺼져 있습니다. "
+            "README의 API 키 설정 방법을 따르거나 config.json에 \"enable_saramin_crawl\"/\"enable_albamon_crawl\"/\"enable_alba_crawl\": true를 추가하세요."
         )
     conn = connect(args.db)
     collected: dict[tuple[str, str], Job] = {}
@@ -583,6 +717,13 @@ def collect(args: argparse.Namespace) -> None:
             merge(jobs, query)
             if index < len(config["queries"]):
                 time.sleep(ALBAMON_CRAWL_DELAY_SECONDS)
+
+    if alba_crawl_enabled:
+        # 검색 API가 없어 검색어 루프와 무관하게 한 번만 실행(fetch_alba_crawl 참고).
+        print(f"알바천국(사이트맵) 최신 공고 수집 중(최대 {ALBA_CRAWL_MAX_RESULTS}건)...")
+        jobs = fetch_alba_crawl(config)
+        print(f"  알바천국(크롤링) {len(jobs)}건 수신")
+        merge(jobs, ALBA_MATCHED_QUERY_LABEL)
 
     inserted, updated = upsert_jobs(conn, collected.values())
     print(f"\n완료: 신규 {inserted}건 / 기존 갱신 {updated}건 / 중복 제거 후 {len(collected)}건")

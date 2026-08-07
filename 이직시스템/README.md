@@ -92,7 +92,16 @@ python3 job_collector.py analyze <source_id> [--source "사람인(크롤링)"]
 - 공고 상세 URL은 `https://www.albamon.com/jobs/detail/{recruitNo}`.
 - 결과는 `source="알바몬(크롤링)"`으로 저장한다. 급여는 `payType.description`(예: "시급"/"월급") + `pay`를 합쳐서 쓴다 — `payType`에는 `value`에 내부 코드("A000")가 들어있어 그쪽을 쓰면 사람이 못 읽는 값이 나온다.
 - 요청 사이 `ALBAMON_CRAWL_DELAY_SECONDS`(1.5초) 딜레이. `queries`는 사람인/워크넷과 동일한 목록을 그대로 재사용한다 — 반도체/TCAD 같은 검색어는 알바몬에서 결과가 0건이어도 그냥 넘어가고, 서빙·물류·판매 계열 공고는 자연히 걸린다.
-- **알바천국(alba.co.kr)은 아직 미구현이다.** robots.txt(`User-agent: *`)는 `/search/`를 명시적으로 허용하지만, 실제로 `/search/?keyword=`에 요청하면 정상 UA·Referer를 붙여도 "일시적인 장애가 발생하였습니다"라는 안내 페이지(HTTP 200)만 돌아온다 — 알바몬처럼 SSR로 데이터가 박혀 있지 않고 클라이언트 렌더링(SPA) 방식이라 실제 검색 API 경로를 아직 못 찾았다. 나중에 브라우저 개발자도구로 실제 API 호출을 확인해서 추가해야 한다.
+## 3-2-1. 알바천국 사이트맵 기반 수집 (`enable_alba_crawl`, ★ 2026-08-08 추가)
+
+`enable_alba_crawl: true`일 때만 동작하는 보조 수집원. 검색결과 페이지(`/search/`, `/Job/List` 등 여러 URL 패턴 시도)는 정상 UA·Referer를 붙여도 매번 "일시적인 장애가 발생하였습니다"라는 안내 페이지(HTTP 200)만 돌아와 결국 실제 검색 API를 못 찾았다 — 알바몬과 달리 SSR로 데이터가 박혀 있지 않은 클라이언트 렌더링(SPA) 방식으로 보인다.
+
+- **검색 대신 sitemap.xml을 쓴다.** `https://www.alba.co.kr/sitemap.xml`(인덱스) → 가장 최근 `lastmod`인 하위 사이트맵 하나 선택 → 그 안의 `https://www.alba.co.kr/job/Detail?adid={id}` 형태 상세 URL들을 최대 100개(`ALBA_CRAWL_MAX_RESULTS`) 순서대로 모은다(`fetch_alba_sitemap_urls`). 사이트맵 하나에 실측 5,758건이 들어있어 전체를 다 가져오지 않고 앞쪽만 자른다.
+- 상세 페이지(`/job/Detail?adid=...`)는 서버 렌더링이라 curl로 바로 읽히고, `og:description` 메타 태그에 `"[알바천국] 지역 / 회사명 / 공고명 / 급여"` 형식으로 이미 정리돼 있어 HTML 본문을 파싱할 필요가 없다(`fetch_alba_detail`, 실측 확인).
+- **검색어 개념이 없다** — 사이트맵에서 최신 공고를 그냥 모아온 뒤, `job_collector.py`의 `score_job()`으로 로컬 키워드 점수만 매긴다(링커리어 공모전 크롤러와 같은 방식). 그래서 `collect()`의 검색어 루프 밖에서 한 번만 실행된다(`fetch_alba_crawl`, `matched_query="알바천국 최신 공고(사이트맵)"` 고정값).
+- **버그(실사용 중 발견)**: 일부 공고의 `og:description`에 급여 단위를 강조하려는 `&lt;span class=&#39;detail-pay__unit&#39;&gt;원&lt;/span&gt;` 같은 **이스케이프된 HTML 태그**가 그대로 섞여 나온다(사이트 쪽 버그로 보임). `html.unescape()`로 먼저 엔티티를 풀어야 실제 `<span>` 형태가 되므로, 태그 제거 정규식을 **unescape 다음에** 적용해야 한다 — 순서를 반대로 했다가 태그가 안 지워지는 버그를 실제로 겪었다.
+- 상세 페이지 하나당 요청 1건이라(최대 100건) 만료·삭제된 공고 하나가 전체 배치를 죽이지 않게, 개별 조회 실패는 `RuntimeError`를 잡아 건너뛴다(`fetch_alba_crawl`).
+- 요청 사이 `ALBA_CRAWL_DELAY_SECONDS`(1초) 딜레이.
 
 ## 3-3. 링커리어 공모전·경진대회 수집 (`contest_collector.py`, ★ 2026-08-07 추가)
 
