@@ -867,16 +867,47 @@ def _notion_publish(token: str, title: str, blocks: list[dict[str, Any]], meta: 
     return url
 
 
+def _rank_candidates_by_analyzability(candidates: list[sqlite3.Row]) -> list[sqlite3.Row]:
+    """★ 2026-08-07 추가: 단순 키워드 점수만으로 "오늘의 추천 공고"를 고르면
+    재무·경영 이력을 전혀 알 수 없는 무명 소기업이 뽑히는 경우가 많아, 회사가
+    어떻게 경영해왔는지·업계에서 어떤 위치인지까지 판단하고 싶다는 요청으로
+    DART(전자공시) 등록 여부를 1차 기준으로 재정렬한다 — 공시 대상이면 실제
+    재무제표·연혁이 있어 company_profile.py 심층 분석이 가능하다는 뜻이다.
+    DART_API_KEY가 없으면 이 재정렬을 건너뛰고 기존 점수 순서를 그대로 쓴다."""
+    api_key = os.environ.get("DART_API_KEY", "").strip()
+    if not api_key:
+        print("  ⚠️ DART_API_KEY 없음 — 기업 분석 가능성 반영 없이 점수 순서로만 고름")
+        return candidates
+    try:
+        from company_profile import fetch_dart_corp_code_map, find_dart_corp_code
+        corp_map = fetch_dart_corp_code_map(api_key)
+    except Exception as exc:  # noqa: BLE001 — DART 조회 실패는 순위만 못 매길 뿐 치명적이지 않음
+        print(f"  ⚠️ DART corp_code 조회 실패({exc}) — 점수 순서로만 고름")
+        return candidates
+
+    def is_registered(row: sqlite3.Row) -> bool:
+        return find_dart_corp_code(row["company"], corp_map) is not None
+
+    registered = [c for c in candidates if is_registered(c)]
+    unregistered = [c for c in candidates if c not in registered]
+    if registered:
+        print(f"  DART 등록 기업 {len(registered)}/{len(candidates)}건 — 우선 순위로 재배치")
+    return registered + unregistered
+
+
 def analyze_top_job(args: argparse.Namespace) -> None:
     """현재 적합도 1위 공고를 골라 AI 분석을 돌리고 결과를 Notion 페이지 하나에
     갱신한다(shift_alarm 메뉴바에서 매일 자동 호출, 2026-08-07 추가). 상위 공고가
-    이미지형 등으로 본문을 못 가져오면 다음 순위로 자동으로 내려가며 시도한다."""
+    이미지형 등으로 본문을 못 가져오면 다음 순위로 자동으로 내려가며 시도한다.
+    후보 15개를 모아 DART 등록 여부(재무·경영 이력 분석 가능 여부)로 우선
+    재정렬한 뒤, 그중 본문을 가져올 수 있는 첫 후보를 최종 선택한다."""
     conn = connect(args.db)
     candidates = conn.execute(
-        "SELECT * FROM jobs ORDER BY score DESC, deadline ASC LIMIT 5"
+        "SELECT * FROM jobs ORDER BY score DESC, deadline ASC LIMIT 15"
     ).fetchall()
     if not candidates:
         raise SystemExit("저장된 공고가 없습니다. collect를 먼저 실행하세요.")
+    candidates = _rank_candidates_by_analyzability(candidates)
 
     row = None
     text = None
@@ -887,7 +918,7 @@ def analyze_top_job(args: argparse.Namespace) -> None:
             break
         print(f"  ↪️ [{candidate['score']}점] {candidate['company']} 분석 불가 — 다음 순위로 시도\n")
     if row is None:
-        raise SystemExit("상위 5개 공고 모두 본문을 못 가져오거나 AI 분석에 실패했습니다.")
+        raise SystemExit("상위 후보 공고 모두 본문을 못 가져오거나 AI 분석에 실패했습니다.")
 
     token = _notion_token()
     if not token:
@@ -895,12 +926,47 @@ def analyze_top_job(args: argparse.Namespace) -> None:
         print(text)
         return
 
+    # ★ 2026-08-07: 선택된 회사의 경영 분석(company_profile.py)도 같이 만들어서
+    # "이 회사는 어떻게 경영해왔는가/누가 운영하는가/업계 위치는" 질문에 답한다.
+    company_notion_url = None
+    try:
+        from company_profile import (
+            fetch_dart_company_info, fetch_dart_corp_code_map, fetch_dart_financial_summary,
+            find_dart_corp_code, search_related_contests, search_related_jobs,
+            build_company_prompt, _markdown_to_notion_blocks as company_blocks,
+            _notion_publish as company_publish, COMPANY_PROFILE_STATE_DIR,
+        )
+        api_key = os.environ.get("DART_API_KEY", "").strip()
+        dart_info = None
+        financials: list[dict] = []
+        if api_key:
+            corp_map = fetch_dart_corp_code_map(api_key)
+            corp_code = find_dart_corp_code(row["company"], corp_map)
+            if corp_code:
+                dart_info = fetch_dart_company_info(corp_code, api_key)
+                financials = fetch_dart_financial_summary(corp_code, api_key)
+        jobs_related = search_related_jobs(row["company"])
+        contests_related = search_related_contests(row["company"])
+        prompt = build_company_prompt(row["company"], dart_info, financials, jobs_related, contests_related, "")
+        from ai_exec import run_ai_exec
+        stdout, _ = run_ai_exec(prompt, BASE_DIR, timeout=300)
+        company_title = f"🏢 {row['company']} 경영 분석"
+        safe_name = re.sub(r"[^\w가-힣-]+", "_", row["company"])
+        state_path = COMPANY_PROFILE_STATE_DIR / f"{safe_name}.json"
+        company_notion_url = company_publish(token, company_title, company_blocks(stdout.strip()), state_path)
+        print(f"✅ 기업 경영 분석 페이지도 갱신: {company_notion_url}")
+    except Exception as exc:  # noqa: BLE001 — 기업 분석 실패해도 공고 분석 발행은 계속 진행
+        print(f"⚠️  기업 경영 분석 생성 실패(공고 분석은 계속 진행): {exc}")
+
     title = f"🎯 {row['company']} — {row['title']}"
     meta_line = f"점수 {row['score']} | {row['source']} | {row['url']}"
+    if company_notion_url:
+        meta_line += f" | 기업 경영 분석: {company_notion_url}"
     blocks = _markdown_to_notion_blocks(meta_line) + _markdown_to_notion_blocks(text)
     meta = {
         "company": row["company"], "title": row["title"],
         "score": row["score"], "source": row["source"], "job_url": row["url"],
+        "company_notion_url": company_notion_url,
     }
     try:
         url = _notion_publish(token, title, blocks, meta)

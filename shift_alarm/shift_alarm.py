@@ -240,6 +240,7 @@ SHORTCUT_NAME = "아침루틴음악재생"
 
 # ── Elmedia로 열 음악 폴더 ─────────────────────────────────────
 PLAYLIST_FOLDER = "/Users/forrestdpark/Desktop/BlogImage/Coffee and Meditation"
+FAVORITES_PLAYLIST_FOLDER = "/Users/forrestdpark/Desktop/BlogImage/좋아요플레이"  # ★ 2026-08-07 추가
 
 # ── 아산시 좌표 ──────────────────────────────────────────────
 LATITUDE  = 36.78
@@ -814,12 +815,13 @@ def ask_input(title, message, default=""):
 # Elmedia 폴더 재생 (m3u 없이 폴더 자체를 직접 엶)
 # ════════════════════════════════════════════════════════════
 
-def play_folder_in_elmedia():
-    """Elmedia Video Player로 음악 폴더 자체를 엶"""
-    if not os.path.isdir(PLAYLIST_FOLDER):
+def play_folder_in_elmedia(folder=PLAYLIST_FOLDER):
+    """Elmedia Video Player로 음악 폴더 자체를 엶(★ 2026-08-07: 폴더를 인자로
+    받게 일반화 — 기본 재생 목록과 "좋아요 플레이" 폴더를 같은 함수로 처리)."""
+    if not os.path.isdir(folder):
         return False, "폴더를 찾을 수 없습니다."
     try:
-        subprocess.Popen(["open", "-a", "Elmedia Video Player", PLAYLIST_FOLDER])
+        subprocess.Popen(["open", "-a", "Elmedia Video Player", folder])
         return True, "Elmedia로 폴더를 열었습니다."
     except Exception as e:
         return False, str(e)
@@ -2964,7 +2966,11 @@ class ShiftAlarmApp(rumps.App):
                 callback=self.make_time_change_callback(shift)
             ))
         self.menu.add(time_menu)
+
+        self.menu.add(None)
         self.menu.add(rumps.MenuItem("🎬 Elmedia 지금 바로 재생", callback=self.play_elmedia_now))
+        self.menu.add(rumps.MenuItem("⭐ 좋아요 플레이하기", callback=self.play_favorites_now))
+        self.menu.add(None)
 
         last_ebook = load_last_ebook_state()
         if last_ebook:
@@ -3071,6 +3077,15 @@ class ShiftAlarmApp(rumps.App):
             rumps.alert("오류", msg)
             return
         rumps.notification("Elmedia", "재생 시작", msg)
+
+    def play_favorites_now(self, _):
+        """★ 2026-08-07 추가: "좋아요 플레이" 폴더를 Elmedia로 연다. 메뉴 클릭
+        시에만 실행되는 일반 콜백이라 자동 재생은 절대 일어나지 않는다."""
+        ok, msg = play_folder_in_elmedia(FAVORITES_PLAYLIST_FOLDER)
+        if not ok:
+            rumps.alert("오류", msg)
+            return
+        rumps.notification("Elmedia", "좋아요 플레이 재생 시작", msg)
 
     # ── 아침 학습 (ebook_reader.py) ──────────────────────────
 
