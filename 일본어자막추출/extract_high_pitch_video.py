@@ -60,6 +60,11 @@ HISTORY_VERSION = 1
 # ★ 2026-07-28: 배경음 입힌 운동용 영상을 한곳에 몰아보고 싶다는 요청으로 추가.
 AV_MUSIC_DIR = "/Users/forrestdpark/Desktop/BlogImage/avMusic"
 _TRASH_RECOVERY_ATTEMPTED = False
+# ★ 2026-08-08: BGM이 계속 반복되는 것처럼 느껴진다는 지적 — shift_alarm.py의
+# 랜덤 북마크 추천(pick_random_bookmarks)과 같은 패턴으로, 전체 곡을 한 바퀴
+# 다 쓰기 전에는 같은 곡이 다시 안 뽑히게 이력을 영상 처리 "회차 간"에도
+# 영구 저장한다(기존엔 build_bgm_track() 호출 한 번 안에서만 안 겹쳤음).
+BGM_HISTORY_FILE = os.path.expanduser("~/.jp_workout_bgm_history.json")
 
 
 def format_elapsed(seconds):
@@ -627,12 +632,36 @@ def find_compatible_existing_highlight(work_dir, base, args):
     return None
 
 
+def _load_bgm_history():
+    """이전 회차(들)에서 이미 쓴 곡 목록을 읽는다. 손상된 기록은 빈 기록으로 복구."""
+    try:
+        with open(BGM_HISTORY_FILE, encoding="utf-8") as f:
+            data = json.load(f)
+        used = data.get("used", [])
+        return used if isinstance(used, list) else []
+    except (OSError, ValueError, TypeError):
+        return []
+
+
+def _save_bgm_history(used):
+    """다음 영상 처리 때도 이어서 참조할 수 있게 원자적으로 저장."""
+    tmp_path = f"{BGM_HISTORY_FILE}.tmp"
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump({"used": used}, f, ensure_ascii=False, indent=2)
+    os.replace(tmp_path, BGM_HISTORY_FILE)
+
+
 def build_bgm_track(bgm_dir, target_duration, tmp_dir):
     """bgm_dir 안의 (미리 잘라놓은) mp3들을 무작위 순서로 이어붙여 target_duration초
-    이상 되는 오디오 트랙 하나를 만들어 경로를 반환. 파일들을 다 이어붙여도 모자라면
-    다시 셔플해서 이어붙이는 걸 반복(재생목록을 반복 순환하는 것과 같은 효과 —
-    다만 한 파일을 그대로 반복 재생하는 게 아니라 매번 순서를 바꿔 이어붙임).
-    폴더가 없거나 mp3가 하나도 없으면 None."""
+    이상 되는 오디오 트랙 하나를 만들어 경로를 반환.
+
+    ★ 2026-08-08 재설계: shift_alarm.py의 랜덤 북마크 추천(pick_random_bookmarks)과
+    같은 "전체를 한 바퀴 다 쓰기 전엔 안 겹침" 방식으로 바꿨다. 예전엔 build_bgm_track()
+    호출 한 번 안에서만 안 겹쳤어서, 영상을 여러 개 연달아 처리하면 매번 새로 셔플하다
+    보니 같은 곡이 자주 다시 걸려 "계속 반복되는 것 같다"는 느낌을 줬다. 이제
+    BGM_HISTORY_FILE에 "이미 쓴 곡" 이력을 영구 저장해서, 폴더 안 모든 곡을 최소 한 번씩
+    다 쓰기 전에는 같은 곡이 다시 안 뽑힌다(회차 간에도 이어짐). 폴더가 없거나 mp3가
+    하나도 없으면 None."""
     if not bgm_dir or not os.path.isdir(bgm_dir):
         return None
     mp3s = glob.glob(os.path.join(bgm_dir, "*.mp3"))
@@ -641,17 +670,24 @@ def build_bgm_track(bgm_dir, target_duration, tmp_dir):
 
     durations = {p: (get_media_duration(p) or 3.0) for p in mp3s}
 
-    pool = list(mp3s)
-    random.shuffle(pool)
-    playlist, total, idx = [], 0.0, 0
+    mp3_set = set(mp3s)
+    used = [p for p in _load_bgm_history() if p in mp3_set]  # 삭제된 파일은 이력에서 자연 소거
+    unused = [p for p in mp3s if p not in set(used)]
+    random.shuffle(unused)
+
+    playlist, total = [], 0.0
     while total < target_duration:
-        if idx >= len(pool):
-            random.shuffle(pool)
-            idx = 0
-        p = pool[idx]
+        if not unused:
+            # 전체를 다 썼으니 새 주기 시작(이력 초기화하고 다시 섞음).
+            used = []
+            unused = list(mp3s)
+            random.shuffle(unused)
+        p = unused.pop()
         playlist.append(p)
+        used.append(p)
         total += durations[p]
-        idx += 1
+
+    _save_bgm_history(used)
 
     inputs = []
     for p in playlist:
