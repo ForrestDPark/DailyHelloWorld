@@ -16,6 +16,7 @@ import json
 import os
 import re
 import sqlite3
+import subprocess
 import sys
 import time
 import urllib.error
@@ -640,48 +641,21 @@ def fetch_job_detail_text(url: str, source: str = "", source_id: str = "") -> st
     return text[:8000]
 
 
-def analyze_job(args: argparse.Namespace) -> None:
-    """공고 하나의 요구사항·우대사항을 AI로 읽어, 회사가 실제로 뭘 만들려는지
-    추론하고 그걸 뒷받침할 연습 프로젝트를 추천받는다(2026-08-07 추가)."""
-    conn = connect(args.db)
-    if args.source:
-        rows = conn.execute(
-            "SELECT * FROM jobs WHERE source = ? AND source_id = ?", (args.source, args.source_id)
-        ).fetchall()
-    else:
-        rows = conn.execute("SELECT * FROM jobs WHERE source_id = ?", (args.source_id,)).fetchall()
-    if not rows:
-        raise SystemExit(f"source_id={args.source_id}인 공고를 찾을 수 없습니다. list로 먼저 확인하세요.")
-    if len(rows) > 1:
-        print(f"같은 source_id가 여러 소스에 있습니다. --source로 지정하세요:")
-        for row in rows:
-            print(f"  --source \"{row['source']}\"  ({row['company']} | {row['title']})")
-        return
-    row = rows[0]
+_CONTENT_MARKERS = ("자격요건", "우대사항", "주요업무", "담당업무", "근무조건", "지원자격", "모집분야")
 
-    print(f"[{row['source']}] {row['company']} — {row['title']}")
-    print(f"공고 페이지 가져오는 중: {row['url']}")
-    detail_text = fetch_job_detail_text(row["url"], source=row["source"], source_id=row["source_id"])
 
-    # ★ 2026-08-07: 사람인 상세 페이지 일부(relay/view 등)는 본문이 JS로 나중에
-    # 로드되거나 회사가 직접 만든 이미지 공고라, curl로는 사이트 내비게이션/푸터
-    # 텍스트(수천 자 분량일 수 있음 — 단순 길이로는 못 걸러냄)만 잡히고 실제
-    # 요구사항은 0글자로 떨어지는 경우를 실사용 중 확인했다(예: rec_idx=54484811,
-    # 추출 1886자 전부가 메뉴/푸터). 표준 채용공고 섹션 제목이 하나도 없으면 실제
-    # 본문을 못 가져온 것으로 보고, 이걸 모른 채 AI에 넘겨 근거 없는 추측을
-    # 만들어내지 않도록 경고하고 중단한다.
-    _CONTENT_MARKERS = ("자격요건", "우대사항", "주요업무", "담당업무", "근무조건", "지원자격", "모집분야")
-    if len(detail_text) < 300 or not any(marker in detail_text for marker in _CONTENT_MARKERS):
-        print(
-            f"\n⚠️  공고 본문을 못 가져온 것으로 보입니다(추출 {len(detail_text)}자, "
-            "채용공고 섹션 제목이 하나도 없음 — 사이트 메뉴/푸터만 잡혔을 가능성). "
-            "이 페이지는 JS로 본문을 나중에 불러오거나(정적 크롤링 한계) 이미지형 "
-            "채용공고일 가능성이 높습니다. 해당 URL을 직접 열어 요구사항을 확인해 "
-            "주세요. 이 상태로 분석을 계속하면 AI가 근거 없이 추측할 수 있습니다.\n"
-        )
-        return
+def _content_available(detail_text: str) -> bool:
+    """★ 2026-08-07: 사람인 상세 페이지 일부(relay/view 등)는 본문이 JS로 나중에
+    로드되거나 회사가 직접 만든 이미지 공고라, curl로는 사이트 내비게이션/푸터
+    텍스트(수천 자 분량일 수 있음 — 단순 길이로는 못 걸러냄)만 잡히고 실제
+    요구사항은 0글자로 떨어지는 경우를 실사용 중 확인했다(예: rec_idx=54484811,
+    추출 1886자 전부가 메뉴/푸터). 표준 채용공고 섹션 제목이 하나도 없으면 실제
+    본문을 못 가져온 것으로 본다."""
+    return len(detail_text) >= 300 and any(marker in detail_text for marker in _CONTENT_MARKERS)
 
-    prompt = f"""다음은 채용공고 상세 페이지에서 그대로 긁어온 텍스트다(내비게이션·광고·
+
+def build_analysis_prompt(row: sqlite3.Row, detail_text: str) -> str:
+    return f"""다음은 채용공고 상세 페이지에서 그대로 긁어온 텍스트다(내비게이션·광고·
 푸터 같은 잡음이 섞여 있을 수 있으니 실제 공고 본문(요구사항/우대사항 등)만 골라
 판단하라).
 
@@ -701,13 +675,213 @@ def analyze_job(args: argparse.Namespace) -> None:
 3. **연습 프로젝트 추천 1~2개**: 지원자가 위 추론을 뒷받침하려고 짧게 만들어볼 수
    있는 프로젝트를 구체적으로 제안하고, 어떤 요구사항 항목과 연결되는지 명시하라."""
 
+
+def run_job_analysis(row: sqlite3.Row) -> str | None:
+    """공고 하나를 분석해 AI 응답 텍스트를 반환한다. 본문을 못 가져왔으면(이미지형
+    공고 등) 경고를 찍고 None을 반환한다 — analyze_job()/analyze_top_job()이 공유."""
+    print(f"[{row['source']}] {row['company']} — {row['title']}")
+    print(f"공고 페이지 가져오는 중: {row['url']}")
+    detail_text = fetch_job_detail_text(row["url"], source=row["source"], source_id=row["source_id"])
+    if not _content_available(detail_text):
+        print(
+            f"\n⚠️  공고 본문을 못 가져온 것으로 보입니다(추출 {len(detail_text)}자, "
+            "채용공고 섹션 제목이 하나도 없음 — 사이트 메뉴/푸터만 잡혔을 가능성). "
+            "이 페이지는 JS로 본문을 나중에 불러오거나(정적 크롤링 한계) 이미지형 "
+            "채용공고일 가능성이 높습니다. 해당 URL을 직접 열어 요구사항을 확인해 "
+            "주세요. 이 상태로 분석을 계속하면 AI가 근거 없이 추측할 수 있습니다.\n"
+        )
+        return None
+    prompt = build_analysis_prompt(row, detail_text)
     print("\nAI로 분석 중... (codex 실패 시 claude로 자동 전환)\n")
     from ai_exec import run_ai_exec
     try:
         stdout, engine = run_ai_exec(prompt, BASE_DIR, timeout=300)
     except RuntimeError as exc:
-        raise SystemExit(f"AI 분석 실패: {exc}")
-    print(stdout.strip())
+        print(f"⚠️  AI 분석 실패: {exc}")
+        return None
+    return stdout.strip()
+
+
+def analyze_job(args: argparse.Namespace) -> None:
+    """공고 하나의 요구사항·우대사항을 AI로 읽어, 회사가 실제로 뭘 만들려는지
+    추론하고 그걸 뒷받침할 연습 프로젝트를 추천받는다(2026-08-07 추가)."""
+    conn = connect(args.db)
+    if args.source:
+        rows = conn.execute(
+            "SELECT * FROM jobs WHERE source = ? AND source_id = ?", (args.source, args.source_id)
+        ).fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM jobs WHERE source_id = ?", (args.source_id,)).fetchall()
+    if not rows:
+        raise SystemExit(f"source_id={args.source_id}인 공고를 찾을 수 없습니다. list로 먼저 확인하세요.")
+    if len(rows) > 1:
+        print(f"같은 source_id가 여러 소스에 있습니다. --source로 지정하세요:")
+        for row in rows:
+            print(f"  --source \"{row['source']}\"  ({row['company']} | {row['title']})")
+        return
+    text = run_job_analysis(rows[0])
+    if text:
+        print(text)
+
+
+NOTION_VERSION = "2026-03-11"
+# "🎴 이직시스템" 페이지(app.notion.com/p/3b132a1eae80805dad0ed4f2cae02709)를
+# 표준 UUID 형식(8-4-4-4-12)으로 표기한 것 — Notion API의 parent.page_id에 그대로 쓴다.
+NOTION_JOBSYSTEM_PAGE_ID = "3b132a1e-ae80-805d-ad0e-d4f2cae02709"
+TOP_JOB_STATE_PATH = BASE_DIR / "data" / "top_job_notion.json"
+
+
+def _notion_token() -> str:
+    """일본어자막추출/sync_book_to_notion.py와 동일한 키체인 항목을 재사용한다
+    (2026-08-07 사용자 확인: 같은 통합을 "🎴 이직시스템" 페이지에도 공유해둠)."""
+    result = subprocess.run(
+        ["security", "find-generic-password", "-a", os.environ.get("USER", ""),
+         "-s", "jp_subtitle_notion_token", "-w"],
+        capture_output=True, text=True,
+    )
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
+def _markdown_to_notion_blocks(text: str) -> list[dict[str, Any]]:
+    """AI 분석 텍스트(마크다운 헤딩·불릿·**볼드**)를 Notion 블록으로 변환한다.
+    sync_book_to_notion.py의 summary_blocks()와 같은 헤딩/불릿 규칙에, **볼드**
+    인라인 서식만 추가했다(분석 텍스트에 강조가 많아 없으면 별표가 그대로 보임)."""
+    bold_re = re.compile(r"\*\*(.+?)\*\*")
+
+    def rich_text(content: str) -> list[dict[str, Any]]:
+        segments = []
+        pos = 0
+        for m in bold_re.finditer(content):
+            if m.start() > pos:
+                segments.append({"type": "text", "text": {"content": content[pos:m.start()][:1900]}})
+            segments.append({
+                "type": "text", "text": {"content": m.group(1)[:1900]},
+                "annotations": {"bold": True},
+            })
+            pos = m.end()
+        if pos < len(content):
+            segments.append({"type": "text", "text": {"content": content[pos:][:1900]}})
+        return segments or [{"type": "text", "text": {"content": ""}}]
+
+    blocks = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        if line.startswith("### "):
+            block_type, content = "heading_3", line[4:]
+        elif line.startswith("## "):
+            block_type, content = "heading_2", line[3:]
+        elif line.startswith("# "):
+            block_type, content = "heading_1", line[2:]
+        elif line.startswith("- ") or line.startswith("• "):
+            block_type, content = "bulleted_list_item", line[2:].strip()
+        else:
+            block_type, content = "paragraph", line
+        blocks.append({
+            "object": "block", "type": block_type,
+            block_type: {"rich_text": rich_text(content[:1900])},
+        })
+    return blocks
+
+
+def _notion_request(method: str, path: str, token: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request = urllib.request.Request(
+        f"https://api.notion.com/v1/{path}", data=body, method=method,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Notion-Version": NOTION_VERSION,
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return json.load(response)
+    except urllib.error.HTTPError as exc:
+        detail = exc.read(500).decode("utf-8", "replace")
+        raise RuntimeError(f"Notion API {method} {path} HTTP {exc.code}: {detail}") from exc
+
+
+def _notion_publish(token: str, title: str, blocks: list[dict[str, Any]], meta: dict[str, Any]) -> str:
+    """저장된 페이지가 있으면 내용을 통째로 교체(기존 자식 블록 archive 후 재작성)
+    하고, 없으면 "🎴 이직시스템" 밑에 새로 만든다. 매일 같은 페이지를 갱신해서
+    실행할 때마다 새 페이지가 쌓이지 않게 한다. 반환값은 Notion 페이지 URL."""
+    state = {}
+    if TOP_JOB_STATE_PATH.exists():
+        try:
+            state = json.loads(TOP_JOB_STATE_PATH.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            state = {}
+    page_id = state.get("page_id")
+
+    if page_id:
+        _notion_request("PATCH", f"pages/{page_id}", token, {
+            "properties": {"title": {"title": [{"text": {"content": title}}]}}
+        })
+        existing = _notion_request("GET", f"blocks/{page_id}/children?page_size=100", token)
+        for child in existing.get("results", []):
+            _notion_request("DELETE", f"blocks/{child['id']}", token)
+    else:
+        created = _notion_request("POST", "pages", token, {
+            "parent": {"page_id": NOTION_JOBSYSTEM_PAGE_ID},
+            "properties": {"title": {"title": [{"text": {"content": title}}]}},
+        })
+        page_id = created["id"]
+
+    for start in range(0, len(blocks), 50):
+        _notion_request("PATCH", f"blocks/{page_id}/children", token, {"children": blocks[start:start + 50]})
+
+    url = f"https://www.notion.so/{page_id.replace('-', '')}"
+    TOP_JOB_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    TOP_JOB_STATE_PATH.write_text(
+        json.dumps({"page_id": page_id, "url": url, **meta}, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return url
+
+
+def analyze_top_job(args: argparse.Namespace) -> None:
+    """현재 적합도 1위 공고를 골라 AI 분석을 돌리고 결과를 Notion 페이지 하나에
+    갱신한다(shift_alarm 메뉴바에서 매일 자동 호출, 2026-08-07 추가). 상위 공고가
+    이미지형 등으로 본문을 못 가져오면 다음 순위로 자동으로 내려가며 시도한다."""
+    conn = connect(args.db)
+    candidates = conn.execute(
+        "SELECT * FROM jobs ORDER BY score DESC, deadline ASC LIMIT 5"
+    ).fetchall()
+    if not candidates:
+        raise SystemExit("저장된 공고가 없습니다. collect를 먼저 실행하세요.")
+
+    row = None
+    text = None
+    for candidate in candidates:
+        text = run_job_analysis(candidate)
+        if text:
+            row = candidate
+            break
+        print(f"  ↪️ [{candidate['score']}점] {candidate['company']} 분석 불가 — 다음 순위로 시도\n")
+    if row is None:
+        raise SystemExit("상위 5개 공고 모두 본문을 못 가져오거나 AI 분석에 실패했습니다.")
+
+    token = _notion_token()
+    if not token:
+        print("⚠️  Notion 토큰(jp_subtitle_notion_token)이 키체인에 없어 Notion 페이지 갱신을 건너뜁니다.")
+        print(text)
+        return
+
+    title = f"🎯 {row['company']} — {row['title']}"
+    meta_line = f"점수 {row['score']} | {row['source']} | {row['url']}"
+    blocks = _markdown_to_notion_blocks(meta_line) + _markdown_to_notion_blocks(text)
+    meta = {
+        "company": row["company"], "title": row["title"],
+        "score": row["score"], "source": row["source"],
+    }
+    try:
+        url = _notion_publish(token, title, blocks, meta)
+    except RuntimeError as exc:
+        print(f"⚠️  Notion 페이지 갱신 실패: {exc}")
+        print(text)
+        return
+    print(f"\n✅ Notion 페이지 갱신 완료: {url}")
 
 
 def doctor(args: argparse.Namespace) -> None:
@@ -741,6 +915,9 @@ def parser() -> argparse.ArgumentParser:
     an.add_argument("source_id", help="list/export에서 확인한 공고의 source_id")
     an.add_argument("--source", help="같은 source_id가 여러 소스에 있을 때만 지정 (예: \"사람인(크롤링)\")")
     an.set_defaults(func=analyze_job)
+    sub.add_parser(
+        "analyze-top", help="적합도 1위 공고를 AI로 분석해 Notion 페이지 갱신(shift_alarm 자동 호출용)"
+    ).set_defaults(func=analyze_top_job)
     return p
 
 

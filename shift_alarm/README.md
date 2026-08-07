@@ -318,7 +318,18 @@ Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으
   - `💼 상위 공고 보기 (클릭하면 브라우저로 열림)` 하위 메뉴 — `get_job_collector_top()`이 점수 높은 순 최대 10건(`JOB_COLLECTOR_MENU_LIMIT`)을 `[점수] (소스) 회사 | 제목`으로 나열하고, 클릭하면 `make_open_url_callback()`이 `open <url>`로 기본 브라우저에서 바로 연다. 수집된 공고가 없으면 "아직 수집된 공고가 없습니다" 한 줄만 표시.
   - 둘 다 `build_menu()`가 매번 다시 그릴 때(5분마다 자동 새로고침 포함) DB를 다시 읽으므로 최신 상태를 유지한다.
 
-### 16-1. ★★ 백그라운드 스레드에서 AppKit 직접 호출 → EXC_BREAKPOINT 크래시 (2026-08-05, 근본 원인 확정)
+### 16-1. 🎯 오늘의 추천 공고 AI 분석 → Notion 자동 발행 (★ 2026-08-07 추가)
+
+`collect` 직후 같은 백그라운드 스레드에서 이어서 `이직시스템/job_collector.py analyze-top`을 실행한다(하루 1번, `collect`와 같은 `job_collector_last_run` 주기를 공유 — 별도 타이머 없음). 적합도 1위 공고의 요구사항·우대사항을 AI(codex→claude 폴백)로 읽어 "① 요약 ② 회사가 실제로 뭘 만들려는지 추론 ③ 연습 프로젝트 추천"을 만들고, `이직시스템/README.md`의 "운영 원칙 — 공고를 학습 커리큘럼으로 쓴다" 문서 자체 원칙을 자동화한 결과를 Notion "🎴 이직시스템" 페이지 밑에 발행한다.
+
+- 상위 공고가 JS 렌더링·이미지형이라 본문을 못 가져오면(`이직시스템/README.md` 3-2 참고) 자동으로 2·3·4·5위로 내려가며 시도한다(`job_collector.py`의 `analyze_top_job()`).
+- Notion 발행은 `이직시스템/job_collector.py`의 `_notion_publish()`가 직접 Notion REST API를 호출한다(내가/Claude 세션과는 별개 — 백그라운드 프로세스가 독자적으로 쓴다). 토큰은 일본어자막추출과 같은 키체인 항목(`jp_subtitle_notion_token`)을 재사용하며, 사용자가 Notion에서 그 통합을 "🎴 이직시스템" 페이지에 직접 공유해 둬야 한다(API로 자동화 불가능한 수동 1회 설정).
+- **페이지 하나만 갱신한다** — 매일 새 페이지를 만들지 않고, `이직시스템/data/top_job_notion.json`에 저장된 `page_id`가 있으면 기존 자식 블록을 전부 archive한 뒤 새 내용으로 다시 채운다(Notion에 페이지가 쌓이지 않게). 오늘 1위가 어제와 같은 공고면 내용도 그대로 유지된다.
+- **메뉴바 표시**: `get_top_job_analysis()`가 `top_job_notion.json`을 읽어 `🎯 오늘의 추천 공고 분석: <회사> — <제목>` 항목을 상위 공고 메뉴 바로 아래에 추가한다. 클릭하면 `make_open_url_callback()`으로 Notion 페이지가 브라우저에 열린다. 상태 파일이 없으면(첫 실행 전, 토큰 미설정 등) 항목 자체를 생략한다.
+- Notion 발행이 끝나면 `rumps.notification("🎯 오늘의 추천 공고 분석", "<회사> — <제목>", ...)`으로 알려준다.
+- AI 폴백 호출이 상위 후보 여러 개를 순서대로 시도할 수 있어 `collect`보다 훨씬 오래 걸릴 수 있으므로, 이 단계만 별도로 타임아웃 1800초(30분)를 둔다.
+
+### 16-2. ★★ 백그라운드 스레드에서 AppKit 직접 호출 → EXC_BREAKPOINT 크래시 (2026-08-05, 근본 원인 확정)
 
 이 기능을 추가하면서 앱이 재시작 후 20초 안팎으로 죽는 크래시가 실제로 발생했다(`~/Library/Logs/DiagnosticReports/python3.11-*.ips`에 `EXC_BREAKPOINT`/`SIGTRAP`, 스택트레이스는 `NSViewBackingLayer display` → `CA::Transaction::commit` → 백그라운드 pthread 종료 시점).
 

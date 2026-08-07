@@ -98,6 +98,9 @@ JOB_COLLECTOR_SCRIPT = os.path.join(JOB_COLLECTOR_DIR, "job_collector.py")
 JOB_COLLECTOR_DB = os.path.join(JOB_COLLECTOR_DIR, "data", "jobs.db")
 JOB_COLLECTOR_REFRESH_SECONDS = 24 * 60 * 60  # 하루 1번
 JOB_COLLECTOR_MENU_LIMIT = 10
+# 적합도 1위 공고를 AI로 분석해 Notion에 올린 결과(★ 2026-08-07 추가).
+# job_collector.py analyze-top이 매일 이 파일을 갱신한다.
+JOB_TOP_ANALYSIS_STATE = os.path.join(JOB_COLLECTOR_DIR, "data", "top_job_notion.json")
 
 # ── 근무표 코드(D/S/G/휴) → 앱 내부 근무 이름 매핑 ───────────────
 CODE_TO_SHIFT = {
@@ -2071,6 +2074,18 @@ def get_job_collector_top(limit=JOB_COLLECTOR_MENU_LIMIT):
     return [dict(row) for row in rows]
 
 
+def get_top_job_analysis():
+    """job_collector.py analyze-top이 써 둔 상태 파일을 읽는다. 없거나 깨졌으면
+    None — 메뉴에서 항목을 아예 생략한다."""
+    if not os.path.exists(JOB_TOP_ANALYSIS_STATE):
+        return None
+    try:
+        with open(JOB_TOP_ANALYSIS_STATE, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
 def fetch_weather():
     try:
         url = (
@@ -2804,6 +2819,11 @@ class ShiftAlarmApp(rumps.App):
             job_top_menu.add(rumps.MenuItem("아직 수집된 공고가 없습니다"))
         self.menu.add(job_top_menu)
 
+        top_analysis = get_top_job_analysis()
+        if top_analysis:
+            label = f"🎯 오늘의 추천 공고 분석: {top_analysis.get('company', '')} — {truncate_title(top_analysis.get('title', ''), 30)}"
+            self.menu.add(rumps.MenuItem(label, callback=self.make_open_url_callback(top_analysis["url"])))
+
         self.menu.add(None)
 
         today_reminders = get_today_reminders(self.schedule)
@@ -3033,10 +3053,36 @@ class ShiftAlarmApp(rumps.App):
                     )
             elif result.returncode != 0:
                 print(f"⚠️ 이직시스템 수집 실패: {result.stderr.strip()[:300]}")
+
+            self._run_job_analysis_top()
         except (OSError, subprocess.TimeoutExpired) as exc:
             print(f"⚠️ 이직시스템 수집 실행 오류: {exc}")
         finally:
             self._job_collector_running = False
+
+    def _run_job_analysis_top(self):
+        """적합도 1위 공고를 AI로 분석해 Notion에 올린다(★ 2026-08-07 추가).
+        collect 직후 같은 백그라운드 스레드에서 이어서 돌아 하루 1번 주기를 그대로
+        공유한다. codex/claude 폴백 호출이 상위 후보 여러 개를 시도할 수 있어
+        collect보다 훨씬 오래 걸릴 수 있으므로 타임아웃을 넉넉히 둔다."""
+        try:
+            result = subprocess.run(
+                [sys.executable, JOB_COLLECTOR_SCRIPT, "analyze-top"],
+                cwd=JOB_COLLECTOR_DIR,
+                capture_output=True, text=True, timeout=1800,
+            )
+            if "Notion 페이지 갱신 완료" in result.stdout:
+                top = get_top_job_analysis()
+                if top:
+                    rumps.notification(
+                        "🎯 오늘의 추천 공고 분석",
+                        f"{top.get('company', '')} — {truncate_title(top.get('title', ''), 40)}",
+                        "메뉴바에서 클릭하면 Notion 분석으로 이동합니다.",
+                    )
+            elif result.returncode != 0:
+                print(f"⚠️ 공고 AI 분석 실패: {result.stderr.strip()[:300]}")
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            print(f"⚠️ 공고 AI 분석 실행 오류: {exc}")
 
     def _prompt_jp_workout_settings(self):
         """운동용 영상 목표 길이(분)와 고음 구간 앞뒤 여유(초)를 키패드로 물어본다.
