@@ -363,6 +363,13 @@ Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으
 - 오늘 리마인더가 하나도 없으면(빈 배열) Notion 호출 자체를 생략한다.
 - 토큰이 키체인에 없거나 API 호출이 실패해도 조용히 넘어간다(메뉴바 앱 동작에는 영향 없음) — 콘솔에 `⚠️ 리마인더 Notion 동기화 실패` 로그만 남는다.
 
+**★ 2026-08-08 양방향 동기화 추가**: 휴대폰 Notion에서 체크한 상태를 5시간(`CHECKLIST_SYNC_INTERVAL_SECONDS`)마다 당겨와 메뉴바·위젯에 반영한다.
+- `fetch_reminder_checklist_state(token, date_str)`가 페이지 자식 블록 중 `rich_text`가 오늘 날짜와 일치하는 토글을 찾고, 그 토글의 자식(`to_do`) 블록들을 다시 조회해 `{라벨: checked}` 딕셔너리로 반환한다(오늘 토글이 아직 없으면 빈 딕셔너리 — 정상 상황, 예: 오늘 리마인더가 0건인 날).
+- `_refresh_checklist_state()`(타이머 콜백, 메인 스레드) → `_fetch_checklist_state_thread()`(백그라운드 스레드에서 네트워크 호출) → 결과를 `self._checklist_state`에 저장 + `~/.shift_alarm_checklist_state.json`에 캐시(오늘 날짜분만 유효, 재시작 직후에도 빈 상태로 안 보이게) → `AppHelper.callAfter()`로 `build_menu()`/`_write_mobile_status()`를 메인 스레드에 재스케줄.
+- **메뉴바**: `_build_reminder_status_menu_item()`에 `checklist_state` 인자가 추가돼, 각 리마인더 앞에 `✅`/`⬜`를 붙인다.
+- **위젯**: `status.reminders_checked`(`{라벨: checked}`)가 새로 추가됐고, `buildLeftColumn()`의 리마인더 목록이 `·` 대신 `✅`/`⬜`로 표시한다.
+- 앱 시작 시 캐시를 먼저 읽어 즉시 반영(`build_menu()`가 그 값을 참조하므로 반드시 `build_menu()` 호출보다 먼저 초기화해야 함 — 순서를 반대로 했다가 `AttributeError`로 크래시한 적 있음, 초기화 위치는 `__init__` 맨 앞쪽 참고).
+
 ### 16-3. ★★ 백그라운드 스레드에서 AppKit 직접 호출 → EXC_BREAKPOINT 크래시 (2026-08-05, 근본 원인 확정)
 
 이 기능을 추가하면서 앱이 재시작 후 20초 안팎으로 죽는 크래시가 실제로 발생했다(`~/Library/Logs/DiagnosticReports/python3.11-*.ips`에 `EXC_BREAKPOINT`/`SIGTRAP`, 스택트레이스는 `NSViewBackingLayer display` → `CA::Transaction::commit` → 백그라운드 pthread 종료 시점).

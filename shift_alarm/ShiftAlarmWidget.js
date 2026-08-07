@@ -84,11 +84,13 @@ function buildLeftColumn(stack, status) {
   }
 
   const reminders = status.reminders || [];
+  const remindersChecked = status.reminders_checked || {};
   if (reminders.length > 0) {
     addLine(stack, "🔔 오늘의 리마인더", { color: COLOR_DIM, size: 11, bold: true });
     stack.addSpacer(3);
     reminders.slice(0, MAX_REMINDERS_SHOWN).forEach((r) => {
-      addLine(stack, `· ${r}`, { color: COLOR_SUB, size: 11 });
+      const mark = remindersChecked[r] ? "✅" : "⬜";
+      addLine(stack, `${mark} ${r}`, { color: COLOR_SUB, size: 11 });
       stack.addSpacer(2);
     });
     const remaining = reminders.length - MAX_REMINDERS_SHOWN;

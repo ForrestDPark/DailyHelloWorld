@@ -117,6 +117,46 @@ REMINDER_MENU_COLOR_CYCLE = [
     NSColor.systemOrangeColor, NSColor.systemBlueColor, NSColor.systemPurpleColor,
     NSColor.systemGreenColor, NSColor.systemRedColor, NSColor.systemYellowColor,
 ]
+# ★ 2026-08-08: 휴대폰 Notion에서 체크한 상태를 5시간마다 당겨와 메뉴바/위젯에
+# 반영한다. 로컬 캐시(오늘 날짜분만 유효)를 둬서 재시작 직후에도 빈 상태로
+# 보이지 않게 한다.
+CHECKLIST_STATE_CACHE_PATH = os.path.expanduser("~/.shift_alarm_checklist_state.json")
+CHECKLIST_SYNC_INTERVAL_SECONDS = 5 * 60 * 60
+
+
+def fetch_reminder_checklist_state(token, date_str):
+    """오늘 날짜 토글 밑 체크박스들의 현재 체크 상태를 Notion에서 읽어온다.
+    반환: {리마인더 라벨: checked(bool)}. 오늘 토글이 아직 없으면 빈 딕셔너리."""
+    def _get(path):
+        request = urllib.request.Request(
+            f"https://api.notion.com/v1/{path}",
+            headers={"Authorization": f"Bearer {token}", "Notion-Version": NOTION_VERSION},
+        )
+        with urllib.request.urlopen(request, timeout=15) as response:
+            return json.load(response)
+
+    page_children = _get(f"blocks/{REMINDER_CHECKLIST_NOTION_PAGE_ID}/children?page_size=100")
+    toggle_id = None
+    for block in page_children.get("results", []):
+        if block.get("type") != "toggle":
+            continue
+        rich_text = block.get("toggle", {}).get("rich_text", [])
+        text = "".join(t.get("plain_text", "") for t in rich_text)
+        if text == date_str:
+            toggle_id = block["id"]
+            break
+    if not toggle_id:
+        return {}
+
+    todo_children = _get(f"blocks/{toggle_id}/children?page_size=100")
+    state = {}
+    for block in todo_children.get("results", []):
+        if block.get("type") != "to_do":
+            continue
+        rich_text = block.get("to_do", {}).get("rich_text", [])
+        text = "".join(t.get("plain_text", "") for t in rich_text)
+        state[text] = bool(block.get("to_do", {}).get("checked"))
+    return state
 
 # ── 근무표 코드(D/S/G/휴) → 앱 내부 근무 이름 매핑 ───────────────
 CODE_TO_SHIFT = {
@@ -2297,19 +2337,25 @@ def _set_menu_item_color(menu_item, text, color):
     menu_item._menuitem.setAttributedTitle_(attributed)
 
 
-def _build_reminder_status_menu_item(today_reminders, callback):
+def _build_reminder_status_menu_item(today_reminders, callback, checklist_state=None):
     """"🔔 오늘: ..." 항목을 만든다. 콜백이 없으면 NSMenu가 자동으로 회색/비활성
     표시하는데(★ 2026-08-07 사용자가 "회색으로 표기된다"고 지적한 원인), 콜백을
     지정해 클릭 가능하게 하고(일일 체크리스트 Notion 링크로 이동), 리마인더마다
-    REMINDER_MENU_COLOR_CYCLE을 순환시켜 알록달록하게 색을 입힌다."""
+    REMINDER_MENU_COLOR_CYCLE을 순환시켜 알록달록하게 색을 입힌다.
+    ★ 2026-08-08: checklist_state({라벨: checked})가 있으면 각 항목 앞에 ✅/⬜를
+    붙여서 휴대폰 Notion에서 체크한 상태가 메뉴바에도 보이게 한다."""
+    checklist_state = checklist_state or {}
     if not today_reminders:
         return rumps.MenuItem("🔔 오늘 예정된 리마인더 없음", callback=callback)
     prefix = "🔔 오늘: "
-    text = prefix + " / ".join(today_reminders)
+    display_tokens = [
+        f"{'✅' if checklist_state.get(label) else '⬜'} {label}" for label in today_reminders
+    ]
+    text = prefix + " / ".join(display_tokens)
     item = rumps.MenuItem(text, callback=callback)
     attributed = NSMutableAttributedString.alloc().initWithString_(text)
     offset = _utf16_len(prefix)
-    for i, token in enumerate(today_reminders):
+    for i, token in enumerate(display_tokens):
         color_fn = REMINDER_MENU_COLOR_CYCLE[i % len(REMINDER_MENU_COLOR_CYCLE)]
         token_len = _utf16_len(token)
         attributed.addAttribute_value_range_(
@@ -2358,6 +2404,8 @@ class ShiftAlarmApp(rumps.App):
         self.codex_usage_item = rumps.MenuItem("🪙 Codex: 확인 중...")
         self.claude_usage_item = rumps.MenuItem("🪙 Claude: 확인 중...")
         self.claude_stats_item = rumps.MenuItem("🪙 Claude 로컬: 확인 중...")
+        # build_menu()가 바로 이어서 _checklist_state를 참조하므로 그 전에 초기화해둔다.
+        self._checklist_state = self._load_cached_checklist_state()
         self.build_menu()
 
         # 날씨 10분마다 갱신
@@ -2411,6 +2459,12 @@ class ShiftAlarmApp(rumps.App):
         # 오늘의 리마인더 알림 (앱 시작 시 한 번)
         self._last_reminder_notified = None
         self._maybe_notify_reminders()
+
+        # ★ 2026-08-08: 휴대폰 Notion에서 체크한 상태를 5시간마다 당겨와 메뉴바/
+        # 위젯에 반영한다(초기값은 위 build_menu() 전에 이미 로드해둠).
+        self.checklist_timer = rumps.Timer(self._refresh_checklist_state, CHECKLIST_SYNC_INTERVAL_SECONDS)
+        self.checklist_timer.start()
+        self._refresh_checklist_state(None)
 
         # Codex/Claude 사용량(quota) 12분마다 갱신 + 앱 시작 시 1회
         self.ai_usage_timer = rumps.Timer(self._refresh_ai_usage, 12 * 60)
@@ -2631,6 +2685,7 @@ class ShiftAlarmApp(rumps.App):
             "shift_day_number": day_num,
             "weather": self.weather_str or None,
             "reminders": get_today_reminders(self.schedule),
+            "reminders_checked": self._checklist_state,
             "storage_free_gb": self.storage_free_gb,
             "earnings_short": self._earnings_short_text(),
             "codex_percent": _codex_primary_percent(self._codex_quota),
@@ -2853,6 +2908,43 @@ class ShiftAlarmApp(rumps.App):
         self.config["reminder_notion_synced_date"] = date_str
         save_config(self.config)
 
+    def _load_cached_checklist_state(self):
+        """오늘 날짜분 캐시만 유효 — 날짜가 바뀌었으면 빈 상태로 시작(어제 체크
+        표시가 새 날에 잘못 남지 않게)."""
+        try:
+            with open(CHECKLIST_STATE_CACHE_PATH, encoding="utf-8") as f:
+                cached = json.load(f)
+            if cached.get("date") == datetime.date.today().isoformat():
+                return cached.get("state", {})
+        except (OSError, json.JSONDecodeError):
+            pass
+        return {}
+
+    def _refresh_checklist_state(self, _):
+        """5시간마다(타이머) 호출 — 네트워크 I/O라 백그라운드 스레드로 뺀다."""
+        threading.Thread(target=self._fetch_checklist_state_thread, daemon=True).start()
+
+    def _fetch_checklist_state_thread(self):
+        token = _notion_keychain_token()
+        if not token:
+            return
+        date_str = datetime.date.today().isoformat()
+        try:
+            state = fetch_reminder_checklist_state(token, date_str)
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
+            print(f"⚠️ 체크리스트 상태 동기화 실패: {exc}")
+            return
+        self._checklist_state = state
+        try:
+            with open(CHECKLIST_STATE_CACHE_PATH, "w", encoding="utf-8") as f:
+                json.dump({"date": date_str, "state": state}, f, ensure_ascii=False)
+        except OSError:
+            pass
+        # NSMenu/NSStatusItem을 안 건드리는 순수 데이터 갱신은 여기까지고,
+        # build_menu()/_write_mobile_status()는 AppKit을 건드리므로 메인 스레드로 넘긴다.
+        AppHelper.callAfter(self.build_menu)
+        AppHelper.callAfter(self._write_mobile_status)
+
     def make_open_url_callback(self, url):
         def callback(_):
             subprocess.Popen(["open", url])
@@ -2981,7 +3073,8 @@ class ShiftAlarmApp(rumps.App):
 
         today_reminders = get_today_reminders(self.schedule)
         self.menu.add(_build_reminder_status_menu_item(
-            today_reminders, self.make_open_url_callback(REMINDER_CHECKLIST_NOTION_URL)
+            today_reminders, self.make_open_url_callback(REMINDER_CHECKLIST_NOTION_URL),
+            checklist_state=self._checklist_state,
         ))
 
         reminder_menu = rumps.MenuItem("🔔 리마인더 켜기/끄기")
