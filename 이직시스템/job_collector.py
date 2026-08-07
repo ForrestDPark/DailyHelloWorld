@@ -873,7 +873,7 @@ def analyze_top_job(args: argparse.Namespace) -> None:
     blocks = _markdown_to_notion_blocks(meta_line) + _markdown_to_notion_blocks(text)
     meta = {
         "company": row["company"], "title": row["title"],
-        "score": row["score"], "source": row["source"],
+        "score": row["score"], "source": row["source"], "job_url": row["url"],
     }
     try:
         url = _notion_publish(token, title, blocks, meta)

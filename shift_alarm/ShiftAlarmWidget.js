@@ -136,14 +136,17 @@ function buildBottomSection(widget, status) {
     widget.addSpacer(8);
   }
 
-  if (status.job_total !== null && status.job_total !== undefined) {
-    const bestText = status.job_best_score !== null && status.job_best_score !== undefined
-      ? ` (최고 ${status.job_best_score}점)`
-      : "";
-    addLine(widget, `💼 이직시스템 ${status.job_total}건 저장됨${bestText}`, {
-      color: COLOR_SUB,
-      size: 11,
-    });
+  if (status.job_company) {
+    addLine(widget, `🎯 오늘의 추천 공고`, { color: COLOR_DIM, size: 11, bold: true });
+    widget.addSpacer(2);
+    const jobLabel = `${status.job_company} — ${status.job_title || ""}`;
+    const jobLine = addLine(widget, jobLabel, { color: COLOR_SUB, size: 12, lineLimit: 2 });
+    if (status.job_url) jobLine.url = status.job_url;
+    if (status.job_notion_url) {
+      widget.addSpacer(2);
+      const notionLine = addLine(widget, "📄 AI 분석 보기", { color: COLOR_PURPLE, size: 11 });
+      notionLine.url = status.job_notion_url;
+    }
   }
 }
 

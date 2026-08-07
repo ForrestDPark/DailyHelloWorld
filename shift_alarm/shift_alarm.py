@@ -97,10 +97,13 @@ JOB_COLLECTOR_DIR = os.path.join(
 JOB_COLLECTOR_SCRIPT = os.path.join(JOB_COLLECTOR_DIR, "job_collector.py")
 JOB_COLLECTOR_DB = os.path.join(JOB_COLLECTOR_DIR, "data", "jobs.db")
 JOB_COLLECTOR_REFRESH_SECONDS = 24 * 60 * 60  # 하루 1번
-JOB_COLLECTOR_MENU_LIMIT = 10
 # 적합도 1위 공고를 AI로 분석해 Notion에 올린 결과(★ 2026-08-07 추가).
 # job_collector.py analyze-top이 매일 이 파일을 갱신한다.
 JOB_TOP_ANALYSIS_STATE = os.path.join(JOB_COLLECTOR_DIR, "data", "top_job_notion.json")
+# "🎎 일일 체크리스트" Notion 페이지(app.notion.com/p/3b532a1eae80803490affd8c9b658711)
+# 를 표준 UUID로 표기한 것 — 오늘의 리마인더를 매일 토글+체크박스로 추가한다(★ 2026-08-07).
+REMINDER_CHECKLIST_NOTION_PAGE_ID = "3b532a1e-ae80-8034-90af-fd8c9b658711"
+NOTION_VERSION = "2026-03-11"
 
 # ── 근무표 코드(D/S/G/휴) → 앱 내부 근무 이름 매핑 ───────────────
 CODE_TO_SHIFT = {
@@ -182,6 +185,7 @@ REMINDERS = {
     "call_heo_minjun": {"label": "📞 허민준한테 전화하는 날(월 1회)", "enabled": True},
     "call_dongchan":   {"label": "📞 동찬이형한테 전화하는 날(21일에 1회)", "enabled": True},
     "call_sondongju":  {"label": "📞 손동주한테 전화하는 날(1주일에 1회)",   "enabled": True},
+    "coding_academy":  {"label": "💬 코딩학원 카톡방에 연락하는 날(1주일에 1회)", "enabled": True},
     "sondongju_off":   {"label": "🎉 손동주 쉬는 날(동주 근무 주기 기준)",         "enabled": True},
     "nose_hair_trim":  {"label": "🪒 코털 정리하는 날(4일에 1회)",       "enabled": True},
     "earphone_charge": {"label": "🎧 이어폰 충전하는 날(4일에 1회)",     "enabled": True},
@@ -554,6 +558,8 @@ CALL_DONGCHAN_ANCHOR = datetime.date(2026, 8, 3)
 CALL_DONGCHAN_INTERVAL_DAYS = 21
 CALL_SONDONGJU_ANCHOR = datetime.date(2026, 8, 5)
 CALL_SONDONGJU_INTERVAL_DAYS = 7
+CODING_ACADEMY_CHAT_ANCHOR = datetime.date(2026, 8, 7)
+CODING_ACADEMY_CHAT_INTERVAL_DAYS = 7
 # 동주 본인 근무표: 야간 2주(14일) → 주간 2주(14일) 로테이션, 각 14일 블록 안에서
 # 5일 근무 + 2일 휴무가 두 번 반복(5+2+5+2=14). 2026-08-04이 야간 블록의 1일째이므로
 # 그 날을 14일 주기의 0번째 오프셋으로 놓으면, 주/야간 구분과 무관하게
@@ -607,6 +613,12 @@ def _is_sondongju_call_day(d):
     """기준일부터 7일마다(주 1회) 돌아오는 손동주 연락일인지 반환."""
     days = (d - CALL_SONDONGJU_ANCHOR).days
     return days >= 0 and days % CALL_SONDONGJU_INTERVAL_DAYS == 0
+
+
+def _is_coding_academy_chat_day(d):
+    """기준일부터 7일마다(주 1회) 돌아오는 코딩학원 카톡방 연락일인지 반환."""
+    days = (d - CODING_ACADEMY_CHAT_ANCHOR).days
+    return days >= 0 and days % CODING_ACADEMY_CHAT_INTERVAL_DAYS == 0
 
 
 def _is_sondongju_off_day(d):
@@ -669,6 +681,7 @@ def get_today_reminders(schedule, now=None):
     - 허민준한테 전화: 월 1회, 이번 달의 첫 번째 휴무 블록 시작일
     - 동찬이형한테 전화: 2026-08-03부터 21일마다 한 번
     - 손동주한테 전화: 2026-08-05부터 7일마다(주 1회) 한 번
+    - 코딩학원 카톡방 연락: 2026-08-07부터 7일마다(주 1회) 한 번
     - 손동주 쉬는 날: 동주 본인 근무표(야간 2주/주간 2주 로테이션, 5일 근무+2일 휴무
       반복) 기준. 2026-08-04(야간 첫날)를 14일 주기 1일째로 놓고 계산.
     - 코털 정리: 근무표와 무관하게 2026-08-03부터 4일마다 한 번
@@ -716,6 +729,9 @@ def get_today_reminders(schedule, now=None):
     if REMINDERS["call_sondongju"]["enabled"] and _is_sondongju_call_day(today):
         reminders.append(REMINDERS["call_sondongju"]["label"])
 
+    if REMINDERS["coding_academy"]["enabled"] and _is_coding_academy_chat_day(today):
+        reminders.append(REMINDERS["coding_academy"]["label"])
+
     if REMINDERS["sondongju_off"]["enabled"] and _is_sondongju_off_day(today):
         reminders.append(REMINDERS["sondongju_off"]["label"])
 
@@ -748,8 +764,6 @@ def get_today_reminder_title_tokens(schedule, now=None):
             tokens.append("🏋️하")
         elif label in call_tokens:
             tokens.append(call_tokens[label])
-        elif label == REMINDERS["earphone_charge"]["label"]:
-            tokens.append("🎧충전")
         else:
             tokens.append(label.split(" ", 1)[0])
     return tokens
@@ -2056,22 +2070,15 @@ def get_job_collector_summary():
     return row[0], row[1]
 
 
-def get_job_collector_top(limit=JOB_COLLECTOR_MENU_LIMIT):
-    """점수 높은 순으로 공고 목록을 반환. 각 항목은
-    {"source","score","company","title","deadline","url"} 딕셔너리. DB 없으면 빈 리스트."""
-    if not os.path.exists(JOB_COLLECTOR_DB):
-        return []
-    try:
-        conn = sqlite3.connect(JOB_COLLECTOR_DB)
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            "SELECT source, score, company, title, deadline, url FROM jobs "
-            "ORDER BY score DESC, deadline ASC LIMIT ?", (limit,)
-        ).fetchall()
-        conn.close()
-    except sqlite3.Error:
-        return []
-    return [dict(row) for row in rows]
+def _notion_keychain_token():
+    """일본어자막추출/이직시스템과 동일한 키체인 항목을 재사용한다(★ 2026-08-07).
+    사용자가 Notion에서 그 통합을 대상 페이지에 공유해 둬야 정상 동작한다."""
+    result = subprocess.run(
+        ["security", "find-generic-password", "-a", os.environ.get("USER", ""),
+         "-s", "jp_subtitle_notion_token", "-w"],
+        capture_output=True, text=True,
+    )
+    return result.stdout.strip() if result.returncode == 0 else ""
 
 
 def get_top_job_analysis():
@@ -2425,8 +2432,10 @@ class ShiftAlarmApp(rumps.App):
             ]
         reminder_icons = " ".join(_reminder_tokens)
 
+        # ★ 2026-08-07: 이모지 없이 숫자만 표시하고, 항상 초록색(부족 시에만 빨강)으로
+        # 색을 입혀서 이모지 없이도 한눈에 저장공간 항목인지 구분되게 했다.
         storage_num = self.storage_free_gb
-        storage = f"💾{storage_num}" if storage_num is not None else ""
+        storage = str(storage_num) if storage_num is not None else ""
 
         day_num = (
             _shift_block_day_number(self.schedule, datetime.date.today(), current)
@@ -2454,12 +2463,14 @@ class ShiftAlarmApp(rumps.App):
             start = _utf16_len(shift_code_text) + 1  # "-" 건너뛰기
             shift_inner.append((start, _utf16_len(self.weather_icon), weather_color))
 
-        # 저장공간 부족 시(5GB 이하)만 숫자를 빨강으로.
+        # 저장공간 숫자는 항상 색을 입힌다 — 평소엔 초록, 부족 시(5GB 이하)만 빨강.
         storage_inner = []
-        if storage_num is not None and storage_num <= LOW_STORAGE_WARNING_GB:
-            num_str = str(storage_num)
-            start = _utf16_len(storage) - _utf16_len(num_str)
-            storage_inner.append((start, _utf16_len(num_str), NSColor.systemRedColor()))
+        if storage_num is not None:
+            color = (
+                NSColor.systemRedColor() if storage_num <= LOW_STORAGE_WARNING_GB
+                else NSColor.systemGreenColor()
+            )
+            storage_inner.append((0, _utf16_len(storage), color))
 
         # Codex/Claude 사용량을 드롭다운을 열지 않아도 보이도록 상태창 타이틀에 바로
         # "코94% 클61%" 형태로 표시한다. 기본은 Codex=초록/Claude=오렌지, 각자의
@@ -2524,7 +2535,7 @@ class ShiftAlarmApp(rumps.App):
             _shift_block_day_number(self.schedule, today, current) if current else None
         )
         sunzi_entry = get_latest_sunzi_entry()
-        job_summary = get_job_collector_summary()
+        top_job = get_top_job_analysis()
         status = {
             "updated_at": datetime.datetime.now().isoformat(timespec="seconds"),
             "date": today.isoformat(),
@@ -2540,8 +2551,10 @@ class ShiftAlarmApp(rumps.App):
             "claude_critical": _claude_weekly_critical(self._claude_live_quota),
             "sunzi_title": sunzi_entry["title"] if sunzi_entry else None,
             "sunzi_url": sunzi_entry["url"] if sunzi_entry else None,
-            "job_total": job_summary[0] if job_summary else None,
-            "job_best_score": job_summary[1] if job_summary else None,
+            "job_company": top_job.get("company") if top_job else None,
+            "job_title": top_job.get("title") if top_job else None,
+            "job_url": top_job.get("job_url") if top_job else None,
+            "job_notion_url": top_job.get("url") if top_job else None,
         }
         for target_dir, target_file in (
             (MOBILE_STATUS_DIR, MOBILE_STATUS_FILE),
@@ -2696,6 +2709,55 @@ class ShiftAlarmApp(rumps.App):
         todays = get_today_reminders(self.schedule)
         if todays:
             rumps.notification("오늘의 리마인더", "", "\n".join(todays))
+            threading.Thread(
+                target=self._sync_reminder_checklist_to_notion,
+                args=(today, todays), daemon=True,
+            ).start()
+
+    def _sync_reminder_checklist_to_notion(self, today, todays):
+        """오늘의 리마인더를 "🎎 일일 체크리스트" Notion 페이지에 날짜별 토글 +
+        체크박스(to_do)로 추가한다(★ 2026-08-07 추가) — 휴대폰 Notion 앱에서 체크
+        해가며 하루를 보낼 수 있게. 네트워크 호출이라 백그라운드 스레드에서만 돌리고
+        AppKit은 전혀 건드리지 않는다(크래시 이력 있는 패턴이라 신중하게 분리).
+
+        앱을 하루에 여러 번 재시작해도(코드 수정 후 kickstart 등) 같은 날짜가
+        중복으로 안 생기게, config에 마지막으로 동기화한 날짜를 영구 저장해서
+        확인한다 — 한 번 만든 뒤엔 사용자가 체크한 상태를 다시 덮어쓰지 않는다."""
+        date_str = today.isoformat()
+        if self.config.get("reminder_notion_synced_date") == date_str:
+            return
+        token = _notion_keychain_token()
+        if not token:
+            return  # Notion 미설정은 정상 상태일 수 있음 — 조용히 건너뜀
+        children = [{
+            "object": "block", "type": "to_do",
+            "to_do": {"rich_text": [{"type": "text", "text": {"content": label}}], "checked": False},
+        } for label in todays]
+        toggle_block = {
+            "object": "block", "type": "toggle",
+            "toggle": {
+                "rich_text": [{"type": "text", "text": {"content": date_str}}],
+                "children": children,
+            },
+        }
+        try:
+            request = urllib.request.Request(
+                f"https://api.notion.com/v1/blocks/{REMINDER_CHECKLIST_NOTION_PAGE_ID}/children",
+                data=json.dumps({"children": [toggle_block]}).encode("utf-8"),
+                method="PATCH",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Notion-Version": NOTION_VERSION,
+                    "Content-Type": "application/json",
+                },
+            )
+            with urllib.request.urlopen(request, timeout=15) as response:
+                response.read()
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
+            print(f"⚠️ 리마인더 Notion 동기화 실패: {exc}")
+            return
+        self.config["reminder_notion_synced_date"] = date_str
+        save_config(self.config)
 
     def make_open_url_callback(self, url):
         def callback(_):
@@ -2803,22 +2865,10 @@ class ShiftAlarmApp(rumps.App):
         self.menu.add(self.claude_stats_item)
 
         self.menu.add(None)
-        job_summary = get_job_collector_summary()
-        if job_summary:
-            total, best = job_summary
-            self.menu.add(rumps.MenuItem(f"💼 이직시스템: {total}건 저장됨 (최고 {best}점)"))
-        else:
-            self.menu.add(rumps.MenuItem("💼 이직시스템: 수집된 공고 없음"))
-        job_top_menu = rumps.MenuItem("💼 상위 공고 보기 (클릭하면 브라우저로 열림)")
-        top_jobs = get_job_collector_top()
-        if top_jobs:
-            for job in top_jobs:
-                label = f"[{job['score']:>3}] ({job['source']}) {job['company']} | {truncate_title(job['title'], 40)}"
-                job_top_menu.add(rumps.MenuItem(label, callback=self.make_open_url_callback(job["url"])))
-        else:
-            job_top_menu.add(rumps.MenuItem("아직 수집된 공고가 없습니다"))
-        self.menu.add(job_top_menu)
-
+        # ★ 2026-08-07: "N건 저장됨"/상위 공고 목록은 키워드 개수로만 매기는
+        # 점수(score_job())라 의미 없는 매칭이 섞여 노이즈가 많다는 사용자 피드백으로
+        # 메뉴 노출을 없앴다. collect는 계속 원료 수집용으로만 백그라운드에서 돌고,
+        # analyze-top이 그중 실제로 깊이 분석할 가치가 있는 1건만 골라 보여준다.
         top_analysis = get_top_job_analysis()
         if top_analysis:
             label = f"🎯 오늘의 추천 공고 분석: {top_analysis.get('company', '')} — {truncate_title(top_analysis.get('title', ''), 30)}"
