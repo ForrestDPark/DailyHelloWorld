@@ -1,3 +1,6 @@
+// Variables used by Scriptable.
+// These must be at the very top of the file. Do not edit.
+// icon-color: brown; icon-glyph: magic;
 // ShiftAlarm 상태 위젯 (Scriptable)
 //
 // 같은 iCloud Documents 폴더(Scriptable 앱의 iCloud 컨테이너)의 status.json을
