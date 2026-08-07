@@ -4,6 +4,7 @@
 
 - 로컬 경로: `/Users/forrestdpark/Desktop/PDG/DailyHelloWorld_/shift_alarm/shift_alarm.py` (관련 파일 전부 `shift_alarm/` 폴더 안 — 손자병법 파이프라인이 `손자병법/` 폴더를 쓰는 것과 같은 패턴)
 - **실행 방식(★ 2026-07-23 확정): `~/Library/LaunchAgents/com.shiftalarm.menubar.plist`로 등록된 LaunchAgent다** (로그인 시 자동 시작, `RunAtLoad=true`). 코드 수정 후 재시작은 `nohup`이 아니라 `launchctl kickstart -k gui/$(id -u)/com.shiftalarm.menubar`로 한다 (기존 프로세스 kill + 재시작을 한 번에 처리). **주의: plist의 `ProgramArguments` 경로는 `shift_alarm.py` 파일을 옮기면 반드시 같이 수정해야 한다** — 코드 안 `__file__` 기준 상대경로와 달리 plist 진입점은 절대경로 고정이라 자동으로 안 따라가고, 이미 떠 있는 프로세스는 멀쩡히 돌다가 다음 재부팅/재로드 때(즉 "껐다 켤 때") 그제서야 조용히 실패한다(자세한 사례는 8-1 참조).
+  - **★ 2026-08-07 KeepAlive 추가**: 예전엔 `KeepAlive: false`라 앱이 정말로 죽으면(크래시 등) launchd가 자동으로 다시 안 띄워줘서, 수동으로 kickstart 해줄 때까지 메뉴바 아이콘이 계속 사라진 채로 남는 문제가 있었다. `KeepAlive: {SuccessfulExit: false}`로 바꿔서 **비정상 종료(크래시/kill)일 때만** 자동 재시작하고, 메뉴의 "종료"로 정상 종료(exit 0, `rumps.quit_application()`)했을 땐 재시작 안 함. `StandardOutPath`/`StandardErrorPath`를 `~/Library/Logs/shift_alarm.{out,err}.log`로 지정해서 다음에 또 죽으면 원인을 사후에 확인할 수 있게 했다. plist를 고친 뒤엔 `launchctl kickstart -k`만으로는 반영이 안 되고(플리스트 자체를 다시 안 읽음) `launchctl bootout gui/$(id -u)/com.shiftalarm.menubar && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.shiftalarm.menubar.plist`로 재로드해야 한다.
 - 사용자는 3교대(Day/Swing/GY) + 휴무로 도는 D조 근무자.
 
 ## 0. 메뉴 구성 원칙 (2026-08-01 재확정)
@@ -52,6 +53,8 @@
 
 ## 5. 주간/월간 리마인더 (`REMINDERS`)
 교대근무자라 요일이 계속 바뀌므로, 요일이 아니라 근무표의 **"휴무 블록"** 을 기준으로 판단한다. 메뉴의 `🔔 리마인더 켜기/끄기`에서 항목별로 개별 on/off 가능 (`~/.shift_alarm_config.json`의 `reminders_enabled`에 저장).
+
+- **`🔔 오늘: ...` 항목(★ 2026-08-07 개선)**: 예전엔 콜백이 없어서(클릭해도 아무 동작 안 함) NSMenu가 자동으로 회색/비활성으로 그렸다. `_build_reminder_status_menu_item()`이 이제 클릭 콜백(16-2의 "🎎 일일 체크리스트" Notion 페이지로 이동)을 달아서 일반 텍스트처럼 보이게 하고, 리마인더마다 `REMINDER_MENU_COLOR_CYCLE`(주황·파랑·보라·초록·빨강·노랑 순환)로 색을 입혀 한눈에 구분되게 했다.
 
 | 항목 | 조건 |
 |---|---|

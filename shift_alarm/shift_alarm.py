@@ -107,7 +107,16 @@ CONTEST_TOP_ANALYSIS_STATE = os.path.join(JOB_COLLECTOR_DIR, "data", "top_contes
 # "🎎 일일 체크리스트" Notion 페이지(app.notion.com/p/3b532a1eae80803490affd8c9b658711)
 # 를 표준 UUID로 표기한 것 — 오늘의 리마인더를 매일 토글+체크박스로 추가한다(★ 2026-08-07).
 REMINDER_CHECKLIST_NOTION_PAGE_ID = "3b532a1e-ae80-8034-90af-fd8c9b658711"
+REMINDER_CHECKLIST_NOTION_URL = (
+    f"https://www.notion.so/{REMINDER_CHECKLIST_NOTION_PAGE_ID.replace('-', '')}"
+)
 NOTION_VERSION = "2026-03-11"
+# "🔔 오늘: ..." 메뉴 항목에서 리마인더마다 색을 다르게 입혀 알록달록하게
+# 보이게 한다(★ 2026-08-07: 콜백 없어 회색으로 보이던 걸 개선하면서 같이 추가).
+REMINDER_MENU_COLOR_CYCLE = [
+    NSColor.systemOrangeColor, NSColor.systemBlueColor, NSColor.systemPurpleColor,
+    NSColor.systemGreenColor, NSColor.systemRedColor, NSColor.systemYellowColor,
+]
 
 # ── 근무표 코드(D/S/G/휴) → 앱 내부 근무 이름 매핑 ───────────────
 CODE_TO_SHIFT = {
@@ -2249,6 +2258,29 @@ def _set_menu_item_color(menu_item, text, color):
     menu_item._menuitem.setAttributedTitle_(attributed)
 
 
+def _build_reminder_status_menu_item(today_reminders, callback):
+    """"🔔 오늘: ..." 항목을 만든다. 콜백이 없으면 NSMenu가 자동으로 회색/비활성
+    표시하는데(★ 2026-08-07 사용자가 "회색으로 표기된다"고 지적한 원인), 콜백을
+    지정해 클릭 가능하게 하고(일일 체크리스트 Notion 링크로 이동), 리마인더마다
+    REMINDER_MENU_COLOR_CYCLE을 순환시켜 알록달록하게 색을 입힌다."""
+    if not today_reminders:
+        return rumps.MenuItem("🔔 오늘 예정된 리마인더 없음", callback=callback)
+    prefix = "🔔 오늘: "
+    text = prefix + " / ".join(today_reminders)
+    item = rumps.MenuItem(text, callback=callback)
+    attributed = NSMutableAttributedString.alloc().initWithString_(text)
+    offset = _utf16_len(prefix)
+    for i, token in enumerate(today_reminders):
+        color_fn = REMINDER_MENU_COLOR_CYCLE[i % len(REMINDER_MENU_COLOR_CYCLE)]
+        token_len = _utf16_len(token)
+        attributed.addAttribute_value_range_(
+            NSForegroundColorAttributeName, color_fn(), NSRange(offset, token_len)
+        )
+        offset += token_len + _utf16_len(" / ")
+    item._menuitem.setAttributedTitle_(attributed)
+    return item
+
+
 # ════════════════════════════════════════════════════════════
 # 메뉴바 앱
 # ════════════════════════════════════════════════════════════
@@ -2909,8 +2941,9 @@ class ShiftAlarmApp(rumps.App):
         self.menu.add(None)
 
         today_reminders = get_today_reminders(self.schedule)
-        reminder_status = " / ".join(today_reminders) if today_reminders else "오늘 예정된 리마인더 없음"
-        self.menu.add(rumps.MenuItem(f"🔔 오늘: {reminder_status}"))
+        self.menu.add(_build_reminder_status_menu_item(
+            today_reminders, self.make_open_url_callback(REMINDER_CHECKLIST_NOTION_URL)
+        ))
 
         reminder_menu = rumps.MenuItem("🔔 리마인더 켜기/끄기")
         for key, r in REMINDERS.items():
