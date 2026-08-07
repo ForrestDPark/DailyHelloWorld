@@ -267,8 +267,14 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
     "sunzi_url": "https://app.notion.com/p/3ae32a1eae8081c58fe3c047920dca07",
     "job_company": "(주)피에스티",
     "job_title": "Claude AI 활용 - 사내 업무 자동화/제조 데이터 분석 담당",
+    "job_score": 70,
     "job_url": "https://www.saramin.co.kr/zf_user/jobs/relay/view?...",
-    "job_notion_url": "https://www.notion.so/3b532a1eae8081a5a479da4c01e2e23a"
+    "job_notion_url": "https://www.notion.so/3b532a1eae8081a5a479da4c01e2e23a",
+    "contest_organizer": "임팩트스테이션(주)",
+    "contest_title": "'Next AI Art' POP-UP AI 아트 공모",
+    "contest_score": 50,
+    "contest_url": "https://linkareer.com/activity/341027",
+    "contest_notion_url": "https://www.notion.so/3b532a1eae8081fd9c3bd3ae8d7bbf08"
   }
   ```
   - `job_*` 필드는 ★ 2026-08-07부터 `job_total`/`job_best_score`(수집 건수·최고점수) 대신 `get_top_job_analysis()`가 읽은 `이직시스템/data/top_job_notion.json`을 그대로 반영한다 — 16-1 항목 참조. 아직 분석 전이면 전부 `null`.
@@ -284,7 +290,7 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
   - **미디엄**: `addStack()` + `layoutHorizontally()`로 좌우 2단
     - 왼쪽: 근무·며칠째, 날씨, 저장공간(5GB 이하 빨강), 오늘의 리마인더 최대 3개(초과분은 "외 N건")
     - 오른쪽: 오늘 급여(근무 중이면 지금까지 번 금액, 근무 전이면 예상 금액), 🪙 AI 사용량 — Codex/Claude 각각 %(주간 90% 이상이면 빨강, 아니면 Codex=초록/Claude=오렌지 — 메뉴바 타이틀 색상 규칙과 동일)
-  - **라지(★ 권장)**: 미디엄 레이아웃 그대로 + 아래에 **⚔️ 손자병법 최신 구절**(`손자병법/README.md`의 "완료된 구절" 표 마지막 줄 — 구절 인용문 「」 포함)과 **🎯 오늘의 추천 공고**(회사·제목, ★ 2026-08-07: 건수·점수 표시에서 교체) 추가. 공고 텍스트를 탭하면 원본 공고(`job_url`)로, 그 아래 "📄 AI 분석 보기"를 탭하면 Notion 분석 페이지(`job_notion_url`)로 각각 이동한다 — `WidgetText.url`을 요소별로 따로 지정하면 iOS 16+에서 한 위젯 안에 여러 탭 타겟을 둘 수 있다. 분석 전이면(`job_company`가 없으면) 이 섹션 자체가 생략된다.
+  - **라지(★ 권장)**: 미디엄 레이아웃 그대로 + 아래에 **⚔️ 손자병법 최신 구절**(`손자병법/README.md`의 "완료된 구절" 표 마지막 줄 — 구절 인용문 「」 포함), **🎯 오늘의 추천 공고**(회사·제목, ★ 2026-08-07: 건수·점수 표시에서 교체), **🏆 오늘의 추천 경진대회**(★ 2026-08-07 추가, 주최·제목 한 줄) 추가. 공고 텍스트를 탭하면 원본 공고(`job_url`)로, 그 아래 "📄 AI 분석 보기"를 탭하면 Notion 분석 페이지(`job_notion_url`)로 각각 이동한다 — `WidgetText.url`을 요소별로 따로 지정하면 iOS 16+에서 한 위젯 안에 여러 탭 타겟을 둘 수 있다. 경진대회 줄은 탭하면 공모전 원문(`contest_url`)으로 이동(위젯 공간 제약으로 별도 분석 링크 줄은 생략 — 깊은 분석은 메뉴바에서). 분석 전이면(`job_company`/`contest_organizer`가 없으면) 해당 섹션이 생략된다.
   - 앱 안에서 재생(▶)으로 직접 실행하면(위젯이 아닐 때) `config.widgetFamily`가 없어서 large로 간주하고 `presentLarge()`로 미리보기를 보여준다.
   - 맨 아래에 갱신시각(스몰 제외)
 - Scriptable 앱 안에서 스크립트를 직접 실행하면(위젯이 아닐 때) `presentMedium()`으로 같은 내용을 미리보기로 보여준다(디버깅용).
@@ -323,14 +329,23 @@ Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으
 
 ### 16-1. 🎯 오늘의 추천 공고 AI 분석 → Notion 자동 발행 (★ 2026-08-07 추가)
 
-`collect` 직후 같은 백그라운드 스레드에서 이어서 `이직시스템/job_collector.py analyze-top`을 실행한다(하루 1번, `collect`와 같은 `job_collector_last_run` 주기를 공유 — 별도 타이머 없음). 적합도 1위 공고의 요구사항·우대사항을 AI(codex→claude 폴백)로 읽어 "① 요약 ② 회사가 실제로 뭘 만들려는지 추론 ③ 연습 프로젝트 추천"을 만들고, `이직시스템/README.md`의 "운영 원칙 — 공고를 학습 커리큘럼으로 쓴다" 문서 자체 원칙을 자동화한 결과를 Notion "🎴 이직시스템" 페이지 밑에 발행한다.
+`collect` 직후 같은 백그라운드 스레드에서 이어서 `이직시스템/job_collector.py analyze-top`을 실행한다(하루 1번, `collect`와 같은 `job_collector_last_run` 주기를 공유 — 별도 타이머 없음). 적합도 1위 공고의 요구사항·우대사항을 AI(codex→claude 폴백)로 읽어 "① 요약 ② 회사가 실제로 뭘 만들려는지 추론 ③ 연습 프로젝트 추천 ④(★ 2026-08-07) 1인 사업자로 창업한다면의 사업계획서 항목화"를 만들고, `이직시스템/README.md`의 "운영 원칙 — 공고를 학습 커리큘럼으로 쓴다" 문서 자체 원칙을 자동화한 결과를 Notion "🎴 이직시스템" 페이지 밑에 발행한다.
 
 - 상위 공고가 JS 렌더링·이미지형이라 본문을 못 가져오면(`이직시스템/README.md` 3-2 참고) 자동으로 2·3·4·5위로 내려가며 시도한다(`job_collector.py`의 `analyze_top_job()`).
 - Notion 발행은 `이직시스템/job_collector.py`의 `_notion_publish()`가 직접 Notion REST API를 호출한다(내가/Claude 세션과는 별개 — 백그라운드 프로세스가 독자적으로 쓴다). 토큰은 일본어자막추출과 같은 키체인 항목(`jp_subtitle_notion_token`)을 재사용하며, 사용자가 Notion에서 그 통합을 "🎴 이직시스템" 페이지에 직접 공유해 둬야 한다(API로 자동화 불가능한 수동 1회 설정).
 - **페이지 하나만 갱신한다** — 매일 새 페이지를 만들지 않고, `이직시스템/data/top_job_notion.json`에 저장된 `page_id`가 있으면 기존 자식 블록을 전부 archive한 뒤 새 내용으로 다시 채운다(Notion에 페이지가 쌓이지 않게). 오늘 1위가 어제와 같은 공고면 내용도 그대로 유지된다.
-- **메뉴바 표시**: `get_top_job_analysis()`가 `top_job_notion.json`을 읽어 `🎯 오늘의 추천 공고 분석: <회사> — <제목>` 항목을 상위 공고 메뉴 바로 아래에 추가한다. 클릭하면 `make_open_url_callback()`으로 Notion 페이지가 브라우저에 열린다. 상태 파일이 없으면(첫 실행 전, 토큰 미설정 등) 항목 자체를 생략한다.
-- Notion 발행이 끝나면 `rumps.notification("🎯 오늘의 추천 공고 분석", "<회사> — <제목>", ...)`으로 알려준다.
+- **메뉴바 표시**: `get_top_job_analysis()`가 `top_job_notion.json`을 읽어 `🎯 [점수] 오늘의 추천 공고 분석: <회사> — <제목>` 항목을 상위 공고 메뉴 바로 아래에 추가한다(★ 2026-08-07: 점수 표기 추가 — 이직시스템 메뉴에서 점수 자체는 노이즈라 없앴지만, 이 한 건짜리 추천에는 점수가 있는 게 낫다는 피드백). 클릭하면 `make_open_url_callback()`으로 Notion 페이지가 브라우저에 열린다. 상태 파일이 없으면(첫 실행 전, 토큰 미설정 등) 항목 자체를 생략한다.
+- Notion 발행이 끝나면 `rumps.notification("🎯 오늘의 추천 공고 분석", "[점수] <회사> — <제목>", ...)`으로 알려준다.
 - AI 폴백 호출이 상위 후보 여러 개를 순서대로 시도할 수 있어 `collect`보다 훨씬 오래 걸릴 수 있으므로, 이 단계만 별도로 타임아웃 1800초(30분)를 둔다.
+- **Notion 페이지 안 URL도 클릭 가능한 링크로(★ 2026-08-07)**: `_markdown_to_notion_blocks()`가 `**볼드**`뿐 아니라 `https?://` 패턴도 감지해서 `rich_text`의 `link` 필드로 만든다 — 이전엔 meta 줄의 공고 원문 URL이 그냥 텍스트로만 보였다.
+
+### 16-1a. 🏆 오늘의 추천 경진대회 AI 분석 → Notion 자동 발행 (★ 2026-08-07 추가)
+
+공고 분석과 같은 패턴을 공모전/경진대회 도메인에 그대로 적용한다. `_run_job_analysis_top()` 바로 다음, 같은 백그라운드 스레드·같은 하루 1번 주기로 `_run_contest_collector_and_analysis()`가 `이직시스템/contest_collector.py collect` → `analyze-top`을 순서대로 실행한다(자세한 크롤링·분석 내용은 `이직시스템/README.md` 3-3 참고 — 현재 링커리어만 구현, 데이콘 등은 후속 예정).
+
+- **메뉴바**: `get_top_contest_analysis()`가 `이직시스템/data/top_contest_notion.json`을 읽어 `🏆 [점수] 오늘의 추천 경진대회: <주최> — <제목>` 항목을 공고 분석 항목 바로 아래에 추가.
+- **라지 위젯**: `buildBottomSection()`에 손자병법·공고 분석 아래로 한 줄 더 추가(`🏆 [점수] 주최 — 제목`, 탭하면 공모전 원문으로 이동). 프레임 공간이 이미 빠듯해서 공고 섹션처럼 "AI 분석 보기" 별도 줄은 안 만들었다 — 깊은 분석은 메뉴바에서 확인.
+- 모바일 상태 JSON에 `contest_organizer`/`contest_title`/`contest_score`/`contest_url`/`contest_notion_url` 필드 추가.
 
 ### 16-2. 🎎 오늘의 리마인더 → Notion 일일 체크리스트 자동 동기화 (★ 2026-08-07 추가)
 

@@ -666,14 +666,27 @@ def build_analysis_prompt(row: sqlite3.Row, detail_text: str) -> str:
 {detail_text}
 --- 끝 ---
 
-한국어로 아래 세 항목에 답하라:
+한국어로 아래 네 항목에 답하라:
 1. **요구사항/우대사항 요약**: 실제 기술 스택·자격요건을 간단히 정리.
 2. **이 회사가 지금 만들려는/겪고 있는 것 추론**: 요구사항과 우대사항의 조합에서
    이 팀이 실제로 하려는 일을 구체적으로 추론하라(예: "Python 기반 code
    interpreter + C++ 우대 → 실행 성능이 중요한 샌드박스/커널 구현 가능성"). 막연한
    일반론이 아니라, 왜 그 항목들이 함께 요구되는지 연결고리를 짚어라.
 3. **연습 프로젝트 추천 1~2개**: 지원자가 위 추론을 뒷받침하려고 짧게 만들어볼 수
-   있는 프로젝트를 구체적으로 제안하고, 어떤 요구사항 항목과 연결되는지 명시하라."""
+   있는 프로젝트를 구체적으로 제안하고, 어떤 요구사항 항목과 연결되는지 명시하라.
+4. **1인 사업자로 이 회사를 직접 창업한다면의 사업계획서 항목화**: 지원자가 아니라
+   이 회사가 하려는 일 자체를 혼자 시작하는 창업자 입장에서 분석하라. 2번의 추론을
+   그대로 사업 아이템으로 놓고, 아래 항목을 채워라(모르는 항목은 "정보 부족 —
+   추정:"으로 표시하고 근거 있는 추정을 적을 것, 지어내지 말 것):
+   - 사업 아이템/핵심 가치제안: 무엇을 파는가, 왜 그게 필요한가
+   - 목표 고객: 이 공고를 낸 회사 같은 업종·규모의 기업들(구체적으로)
+   - 수익 모델: 구독/용역/라이선스 등 중 어느 쪽이 맞을지와 그 이유
+   - 최소 실행 조직: 혼자 또는 몇 명으로, 어떤 역할 분담이 필요한지(이 공고의
+     업무 범위를 그대로 참고)
+   - 초기 필요 역량/도구: 2·3번에서 나온 기술 스택 그대로 연결
+   - 시장 진입 전략: 첫 고객을 어떻게 확보할지(예: 이 회사가 속한 업종 커뮤니티,
+     레퍼런스 고객 확보 방식)
+   - 경쟁/대체재 대비 차별점: 기존에 어떻게 해결하고 있었을지와 비교"""
 
 
 def run_job_analysis(row: sqlite3.Row) -> str | None:
@@ -744,20 +757,34 @@ def _notion_token() -> str:
 
 def _markdown_to_notion_blocks(text: str) -> list[dict[str, Any]]:
     """AI 분석 텍스트(마크다운 헤딩·불릿·**볼드**)를 Notion 블록으로 변환한다.
-    sync_book_to_notion.py의 summary_blocks()와 같은 헤딩/불릿 규칙에, **볼드**
-    인라인 서식만 추가했다(분석 텍스트에 강조가 많아 없으면 별표가 그대로 보임)."""
-    bold_re = re.compile(r"\*\*(.+?)\*\*")
+    sync_book_to_notion.py의 summary_blocks()와 같은 헤딩/불릿 규칙에, **볼드**와
+    URL 하이퍼링크 인라인 서식을 추가했다(볼드 없으면 별표가 그대로 보이고, URL도
+    링크로 안 만들면 meta 줄의 공고 원문 URL이 그냥 텍스트로만 보여서 2026-08-07
+    사용자 피드백으로 추가)."""
+    inline_re = re.compile(r"\*\*(.+?)\*\*|(https?://[^\s]+)")
 
     def rich_text(content: str) -> list[dict[str, Any]]:
         segments = []
         pos = 0
-        for m in bold_re.finditer(content):
+        for m in inline_re.finditer(content):
             if m.start() > pos:
                 segments.append({"type": "text", "text": {"content": content[pos:m.start()][:1900]}})
-            segments.append({
-                "type": "text", "text": {"content": m.group(1)[:1900]},
-                "annotations": {"bold": True},
-            })
+            if m.group(1) is not None:
+                segments.append({
+                    "type": "text", "text": {"content": m.group(1)[:1900]},
+                    "annotations": {"bold": True},
+                })
+            else:
+                url = m.group(2)
+                trail = ""
+                while url and url[-1] in ".,)]}":
+                    trail = url[-1] + trail
+                    url = url[:-1]
+                segments.append({
+                    "type": "text", "text": {"content": url[:1900], "link": {"url": url}},
+                })
+                if trail:
+                    segments.append({"type": "text", "text": {"content": trail}})
             pos = m.end()
         if pos < len(content):
             segments.append({"type": "text", "text": {"content": content[pos:][:1900]}})

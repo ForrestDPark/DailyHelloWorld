@@ -65,7 +65,7 @@ python3 job_collector.py analyze <source_id> [--source "사람인(크롤링)"]
 - `collect`: 검색어를 차례로 조회하고 `data/jobs.db`에 저장한다.
 - `list`: 적합도가 높은 공고부터 터미널에 보여준다(각 줄의 URL 옆에 붙은 값이 아니라 별도로 source_id를 확인하려면 `export`나 DB를 직접 조회).
 - `export`: 전체 공고를 엑셀에서도 열 수 있는 `exports/jobs.csv`로 내보낸다.
-- **`analyze` (★ 2026-08-07 추가, "운영 원칙" 실전 도구)**: 공고 하나의 요구사항·우대사항을 AI로 읽어서 ①요약 ②이 회사가 실제로 뭘 만들려는지 추론 ③그걸 뒷받침할 연습 프로젝트 1~2개를 추천받는다. `job_collector.py`의 `analyze_job()`/`fetch_job_detail_text()`, AI 호출은 `ai_exec.py`(일본어자막추출과 동일한 codex→claude 폴백 패턴, 파일 복사해서 이 폴더에도 둠).
+- **`analyze` (★ 2026-08-07 추가, "운영 원칙" 실전 도구)**: 공고 하나의 요구사항·우대사항을 AI로 읽어서 ①요약 ②이 회사가 실제로 뭘 만들려는지 추론 ③그걸 뒷받침할 연습 프로젝트 1~2개 ④(★ 2026-08-07 추가) **1인 사업자로 이 회사를 직접 창업한다면**의 사업계획서 항목화(사업 아이템·목표 고객·수익 모델·최소 실행 조직·초기 필요 역량·시장 진입 전략·차별점) — 지원자 관점뿐 아니라 창업자 관점에서도 같은 공고를 뜯어본다. `job_collector.py`의 `analyze_job()`/`fetch_job_detail_text()`, AI 호출은 `ai_exec.py`(일본어자막추출과 동일한 codex→claude 폴백 패턴, 파일 복사해서 이 폴더에도 둠).
   - 같은 `source_id`가 여러 소스에 있으면 `--source`로 지정해야 한다(예: `"사람인"` API와 `"사람인(크롤링)"`은 ID 체계가 다를 수 있어 별도 소스로 저장됨).
   - **사람인 URL 함정(실사용 중 발견)**: DB에 저장된 사람인 URL(`zf_user/jobs/relay/view?...`)은 본문이 JS로 나중에 로드돼 curl로는 사이트 메뉴/푸터만 잡히고 실제 요구사항은 0글자다. 구버전 URL `zf_user/jobs/view?rec_idx={source_id}`는 서버 렌더링이라 본문이 그대로 잡히므로, 사람인 소스일 때는 자동으로 이 URL을 대신 쓴다.
   - **이미지형 공고 감지**: 위 대체 URL을 써도 "자격요건/우대사항/주요업무" 같은 표준 섹션 제목이 하나도 안 잡히면(회사가 요구사항을 이미지로만 올린 경우 등) AI를 부르지 않고 경고만 띄운다 — 본문 없이 AI에 넘기면 근거 없는 추측을 만들어내기 때문.
@@ -93,6 +93,23 @@ python3 job_collector.py analyze <source_id> [--source "사람인(크롤링)"]
 - 결과는 `source="알바몬(크롤링)"`으로 저장한다. 급여는 `payType.description`(예: "시급"/"월급") + `pay`를 합쳐서 쓴다 — `payType`에는 `value`에 내부 코드("A000")가 들어있어 그쪽을 쓰면 사람이 못 읽는 값이 나온다.
 - 요청 사이 `ALBAMON_CRAWL_DELAY_SECONDS`(1.5초) 딜레이. `queries`는 사람인/워크넷과 동일한 목록을 그대로 재사용한다 — 반도체/TCAD 같은 검색어는 알바몬에서 결과가 0건이어도 그냥 넘어가고, 서빙·물류·판매 계열 공고는 자연히 걸린다.
 - **알바천국(alba.co.kr)은 아직 미구현이다.** robots.txt(`User-agent: *`)는 `/search/`를 명시적으로 허용하지만, 실제로 `/search/?keyword=`에 요청하면 정상 UA·Referer를 붙여도 "일시적인 장애가 발생하였습니다"라는 안내 페이지(HTTP 200)만 돌아온다 — 알바몬처럼 SSR로 데이터가 박혀 있지 않고 클라이언트 렌더링(SPA) 방식이라 실제 검색 API 경로를 아직 못 찾았다. 나중에 브라우저 개발자도구로 실제 API 호출을 확인해서 추가해야 한다.
+
+## 3-3. 링커리어 공모전·경진대회 수집 (`contest_collector.py`, ★ 2026-08-07 추가)
+
+채용공고와 별개로 공모전·경진대회를 같은 철학("공고를 학습 커리큘럼으로 쓴다")으로 다룬다 — 실력 검증 기회이자, 참가하지 않더라도 "이 대회가 뭘 원하는지" 분석 자체가 학습 재료다. `data/contests.db`에 별도 저장하며, `job_collector.py`와 완전히 분리된 파일이다(도메인이 달라 스키마도 다름).
+
+```bash
+python3 contest_collector.py collect        # 링커리어 공모전 목록 최대 5페이지(100건) 수집
+python3 contest_collector.py list --limit 20
+python3 contest_collector.py analyze-top     # 적합도 1위를 AI로 분석해 Notion에 발행
+```
+
+- **링커리어(linkareer.com)만 우선 구현**했다(2026-08-07, 사용자 요청으로 여러 후보 사이트 중 하나씩 순차 추가하기로 함). `/list/contest` 페이지가 Next.js SSR이라 `__NEXT_DATA__`의 `activityItems`(제목·URL)와 `__APOLLO_STATE__`의 `Activity:{id}`(주최·마감일 등 정규화 캐시)를 조합해서 읽는다 — 알바몬 크롤러와 같은 패턴.
+- **`?keyword=` 검색 파라미터는 서버 렌더링에 반영되지 않는다** — 항상 "최신 20건"만 내려준다(확인됨). 그래서 검색 대신 `?page=1~5`로 여러 페이지(최대 100건)를 모은 뒤, `job_collector.py`의 `score_job()`과 동일한 방식(`config.json`의 include/exclude_keywords 재사용)으로 로컬 점수를 매긴다.
+- 공모전 상세 페이지(`https://linkareer.com/activity/{id}`)는 서버 렌더링이라 curl로 본문(참여대상/시상규모/접수기간/상세내용)이 바로 잡힌다.
+- AI 분석은 4개 항목: ①참여자격/공모분야/평가기준 요약 ②이 대회가 검증하려는 역량 추론 ③참가 시 접근 전략 ④1인 사업자 관점 상품화(이 문제를 사업 아이템으로 본다면).
+- Notion 발행은 `job_collector.py`와 같은 "🎴 이직시스템" 페이지 밑, 페이지 하나만 매일 갱신하는 방식을 그대로 재사용(`_notion_publish`가 두 파일에 거의 동일하게 존재 — 도메인별 파일 분리 원칙을 지키려고 공용 모듈로 합치지 않음).
+- **아직 미구현(후속 예정)**: 데이콘(dacon.io, 순수 클라이언트 렌더링이라 실제 API 엔드포인트 발견 필요), aichallenge4all.or.kr, 콘테스트코리아(contestkorea.com), allforyoung.com, 위비티(wevity.com), 씽굿(thinkcontest.com), 해외 플랫폼(Devpost 등).
 
 ## 4. 다음 확장
 

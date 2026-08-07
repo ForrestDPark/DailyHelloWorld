@@ -137,7 +137,10 @@ function buildBottomSection(widget, status) {
   }
 
   if (status.job_company) {
-    addLine(widget, `🎯 오늘의 추천 공고`, { color: COLOR_DIM, size: 11, bold: true });
+    const scoreText = status.job_score !== null && status.job_score !== undefined
+      ? `🎯 [${status.job_score}점] 오늘의 추천 공고`
+      : `🎯 오늘의 추천 공고`;
+    addLine(widget, scoreText, { color: COLOR_DIM, size: 11, bold: true });
     widget.addSpacer(2);
     const jobLabel = `${status.job_company} — ${status.job_title || ""}`;
     const jobLine = addLine(widget, jobLabel, { color: COLOR_SUB, size: 12, lineLimit: 2 });
@@ -147,6 +150,18 @@ function buildBottomSection(widget, status) {
       const notionLine = addLine(widget, "📄 AI 분석 보기", { color: COLOR_PURPLE, size: 11 });
       notionLine.url = status.job_notion_url;
     }
+  }
+
+  // ★ 2026-08-07: 공고 섹션과 형식은 맞추되, 라지 위젯 프레임이 이미 꽉 찬
+  // 편이라(손자병법+공고 3줄) 한 줄로 압축했다 — 넘치면 사용자가 알려주면 조정.
+  if (status.contest_organizer) {
+    widget.addSpacer(8);
+    const scoreText = status.contest_score !== null && status.contest_score !== undefined
+      ? `🏆 [${status.contest_score}점] `
+      : `🏆 `;
+    const contestLabel = `${scoreText}${status.contest_organizer} — ${status.contest_title || ""}`;
+    const contestLine = addLine(widget, contestLabel, { color: COLOR_SUB, size: 11, lineLimit: 2 });
+    if (status.contest_url) contestLine.url = status.contest_url;
   }
 }
 
