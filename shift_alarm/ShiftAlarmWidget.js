@@ -262,6 +262,9 @@ async function run() {
   const status = await loadStatus();
   const family = config.widgetFamily || "large"; // 앱 안에서 미리보기 실행할 땐 large로 가정
   const widget = buildWidget(status, family);
+  // Notion 체크 상태가 Mac→iCloud로 갱신된 뒤 위젯도 가능한 한 빨리 다시 읽는다.
+  // WidgetKit이 배터리 정책에 따라 실제 실행 시각을 늦출 수는 있다.
+  widget.refreshAfterDate = new Date(Date.now() + 60 * 1000);
 
   if (config.runsInWidget) {
     Script.setWidget(widget);

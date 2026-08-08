@@ -118,11 +118,11 @@ REMINDER_MENU_COLOR_CYCLE = [
     NSColor.systemOrangeColor, NSColor.systemBlueColor, NSColor.systemPurpleColor,
     NSColor.systemGreenColor, NSColor.systemRedColor, NSColor.systemYellowColor,
 ]
-# ★ 2026-08-08: 휴대폰 Notion에서 체크한 상태를 5시간마다 당겨와 메뉴바/위젯에
+# ★ 2026-08-08: 휴대폰 Notion에서 체크한 상태를 1분마다 당겨와 메뉴바/위젯에
 # 반영한다. 로컬 캐시(오늘 날짜분만 유효)를 둬서 재시작 직후에도 빈 상태로
 # 보이지 않게 한다.
 CHECKLIST_STATE_CACHE_PATH = os.path.expanduser("~/.shift_alarm_checklist_state.json")
-CHECKLIST_SYNC_INTERVAL_SECONDS = 5 * 60 * 60
+CHECKLIST_SYNC_INTERVAL_SECONDS = 60
 
 
 def fetch_reminder_checklist_state(token, date_str):
@@ -2499,7 +2499,7 @@ class ShiftAlarmApp(rumps.App):
         self._last_reminder_notified = None
         self._maybe_notify_reminders()
 
-        # ★ 2026-08-08: 휴대폰 Notion에서 체크한 상태를 5시간마다 당겨와 메뉴바/
+        # ★ 2026-08-08: 휴대폰 Notion에서 체크한 상태를 1분마다 당겨와 메뉴바/
         # 위젯에 반영한다(초기값은 위 build_menu() 전에 이미 로드해둠).
         self.checklist_timer = rumps.Timer(self._refresh_checklist_state, CHECKLIST_SYNC_INTERVAL_SECONDS)
         self.checklist_timer.start()
@@ -2963,7 +2963,7 @@ class ShiftAlarmApp(rumps.App):
         return {}
 
     def _refresh_checklist_state(self, _):
-        """5시간마다(타이머) 호출 — 네트워크 I/O라 백그라운드 스레드로 뺀다."""
+        """1분마다(타이머) 호출 — 네트워크 I/O라 백그라운드 스레드로 뺀다."""
         threading.Thread(target=self._fetch_checklist_state_thread, daemon=True).start()
 
     def _fetch_checklist_state_thread(self):

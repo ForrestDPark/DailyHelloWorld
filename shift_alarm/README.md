@@ -368,7 +368,7 @@ Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으
 - 오늘 리마인더가 하나도 없으면(빈 배열) Notion 호출 자체를 생략한다.
 - 토큰이 키체인에 없거나 API 호출이 실패해도 조용히 넘어간다(메뉴바 앱 동작에는 영향 없음) — 콘솔에 `⚠️ 리마인더 Notion 동기화 실패` 로그만 남는다.
 
-**★ 2026-08-08 양방향 동기화 추가**: 휴대폰 Notion에서 체크한 상태를 5시간(`CHECKLIST_SYNC_INTERVAL_SECONDS`)마다 당겨와 메뉴바·위젯에 반영한다.
+**★ 2026-08-08 양방향 동기화 추가·실시간화**: 휴대폰 Notion에서 체크한 상태를 1분(`CHECKLIST_SYNC_INTERVAL_SECONDS = 60`)마다 당겨와 메뉴바·위젯 상태 파일에 즉시 반영한다. 이 조회는 AI를 호출하지 않아 토큰 비용이 없고, 분당 몇 번 수준의 Notion 요청은 공식 제한(연결당 평균 초당 3회)보다 충분히 낮다. Scriptable 위젯도 `refreshAfterDate`를 현재 시각+1분으로 요청한다. 단, 실제 홈 화면 갱신 시각은 iOS WidgetKit의 배터리·실행 예산 정책에 따라 늦어질 수 있다.
 - `fetch_reminder_checklist_state(token, date_str)`가 페이지 자식 블록 중 `rich_text`가 오늘 날짜와 일치하는 토글을 찾고, 그 토글의 자식(`to_do`) 블록들을 다시 조회해 `{라벨: checked}` 딕셔너리로 반환한다(오늘 토글이 아직 없으면 빈 딕셔너리 — 정상 상황, 예: 오늘 리마인더가 0건인 날).
 - `_refresh_checklist_state()`(타이머 콜백, 메인 스레드) → `_fetch_checklist_state_thread()`(백그라운드 스레드에서 네트워크 호출) → 결과를 `self._checklist_state`에 저장 + `~/.shift_alarm_checklist_state.json`에 캐시(오늘 날짜분만 유효, 재시작 직후에도 빈 상태로 안 보이게) → `AppHelper.callAfter()`로 `build_menu()`/`_write_mobile_status()`를 메인 스레드에 재스케줄.
 - **메뉴바**: `_build_reminder_status_menu_item()`에 `checklist_state` 인자가 추가돼, 각 리마인더 앞에 `✅`/`⬜`를 붙인다.
