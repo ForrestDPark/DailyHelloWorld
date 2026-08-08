@@ -37,6 +37,7 @@ from urllib.parse import urlparse, parse_qs
 import threading
 import datetime
 import random
+import math
 import concurrent.futures
 import shutil
 import time
@@ -2196,6 +2197,27 @@ def _ai_window_label(window_minutes):
     return f"{days:.0f}일" if days == int(days) else f"{days:.1f}일"
 
 
+def _quota_window_progress(info, now=None):
+    """quota 윈도우의 현재 진행일과 전체 일수를 ``(현재, 전체)``로 반환한다.
+
+    Codex가 기록한 ``resets_at``에서 ``window_minutes``를 빼 시작 시각을 구한다.
+    둘 중 하나라도 없거나 하루 미만의 윈도우면 표시하지 않는다.
+    """
+    if not info:
+        return None
+    window_minutes = info.get("window_minutes")
+    resets_at = info.get("resets_at")
+    if not window_minutes or not resets_at or window_minutes < 24 * 60:
+        return None
+    now = time.time() if now is None else now
+    window_seconds = window_minutes * 60
+    started_at = resets_at - window_seconds
+    total_days = max(1, math.ceil(window_minutes / (24 * 60)))
+    current_day = math.floor((now - started_at) / (24 * 60 * 60)) + 1
+    current_day = min(total_days, max(1, current_day))
+    return current_day, total_days
+
+
 def format_codex_usage(quota):
     """값을 못 가져오면 추측하지 않고 '확인 불가'로 표시."""
     if not quota:
@@ -2205,8 +2227,29 @@ def format_codex_usage(quota):
         info = quota.get(key)
         if not info or info.get("used_percent") is None:
             continue
-        parts.append(f"{_ai_window_label(info.get('window_minutes'))} {info['used_percent']:.0f}%")
+        part = f"{_ai_window_label(info.get('window_minutes'))} {info['used_percent']:.0f}%"
+        progress = _quota_window_progress(info)
+        if progress:
+            part += f" ({progress[0]}/{progress[1]}일째)"
+        parts.append(part)
     return f"🪙 Codex: {' · '.join(parts)}" if parts else "🪙 Codex: 확인 불가"
+
+
+def _claude_seven_day_progress(resets_at: str) -> str:
+    """seven_day(주간) 윈도우의 resets_at으로부터 "7일 중 N일째"를 계산한다.
+    (★ 2026-08-08: 사용률 %만으로는 이번 주 사용 페이스를 가늠하기 어렵다는
+    피드백으로 추가 — 예: 3일째에 48%면 아직 여유, 6일째에 48%면 절약 모드.)"""
+    if not resets_at:
+        return ""
+    try:
+        reset_dt = datetime.datetime.fromisoformat(resets_at.replace("Z", "+00:00"))
+        now = datetime.datetime.now(datetime.timezone.utc)
+        window_start = reset_dt - datetime.timedelta(days=7)
+        day_number = int((now - window_start).total_seconds() // 86400) + 1
+        day_number = min(7, max(1, day_number))
+        return f"({day_number}/7일째)"
+    except (ValueError, TypeError):
+        return ""
 
 
 def format_claude_live_usage(data):
@@ -2220,7 +2263,12 @@ def format_claude_live_usage(data):
         util = val.get("utilization")
         if util is None:
             continue
-        parts.append(f"{key.replace('_', ' ')} {util:.0f}%")
+        label = f"{key.replace('_', ' ')} {util:.0f}%"
+        if key == "seven_day":
+            progress = _claude_seven_day_progress(val.get("resets_at"))
+            if progress:
+                label = f"{label} {progress}"
+        parts.append(label)
     return f"🪙 Claude: {' · '.join(parts)}" if parts else "🪙 Claude: 확인 불가"
 
 
@@ -2273,6 +2321,13 @@ def _codex_primary_percent(quota):
     if not primary:
         return None
     return primary.get("used_percent")
+
+
+def _codex_primary_window_progress(quota):
+    """메뉴바·위젯에 표시할 Codex 주간 윈도우 진행일."""
+    if not quota:
+        return None
+    return _quota_window_progress(quota.get("primary"))
 
 
 def _claude_five_hour_percent(data):
@@ -2488,7 +2543,7 @@ class ShiftAlarmApp(rumps.App):
     def _apply_ai_usage(self, codex_quota, claude_live, claude_local):
         codex_color = (
             NSColor.systemRedColor() if _codex_weekly_critical(codex_quota)
-            else NSColor.systemBlueColor()
+            else NSColor.systemPinkColor()
         )
         _set_menu_item_color(self.codex_usage_item, format_codex_usage(codex_quota), codex_color)
 
@@ -2581,13 +2636,16 @@ class ShiftAlarmApp(rumps.App):
             storage_inner.append((0, _utf16_len(storage), color))
 
         # Codex/Claude 사용량을 드롭다운을 열지 않아도 보이도록 상태창 타이틀에 바로
-        # "94% 61%" 형태로 표시한다. 순서는 Codex(파랑) → Claude(오렌지)이며,
+        # "94% 61%" 형태로 표시한다. 순서는 Codex(핑크) → Claude(오렌지)이며,
         # 각자의 주간(7일) 윈도우가 90% 이상이면 빨강으로 덮어써 경고한다.
         codex_pct = _codex_primary_percent(self._codex_quota)
+        codex_progress = _codex_primary_window_progress(self._codex_quota)
         codex_token = f"{codex_pct:.0f}%" if codex_pct is not None else ""
+        if codex_token and codex_progress:
+            codex_token += f"·{codex_progress[0]}/{codex_progress[1]}"
         codex_color = (
             NSColor.systemRedColor() if _codex_weekly_critical(self._codex_quota)
-            else NSColor.systemBlueColor()
+            else NSColor.systemPinkColor()
         )
 
         claude_pct = _claude_five_hour_percent(self._claude_live_quota)
@@ -2645,6 +2703,7 @@ class ShiftAlarmApp(rumps.App):
         sunzi_entry = get_latest_sunzi_entry()
         top_job = get_top_job_analysis()
         top_contest = get_top_contest_analysis()
+        codex_progress = _codex_primary_window_progress(self._codex_quota)
         status = {
             "updated_at": datetime.datetime.now().isoformat(timespec="seconds"),
             "date": today.isoformat(),
@@ -2656,6 +2715,8 @@ class ShiftAlarmApp(rumps.App):
             "storage_free_gb": self.storage_free_gb,
             "earnings_short": self._earnings_short_text(),
             "codex_percent": _codex_primary_percent(self._codex_quota),
+            "codex_window_day": codex_progress[0] if codex_progress else None,
+            "codex_window_days": codex_progress[1] if codex_progress else None,
             "codex_critical": _codex_weekly_critical(self._codex_quota),
             "claude_percent": _claude_five_hour_percent(self._claude_live_quota),
             "claude_critical": _claude_weekly_critical(self._claude_live_quota),

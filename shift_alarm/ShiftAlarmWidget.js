@@ -38,7 +38,7 @@ const COLOR_TEXT = Color.white();
 const COLOR_DIM = new Color("#8e8e93");
 const COLOR_SUB = new Color("#d1d1d6");
 const COLOR_WARN = new Color("#ff6961");
-const COLOR_BLUE = new Color("#0a84ff");
+const COLOR_PINK = new Color("#ff2d55");
 const COLOR_ORANGE = new Color("#ff9f0a");
 const COLOR_PURPLE = new Color("#bf5af2");
 
@@ -136,8 +136,11 @@ function buildRightColumn(stack, status) {
   stack.addSpacer(3);
 
   if (status.codex_percent !== null && status.codex_percent !== undefined) {
-    const color = status.codex_critical ? COLOR_WARN : COLOR_BLUE;
-    addLine(stack, `Codex ${Math.round(status.codex_percent)}%`, { color, size: 12 });
+    const color = status.codex_critical ? COLOR_WARN : COLOR_PINK;
+    const windowText = status.codex_window_day && status.codex_window_days
+      ? ` · ${status.codex_window_day}/${status.codex_window_days}일`
+      : "";
+    addLine(stack, `Codex ${Math.round(status.codex_percent)}%${windowText}`, { color, size: 12 });
   } else {
     addLine(stack, "Codex -", { color: COLOR_DIM, size: 12 });
   }

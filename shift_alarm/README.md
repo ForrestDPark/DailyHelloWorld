@@ -41,8 +41,9 @@
 - **연차 등 근무표와 다르게 수동으로 오늘 근무를 바꾼 경우**(메뉴에서 직접 근무 선택 → `auto_mode` 꺼짐), 급여 계산도 그 수동값을 따라간다 (`today_override` 파라미터로 근무표 대신 config의 `current_shift`를 씀) — 알람만 꺼지고 급여는 근무표 기준으로 계속 올라가던 버그를 고친 것.
 
 ## 4. 메뉴바 타이틀 구성
-`{근무코드+며칠째}-{날씨 한자} {저장공간} {오늘의 리마인더} {Codex%} {Claude%}` 형태로 표시한다(예: `G3-雨 14 🏋️상 📞동찬 94% 61%`). 운동은 `🏋️상`/`🏋️하`, 전화는 `📞엄마`/`📞민준`/`📞동찬`/`📞동주`로 대상을 바로 표시한다. 급여는 제목에 넣지 않는다.
-- **AI 사용량 상태창 직접 표기 (★ 2026-08-05 추가, 2026-08-08 간소화)**: 드롭다운을 열지 않아도 바로 보이도록 타이틀 맨 끝에 글자 없이 `{Codex 주간%}%`(파랑), `{Claude 5시간%}%`(오렌지) 순서로 붙인다. 저장공간의 정상 색이 초록이라 Codex도 초록이면 구분이 어려워 파랑으로 변경했다. 각자의 **주간(7일) 윈도우 사용률이 90% 이상**이면 해당 숫자가 빨간색으로 바뀐다(`AI_USAGE_CRITICAL_PERCENT`). 값을 아직 못 가져왔으면 해당 숫자를 생략한다. 자세한 데이터 출처는 14번 항목 참조.
+`{근무코드+며칠째}-{날씨 한자} {저장공간} {오늘의 리마인더} {Codex%·주기일/7} {Claude%}` 형태로 표시한다(예: `G3-雨 14 🏋️상 📞동찬 94%·5/7 61%`). 운동은 `🏋️상`/`🏋️하`, 전화는 `📞엄마`/`📞민준`/`📞동찬`/`📞동주`로 대상을 바로 표시한다. 급여는 제목에 넣지 않는다.
+- **AI 사용량 상태창 직접 표기 (★ 2026-08-05 추가, 2026-08-08 간소화)**: 드롭다운을 열지 않아도 바로 보이도록 타이틀 맨 끝에 글자 없이 `{Codex 주간%}%`(핑크), `{Claude 5시간%}%`(오렌지) 순서로 붙인다. 저장공간의 초록·비 오는 날의 파랑과 겹치지 않도록 Codex는 핑크로 구분한다. 각자의 **주간(7일) 윈도우 사용률이 90% 이상**이면 해당 숫자가 빨간색으로 바뀐다(`AI_USAGE_CRITICAL_PERCENT`). 값을 아직 못 가져왔으면 해당 숫자를 생략한다. 자세한 데이터 출처는 14번 항목 참조.
+- **★ 2026-08-08 Codex 주기 진행일 추가**: 사용률만으로는 7일 주기의 초반인지 후반인지 알 수 없어 Codex 숫자를 `3%·1/7`처럼 표시한다. `resets_at - window_minutes`로 주기 시작 시각을 구해 현재가 7일 중 몇 일째인지 자동 계산한다. 드롭다운에는 `7일 3% (1/7일째)`, 위젯에는 `Codex 3% · 1/7일`로 표시한다.
 - 날씨 아이콘(★ 2026-08-05 이모지→한자로 교체): 강수확률 기준 晴(20% 미만) / 曇(20~50%) / 雨(50%+). 임계값은 기존과 동일, Open-Meteo API·아산시 좌표(`LATITUDE=36.78, LONGITUDE=127.00`) 사용. 근무 표기 바로 뒤에 `-`로 이어붙인다(`_update_title()`).
 - **근무 며칠째 표기 + 색상 (★ 2026-08-05 추가)**: `_shift_block_day_number()`가 오늘 근무 코드가 며칠째 연속인지(과거는 근무표 원본 기준) 세서 코드 뒤에 붙인다(`G3`, `D1`, `휴2` 등). GY 숫자는 노란색(`NSColor.systemYellowColor`), 휴무 숫자는 빨간색(`systemRedColor`)으로 표시하고 Day/Swing 숫자는 기본색. 비 오는 날(雨)은 파란색(`systemBlueColor`)으로 표시.
 - **저장공간 숫자 색상(★ 2026-08-07: 이모지 제거)**: `💾` 이모지 없이 숫자만 표시하고 항상 색을 입힌다 — 평소엔 초록(`systemGreenColor`), `LOW_STORAGE_WARNING_GB`(5GB) 이하일 때만 빨간색.
@@ -240,7 +241,7 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
 - `🪙 Claude: {윈도우} {사용률}%` — `get_claude_live_quota()`가 macOS 키체인의 `Claude Code-credentials`(Claude Code 자신이 이미 저장해둔 OAuth 토큰)로 `GET https://api.anthropic.com/api/oauth/usage`를 호출한다. 비공개 엔드포인트지만 자기 계정 조회에만 쓴다. **토큰 값은 절대 print/log에 노출하지 않는다** — Authorization 헤더로만 사용하고 즉시 스코프에서 제거.
 - `🪙 Claude 로컬: {모델} · 턴 N · 요청 N · 캐시 N%` — `get_claude_local_stats()`가 최근 24시간 이내 수정된 `~/.claude/projects/**/*.jsonl`을 집계해 모델명·유저 턴수·모델 요청수·프롬프트 캐시 적중률을 계산.
 - 값을 못 가져오면(로그 없음, API 실패, 키체인 없음 등) **추측하지 않고 "확인 불가"로 표시**한다.
-- **★ 2026-08-05 색상 추가, 2026-08-08 Codex 색상 변경**: `Codex`/`Claude` 두 항목 텍스트 전체에 색을 입힌다 — Codex는 파랑(`systemBlueColor`), Claude(라이브 quota)는 오렌지(`systemOrangeColor`). 단, **주간(7일) 윈도우 사용률이 90% 이상이면 해당 항목을 빨간색(`systemRedColor`)으로 덮어쓴다**(`AI_USAGE_CRITICAL_PERCENT = 90`) — Codex는 `primary`(window_minutes≈10080)를, Claude는 키 이름에 `day`가 들어간 윈도우(예: `seven_day`)를 주간으로 취급. `_set_menu_item_color()`가 `NSMenuItem.attributedTitle`을 직접 설정하는 방식이라 rumps `MenuItem.title`이 아니라 `menu_item._menuitem`을 직접 다룬다. `🪙 Claude 로컬` 항목은 색상 없이 기본색 그대로 둔다(quota가 아니라 통계라 임계값 개념이 없음).
+- **★ 2026-08-05 색상 추가, 2026-08-08 Codex 색상 변경**: `Codex`/`Claude` 두 항목 텍스트 전체에 색을 입힌다 — Codex는 핑크(`systemPinkColor`), Claude(라이브 quota)는 오렌지(`systemOrangeColor`). 단, **주간(7일) 윈도우 사용률이 90% 이상이면 해당 항목을 빨간색(`systemRedColor`)으로 덮어쓴다**(`AI_USAGE_CRITICAL_PERCENT = 90`) — Codex는 `primary`(window_minutes≈10080)를, Claude는 키 이름에 `day`가 들어간 윈도우(예: `seven_day`)를 주간으로 취급. `_set_menu_item_color()`가 `NSMenuItem.attributedTitle`을 직접 설정하는 방식이라 rumps `MenuItem.title`이 아니라 `menu_item._menuitem`을 직접 다룬다. `🪙 Claude 로컬` 항목은 색상 없이 기본색 그대로 둔다(quota가 아니라 통계라 임계값 개념이 없음).
 - 12분마다 백그라운드 스레드(`_refresh_ai_usage`)로 갱신 + 앱 시작 시 1회.
 - Gemini CLI는 이 기기에 설치돼 있지 않아(`~/.gemini` 없음) 데이터 소스에서 제외했다.
 
@@ -265,6 +266,8 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
     "storage_free_gb": 13,
     "earnings_short": "💰 42,300원",
     "codex_percent": 94.0,
+    "codex_window_day": 5,
+    "codex_window_days": 7,
     "codex_critical": true,
     "claude_percent": 41.0,
     "claude_critical": false,
@@ -295,7 +298,7 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
   - **스몰**: 근무·며칠째, 날씨만 (한 줄씩, 최소한만 — 정보 다 넣으면 잘림)
   - **미디엄**: `addStack()` + `layoutHorizontally()`로 좌우 2단
     - 왼쪽: 근무·며칠째, 날씨, 저장공간(5GB 이하 빨강), 오늘의 리마인더 최대 3개(초과분은 "외 N건")
-    - 오른쪽: 오늘 급여(근무 중이면 지금까지 번 금액, 근무 전이면 예상 금액), 🪙 AI 사용량 — Codex/Claude 각각 %(주간 90% 이상이면 빨강, 아니면 Codex=파랑/Claude=오렌지 — 메뉴바 타이틀 색상 규칙과 동일)
+    - 오른쪽: 오늘 급여(근무 중이면 지금까지 번 금액, 근무 전이면 예상 금액), 🪙 AI 사용량 — Codex/Claude 각각 %(주간 90% 이상이면 빨강, 아니면 Codex=핑크/Claude=오렌지 — 메뉴바 타이틀 색상 규칙과 동일)
   - **라지(★ 권장)**: 미디엄 레이아웃 그대로 + 아래에 **⚔️ 손자병법 최신 구절**(`손자병법/README.md`의 "완료된 구절" 표 마지막 줄 — 구절 인용문 「」 포함), **🎯 오늘의 추천 공고**(회사·제목, ★ 2026-08-07: 건수·점수 표시에서 교체), **🏆 오늘의 추천 경진대회**(★ 2026-08-07 추가, 주최·제목 한 줄) 추가. 손자병법 제목이나 구절을 탭하면 해당 Notion 페이지(`sunzi_url`)가 열린다(★ 2026-08-08). 공고 텍스트를 탭하면 원본 공고(`job_url`)로, 그 아래 "📄 AI 분석 보기"를 탭하면 Notion 분석 페이지(`job_notion_url`)로 각각 이동한다 — `WidgetText.url`을 요소별로 따로 지정하면 iOS 16+에서 한 위젯 안에 여러 탭 타겟을 둘 수 있다. 경진대회 줄은 탭하면 공모전 원문(`contest_url`)으로 이동(위젯 공간 제약으로 별도 분석 링크 줄은 생략 — 깊은 분석은 메뉴바에서). 분석 전이면(`job_company`/`contest_organizer`가 없으면) 해당 섹션이 생략된다.
   - 앱 안에서 재생(▶)으로 직접 실행하면(위젯이 아닐 때) `config.widgetFamily`가 없어서 large로 간주하고 `presentLarge()`로 미리보기를 보여준다.
   - 맨 아래에 갱신시각(스몰 제외)
