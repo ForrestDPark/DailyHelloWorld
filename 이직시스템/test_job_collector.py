@@ -4,6 +4,7 @@ import unittest
 from pathlib import Path
 
 import job_collector as jc
+import contest_collector as cc
 
 
 class JobCollectorTest(unittest.TestCase):
@@ -43,6 +44,25 @@ class JobCollectorTest(unittest.TestCase):
             self.assertEqual(jc.upsert_jobs(conn, [job]), (0, 1))
             count = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
             self.assertEqual(count, 1)
+
+    def test_contest_prompt_requires_theme_specific_ideas(self):
+        with tempfile.TemporaryDirectory() as directory:
+            conn = cc.connect(Path(directory) / "contests.db")
+            contest = cc.Contest(
+                source="테스트",
+                source_id="contest-1",
+                title="지역 교통 데이터 활용 경진대회",
+                organizer="테스트기관",
+                url="https://example.com/contest-1",
+            )
+            cc.upsert_contests(conn, [contest])
+            row = conn.execute("SELECT * FROM contests").fetchone()
+            prompt = cc.build_contest_prompt(row, "공모분야: 지역 교통 문제 해결")
+
+        self.assertIn("경진대회 주제 맞춤 출품 아이디어 3개", prompt)
+        self.assertIn("주제 적합성", prompt)
+        self.assertIn("1인이 짧게 만들 최소", prompt)
+        self.assertIn("최우선 추천", prompt)
 
 
 if __name__ == "__main__":
