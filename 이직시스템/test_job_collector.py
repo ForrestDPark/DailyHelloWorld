@@ -1,10 +1,13 @@
 import json
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
+from unittest import mock
 
 import job_collector as jc
 import contest_collector as cc
+import company_profile as cp
 
 
 class JobCollectorTest(unittest.TestCase):
@@ -33,7 +36,99 @@ class JobCollectorTest(unittest.TestCase):
         self.assertEqual(job.company, "테스트사")
         self.assertIn("Python", job.skills)
         self.assertIn("SQL", job.skills)
-        self.assertEqual(job.score, 70)
+        self.assertEqual(job.score, 30)
+
+    def _job_row(self, **overrides):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        conn = jc.connect(Path(directory.name) / "jobs.db")
+        self.addCleanup(conn.close)
+        values = {
+            "source_id": "score-1", "title": "Python AI 자동화 개발자", "company": "테스트사",
+            "url": "https://example.com/score-1", "source": "사람인", "location": "서울",
+            "experience": "경력 2년", "education": "대졸", "employment_type": "정규직",
+            "salary": "연봉 협의", "posted_at": "2026-08-07", "deadline": "2026-08-31",
+            "keywords": "SQL 데이터 LLM", "skills": "Python, SQL, FastAPI", "matched_query": "Python 백엔드",
+        }
+        values.update(overrides)
+        jc.upsert_jobs(conn, [jc.Job(**values)])
+        return conn.execute("SELECT * FROM jobs").fetchone()
+
+    def test_career_score_is_100_point_explainable_model(self):
+        row = self._job_row()
+        detail = jc.score_recommendation_candidate(
+            row, self.config, "career",
+            {"dart_registered": False, "financial_years": 0, "news_count": 0, "related_jobs": 0},
+            today=datetime(2026, 8, 9),
+        )
+        self.assertGreater(detail["total"], 0)
+        self.assertLessEqual(detail["total"], 100)
+        self.assertEqual(sum(item["max"] for item in detail["dimensions"]), 100)
+        self.assertEqual(next(item for item in detail["dimensions"] if item["label"] == "회사 정보 신뢰도")["score"], 0)
+
+    def test_dart_and_financials_are_bonus_not_filter(self):
+        without_dart = self._job_row(source_id="no-dart", company="비상장사")
+        with_dart = self._job_row(source_id="with-dart", company="공시기업")
+        with mock.patch("company_profile._dart_api_key", return_value="key"), \
+             mock.patch("company_profile.fetch_dart_corp_code_map", return_value={"공시기업": "001"}), \
+             mock.patch("company_profile.find_dart_corp_code", side_effect=lambda name, _: "001" if name == "공시기업" else None), \
+             mock.patch("company_profile.fetch_dart_financial_summary", return_value=[{"year": "2025"}]), \
+             mock.patch("company_profile.fetch_company_news", return_value=[]), \
+             mock.patch("company_profile.search_related_jobs", return_value=[]):
+            ranked, info = jc._rank_candidates_by_analyzability([without_dart, with_dart], self.config, "career")
+        self.assertEqual(len(ranked), 2)
+        self.assertGreater(info["사람인:with-dart"]["total"], info["사람인:no-dart"]["total"])
+
+    def test_parttime_prioritizes_location_and_pay_over_dart(self):
+        config = {**self.config, "parttime_locations": ["서울"]}
+        practical = self._job_row(
+            source="알바몬", source_id="practical", title="Python 데이터 주 3일 오후 알바",
+            employment_type="파트타임", salary="시급 15,000원", location="서울",
+        )
+        opaque = self._job_row(
+            source="알바몬", source_id="opaque", title="Python 데이터 보조",
+            employment_type="", salary="", location="부산",
+        )
+        practical_score = jc.score_recommendation_candidate(practical, config, "parttime")["total"]
+        opaque_score = jc.score_recommendation_candidate(
+            opaque, config, "parttime", {"dart_registered": True, "financial_years": 3, "news_count": 3, "related_jobs": 3},
+        )["total"]
+        self.assertGreater(practical_score, opaque_score)
+
+    def test_expired_and_duplicate_jobs_do_not_enter_daily_pool(self):
+        first = self._job_row(source_id="dup-1", company="중복 회사", title="Python 개발자", deadline="2026-08-31")
+        duplicate = self._job_row(source_id="dup-2", company="중복회사", title="Python  개발자", deadline="2026-08-31")
+        expired = self._job_row(source_id="expired", company="마감 회사", title="AI 개발자", deadline="2026-08-08")
+        eligible = jc._eligible_unique_candidates([first, duplicate, expired], today=datetime(2026, 8, 9))
+        self.assertEqual(len(eligible), 1)
+        self.assertIn(eligible[0]["source_id"], {"dup-1", "dup-2"})
+
+    def test_job_detail_connection_failure_falls_back_to_next_candidate(self):
+        row = self._job_row()
+        with mock.patch.object(jc, "fetch_job_detail_text", side_effect=RuntimeError("network down")):
+            self.assertIsNone(jc.run_job_analysis(row))
+
+    def test_company_prompt_requires_inline_source_links(self):
+        prompt = cp.build_company_prompt(
+            "테스트사", {"ceo_nm": "홍길동", "induty_code": "62010"}, [], [], [],
+            "회사 소개", [{"title": "내부거래 증가 보도", "url": "https://news.example/article"}],
+            "https://company.example",
+        )
+        self.assertIn("[기업 홈페이지 바로가기](https://company.example)", prompt)
+        self.assertIn("[내부거래 증가 보도](https://news.example/article)", prompt)
+        self.assertIn("문장 끝에 제공된", prompt)
+        self.assertIn("내부거래·승계·계열분리", prompt)
+
+    def test_company_overview_links_are_injected_after_heading(self):
+        text = cp.ensure_company_overview_links(
+            "## 1. **기업 개황**\n확인된 내용", "테스트사", "https://company.example", "001",
+        )
+        heading_pos = text.index("기업 개황")
+        homepage_pos = text.index("기업 홈페이지 바로가기")
+        body_pos = text.index("확인된 내용")
+        self.assertLess(heading_pos, homepage_pos)
+        self.assertLess(homepage_pos, body_pos)
+        self.assertIn("DART 기업개황 바로가기", text)
 
     def test_upsert_deduplicates(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -44,6 +139,7 @@ class JobCollectorTest(unittest.TestCase):
             self.assertEqual(jc.upsert_jobs(conn, [job]), (0, 1))
             count = conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0]
             self.assertEqual(count, 1)
+            conn.close()
 
     def test_contest_prompt_requires_theme_specific_ideas(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -58,6 +154,7 @@ class JobCollectorTest(unittest.TestCase):
             cc.upsert_contests(conn, [contest])
             row = conn.execute("SELECT * FROM contests").fetchone()
             prompt = cc.build_contest_prompt(row, "공모분야: 지역 교통 문제 해결")
+            conn.close()
 
         self.assertIn("경진대회 주제 맞춤 출품 아이디어 3개", prompt)
         self.assertIn("주제 적합성", prompt)
@@ -77,6 +174,7 @@ class JobCollectorTest(unittest.TestCase):
             jc.upsert_jobs(conn, [job])
             row = conn.execute("SELECT * FROM jobs").fetchone()
             prompt = jc.build_analysis_prompt(row, "주요업무 Python 자동화 자격요건 SQL 우대사항 AI")
+            conn.close()
         self.assertIn("비식별 후보자 근거 프로필", prompt)
         self.assertIn("맞춤 포트폴리오 구성", prompt)
         self.assertIn("맞춤 자기소개서 초안", prompt)

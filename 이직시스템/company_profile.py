@@ -52,6 +52,10 @@ _ACCOUNT_LABELS = {
     "영업이익": "영업이익", "영업손실": "영업이익",
     "당기순이익": "당기순이익", "당기순손실": "당기순이익",
     "자산총계": "자산총계", "부채총계": "부채총계", "자본총계": "자본총계",
+    # ★ 2026-08-09: 세무·회계·노무 관점 분석용 — DART 요약재무제표에 급여/복리
+    # 후생비가 별도 계정으로 잡혀 있으면 인건비 비중을 볼 수 있다(작은 비상장사는
+    # 보통 미공시라 없는 게 정상 — 이 경우 그냥 항목이 빠진다).
+    "급여": "급여", "복리후생비": "복리후생비",
 }
 
 
@@ -128,6 +132,77 @@ def find_dart_corp_code(company_name: str, corp_map: dict[str, str]) -> str | No
     return None
 
 
+# ★ 2026-08-09 추가: DART가 돌려주는 induty_code는 표준산업분류(KSIC) 코드인데
+# 업종명 없이 숫자만 와서("23222") 그동안 "코드만 제공됐고 업종명이 확인되지
+# 않았다"고 얼버무렸다(사용자 피드백: "정보가 없으면 네가 찾아서 매칭해줘야지").
+# 세세분류(5자리) 전체 표는 수천 개라 통째로 정확히 재현할 자신이 없어 여기
+# 넣지 않았고, 대신 신뢰도 높은 중분류(앞 2자리, KSIC 10차 기준 총 76개
+# 대분류 밑 분류) 표만 넣는다 — "정밀한 세부 업종"이 아니라 "큰 업종
+# 카테고리"만 알려주는 것으로, 없는 것보다는 훨씬 유용하지만 5자리 전체의
+# 정확한 세세분류명이 필요하면 KSIC_LOOKUP_URL에서 직접 확인해야 한다.
+KSIC_LOOKUP_URL = "https://kssc.kostat.go.kr/ksscNew_web/link.do?gubun=001"
+_KSIC_DIVISION_NAMES = {
+    "01": "농업", "02": "임업", "03": "어업",
+    "05": "석탄, 원유 및 천연가스 광업", "06": "금속 광업", "07": "비금속광물 광업(연료용 제외)", "08": "광업 지원 서비스업",
+    "10": "식료품 제조업", "11": "음료 제조업", "12": "담배 제조업",
+    "13": "섬유제품 제조업(의복 제외)", "14": "의복, 의복액세서리 및 모피제품 제조업",
+    "15": "가죽, 가방 및 신발 제조업", "16": "목재 및 나무제품 제조업(가구 제외)",
+    "17": "펄프, 종이 및 종이제품 제조업", "18": "인쇄 및 기록매체 복제업",
+    "19": "코크스, 연탄 및 석유정제품 제조업", "20": "화학물질 및 화학제품 제조업(의약품 제외)",
+    "21": "의료용 물질 및 의약품 제조업", "22": "고무제품 및 플라스틱제품 제조업",
+    "23": "비금속 광물제품 제조업", "24": "1차 금속 제조업",
+    "25": "금속가공제품 제조업(기계 및 가구 제외)", "26": "전자부품, 컴퓨터, 영상, 음향 및 통신장비 제조업",
+    "27": "의료, 정밀, 광학기기 및 시계 제조업", "28": "전기장비 제조업",
+    "29": "기타 기계 및 장비 제조업", "30": "자동차 및 트레일러 제조업",
+    "31": "기타 운송장비 제조업", "32": "가구 제조업", "33": "기타 제품 제조업",
+    "35": "전기, 가스, 증기 및 공기조절 공급업",
+    "36": "수도업", "37": "하수, 폐수 및 분뇨 처리업", "38": "폐기물 수집, 운반, 처리 및 원료 재생업", "39": "환경 정화 및 복원업",
+    "41": "종합 건설업", "42": "전문직별 공사업",
+    "45": "자동차 및 부품 판매업", "46": "도매 및 상품중개업", "47": "소매업(자동차 제외)",
+    "49": "육상운송 및 파이프라인 운송업", "50": "수상 운송업", "51": "항공 운송업", "52": "창고 및 운송관련 서비스업",
+    "55": "숙박업", "56": "음식점 및 주점업",
+    "58": "출판업", "59": "영상·오디오 기록물 제작 및 배급업", "60": "방송업",
+    "61": "통신업", "62": "컴퓨터 프로그래밍, 시스템 통합 및 관리업", "63": "정보서비스업",
+    "64": "금융업", "65": "보험 및 연금업", "66": "금융 및 보험 관련 서비스업",
+    "68": "부동산업",
+    "70": "연구개발업", "71": "전문서비스업", "72": "건축기술, 엔지니어링 및 기타 과학기술 서비스업",
+    "73": "기타 전문, 과학 및 기술 서비스업", "74": "사업시설 관리 및 조경 서비스업", "75": "사업지원 서비스업",
+    "76": "임대업(부동산 제외)",
+    "84": "공공행정, 국방 및 사회보장 행정",
+    "85": "교육 서비스업",
+    "86": "보건업", "87": "사회복지 서비스업",
+    "90": "창작, 예술 및 여가관련 서비스업", "91": "스포츠 및 오락관련 서비스업",
+    "94": "협회 및 단체", "95": "개인 및 소비용품 수리업", "96": "기타 개인 서비스업",
+    "97": "가구내 고용활동", "98": "달리 분류되지 않은 자가소비를 위한 가구의 재화 및 서비스 생산활동",
+    "99": "국제 및 외국기관",
+}
+
+
+def ksic_industry_hint(induty_code: str) -> str:
+    """DART induty_code(표준산업분류 코드)의 앞 2자리(중분류)로 대략적인 업종
+    카테고리를 알려준다. 정확한 세세분류(5자리 전체)명까지는 이 표에 없으니
+    "근사치"임을 항상 밝힌다. 코드가 없거나 표에 없는 중분류면 빈 문자열."""
+    code = (induty_code or "").strip()
+    if len(code) < 2:
+        return ""
+    name = _KSIC_DIVISION_NAMES.get(code[:2])
+    if not name:
+        return ""
+    return f"{name}(표준산업분류 중분류 {code[:2]} 기준 근사 — 정확한 세부 분류는 {KSIC_LOOKUP_URL} 참고)"
+
+
+def dart_filing_search_url(company_name: str) -> str:
+    """★ 2026-08-09 추가: corp_code를 몰라도(또는 아예 미등록이라도) 회사명으로
+    DART 공시 검색 결과 페이지를 바로 열 수 있는 링크 — "정보 부족"이라고만
+    적어두지 말고 사용자가 직접 확인할 수 있게 항상 붙여준다."""
+    return "https://dart.fss.or.kr/dsab002/main.do?autoSearch=true&textCrpNm=" + urllib.parse.quote(company_name)
+
+
+def dart_company_overview_url(corp_code: str) -> str:
+    """corp_code를 찾았을 때만 쓸 수 있는, 이 회사의 DART 기업개황(공시 목록) 페이지."""
+    return f"https://dart.fss.or.kr/dsae001/main.do?corpCode={corp_code}"
+
+
 def fetch_dart_company_info(corp_code: str, api_key: str) -> dict[str, Any] | None:
     data = _dart_get("company.json", {"crtfc_key": api_key, "corp_code": corp_code})
     if data.get("status") != "000":
@@ -191,6 +266,81 @@ def search_related_contests(company_name: str, db_path: Path = DEFAULT_CONTESTS_
     return [dict(row) for row in rows]
 
 
+def fetch_company_news(company_name: str, limit: int = 8) -> list[dict[str, str]]:
+    """★ 2026-08-09 추가: 회사명으로 네이버 뉴스 검색 결과를 최신순으로 긁어와
+    제목·링크를 뽑는다. "궤도(詭道)" 해석 요청 — 회사가 대외적으로 어떻게
+    비치고 싶어하는지, 무엇을 강조하고 무엇을 감추는지는 재무제표가 아니라
+    언론 노출의 제목·빈도에서 드러난다는 취지로 추가했다. 사람인/알바천국
+    크롤러와 같은 패턴으로 표준 라이브러리(re)만 쓴다. 네이버가 마크업을 바꾸면
+    빈 리스트를 반환할 수 있는데, 뉴스는 있으면 좋은 보조 자료지 필수 데이터가
+    아니므로 실패해도 조용히 넘어간다."""
+    url = "https://search.naver.com/search.naver?" + urllib.parse.urlencode({
+        "where": "news", "query": company_name, "sort": "1",  # sort=1: 최신순
+    })
+    # ★ 실측: USER_AGENT(커스텀 UA)만 쓰면 네이버가 403으로 막는다. 일반
+    # 브라우저 UA에 Accept-Language·Referer까지 더해야 통과한다(실측 확인).
+    request = urllib.request.Request(url, headers={
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
+                      "(KHTML, like Gecko) Version/17.0 Safari/605.1.15",
+        "Accept-Language": "ko-KR,ko;q=0.9",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Referer": "https://www.naver.com/",
+    })
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            body = response.read().decode("utf-8", "replace")
+    except (urllib.error.HTTPError, urllib.error.URLError):
+        return []
+
+    # ★ 실측(2026-08-09): 네이버가 예전 "news_tit" 클래스 방식에서 sds-comps
+    # 디자인시스템으로 마크업을 바꿨다. 개별 컴포넌트 클래스는 해시가 붙어
+    # 불안정하지만, 제목 링크에 붙는 data-heatmap-target=".tit"과 제목 span의
+    # "sds-comps-text-type-headline1" 클래스는 비교적 안정적으로 확인됨.
+    items: list[dict[str, str]] = []
+    seen_urls: set[str] = set()
+    anchor_re = re.compile(r'<a\s+([^>]*data-heatmap-target="\.tit"[^>]*)>(.*?)</a>', re.S)
+    span_re = re.compile(r'sds-comps-text-type-headline1[^"]*"[^>]*>(.*?)</span>', re.S)
+    for m in anchor_re.finditer(body):
+        attrs, inner = m.group(1), m.group(2)
+        href_m = re.search(r'href="([^"]+)"', attrs)
+        title_m = span_re.search(inner)
+        if not href_m or not title_m:
+            continue
+        href = html.unescape(href_m.group(1))
+        if href in seen_urls:
+            continue
+        title = plain(html.unescape(re.sub(r"<[^>]+>", "", title_m.group(1))))
+        if not title:
+            continue
+        seen_urls.add(href)
+        items.append({"title": title, "url": href})
+        if len(items) >= limit:
+            break
+    return items
+
+
+def build_reference_links_block(company_name: str, corp_code: str | None, news: list[dict[str, str]]) -> str:
+    """★ 2026-08-09 추가: AI가 본문 안에 링크를 정확하게 인용한다는 보장이 없으므로,
+    실제로 클릭 가능한 참고 링크는 AI 출력과 별개로 코드가 직접 덧붙인다. ★ 같은
+    날 정리: 크레딧잡·잡플래닛·홈택스처럼 코드가 직접 확인하지 못하는 곳은
+    "가서 확인해보라"는 링크로도 보여주지 않는다(사용자 피드백: "내가 파악할 수
+    없는 자료는 아예 보이지 않게 하라"). 실제로 코드가 확인한 것만 링크로 남긴다
+    — DART(직접 조회), 뉴스(직접 크롤링). 원문 URL을 그대로 노출하지 않고 짧은
+    라벨 링크로 건다(피드백: "URL 그대로 보이지 않게, ~바로가기 이런식으로")."""
+    lines = ["## 🔗 참고 링크", f"- [DART 공시 검색 바로가기]({dart_filing_search_url(company_name)})"]
+    if corp_code:
+        lines.append(f"- [DART 기업개황(공시 목록) 바로가기]({dart_company_overview_url(corp_code)})")
+    lines.append("### 최근 관련 뉴스(네이버 뉴스 검색, 최신순 — 직접 크롤링해 확인한 것만 표시)")
+    if news:
+        for item in news:
+            lines.append(f"- {item['title']} — [기사 원문 바로가기]({item['url']})")
+    else:
+        q = urllib.parse.quote(company_name)
+        lines.append(f"- 검색된 뉴스 없음(언론 노출이 적거나 회사명 검색이 모호할 수 있음) — "
+                      f"[네이버 뉴스에서 직접 검색]({'https://search.naver.com/search.naver?where=news&query=' + q})")
+    return "\n".join(lines)
+
+
 def fetch_homepage_text(url: str) -> str:
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
@@ -203,15 +353,43 @@ def fetch_homepage_text(url: str) -> str:
     return re.sub(r"\s+", " ", text).strip()[:6000]
 
 
+def ensure_company_overview_links(
+    text: str,
+    company_name: str,
+    homepage_url: str | None,
+    corp_code: str | None,
+) -> str:
+    """AI 출력과 무관하게 `1. 기업 개황` 바로 아래에 확인 가능한 링크를 넣는다."""
+    links = []
+    if homepage_url:
+        links.append(f"[기업 홈페이지 바로가기]({homepage_url})")
+    links.append(f"[DART 공시 검색 바로가기]({dart_filing_search_url(company_name)})")
+    if corp_code:
+        links.append(f"[DART 기업개황 바로가기]({dart_company_overview_url(corp_code)})")
+    link_line = "근거 링크: " + " · ".join(links)
+    if link_line in text:
+        return text
+    heading = re.search(r"(?m)^(#{1,3}\s*)?1\.\s*\*\*기업 개황\*\*.*$", text)
+    if heading:
+        return text[:heading.end()] + "\n" + link_line + text[heading.end():]
+    return "## 1. 기업 개황\n" + link_line + "\n\n" + text
+
+
 def build_company_prompt(
     company_name: str, dart_info: dict | None, financials: list[dict],
     jobs: list[dict], contests: list[dict], homepage_text: str,
+    news: list[dict[str, str]] | None = None,
+    homepage_url: str | None = None,
 ) -> str:
-    dart_block = "DART 공시 정보 없음(비상장 또는 공시대상 아닌 소규모 기업일 가능성)"
+    dart_search_url = dart_filing_search_url(company_name)
+    dart_block = f"DART 공시 정보 없음(비상장 또는 공시대상 아닌 소규모 기업일 가능성) — 직접 검색: {dart_search_url}"
     if dart_info:
+        induty_code = dart_info.get("induty_code", "")
+        industry_hint = ksic_industry_hint(induty_code)
+        industry_label = f"{induty_code}({industry_hint})" if industry_hint else (induty_code or "미상")
         dart_block = (
             f"대표자: {dart_info.get('ceo_nm', '')} | 설립일: {dart_info.get('est_dt', '')} | "
-            f"업종: {dart_info.get('induty_code', '')} | 상장여부: "
+            f"업종코드: {industry_label} | 상장여부: "
             f"{'상장' if dart_info.get('stock_code') else '비상장'} | "
             f"주소: {dart_info.get('adres', '')}"
         )
@@ -219,9 +397,11 @@ def build_company_prompt(
         f"- {f['year']}년({'연결' if f['fs_div'] == 'CFS' else '별도'}): "
         + ", ".join(f"{k}={v}" for k, v in f.items() if k not in ("year", "fs_div"))
         for f in financials
-    ) or "공시된 재무제표 없음"
+    ) or "공시된 재무제표 없음(급여·복리후생비 등 인건비 항목 포함해서 미공시)"
     jobs_block = "\n".join(f"- [{j['source']}] {j['title']} (마감 {j['deadline']})" for j in jobs) or "수집된 채용공고 없음"
     contests_block = "\n".join(f"- {c['title']} (마감 {c['deadline']})" for c in contests) or "수집된 공모전 없음"
+    news_block = "\n".join(f"- [{n['title']}]({n['url']})" for n in (news or [])) or "검색된 뉴스 없음(언론 노출이 적을 수 있음)"
+    homepage_link = f"[기업 홈페이지 바로가기]({homepage_url})" if homepage_url else "확인된 기업 홈페이지 링크 없음"
 
     return f"""다음은 "{company_name}"에 대해 여러 출처에서 모은 정보다. 손자병법
 해석에서 역사적 실증사례를 드는 것처럼, 각 판단마다 아래 정보 중 무엇을
@@ -231,7 +411,8 @@ def build_company_prompt(
 --- DART 기업개황 ---
 {dart_block}
 
---- DART 재무제표 요약(최근 공시분) ---
+--- DART 재무제표 요약(최근 공시분, 매출·이익 외에 급여·복리후생비가 별도
+공시돼 있으면 인건비 항목으로 포함됨) ---
 {financial_block}
 
 --- 이직시스템에 수집된 이 회사 채용공고 ---
@@ -241,26 +422,96 @@ def build_company_prompt(
 {contests_block}
 
 --- 회사 홈페이지/소개 페이지 원문(잡음 포함 가능) ---
+{homepage_link}
 {homepage_text or "(제공된 홈페이지 텍스트 없음)"}
+
+--- 최근 언론 보도 제목(네이버 뉴스 검색, 최신순 — 회사가 대외적으로 어떻게
+비치는지/무엇을 강조하는지 판단하는 데 쓸 것. 각 제목에는 원문 링크가 붙어 있다.
+제목만 보고 원문 내용을 지어내지 말 것) ---
+{news_block}
+
 --- 끝 ---
 
-한국어로 아래 여섯 항목에 답하라:
-1. **기업 개황**: 설립·업종·상장여부·규모 등 확인 가능한 사실 요약.
+한국어로 아래 일곱 항목에 답하라:
+**출처 링크 의무 규칙**: 홈페이지·DART·뉴스를 근거로 쓴 모든 문장 끝에 제공된
+마크다운 링크를 붙여라. 특히 내부거래·승계·계열분리·소송·과로처럼 언론 제목에서
+읽은 판단은 반드시 바로 뒤에 `[기사 제목](URL)`을 붙인다. 링크가 제공되지 않은
+구체적 사실은 쓰지 말고 `정보 부족`으로 남긴다. 맨 아래 참고 링크만으로 대신하지
+말고, 독자가 그 문장을 읽는 자리에서 바로 원문을 열 수 있어야 한다.
+1. **기업 개황**: 설립·업종·상장여부·규모 등 확인 가능한 사실 요약. 첫 줄에
+   `{homepage_link}`를 그대로 넣고, DART 사실에는 [DART 공시 검색]({dart_search_url})을 붙여라.
 2. **재무 상태 해석**: 재무제표가 있으면 매출/이익 추이가 뭘 시사하는지 해석.
    없으면 "DART 미등록 — 공시 재무정보 없음"이라고 명시하고 다른 근거(채용
-   규모·공고 빈도 등)로 회사 규모를 추정.
+   규모·공고 빈도, 위 뉴스 제목 등)로 회사 규모를 추정하라. **코드가 직접
+   확인하지 않은 외부 사이트(크레딧잡·잡플래닛·홈택스 등)를 "가서 확인해보라"고
+   안내하지 마라** — 사용자가 직접 조회할 수 없는 자료는 언급 자체를 하지 않는
+   편이 낫다(정보 부족은 "정보 부족 — 추정"이라고만 명시하고 넘어갈 것).
 3. **채용·공모전 이력에서 보이는 경영 방향**: 어떤 직무를 왜 뽑으려 하는지,
    공모전을 왜 여는지에서 회사가 지금 무엇에 투자하고 있는지 추론.
 4. **종합 서사**: 이 회사가 걸어온 궤적과 지금 하려는 것을 하나의 이야기로
    엮어라 — 개별 사실을 나열하지 말고 왜 그 순서로 일어났는지 연결하라.
 5. **병법적 해석**: 지금까지 정리한 사실(채용 시점·규모, 공모전 개최 목적,
    재무 추이, 홈페이지에서 드러나는 태도 등)을 손자병법의 개념으로 다시 읽어라.
-   예: 유리한 조건을 만든 뒤 움직였는가(선승이후구전, 形/勢), 정보를 안 드러내며
-   움직였는가(궤도), 무리한 확장 대신 때를 기다렸는가(진퇴), 경쟁자·시장 상황
-   대비 자원을 어디에 집중했는가(허실). **막연한 손자병법 인용이 아니라, 위에서
-   근거로 든 구체적 사실 하나하나를 손자병법 개념과 짝지어 설명하라** — 근거가
-   부족하면 "이 부분은 병법적으로 해석할 근거가 부족하다"고 명시하고 넘어가라.
-6. **관점별 시사점**: 구직자·협업 파트너·(관심 있다면) 투자자 각각에게 이
+   **막연한 인용이 아니라, 위에서 근거로 든 구체적 사실 하나하나를 아래
+   개념과 짝지어 설명하라** — 근거가 부족하면 "이 부분은 병법적으로 해석할
+   근거가 부족하다"고 명시하고 넘어가라. 세 개념을 각각 다뤄라:
+   - **形(형)·勢(세)·궤도(詭道) — 하나로 묶어서 다뤄라**: 形은 회사가 스스로를
+     "어떻게 보이게 하는가/얼마나 드러내는가"다. 손자병법: "형병지극 지어무형
+     (형의 극치는 형태가 없음에 이르는 것) — 무형이면 아무리 가까이서 살펴도
+     헤아릴 수 없고 아무리 지혜로운 자도 계략을 꾸밀 수 없다." DART 미공시·
+     홈페이지 부재·언론 노출 없음처럼 "안 보이는" 상태는 의도적으로 형을
+     감춘 것(무형 전략)일 수도, 그냥 정보가 없는 것일 수도 있다 — 구분할
+     근거가 없으면 반드시 그렇게 명시하고, 안 보이기 때문에 남들이 제멋대로
+     판단하게 되는 지점(그래서 오히려 허가 드러나는 지점)이 있다면 짚어라.
+     반대로 뉴스·홈페이지·공시가 있으면 무엇을 보여주려 하는지(形) 읽어라.
+     勢는 이 회사가 어떤 실력·품질로 시장에서 인정받아 지금의 유리한 위치
+     (경쟁우위)를 만들었는가, 그리고 그 유리함을 지금 무엇에 쓰고 있는가다
+     (채용 규모·공모전 개최·사업 확장 방향과 연결해서 설명). 궤도는 그 세를
+     만들고 지키기 위해 자신을 어떻게 보이게 하는가의 구체적 수법이다 —
+     "능이시지무능, 용이시지무용"(할 수 있어도 못하는 척, 쓸 수 있어도 안 쓰는
+     척)처럼, 위 "최근 언론 보도 제목"에서 실제 상태와 다르게 보이려는 신호가
+     있는지 근거를 찾아라. 뉴스가 없으면 그 자체가 무형(形) 전략의 결과일
+     수도, 단순 노출 부족일 수도 있으니 단정하지 말고 그 불확실성 자체를
+     명시하라. **하나의 사실(마감일이 같은 공모전 2건처럼 사소한 것)만 근거로
+     "세를 키우려는 시도" 같은 결론을 성급하게 내지 마라** — 뒷받침할 근거가
+     한둘뿐이면 "이 부분은 추정 수준에 머문다"고 정직하게 밝혀라.
+   - **진퇴(進退)**: 손자병법 행군편의 관찰 신호를 그대로 대응시켜라 — 겉으로
+     보이는 행동과 실제 의도가 다르다는 게 핵심이다. "사비이익비자 진야"(말은
+     낮추면서 대비를 늘리는 것은 나아가려는 것) → 공고 문구는 소박한데 채용
+     규모·빈도가 늘고 있다면 진(공격적 확장 조짐). "사강이진구자 퇴야"(말은
+     강경한데 앞으로 나오는 척하는 것은 실은 물러나려는 것) → 공모전·홍보는
+     요란한데 실제 채용·재무 지표는 정체·감소라면 퇴(실은 물러서는 중).
+     "경거선출거기측자 진야"(가벼운 전력이 먼저 옆으로 나오는 것은 진을 치려는
+     것) → 본 채용 전에 소수 인원을 곁가지 직무로 먼저 뽑는다면 진영을 갖추는
+     중. "무약이청화자 모야"(조건 없이 화친을 청하는 것은 계략) → 이례적으로
+     좋은 조건을 조건 없이 내미는 채용공고라면 다른 의도가 있을 수 있음.
+     "분주이진병거자 기야"(분주하게 진열하는 것은 시기를 정한 것) → 짧은
+     기간에 여러 공고·공모전을 한꺼번에 벌인다면 정해둔 시점에 맞춰 움직이는
+     신호. "반진반퇴자 유야"(반은 나아가고 반은 물러나는 것은 유인) → 공고를
+     냈다가 취소하거나 방향이 오락가락한다면 유인이거나 내부 혼선의 신호.
+     **위 신호 쌍 중 실제로 대응하는 구체적 사실이 하나도 없으면 "근거
+     부족"이라고 얼버무리지 말고 진퇴 항목 자체를 통째로 생략하라** — 채용을
+     안 하고 있다는 사실 하나만으로 "때를 기다린다"는 식의 성급한 결론을
+     내지 마라.
+   - **허실(虛實)**: "경쟁자 대비 자원을 어디에 집중했는가" 같은 추상적 배분
+     이야기가 아니라, **이 회사가 사람을 어떻게 다루는가**로 읽어라. 실(實)은
+     보급이 잘 되고(재무가 탄탄하고), 인재풀이 풍성하며, 인력을 혹사시키지
+     않고 잘 쉬게 하는(재직자가 로(勞)하지 않는) 상태 — 즉 준비가 잘 되고
+     실수익이 탄탄하며 미래 손실 확률이 낮은 상태다. 허(虛)는 노동을 많이
+     투입했지만 실제 결과물은 노력에 비해 적거나, 지금은 그럴듯해 보여도
+     향후 손실로 돌아올 수 있는 상태다. 판단 근거는 위 뉴스 제목(과로·야근·
+     이직률·임금체불·소송 관련 보도 여부), 채용공고가 같은 자리를 반복해서
+     올리는지(잦은 재공고는 잦은 퇴사의 신호일 수 있음), 재무제표의 인건비
+     비중과 이익률을 함께 봐라. **코드가 직접 확인하지 않은 외부 사이트(크레딧잡·
+     잡플래닛 등)를 "가서 확인해보라"고 안내하지 마라** — 근거가 약하면 단정하지
+     말고 "정보 부족 — 추정"으로만 표시하라.
+6. **세무·회계·노무 관점**: 재무제표에 급여·복리후생비가 공시돼 있으면 매출 대비
+   인건비 비중으로 인력 투자 규모를 해석하라. 채용공고에 연봉·수습기간·4대보험
+   같은 노무 조건이 명시돼 있으면 노무 관리 수준을 판단하라. 이 항목은 공개
+   데이터가 특히 제한적이므로, 확인할 근거가 없으면 추측하지 말고 "정보 부족 —
+   추정"이라고만 명시하라(코드가 직접 확인하지 못한 외부 사이트를 확인해보라고
+   안내하지 말 것).
+7. **관점별 시사점**: 구직자·협업 파트너·(관심 있다면) 투자자 각각에게 이
    회사가 어떤 의미인지 짧게."""
 
 
@@ -289,8 +540,9 @@ def _dart_api_key() -> str:
 
 
 def _markdown_to_notion_blocks(text: str) -> list[dict[str, Any]]:
-    """job_collector.py/contest_collector.py의 동명 함수와 동일(볼드·URL 링크 지원)."""
-    inline_re = re.compile(r"\*\*(.+?)\*\*|(https?://[^\s]+)")
+    """job_collector.py/contest_collector.py의 동명 함수와 동일(볼드·URL 링크·
+    `[라벨](URL)` 마크다운 링크 지원, ★ 2026-08-09)."""
+    inline_re = re.compile(r"\*\*(.+?)\*\*|\[([^\]]+)\]\((https?://[^\s)]+)\)|(https?://[^\s]+)")
 
     def rich_text(content: str) -> list[dict[str, Any]]:
         segments = []
@@ -303,8 +555,12 @@ def _markdown_to_notion_blocks(text: str) -> list[dict[str, Any]]:
                     "type": "text", "text": {"content": m.group(1)[:1900]},
                     "annotations": {"bold": True},
                 })
+            elif m.group(2) is not None:
+                segments.append({
+                    "type": "text", "text": {"content": m.group(2)[:1900], "link": {"url": m.group(3)}},
+                })
             else:
-                url = m.group(2)
+                url = m.group(4)
                 trail = ""
                 while url and url[-1] in ".,)]}":
                     trail = url[-1] + trail
@@ -404,6 +660,7 @@ def analyze_company(args: argparse.Namespace) -> None:
 
     dart_info = None
     financials: list[dict] = []
+    corp_code = None
     api_key = _dart_api_key()
     if api_key:
         try:
@@ -425,18 +682,29 @@ def analyze_company(args: argparse.Namespace) -> None:
     contests = search_related_contests(company_name)
     print(f"  관련 채용공고 {len(jobs)}건, 관련 공모전 {len(contests)}건")
 
-    homepage_text = fetch_homepage_text(args.url) if args.url else ""
-    if args.url:
+    news = fetch_company_news(company_name)
+    print(f"  관련 뉴스 {len(news)}건 수집")
+
+    homepage_url = args.url
+    if not homepage_url and dart_info:
+        candidate_url = (dart_info.get("hm_url") or "").strip()
+        if candidate_url and "." in candidate_url:
+            homepage_url = candidate_url if candidate_url.startswith("http") else f"https://{candidate_url}"
+    homepage_text = fetch_homepage_text(homepage_url) if homepage_url else ""
+    if homepage_url:
         print(f"  홈페이지 텍스트 {len(homepage_text)}자 수집")
 
-    prompt = build_company_prompt(company_name, dart_info, financials, jobs, contests, homepage_text)
+    prompt = build_company_prompt(company_name, dart_info, financials, jobs, contests, homepage_text, news, homepage_url)
     print("\nAI로 분석 중... (codex 실패 시 claude로 자동 전환)\n")
     from ai_exec import run_ai_exec
     try:
         stdout, engine = run_ai_exec(prompt, BASE_DIR, timeout=300)
     except RuntimeError as exc:
         raise SystemExit(f"AI 분석 실패: {exc}")
-    text = stdout.strip()
+    # ★ 2026-08-09: 참고 링크(DART·대안 정보원·뉴스 원문)는 AI가 정확히 인용한다는
+    # 보장이 없으므로 AI 출력과 별개로 코드가 직접 덧붙인다.
+    text = ensure_company_overview_links(stdout.strip(), company_name, homepage_url, corp_code)
+    text += "\n\n" + build_reference_links_block(company_name, corp_code, news)
 
     token = _notion_token()
     if not token:

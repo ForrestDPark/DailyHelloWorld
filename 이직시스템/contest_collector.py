@@ -25,7 +25,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -121,6 +121,23 @@ def score_text(text: str, config: dict[str, Any]) -> int:
     includes = sum(1 for word in config.get("include_keywords", []) if word.casefold() in haystack)
     excludes = sum(1 for word in config.get("exclude_keywords", []) if word.casefold() in haystack)
     return max(0, min(100, 40 + includes * 10 - excludes * 25))
+
+
+def _format_score_breakdown(row: sqlite3.Row, config: dict[str, Any]) -> str:
+    """job_collector.py의 동명 함수와 동일한 목적("왜 이 점수인지" 근거 표시,
+    ★ 2026-08-09). 공모전 DB에는 keywords/skills 컬럼이 없어 title·organizer·
+    matched_query로 근사 재구성한다."""
+    text = " ".join(filter(None, [row["title"], row["organizer"] or "", row["matched_query"] or ""]))
+    haystack = text.casefold()
+    matched_includes = [w for w in config.get("include_keywords", []) if w.casefold() in haystack]
+    matched_excludes = [w for w in config.get("exclude_keywords", []) if w.casefold() in haystack]
+    recomputed = max(0, min(100, 40 + len(matched_includes) * 10 - len(matched_excludes) * 25))
+    parts = ["기본 40점"]
+    if matched_includes:
+        parts.append(f"+ 포함 키워드 {len(matched_includes)}개({', '.join(matched_includes)}) × 10")
+    if matched_excludes:
+        parts.append(f"− 제외 키워드 {len(matched_excludes)}개({', '.join(matched_excludes)}) × 25")
+    return f"점수 {row['score']}점 산출 근거: " + " ".join(parts) + f" (재계산 {recomputed}점 — 원 점수와 다르면 DB 저장 필드만으로 재구성한 근사치이기 때문)"
 
 
 def connect(db_path: Path) -> sqlite3.Connection:
@@ -410,6 +427,54 @@ def list_contests(args: argparse.Namespace) -> None:
 
 _CONTENT_MARKERS = ("접수기간", "참여대상", "시상", "공모분야", "지원자격", "응모자격", "모집분야")
 
+_STUDENT_ONLY_MARKERS = ("대학생", "대학원생", "재학생", "학부생", "대학(원)생")
+_OPEN_TO_ALL_MARKERS = ("일반인", "누구나", "제한 없음", "제한없음", "연령 제한 없음", "자격 무관", "누구든")
+
+
+def _looks_student_only(detail_text: str) -> bool:
+    """★ 2026-08-09 추가: 사용자는 더 이상 학생·대학원생이 아니므로, 참가자격이
+    학생으로 제한된 공모전은 추천하지 않는다. 본문에 학생 관련 단어가 있고
+    "일반인/누구나/제한 없음" 같은 개방 신호가 없으면 학생 전용으로 간주한다 —
+    완벽한 판정은 아니라서(마커가 아예 없는 경우) 애매하면 걸러내지 않는다
+    (모르면 배제하지 않는 원칙, DART 미등록 필터와 반대 방향)."""
+    if not any(m in detail_text for m in _STUDENT_ONLY_MARKERS):
+        return False
+    return not any(m in detail_text for m in _OPEN_TO_ALL_MARKERS)
+
+
+_DEADLINE_YMD_RE = re.compile(r"(20\d{2})[.\-](\d{1,2})[.\-](\d{1,2})")
+_DEADLINE_MD_RE = re.compile(r"(?<!\d)(\d{1,2})[.\-](\d{1,2})(?!\d)")
+
+
+def _parse_deadline_end(deadline_str: str, today: "date") -> "date | None":
+    """마감일 문자열에서 접수 종료일을 최대한 뽑아낸다. "YYYY.MM.DD~YYYY.MM.DD",
+    "YYYY-MM-DD", 연도 없는 "MM.DD~MM.DD"(콘테스트코리아 등에서 흔함, ★
+    2026-08-09 발견 — 이 경우 연도가 없어 이미 지난 공모전도 걸러지지 않고
+    추천됐다) 형식을 모두 시도해 가장 마지막에 나오는 날짜를 종료일로 본다.
+    형식을 전혀 못 알아보면 None(모르면 걸러내지 않는다)."""
+    if not deadline_str:
+        return None
+    ymd_matches = _DEADLINE_YMD_RE.findall(deadline_str)
+    if ymd_matches:
+        y, m, d = ymd_matches[-1]
+        try:
+            return date(int(y), int(m), int(d))
+        except ValueError:
+            return None
+    md_matches = _DEADLINE_MD_RE.findall(deadline_str)
+    if md_matches:
+        m, d = md_matches[-1]
+        try:
+            return date(today.year, int(m), int(d))
+        except ValueError:
+            return None
+    return None
+
+
+def _is_deadline_expired(deadline_str: str, today: "date") -> bool:
+    end = _parse_deadline_end(deadline_str, today)
+    return end is not None and end < today
+
 
 def fetch_contest_detail_text(url: str) -> str:
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
@@ -441,20 +506,22 @@ def build_contest_prompt(row: sqlite3.Row, detail_text: str) -> str:
 {detail_text}
 --- 끝 ---
 
-한국어로 아래 다섯 항목에 답하라:
-1. **참여자격/공모분야/평가기준 요약**: 실제 응모 요건과 어떤 능력을 보려는
-   대회인지 간단히 정리.
-2. **이 대회가 검증하려는 역량 추론**: 공모 취지·평가기준·주최 기관의 성격을
-   조합해서 이 대회가 실제로 어떤 역량/결과물을 원하는지 구체적으로 추론하라.
-   막연한 일반론이 아니라 왜 그렇게 판단했는지 근거를 짚어라.
-3. **참가 시 접근 전략**: 참가한다면 어떤 주제·구현 방향으로 접근하는 게
-   좋을지, 짧게 준비할 수 있는 범위에서 구체적으로 제안하라.
-4. **경진대회 주제 맞춤 출품 아이디어 3개**: 공모전명과 원문의 공모 주제·분야에
+한국어로 아래 다섯 항목에 답하라(★ 2026-08-09: 가장 관심 있는 섹션이 "경진대회
+주제 맞춤 출품 아이디어"라는 피드백으로 1번으로 앞당김 — 순서가 곧 Notion
+페이지에 보이는 순서):
+1. **경진대회 주제 맞춤 출품 아이디어 3개**: 공모전명과 원문의 공모 주제·분야에
    직접 해당하는 아이디어를 정확히 3개 제안하라. 각 아이디어마다 `아이디어명`,
    `해결하려는 문제와 주제 적합성`, `핵심 기능/접근법`, `1인이 짧게 만들 최소
    결과물(MVP)`, `심사에서 보여줄 차별점`을 적어라. 범용적인 AI 챗봇처럼 어느
    대회에나 붙일 수 있는 제안은 피하고, 원문에 없는 데이터·규칙·기술을 사실처럼
    단정하지 말라. 그중 가장 추천하는 하나에는 **최우선 추천**이라고 표시하라.
+2. **참여자격/공모분야/평가기준 요약**: 실제 응모 요건과 어떤 능력을 보려는
+   대회인지 간단히 정리.
+3. **이 대회가 검증하려는 역량 추론**: 공모 취지·평가기준·주최 기관의 성격을
+   조합해서 이 대회가 실제로 어떤 역량/결과물을 원하는지 구체적으로 추론하라.
+   막연한 일반론이 아니라 왜 그렇게 판단했는지 근거를 짚어라.
+4. **참가 시 접근 전략**: 참가한다면 어떤 주제·구현 방향으로 접근하는 게
+   좋을지, 짧게 준비할 수 있는 범위에서 구체적으로 제안하라.
 5. **1인 사업자 관점 상품화**: 이 문제를 개인 사업 아이템으로 그대로 상품화
    한다면 어떤 형태(서비스/도구/컨설팅 등)가 될지, 목표 고객과 함께 항목화하라
    (모르는 부분은 "정보 부족 — 추정:"으로 표시하고 근거 있는 추정만 적을 것)."""
@@ -469,6 +536,9 @@ def run_contest_analysis(row: sqlite3.Row) -> str | None:
             f"\n⚠️  공모전 본문을 못 가져온 것으로 보입니다(추출 {len(detail_text)}자). "
             "해당 URL을 직접 열어 확인해 주세요.\n"
         )
+        return None
+    if _looks_student_only(detail_text):
+        print("\n⚠️  참가자격이 학생(대학생/대학원생 등)으로 제한된 것으로 보여 건너뜁니다.\n")
         return None
     prompt = build_contest_prompt(row, detail_text)
     print("\nAI로 분석 중... (codex 실패 시 claude로 자동 전환)\n")
@@ -491,8 +561,9 @@ def _notion_token() -> str:
 
 
 def _markdown_to_notion_blocks(text: str) -> list[dict[str, Any]]:
-    """job_collector.py의 동명 함수와 동일(볼드·URL 하이퍼링크 지원)."""
-    inline_re = re.compile(r"\*\*(.+?)\*\*|(https?://[^\s]+)")
+    """job_collector.py의 동명 함수와 동일(볼드·URL 하이퍼링크·`[라벨](URL)` 마크다운
+    링크 지원, ★ 2026-08-09)."""
+    inline_re = re.compile(r"\*\*(.+?)\*\*|\[([^\]]+)\]\((https?://[^\s)]+)\)|(https?://[^\s]+)")
 
     def rich_text(content: str) -> list[dict[str, Any]]:
         segments = []
@@ -505,8 +576,12 @@ def _markdown_to_notion_blocks(text: str) -> list[dict[str, Any]]:
                     "type": "text", "text": {"content": m.group(1)[:1900]},
                     "annotations": {"bold": True},
                 })
+            elif m.group(2) is not None:
+                segments.append({
+                    "type": "text", "text": {"content": m.group(2)[:1900], "link": {"url": m.group(3)}},
+                })
             else:
-                url = m.group(2)
+                url = m.group(4)
                 trail = ""
                 while url and url[-1] in ".,)]}":
                     trail = url[-1] + trail
@@ -608,51 +683,11 @@ def _notion_publish(
     return url
 
 
-def _append_history_toggle(
-    token: str, parent_page_id: str, prefix: str, toggle_title: str, blocks: list[dict[str, Any]],
-) -> None:
-    """job_collector.py의 동명 함수와 동일 — "🎴 이직시스템" 최상위 페이지에
-    오늘의 추천 경진대회를 접힌 토글로 누적한다(★ 2026-08-08 사용자 요청).
-    카테고리별 하위 페이지는 계속 "하나만 매일 갱신"으로 최신 스냅샷만 유지하고,
-    이 토글이 과거 기록을 남기는 유일한 곳이다. 같은 날 재실행하면 새 토글을
-    만들지 않고 기존 토글 내용만 교체한다."""
-    toggle_id = None
-    cursor = None
-    while toggle_id is None:
-        path = f"blocks/{parent_page_id}/children?page_size=100"
-        if cursor:
-            path += f"&start_cursor={cursor}"
-        resp = _notion_request("GET", path, token)
-        for child in resp.get("results", []):
-            if child.get("type") != "toggle":
-                continue
-            text = "".join(r.get("plain_text", "") for r in child["toggle"].get("rich_text", []))
-            if text.startswith(prefix):
-                toggle_id = child["id"]
-                break
-        if toggle_id or not resp.get("has_more"):
-            break
-        cursor = resp.get("next_cursor")
-
-    if toggle_id:
-        while True:
-            resp = _notion_request("GET", f"blocks/{toggle_id}/children?page_size=100", token)
-            results = resp.get("results", [])
-            if not results:
-                break
-            for child in results:
-                _notion_request("DELETE", f"blocks/{child['id']}", token)
-    else:
-        created = _notion_request("PATCH", f"blocks/{parent_page_id}/children", token, {
-            "children": [{
-                "object": "block", "type": "toggle",
-                "toggle": {"rich_text": [{"type": "text", "text": {"content": toggle_title[:1900]}}]},
-            }]
-        })
-        toggle_id = created["results"][0]["id"]
-
-    for start in range(0, len(blocks), 50):
-        _notion_request("PATCH", f"blocks/{toggle_id}/children", token, {"children": blocks[start:start + 50]})
+# ★ 2026-08-09: "📋 최근 추천 기록" 인덱스 관리 로직(record_top_index_entry 등)은
+# job_collector.py에만 두고 여기서는 그대로 가져다 쓴다 — 이전엔 이 파일에
+# `after` 파라미터를 쓰는 버전이 따로 있었는데, 이 Notion API 버전은 append
+# 요청의 `after`를 지원하지 않아(실측: HTTP 400) 동작하지 않았다. 자세한 설계
+# 이유는 job_collector.py의 TOP_INDEX_PAGE_ID 주석 참고.
 
 
 def _load_top_contest_history(category: str) -> set[str]:
@@ -699,6 +734,17 @@ def analyze_top_contest(args: argparse.Namespace) -> None:
     ).fetchall()
     if not candidates:
         raise SystemExit(f"[{CONTEST_CATEGORY_LABELS[category]}] 저장된 공모전이 없습니다. collect를 먼저 실행하세요.")
+    # ★ 2026-08-09: deadline이 연도 없는 자유 텍스트("MM.DD~MM.DD")인 소스가 있어
+    # 이미 마감된 공모전도 걸러지지 않고 추천되는 문제를 발견 — 파싱 가능한
+    # 마감일이 오늘보다 과거면 후보에서 제외한다(형식을 못 알아보면 모르는
+    # 채로 두고 걸러내지 않는다).
+    today = datetime.now().date()
+    before = len(candidates)
+    candidates = [c for c in candidates if not _is_deadline_expired(c["deadline"], today)]
+    if len(candidates) < before:
+        print(f"  마감 지난 공모전 {before - len(candidates)}건 제외")
+    if not candidates:
+        raise SystemExit(f"[{CONTEST_CATEGORY_LABELS[category]}] 마감이 지나지 않은 공모전이 없습니다.")
     candidates, used = _apply_no_repeat_rotation(candidates, category)
 
     row = None
@@ -722,7 +768,9 @@ def analyze_top_contest(args: argparse.Namespace) -> None:
         return
 
     title = f"🏆 [{CONTEST_CATEGORY_LABELS[category]}] {row['organizer']} — {row['title']}"
-    meta_line = f"점수 {row['score']} | {row['source']} | 마감 {row['deadline']} | {row['url']}"
+    # ★ 2026-08-09: 원문 URL을 그대로 노출하면 너무 길어 읽기 불편하다는 피드백으로
+    # job_collector.py와 동일하게 짧은 라벨 링크로 바꿨다.
+    meta_line = f"점수 {row['score']} | {row['source']} | 마감 {row['deadline']} | [{row['source']} 공모전 바로가기]({row['url']})"
     blocks = _markdown_to_notion_blocks(meta_line) + _markdown_to_notion_blocks(text)
     meta = {
         "category": category,
@@ -738,13 +786,15 @@ def analyze_top_contest(args: argparse.Namespace) -> None:
         return
     print(f"\n✅ Notion 페이지 갱신 완료: {url}")
 
-    # ★ 2026-08-08: 최상위 "🎴 이직시스템" 페이지에도 접힌 토글로 남긴다(job_collector.py와 동일).
+    # ★ 2026-08-08 도입, 2026-08-09 경량화: 최상위 "🎴 이직시스템" 페이지의
+    # "📋 최근 추천 기록" 인덱스에 링크 한 줄로 남긴다(job_collector.py와 동일 — 자세한 이유는 그쪽 주석 참고).
     try:
+        from job_collector import record_top_index_entry
         today = datetime.now().date().isoformat()
-        prefix = f"[{today}][{category}]"
-        _append_history_toggle(token, NOTION_JOBSYSTEM_PAGE_ID, prefix, f"{prefix} {title}", blocks)
+        line = f"[{today}][{category}] {title}"
+        record_top_index_entry(token, "job", line, url)
     except RuntimeError as exc:
-        print(f"⚠️  최상위 페이지 히스토리 토글 추가 실패(본 발행은 정상 완료): {exc}")
+        print(f"⚠️  최상위 페이지 목록 갱신 실패(본 발행은 정상 완료): {exc}")
 
 
 def doctor(args: argparse.Namespace) -> None:

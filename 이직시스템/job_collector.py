@@ -175,10 +175,189 @@ def detect_skills(text: str) -> list[str]:
 
 
 def score_job(text: str, config: dict[str, Any]) -> int:
+    """★ 2026-08-09: 기본값 40점을 없앴다("근거 없는 기본 점수가 왜 있냐"는
+    피드백) — 이제 순수하게 포함/제외 키워드 매칭에서만 점수가 나온다. 이
+    점수는 수집 단계에서 전체 후보를 빠르게 훑는 1차 지표일 뿐이고, 실제
+    "오늘의 추천"은 아래 `_rank_candidates_by_analyzability()`가 DART 재무
+    공시·뉴스·관련 공고 건수까지 합산한 종합 점수로 다시 정한다."""
     haystack = text.casefold()
     includes = sum(1 for word in config.get("include_keywords", []) if word.casefold() in haystack)
     excludes = sum(1 for word in config.get("exclude_keywords", []) if word.casefold() in haystack)
-    return max(0, min(100, 40 + includes * 10 - excludes * 25))
+    return max(0, min(100, includes * 10 - excludes * 25))
+
+
+def score_job_breakdown(text: str, config: dict[str, Any]) -> dict[str, Any]:
+    """★ 2026-08-09 추가: score_job()과 같은 계산이지만, "왜 이 점수인지"를
+    사용자가 바로 확인할 수 있게 어떤 키워드가 매칭됐는지도 함께 반환한다."""
+    haystack = text.casefold()
+    matched_includes = [w for w in config.get("include_keywords", []) if w.casefold() in haystack]
+    matched_excludes = [w for w in config.get("exclude_keywords", []) if w.casefold() in haystack]
+    score = max(0, min(100, len(matched_includes) * 10 - len(matched_excludes) * 25))
+    return {"score": score, "includes": matched_includes, "excludes": matched_excludes}
+
+
+def _row_text(row: sqlite3.Row) -> str:
+    return " ".join(str(row[key] or "") for key in (
+        "title", "company", "location", "experience", "education", "employment_type",
+        "salary", "keywords", "skills", "matched_query",
+    ))
+
+
+def _candidate_skill_names() -> set[str]:
+    """비식별 후보자 프로필에서 실제 근거가 있는 정규화 기술명만 추출한다."""
+    profile_text = json.dumps(load_candidate_profile(), ensure_ascii=False)
+    return set(detect_skills(profile_text))
+
+
+def _date_score(row: sqlite3.Row, today: datetime | None = None) -> tuple[int, list[str]]:
+    today_date = (today or datetime.now()).date()
+    score = 0
+    reasons: list[str] = []
+    for field, label in (("posted_at", "등록"), ("deadline", "마감")):
+        raw = str(row[field] or "")[:10]
+        try:
+            value = datetime.fromisoformat(raw).date()
+        except (TypeError, ValueError):
+            continue
+        days = (today_date - value).days if field == "posted_at" else (value - today_date).days
+        if field == "posted_at":
+            points = 3 if 0 <= days <= 7 else 2 if 0 <= days <= 30 else 0
+        else:
+            points = 2 if days >= 7 else 1 if days >= 0 else 0
+        if points:
+            score += points
+            reasons.append(f"{label}일 {raw}")
+    return min(5, score), reasons
+
+
+def score_recommendation_candidate(
+    row: sqlite3.Row,
+    config: dict[str, Any],
+    category: str,
+    company_signals: dict[str, Any] | None = None,
+    today: datetime | None = None,
+) -> dict[str, Any]:
+    """오늘의 추천용 설명 가능한 100점 점수.
+
+    수집 단계의 `score_job()`은 후보를 빠르게 줄이는 1차 점수로만 유지한다. 여기서는
+    커리어와 알바의 목적을 분리하고, DART·재무제표가 없어도 0점 가점일 뿐 후보에서
+    제외하지 않는다.
+    """
+    if category not in JOB_CATEGORY_LABELS:
+        raise ValueError(f"알 수 없는 카테고리: {category}")
+    text = _row_text(row)
+    title = str(row["title"] or "")
+    haystack, title_haystack = text.casefold(), title.casefold()
+    include_words = list(dict.fromkeys(config.get("include_keywords", [])))
+    title_hits = [w for w in include_words if w.casefold() in title_haystack]
+    body_hits = [w for w in include_words if w not in title_hits and w.casefold() in haystack]
+    exclude_hits = [w for w in dict.fromkeys(config.get("exclude_keywords", [])) if w.casefold() in haystack]
+    detected = set(detect_skills(text))
+    evidence_hits = sorted(detected & _candidate_skill_names())
+    dimensions: list[dict[str, Any]] = []
+
+    def add(label: str, score: int, maximum: int, reasons: list[str]) -> None:
+        dimensions.append({"label": label, "score": max(0, min(maximum, score)), "max": maximum, "reasons": reasons})
+
+    company_signals = company_signals or {}
+    financial_years = int(company_signals.get("financial_years", 0))
+    news_count = int(company_signals.get("news_count", 0))
+    related_jobs = int(company_signals.get("related_jobs", 0))
+    dart_registered = bool(company_signals.get("dart_registered", False))
+    date_points, date_reasons = _date_score(row, today)
+
+    if category == "career":
+        role_score = min(30, len(title_hits) * 6 + len(body_hits) * 3)
+        add("직무 핵심 적합도", role_score, 30, [f"제목: {', '.join(title_hits)}" if title_hits else "제목 핵심어 없음", f"기타: {', '.join(body_hits)}" if body_hits else "기타 핵심어 없음"])
+        add("내 경험·기술 근거", min(25, len(evidence_hits) * 5), 25, evidence_hits or ["확인된 기술 교집합 없음"])
+
+        exp = str(row["experience"] or "")
+        edu = str(row["education"] or "")
+        employment = str(row["employment_type"] or "")
+        feasibility = 0
+        feasibility_reasons = []
+        if re.search(r"신입|경력\s*무관|무관", exp):
+            feasibility += 6; feasibility_reasons.append("신입·경력무관")
+        else:
+            years = [int(v) for v in re.findall(r"(\d+)\s*년", exp)]
+            required = min(years) if years else None
+            points = 4 if required is not None and required <= 3 else 2 if required is not None and required <= 5 else 2 if not exp else 0
+            feasibility += points; feasibility_reasons.append(exp or "경력조건 미기재")
+        if re.search(r"학력\s*무관|무관|대졸|학사", edu):
+            feasibility += 4; feasibility_reasons.append(edu or "학력 충족")
+        elif not edu:
+            feasibility += 2; feasibility_reasons.append("학력 미기재")
+        if "정규" in employment:
+            feasibility += 3; feasibility_reasons.append("정규직")
+        elif employment:
+            feasibility += 2; feasibility_reasons.append(employment)
+        else:
+            feasibility += 1; feasibility_reasons.append("고용형태 미기재")
+        locations = config.get("locations", [])
+        if not locations or any(loc.casefold() in str(row["location"] or "").casefold() for loc in locations):
+            feasibility += 2; feasibility_reasons.append(str(row["location"] or "위치 제한 없음"))
+        add("지원 현실성", feasibility, 15, feasibility_reasons)
+
+        growth_terms = ["AI", "LLM", "자동화", "데이터", "반도체", "TCAD", "신뢰성", "공정"]
+        growth_hits = [w for w in growth_terms if w.casefold() in haystack]
+        add("성장·학습 가치", min(10, len(growth_hits) * 2), 10, growth_hits or ["목표 분야 신호 없음"])
+        add("공고 최신성·마감 여유", date_points, 5, date_reasons or ["날짜 정보 부족"])
+        preference_reasons = []
+        preference = 0
+        if row["matched_query"]:
+            preference += 2; preference_reasons.append(f"검색 맥락: {row['matched_query']}")
+        if row["salary"]:
+            preference += 1; preference_reasons.append("급여 정보 있음")
+        if row["deadline"]:
+            preference += 1; preference_reasons.append("마감일 명시")
+        if row["source"] in {"사람인", "고용24"}:
+            preference += 1; preference_reasons.append(f"주요 수집원: {row['source']}")
+        add("선호조건·정보 완성도", preference, 5, preference_reasons or ["추가 선호 근거 없음"])
+        company_score = min(10, (2 if dart_registered else 0) + min(4, financial_years * 2) + min(2, news_count) + min(2, related_jobs))
+        company_reasons = [f"DART {'등록' if dart_registered else '미등록'}", f"재무 {financial_years}개년", f"뉴스 {news_count}건", f"관련 공고 {related_jobs}건"]
+        add("회사 정보 신뢰도", company_score, 10, company_reasons)
+    else:
+        add("업무 적합도", min(30, len(title_hits) * 6 + len(body_hits) * 3), 30, title_hits + body_hits or ["업무 핵심어 없음"])
+        add("내 기술 활용도", min(10, len(evidence_hits) * 2), 10, evidence_hits or ["확인된 기술 교집합 없음"])
+        schedule_text = " ".join(str(row[k] or "") for k in ("title", "employment_type", "keywords"))
+        schedule_hits = re.findall(r"(?:\d{1,2}\s*시|주\s*\d\s*일|오전|오후|야간|시간협의|스케줄)", schedule_text)
+        schedule_score = min(20, len(set(schedule_hits)) * 5 + (5 if re.search(r"알바|파트|계약", schedule_text) else 0))
+        add("근무시간 명확성", schedule_score, 20, sorted(set(schedule_hits)) or ["시간 정보 부족"])
+        locations = config.get("parttime_locations") or config.get("locations") or []
+        location_text = str(row["location"] or "")
+        if locations:
+            location_hits = [loc for loc in locations if loc.casefold() in location_text.casefold()]
+            location_score = 15 if location_hits else 0
+            location_reasons = location_hits or [f"선호지역 불일치: {location_text or '미기재'}"]
+        else:
+            location_score = 8 if location_text else 4
+            location_reasons = [location_text or "지역 미기재(선호지역 설정 없음)"]
+        add("위치 적합도", location_score, 15, location_reasons)
+        salary_text = str(row["salary"] or "")
+        add("급여 투명성", 15 if salary_text and salary_text not in {"0", "-"} else 0, 15, [salary_text or "급여 미기재"])
+        add("공고 최신성·마감 여유", date_points, 5, date_reasons or ["날짜 정보 부족"])
+        company_score = min(5, (1 if dart_registered else 0) + (1 if financial_years else 0) + min(1, news_count) + min(2, related_jobs))
+        add("사업자·회사 정보", company_score, 5, [f"DART {'등록' if dart_registered else '미등록'}", f"재무 {financial_years}개년", f"뉴스 {news_count}건"])
+
+    penalty = min(30, len(exclude_hits) * 15)
+    subtotal = sum(item["score"] for item in dimensions)
+    total = max(0, min(100, subtotal - penalty))
+    return {"total": total, "subtotal": subtotal, "penalty": penalty, "exclude_hits": exclude_hits, "dimensions": dimensions}
+
+
+def _format_score_breakdown(row: sqlite3.Row, config: dict[str, Any], score_info: dict[str, Any] | None = None) -> str:
+    detail = (score_info or {}).get("score_detail")
+    if not detail:
+        category = JOB_SOURCE_CATEGORY.get(row["source"], "career")
+        detail = score_recommendation_candidate(row, config, category)
+    lines = [f"오늘의 추천 종합 점수 **{detail['total']}/100점**"]
+    for item in detail["dimensions"]:
+        reasons = ", ".join(item["reasons"])
+        lines.append(f"- {item['label']}: {item['score']}/{item['max']}점 — {reasons}")
+    if detail["penalty"]:
+        lines.append(f"- 불일치 감점: -{detail['penalty']}점 — {', '.join(detail['exclude_hits'])}")
+    lines.append("- DART·재무 정보가 없어도 제외하지 않으며, 회사 정보 항목에서 가점만 받지 못한다.")
+    return "\n".join(lines)
 
 
 def parse_saramin_job(raw: dict[str, Any], query: str, config: dict[str, Any]) -> Job:
@@ -837,11 +1016,11 @@ def build_analysis_prompt(row: sqlite3.Row, detail_text: str) -> str:
 {candidate_context}
 --- 후보자 프로필 끝 ---
 
-5. **맞춤 포트폴리오 구성**: 공고 요구사항별로 후보자의 어떤 프로젝트·경력 근거를
+4. **맞춤 포트폴리오 구성**: 공고 요구사항별로 후보자의 어떤 프로젝트·경력 근거를
    연결할지 표로 정리하라. 대표 프로젝트는 2~3개만 고르고 배열 순서, 첫 화면 한 줄,
    강조할 문제·행동·결과, 부족한 증거와 보완 과제를 제시하라. 검증 대기 항목은
    확정 사실처럼 쓰지 말고 반드시 "확인 필요"라고 표시하라.
-6. **맞춤 자기소개서 초안**: ①지원 동기 ②직무 수행 경험 ③문제 해결·협업 ④입사 후
+5. **맞춤 자기소개서 초안**: ①지원 동기 ②직무 수행 경험 ③문제 해결·협업 ④입사 후
    기여의 네 소제목으로 작성하라. 공고의 표현을 복사하지 말고 후보자 근거와 연결하며,
    하지 않은 경험이나 숫자를 만들지 마라. 각 문단은 문제→판단·행동→결과→회사에서의
    활용 순서로 쓰고, 연락처·주소·나이 등 개인정보는 넣지 마라.
@@ -858,27 +1037,16 @@ def build_analysis_prompt(row: sqlite3.Row, detail_text: str) -> str:
 --- 끝 ---
 
 한국어로 아래 항목에 답하라(★ 2026-08-08: 가장 궁금해하는 "회사가 지금 뭘
-하려는지" 추론을 1번으로 옮김 — 순서가 곧 Notion 페이지에 보이는 순서):
+하려는지" 추론을 1번으로 옮김. ★ 2026-08-09: 가장 관심 있는 섹션이 "연습
+프로젝트 추천"이라는 피드백으로 2번으로 앞당김 — 순서가 곧 Notion 페이지에
+보이는 순서):
 1. **이 회사가 지금 만들려는/겪고 있는 것 추론**: 요구사항과 우대사항의 조합에서
    이 팀이 실제로 하려는 일을 구체적으로 추론하라(예: "Python 기반 code
    interpreter + C++ 우대 → 실행 성능이 중요한 샌드박스/커널 구현 가능성"). 막연한
    일반론이 아니라, 왜 그 항목들이 함께 요구되는지 연결고리를 짚어라.
-2. **요구사항/우대사항 요약**: 실제 기술 스택·자격요건을 간단히 정리.
-3. **연습 프로젝트 추천 1~2개**: 지원자가 1번 추론을 뒷받침하려고 짧게 만들어볼 수
+2. **연습 프로젝트 추천 1~2개**: 지원자가 1번 추론을 뒷받침하려고 짧게 만들어볼 수
    있는 프로젝트를 구체적으로 제안하고, 어떤 요구사항 항목과 연결되는지 명시하라.
-4. **1인 사업자로 이 회사를 직접 창업한다면의 사업계획서 항목화**: 지원자가 아니라
-   이 회사가 하려는 일 자체를 혼자 시작하는 창업자 입장에서 분석하라. 1번의 추론을
-   그대로 사업 아이템으로 놓고, 아래 항목을 채워라(모르는 항목은 "정보 부족 —
-   추정:"으로 표시하고 근거 있는 추정을 적을 것, 지어내지 말 것):
-   - 사업 아이템/핵심 가치제안: 무엇을 파는가, 왜 그게 필요한가
-   - 목표 고객: 이 공고를 낸 회사 같은 업종·규모의 기업들(구체적으로)
-   - 수익 모델: 구독/용역/라이선스 등 중 어느 쪽이 맞을지와 그 이유
-   - 최소 실행 조직: 혼자 또는 몇 명으로, 어떤 역할 분담이 필요한지(이 공고의
-     업무 범위를 그대로 참고)
-   - 초기 필요 역량/도구: 2·3번에서 나온 기술 스택 그대로 연결
-   - 시장 진입 전략: 첫 고객을 어떻게 확보할지(예: 이 회사가 속한 업종 커뮤니티,
-     레퍼런스 고객 확보 방식)
-   - 경쟁/대체재 대비 차별점: 기존에 어떻게 해결하고 있었을지와 비교{custom_request}"""
+3. **요구사항/우대사항 요약**: 실제 기술 스택·자격요건을 간단히 정리.{custom_request}"""
 
 
 def run_job_analysis(row: sqlite3.Row) -> str | None:
@@ -886,7 +1054,11 @@ def run_job_analysis(row: sqlite3.Row) -> str | None:
     공고 등) 경고를 찍고 None을 반환한다 — analyze_job()/analyze_top_job()이 공유."""
     print(f"[{row['source']}] {row['company']} — {row['title']}")
     print(f"공고 페이지 가져오는 중: {row['url']}")
-    detail_text = fetch_job_detail_text(row["url"], source=row["source"], source_id=row["source_id"])
+    try:
+        detail_text = fetch_job_detail_text(row["url"], source=row["source"], source_id=row["source_id"])
+    except RuntimeError as exc:
+        print(f"⚠️  공고 상세 조회 실패: {exc}")
+        return None
     if not _content_available(detail_text):
         print(
             f"\n⚠️  공고 본문을 못 가져온 것으로 보입니다(추출 {len(detail_text)}자, "
@@ -963,8 +1135,10 @@ def _markdown_to_notion_blocks(text: str) -> list[dict[str, Any]]:
     sync_book_to_notion.py의 summary_blocks()와 같은 헤딩/불릿 규칙에, **볼드**와
     URL 하이퍼링크 인라인 서식을 추가했다(볼드 없으면 별표가 그대로 보이고, URL도
     링크로 안 만들면 meta 줄의 공고 원문 URL이 그냥 텍스트로만 보여서 2026-08-07
-    사용자 피드백으로 추가)."""
-    inline_re = re.compile(r"\*\*(.+?)\*\*|(https?://[^\s]+)")
+    사용자 피드백으로 추가). ★ 2026-08-09: `[라벨](URL)` 마크다운 링크도 지원
+    추가 — 긴 원문 URL이 그대로 노출돼 읽기 불편하다는 피드백으로, "사람인
+    홈페이지 바로가기"처럼 짧은 라벨로 링크를 걸 수 있게 함."""
+    inline_re = re.compile(r"\*\*(.+?)\*\*|\[([^\]]+)\]\((https?://[^\s)]+)\)|(https?://[^\s]+)")
 
     def rich_text(content: str) -> list[dict[str, Any]]:
         segments = []
@@ -977,8 +1151,12 @@ def _markdown_to_notion_blocks(text: str) -> list[dict[str, Any]]:
                     "type": "text", "text": {"content": m.group(1)[:1900]},
                     "annotations": {"bold": True},
                 })
+            elif m.group(2) is not None:
+                segments.append({
+                    "type": "text", "text": {"content": m.group(2)[:1900], "link": {"url": m.group(3)}},
+                })
             else:
-                url = m.group(2)
+                url = m.group(4)
                 trail = ""
                 while url and url[-1] in ".,)]}":
                     trail = url[-1] + trail
@@ -1087,53 +1265,86 @@ def _notion_publish(
     return url
 
 
-def _append_history_toggle(
-    token: str, parent_page_id: str, prefix: str, toggle_title: str, blocks: list[dict[str, Any]],
-) -> None:
-    """"🎴 이직시스템" 최상위 페이지에 오늘의 추천을 토글로 누적한다(★ 2026-08-08
-    사용자 요청: "최상위에 오늘의 추천공고랑 경진대회 페이지들이 축적되도록,
-    토글화해서 너무 늘어지지 않게"). `_notion_publish()`의 카테고리별 하위
-    페이지는 계속 "하나만 매일 갱신" 방식을 유지하고(최신 스냅샷용), 이 함수는
-    그와 별개로 매일의 결과를 접힌 토글로 남겨 과거 기록이 사라지지 않게 한다.
-    같은 날 같은 카테고리로 이미 추가된 토글이 있으면(재실행 등) 새로 만들지
-    않고 그 안의 내용만 교체한다 — `prefix`(예: "[2026-08-08][career]")로 식별."""
-    toggle_id = None
-    cursor = None
-    while toggle_id is None:
-        path = f"blocks/{parent_page_id}/children?page_size=100"
-        if cursor:
-            path += f"&start_cursor={cursor}"
-        resp = _notion_request("GET", path, token)
-        for child in resp.get("results", []):
-            if child.get("type") != "toggle":
-                continue
-            text = "".join(r.get("plain_text", "") for r in child["toggle"].get("rich_text", []))
-            if text.startswith(prefix):
-                toggle_id = child["id"]
-                break
-        if toggle_id or not resp.get("has_more"):
+TOP_INDEX_JOB_SECTION = "🎯🏆 오늘의 추천 공고·경진대회"
+TOP_INDEX_COMPANY_SECTION = "🏢 기업 경영 분석 목록"
+# ★ 2026-08-09: "🎴 이직시스템" 최상위 페이지 안의 특정 위치(헤딩 바로 다음)에
+# 블록을 끼워 넣으려 했으나, 이 Notion API 버전은 append 요청의 `after`
+# 파라미터를 지원하지 않는다(실측: HTTP 400 "body.after should be not
+# present"). 처음엔 이를 우회하려고 전용 하위 페이지로 따로 뺐지만, "페이지로
+# 만들면 더 귀찮아진다 — 그냥 이직시스템 페이지 안에서 토글로 보이게 하라"는
+# 피드백으로 되돌렸다. 최종 해법: 최상위 페이지의 맨 첫 블록으로 토글
+# 헤딩("📋 최근 추천 기록", is_toggleable=true)을 한 번만 만들어두고(수동
+# 생성, 절대 다시 옮기지 않음), 이후로는 그 토글 블록의 자식 목록만 통째로
+# 지웠다 재작성한다 — 대상이 "페이지 맨 위"가 아니라 "이미 존재하는 특정
+# 블록의 자식 목록"이라 `after` 없이도 append 순서로 정렬이 완전히 통제된다
+# (`_notion_publish()`가 이미 쓰는 "전체 삭제 후 재작성" 패턴과 동일).
+TOP_INDEX_TOGGLE_ID = "41650060-a2ce-4cd4-954f-bec670377313"
+TOP_INDEX_HISTORY_PATH = BASE_DIR / "data" / "top_index_history.json"
+TOP_INDEX_MAX_ENTRIES = 300  # 하루 최대 4~5건씩 쌓여도 몇 달치는 거뜬한 여유
+
+
+def _load_top_index_entries() -> list[dict[str, str]]:
+    if not TOP_INDEX_HISTORY_PATH.exists():
+        return []
+    try:
+        return json.loads(TOP_INDEX_HISTORY_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+
+
+def _save_top_index_entries(entries: list[dict[str, str]]) -> None:
+    TOP_INDEX_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    TOP_INDEX_HISTORY_PATH.write_text(json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _sync_top_index_page(token: str, entries: list[dict[str, str]]) -> None:
+    while True:
+        existing = _notion_request("GET", f"blocks/{TOP_INDEX_TOGGLE_ID}/children?page_size=100", token)
+        results = existing.get("results", [])
+        if not results:
             break
-        cursor = resp.get("next_cursor")
+        for child in results:
+            _notion_request("DELETE", f"blocks/{child['id']}", token)
 
-    if toggle_id:
-        while True:
-            resp = _notion_request("GET", f"blocks/{toggle_id}/children?page_size=100", token)
-            results = resp.get("results", [])
-            if not results:
-                break
-            for child in results:
-                _notion_request("DELETE", f"blocks/{child['id']}", token)
-    else:
-        created = _notion_request("PATCH", f"blocks/{parent_page_id}/children", token, {
-            "children": [{
-                "object": "block", "type": "toggle",
-                "toggle": {"rich_text": [{"type": "text", "text": {"content": toggle_title[:1900]}}]},
-            }]
-        })
-        toggle_id = created["results"][0]["id"]
+    def line_block(entry: dict[str, str]) -> dict[str, Any]:
+        return {
+            "object": "block", "type": "bulleted_list_item",
+            "bulleted_list_item": {"rich_text": [{
+                "type": "text", "text": {"content": entry["line"][:1900], "link": {"url": entry["url"]}},
+            }]},
+        }
 
+    def heading(text: str) -> dict[str, Any]:
+        return {"object": "block", "type": "heading_3", "heading_3": {"rich_text": [{"type": "text", "text": {"content": text}}]}}
+
+    def paragraph(text: str) -> dict[str, Any]:
+        return {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"type": "text", "text": {"content": text}}]}}
+
+    job_entries = [e for e in entries if e["kind"] == "job"]
+    company_entries = [e for e in entries if e["kind"] == "company"]
+    blocks = (
+        [paragraph("새 추천은 이 목록 맨 위에 한 줄씩 쌓인다(자동 갱신). 전체 분석 내용은 링크를 눌러 확인."),
+         heading(f"{TOP_INDEX_JOB_SECTION} (최신순)")]
+        + [line_block(e) for e in job_entries]
+        + [heading(f"{TOP_INDEX_COMPANY_SECTION} (회사당 1건, 계속 누적)")]
+        + [line_block(e) for e in company_entries]
+    )
     for start in range(0, len(blocks), 50):
-        _notion_request("PATCH", f"blocks/{toggle_id}/children", token, {"children": blocks[start:start + 50]})
+        _notion_request("PATCH", f"blocks/{TOP_INDEX_TOGGLE_ID}/children", token, {"children": blocks[start:start + 50]})
+
+
+def record_top_index_entry(token: str, kind: str, line: str, url: str) -> None:
+    """job/contest/company 발행 직후 호출한다. 로컬 이력에 새 항목을 최신순으로
+    추가하고 "📋 최근 추천 기록" 페이지를 다시 쓴다. 예전 `_append_history_toggle`은
+    분석 전문을 그대로 복제해 토글로 쌓아 페이지가 급격히 커졌다("content 있을
+    필요 없다"는 피드백으로 교체) — 전체 내용은 이미 링크로 연결된 실제
+    페이지에 있으니 여기는 "언제 무엇을 추천했는지"만 보여주는 가벼운 인덱스
+    역할만 한다."""
+    entries = _load_top_index_entries()
+    entries.insert(0, {"kind": kind, "line": line, "url": url})
+    entries = entries[:TOP_INDEX_MAX_ENTRIES]
+    _save_top_index_entries(entries)
+    _sync_top_index_page(token, entries)
 
 
 def _format_krw(raw: str) -> str:
@@ -1191,34 +1402,75 @@ def _dart_financial_table_block(financials: list[dict]) -> dict[str, Any] | None
     }
 
 
-def _rank_candidates_by_analyzability(candidates: list[sqlite3.Row]) -> list[sqlite3.Row]:
-    """★ 2026-08-07 추가, ★ 2026-08-09 하드 필터로 강화: 단순 키워드 점수만으로
-    "오늘의 추천 공고"를 고르면 재무·경영 이력을 전혀 알 수 없는 무명 소기업이
-    뽑히는 경우가 많았다. 처음엔 DART 등록 기업을 우선 순위로만 앞당겼지만,
-    그래도 등록 기업이 없으면 결국 "DART 미등록 — 공시 재무정보 없음 / 수집된
-    채용공고 없음"처럼 아무 근거도 없이 "정보 부족 — 추정"만 가득한 분석이
-    나왔다. 사용자 피드백: 이렇게 아무 정보도 확인할 수 없는 불안정한 회사는
-    애초에 추천 후보에서 빼고 싶다 — 그런 회사에 지원하고 싶지 않다. 그래서
-    DART 미등록 기업은 아예 후보에서 제외한다. DART_API_KEY가 없으면 등록
-    여부 자체를 확인할 수 없으므로(잘못 걸러내는 것을 막기 위해) 필터를 적용하지
-    않고 전체 후보를 그대로 반환한다."""
-    from company_profile import _dart_api_key, fetch_dart_corp_code_map, find_dart_corp_code
+_RICHNESS_SCORE_CAP = 15  # 재무·뉴스 조회는 회사당 여러 번 네트워크 요청이 드니 상위 N건만 정밀 채점
+
+
+def _rank_candidates_by_analyzability(
+    candidates: list[sqlite3.Row],
+    config: dict[str, Any],
+    category: str,
+) -> tuple[list[sqlite3.Row], dict[str, dict[str, Any]]]:
+    """지원자 적합도 100점으로 정렬하고 상위 후보만 회사 정보 가점을 보강한다.
+
+    DART 미등록·재무제표 없음은 절대 탈락 조건이 아니다. 네트워크 조회에 실패해도
+    해당 가점만 0점으로 남기고 후보는 보존한다.
+    """
+    from company_profile import (
+        _dart_api_key, fetch_dart_corp_code_map, find_dart_corp_code,
+        fetch_dart_financial_summary, fetch_company_news, search_related_jobs,
+    )
+    info_map: dict[str, dict[str, Any]] = {}
+    initial: list[tuple[int, sqlite3.Row]] = []
+    for row in candidates:
+        key = f"{row['source']}:{row['source_id']}"
+        detail = score_recommendation_candidate(row, config, category)
+        info_map[key] = {
+            "dart_registered": False, "financial_years": 0, "news_count": 0,
+            "related_jobs": 0, "score_detail": detail, "total": detail["total"],
+        }
+        initial.append((detail["total"], row))
+    initial.sort(key=lambda item: item[0], reverse=True)
+
     api_key = _dart_api_key()
-    if not api_key:
-        print("  ⚠️ DART_API_KEY 없음 — 정보 없는 회사를 걸러내지 못하고 점수 순서로만 고름")
-        return candidates
-    try:
-        corp_map = fetch_dart_corp_code_map(api_key)
-    except Exception as exc:  # noqa: BLE001 — DART 조회 실패는 순위만 못 매길 뿐 치명적이지 않음
-        print(f"  ⚠️ DART corp_code 조회 실패({exc}) — 걸러내지 못하고 점수 순서로만 고름")
-        return candidates
+    corp_map = {}
+    if api_key:
+        try:
+            corp_map = fetch_dart_corp_code_map(api_key)
+        except Exception as exc:  # noqa: BLE001
+            print(f"  ⚠️ DART 조회 실패({exc}) — DART 가점만 0점으로 계속 진행")
+    else:
+        print("  ⚠️ DART_API_KEY 없음 — DART·재무 가점 없이 계속 진행")
 
-    def is_registered(row: sqlite3.Row) -> bool:
-        return find_dart_corp_code(row["company"], corp_map) is not None
+    for _, row in initial[:_RICHNESS_SCORE_CAP]:
+        corp_code = find_dart_corp_code(row["company"], corp_map) if corp_map else None
+        financials: list[dict[str, Any]] = []
+        if corp_code and api_key:
+            try:
+                financials = fetch_dart_financial_summary(corp_code, api_key)
+            except Exception:  # noqa: BLE001
+                pass
+        try:
+            news = fetch_company_news(row["company"], limit=5)
+        except Exception:  # noqa: BLE001
+            news = []
+        try:
+            related = search_related_jobs(row["company"], limit=20)
+        except Exception:  # noqa: BLE001
+            related = []
+        signals = {
+            "dart_registered": bool(corp_code), "financial_years": len(financials),
+            "news_count": len(news), "related_jobs": len(related),
+        }
+        detail = score_recommendation_candidate(row, config, category, signals)
+        key = f"{row['source']}:{row['source_id']}"
+        info_map[key] = {**signals, "score_detail": detail, "total": detail["total"]}
 
-    registered = [c for c in candidates if is_registered(c)]
-    print(f"  DART 등록 기업 {len(registered)}/{len(candidates)}건 — 미등록(정보 확인 불가) 기업은 추천 후보에서 제외")
-    return registered
+    ranked = sorted(candidates, key=lambda row: info_map[f"{row['source']}:{row['source_id']}"]["total"], reverse=True)
+    if ranked:
+        top = ranked[0]
+        total = info_map[f"{top['source']}:{top['source_id']}"]["total"]
+        print(f"  지원자 적합도 1위: {top['company']} (종합 {total}/100점)")
+    return ranked, info_map
 
 
 def top_job_history_path(category: str) -> Path:
@@ -1257,6 +1509,29 @@ def _apply_no_repeat_rotation(candidates: list[sqlite3.Row], category: str) -> l
     return unused, used
 
 
+def _eligible_unique_candidates(candidates: list[sqlite3.Row], today: datetime | None = None) -> list[sqlite3.Row]:
+    """마감된 공고를 빼고 회사·제목이 같은 중복 수집본은 하나만 남긴다.
+
+    날짜 형식을 해석할 수 없거나 마감일이 없는 공고는 섣불리 제외하지 않는다.
+    """
+    today_date = (today or datetime.now()).date()
+    unique: dict[tuple[str, str], sqlite3.Row] = {}
+    for row in candidates:
+        deadline = str(row["deadline"] or "")[:10]
+        try:
+            if deadline and datetime.fromisoformat(deadline).date() < today_date:
+                continue
+        except ValueError:
+            pass
+        company_key = re.sub(r"[^0-9a-z가-힣]", "", str(row["company"] or "").casefold())
+        title_key = re.sub(r"[^0-9a-z가-힣]", "", str(row["title"] or "").casefold())
+        key = (company_key, title_key)
+        previous = unique.get(key)
+        if previous is None or row["score"] > previous["score"]:
+            unique[key] = row
+    return list(unique.values())
+
+
 def analyze_top_job(args: argparse.Namespace) -> None:
     """현재 적합도 1위 공고를 골라 AI 분석을 돌리고 결과를 Notion 페이지 하나에
     갱신한다(shift_alarm 메뉴바에서 매일 자동 호출, 2026-08-07 추가). 상위 공고가
@@ -1272,17 +1547,16 @@ def analyze_top_job(args: argparse.Namespace) -> None:
     placeholders = ",".join("?" for _ in sources)
     candidates = conn.execute(
         f"SELECT * FROM jobs WHERE source IN ({placeholders}) "
-        "ORDER BY score DESC, deadline ASC LIMIT 50",
+        "ORDER BY score DESC, deadline ASC LIMIT 200",
         sources,
     ).fetchall()
+    candidates = _eligible_unique_candidates(candidates)
     if not candidates:
         raise SystemExit(f"[{JOB_CATEGORY_LABELS[category]}] 저장된 공고가 없습니다. collect를 먼저 실행하세요.")
-    candidates = _rank_candidates_by_analyzability(candidates)
+    config = load_config(args.config)
+    candidates, richness_info = _rank_candidates_by_analyzability(candidates, config, category)
     if not candidates:
-        # ★ 2026-08-09: DART 미등록 기업을 하드 필터로 걸러낸 결과 후보가 하나도
-        # 안 남을 수 있다 — 에러가 아니라 "오늘은 추천할 만한 정보 있는 공고가
-        # 없었다"는 정상 상황이다. 기존 Notion 페이지는 그대로 두고 조용히 종료.
-        print(f"[{JOB_CATEGORY_LABELS[category]}] DART 등록 등 정보를 확인할 수 있는 후보가 없어 오늘은 추천을 건너뜁니다.")
+        print(f"[{JOB_CATEGORY_LABELS[category]}] 추천 후보가 없습니다.")
         return
     candidates, used = _apply_no_repeat_rotation(candidates, category)
 
@@ -1315,7 +1589,8 @@ def analyze_top_job(args: argparse.Namespace) -> None:
         from company_profile import (
             _dart_api_key, fetch_dart_company_info, fetch_dart_corp_code_map, fetch_dart_financial_summary,
             find_dart_corp_code, search_related_contests, search_related_jobs, fetch_company_news,
-            build_company_prompt, build_reference_links_block, _markdown_to_notion_blocks as company_blocks,
+            build_company_prompt, build_reference_links_block, ensure_company_overview_links,
+            _markdown_to_notion_blocks as company_blocks,
             _notion_publish as company_publish, COMPANY_PROFILE_STATE_DIR,
         )
         api_key = _dart_api_key()
@@ -1338,17 +1613,29 @@ def analyze_top_job(args: argparse.Namespace) -> None:
         jobs_related = search_related_jobs(row["company"])
         contests_related = search_related_contests(row["company"])
         news_related = fetch_company_news(row["company"])
-        prompt = build_company_prompt(row["company"], dart_info, financials, jobs_related, contests_related, "", news_related)
+        prompt = build_company_prompt(
+            row["company"], dart_info, financials, jobs_related, contests_related,
+            "", news_related, homepage_url,
+        )
         from ai_exec import run_ai_exec
         stdout, _ = run_ai_exec(prompt, BASE_DIR, timeout=300)
         # ★ 2026-08-09: 참고 링크(DART·대안 정보원·뉴스 원문)는 AI 출력과 별개로
         # 코드가 직접 덧붙인다 — company_profile.py의 analyze_company()와 동일.
-        company_text = stdout.strip() + "\n\n" + build_reference_links_block(row["company"], corp_code, news_related)
+        company_text = ensure_company_overview_links(
+            stdout.strip(), row["company"], homepage_url, corp_code,
+        )
+        company_text += "\n\n" + build_reference_links_block(row["company"], corp_code, news_related)
         company_title = f"🏢 {row['company']} 경영 분석"
         safe_name = re.sub(r"[^\w가-힣-]+", "_", row["company"])
         state_path = COMPANY_PROFILE_STATE_DIR / f"{safe_name}.json"
+        is_new_company = not state_path.exists()  # ★ 2026-08-09: 처음 보는 회사일 때만 최상단 인덱스에 기록(재갱신은 중복 방지)
         company_notion_url = company_publish(token, company_title, company_blocks(company_text), state_path)
         print(f"✅ 기업 경영 분석 페이지도 갱신: {company_notion_url}")
+        if is_new_company:
+            try:
+                record_top_index_entry(token, "company", company_title, company_notion_url)
+            except RuntimeError as exc:
+                print(f"⚠️  최상단 기업 목록 갱신 실패(본 발행은 정상 완료): {exc}")
     except Exception as exc:  # noqa: BLE001 — 기업 분석 실패해도 공고 분석 발행은 계속 진행
         print(f"⚠️  기업 경영 분석 생성 실패(공고 분석은 계속 진행): {exc}")
 
@@ -1357,11 +1644,18 @@ def analyze_top_job(args: argparse.Namespace) -> None:
     # DART 재무 요약도 공고 원문 링크와 함께 페이지 맨 위 meta 블록에 바로 넣는다
     # — 예전엔 재무 정보를 보려면 별도 기업 경영 분석 페이지로 이동해야 했다.
     title = f"🎯 [{JOB_CATEGORY_LABELS[category]}] {row['company']} — {row['title']}"
-    meta_lines = [f"점수 {row['score']} | {row['source']} | {row['url']}"]
+    # ★ 2026-08-09: 원문 URL을 그대로 노출하면 너무 길어 읽기 불편하다는 피드백으로
+    # 짧은 라벨 링크로 바꾸고, "왜 이 점수인지" 근거도 바로 아래에 덧붙인다.
+    row_key = f"{row['source']}:{row['source_id']}"
+    recommendation_score = richness_info[row_key]["total"]
+    meta_lines = [
+        f"추천 점수 {recommendation_score}/100 | 1차 수집 점수 {row['score']} | {row['source']} | [{row['source']} 공고 바로가기]({row['url']})",
+        _format_score_breakdown(row, config, richness_info.get(row_key)),
+    ]
     if homepage_url:
-        meta_lines.append(f"회사 홈페이지: {homepage_url}")
+        meta_lines.append(f"회사 홈페이지: [회사 홈페이지 바로가기]({homepage_url})")
     if company_notion_url:
-        meta_lines.append(f"기업 경영 분석 상세(병법적 해석 등): {company_notion_url}")
+        meta_lines.append(f"기업 경영 분석 상세(병법적 해석 등): [기업 경영분석 상세 바로가기]({company_notion_url})")
     meta_line = "\n".join(meta_lines)
     blocks = _markdown_to_notion_blocks(meta_line)
     # ★ 2026-08-08: 슬래시로 이어붙인 텍스트 한 줄 대신 표 블록으로(피드백: "성의
@@ -1373,7 +1667,8 @@ def analyze_top_job(args: argparse.Namespace) -> None:
     meta = {
         "category": category,
         "company": row["company"], "title": row["title"],
-        "score": row["score"], "source": row["source"], "job_url": row["url"],
+        "score": recommendation_score, "collection_score": row["score"],
+        "source": row["source"], "job_url": row["url"],
         "company_notion_url": company_notion_url,
     }
     try:
@@ -1384,15 +1679,17 @@ def analyze_top_job(args: argparse.Namespace) -> None:
         return
     print(f"\n✅ Notion 페이지 갱신 완료: {url}")
 
-    # ★ 2026-08-08: 최상위 "🎴 이직시스템" 페이지에도 오늘의 추천을 접힌 토글로
-    # 남겨 과거 기록이 사라지지 않게 한다(사용자 요청 — 카테고리별 하위 페이지는
-    # 최신 스냅샷만 유지하므로 이 토글이 유일한 히스토리다).
+    # ★ 2026-08-08 도입, 2026-08-09 경량화: 최상위 "🎴 이직시스템" 페이지의
+    # "📋 최근 추천 기록" 인덱스에도 오늘의 추천을 링크 한 줄로 남겨 과거 기록이
+    # 사라지지 않게 한다(카테고리별 하위 페이지는 최신 스냅샷만 유지하므로 이
+    # 인덱스가 유일한 히스토리다). 예전엔 분석 전문을 토글로 복제해 쌓았지만
+    # "content 있을 필요 없다"는 피드백으로 링크만 남기는 방식으로 바꿨다.
     try:
         today = datetime.now().date().isoformat()
-        prefix = f"[{today}][{category}]"
-        _append_history_toggle(token, NOTION_JOBSYSTEM_PAGE_ID, prefix, f"{prefix} {title}", blocks)
+        line = f"[{today}][{category}] {title}"
+        record_top_index_entry(token, "job", line, url)
     except RuntimeError as exc:
-        print(f"⚠️  최상위 페이지 히스토리 토글 추가 실패(본 발행은 정상 완료): {exc}")
+        print(f"⚠️  최상위 페이지 목록 갱신 실패(본 발행은 정상 완료): {exc}")
 
 
 def doctor(args: argparse.Namespace) -> None:
