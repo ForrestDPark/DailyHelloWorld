@@ -2488,7 +2488,7 @@ class ShiftAlarmApp(rumps.App):
     def _apply_ai_usage(self, codex_quota, claude_live, claude_local):
         codex_color = (
             NSColor.systemRedColor() if _codex_weekly_critical(codex_quota)
-            else NSColor.systemGreenColor()
+            else NSColor.systemBlueColor()
         )
         _set_menu_item_color(self.codex_usage_item, format_codex_usage(codex_quota), codex_color)
 
@@ -2500,7 +2500,7 @@ class ShiftAlarmApp(rumps.App):
 
         self.claude_stats_item.title = format_claude_local_stats(claude_local)
 
-        # 메뉴바 타이틀 자체에도 "코94% 클61%" 형태로 바로 보이게 캐시해서 반영한다.
+        # 메뉴바 타이틀 자체에도 사용률 숫자를 바로 보이게 캐시해서 반영한다.
         self._codex_quota = codex_quota
         self._claude_live_quota = claude_live
         self._update_title()
@@ -2581,17 +2581,17 @@ class ShiftAlarmApp(rumps.App):
             storage_inner.append((0, _utf16_len(storage), color))
 
         # Codex/Claude 사용량을 드롭다운을 열지 않아도 보이도록 상태창 타이틀에 바로
-        # "코94% 클61%" 형태로 표시한다. 기본은 Codex=초록/Claude=오렌지, 각자의
-        # 주간(7일) 윈도우가 90% 이상이면 빨강으로 덮어써 경고한다.
+        # "94% 61%" 형태로 표시한다. 순서는 Codex(파랑) → Claude(오렌지)이며,
+        # 각자의 주간(7일) 윈도우가 90% 이상이면 빨강으로 덮어써 경고한다.
         codex_pct = _codex_primary_percent(self._codex_quota)
-        codex_token = f"코{codex_pct:.0f}%" if codex_pct is not None else ""
+        codex_token = f"{codex_pct:.0f}%" if codex_pct is not None else ""
         codex_color = (
             NSColor.systemRedColor() if _codex_weekly_critical(self._codex_quota)
-            else NSColor.systemGreenColor()
+            else NSColor.systemBlueColor()
         )
 
         claude_pct = _claude_five_hour_percent(self._claude_live_quota)
-        claude_token = f"클{claude_pct:.0f}%" if claude_pct is not None else ""
+        claude_token = f"{claude_pct:.0f}%" if claude_pct is not None else ""
         claude_color = (
             NSColor.systemRedColor() if _claude_weekly_critical(self._claude_live_quota)
             else NSColor.systemOrangeColor()
