@@ -64,6 +64,23 @@ class JobCollectorTest(unittest.TestCase):
         self.assertIn("1인이 짧게 만들 최소", prompt)
         self.assertIn("최우선 추천", prompt)
 
+    def test_candidate_profile_is_sanitized_and_used_in_job_prompt(self):
+        profile = jc.load_candidate_profile()
+        self.assertTrue(profile["projects"])
+        serialized = json.dumps(profile, ensure_ascii=False)
+        self.assertNotRegex(serialized, r"01[016789][ -]?\d{3,4}[ -]?\d{4}")
+        self.assertNotRegex(serialized, r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+
+        with tempfile.TemporaryDirectory() as directory:
+            conn = jc.connect(Path(directory) / "jobs.db")
+            job = jc.Job(source_id="2", title="Python 자동화 개발자", company="B", url="https://example.com/2")
+            jc.upsert_jobs(conn, [job])
+            row = conn.execute("SELECT * FROM jobs").fetchone()
+            prompt = jc.build_analysis_prompt(row, "주요업무 Python 자동화 자격요건 SQL 우대사항 AI")
+        self.assertIn("비식별 후보자 근거 프로필", prompt)
+        self.assertIn("맞춤 포트폴리오 구성", prompt)
+        self.assertIn("맞춤 자기소개서 초안", prompt)
+
 
 if __name__ == "__main__":
     unittest.main()

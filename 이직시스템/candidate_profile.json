@@ -1,0 +1,257 @@
+{
+  "schema_version": 1,
+  "identity": {
+    "name": "박동근",
+    "headline": "반도체·센서 연구 경험을 실제 AI·데이터·업무 자동화 서비스로 연결하는 개발자",
+    "summary": "전자정보공학과 반도체 연구를 바탕으로 측정 자동화, 데이터 정제, 머신러닝 모델링을 수행했고, 이후 Python·SQL·백엔드·모바일 앱 교육과 팀 프로젝트를 거쳐 개인 업무 자동화 파이프라인을 지속적으로 운영하고 있다.",
+    "privacy": "연락처, 이메일, 생년월일, 주소, 주민번호, 계좌·건강 정보는 이 공유 파일에 저장하지 않는다."
+  },
+  "target_roles": [
+    "AI·업무 자동화 개발자",
+    "데이터·AI 엔지니어",
+    "Python 백엔드 개발자",
+    "제조·반도체 데이터 분석 및 자동화"
+  ],
+  "education": [
+    {
+      "institution": "고려대학교 세종캠퍼스",
+      "major": "전자 및 정보공학",
+      "period": "2008.03~2017.02",
+      "status": "졸업",
+      "evidence": ["이력서 문서"]
+    },
+    {
+      "institution": "고려대학교 대학원",
+      "major": "전자 및 정보공학 석박사통합과정",
+      "period": "2017.03~2023.11",
+      "status": "수료",
+      "evidence": ["이력서 문서", "전공소개서"]
+    },
+    {
+      "institution": "더조은컴퓨터아카데미",
+      "major": "빅데이터 분석·추천시스템 개발자 양성과정",
+      "period": "2023.11~2024.07",
+      "status": "수료",
+      "evidence": ["이력서 문서", "자기소개서"]
+    }
+  ],
+  "experience": [
+    {
+      "organization": "한국전자통신연구원(ETRI)",
+      "period": "2016.07~2016.09",
+      "role": "인턴",
+      "work": ["열전·반도체 소자 측정 및 평가용 테스트베드 프로그램 개발"],
+      "evidence": ["이력서 문서", "전공소개서"]
+    },
+    {
+      "organization": "고려대학교 차세대 반도체 연구실(AEDL)",
+      "period": "2019.03~2023.11",
+      "role": "수료 후 연구원",
+      "work": [
+        "반도체·뉴로모픽 소자 연구",
+        "바이오센서 측정 시스템 자동화",
+        "측정 데이터 정제와 머신러닝 기반 예측"
+      ],
+      "evidence": ["이력서 문서", "전공소개서", "삼성전자 입사지원서"]
+    }
+  ],
+  "skills": {
+    "strong_evidence": [
+      "Python 데이터 수집·정제·자동화",
+      "pandas·NumPy·scikit-learn 기반 분석과 모델링",
+      "Whisper·FFmpeg 기반 미디어 처리",
+      "REST API 연동과 JSON 데이터 제공",
+      "Git·GitHub 기반 버전 관리",
+      "문제 정의, 로그 기반 디버깅, 캐시·재시도·장애 복구 설계"
+    ],
+    "working_experience": [
+      "SQL·MySQL·SQLite",
+      "Flask·FastAPI",
+      "AWS Ubuntu 환경",
+      "PyTorch·TensorFlow·Transformers·Hugging Face",
+      "Java·Spring Boot·JDBC",
+      "SwiftUI·Flutter",
+      "R·LabVIEW·Arduino"
+    ],
+    "collaboration": [
+      "팀 프로젝트 PM·팀장",
+      "페어 프로그래밍과 코드 리뷰",
+      "역할 재조정과 일정 관리",
+      "연구실 간 협업과 실험 요구사항 조율"
+    ]
+  },
+  "projects": [
+    {
+      "id": "japanese-learning-automation",
+      "name": "일본어 영상 학습 자동화 파이프라인",
+      "period": "개인 운영 프로젝트",
+      "role": "기획·개발·운영",
+      "problem": "영상별 자막, 번역, 장면 이미지, 학습카드, EPUB 제작을 반복 수행해야 했다.",
+      "actions": [
+        "Whisper 자막 추출과 번역·후리가나·장면 분할 연결",
+        "AI 장면 학습카드 생성과 형식 검증·중간 저장·재시도 구현",
+        "FFmpeg 미디어 처리, TTS 낭독판 EPUB, 캐시 재사용 연결",
+        "메뉴바 앱에서 실행하고 장기 작업이 중단돼도 복구할 수 있게 구성"
+      ],
+      "results": ["실제 개인 학습 워크플로를 반복 운영", "중복 분석과 수작업 단계를 캐시·자동화로 축소"],
+      "technologies": ["Python", "Whisper", "FFmpeg", "LLM", "EPUB", "TTS", "Git"],
+      "evidence": ["DailyHelloWorld_/일본어자막추출 코드와 README"]
+    },
+    {
+      "id": "shift-alarm",
+      "name": "Shift Alarm 교대근무·개인 업무 자동화 도구",
+      "period": "개인 운영 프로젝트",
+      "role": "기획·개발·운영",
+      "problem": "교대근무 일정, 알람, 리마인더, 여러 자동화 실행 상태가 흩어져 있었다.",
+      "actions": [
+        "macOS 메뉴바 UI와 launchd 예약 실행 구현",
+        "Notion 체크리스트·iPhone 위젯·상태 JSON 동기화",
+        "AI 사용량, 날씨, 저장공간, 근무·급여 상태 통합",
+        "Elmedia 기상 음악, 전자책 낭독, 자막 파이프라인 실행 연결"
+      ],
+      "results": ["실제 매일 사용하는 개인 운영 도구로 정착", "설정 보존·오류 로그·자동 재시작을 포함한 운영 구조 확보"],
+      "technologies": ["Python", "rumps", "macOS", "launchd", "Notion API", "Scriptable", "JSON"],
+      "evidence": ["DailyHelloWorld_/shift_alarm 코드와 README"]
+    },
+    {
+      "id": "job-transition-system",
+      "name": "채용공고·기업·경진대회 분석 이직시스템",
+      "period": "개인 운영 프로젝트",
+      "role": "기획·개발·운영",
+      "problem": "공고를 단발적으로 읽어 요구 기술과 준비 과제로 연결하지 못했다.",
+      "actions": [
+        "사람인·고용24 API와 허용된 공개 소스 수집",
+        "SQLite 중복 제거, 기술 태그, 적합도 점수, 카테고리별 순환 추천 구현",
+        "DART 기업 분석과 LLM 공고 분석을 Notion에 자동 발행",
+        "Git·Notion·메뉴바 앱을 연결한 일일 운영 파이프라인 구성"
+      ],
+      "results": ["공고 수집→분석→학습·프로젝트 과제화를 반복 가능한 시스템으로 전환"],
+      "technologies": ["Python", "SQLite", "REST API", "HTML parsing", "LLM", "Notion API", "DART"],
+      "evidence": ["DailyHelloWorld_/이직시스템 코드와 README"]
+    },
+    {
+      "id": "day-start",
+      "name": "하루시작 — 지하철 혼잡도 예측·뉴스 감정분류 앱",
+      "period": "2024.05~2024.06",
+      "role": "3인 팀 팀장·데이터 분석·백엔드",
+      "problem": "사용자가 선택한 역과 시간대의 승하차 혼잡도를 예측하고 뉴스 감정을 분류해 제공한다.",
+      "actions": [
+        "서울 지하철 8개 노선의 2018~2024 일별·역별 데이터와 배차 정보를 통합",
+        "약 396만 행·51열, 약 1GB 데이터를 정제하는 재사용 모듈 개발",
+        "KNN·XGBoost·Random Forest·선형회귀 모델 비교와 교차검증",
+        "AWS Ubuntu의 Flask·FastAPI에서 SwiftUI 앱으로 JSON 예측 결과 제공",
+        "Transformers 기반 뉴스 감정분류 모델과 크롤링 데이터 연결"
+      ],
+      "results": ["문서상 승하차 예측 정확도 80% 이상", "선형회귀 일부 조건 90% 이상", "팀원이 재사용할 전처리·입력 변환 모듈 제공"],
+      "technologies": ["Python", "scikit-learn", "XGBoost", "Flask", "FastAPI", "AWS", "SwiftUI", "Transformers"],
+      "evidence": ["박동근_포트폴리오__.pdf", "3차첨삭_자소서_2024.07.14_word.docx"]
+    },
+    {
+      "id": "reco-farm",
+      "name": "Reco-Farm — 농산물 생산량·가격 예측 앱",
+      "period": "교육 팀 프로젝트",
+      "role": "앱 기획·설계·팀장",
+      "problem": "농작지와 작물을 선택하면 생산량과 가격 변동을 예측한다.",
+      "actions": ["기상·토양·생산량 데이터 분석", "Random Forest·SVM·회귀·ARIMA 비교", "Flutter 지도·농작지 관리 UI", "Spring Boot·Rserve·AWS·DB 연동"],
+      "results": ["가격 예측 문서상 MAPE 15.5%, 예측률 84.5%", "예측 불안정 모델을 오차 비교 후 제외한 판단 기록"],
+      "technologies": ["R", "Python", "Flutter", "Spring Boot", "AWS", "MySQL", "Firebase", "SQLite"],
+      "evidence": ["박동근_포트폴리오__.pdf"]
+    },
+    {
+      "id": "apple-king",
+      "name": "Apple King — Spring Boot 전자상거래 서비스",
+      "period": "교육 팀 프로젝트",
+      "role": "기획·설계·팀장, Spring 전환",
+      "problem": "상품·회원·장바구니·구매·리뷰·문의가 연결된 전자상거래 백엔드를 구현한다.",
+      "actions": ["ERD 설계", "Java·Spring Boot·MySQL CRUD", "검색·정렬·페이징·구매·관리자 기능", "Git·Jira·Slack 기반 협업"],
+      "results": ["기본 구매 흐름과 관리자·리뷰·문의 기능 구현"],
+      "technologies": ["Java", "Spring Boot", "MySQL", "HTML", "CSS", "JavaScript"],
+      "evidence": ["박동근_포트폴리오__.pdf"]
+    },
+    {
+      "id": "happy-seat",
+      "name": "행복좌석 — 액티브 시니어 좌석예매 키오스크",
+      "period": "교육 팀 프로젝트",
+      "role": "5인 팀 PM·R&D·페어 프로그래밍",
+      "problem": "고령층도 쉽게 문화생활 좌석을 예매할 수 있는 키오스크를 만든다.",
+      "actions": ["사용자 흐름과 ERD 반복 설계", "행·열 좌석을 코드로 관리하는 알고리즘", "XOR 기반 선택 상태 계산", "3초 주기 DB 동기화", "PR 관리와 코드 리뷰"],
+      "results": ["GitHub 문서상 PR 병합 101건·커밋 391건", "키오스크와 관리자 프로그램 시연 영상 제작"],
+      "technologies": ["Java", "Swing", "MySQL", "Git", "Figma"],
+      "evidence": ["박동근_포트폴리오__.pdf"]
+    },
+    {
+      "id": "semiconductor-sensor-research",
+      "name": "반도체·바이오센서 측정 자동화 및 예측 연구",
+      "period": "대학·대학원 연구",
+      "role": "측정 시스템 개발·데이터 분석·연구",
+      "problem": "소자와 센서의 반복 측정을 자동화하고 측정값으로 특성을 예측한다.",
+      "actions": ["LabVIEW·Arduino·Python 기반 측정 자동화", "실험 데이터 정제", "머신러닝 기반 문턱전압 예측", "협업 연구와 논문·특허 작업"],
+      "results": ["문턱전압 예측 문서상 최고 RMSE 1.35%, MAE 0.84%, R² 0.98", "센서 자동화 관련 특허와 반도체 예측 논문 경험"],
+      "technologies": ["Python", "LabVIEW", "Arduino", "Machine Learning", "Semiconductor"],
+      "evidence": ["전공소개서_박동근.pdf", "삼성전자 입사지원서 박동근.docx"]
+    }
+  ],
+  "story_bank": [
+    {
+      "id": "large-data-preprocessing",
+      "competency": ["문제 해결", "데이터 엔지니어링", "협업"],
+      "situation": "연도·노선마다 구조가 다른 대용량 지하철 데이터를 팀이 함께 사용해야 했다.",
+      "action": "열 구조를 표준화하고 배차·날짜 특성을 병합하는 전처리와 모델 입력 변환을 함수로 모듈화했다.",
+      "result": "약 1GB 데이터로 여러 모델을 비교했고 팀원들이 같은 전처리 코드를 재사용했다.",
+      "use_for": ["직무 수행 경험", "어려운 문제 해결", "협업"]
+    },
+    {
+      "id": "research-to-software-transition",
+      "competency": ["지원 동기", "학습 민첩성", "진로 전환"],
+      "situation": "반도체 연구 중 측정 자동화와 데이터 기반 예측 업무에서 소프트웨어 문제 해결에 더 큰 흥미를 확인했다.",
+      "action": "AI·데이터·웹·앱 개발 교육을 수료하고 연구 데이터를 서비스로 연결하는 프로젝트를 반복했다.",
+      "result": "연구 도메인과 Python·AI·백엔드 자동화를 결합한 직무 방향을 만들었다.",
+      "use_for": ["지원 동기", "직무 전환 설명"]
+    },
+    {
+      "id": "team-leadership",
+      "competency": ["리더십", "갈등 관리", "육성"],
+      "situation": "숙련도와 참여도가 다른 팀원들로 여러 교육 프로젝트를 완성해야 했다.",
+      "action": "역할을 현실적으로 재조정하고 페어 프로그래밍·질문 중심 코칭·코드 리뷰를 사용했다.",
+      "result": "문서상 5개 프로젝트에서 팀장을 맡았고 수강생 평가 최우수상을 받았다.",
+      "use_for": ["성격의 장단점", "협업", "리더십"]
+    },
+    {
+      "id": "persistent-operations",
+      "competency": ["주도성", "운영", "지속 개선"],
+      "situation": "개인 자동화는 한 번 실행되는 데모보다 매일 안정적으로 동작해야 했다.",
+      "action": "로그, 캐시, 재시도, 상태 파일, launchd 자동 재시작, Git·Notion 동기화를 반복적으로 보강했다.",
+      "result": "Shift Alarm·일본어 학습·이직시스템을 실제 일상에서 계속 운영하는 도구로 만들었다.",
+      "use_for": ["입사 후 포부", "주도적 문제 해결", "업무 자동화"]
+    }
+  ],
+  "writing_rules": {
+    "must": [
+      "공고 요구사항과 직접 연결되는 프로젝트·사례만 선택한다.",
+      "문제→판단·행동→결과 순서로 쓰고 숫자는 evidence가 있는 것만 사용한다.",
+      "연구 경험과 최근 운영 자동화 경험을 목표 직무에 맞게 연결한다.",
+      "지원 회사마다 프로젝트 순서와 강조 문장을 바꾼다."
+    ],
+    "never": [
+      "하지 않은 실무 경험, 수익·사용자 수, 정확도, 자격증을 지어내지 않는다.",
+      "연락처·주소·생년월일·주민번호·계좌·건강정보를 AI 프롬프트나 Git에 넣지 않는다.",
+      "초급 경험을 전문가 수준으로 과장하지 않는다.",
+      "예측률과 RMSE처럼 서로 다른 지표를 섞어 표현하지 않는다."
+    ]
+  },
+  "verification_queue": [
+    "논문 제목·저널·연도·저자 순서와 DOI",
+    "특허 명칭·출원번호·현재 상태",
+    "각 프로젝트의 정확한 기간과 GitHub·시연 링크",
+    "교육 프로젝트별 팀원 수와 본인 기여 범위",
+    "현재 재직 경력 및 최근 업무 성과는 원본 폴더에 없어 별도 추가 필요"
+  ],
+  "source_refs": [
+    "6.1 박동근_이력서__.docx",
+    "3차첨삭_자소서_2024.07.14_word.docx",
+    "박동근_포트폴리오__.pdf",
+    "전공소개서_박동근.pdf",
+    "삼성전자 입사지원서 박동근.docx",
+    "DailyHelloWorld_ 저장소의 일본어자막추출·shift_alarm·이직시스템 README와 코드"
+  ]
+}

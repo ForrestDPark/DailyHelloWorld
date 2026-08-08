@@ -13,6 +13,9 @@
 - 사람인·워크넷(고용24) 공식 API를 기본 수집원으로 사용한다.
 - 로그인·CAPTCHA·접근 제한을 우회하지 않는다. 사람인 공개 검색결과 페이지 크롤링(`enable_saramin_crawl`)은 로그인/CAPTCHA 우회가 아니므로 예외적으로 허용하되, robots.txt로 막힌 사이트(잡코리아 등)는 절대 크롤링하지 않는다.
 - API 키, `config.json`, SQLite DB, CSV, 개인 이력서는 Git에 커밋하지 않는다.
+- 맞춤 포트폴리오·자소서 작업 전 `candidate_profile.json`과 `CAREER_PROFILE.md`를 읽는다. 원본 문서와 `data/career_profile/` 추출 코퍼스는 Git에 올리거나 외부 프롬프트에 통째로 넣지 않는다.
+- 후보자 근거는 문제→행동→결과 단위로 사용하고, `verification_queue`의 논문·특허·기간·링크는 확인 전 확정 사실로 쓰지 않는다. 연락처·주소·생년월일·주민번호·계좌·건강정보를 Git·Notion 요약·AI 프롬프트에 넣지 않는다.
+- 새 자소서·포트폴리오 원본이 추가되면 `career_profile_pipeline.py scan`으로 비공개 코퍼스를 갱신한 뒤 검토된 사실만 `candidate_profile.json`과 `CAREER_PROFILE.md`에 반영한다.
 - 사용자와의 대화에서 장기적으로 재사용할 원칙·검색 조건·분류 기준·학습 전략이 나오면 같은 작업에서 `README.md`를 갱신한다.
 - 공고는 `지금 지원 가능 / 1~3개월 준비 후 지원 / 장기 목표`로 구분하고, 부족한 기술을 학습·포트폴리오 과제로 연결한다.
 

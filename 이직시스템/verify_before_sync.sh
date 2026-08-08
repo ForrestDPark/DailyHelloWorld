@@ -7,6 +7,8 @@ REPO_DIR="${SCRIPT_DIR:h}"
 cd "$SCRIPT_DIR"
 python3 -m unittest -v test_job_collector.py
 python3 -m py_compile job_collector.py
+python3 -m py_compile career_profile_pipeline.py
+python3 career_profile_pipeline.py validate
 
 cd "$REPO_DIR"
 git diff --check -- README.md "이직시스템"

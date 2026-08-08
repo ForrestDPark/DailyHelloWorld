@@ -12,6 +12,23 @@
 
 이 시스템의 목표는 `공고 수집 → 요구 기술 분해 → 반복 빈도 집계 → 내 기술과 비교 → 학습 과제 생성 → 포트폴리오로 증명 → 지원`이다.
 
+## 후보자 프로필·맞춤 포트폴리오/자소서 파이프라인
+
+두 로컬 원본 폴더(`/Users/forrestdpark/Desktop/이전 자소서`, `/Users/forrestdpark/Desktop/자소서`)의 이력서·자소서·포트폴리오를 재사용 가능한 근거 저장소로 정리했다(★ 2026-08-09).
+
+- `career_profile_pipeline.py scan`: DOCX·PPTX·PDF·HWP·Pages를 스캔해 `data/career_profile/`에 비공개 텍스트 코퍼스와 출처 인덱스를 만든다. 주민등록표·신분증·통장·건강보험·성적증명 등은 파일명 규칙으로 자동 제외한다.
+- `candidate_profile.json`: 다른 Codex·Claude 세션과 공고 분석기가 읽는 Git 공유용 비식별 구조화 프로필. 연락처·주소·생년월일·주민번호·계좌·건강정보는 넣지 않는다.
+- `CAREER_PROFILE.md`: 사람이 빠르게 읽는 경력·프로젝트·자소서 서사 요약과 맞춤 작성 규칙.
+- `job_collector.py`: 공고 분석 시 공유 프로필을 자동으로 읽어 기존 회사·공고 분석 뒤에 **맞춤 포트폴리오 구성**과 **맞춤 자기소개서 초안**을 함께 만든다. 근거 없는 경력·숫자는 만들지 않고 `verification_queue` 항목은 확인 필요로 표시한다.
+- 원본 문서와 `data/career_profile/` 추출본은 Git에 올리지 않는다. 새 문서가 생기면 `scan` → 근거 검토 → `candidate_profile.json`·`CAREER_PROFILE.md` 갱신 순서로 관리한다.
+
+```bash
+python3 career_profile_pipeline.py scan
+python3 career_profile_pipeline.py validate
+```
+
+상세 프로필과 프로젝트 우선순위는 [CAREER_PROFILE.md](CAREER_PROFILE.md)를 참고한다.
+
 ## 현재 구축 상태
 
 - 사람인 API 이용 신청 완료, **사용 승인 대기 중**(2026-08-03 신청, 거절 확정 아님)

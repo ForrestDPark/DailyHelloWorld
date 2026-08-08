@@ -32,6 +32,7 @@ from typing import Any, Iterable
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG = BASE_DIR / "config.json"
 DEFAULT_DB = BASE_DIR / "data" / "jobs.db"
+CANDIDATE_PROFILE_PATH = BASE_DIR / "candidate_profile.json"
 SARAMIN_API_URL = "https://oapi.saramin.co.kr/job-search"
 SARAMIN_MAX_RESULTS = 110
 WORK24_API_URL = "https://www.work24.go.kr/cm/openApi/call/wk/callOpenApiSvcInfo210L01.do"
@@ -795,7 +796,56 @@ def _content_available(detail_text: str) -> bool:
     return len(detail_text) >= 300 and any(marker in detail_text for marker in _CONTENT_MARKERS)
 
 
+def load_candidate_profile(path: Path = CANDIDATE_PROFILE_PATH) -> dict[str, Any]:
+    """Git에 공유된 비식별 후보자 프로필을 읽는다.
+
+    연락처·주소 등 원본 개인정보는 이 파일에 들어가지 않는다. 프로필이 없거나
+    깨졌으면 기존 공고 분석은 계속 동작하고 맞춤 작성 섹션만 생략한다.
+    """
+    try:
+        profile = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    required = {"identity", "skills", "experience", "projects", "story_bank", "writing_rules"}
+    return profile if required.issubset(profile) else {}
+
+
+def candidate_profile_context(profile: dict[str, Any] | None = None) -> str:
+    profile = load_candidate_profile() if profile is None else profile
+    if not profile:
+        return ""
+    # 모델이 공고와 연결할 때 필요한 근거만 전달하고 verification_queue를 같이 넣어
+    # 미확인 논문·특허·수치를 확정 사실처럼 쓰지 못하게 한다.
+    selected = {
+        "identity": profile["identity"],
+        "target_roles": profile.get("target_roles", []),
+        "skills": profile["skills"],
+        "experience": profile["experience"],
+        "projects": profile["projects"],
+        "story_bank": profile["story_bank"],
+        "writing_rules": profile["writing_rules"],
+        "verification_queue": profile.get("verification_queue", []),
+    }
+    return json.dumps(selected, ensure_ascii=False, indent=2)
+
+
 def build_analysis_prompt(row: sqlite3.Row, detail_text: str) -> str:
+    candidate_context = candidate_profile_context()
+    custom_request = "" if not candidate_context else f"""
+
+--- 비식별 후보자 근거 프로필 ---
+{candidate_context}
+--- 후보자 프로필 끝 ---
+
+5. **맞춤 포트폴리오 구성**: 공고 요구사항별로 후보자의 어떤 프로젝트·경력 근거를
+   연결할지 표로 정리하라. 대표 프로젝트는 2~3개만 고르고 배열 순서, 첫 화면 한 줄,
+   강조할 문제·행동·결과, 부족한 증거와 보완 과제를 제시하라. 검증 대기 항목은
+   확정 사실처럼 쓰지 말고 반드시 "확인 필요"라고 표시하라.
+6. **맞춤 자기소개서 초안**: ①지원 동기 ②직무 수행 경험 ③문제 해결·협업 ④입사 후
+   기여의 네 소제목으로 작성하라. 공고의 표현을 복사하지 말고 후보자 근거와 연결하며,
+   하지 않은 경험이나 숫자를 만들지 마라. 각 문단은 문제→판단·행동→결과→회사에서의
+   활용 순서로 쓰고, 연락처·주소·나이 등 개인정보는 넣지 마라.
+"""
     return f"""다음은 채용공고 상세 페이지에서 그대로 긁어온 텍스트다(내비게이션·광고·
 푸터 같은 잡음이 섞여 있을 수 있으니 실제 공고 본문(요구사항/우대사항 등)만 골라
 판단하라).
@@ -807,7 +857,7 @@ def build_analysis_prompt(row: sqlite3.Row, detail_text: str) -> str:
 {detail_text}
 --- 끝 ---
 
-한국어로 아래 네 항목에 답하라(★ 2026-08-08: 가장 궁금해하는 "회사가 지금 뭘
+한국어로 아래 항목에 답하라(★ 2026-08-08: 가장 궁금해하는 "회사가 지금 뭘
 하려는지" 추론을 1번으로 옮김 — 순서가 곧 Notion 페이지에 보이는 순서):
 1. **이 회사가 지금 만들려는/겪고 있는 것 추론**: 요구사항과 우대사항의 조합에서
    이 팀이 실제로 하려는 일을 구체적으로 추론하라(예: "Python 기반 code
@@ -828,7 +878,7 @@ def build_analysis_prompt(row: sqlite3.Row, detail_text: str) -> str:
    - 초기 필요 역량/도구: 2·3번에서 나온 기술 스택 그대로 연결
    - 시장 진입 전략: 첫 고객을 어떻게 확보할지(예: 이 회사가 속한 업종 커뮤니티,
      레퍼런스 고객 확보 방식)
-   - 경쟁/대체재 대비 차별점: 기존에 어떻게 해결하고 있었을지와 비교"""
+   - 경쟁/대체재 대비 차별점: 기존에 어떻게 해결하고 있었을지와 비교{custom_request}"""
 
 
 def run_job_analysis(row: sqlite3.Row) -> str | None:
@@ -1142,31 +1192,33 @@ def _dart_financial_table_block(financials: list[dict]) -> dict[str, Any] | None
 
 
 def _rank_candidates_by_analyzability(candidates: list[sqlite3.Row]) -> list[sqlite3.Row]:
-    """★ 2026-08-07 추가: 단순 키워드 점수만으로 "오늘의 추천 공고"를 고르면
-    재무·경영 이력을 전혀 알 수 없는 무명 소기업이 뽑히는 경우가 많아, 회사가
-    어떻게 경영해왔는지·업계에서 어떤 위치인지까지 판단하고 싶다는 요청으로
-    DART(전자공시) 등록 여부를 1차 기준으로 재정렬한다 — 공시 대상이면 실제
-    재무제표·연혁이 있어 company_profile.py 심층 분석이 가능하다는 뜻이다.
-    DART_API_KEY가 없으면 이 재정렬을 건너뛰고 기존 점수 순서를 그대로 쓴다."""
+    """★ 2026-08-07 추가, ★ 2026-08-09 하드 필터로 강화: 단순 키워드 점수만으로
+    "오늘의 추천 공고"를 고르면 재무·경영 이력을 전혀 알 수 없는 무명 소기업이
+    뽑히는 경우가 많았다. 처음엔 DART 등록 기업을 우선 순위로만 앞당겼지만,
+    그래도 등록 기업이 없으면 결국 "DART 미등록 — 공시 재무정보 없음 / 수집된
+    채용공고 없음"처럼 아무 근거도 없이 "정보 부족 — 추정"만 가득한 분석이
+    나왔다. 사용자 피드백: 이렇게 아무 정보도 확인할 수 없는 불안정한 회사는
+    애초에 추천 후보에서 빼고 싶다 — 그런 회사에 지원하고 싶지 않다. 그래서
+    DART 미등록 기업은 아예 후보에서 제외한다. DART_API_KEY가 없으면 등록
+    여부 자체를 확인할 수 없으므로(잘못 걸러내는 것을 막기 위해) 필터를 적용하지
+    않고 전체 후보를 그대로 반환한다."""
     from company_profile import _dart_api_key, fetch_dart_corp_code_map, find_dart_corp_code
     api_key = _dart_api_key()
     if not api_key:
-        print("  ⚠️ DART_API_KEY 없음 — 기업 분석 가능성 반영 없이 점수 순서로만 고름")
+        print("  ⚠️ DART_API_KEY 없음 — 정보 없는 회사를 걸러내지 못하고 점수 순서로만 고름")
         return candidates
     try:
         corp_map = fetch_dart_corp_code_map(api_key)
     except Exception as exc:  # noqa: BLE001 — DART 조회 실패는 순위만 못 매길 뿐 치명적이지 않음
-        print(f"  ⚠️ DART corp_code 조회 실패({exc}) — 점수 순서로만 고름")
+        print(f"  ⚠️ DART corp_code 조회 실패({exc}) — 걸러내지 못하고 점수 순서로만 고름")
         return candidates
 
     def is_registered(row: sqlite3.Row) -> bool:
         return find_dart_corp_code(row["company"], corp_map) is not None
 
     registered = [c for c in candidates if is_registered(c)]
-    unregistered = [c for c in candidates if c not in registered]
-    if registered:
-        print(f"  DART 등록 기업 {len(registered)}/{len(candidates)}건 — 우선 순위로 재배치")
-    return registered + unregistered
+    print(f"  DART 등록 기업 {len(registered)}/{len(candidates)}건 — 미등록(정보 확인 불가) 기업은 추천 후보에서 제외")
+    return registered
 
 
 def top_job_history_path(category: str) -> Path:
@@ -1226,6 +1278,12 @@ def analyze_top_job(args: argparse.Namespace) -> None:
     if not candidates:
         raise SystemExit(f"[{JOB_CATEGORY_LABELS[category]}] 저장된 공고가 없습니다. collect를 먼저 실행하세요.")
     candidates = _rank_candidates_by_analyzability(candidates)
+    if not candidates:
+        # ★ 2026-08-09: DART 미등록 기업을 하드 필터로 걸러낸 결과 후보가 하나도
+        # 안 남을 수 있다 — 에러가 아니라 "오늘은 추천할 만한 정보 있는 공고가
+        # 없었다"는 정상 상황이다. 기존 Notion 페이지는 그대로 두고 조용히 종료.
+        print(f"[{JOB_CATEGORY_LABELS[category]}] DART 등록 등 정보를 확인할 수 있는 후보가 없어 오늘은 추천을 건너뜁니다.")
+        return
     candidates, used = _apply_no_repeat_rotation(candidates, category)
 
     row = None
@@ -1256,12 +1314,13 @@ def analyze_top_job(args: argparse.Namespace) -> None:
     try:
         from company_profile import (
             _dart_api_key, fetch_dart_company_info, fetch_dart_corp_code_map, fetch_dart_financial_summary,
-            find_dart_corp_code, search_related_contests, search_related_jobs,
-            build_company_prompt, _markdown_to_notion_blocks as company_blocks,
+            find_dart_corp_code, search_related_contests, search_related_jobs, fetch_company_news,
+            build_company_prompt, build_reference_links_block, _markdown_to_notion_blocks as company_blocks,
             _notion_publish as company_publish, COMPANY_PROFILE_STATE_DIR,
         )
         api_key = _dart_api_key()
         dart_info = None
+        corp_code = None
         if api_key:
             corp_map = fetch_dart_corp_code_map(api_key)
             corp_code = find_dart_corp_code(row["company"], corp_map)
@@ -1278,13 +1337,17 @@ def analyze_top_job(args: argparse.Namespace) -> None:
                 homepage_url = f"https://{homepage_url}"
         jobs_related = search_related_jobs(row["company"])
         contests_related = search_related_contests(row["company"])
-        prompt = build_company_prompt(row["company"], dart_info, financials, jobs_related, contests_related, "")
+        news_related = fetch_company_news(row["company"])
+        prompt = build_company_prompt(row["company"], dart_info, financials, jobs_related, contests_related, "", news_related)
         from ai_exec import run_ai_exec
         stdout, _ = run_ai_exec(prompt, BASE_DIR, timeout=300)
+        # ★ 2026-08-09: 참고 링크(DART·대안 정보원·뉴스 원문)는 AI 출력과 별개로
+        # 코드가 직접 덧붙인다 — company_profile.py의 analyze_company()와 동일.
+        company_text = stdout.strip() + "\n\n" + build_reference_links_block(row["company"], corp_code, news_related)
         company_title = f"🏢 {row['company']} 경영 분석"
         safe_name = re.sub(r"[^\w가-힣-]+", "_", row["company"])
         state_path = COMPANY_PROFILE_STATE_DIR / f"{safe_name}.json"
-        company_notion_url = company_publish(token, company_title, company_blocks(stdout.strip()), state_path)
+        company_notion_url = company_publish(token, company_title, company_blocks(company_text), state_path)
         print(f"✅ 기업 경영 분석 페이지도 갱신: {company_notion_url}")
     except Exception as exc:  # noqa: BLE001 — 기업 분석 실패해도 공고 분석 발행은 계속 진행
         print(f"⚠️  기업 경영 분석 생성 실패(공고 분석은 계속 진행): {exc}")
@@ -1381,4 +1444,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
