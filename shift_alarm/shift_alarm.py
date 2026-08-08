@@ -134,6 +134,15 @@ REMINDER_MENU_COLOR_CYCLE = [
 CHECKLIST_STATE_CACHE_PATH = os.path.expanduser("~/.shift_alarm_checklist_state.json")
 CHECKLIST_SYNC_INTERVAL_SECONDS = 60
 
+# ★ 2026-08-09: Claude 라이브 quota는 OAuth 액세스 토큰(수 시간짜리)이 있어야
+# 조회되는데, 이 토큰은 claude CLI를 실제로 켜서 쓸 때만 갱신된다. 밤새
+# claude를 안 켜두면 토큰이 만료돼 "확인 불가"로 뜨다가, 아침에 claude를
+# 다시 켜는 순간 키체인의 토큰은 이미 갱신되지만 shift_alarm이 그걸 알아채는
+# 데 최대 12분(정상 주기)이 걸렸다. 실패 상태일 땐 주기를 짧게 당겨서 다음
+# claude 세션이 열리자마자 몇 분 안에 자동 복구되게 한다.
+AI_USAGE_NORMAL_INTERVAL = 12 * 60
+AI_USAGE_RETRY_INTERVAL = 2 * 60
+
 
 def fetch_reminder_checklist_state(token, date_str):
     """오늘 날짜 토글 밑 체크박스들의 현재 체크 상태를 Notion에서 읽어온다.
@@ -2527,7 +2536,7 @@ class ShiftAlarmApp(rumps.App):
         self._refresh_checklist_state(None)
 
         # Codex/Claude 사용량(quota) 12분마다 갱신 + 앱 시작 시 1회
-        self.ai_usage_timer = rumps.Timer(self._refresh_ai_usage, 12 * 60)
+        self.ai_usage_timer = rumps.Timer(self._refresh_ai_usage, AI_USAGE_NORMAL_INTERVAL)
         self.ai_usage_timer.start()
         self._refresh_ai_usage(None)
 
@@ -2592,6 +2601,12 @@ class ShiftAlarmApp(rumps.App):
         _set_menu_item_color(self.claude_usage_item, format_claude_live_usage(claude_live), claude_color)
 
         self.claude_stats_item.title = format_claude_local_stats(claude_local)
+
+        # 라이브 조회 실패 시(토큰 만료 등) 다음 claude 세션이 열리는 즉시 몇
+        # 분 안에 자동 복구되도록 재시도 주기를 짧게, 성공하면 원래대로.
+        self.ai_usage_timer.interval = (
+            AI_USAGE_RETRY_INTERVAL if claude_live is None else AI_USAGE_NORMAL_INTERVAL
+        )
 
         # 메뉴바 타이틀 자체에도 사용률 숫자를 바로 보이게 캐시해서 반영한다.
         self._codex_quota = codex_quota
