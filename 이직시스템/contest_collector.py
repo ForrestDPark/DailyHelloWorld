@@ -791,8 +791,8 @@ def analyze_top_contest(args: argparse.Namespace) -> None:
     try:
         from job_collector import record_top_index_entry
         today = datetime.now().date().isoformat()
-        line = f"[{today}][{category}] {title}"
-        record_top_index_entry(token, "job", line, url)
+        line = f"(점수 {row['score']}) [{today}][{category}] {title}"
+        record_top_index_entry(token, "contest", line, url)
     except RuntimeError as exc:
         print(f"⚠️  최상위 페이지 목록 갱신 실패(본 발행은 정상 완료): {exc}")
 

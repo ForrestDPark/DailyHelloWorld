@@ -1265,7 +1265,8 @@ def _notion_publish(
     return url
 
 
-TOP_INDEX_JOB_SECTION = "🎯🏆 오늘의 추천 공고·경진대회"
+TOP_INDEX_JOB_SECTION = "🎯 오늘의 추천 공고"
+TOP_INDEX_CONTEST_SECTION = "🏆 오늘의 추천 경진대회"
 TOP_INDEX_COMPANY_SECTION = "🏢 기업 경영 분석 목록"
 # ★ 2026-08-09: "🎴 이직시스템" 최상위 페이지 안의 특정 위치(헤딩 바로 다음)에
 # 블록을 끼워 넣으려 했으나, 이 Notion API 버전은 append 요청의 `after`
@@ -1307,10 +1308,13 @@ def _sync_top_index_page(token: str, entries: list[dict[str, str]]) -> None:
             _notion_request("DELETE", f"blocks/{child['id']}", token)
 
     def line_block(entry: dict[str, str]) -> dict[str, Any]:
+        line = entry["line"]
+        if entry.get("kind") in {"job", "contest"} and not line.startswith("(점수 "):
+            line = f"(점수 미기록) {line}"
         return {
             "object": "block", "type": "bulleted_list_item",
             "bulleted_list_item": {"rich_text": [{
-                "type": "text", "text": {"content": entry["line"][:1900], "link": {"url": entry["url"]}},
+                "type": "text", "text": {"content": line[:1900], "link": {"url": entry["url"]}},
             }]},
         }
 
@@ -1320,12 +1324,17 @@ def _sync_top_index_page(token: str, entries: list[dict[str, str]]) -> None:
     def paragraph(text: str) -> dict[str, Any]:
         return {"object": "block", "type": "paragraph", "paragraph": {"rich_text": [{"type": "text", "text": {"content": text}}]}}
 
-    job_entries = [e for e in entries if e["kind"] == "job"]
+    # 예전 이력은 공고와 경진대회를 모두 kind=job으로 저장했다. 기존 JSON을
+    # 지우지 않고 제목의 🏆 표시로 구분해 새 섹션으로 자연스럽게 이관한다.
+    contest_entries = [e for e in entries if e.get("kind") == "contest" or (e.get("kind") == "job" and "🏆" in e.get("line", ""))]
+    job_entries = [e for e in entries if e.get("kind") == "job" and "🏆" not in e.get("line", "")]
     company_entries = [e for e in entries if e["kind"] == "company"]
     blocks = (
         [paragraph("새 추천은 이 목록 맨 위에 한 줄씩 쌓인다(자동 갱신). 전체 분석 내용은 링크를 눌러 확인."),
          heading(f"{TOP_INDEX_JOB_SECTION} (최신순)")]
         + [line_block(e) for e in job_entries]
+        + [heading(f"{TOP_INDEX_CONTEST_SECTION} (최신순)")]
+        + [line_block(e) for e in contest_entries]
         + [heading(f"{TOP_INDEX_COMPANY_SECTION} (회사당 1건, 계속 누적)")]
         + [line_block(e) for e in company_entries]
     )
@@ -1686,7 +1695,7 @@ def analyze_top_job(args: argparse.Namespace) -> None:
     # "content 있을 필요 없다"는 피드백으로 링크만 남기는 방식으로 바꿨다.
     try:
         today = datetime.now().date().isoformat()
-        line = f"[{today}][{category}] {title}"
+        line = f"(점수 {recommendation_score}) [{today}][{category}] {title}"
         record_top_index_entry(token, "job", line, url)
     except RuntimeError as exc:
         print(f"⚠️  최상위 페이지 목록 갱신 실패(본 발행은 정상 완료): {exc}")
