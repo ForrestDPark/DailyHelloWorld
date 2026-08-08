@@ -2311,7 +2311,6 @@ def format_claude_local_stats(stats):
     return f"🪙 Claude 로컬: {' · '.join(parts)}"
 
 
-CODEX_DAILY_BUDGET_PERCENT = 100.0 / 7.0
 CLAUDE_WEEKLY_CRITICAL_PERCENT = 90
 CODEX_LIGHT_PURPLE_COLOR = NSColor.colorWithCalibratedRed_green_blue_alpha_(
     0.79, 0.65, 1.0, 1.0
@@ -2319,17 +2318,23 @@ CODEX_LIGHT_PURPLE_COLOR = NSColor.colorWithCalibratedRed_green_blue_alpha_(
 
 
 def _codex_weekly_critical(quota):
-    """Codex 주간 한도의 하루 몫(100/7≈14.3%)을 모두 사용했는지."""
+    """현재 진행일까지의 Codex 누적 권장량을 모두 사용했는지.
+
+    7일 윈도우라면 1일째 14.3%, 2일째 28.6%, …, 7일째 100%가
+    경고선이다. resets_at이 없어 진행일을 계산할 수 없으면 경고하지 않는다.
+    """
     if not quota:
         return False
     primary = quota.get("primary")
     if not primary:
         return False
-    window = primary.get("window_minutes")
     pct = primary.get("used_percent")
-    if window is None or pct is None:
+    progress = _quota_window_progress(primary)
+    if pct is None or not progress:
         return False
-    return window >= 10000 and pct >= CODEX_DAILY_BUDGET_PERCENT
+    current_day, total_days = progress
+    threshold = current_day * 100.0 / total_days
+    return pct >= threshold
 
 
 def _claude_weekly_critical(data):
@@ -2670,8 +2675,8 @@ class ShiftAlarmApp(rumps.App):
 
         # Codex/Claude 사용량을 드롭다운을 열지 않아도 보이도록 상태창 타이틀에 바로
         # "94% 61%" 형태로 표시한다. 순서는 Codex(연보라) → Claude(오렌지)이며,
-        # Codex는 주간 한도의 하루 몫(약 14.3%)을 다 쓰면, Claude는 주간
-        # 윈도우가 90% 이상이면 빨강으로 덮어써 경고한다.
+        # Codex는 현재 진행일까지의 누적 권장량(1일째 14.3%, 2일째 28.6% …)을
+        # 다 쓰면, Claude는 주간 윈도우가 90% 이상이면 빨강으로 경고한다.
         codex_pct = _codex_primary_percent(self._codex_quota)
         codex_token = f"{codex_pct:.0f}%" if codex_pct is not None else ""
         codex_color = (
