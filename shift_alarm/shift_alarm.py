@@ -3037,7 +3037,14 @@ class ShiftAlarmApp(rumps.App):
 
     def make_open_url_callback(self, url):
         def callback(_):
-            subprocess.Popen(["open", url])
+            # https URL을 그냥 `open`에 넘기면 macOS 기본 브라우저가 받는다.
+            # Notion 링크는 설치된 데스크톱 앱을 명시해 일일 체크리스트와 AI 분석
+            # 페이지가 Chrome이 아니라 Notion에서 열리게 한다(★ 2026-08-09).
+            host = (urlparse(url).hostname or "").lower()
+            if host == "notion.so" or host.endswith(".notion.so") or host == "notion.com" or host.endswith(".notion.com"):
+                subprocess.Popen(["open", "-a", "Notion", url])
+            else:
+                subprocess.Popen(["open", url])
         return callback
 
     def make_reminder_toggle_callback(self, key):
