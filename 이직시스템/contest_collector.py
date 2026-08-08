@@ -65,7 +65,22 @@ CONTESTKOREA_SOURCE = "콘테스트코리아"
 NOTION_VERSION = "2026-03-11"
 # "🎴 이직시스템" 페이지 — job_collector.py의 분석 페이지와 같은 부모 밑에 만든다.
 NOTION_JOBSYSTEM_PAGE_ID = "3b132a1e-ae80-805d-ad0e-d4f2cae02709"
-TOP_CONTEST_STATE_PATH = BASE_DIR / "data" / "top_contest_notion.json"
+# ★ 2026-08-08: job_collector.py와 같은 이유로(AI 특화 경진대회 vs 일반 공모전은
+# 성격이 달라 하나로 뭉치면 한쪽이 묻힌다) 카테고리별로 분리했다.
+CONTEST_SOURCE_CATEGORY = {
+    AICHALLENGE4ALL_SOURCE: "ai",
+    LINKAREER_SOURCE: "general",
+    CONTESTKOREA_SOURCE: "general",
+}
+CONTEST_CATEGORY_LABELS = {"ai": "AI 경진대회", "general": "일반 공모전"}
+
+
+def top_contest_state_path(category: str) -> Path:
+    return BASE_DIR / "data" / f"top_contest_notion_{category}.json"
+
+
+def top_contest_history_path(category: str) -> Path:
+    return BASE_DIR / "data" / f"top_contest_history_{category}.json"
 
 _NEXT_DATA_RE = re.compile(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', re.S)
 
@@ -538,12 +553,19 @@ def _notion_request(method: str, path: str, token: str, payload: dict[str, Any] 
         raise RuntimeError(f"Notion API {method} {path} HTTP {exc.code}: {detail}") from exc
 
 
-def _notion_publish(token: str, title: str, blocks: list[dict[str, Any]], meta: dict[str, Any]) -> str:
-    """job_collector.py의 동명 함수와 동일한 "페이지 하나만 갱신" 방식."""
+def _notion_publish(
+    token: str, title: str, blocks: list[dict[str, Any]], meta: dict[str, Any],
+    state_path: Path = None,
+) -> str:
+    """job_collector.py의 동명 함수와 동일한 "페이지 하나만 갱신" 방식.
+    ★ 2026-08-08: state_path를 인자로 받아 카테고리(ai/general)별로 서로 다른
+    상태 파일(=서로 다른 Notion 페이지)을 쓸 수 있게 함."""
+    if state_path is None:
+        state_path = top_contest_state_path("general")  # 하위호환 기본값
     state = {}
-    if TOP_CONTEST_STATE_PATH.exists():
+    if state_path.exists():
         try:
-            state = json.loads(TOP_CONTEST_STATE_PATH.read_text(encoding="utf-8"))
+            state = json.loads(state_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             state = {}
     page_id = state.get("page_id")
@@ -552,9 +574,16 @@ def _notion_publish(token: str, title: str, blocks: list[dict[str, Any]], meta: 
         _notion_request("PATCH", f"pages/{page_id}", token, {
             "properties": {"title": {"title": [{"text": {"content": title}}]}}
         })
-        existing = _notion_request("GET", f"blocks/{page_id}/children?page_size=100", token)
-        for child in existing.get("results", []):
-            _notion_request("DELETE", f"blocks/{child['id']}", token)
+        # ★ 2026-08-08 버그 수정: job_collector.py와 동일 — page_size=100 한 페이지만
+        # 지우면 블록 100개 넘는 긴 분석은 이전 내용이 안 지워지고 계속 쌓인다.
+        # 삭제하며 커서가 밀리는 걸 피하려고 매번 "첫 페이지"를 새로 조회해 지운다.
+        while True:
+            existing = _notion_request("GET", f"blocks/{page_id}/children?page_size=100", token)
+            results = existing.get("results", [])
+            if not results:
+                break
+            for child in results:
+                _notion_request("DELETE", f"blocks/{child['id']}", token)
     else:
         created = _notion_request("POST", "pages", token, {
             "parent": {"page_id": NOTION_JOBSYSTEM_PAGE_ID},
@@ -566,22 +595,105 @@ def _notion_publish(token: str, title: str, blocks: list[dict[str, Any]], meta: 
         _notion_request("PATCH", f"blocks/{page_id}/children", token, {"children": blocks[start:start + 50]})
 
     url = f"https://www.notion.so/{page_id.replace('-', '')}"
-    TOP_CONTEST_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    TOP_CONTEST_STATE_PATH.write_text(
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
         json.dumps({"page_id": page_id, "url": url, **meta}, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     return url
 
 
+def _append_history_toggle(
+    token: str, parent_page_id: str, prefix: str, toggle_title: str, blocks: list[dict[str, Any]],
+) -> None:
+    """job_collector.py의 동명 함수와 동일 — "🎴 이직시스템" 최상위 페이지에
+    오늘의 추천 경진대회를 접힌 토글로 누적한다(★ 2026-08-08 사용자 요청).
+    카테고리별 하위 페이지는 계속 "하나만 매일 갱신"으로 최신 스냅샷만 유지하고,
+    이 토글이 과거 기록을 남기는 유일한 곳이다. 같은 날 재실행하면 새 토글을
+    만들지 않고 기존 토글 내용만 교체한다."""
+    toggle_id = None
+    cursor = None
+    while toggle_id is None:
+        path = f"blocks/{parent_page_id}/children?page_size=100"
+        if cursor:
+            path += f"&start_cursor={cursor}"
+        resp = _notion_request("GET", path, token)
+        for child in resp.get("results", []):
+            if child.get("type") != "toggle":
+                continue
+            text = "".join(r.get("plain_text", "") for r in child["toggle"].get("rich_text", []))
+            if text.startswith(prefix):
+                toggle_id = child["id"]
+                break
+        if toggle_id or not resp.get("has_more"):
+            break
+        cursor = resp.get("next_cursor")
+
+    if toggle_id:
+        while True:
+            resp = _notion_request("GET", f"blocks/{toggle_id}/children?page_size=100", token)
+            results = resp.get("results", [])
+            if not results:
+                break
+            for child in results:
+                _notion_request("DELETE", f"blocks/{child['id']}", token)
+    else:
+        created = _notion_request("PATCH", f"blocks/{parent_page_id}/children", token, {
+            "children": [{
+                "object": "block", "type": "toggle",
+                "toggle": {"rich_text": [{"type": "text", "text": {"content": toggle_title[:1900]}}]},
+            }]
+        })
+        toggle_id = created["results"][0]["id"]
+
+    for start in range(0, len(blocks), 50):
+        _notion_request("PATCH", f"blocks/{toggle_id}/children", token, {"children": blocks[start:start + 50]})
+
+
+def _load_top_contest_history(category: str) -> set[str]:
+    path = top_contest_history_path(category)
+    if not path.exists():
+        return set()
+    try:
+        return set(json.loads(path.read_text(encoding="utf-8")).get("used", []))
+    except json.JSONDecodeError:
+        return set()
+
+
+def _save_top_contest_history(category: str, used: set[str]) -> None:
+    path = top_contest_history_path(category)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"used": sorted(used)}, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _apply_no_repeat_rotation(candidates: list[sqlite3.Row], category: str) -> tuple[list[sqlite3.Row], set[str]]:
+    """job_collector.py의 동명 함수와 같은 이유·같은 패턴(2026-08-08) — 매일
+    같은 1위 공모전만 추천되는 걸 막기 위해 이미 추천한 건 풀 소진까지 제외."""
+    used = _load_top_contest_history(category)
+    pool_ids = {f"{c['source']}:{c['source_id']}" for c in candidates}
+    used &= pool_ids
+    unused = [c for c in candidates if f"{c['source']}:{c['source_id']}" not in used]
+    if not unused:
+        used = set()
+        unused = candidates
+    return unused, used
+
+
 def analyze_top_contest(args: argparse.Namespace) -> None:
     """현재 적합도 1위 공모전을 골라 AI 분석 후 Notion 페이지 하나에 갱신한다
-    (shift_alarm이 매일 자동 호출, job_collector.py의 analyze_top_job()과 대응)."""
+    (shift_alarm이 매일 자동 호출, job_collector.py의 analyze_top_job()과 대응).
+    ★ 2026-08-08: AI 특화(ai)/일반(general) 카테고리별로 독립 페이지·로테이션."""
+    category = args.category
     conn = connect(args.db)
+    sources = [s for s, cat in CONTEST_SOURCE_CATEGORY.items() if cat == category]
+    placeholders = ",".join("?" for _ in sources)
     candidates = conn.execute(
-        "SELECT * FROM contests ORDER BY score DESC, deadline ASC LIMIT 5"
+        f"SELECT * FROM contests WHERE source IN ({placeholders}) "
+        "ORDER BY score DESC, deadline ASC LIMIT 20",
+        sources,
     ).fetchall()
     if not candidates:
-        raise SystemExit("저장된 공모전이 없습니다. collect를 먼저 실행하세요.")
+        raise SystemExit(f"[{CONTEST_CATEGORY_LABELS[category]}] 저장된 공모전이 없습니다. collect를 먼저 실행하세요.")
+    candidates, used = _apply_no_repeat_rotation(candidates, category)
 
     row = None
     text = None
@@ -592,7 +704,10 @@ def analyze_top_contest(args: argparse.Namespace) -> None:
             break
         print(f"  ↪️ [{candidate['score']}점] {candidate['organizer']} 분석 불가 — 다음 순위로 시도\n")
     if row is None:
-        raise SystemExit("상위 5개 공모전 모두 본문을 못 가져오거나 AI 분석에 실패했습니다.")
+        raise SystemExit("상위 후보 공모전 모두 본문을 못 가져오거나 AI 분석에 실패했습니다.")
+
+    used.add(f"{row['source']}:{row['source_id']}")
+    _save_top_contest_history(category, used)
 
     token = _notion_token()
     if not token:
@@ -600,21 +715,30 @@ def analyze_top_contest(args: argparse.Namespace) -> None:
         print(text)
         return
 
-    title = f"🏆 {row['organizer']} — {row['title']}"
+    title = f"🏆 [{CONTEST_CATEGORY_LABELS[category]}] {row['organizer']} — {row['title']}"
     meta_line = f"점수 {row['score']} | {row['source']} | 마감 {row['deadline']} | {row['url']}"
     blocks = _markdown_to_notion_blocks(meta_line) + _markdown_to_notion_blocks(text)
     meta = {
+        "category": category,
         "organizer": row["organizer"], "title": row["title"],
         "score": row["score"], "source": row["source"],
         "deadline": row["deadline"], "contest_url": row["url"],
     }
     try:
-        url = _notion_publish(token, title, blocks, meta)
+        url = _notion_publish(token, title, blocks, meta, top_contest_state_path(category))
     except RuntimeError as exc:
         print(f"⚠️  Notion 페이지 갱신 실패: {exc}")
         print(text)
         return
     print(f"\n✅ Notion 페이지 갱신 완료: {url}")
+
+    # ★ 2026-08-08: 최상위 "🎴 이직시스템" 페이지에도 접힌 토글로 남긴다(job_collector.py와 동일).
+    try:
+        today = datetime.now().date().isoformat()
+        prefix = f"[{today}][{category}]"
+        _append_history_toggle(token, NOTION_JOBSYSTEM_PAGE_ID, prefix, f"{prefix} {title}", blocks)
+    except RuntimeError as exc:
+        print(f"⚠️  최상위 페이지 히스토리 토글 추가 실패(본 발행은 정상 완료): {exc}")
 
 
 def doctor(args: argparse.Namespace) -> None:
@@ -632,9 +756,14 @@ def parser() -> argparse.ArgumentParser:
     ls = sub.add_parser("list", help="적합도 순으로 보기")
     ls.add_argument("--limit", type=int, default=20)
     ls.set_defaults(func=list_contests)
-    sub.add_parser(
+    at = sub.add_parser(
         "analyze-top", help="적합도 1위 공모전을 AI로 분석해 Notion 페이지 갱신(shift_alarm 자동 호출용)"
-    ).set_defaults(func=analyze_top_contest)
+    )
+    at.add_argument(
+        "--category", choices=["ai", "general"], default="general",
+        help="ai=AI 특화 경진대회, general=일반 공모전 (2026-08-08 추가)",
+    )
+    at.set_defaults(func=analyze_top_contest)
     sub.add_parser("doctor", help="실행 환경 점검").set_defaults(func=doctor)
     return p
 

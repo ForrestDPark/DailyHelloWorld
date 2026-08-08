@@ -5,10 +5,13 @@ Notion에 발행한다(손자병법 해석의 "역사적 실증사례"처럼, �
 이 회사가 걸어온 궤적과 지금 하려는 것을 서술). job_collector.py analyze와
 같은 패턴, 2026-08-07 추가.
 
-DART_API_KEY 환경변수가 필요하다(무료, opendart.fss.or.kr에서 즉시 발급).
-없으면 재무제표 파트만 건너뛰고 홈페이지·채용공고·경진대회 정보만으로 분석한다
-— DART는 상장사·일정 규모 이상 비상장사만 공시 대상이라 작은 스타트업은 키가
-있어도 재무제표가 아예 없을 수 있다(이 경우도 동일하게 건너뛴다).
+DART API 키가 필요하다(무료, opendart.fss.or.kr에서 즉시 발급). DART_API_KEY
+환경변수로 줘도 되지만, shift_alarm이 launchd로 실행돼 셸 프로필을 못 읽으므로
+기본은 키체인 저장(★ 2026-08-08): `security add-generic-password -a $USER
+-s dart_api_key -w "<키>"`. 키가 아예 없으면 재무제표 파트만 건너뛰고
+홈페이지·채용공고·경진대회 정보만으로 분석한다 — DART는 상장사·일정 규모 이상
+비상장사만 공시 대상이라 작은 스타트업은 키가 있어도 재무제표가 아예 없을 수
+있다(이 경우도 동일하게 건너뛴다).
 """
 
 from __future__ import annotations
@@ -270,6 +273,21 @@ def _notion_token() -> str:
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
+def _dart_api_key() -> str:
+    """DART_API_KEY 환경변수가 있으면 우선 쓰고, 없으면 키체인(dart_api_key)에서
+    읽는다(★ 2026-08-08 — shift_alarm이 launchd로 실행돼 셸 프로필의 환경변수를
+    못 보므로, jp_subtitle_notion_token과 같은 키체인 패턴으로 저장해뒀다)."""
+    env_key = os.environ.get("DART_API_KEY", "").strip()
+    if env_key:
+        return env_key
+    result = subprocess.run(
+        ["security", "find-generic-password", "-a", os.environ.get("USER", ""),
+         "-s", "dart_api_key", "-w"],
+        capture_output=True, text=True,
+    )
+    return result.stdout.strip() if result.returncode == 0 else ""
+
+
 def _markdown_to_notion_blocks(text: str) -> list[dict[str, Any]]:
     """job_collector.py/contest_collector.py의 동명 함수와 동일(볼드·URL 링크 지원)."""
     inline_re = re.compile(r"\*\*(.+?)\*\*|(https?://[^\s]+)")
@@ -354,9 +372,16 @@ def _notion_publish(token: str, title: str, blocks: list[dict[str, Any]], state_
         _notion_request("PATCH", f"pages/{page_id}", token, {
             "properties": {"title": {"title": [{"text": {"content": title}}]}}
         })
-        existing = _notion_request("GET", f"blocks/{page_id}/children?page_size=100", token)
-        for child in existing.get("results", []):
-            _notion_request("DELETE", f"blocks/{child['id']}", token)
+        # ★ 2026-08-08 버그 수정: job_collector.py와 동일 — page_size=100 한 페이지만
+        # 지우면 블록 100개 넘는 긴 분석은 이전 내용이 안 지워지고 계속 쌓인다.
+        # 삭제하며 커서가 밀리는 걸 피하려고 매번 "첫 페이지"를 새로 조회해 지운다.
+        while True:
+            existing = _notion_request("GET", f"blocks/{page_id}/children?page_size=100", token)
+            results = existing.get("results", [])
+            if not results:
+                break
+            for child in results:
+                _notion_request("DELETE", f"blocks/{child['id']}", token)
     else:
         created = _notion_request("POST", "pages", token, {
             "parent": {"page_id": NOTION_JOBSYSTEM_PAGE_ID},
@@ -379,7 +404,7 @@ def analyze_company(args: argparse.Namespace) -> None:
 
     dart_info = None
     financials: list[dict] = []
-    api_key = os.environ.get("DART_API_KEY", "").strip()
+    api_key = _dart_api_key()
     if api_key:
         try:
             corp_map = fetch_dart_corp_code_map(api_key)
@@ -394,7 +419,7 @@ def analyze_company(args: argparse.Namespace) -> None:
         except RuntimeError as exc:
             print(f"  ⚠️ DART 조회 실패: {exc}")
     else:
-        print("  ⚠️ DART_API_KEY 환경변수 없음 — 재무제표 없이 진행(opendart.fss.or.kr에서 무료 발급)")
+        print("  ⚠️ DART_API_KEY 없음(환경변수/키체인 모두) — 재무제표 없이 진행(opendart.fss.or.kr에서 무료 발급)")
 
     jobs = search_related_jobs(company_name)
     contests = search_related_contests(company_name)

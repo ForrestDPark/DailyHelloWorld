@@ -176,33 +176,32 @@ function buildBottomSection(widget, status) {
     widget.addSpacer(8);
   }
 
-  if (status.job_company) {
-    const scoreText = status.job_score !== null && status.job_score !== undefined
-      ? `🎯 [${status.job_score}점] 오늘의 추천 공고`
-      : `🎯 오늘의 추천 공고`;
-    addLine(widget, scoreText, { color: COLOR_DIM, size: 11, bold: true });
+  // ★ 2026-08-08: 커리어/알바(공고), AI/일반(경진대회) 카테고리별 2건씩으로
+  // 늘어나서(job_items/contest_items 배열), 라지 위젯 프레임 안에 다 넣으려면
+  // 예전처럼 항목당 여러 줄(헤딩+본문+링크)을 쓸 수 없다 — 카테고리 태그를 붙인
+  // 한 줄로 압축하고, 탭하면 바로 AI 분석(Notion)으로 이동하게 했다.
+  const jobItems = status.job_items || [];
+  jobItems.forEach((item, i) => {
+    if (i === 0) addLine(widget, "🎯 오늘의 추천 공고", { color: COLOR_DIM, size: 11, bold: true });
     widget.addSpacer(2);
-    const jobLabel = `${status.job_company} — ${status.job_title || ""}`;
-    const jobLine = addLine(widget, jobLabel, { color: COLOR_SUB, size: 12, lineLimit: 2 });
-    if (status.job_url) jobLine.url = status.job_url;
-    if (status.job_notion_url) {
-      widget.addSpacer(2);
-      const notionLine = addLine(widget, "📄 AI 분석 보기", { color: COLOR_PURPLE, size: 11 });
-      notionLine.url = status.job_notion_url;
-    }
-  }
+    const scoreText = item.score !== null && item.score !== undefined ? `[${item.score}점] ` : "";
+    const label = `${scoreText}[${item.label}] ${item.company || ""} — ${item.title || ""}`;
+    const line = addLine(widget, label, { color: COLOR_SUB, size: 11, lineLimit: 2 });
+    if (item.notion_url || item.url) line.url = item.notion_url || item.url;
+  });
 
-  // ★ 2026-08-07: 공고 섹션과 형식은 맞추되, 라지 위젯 프레임이 이미 꽉 찬
-  // 편이라(손자병법+공고 3줄) 한 줄로 압축했다 — 넘치면 사용자가 알려주면 조정.
-  if (status.contest_organizer) {
-    widget.addSpacer(8);
-    const scoreText = status.contest_score !== null && status.contest_score !== undefined
-      ? `🏆 [${status.contest_score}점] `
-      : `🏆 `;
-    const contestLabel = `${scoreText}${status.contest_organizer} — ${status.contest_title || ""}`;
-    const contestLine = addLine(widget, contestLabel, { color: COLOR_SUB, size: 11, lineLimit: 2 });
-    if (status.contest_url) contestLine.url = status.contest_url;
-  }
+  const contestItems = status.contest_items || [];
+  contestItems.forEach((item, i) => {
+    if (i === 0) {
+      widget.addSpacer(jobItems.length ? 8 : 0);
+      addLine(widget, "🏆 오늘의 추천 경진대회", { color: COLOR_DIM, size: 11, bold: true });
+    }
+    widget.addSpacer(2);
+    const scoreText = item.score !== null && item.score !== undefined ? `[${item.score}점] ` : "";
+    const label = `${scoreText}[${item.label}] ${item.organizer || ""} — ${item.title || ""}`;
+    const line = addLine(widget, label, { color: COLOR_SUB, size: 11, lineLimit: 2 });
+    if (item.notion_url || item.url) line.url = item.notion_url || item.url;
+  });
 }
 
 function buildSmall(widget, status) {

@@ -807,16 +807,17 @@ def build_analysis_prompt(row: sqlite3.Row, detail_text: str) -> str:
 {detail_text}
 --- 끝 ---
 
-한국어로 아래 네 항목에 답하라:
-1. **요구사항/우대사항 요약**: 실제 기술 스택·자격요건을 간단히 정리.
-2. **이 회사가 지금 만들려는/겪고 있는 것 추론**: 요구사항과 우대사항의 조합에서
+한국어로 아래 네 항목에 답하라(★ 2026-08-08: 가장 궁금해하는 "회사가 지금 뭘
+하려는지" 추론을 1번으로 옮김 — 순서가 곧 Notion 페이지에 보이는 순서):
+1. **이 회사가 지금 만들려는/겪고 있는 것 추론**: 요구사항과 우대사항의 조합에서
    이 팀이 실제로 하려는 일을 구체적으로 추론하라(예: "Python 기반 code
    interpreter + C++ 우대 → 실행 성능이 중요한 샌드박스/커널 구현 가능성"). 막연한
    일반론이 아니라, 왜 그 항목들이 함께 요구되는지 연결고리를 짚어라.
-3. **연습 프로젝트 추천 1~2개**: 지원자가 위 추론을 뒷받침하려고 짧게 만들어볼 수
+2. **요구사항/우대사항 요약**: 실제 기술 스택·자격요건을 간단히 정리.
+3. **연습 프로젝트 추천 1~2개**: 지원자가 1번 추론을 뒷받침하려고 짧게 만들어볼 수
    있는 프로젝트를 구체적으로 제안하고, 어떤 요구사항 항목과 연결되는지 명시하라.
 4. **1인 사업자로 이 회사를 직접 창업한다면의 사업계획서 항목화**: 지원자가 아니라
-   이 회사가 하려는 일 자체를 혼자 시작하는 창업자 입장에서 분석하라. 2번의 추론을
+   이 회사가 하려는 일 자체를 혼자 시작하는 창업자 입장에서 분석하라. 1번의 추론을
    그대로 사업 아이템으로 놓고, 아래 항목을 채워라(모르는 항목은 "정보 부족 —
    추정:"으로 표시하고 근거 있는 추정을 적을 것, 지어내지 말 것):
    - 사업 아이템/핵심 가치제안: 무엇을 파는가, 왜 그게 필요한가
@@ -882,7 +883,18 @@ NOTION_VERSION = "2026-03-11"
 # "🎴 이직시스템" 페이지(app.notion.com/p/3b132a1eae80805dad0ed4f2cae02709)를
 # 표준 UUID 형식(8-4-4-4-12)으로 표기한 것 — Notion API의 parent.page_id에 그대로 쓴다.
 NOTION_JOBSYSTEM_PAGE_ID = "3b132a1e-ae80-805d-ad0e-d4f2cae02709"
-TOP_JOB_STATE_PATH = BASE_DIR / "data" / "top_job_notion.json"
+# ★ 2026-08-08: 취업공고와 알바공고는 성격이 달라서(정규직 커리어 vs 단기/알바)
+# 하나로 뭉쳐서 1건만 추천하면 둘 중 한쪽이 항상 묻힌다는 지적으로 카테고리별로
+# 분리했다 — 각각 별도 상태 파일·Notion 페이지를 갖는다.
+JOB_SOURCE_CATEGORY = {
+    "사람인": "career", "사람인(크롤링)": "career", "워크넷": "career",
+    "알바몬(크롤링)": "parttime", "알바천국(크롤링)": "parttime",
+}
+JOB_CATEGORY_LABELS = {"career": "커리어 공고", "parttime": "알바·단기 공고"}
+
+
+def top_job_state_path(category: str) -> Path:
+    return BASE_DIR / "data" / f"top_job_notion_{category}.json"
 
 
 def _notion_token() -> str:
@@ -971,14 +983,22 @@ def _notion_request(method: str, path: str, token: str, payload: dict[str, Any] 
         raise RuntimeError(f"Notion API {method} {path} HTTP {exc.code}: {detail}") from exc
 
 
-def _notion_publish(token: str, title: str, blocks: list[dict[str, Any]], meta: dict[str, Any]) -> str:
+def _notion_publish(
+    token: str, title: str, blocks: list[dict[str, Any]], meta: dict[str, Any],
+    state_path: Path = None,
+) -> str:
     """저장된 페이지가 있으면 내용을 통째로 교체(기존 자식 블록 archive 후 재작성)
     하고, 없으면 "🎴 이직시스템" 밑에 새로 만든다. 매일 같은 페이지를 갱신해서
-    실행할 때마다 새 페이지가 쌓이지 않게 한다. 반환값은 Notion 페이지 URL."""
+    실행할 때마다 새 페이지가 쌓이지 않게 한다. 반환값은 Notion 페이지 URL.
+    ★ 2026-08-08: state_path를 인자로 받게 바꿔서 커리어/알바 등 카테고리별로
+    서로 다른 상태 파일(=서로 다른 Notion 페이지)을 쓸 수 있게 함
+    (contest_collector.py의 동명 함수와 같은 시그니처)."""
+    if state_path is None:
+        state_path = top_job_state_path("career")  # 하위호환 기본값
     state = {}
-    if TOP_JOB_STATE_PATH.exists():
+    if state_path.exists():
         try:
-            state = json.loads(TOP_JOB_STATE_PATH.read_text(encoding="utf-8"))
+            state = json.loads(state_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             state = {}
     page_id = state.get("page_id")
@@ -987,9 +1007,18 @@ def _notion_publish(token: str, title: str, blocks: list[dict[str, Any]], meta: 
         _notion_request("PATCH", f"pages/{page_id}", token, {
             "properties": {"title": {"title": [{"text": {"content": title}}]}}
         })
-        existing = _notion_request("GET", f"blocks/{page_id}/children?page_size=100", token)
-        for child in existing.get("results", []):
-            _notion_request("DELETE", f"blocks/{child['id']}", token)
+        # ★ 2026-08-08 버그 수정: page_size=100 한 페이지만 지우면 블록이 100개
+        # 넘는 긴 분석 페이지(흔함)는 이전 내용이 안 지워지고 그 뒤에 새 내용이
+        # 계속 쌓였다(실측: 크라우드웍스 페이지에 다믈파워반도체 내용이 그대로
+        # 남아 있었음). 삭제하면서 커서가 밀리는 걸 피하려고 매번 "첫 페이지"를
+        # 새로 조회해 지우는 방식으로, 결과가 빌 때까지 반복한다.
+        while True:
+            existing = _notion_request("GET", f"blocks/{page_id}/children?page_size=100", token)
+            results = existing.get("results", [])
+            if not results:
+                break
+            for child in results:
+                _notion_request("DELETE", f"blocks/{child['id']}", token)
     else:
         created = _notion_request("POST", "pages", token, {
             "parent": {"page_id": NOTION_JOBSYSTEM_PAGE_ID},
@@ -1001,11 +1030,115 @@ def _notion_publish(token: str, title: str, blocks: list[dict[str, Any]], meta: 
         _notion_request("PATCH", f"blocks/{page_id}/children", token, {"children": blocks[start:start + 50]})
 
     url = f"https://www.notion.so/{page_id.replace('-', '')}"
-    TOP_JOB_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    TOP_JOB_STATE_PATH.write_text(
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    state_path.write_text(
         json.dumps({"page_id": page_id, "url": url, **meta}, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     return url
+
+
+def _append_history_toggle(
+    token: str, parent_page_id: str, prefix: str, toggle_title: str, blocks: list[dict[str, Any]],
+) -> None:
+    """"🎴 이직시스템" 최상위 페이지에 오늘의 추천을 토글로 누적한다(★ 2026-08-08
+    사용자 요청: "최상위에 오늘의 추천공고랑 경진대회 페이지들이 축적되도록,
+    토글화해서 너무 늘어지지 않게"). `_notion_publish()`의 카테고리별 하위
+    페이지는 계속 "하나만 매일 갱신" 방식을 유지하고(최신 스냅샷용), 이 함수는
+    그와 별개로 매일의 결과를 접힌 토글로 남겨 과거 기록이 사라지지 않게 한다.
+    같은 날 같은 카테고리로 이미 추가된 토글이 있으면(재실행 등) 새로 만들지
+    않고 그 안의 내용만 교체한다 — `prefix`(예: "[2026-08-08][career]")로 식별."""
+    toggle_id = None
+    cursor = None
+    while toggle_id is None:
+        path = f"blocks/{parent_page_id}/children?page_size=100"
+        if cursor:
+            path += f"&start_cursor={cursor}"
+        resp = _notion_request("GET", path, token)
+        for child in resp.get("results", []):
+            if child.get("type") != "toggle":
+                continue
+            text = "".join(r.get("plain_text", "") for r in child["toggle"].get("rich_text", []))
+            if text.startswith(prefix):
+                toggle_id = child["id"]
+                break
+        if toggle_id or not resp.get("has_more"):
+            break
+        cursor = resp.get("next_cursor")
+
+    if toggle_id:
+        while True:
+            resp = _notion_request("GET", f"blocks/{toggle_id}/children?page_size=100", token)
+            results = resp.get("results", [])
+            if not results:
+                break
+            for child in results:
+                _notion_request("DELETE", f"blocks/{child['id']}", token)
+    else:
+        created = _notion_request("PATCH", f"blocks/{parent_page_id}/children", token, {
+            "children": [{
+                "object": "block", "type": "toggle",
+                "toggle": {"rich_text": [{"type": "text", "text": {"content": toggle_title[:1900]}}]},
+            }]
+        })
+        toggle_id = created["results"][0]["id"]
+
+    for start in range(0, len(blocks), 50):
+        _notion_request("PATCH", f"blocks/{toggle_id}/children", token, {"children": blocks[start:start + 50]})
+
+
+def _format_krw(raw: str) -> str:
+    """DART 원 단위 숫자(예: "77002948664")를 사람이 바로 읽을 수 있는 조/억
+    단위로 바꾼다(★ 2026-08-08: "77002948664원"처럼 원 단위 그대로 보여주는 게
+    "성의 없다"는 피드백으로 추가)."""
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return raw or "-"
+    sign = "-" if n < 0 else ""
+    n = abs(n)
+    if n >= 1_0000_0000_0000:
+        jo, rem = divmod(n, 1_0000_0000_0000)
+        eok = rem // 1_0000_0000
+        return f"{sign}{jo}조 {eok:,}억원" if eok else f"{sign}{jo}조원"
+    if n >= 1_0000_0000:
+        return f"{sign}{n / 1_0000_0000:,.0f}억원"
+    return f"{sign}{n:,}원"
+
+
+_DART_TABLE_COLUMNS = ["매출액", "영업이익", "당기순이익", "자산총계", "부채총계", "자본총계"]
+
+
+def _dart_financial_table_block(financials: list[dict]) -> dict[str, Any] | None:
+    """DART 재무 요약을 슬래시로 이어붙인 한 줄 텍스트 대신 Notion 표 블록으로
+    만든다(★ 2026-08-08 피드백: "분석하기 쉽게 요약하고 table을 쓰면 좋겠다").
+    최근 연도부터 최대 3개년을 행으로, 계정과목을 열로 둔다."""
+    years = financials[:3]
+    if not years:
+        return None
+
+    def cell(content: str) -> list[dict[str, Any]]:
+        return [{"type": "text", "text": {"content": content}}]
+
+    header_row = {
+        "object": "block", "type": "table_row",
+        "table_row": {"cells": [cell("연도")] + [cell(c) for c in _DART_TABLE_COLUMNS]},
+    }
+    data_rows = []
+    for year_data in years:
+        cells = [cell(f"{year_data['year']}년")]
+        for col in _DART_TABLE_COLUMNS:
+            cells.append(cell(_format_krw(year_data.get(col, ""))))
+        data_rows.append({"object": "block", "type": "table_row", "table_row": {"cells": cells}})
+
+    return {
+        "object": "block", "type": "table",
+        "table": {
+            "table_width": len(_DART_TABLE_COLUMNS) + 1,
+            "has_column_header": True,
+            "has_row_header": True,
+            "children": [header_row] + data_rows,
+        },
+    }
 
 
 def _rank_candidates_by_analyzability(candidates: list[sqlite3.Row]) -> list[sqlite3.Row]:
@@ -1015,12 +1148,12 @@ def _rank_candidates_by_analyzability(candidates: list[sqlite3.Row]) -> list[sql
     DART(전자공시) 등록 여부를 1차 기준으로 재정렬한다 — 공시 대상이면 실제
     재무제표·연혁이 있어 company_profile.py 심층 분석이 가능하다는 뜻이다.
     DART_API_KEY가 없으면 이 재정렬을 건너뛰고 기존 점수 순서를 그대로 쓴다."""
-    api_key = os.environ.get("DART_API_KEY", "").strip()
+    from company_profile import _dart_api_key, fetch_dart_corp_code_map, find_dart_corp_code
+    api_key = _dart_api_key()
     if not api_key:
         print("  ⚠️ DART_API_KEY 없음 — 기업 분석 가능성 반영 없이 점수 순서로만 고름")
         return candidates
     try:
-        from company_profile import fetch_dart_corp_code_map, find_dart_corp_code
         corp_map = fetch_dart_corp_code_map(api_key)
     except Exception as exc:  # noqa: BLE001 — DART 조회 실패는 순위만 못 매길 뿐 치명적이지 않음
         print(f"  ⚠️ DART corp_code 조회 실패({exc}) — 점수 순서로만 고름")
@@ -1036,19 +1169,64 @@ def _rank_candidates_by_analyzability(candidates: list[sqlite3.Row]) -> list[sql
     return registered + unregistered
 
 
+def top_job_history_path(category: str) -> Path:
+    return BASE_DIR / "data" / f"top_job_history_{category}.json"
+
+
+def _load_top_job_history(category: str) -> set[str]:
+    path = top_job_history_path(category)
+    if not path.exists():
+        return set()
+    try:
+        return set(json.loads(path.read_text(encoding="utf-8")).get("used", []))
+    except json.JSONDecodeError:
+        return set()
+
+
+def _save_top_job_history(category: str, used: set[str]) -> None:
+    path = top_job_history_path(category)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"used": sorted(used)}, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _apply_no_repeat_rotation(candidates: list[sqlite3.Row], category: str) -> list[sqlite3.Row]:
+    """★ 2026-08-08: 점수·마감일로만 정렬하면 순위 1위 공고(예: 피에스티)가
+    마감 전까지 매일 똑같이 뽑혀 "갱신이 안 되는 것처럼" 보인다는 지적으로,
+    extract_high_pitch_video.py의 BGM 로테이션과 같은 패턴을 적용한다 — 이미
+    추천한 공고는 풀이 소진될 때까지 제외하고, 다 소진되면 초기화해서 다시
+    1위부터 순환한다."""
+    used = _load_top_job_history(category)
+    pool_ids = {f"{c['source']}:{c['source_id']}" for c in candidates}
+    used &= pool_ids  # 마감 지나 후보군에서 빠진 공고는 히스토리에서도 정리
+    unused = [c for c in candidates if f"{c['source']}:{c['source_id']}" not in used]
+    if not unused:
+        used = set()
+        unused = candidates
+    return unused, used
+
+
 def analyze_top_job(args: argparse.Namespace) -> None:
     """현재 적합도 1위 공고를 골라 AI 분석을 돌리고 결과를 Notion 페이지 하나에
     갱신한다(shift_alarm 메뉴바에서 매일 자동 호출, 2026-08-07 추가). 상위 공고가
     이미지형 등으로 본문을 못 가져오면 다음 순위로 자동으로 내려가며 시도한다.
-    후보 15개를 모아 DART 등록 여부(재무·경영 이력 분석 가능 여부)로 우선
-    재정렬한 뒤, 그중 본문을 가져올 수 있는 첫 후보를 최종 선택한다."""
+    후보를 모아 DART 등록 여부(재무·경영 이력 분석 가능 여부)로 우선 재정렬한 뒤,
+    이미 추천했던 공고는 풀이 소진될 때까지 제외하는 로테이션을 적용하고, 그중
+    본문을 가져올 수 있는 첫 후보를 최종 선택한다.
+    ★ 2026-08-08: 취업(career)/알바(parttime) 카테고리별로 후보를 나눠 각자
+    독립된 Notion 페이지·로테이션 히스토리를 갖는다(--category 인자)."""
+    category = args.category
     conn = connect(args.db)
+    sources = [s for s, cat in JOB_SOURCE_CATEGORY.items() if cat == category]
+    placeholders = ",".join("?" for _ in sources)
     candidates = conn.execute(
-        "SELECT * FROM jobs ORDER BY score DESC, deadline ASC LIMIT 15"
+        f"SELECT * FROM jobs WHERE source IN ({placeholders}) "
+        "ORDER BY score DESC, deadline ASC LIMIT 50",
+        sources,
     ).fetchall()
     if not candidates:
-        raise SystemExit("저장된 공고가 없습니다. collect를 먼저 실행하세요.")
+        raise SystemExit(f"[{JOB_CATEGORY_LABELS[category]}] 저장된 공고가 없습니다. collect를 먼저 실행하세요.")
     candidates = _rank_candidates_by_analyzability(candidates)
+    candidates, used = _apply_no_repeat_rotation(candidates, category)
 
     row = None
     text = None
@@ -1061,6 +1239,9 @@ def analyze_top_job(args: argparse.Namespace) -> None:
     if row is None:
         raise SystemExit("상위 후보 공고 모두 본문을 못 가져오거나 AI 분석에 실패했습니다.")
 
+    used.add(f"{row['source']}:{row['source_id']}")
+    _save_top_job_history(category, used)
+
     token = _notion_token()
     if not token:
         print("⚠️  Notion 토큰(jp_subtitle_notion_token)이 키체인에 없어 Notion 페이지 갱신을 건너뜁니다.")
@@ -1070,22 +1251,31 @@ def analyze_top_job(args: argparse.Namespace) -> None:
     # ★ 2026-08-07: 선택된 회사의 경영 분석(company_profile.py)도 같이 만들어서
     # "이 회사는 어떻게 경영해왔는가/누가 운영하는가/업계 위치는" 질문에 답한다.
     company_notion_url = None
+    homepage_url = None
+    financials: list[dict] = []
     try:
         from company_profile import (
-            fetch_dart_company_info, fetch_dart_corp_code_map, fetch_dart_financial_summary,
+            _dart_api_key, fetch_dart_company_info, fetch_dart_corp_code_map, fetch_dart_financial_summary,
             find_dart_corp_code, search_related_contests, search_related_jobs,
             build_company_prompt, _markdown_to_notion_blocks as company_blocks,
             _notion_publish as company_publish, COMPANY_PROFILE_STATE_DIR,
         )
-        api_key = os.environ.get("DART_API_KEY", "").strip()
+        api_key = _dart_api_key()
         dart_info = None
-        financials: list[dict] = []
         if api_key:
             corp_map = fetch_dart_corp_code_map(api_key)
             corp_code = find_dart_corp_code(row["company"], corp_map)
             if corp_code:
                 dart_info = fetch_dart_company_info(corp_code, api_key)
                 financials = fetch_dart_financial_summary(corp_code, api_key)
+        if dart_info:
+            homepage_url = (dart_info.get("hm_url") or "").strip() or None
+            # DART는 미등록 홈페이지를 빈 문자열 대신 "-" 같은 자리표시자로 주기도 한다
+            # (실측: 에스컴퍼니, 2026-08-08) — URL처럼 안 생겼으면 버린다.
+            if homepage_url and "." not in homepage_url:
+                homepage_url = None
+            elif homepage_url and not homepage_url.startswith("http"):
+                homepage_url = f"https://{homepage_url}"
         jobs_related = search_related_jobs(row["company"])
         contests_related = search_related_contests(row["company"])
         prompt = build_company_prompt(row["company"], dart_info, financials, jobs_related, contests_related, "")
@@ -1099,23 +1289,47 @@ def analyze_top_job(args: argparse.Namespace) -> None:
     except Exception as exc:  # noqa: BLE001 — 기업 분석 실패해도 공고 분석 발행은 계속 진행
         print(f"⚠️  기업 경영 분석 생성 실패(공고 분석은 계속 진행): {exc}")
 
-    title = f"🎯 {row['company']} — {row['title']}"
-    meta_line = f"점수 {row['score']} | {row['source']} | {row['url']}"
+    # ★ 2026-08-08: "회사가 지금 만들려는 것" 추론이 가장 궁금하다는 피드백으로
+    # 그 항목을 프롬프트 1번으로 올렸고(위 build_analysis_prompt), 회사 홈페이지·
+    # DART 재무 요약도 공고 원문 링크와 함께 페이지 맨 위 meta 블록에 바로 넣는다
+    # — 예전엔 재무 정보를 보려면 별도 기업 경영 분석 페이지로 이동해야 했다.
+    title = f"🎯 [{JOB_CATEGORY_LABELS[category]}] {row['company']} — {row['title']}"
+    meta_lines = [f"점수 {row['score']} | {row['source']} | {row['url']}"]
+    if homepage_url:
+        meta_lines.append(f"회사 홈페이지: {homepage_url}")
     if company_notion_url:
-        meta_line += f" | 기업 경영 분석: {company_notion_url}"
-    blocks = _markdown_to_notion_blocks(meta_line) + _markdown_to_notion_blocks(text)
+        meta_lines.append(f"기업 경영 분석 상세(병법적 해석 등): {company_notion_url}")
+    meta_line = "\n".join(meta_lines)
+    blocks = _markdown_to_notion_blocks(meta_line)
+    # ★ 2026-08-08: 슬래시로 이어붙인 텍스트 한 줄 대신 표 블록으로(피드백: "성의
+    # 없다, table을 쓰면 좋겠다") — 표는 마크다운 파서가 아니라 직접 블록을 만든다.
+    table_block = _dart_financial_table_block(financials)
+    if table_block:
+        blocks.append(table_block)
+    blocks += _markdown_to_notion_blocks(text)
     meta = {
+        "category": category,
         "company": row["company"], "title": row["title"],
         "score": row["score"], "source": row["source"], "job_url": row["url"],
         "company_notion_url": company_notion_url,
     }
     try:
-        url = _notion_publish(token, title, blocks, meta)
+        url = _notion_publish(token, title, blocks, meta, top_job_state_path(category))
     except RuntimeError as exc:
         print(f"⚠️  Notion 페이지 갱신 실패: {exc}")
         print(text)
         return
     print(f"\n✅ Notion 페이지 갱신 완료: {url}")
+
+    # ★ 2026-08-08: 최상위 "🎴 이직시스템" 페이지에도 오늘의 추천을 접힌 토글로
+    # 남겨 과거 기록이 사라지지 않게 한다(사용자 요청 — 카테고리별 하위 페이지는
+    # 최신 스냅샷만 유지하므로 이 토글이 유일한 히스토리다).
+    try:
+        today = datetime.now().date().isoformat()
+        prefix = f"[{today}][{category}]"
+        _append_history_toggle(token, NOTION_JOBSYSTEM_PAGE_ID, prefix, f"{prefix} {title}", blocks)
+    except RuntimeError as exc:
+        print(f"⚠️  최상위 페이지 히스토리 토글 추가 실패(본 발행은 정상 완료): {exc}")
 
 
 def doctor(args: argparse.Namespace) -> None:
@@ -1149,9 +1363,14 @@ def parser() -> argparse.ArgumentParser:
     an.add_argument("source_id", help="list/export에서 확인한 공고의 source_id")
     an.add_argument("--source", help="같은 source_id가 여러 소스에 있을 때만 지정 (예: \"사람인(크롤링)\")")
     an.set_defaults(func=analyze_job)
-    sub.add_parser(
+    at = sub.add_parser(
         "analyze-top", help="적합도 1위 공고를 AI로 분석해 Notion 페이지 갱신(shift_alarm 자동 호출용)"
-    ).set_defaults(func=analyze_top_job)
+    )
+    at.add_argument(
+        "--category", choices=["career", "parttime"], default="career",
+        help="career=정규직 커리어 공고, parttime=알바·단기 공고 (2026-08-08 추가)",
+    )
+    at.set_defaults(func=analyze_top_job)
     return p
 
 

@@ -239,7 +239,7 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
 
 드롭다운에 3개 항목이 뜬다(`_check_stay_awake` 토글 항목 바로 아래):
 - `🪙 Codex: {윈도우} {사용률}%` — `get_codex_quota()`가 `~/.codex/sessions/**/*.jsonl`을 최신순으로 확인해 가장 최근의 `payload.rate_limits`(primary/secondary)를 읽는다. 네트워크·인증 불필요, 순수 로컬 파일 읽기. **★ 2026-08-08 버그 수정**: Shift Alarm과 Codex가 비슷한 시각에 시작되어 최신 세션 파일에 아직 `token_count`가 없을 때도, 그 직전 세션의 정상 quota를 찾아 표시한다. 예전에는 최신 파일 하나만 읽고 `None`을 12분간 캐시해 메뉴바에서 Codex 토큰만 사라졌다.
-- `🪙 Claude: {윈도우} {사용률}%` — `get_claude_live_quota()`가 macOS 키체인의 `Claude Code-credentials`(Claude Code 자신이 이미 저장해둔 OAuth 토큰)로 `GET https://api.anthropic.com/api/oauth/usage`를 호출한다. 비공개 엔드포인트지만 자기 계정 조회에만 쓴다. **토큰 값은 절대 print/log에 노출하지 않는다** — Authorization 헤더로만 사용하고 즉시 스코프에서 제거.
+- `🪙 Claude: {윈도우} {사용률}%` — `get_claude_live_quota()`가 macOS 키체인의 `Claude Code-credentials`(Claude Code 자신이 이미 저장해둔 OAuth 토큰)로 `GET https://api.anthropic.com/api/oauth/usage`를 호출한다. 비공개 엔드포인트지만 자기 계정 조회에만 쓴다. **토큰 값은 절대 print/log에 노출하지 않는다** — Authorization 헤더로만 사용하고 즉시 스코프에서 제거. **★ 2026-08-08 추가**: `seven_day`(주간) 항목에는 `_claude_seven_day_progress()`가 `resets_at`(다음 초기화 시각)에서 역산한 `(N/7일째)`를 덧붙인다 — 사용률 %만으로는 "이번 주 페이스"를 가늠하기 어렵다는 피드백(예: 3일째에 48%면 여유, 6일째에 48%면 절약 모드 필요).
 - `🪙 Claude 로컬: {모델} · 턴 N · 요청 N · 캐시 N%` — `get_claude_local_stats()`가 최근 24시간 이내 수정된 `~/.claude/projects/**/*.jsonl`을 집계해 모델명·유저 턴수·모델 요청수·프롬프트 캐시 적중률을 계산.
 - 값을 못 가져오면(로그 없음, API 실패, 키체인 없음 등) **추측하지 않고 "확인 불가"로 표시**한다.
 - **★ 2026-08-05 색상 추가, 2026-08-08 Codex 색상 변경**: `Codex`/`Claude` 두 항목 텍스트 전체에 색을 입힌다 — Codex는 연한 핑크(RGB `1.0, 0.50, 0.72`), Claude(라이브 quota)는 오렌지(`systemOrangeColor`). 단, **주간(7일) 윈도우 사용률이 90% 이상이면 해당 항목을 빨간색(`systemRedColor`)으로 덮어쓴다**(`AI_USAGE_CRITICAL_PERCENT = 90`) — Codex는 `primary`(window_minutes≈10080)를, Claude는 키 이름에 `day`가 들어간 윈도우(예: `seven_day`)를 주간으로 취급. `_set_menu_item_color()`가 `NSMenuItem.attributedTitle`을 직접 설정하는 방식이라 rumps `MenuItem.title`이 아니라 `menu_item._menuitem`을 직접 다룬다. `🪙 Claude 로컬` 항목은 색상 없이 기본색 그대로 둔다(quota가 아니라 통계라 임계값 개념이 없음).
@@ -274,19 +274,17 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
     "claude_critical": false,
     "sunzi_title": "9편 구지 15구절 「吾士無余財, 非惡貨也, 無余命, 非惡壽也」",
     "sunzi_url": "https://app.notion.com/p/3ae32a1eae8081c58fe3c047920dca07",
-    "job_company": "(주)피에스티",
-    "job_title": "Claude AI 활용 - 사내 업무 자동화/제조 데이터 분석 담당",
-    "job_score": 70,
-    "job_url": "https://www.saramin.co.kr/zf_user/jobs/relay/view?...",
-    "job_notion_url": "https://www.notion.so/3b532a1eae8081a5a479da4c01e2e23a",
-    "contest_organizer": "임팩트스테이션(주)",
-    "contest_title": "'Next AI Art' POP-UP AI 아트 공모",
-    "contest_score": 50,
-    "contest_url": "https://linkareer.com/activity/341027",
-    "contest_notion_url": "https://www.notion.so/3b532a1eae8081fd9c3bd3ae8d7bbf08"
+    "job_items": [
+      {"category": "career", "label": "커리어", "company": "다믈파워반도체(유)", "title": "AI 업무자동화 엔지니어", "score": 70, "url": "https://www.saramin.co.kr/...", "notion_url": "https://www.notion.so/3b632a1eae8081278fb0e079d8ae26ec"},
+      {"category": "parttime", "label": "알바", "company": "글로벌아카데미", "title": "채용 연계형 단기 프로젝트 참여자 모집", "score": 70, "url": "https://www.albamon.com/...", "notion_url": "https://www.notion.so/3b632a1eae8081b683f5e02fd931a5bb"}
+    ],
+    "contest_items": [
+      {"category": "ai", "label": "AI", "organizer": "전국민 AI 경진대회(정부 주관)", "title": "AI 데이터활용 미래역량강화 공모전", "score": 60, "url": "https://aichallenge4all.or.kr/...", "notion_url": "https://www.notion.so/3b632a1eae8081a4995eee02e8dbc56f"},
+      {"category": "general", "label": "일반", "organizer": "대전정보문화산업진흥원", "title": "2026년 물류데이터·AI 활용 및 분석 아이디어 공모전", "score": 60, "url": "https://www.contestkorea.com/...", "notion_url": "https://www.notion.so/3b632a1eae80813ea4a4f035c48103d0"}
+    ]
   }
   ```
-  - `job_*` 필드는 ★ 2026-08-07부터 `job_total`/`job_best_score`(수집 건수·최고점수) 대신 `get_top_job_analysis()`가 읽은 `이직시스템/data/top_job_notion.json`을 그대로 반영한다 — 16-1 항목 참조. 아직 분석 전이면 전부 `null`.
+  - **★ 2026-08-08 카테고리 분리**: `job_company`/`job_title`/`job_url`/`job_notion_url`/`job_score` 단일 필드 4종(★ 2026-08-07)이 `job_items` 배열(커리어·알바 각 1건)로, `contest_organizer` 등도 `contest_items` 배열(AI·일반 각 1건)로 바뀌었다 — 취업/알바, AI/일반 특화 경진대회는 성격이 달라 하나로 뭉치면 한쪽이 항상 묻힌다는 지적으로 `get_top_job_analysis(category)`/`get_top_contest_analysis(category)`가 카테고리별 상태 파일(`이직시스템/data/top_job_notion_{career,parttime}.json`, `top_contest_notion_{ai,general}.json`)을 각각 읽어 리스트로 합친다 — 16-1 항목 참조. 아직 분석 전인 카테고리는 배열에서 아예 빠진다.
 
 ### 15-1. 아이폰 홈 화면 위젯 — Scriptable (★ 권장, 2026-08-06)
 
@@ -300,7 +298,7 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
   - **미디엄**: `addStack()` + `layoutHorizontally()`로 좌우 2단
     - 왼쪽: 근무·며칠째, 날씨, 저장공간(5GB 이하 빨강), 오늘의 리마인더 최대 3개(초과분은 "외 N건")
     - 오른쪽: 오늘 급여(근무 중이면 지금까지 번 금액, 근무 전이면 예상 금액), 🪙 AI 사용량 — Codex/Claude 각각 %(주간 90% 이상이면 빨강, 아니면 Codex=연한 핑크/Claude=오렌지 — 메뉴바 타이틀 색상 규칙과 동일)
-  - **라지(★ 권장)**: 미디엄 레이아웃 그대로 + 아래에 **⚔️ 손자병법 최신 구절**(`손자병법/README.md`의 "완료된 구절" 표 마지막 줄 — 구절 인용문 「」 포함), **🎯 오늘의 추천 공고**(회사·제목, ★ 2026-08-07: 건수·점수 표시에서 교체), **🏆 오늘의 추천 경진대회**(★ 2026-08-07 추가, 주최·제목 한 줄) 추가. 손자병법 제목이나 구절을 탭하면 해당 Notion 페이지(`sunzi_url`)가 열린다(★ 2026-08-08). 공고 텍스트를 탭하면 원본 공고(`job_url`)로, 그 아래 "📄 AI 분석 보기"를 탭하면 Notion 분석 페이지(`job_notion_url`)로 각각 이동한다 — `WidgetText.url`을 요소별로 따로 지정하면 iOS 16+에서 한 위젯 안에 여러 탭 타겟을 둘 수 있다. 경진대회 줄은 탭하면 공모전 원문(`contest_url`)으로 이동(위젯 공간 제약으로 별도 분석 링크 줄은 생략 — 깊은 분석은 메뉴바에서). 분석 전이면(`job_company`/`contest_organizer`가 없으면) 해당 섹션이 생략된다.
+  - **라지(★ 권장)**: 미디엄 레이아웃 그대로 + 아래에 **⚔️ 손자병법 최신 구절**(`손자병법/README.md`의 "완료된 구절" 표 마지막 줄 — 구절 인용문 「」 포함), **🎯 오늘의 추천 공고**, **🏆 오늘의 추천 경진대회** 추가. 손자병법 제목이나 구절을 탭하면 해당 Notion 페이지(`sunzi_url`)가 열린다(★ 2026-08-08). **★ 2026-08-08 카테고리 2건씩으로 변경**: `job_items`/`contest_items` 배열을 순회해 카테고리(커리어/알바, AI/일반)당 한 줄씩 찍는다 — 항목당 여러 줄(헤딩+본문+링크)을 쓰던 예전 방식으로는 2배로 늘어난 항목이 라지 위젯 프레임을 넘치므로, `[점수] [카테고리] 회사 — 제목` 한 줄로 압축하고 그 줄 자체를 탭하면 바로 Notion AI 분석(`notion_url`)으로 이동하게 했다(원본 공고 링크는 생략 — 분석 페이지 안에 원문 URL이 이미 링크로 들어있다). 두 카테고리 모두 분석 전이면(배열이 비어 있으면) 해당 섹션 전체가 생략된다.
   - 앱 안에서 재생(▶)으로 직접 실행하면(위젯이 아닐 때) `config.widgetFamily`가 없어서 large로 간주하고 `presentLarge()`로 미리보기를 보여준다.
   - 맨 아래에 갱신시각(스몰 제외)
 - Scriptable 앱 안에서 스크립트를 직접 실행하면(위젯이 아닐 때) `presentMedium()`으로 같은 내용을 미리보기로 보여준다(디버깅용).
@@ -333,29 +331,33 @@ Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으
 - 실행은 `subprocess.run([sys.executable, JOB_COLLECTOR_SCRIPT, "collect"], cwd=JOB_COLLECTOR_DIR, ...)` — shift_alarm과 같은 파이썬 인터프리터(`/opt/anaconda3/bin/python3`)로 돌린다. `job_collector.py`가 표준 라이브러리만 쓰므로 별도 venv 없이도 그대로 동작.
 - **마지막 실행 시각을 `~/.shift_alarm_config.json`의 `job_collector_last_run`에 저장하고, 그로부터 24시간(`JOB_COLLECTOR_REFRESH_SECONDS`)이 안 지났으면 건너뛴다.** 앱을 자주 재시작해도(코드 수정 후 매번 kickstart) 사람인 서버에 매번 크롤링 요청을 보내지 않기 위한 안전장치 — 타이머 자체는 24시간 주기지만, 앱이 그보다 자주 재시작되는 경우를 이 저장된 타임스탬프가 실질적으로 막아준다.
 - `collect` 명령의 표준출력에서 `신규 (\d+)건 / 기존 갱신 (\d+)건` 패턴을 정규식으로 파싱해서, **신규 공고가 1건이라도 있을 때만** `rumps.notification("💼 이직시스템 새 공고", ...)`을 띄운다. 갱신만 있고 신규가 없으면 알림 없이 조용히 넘어간다(알림 피로 방지).
-- `이직시스템/config.json`에 사람인/워크넷 API 키가 없어도 `enable_saramin_crawl: true`면 계속 동작한다(현재 사람인 API 승인 대기 중이라 크롤링만으로 운영 중). **launchd로 뜨는 shift_alarm 프로세스는 사용자의 대화형 셸 환경변수(`export SARAMIN_ACCESS_KEY=...`)를 상속받지 않으므로**, API 키를 실제로 쓰게 하려면 `~/Library/LaunchAgents/com.shiftalarm.menubar.plist`에 `EnvironmentVariables`로 등록하거나 다른 영구 저장 방식이 필요하다 — 아직 미구현, 지금은 크롤링만으로 동작.
+- `이직시스템/config.json`에 사람인/워크넷 API 키가 없어도 `enable_saramin_crawl: true`면 계속 동작한다(현재 사람인 API 승인 대기 중이라 크롤링만으로 운영 중). **launchd로 뜨는 shift_alarm 프로세스는 사용자의 대화형 셸 환경변수(`export SARAMIN_ACCESS_KEY=...`)를 상속받지 않으므로**, API 키를 실제로 쓰게 하려면 `~/Library/LaunchAgents/com.shiftalarm.menubar.plist`에 `EnvironmentVariables`로 등록하거나 다른 영구 저장 방식이 필요하다 — 아직 미구현, 지금은 크롤링만으로 동작. **DART_API_KEY는 이 문제를 키체인으로 해결했다(★ 2026-08-08)** — `company_profile.py`의 `_dart_api_key()`가 환경변수 우선, 없으면 키체인 `dart_api_key` 항목을 읽는다(`jp_subtitle_notion_token`과 동일 패턴). 사람인/워크넷 키도 필요해지면 같은 방식을 쓰면 된다.
 - **메뉴바 드롭다운 표시(★ 2026-08-07: N건 저장됨/상위 공고 목록 제거)**: `score_job()`이 키워드 개수만 세는 단순 점수라 대량 수집·나열은 노이즈만 많다는 사용자 피드백으로, "N건 저장됨"과 "상위 공고 보기" 메뉴를 완전히 없앴다(`get_job_collector_top()`도 호출부가 없어져 코드 자체를 삭제). `collect`는 계속 백그라운드에서 원료 수집용으로만 돌고, 실제로 메뉴에 보이는 건 16-1의 `🎯 오늘의 추천 공고 분석` 한 줄뿐이다. `get_job_collector_summary()`(총건수·최고점수)는 모바일 위젯 JSON에서는 이미 안 쓰지만 함수 자체는 남겨둠(다른 곳에서 값이 필요해지면 재사용).
   - 둘 다 `build_menu()`가 매번 다시 그릴 때(5분마다 자동 새로고침 포함) DB를 다시 읽으므로 최신 상태를 유지한다.
 
-### 16-1. 🎯 오늘의 추천 공고 AI 분석 → Notion 자동 발행 (★ 2026-08-07 추가)
+### 16-1. 🎯 오늘의 추천 공고 AI 분석 → Notion 자동 발행 (★ 2026-08-07 추가, 2026-08-08 카테고리 분리)
 
-`collect` 직후 같은 백그라운드 스레드에서 이어서 `이직시스템/job_collector.py analyze-top`을 실행한다(하루 1번, `collect`와 같은 `job_collector_last_run` 주기를 공유 — 별도 타이머 없음). 적합도 1위 공고의 요구사항·우대사항을 AI(codex→claude 폴백)로 읽어 "① 요약 ② 회사가 실제로 뭘 만들려는지 추론 ③ 연습 프로젝트 추천 ④(★ 2026-08-07) 1인 사업자로 창업한다면의 사업계획서 항목화"를 만들고, `이직시스템/README.md`의 "운영 원칙 — 공고를 학습 커리큘럼으로 쓴다" 문서 자체 원칙을 자동화한 결과를 Notion "🎴 이직시스템" 페이지 밑에 발행한다.
+`collect` 직후 같은 백그라운드 스레드에서 이어서 `이직시스템/job_collector.py analyze-top --category {career,parttime}`을 카테고리마다 한 번씩 실행한다(하루 1번, `collect`와 같은 `job_collector_last_run` 주기를 공유 — 별도 타이머 없음). 적합도 1위 공고의 요구사항·우대사항을 AI(codex→claude 폴백)로 읽어 "① 요약 ② 회사가 실제로 뭘 만들려는지 추론 ③ 연습 프로젝트 추천 ④(★ 2026-08-07) 1인 사업자로 창업한다면의 사업계획서 항목화"를 만들고, `이직시스템/README.md`의 "운영 원칙 — 공고를 학습 커리큘럼으로 쓴다" 문서 자체 원칙을 자동화한 결과를 Notion "🎴 이직시스템" 페이지 밑에 발행한다.
 
-- 상위 공고가 JS 렌더링·이미지형이라 본문을 못 가져오면(`이직시스템/README.md` 3-2 참고) 자동으로 2·3·4·5위로 내려가며 시도한다(`job_collector.py`의 `analyze_top_job()`).
+- **★ 2026-08-08 취업/알바 카테고리 분리**: "매일 같은 1위 공고만 추천된다"는 지적(정확히는 "며칠째 피에스티만 나온다")과 별개로, 애초에 취업(사람인·워크넷)과 알바(알바몬·알바천국)는 결이 달라 하나로 뭉치면 한쪽이 항상 묻힌다는 요청으로 `JOB_SOURCE_CATEGORY` 딕셔너리(`job_collector.py`)로 소스를 career/parttime 두 그룹으로 나누고, `analyze_top_job()`이 `--category` 인자로 받은 그룹 안에서만 후보를 고른다. 카테고리마다 독립된 상태 파일(`data/top_job_notion_{career,parttime}.json`)·독립된 Notion 페이지를 갖는다.
+- **★ 2026-08-08 "매일 같은 회사만 나옴" 반복 추천 버그 수정**: 점수·마감일로만 정렬하면 동점 1위 공고(예: (주)피에스티)가 마감 전까지 매일 그대로 뽑혀 "갱신이 안 되는 것처럼" 보였다(실제로는 `collect`는 매일 정상 실행 중이었음 — 선택 알고리즘에 반복 방지가 없었을 뿐). `extract_high_pitch_video.py`의 BGM 로테이션(`~/.jp_workout_bgm_history.json`)과 같은 패턴을 적용: `data/top_job_history_{career,parttime}.json`에 "이미 추천한 공고"(`source:source_id`) 목록을 카테고리별로 남겨두고, 다음 실행 때는 그 목록에 없는 후보를 우선 시도한다. 카테고리 후보 풀이 전부 소진되면(모두 이미 추천됨) 히스토리를 초기화하고 다시 1위부터 순환한다. 마감이 지나 후보 풀에서 빠진 공고는 히스토리에서도 자동으로 정리된다.
+- 상위 공고가 JS 렌더링·이미지형이라 본문을 못 가져오면(`이직시스템/README.md` 3-2 참고) 자동으로 다음 순위로 내려가며 시도한다(`job_collector.py`의 `analyze_top_job()`, 카테고리당 후보 풀 최대 50개).
 - Notion 발행은 `이직시스템/job_collector.py`의 `_notion_publish()`가 직접 Notion REST API를 호출한다(내가/Claude 세션과는 별개 — 백그라운드 프로세스가 독자적으로 쓴다). 토큰은 일본어자막추출과 같은 키체인 항목(`jp_subtitle_notion_token`)을 재사용하며, 사용자가 Notion에서 그 통합을 "🎴 이직시스템" 페이지에 직접 공유해 둬야 한다(API로 자동화 불가능한 수동 1회 설정).
-- **페이지 하나만 갱신한다** — 매일 새 페이지를 만들지 않고, `이직시스템/data/top_job_notion.json`에 저장된 `page_id`가 있으면 기존 자식 블록을 전부 archive한 뒤 새 내용으로 다시 채운다(Notion에 페이지가 쌓이지 않게). 오늘 1위가 어제와 같은 공고면 내용도 그대로 유지된다.
-- **메뉴바 표시**: `get_top_job_analysis()`가 `top_job_notion.json`을 읽어 `🎯 [점수] 오늘의 추천 공고 분석: <회사> — <제목>` 항목을 상위 공고 메뉴 바로 아래에 추가한다(★ 2026-08-07: 점수 표기 추가 — 이직시스템 메뉴에서 점수 자체는 노이즈라 없앴지만, 이 한 건짜리 추천에는 점수가 있는 게 낫다는 피드백). 클릭하면 `make_open_url_callback()`으로 Notion 페이지가 브라우저에 열린다. 상태 파일이 없으면(첫 실행 전, 토큰 미설정 등) 항목 자체를 생략한다.
-- Notion 발행이 끝나면 `rumps.notification("🎯 오늘의 추천 공고 분석", "[점수] <회사> — <제목>", ...)`으로 알려준다.
-- AI 폴백 호출이 상위 후보 여러 개를 순서대로 시도할 수 있어 `collect`보다 훨씬 오래 걸릴 수 있으므로, 이 단계만 별도로 타임아웃 1800초(30분)를 둔다.
+- **페이지 하나만 갱신한다** — 카테고리마다 매일 새 페이지를 만들지 않고, 해당 상태 파일에 저장된 `page_id`가 있으면 기존 자식 블록을 전부 archive한 뒤 새 내용으로 다시 채운다(Notion에 페이지가 쌓이지 않게). 오늘 1위가 어제와 같은 공고면 내용도 그대로 유지된다.
+- **메뉴바 표시**: `get_top_job_analysis(category)`가 카테고리별 상태 파일을 읽어 `🎯 [점수] 오늘의 추천 {커리어,알바} 공고: <회사> — <제목>` 항목을 카테고리마다 하나씩 추가한다(★ 2026-08-07: 점수 표기 추가). 클릭하면 `make_open_url_callback()`으로 Notion 페이지가 브라우저에 열린다. 상태 파일이 없으면(첫 실행 전, 토큰 미설정 등) 해당 카테고리 항목만 생략한다.
+- Notion 발행이 끝나면 카테고리마다 `rumps.notification(f"🎯 오늘의 추천 {카테고리} 공고", "[점수] <회사> — <제목>", ...)`으로 알려준다.
+- AI 폴백 호출이 상위 후보 여러 개를 순서대로 시도할 수 있어 `collect`보다 훨씬 오래 걸릴 수 있으므로, 이 단계만 카테고리마다 별도로 타임아웃 1800초(30분)를 둔다.
 - **Notion 페이지 안 URL도 클릭 가능한 링크로(★ 2026-08-07)**: `_markdown_to_notion_blocks()`가 `**볼드**`뿐 아니라 `https?://` 패턴도 감지해서 `rich_text`의 `link` 필드로 만든다 — 이전엔 meta 줄의 공고 원문 URL이 그냥 텍스트로만 보였다.
+- **DART_API_KEY 설정 완료(★ 2026-08-08)** — `_rank_candidates_by_analyzability()`가 DART(전자공시) 등록 여부로 후보를 우선 재정렬하는 기능이 이제 실제로 작동한다(16-1 상단 참고, 키는 `company_profile._dart_api_key()`가 키체인 `dart_api_key`에서 읽음).
 
-### 16-1a. 🏆 오늘의 추천 경진대회 AI 분석 → Notion 자동 발행 (★ 2026-08-07 추가)
+### 16-1a. 🏆 오늘의 추천 경진대회 AI 분석 → Notion 자동 발행 (★ 2026-08-07 추가, 2026-08-08 카테고리 분리)
 
-공고 분석과 같은 패턴을 공모전/경진대회 도메인에 그대로 적용한다. `_run_job_analysis_top()` 바로 다음, 같은 백그라운드 스레드·같은 하루 1번 주기로 `_run_contest_collector_and_analysis()`가 `이직시스템/contest_collector.py collect` → `analyze-top`을 순서대로 실행한다(자세한 크롤링·분석 내용은 `이직시스템/README.md` 3-3 참고 — 현재 링커리어만 구현, 데이콘 등은 후속 예정).
+공고 분석과 같은 패턴을 공모전/경진대회 도메인에 그대로 적용한다. `_run_job_analysis_top()` 바로 다음, 같은 백그라운드 스레드·같은 하루 1번 주기로 `_run_contest_collector_and_analysis()`가 `이직시스템/contest_collector.py collect`를 한 번 실행한 뒤 `analyze-top --category {ai,general}`을 카테고리마다 실행한다(자세한 크롤링·분석 내용은 `이직시스템/README.md` 3-3 참고).
 
-- **메뉴바**: `get_top_contest_analysis()`가 `이직시스템/data/top_contest_notion.json`을 읽어 `🏆 [점수] 오늘의 추천 경진대회: <주최> — <제목>` 항목을 공고 분석 항목 바로 아래에 추가.
-- **라지 위젯**: `buildBottomSection()`에 손자병법·공고 분석 아래로 한 줄 더 추가(`🏆 [점수] 주최 — 제목`, 탭하면 공모전 원문으로 이동). 프레임 공간이 이미 빠듯해서 공고 섹션처럼 "AI 분석 보기" 별도 줄은 안 만들었다 — 깊은 분석은 메뉴바에서 확인.
-- 모바일 상태 JSON에 `contest_organizer`/`contest_title`/`contest_score`/`contest_url`/`contest_notion_url` 필드 추가.
+- **★ 2026-08-08 AI 특화/일반 공모전 카테고리 분리 + 반복 추천 방지**: 16-1과 같은 이유·같은 패턴 — `CONTEST_SOURCE_CATEGORY`(`contest_collector.py`)가 `AI경진대회(정부)` 소스를 `ai`로, 링커리어·콘테스트코리아를 `general`로 나누고, 각각 독립된 상태 파일(`data/top_contest_notion_{ai,general}.json`)·독립된 로테이션 히스토리(`data/top_contest_history_{ai,general}.json`)를 갖는다.
+- **메뉴바**: `get_top_contest_analysis(category)`가 카테고리별 상태 파일을 읽어 `🏆 [점수] 오늘의 추천 {AI,일반} 경진대회: <주최> — <제목>` 항목을 공고 분석 항목들 바로 아래에 카테고리마다 하나씩 추가.
+- **라지 위젯**: `buildBottomSection()`이 `job_items`/`contest_items` 배열을 순회해 카테고리당 한 줄씩 찍는다(15-1 참고) — 항목이 2배로 늘어 프레임이 빠듯해진 만큼 한 줄로 압축했다.
+- 모바일 상태 JSON은 `contest_organizer` 등 단일 필드 대신 `contest_items` 배열(15 참고)을 쓴다.
 
 ### 16-2. 🎎 오늘의 리마인더 → Notion 일일 체크리스트 자동 동기화 (★ 2026-08-07 추가)
 

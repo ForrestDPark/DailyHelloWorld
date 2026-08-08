@@ -100,11 +100,21 @@ JOB_COLLECTOR_DB = os.path.join(JOB_COLLECTOR_DIR, "data", "jobs.db")
 JOB_COLLECTOR_REFRESH_SECONDS = 24 * 60 * 60  # 하루 1번
 # 적합도 1위 공고를 AI로 분석해 Notion에 올린 결과(★ 2026-08-07 추가).
 # job_collector.py analyze-top이 매일 이 파일을 갱신한다.
-JOB_TOP_ANALYSIS_STATE = os.path.join(JOB_COLLECTOR_DIR, "data", "top_job_notion.json")
+# ★ 2026-08-08: 취업/알바는 성격이 달라 카테고리별로 분리(job_collector.py의
+# JOB_CATEGORY_LABELS와 키를 맞춘다).
+JOB_CATEGORIES = {"career": "커리어", "parttime": "알바"}
+JOB_TOP_ANALYSIS_STATE = {
+    cat: os.path.join(JOB_COLLECTOR_DIR, "data", f"top_job_notion_{cat}.json") for cat in JOB_CATEGORIES
+}
 # 링커리어 공모전·경진대회 수집기(★ 2026-08-07 추가). job_collector.py와 같은
 # 이직시스템 폴더에 있고 같은 하루 1번 주기로 collect → analyze-top을 이어서 돌린다.
 CONTEST_COLLECTOR_SCRIPT = os.path.join(JOB_COLLECTOR_DIR, "contest_collector.py")
-CONTEST_TOP_ANALYSIS_STATE = os.path.join(JOB_COLLECTOR_DIR, "data", "top_contest_notion.json")
+# ★ 2026-08-08: AI 특화/일반 공모전으로 분리(contest_collector.py의
+# CONTEST_CATEGORY_LABELS와 키를 맞춘다).
+CONTEST_CATEGORIES = {"ai": "AI", "general": "일반"}
+CONTEST_TOP_ANALYSIS_STATE = {
+    cat: os.path.join(JOB_COLLECTOR_DIR, "data", f"top_contest_notion_{cat}.json") for cat in CONTEST_CATEGORIES
+}
 # "🎎 일일 체크리스트" Notion 페이지(app.notion.com/p/3b532a1eae80803490affd8c9b658711)
 # 를 표준 UUID로 표기한 것 — 오늘의 리마인더를 매일 토글+체크박스로 추가한다(★ 2026-08-07).
 REMINDER_CHECKLIST_NOTION_PAGE_ID = "3b532a1e-ae80-8034-90af-fd8c9b658711"
@@ -2155,25 +2165,29 @@ def _notion_keychain_token():
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
-def get_top_job_analysis():
-    """job_collector.py analyze-top이 써 둔 상태 파일을 읽는다. 없거나 깨졌으면
-    None — 메뉴에서 항목을 아예 생략한다."""
-    if not os.path.exists(JOB_TOP_ANALYSIS_STATE):
+def get_top_job_analysis(category="career"):
+    """job_collector.py analyze-top --category가 써 둔 상태 파일을 읽는다. 없거나
+    깨졌으면 None — 메뉴에서 항목을 아예 생략한다(★ 2026-08-08: career/parttime
+    카테고리별 파일로 분리)."""
+    path = JOB_TOP_ANALYSIS_STATE[category]
+    if not os.path.exists(path):
         return None
     try:
-        with open(JOB_TOP_ANALYSIS_STATE, encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     except (OSError, json.JSONDecodeError):
         return None
 
 
-def get_top_contest_analysis():
-    """contest_collector.py analyze-top이 써 둔 상태 파일을 읽는다(★ 2026-08-07).
-    없거나 깨졌으면 None — 메뉴에서 항목을 아예 생략한다."""
-    if not os.path.exists(CONTEST_TOP_ANALYSIS_STATE):
+def get_top_contest_analysis(category="general"):
+    """contest_collector.py analyze-top --category가 써 둔 상태 파일을 읽는다
+    (★ 2026-08-07 추가, 2026-08-08 카테고리 분리). 없거나 깨졌으면 None —
+    메뉴에서 항목을 아예 생략한다."""
+    path = CONTEST_TOP_ANALYSIS_STATE[category]
+    if not os.path.exists(path):
         return None
     try:
-        with open(CONTEST_TOP_ANALYSIS_STATE, encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return json.load(f)
     except (OSError, json.JSONDecodeError):
         return None
@@ -2715,8 +2729,27 @@ class ShiftAlarmApp(rumps.App):
             _shift_block_day_number(self.schedule, today, current) if current else None
         )
         sunzi_entry = get_latest_sunzi_entry()
-        top_job = get_top_job_analysis()
-        top_contest = get_top_contest_analysis()
+        # ★ 2026-08-08: 카테고리별(커리어/알바, AI/일반) 2건씩 배열로 넘긴다.
+        job_items = []
+        for category, cat_label in JOB_CATEGORIES.items():
+            top_job = get_top_job_analysis(category)
+            if top_job:
+                job_items.append({
+                    "category": category, "label": cat_label,
+                    "company": top_job.get("company"), "title": top_job.get("title"),
+                    "score": top_job.get("score"), "url": top_job.get("job_url"),
+                    "notion_url": top_job.get("url"),
+                })
+        contest_items = []
+        for category, cat_label in CONTEST_CATEGORIES.items():
+            top_contest = get_top_contest_analysis(category)
+            if top_contest:
+                contest_items.append({
+                    "category": category, "label": cat_label,
+                    "organizer": top_contest.get("organizer"), "title": top_contest.get("title"),
+                    "score": top_contest.get("score"), "url": top_contest.get("contest_url"),
+                    "notion_url": top_contest.get("url"),
+                })
         codex_progress = _codex_primary_window_progress(self._codex_quota)
         status = {
             "updated_at": datetime.datetime.now().isoformat(timespec="seconds"),
@@ -2736,16 +2769,8 @@ class ShiftAlarmApp(rumps.App):
             "claude_critical": _claude_weekly_critical(self._claude_live_quota),
             "sunzi_title": sunzi_entry["title"] if sunzi_entry else None,
             "sunzi_url": sunzi_entry["url"] if sunzi_entry else None,
-            "job_company": top_job.get("company") if top_job else None,
-            "job_title": top_job.get("title") if top_job else None,
-            "job_score": top_job.get("score") if top_job else None,
-            "job_url": top_job.get("job_url") if top_job else None,
-            "job_notion_url": top_job.get("url") if top_job else None,
-            "contest_organizer": top_contest.get("organizer") if top_contest else None,
-            "contest_title": top_contest.get("title") if top_contest else None,
-            "contest_score": top_contest.get("score") if top_contest else None,
-            "contest_url": top_contest.get("contest_url") if top_contest else None,
-            "contest_notion_url": top_contest.get("url") if top_contest else None,
+            "job_items": job_items,
+            "contest_items": contest_items,
         }
         for target_dir, target_file in (
             (MOBILE_STATUS_DIR, MOBILE_STATUS_FILE),
@@ -3097,19 +3122,24 @@ class ShiftAlarmApp(rumps.App):
         # 점수(score_job())라 의미 없는 매칭이 섞여 노이즈가 많다는 사용자 피드백으로
         # 메뉴 노출을 없앴다. collect는 계속 원료 수집용으로만 백그라운드에서 돌고,
         # analyze-top이 그중 실제로 깊이 분석할 가치가 있는 1건만 골라 보여준다.
-        top_analysis = get_top_job_analysis()
-        if top_analysis:
-            score = top_analysis.get("score")
-            score_text = f"[{score}점] " if score is not None else ""
-            label = f"🎯 {score_text}오늘의 추천 공고 분석: {top_analysis.get('company', '')} — {truncate_title(top_analysis.get('title', ''), 30)}"
-            self.menu.add(rumps.MenuItem(label, callback=self.make_open_url_callback(top_analysis["url"])))
+        # ★ 2026-08-08: 취업/알바는 결이 달라 하나로 뭉치면 한쪽이 묻힌다는 지적으로
+        # 카테고리별(커리어/알바) 각 1건씩 보여준다.
+        for category, cat_label in JOB_CATEGORIES.items():
+            top_analysis = get_top_job_analysis(category)
+            if top_analysis:
+                score = top_analysis.get("score")
+                score_text = f"[{score}점] " if score is not None else ""
+                label = f"🎯 {score_text}오늘의 추천 {cat_label} 공고: {top_analysis.get('company', '')} — {truncate_title(top_analysis.get('title', ''), 30)}"
+                self.menu.add(rumps.MenuItem(label, callback=self.make_open_url_callback(top_analysis["url"])))
 
-        top_contest = get_top_contest_analysis()
-        if top_contest:
-            score = top_contest.get("score")
-            score_text = f"[{score}점] " if score is not None else ""
-            label = f"🏆 {score_text}오늘의 추천 경진대회: {top_contest.get('organizer', '')} — {truncate_title(top_contest.get('title', ''), 30)}"
-            self.menu.add(rumps.MenuItem(label, callback=self.make_open_url_callback(top_contest["url"])))
+        # ★ 2026-08-08: 경진대회도 같은 이유로 AI 특화/일반 카테고리별 각 1건씩.
+        for category, cat_label in CONTEST_CATEGORIES.items():
+            top_contest = get_top_contest_analysis(category)
+            if top_contest:
+                score = top_contest.get("score")
+                score_text = f"[{score}점] " if score is not None else ""
+                label = f"🏆 {score_text}오늘의 추천 {cat_label} 경진대회: {top_contest.get('organizer', '')} — {truncate_title(top_contest.get('title', ''), 30)}"
+                self.menu.add(rumps.MenuItem(label, callback=self.make_open_url_callback(top_contest["url"])))
 
         self.menu.add(None)
 
@@ -3367,33 +3397,36 @@ class ShiftAlarmApp(rumps.App):
         """적합도 1위 공고를 AI로 분석해 Notion에 올린다(★ 2026-08-07 추가).
         collect 직후 같은 백그라운드 스레드에서 이어서 돌아 하루 1번 주기를 그대로
         공유한다. codex/claude 폴백 호출이 상위 후보 여러 개를 시도할 수 있어
-        collect보다 훨씬 오래 걸릴 수 있으므로 타임아웃을 넉넉히 둔다."""
-        try:
-            result = subprocess.run(
-                [sys.executable, JOB_COLLECTOR_SCRIPT, "analyze-top"],
-                cwd=JOB_COLLECTOR_DIR,
-                capture_output=True, text=True, timeout=1800,
-            )
-            if "Notion 페이지 갱신 완료" in result.stdout:
-                top = get_top_job_analysis()
-                if top:
-                    score = top.get("score")
-                    score_text = f"[{score}점] " if score is not None else ""
-                    rumps.notification(
-                        "🎯 오늘의 추천 공고 분석",
-                        f"{score_text}{top.get('company', '')} — {truncate_title(top.get('title', ''), 40)}",
-                        "메뉴바에서 클릭하면 Notion 분석으로 이동합니다.",
-                    )
-            elif result.returncode != 0:
-                print(f"⚠️ 공고 AI 분석 실패: {result.stderr.strip()[:300]}")
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            print(f"⚠️ 공고 AI 분석 실행 오류: {exc}")
+        collect보다 훨씬 오래 걸릴 수 있으므로 타임아웃을 넉넉히 둔다.
+        ★ 2026-08-08: 커리어/알바 카테고리별로 각각 analyze-top을 돌린다."""
+        for category, cat_label in JOB_CATEGORIES.items():
+            try:
+                result = subprocess.run(
+                    [sys.executable, JOB_COLLECTOR_SCRIPT, "analyze-top", "--category", category],
+                    cwd=JOB_COLLECTOR_DIR,
+                    capture_output=True, text=True, timeout=1800,
+                )
+                if "Notion 페이지 갱신 완료" in result.stdout:
+                    top = get_top_job_analysis(category)
+                    if top:
+                        score = top.get("score")
+                        score_text = f"[{score}점] " if score is not None else ""
+                        rumps.notification(
+                            f"🎯 오늘의 추천 {cat_label} 공고",
+                            f"{score_text}{top.get('company', '')} — {truncate_title(top.get('title', ''), 40)}",
+                            "메뉴바에서 클릭하면 Notion 분석으로 이동합니다.",
+                        )
+                elif result.returncode != 0:
+                    print(f"⚠️ {cat_label} 공고 AI 분석 실패: {result.stderr.strip()[:300]}")
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                print(f"⚠️ {cat_label} 공고 AI 분석 실행 오류: {exc}")
 
     def _run_contest_collector_and_analysis(self):
         """링커리어 공모전·경진대회를 수집하고 적합도 1위를 AI로 분석해 Notion에
         올린다(★ 2026-08-07 추가). 이직시스템 collect/analyze-top과 같은 백그라운드
         스레드·같은 하루 1번 주기를 그대로 공유한다(job_collector_last_run 가드가
-        이 함수 전체를 감쌈)."""
+        이 함수 전체를 감쌈). ★ 2026-08-08: collect는 한 번만 돌리고, AI 특화/일반
+        카테고리별로 analyze-top을 각각 돌린다."""
         try:
             collect_result = subprocess.run(
                 [sys.executable, CONTEST_COLLECTOR_SCRIPT, "collect"],
@@ -3404,23 +3437,24 @@ class ShiftAlarmApp(rumps.App):
                 print(f"⚠️ 경진대회 수집 실패: {collect_result.stderr.strip()[:300]}")
                 return
 
-            analyze_result = subprocess.run(
-                [sys.executable, CONTEST_COLLECTOR_SCRIPT, "analyze-top"],
-                cwd=JOB_COLLECTOR_DIR,
-                capture_output=True, text=True, timeout=1800,
-            )
-            if "Notion 페이지 갱신 완료" in analyze_result.stdout:
-                top = get_top_contest_analysis()
-                if top:
-                    score = top.get("score")
-                    score_text = f"[{score}점] " if score is not None else ""
-                    rumps.notification(
-                        "🏆 오늘의 추천 경진대회",
-                        f"{score_text}{top.get('organizer', '')} — {truncate_title(top.get('title', ''), 40)}",
-                        "메뉴바에서 클릭하면 Notion 분석으로 이동합니다.",
-                    )
-            elif analyze_result.returncode != 0:
-                print(f"⚠️ 경진대회 AI 분석 실패: {analyze_result.stderr.strip()[:300]}")
+            for category, cat_label in CONTEST_CATEGORIES.items():
+                analyze_result = subprocess.run(
+                    [sys.executable, CONTEST_COLLECTOR_SCRIPT, "analyze-top", "--category", category],
+                    cwd=JOB_COLLECTOR_DIR,
+                    capture_output=True, text=True, timeout=1800,
+                )
+                if "Notion 페이지 갱신 완료" in analyze_result.stdout:
+                    top = get_top_contest_analysis(category)
+                    if top:
+                        score = top.get("score")
+                        score_text = f"[{score}점] " if score is not None else ""
+                        rumps.notification(
+                            f"🏆 오늘의 추천 {cat_label} 경진대회",
+                            f"{score_text}{top.get('organizer', '')} — {truncate_title(top.get('title', ''), 40)}",
+                            "메뉴바에서 클릭하면 Notion 분석으로 이동합니다.",
+                        )
+                elif analyze_result.returncode != 0:
+                    print(f"⚠️ {cat_label} 경진대회 AI 분석 실패: {analyze_result.stderr.strip()[:300]}")
         except (OSError, subprocess.TimeoutExpired) as exc:
             print(f"⚠️ 경진대회 수집/분석 실행 오류: {exc}")
 

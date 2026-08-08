@@ -60,6 +60,8 @@ python3 job_collector.py collect
 python3 job_collector.py list --limit 30
 python3 job_collector.py export
 python3 job_collector.py analyze <source_id> [--source "사람인(크롤링)"]
+python3 job_collector.py analyze-top --category career    # 커리어(사람인·워크넷) 1위, ★ 2026-08-08
+python3 job_collector.py analyze-top --category parttime  # 알바(알바몬·알바천국) 1위, ★ 2026-08-08
 ```
 
 - `collect`: 검색어를 차례로 조회하고 `data/jobs.db`에 저장한다.
@@ -110,7 +112,8 @@ python3 job_collector.py analyze <source_id> [--source "사람인(크롤링)"]
 ```bash
 python3 contest_collector.py collect        # 링커리어(최대 100건) + 전국민 AI 경진대회(전체) + 콘테스트코리아(최대 60건) 수집
 python3 contest_collector.py list --limit 20
-python3 contest_collector.py analyze-top     # 적합도 1위를 AI로 분석해 Notion에 발행(모든 소스 통합 순위)
+python3 contest_collector.py analyze-top --category ai       # AI경진대회(정부) 1위, ★ 2026-08-08
+python3 contest_collector.py analyze-top --category general  # 링커리어+콘테스트코리아 1위, ★ 2026-08-08
 ```
 
 - **링커리어(linkareer.com)만 우선 구현**했다(2026-08-07, 사용자 요청으로 여러 후보 사이트 중 하나씩 순차 추가하기로 함). `/list/contest` 페이지가 Next.js SSR이라 `__NEXT_DATA__`의 `activityItems`(제목·URL)와 `__APOLLO_STATE__`의 `Activity:{id}`(주최·마감일 등 정규화 캐시)를 조합해서 읽는다 — 알바몬 크롤러와 같은 패턴.
@@ -142,21 +145,28 @@ python3 contest_collector.py analyze-top     # 적합도 1위를 AI로 분석해
 회사 하나를 지정하면 DART(전자공시) 재무정보 + 이직시스템에 이미 수집된 채용공고·공모전 + 회사 홈페이지 텍스트를 모아, 손자병법 해석에서 역사적 실증사례를 드는 것처럼 근거를 명시하며 경영 서사를 분석한다. "이 회사는 어떻게 경영해왔는가·누가 운영하는가·업계에서 어떤 위치인가"를 판단하는 게 목적.
 
 ```bash
-export DART_API_KEY="발급받은 키"   # opendart.fss.or.kr에서 무료 즉시 발급, 필수는 아니지만 강력 권장
 python3 company_profile.py analyze "(주)회사명" --url "https://회사홈페이지/about"
 ```
 
-- **DART OpenAPI**: `corpCode.xml`(zip 안 XML, 전체 공시대상 기업의 회사명→corp_code 매핑, 30일 로컬 캐시) → `company.json`(기업개황) → `fnlttSinglAcntAll.json`(최근 3개년 재무제표, 연결 우선/별도 폴백)에서 매출액·영업이익·당기순이익·자산총계만 추출. `DART_API_KEY` 환경변수 없으면 이 단계 전체를 건너뛰고 나머지 정보만으로 분석(비상장 소규모 기업은 키가 있어도 애초에 공시가 없어 똑같이 건너뜀 — 정상 상황).
+- **DART API 키(★ 2026-08-08 키체인으로 전환)**: `export DART_API_KEY=...`도 여전히 되지만, `_dart_api_key()`가 환경변수 우선·없으면 macOS 키체인 `dart_api_key` 항목을 읽는다 — `security add-generic-password -a $USER -s dart_api_key -w "<키>"`. shift_alarm이 launchd로 떠서 셸 프로필의 export를 못 보는 문제를 `jp_subtitle_notion_token`과 같은 방식으로 해결(3-1 참고).
+- **DART OpenAPI**: `corpCode.xml`(zip 안 XML, 전체 공시대상 기업의 회사명→corp_code 매핑, 30일 로컬 캐시) → `company.json`(기업개황 — 대표자·주소·**홈페이지(`hm_url`)** 등) → `fnlttSinglAcntAll.json`(최근 3개년 재무제표, 연결 우선/별도 폴백)에서 매출액·영업이익·당기순이익·자산총계만 추출. `DART_API_KEY`가 없으면 이 단계 전체를 건너뛰고 나머지 정보만으로 분석(비상장 소규모 기업은 키가 있어도 애초에 공시가 없어 똑같이 건너뜀 — 정상 상황). `hm_url`이 없는 회사는 DART가 빈 문자열 대신 `"-"` 같은 자리표시자를 주기도 해서(실측: 에스컴퍼니, 2026-08-08), URL처럼 안 생겼으면(`.` 없음) 버리게 했다.
 - 회사명 매칭은 정확히 일치 우선, 안 되면 "(주)"/"주식회사" 등을 뗀 이름으로 느슨하게 재시도.
 - 홈페이지 URL은 선택이지만 있으면 서사 품질이 좋아진다. 단, React/Vue 등 순수 클라이언트 렌더링 페이지는 curl로 빈 텍스트만 잡힌다(예: nculture.co.kr — "You need to enable JavaScript" 46자만 수신됨, 확인됨).
 - AI 분석은 6개 항목: ①기업 개황 ②재무 상태 해석(없으면 "DART 미등록"으로 명시) ③채용·공모전 이력에서 보이는 경영 방향 ④종합 서사 ⑤**병법적 해석**(★ 사용자 요청, 2026-08-07) — 정보 노출을 감추는 방식(궤도)·자원 배분(허실)·유리한 형세를 먼저 만드는지(形·勢)·때를 기다리는지(진퇴) 등을 손자병법 개념으로 재해석하되, 근거 없이 손자병법을 인용만 하지 않도록 "이 부분은 병법적으로 해석할 근거가 부족하다"고 명시하는 경우를 허용 ⑥관점별 시사점(구직자/파트너/투자자).
 - Notion 발행은 회사명별로 별도 상태 파일(`data/company_profiles/<회사명>.json`)에 `page_id`를 저장해서, 같은 회사를 다시 분석하면 새 페이지 대신 기존 페이지를 갱신한다(다른 기능들과 같은 "페이지 하나만 계속 갱신" 원칙).
 
-### 3-4-1. 오늘의 추천 공고 선정에도 연동(★ 2026-08-07)
+### 3-4-1. 오늘의 추천 공고 선정에도 연동(★ 2026-08-07, 2026-08-08 페이지 구성 개편)
 
-기존엔 키워드 점수(`score_job()`)로만 1위를 골라서, 재무·경영 이력을 전혀 알 수 없는 무명 소기업이 뽑히는 경우가 많았다. `job_collector.py`의 `_rank_candidates_by_analyzability()`가 상위 15개 후보를 DART 등록 여부로 재정렬해서(등록 기업 우선), 실제로 심층 분석이 가능한 회사가 우선 선택되게 했다. `DART_API_KEY`가 없으면 이 재정렬은 건너뛰고 기존 점수 순서 그대로 쓴다.
+기존엔 키워드 점수(`score_job()`)로만 1위를 골라서, 재무·경영 이력을 전혀 알 수 없는 무명 소기업이 뽑히는 경우가 많았다. `job_collector.py`의 `_rank_candidates_by_analyzability()`가 후보를 DART 등록 여부로 재정렬해서(등록 기업 우선), 실제로 심층 분석이 가능한 회사가 우선 선택되게 했다. `DART_API_KEY`가 없으면 이 재정렬은 건너뛰고 기존 점수 순서 그대로 쓴다.
 
-선정된 회사에 대해 `analyze_top_job()`이 `company_profile.py`의 함수(`build_company_prompt`/`_notion_publish` 등)를 직접 import해서 기업 경영 분석 페이지도 같이 만들고, 공고 분석 페이지 meta 줄에 그 링크를 남긴다 — 공고 하나를 보다가 "이 회사는 어떤 회사인가"까지 한 번에 확인할 수 있게.
+선정된 회사에 대해 `analyze_top_job()`이 `company_profile.py`의 함수(`build_company_prompt`/`_notion_publish` 등)를 직접 import해서 기업 경영 분석 페이지(병법적 해석 포함)도 별도 하위 페이지로 같이 만들고, 공고 분석 페이지 meta 줄에 그 링크를 남긴다 — 공고 하나를 보다가 "이 회사는 어떤 회사인가"까지 한 번에 확인할 수 있게(★ 2026-08-08: 공고 페이지 안에 통째로 합칠지 검토했으나, "경영 분석만 따로 훑어보기"가 더 낫다는 판단으로 별도 페이지+링크 방식을 유지하기로 함).
+
+**★ 2026-08-08 공고 페이지 상단 구성 개편** — "제일 궁금한 건 이 회사가 지금 뭘 하려는지 추론인데 그게 맨 위에 안 뜬다, 홈페이지·재무 정보도 상단에 있으면 좋겠다"는 피드백으로:
+- `build_analysis_prompt()`의 4개 항목 순서를 요약→추론→프로젝트→사업계획서에서 **추론→요약→프로젝트→사업계획서**로 바꿨다 — AI가 그 순서 그대로 답하므로 Notion 페이지에도 "① 이 회사가 지금 만들려는/겪고 있는 것 추론"이 본문 맨 위에 온다.
+- meta 블록에 DART `hm_url`(회사 홈페이지)을 추가하고, 재무 요약은 `점수 | 소스 | URL` 슬래시 텍스트 한 줄 대신 **Notion 표 블록**(`_dart_financial_table_block()`)으로 만든다 — 연도별(최근 3개년) 행 × 매출액/영업이익/당기순이익/자산총계/부채총계/자본총계 열. 원 단위 큰 숫자(`77002948664`)는 `_format_krw()`가 억/조 단위(`770억원`)로 바꿔서 보여준다("숫자 그대로는 성의 없다"는 피드백).
+
+**★ 2026-08-08 최상위 "🎴 이직시스템" 페이지에 히스토리 토글 누적** — "카테고리별 하위 페이지"는 여전히 "페이지 하나만 매일 갱신"이라 어제 추천은 사라진다. 이걸로는 과거 기록이 안 남는다는 지적으로, `_append_history_toggle()`이 매번 발행 후 최상위 페이지(`NOTION_JOBSYSTEM_PAGE_ID`)에 그날 결과를 **접힌 토글**로 추가한다 — 토글 제목은 `[날짜][카테고리] 제목` 형식(예: `[2026-08-08][career] 🎯 [커리어 공고] ...`)이고, 하위 페이지에 실제로 발행한 것과 같은 블록을 토글 안에 그대로 넣는다(자체 완결된 스냅샷이라 다음날 하위 페이지가 덮어써져도 이 토글 내용은 그대로 남는다). 같은 날 같은 카테고리로 재실행하면(수동 재실행·테스트 등) 새 토글을 추가하지 않고 제목이 일치하는 기존 토글의 내용만 교체해서 중복 누적을 막는다. `contest_collector.py`의 `analyze_top_contest()`에도 동일한 함수(파일별로 중복 구현, 기존 관례)로 똑같이 적용됨.
+- **Notion 페이지 블록 삭제 페이지네이션 버그 발견·수정(★ 2026-08-08)**: 하위 페이지를 매일 갱신할 때 기존 블록을 지우는 로직(`_notion_publish`)이 `page_size=100` 딱 한 페이지만 조회해서 지웠는데, AI 분석 하나가 100블록을 넘기는 경우가 흔해(사업계획서까지 포함하면 특히) 100개 넘는 나머지가 안 지워지고 다음 날 내용이 그 뒤에 계속 쌓이는 버그가 실측으로 발견됐다((주)크라우드웍스 페이지에 전날 다믈파워반도체 내용이 섞여 있었음). `job_collector.py`/`contest_collector.py`/`company_profile.py` 세 파일 모두 "결과가 빌 때까지 첫 페이지를 반복 조회해서 지운다" 방식으로 고쳤다(삭제 중 커서가 밀리는 걸 피하려고 `next_cursor`를 안 쓰고 매번 첫 페이지부터 다시 조회).
 
 ## 4. 다음 확장
 
