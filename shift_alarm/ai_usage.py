@@ -22,38 +22,44 @@ CLAUDE_USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
 
 
 def get_codex_quota():
-    """가장 최근 Codex 세션(jsonl) 파일에서 마지막으로 기록된 rate_limits를 읽어
-    {"primary": {...}, "secondary": {...}} 형태로 반환. 실패 시 None."""
+    """최근 Codex 세션에서 가장 최신의 rate_limits를 찾아 반환한다.
+
+    앱과 Codex가 비슷한 시각에 시작되면 가장 최근 세션 파일은 만들어졌지만 첫
+    token_count 이벤트는 아직 기록되지 않았을 수 있다. 이때 최신 파일 하나만
+    읽으면 이전 세션에 정상 quota가 있어도 ``None``이 되어 다음 12분 갱신까지
+    메뉴바에서 Codex가 사라진다. 따라서 세션을 수정 시각 역순으로 확인하고,
+    rate_limits가 실제로 들어 있는 첫 파일을 사용한다.
+    """
     files = glob.glob(CODEX_SESSIONS_GLOB, recursive=True)
     if not files:
         return None
-    latest = max(files, key=os.path.getmtime)
 
-    rate_limits = None
-    try:
-        with open(latest, "r", encoding="utf-8") as f:
-            for line in f:
-                if '"rate_limits"' not in line:
-                    continue
-                try:
-                    obj = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                payload = obj.get("payload", {})
-                if payload.get("type") != "token_count":
-                    continue
-                rl = payload.get("rate_limits")
-                if rl:
-                    rate_limits = rl
-    except OSError:
-        return None
+    for path in sorted(files, key=os.path.getmtime, reverse=True):
+        rate_limits = None
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if '"rate_limits"' not in line:
+                        continue
+                    try:
+                        obj = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    payload = obj.get("payload", {})
+                    if payload.get("type") != "token_count":
+                        continue
+                    rl = payload.get("rate_limits")
+                    if rl:
+                        rate_limits = rl
+        except OSError:
+            continue
 
-    if not rate_limits:
-        return None
-    return {
-        "primary": rate_limits.get("primary"),
-        "secondary": rate_limits.get("secondary"),
-    }
+        if rate_limits:
+            return {
+                "primary": rate_limits.get("primary"),
+                "secondary": rate_limits.get("secondary"),
+            }
+    return None
 
 
 def get_claude_local_stats():

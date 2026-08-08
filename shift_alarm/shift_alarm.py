@@ -1362,39 +1362,6 @@ def get_trash_size_str():
     return format_file_size(total)
 
 
-def empty_trash_forcefully():
-    """휴지통을 비우기 전에, 휴지통 디렉토리를 물고 있는 프로세스(Finder 자신은 제외)가
-    있으면 강제 종료한 뒤 Finder로 휴지통을 비운다.
-    ★ 2026-07-31: "Uninstaller sensei"(com.katrych.uninstaller-sensei-watcher) 같은
-    서드파티 백그라운드 감시 프로세스가 ~/.Trash 디렉토리를 계속 열어두고 있어서
-    휴지통 비우기 버튼을 눌러도 반응이 없던 것을 진단하며 추가한 기능 — 매번 수동으로
-    lsof/kill을 안 해도 되게 자동화함.
-    반환값: (성공 여부, 종료한 프로세스 이름 목록, 실패 시 에러 메시지)."""
-    trash_dir = os.path.expanduser("~/.Trash")
-    killed = []
-    try:
-        result = subprocess.run(
-            ["lsof", "+D", trash_dir], capture_output=True, text=True, timeout=15
-        )
-        for line in result.stdout.strip().splitlines()[1:]:  # 헤더 줄 제외
-            parts = line.split()
-            if len(parts) < 2:
-                continue
-            command, pid = parts[0], parts[1]
-            if command == "Finder" or not pid.isdigit() or int(pid) == os.getpid():
-                continue
-            subprocess.run(["kill", "-9", pid], check=False)
-            killed.append(f"{command}({pid})")
-    except Exception:
-        pass
-
-    result = subprocess.run(
-        ["osascript", "-e", 'tell application "Finder" to empty trash'],
-        capture_output=True, text=True, timeout=120,
-    )
-    return result.returncode == 0, killed, result.stderr.strip()
-
-
 def choose_bgm_playlist_folder():
     """곡별 MP3로 나눌 플레이리스트 MP4 폴더를 선택한다."""
     apple_script = (
@@ -2734,7 +2701,7 @@ class ShiftAlarmApp(rumps.App):
             rumps.notification(
                 "💾 저장공간 부족",
                 f"남은 용량 {self.storage_free_gb}GB",
-                "5GB 이하입니다. Shift Alarm 메뉴에서 휴지통을 비워주세요.",
+                "5GB 이하입니다. Shift Alarm 메뉴의 '저장공간 관리'로 정리해주세요.",
             )
 
     # ── 급여 갱신 ────────────────────────────────────────────
@@ -3143,8 +3110,8 @@ class ShiftAlarmApp(rumps.App):
             ))
 
         trash_size = get_trash_size_str()
-        trash_label = f"🗑️ 휴지통 비우기 ({trash_size})" if trash_size else "🗑️ 휴지통 비우기"
-        self.menu.add(rumps.MenuItem(trash_label, callback=self.empty_trash_now))
+        trash_label = f"🗑️ 저장공간 관리 (휴지통 {trash_size})" if trash_size else "🗑️ 저장공간 관리"
+        self.menu.add(rumps.MenuItem(trash_label, callback=self.open_storage_settings))
         self.menu.add(rumps.MenuItem("현재 설정 확인", callback=self.show_status))
         self.menu.add(None)
         self.menu.add(rumps.MenuItem("종료", callback=self.quit_app))
@@ -3602,33 +3569,16 @@ class ShiftAlarmApp(rumps.App):
             return
         subprocess.Popen(["open", entry["url"]])
 
-    # ── 휴지통 비우기 ────────────────────────────────────────────
+    # ── 저장공간 관리 ────────────────────────────────────────
 
-    def empty_trash_now(self, _):
-        threading.Thread(target=self._empty_trash_thread, daemon=True).start()
-
-    def _empty_trash_thread(self):
-        before = get_trash_size_bytes()
-        ok, killed, err = empty_trash_forcefully()
-        if ok:
-            after = get_trash_size_bytes()
-            if before is None:
-                note = "휴지통을 비웠습니다. 삭제 용량은 계산하지 못했습니다."
-            elif before == 0:
-                note = "휴지통이 이미 비어 있습니다."
-            else:
-                remaining = after if after is not None else 0
-                deleted = max(0, before - remaining)
-                note = f"휴지통에서 {format_file_size(deleted)}를 삭제했습니다."
-                if remaining:
-                    note += f" 삭제하지 못한 항목 {format_file_size(remaining)}가 남아 있습니다."
-            if killed:
-                note += f" 사용 중이던 프로세스 {', '.join(killed)}도 종료했습니다."
-            rumps.notification("휴지통 비우기 완료", "", note)
-            self._check_storage(None)
-            self.build_menu()  # 메뉴 항목의 휴지통 용량 표시를 바로 최신화
-        else:
-            rumps.alert("오류", f"휴지통 비우기 실패:\n{err}")
+    def open_storage_settings(self, _):
+        """★ 2026-08-08: 기존엔 Finder AppleScript로 휴지통을 직접 비우려 했으나
+        launchd로 뜬 백그라운드 프로세스에서는 AppleEvent 자동화 권한이 제대로
+        안 붙어 클릭해도 조용히 아무 반응이 없었다(이 코드베이스에서 반복적으로
+        겪은 launchd·AppleEvent 문제와 같은 패턴). 자동 삭제를 억지로 고치는
+        대신, 사용자가 직접 정리할 수 있게 시스템 설정의 저장 공간 화면을
+        열어주는 것으로 단순화했다."""
+        subprocess.Popen(["open", "x-apple.systempreferences:com.apple.settings.Storage"])
 
     # ── 상태 확인 ────────────────────────────────────────────
 
