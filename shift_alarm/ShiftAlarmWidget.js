@@ -155,9 +155,21 @@ function buildBottomSection(widget, status) {
   widget.addSpacer(10);
 
   if (status.sunzi_title) {
-    addLine(widget, `⚔️ 손자병법 최신`, { color: COLOR_DIM, size: 11, bold: true });
+    const sunziHeading = addLine(widget, `⚔️ 손자병법 최신`, {
+      color: COLOR_DIM,
+      size: 11,
+      bold: true,
+    });
     widget.addSpacer(2);
-    addLine(widget, status.sunzi_title, { color: COLOR_PURPLE, size: 12, lineLimit: 2 });
+    const sunziLine = addLine(widget, status.sunzi_title, {
+      color: COLOR_PURPLE,
+      size: 12,
+      lineLimit: 2,
+    });
+    if (status.sunzi_url) {
+      sunziHeading.url = status.sunzi_url;
+      sunziLine.url = status.sunzi_url;
+    }
     widget.addSpacer(8);
   }
 
