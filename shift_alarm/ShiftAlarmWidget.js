@@ -38,7 +38,7 @@ const COLOR_TEXT = Color.white();
 const COLOR_DIM = new Color("#8e8e93");
 const COLOR_SUB = new Color("#d1d1d6");
 const COLOR_WARN = new Color("#ff6961");
-const COLOR_PINK = new Color("#ff2d55");
+const COLOR_PINK = new Color("#ff80b8");
 const COLOR_ORANGE = new Color("#ff9f0a");
 const COLOR_PURPLE = new Color("#bf5af2");
 
