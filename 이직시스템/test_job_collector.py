@@ -116,18 +116,21 @@ class JobCollectorTest(unittest.TestCase):
         )
         self.assertIn("[기업 홈페이지 바로가기](https://company.example)", prompt)
         self.assertIn("[내부거래 증가 보도](https://news.example/article)", prompt)
-        self.assertIn("문장 끝에 제공된", prompt)
+        self.assertIn("문장 끝에 반드시", prompt)
+        self.assertIn("별도의 `참고 링크`, `출처 지도`", prompt)
+        self.assertIn("(출처: [기사 제목](URL))", prompt)
         self.assertIn("내부거래·승계·계열분리", prompt)
 
     def test_company_overview_links_are_injected_after_heading(self):
         text = cp.ensure_company_overview_links(
-            "## 1. **기업 개황**\n확인된 내용", "테스트사", "https://company.example", "001",
+            "## 1. **기업 개황**\n확인된 내용이다.\n다음 내용", "테스트사", "https://company.example", "001",
         )
         heading_pos = text.index("기업 개황")
         homepage_pos = text.index("기업 홈페이지 바로가기")
         body_pos = text.index("확인된 내용")
-        self.assertLess(heading_pos, homepage_pos)
-        self.assertLess(homepage_pos, body_pos)
+        self.assertLess(heading_pos, body_pos)
+        self.assertLess(body_pos, homepage_pos)
+        self.assertIn("(출처:", text)
         self.assertIn("DART 기업개황 바로가기", text)
 
     def test_upsert_deduplicates(self):

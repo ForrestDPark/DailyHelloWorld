@@ -359,20 +359,23 @@ def ensure_company_overview_links(
     homepage_url: str | None,
     corp_code: str | None,
 ) -> str:
-    """AI 출력과 무관하게 `1. 기업 개황` 바로 아래에 확인 가능한 링크를 넣는다."""
+    """기업 개황의 첫 사실 문장에 홈페이지·DART를 괄호 출처로 붙인다."""
     links = []
     if homepage_url:
         links.append(f"[기업 홈페이지 바로가기]({homepage_url})")
     links.append(f"[DART 공시 검색 바로가기]({dart_filing_search_url(company_name)})")
     if corp_code:
         links.append(f"[DART 기업개황 바로가기]({dart_company_overview_url(corp_code)})")
-    link_line = "근거 링크: " + " · ".join(links)
-    if link_line in text:
+    citation = " (출처: " + " · ".join(links) + ")"
+    if citation in text:
         return text
     heading = re.search(r"(?m)^(#{1,3}\s*)?1\.\s*\*\*기업 개황\*\*.*$", text)
     if heading:
-        return text[:heading.end()] + "\n" + link_line + text[heading.end():]
-    return "## 1. 기업 개황\n" + link_line + "\n\n" + text
+        sentence_end = text.find(".\n", heading.end())
+        if sentence_end >= 0:
+            return text[:sentence_end + 1] + citation + text[sentence_end + 1:]
+        return text[:heading.end()] + "\n" + company_name + citation + text[heading.end():]
+    return "## 1. 기업 개황\n" + company_name + citation + "\n\n" + text
 
 
 def build_company_prompt(
@@ -433,11 +436,12 @@ def build_company_prompt(
 --- 끝 ---
 
 한국어로 아래 일곱 항목에 답하라:
-**출처 링크 의무 규칙**: 홈페이지·DART·뉴스를 근거로 쓴 모든 문장 끝에 제공된
-마크다운 링크를 붙여라. 특히 내부거래·승계·계열분리·소송·과로처럼 언론 제목에서
-읽은 판단은 반드시 바로 뒤에 `[기사 제목](URL)`을 붙인다. 링크가 제공되지 않은
-구체적 사실은 쓰지 말고 `정보 부족`으로 남긴다. 맨 아래 참고 링크만으로 대신하지
-말고, 독자가 그 문장을 읽는 자리에서 바로 원문을 열 수 있어야 한다.
+**출처 링크 의무 규칙**: 별도의 `참고 링크`, `출처 지도`, 링크 모음 섹션을 만들지
+마라. 홈페이지·DART·뉴스를 근거로 쓴 문장 끝에 반드시
+`(출처: [자료명](URL))` 형식으로 괄호 출처를 붙여라. 특히 내부거래·승계·계열분리·
+소송·과로처럼 언론에서 읽은 판단은 바로 그 문장 끝에
+`(출처: [기사 제목](URL))`을 붙인다. 한 문장에 출처가 여러 개면 같은 괄호 안에
+나란히 넣는다. 링크가 제공되지 않은 구체적 사실은 쓰지 말고 `정보 부족`으로 남긴다.
 1. **기업 개황**: 설립·업종·상장여부·규모 등 확인 가능한 사실 요약. 첫 줄에
    `{homepage_link}`를 그대로 넣고, DART 사실에는 [DART 공시 검색]({dart_search_url})을 붙여라.
 2. **재무 상태 해석**: 재무제표가 있으면 매출/이익 추이가 뭘 시사하는지 해석.
@@ -701,10 +705,8 @@ def analyze_company(args: argparse.Namespace) -> None:
         stdout, engine = run_ai_exec(prompt, BASE_DIR, timeout=300)
     except RuntimeError as exc:
         raise SystemExit(f"AI 분석 실패: {exc}")
-    # ★ 2026-08-09: 참고 링크(DART·대안 정보원·뉴스 원문)는 AI가 정확히 인용한다는
-    # 보장이 없으므로 AI 출력과 별개로 코드가 직접 덧붙인다.
+    # 첫 기업개황 문장에는 코드가 괄호형 출처를 보장한다. 별도 링크 목록은 만들지 않는다.
     text = ensure_company_overview_links(stdout.strip(), company_name, homepage_url, corp_code)
-    text += "\n\n" + build_reference_links_block(company_name, corp_code, news)
 
     token = _notion_token()
     if not token:

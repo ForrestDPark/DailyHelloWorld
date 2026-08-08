@@ -1598,7 +1598,7 @@ def analyze_top_job(args: argparse.Namespace) -> None:
         from company_profile import (
             _dart_api_key, fetch_dart_company_info, fetch_dart_corp_code_map, fetch_dart_financial_summary,
             find_dart_corp_code, search_related_contests, search_related_jobs, fetch_company_news,
-            build_company_prompt, build_reference_links_block, ensure_company_overview_links,
+            build_company_prompt, ensure_company_overview_links,
             _markdown_to_notion_blocks as company_blocks,
             _notion_publish as company_publish, COMPANY_PROFILE_STATE_DIR,
         )
@@ -1628,12 +1628,10 @@ def analyze_top_job(args: argparse.Namespace) -> None:
         )
         from ai_exec import run_ai_exec
         stdout, _ = run_ai_exec(prompt, BASE_DIR, timeout=300)
-        # ★ 2026-08-09: 참고 링크(DART·대안 정보원·뉴스 원문)는 AI 출력과 별개로
-        # 코드가 직접 덧붙인다 — company_profile.py의 analyze_company()와 동일.
+        # 기업개황 첫 사실에 괄호형 출처를 보장한다. 별도 출처 지도는 만들지 않는다.
         company_text = ensure_company_overview_links(
             stdout.strip(), row["company"], homepage_url, corp_code,
         )
-        company_text += "\n\n" + build_reference_links_block(row["company"], corp_code, news_related)
         company_title = f"🏢 {row['company']} 경영 분석"
         safe_name = re.sub(r"[^\w가-힣-]+", "_", row["company"])
         state_path = COMPANY_PROFILE_STATE_DIR / f"{safe_name}.json"
