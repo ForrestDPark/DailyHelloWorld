@@ -2077,16 +2077,17 @@ def open_ebook_study_build_terminal(book_path):
 # ════════════════════════════════════════════════════════════
 
 def write_alarm_script():
-    """실제 알람 시 실행될 셸 스크립트 생성 (폴더 직접 열기 방식)"""
+    """실제 알람 시 Elmedia를 새 세션으로 열어 클래식만 재생한다."""
     os.makedirs(os.path.dirname(ALARM_SCRIPT_PATH), exist_ok=True)
     script = f"""#!/bin/bash
 # 교대근무 아침 알람 실행 스크립트
 
-# 1. Elmedia로 음악 폴더 직접 열기 (m3u 파싱 문제 우회)
-open -a "Elmedia Video Player" "{PLAYLIST_FOLDER}"
-
-# 2. 맥 단축어 실행 (유튜브 랜덤 음악)
-/usr/bin/shortcuts run "{SHORTCUT_NAME}"
+# 전날 재생하던 좋아요 큐가 남아 있으면 클래식과 섞이므로 Elmedia를 완전히
+# 종료한 뒤 클래식 폴더만 새 인스턴스로 연다. 알람에서는 유튜브 랜덤 음악
+# 단축어도 실행하지 않아 기상 음악이 클래식으로만 유지된다.
+/usr/bin/killall "Elmedia Video Player" 2>/dev/null || true
+/bin/sleep 1
+/usr/bin/open -n -a "Elmedia Video Player" "{PLAYLIST_FOLDER}"
 """
     with open(ALARM_SCRIPT_PATH, "w") as f:
         f.write(script)
@@ -2310,14 +2311,15 @@ def format_claude_local_stats(stats):
     return f"🪙 Claude 로컬: {' · '.join(parts)}"
 
 
-AI_USAGE_CRITICAL_PERCENT = 90
-CODEX_PINK_COLOR = NSColor.colorWithCalibratedRed_green_blue_alpha_(
-    1.0, 0.50, 0.72, 1.0
+CODEX_DAILY_BUDGET_PERCENT = 100.0 / 7.0
+CLAUDE_WEEKLY_CRITICAL_PERCENT = 90
+CODEX_LIGHT_PURPLE_COLOR = NSColor.colorWithCalibratedRed_green_blue_alpha_(
+    0.79, 0.65, 1.0, 1.0
 )
 
 
 def _codex_weekly_critical(quota):
-    """Codex의 주간(primary, window_minutes≈10080) 사용률이 90% 이상인지."""
+    """Codex 주간 한도의 하루 몫(100/7≈14.3%)을 모두 사용했는지."""
     if not quota:
         return False
     primary = quota.get("primary")
@@ -2327,7 +2329,7 @@ def _codex_weekly_critical(quota):
     pct = primary.get("used_percent")
     if window is None or pct is None:
         return False
-    return window >= 10000 and pct >= AI_USAGE_CRITICAL_PERCENT
+    return window >= 10000 and pct >= CODEX_DAILY_BUDGET_PERCENT
 
 
 def _claude_weekly_critical(data):
@@ -2339,7 +2341,7 @@ def _claude_weekly_critical(data):
         if not isinstance(val, dict) or "day" not in key.lower():
             continue
         util = val.get("utilization")
-        if util is not None and util >= AI_USAGE_CRITICAL_PERCENT:
+        if util is not None and util >= CLAUDE_WEEKLY_CRITICAL_PERCENT:
             return True
     return False
 
@@ -2574,7 +2576,7 @@ class ShiftAlarmApp(rumps.App):
     def _apply_ai_usage(self, codex_quota, claude_live, claude_local):
         codex_color = (
             NSColor.systemRedColor() if _codex_weekly_critical(codex_quota)
-            else CODEX_PINK_COLOR
+            else CODEX_LIGHT_PURPLE_COLOR
         )
         _set_menu_item_color(self.codex_usage_item, format_codex_usage(codex_quota), codex_color)
 
@@ -2667,13 +2669,14 @@ class ShiftAlarmApp(rumps.App):
             storage_inner.append((0, _utf16_len(storage), color))
 
         # Codex/Claude 사용량을 드롭다운을 열지 않아도 보이도록 상태창 타이틀에 바로
-        # "94% 61%" 형태로 표시한다. 순서는 Codex(연한 핑크) → Claude(오렌지)이며,
-        # 각자의 주간(7일) 윈도우가 90% 이상이면 빨강으로 덮어써 경고한다.
+        # "94% 61%" 형태로 표시한다. 순서는 Codex(연보라) → Claude(오렌지)이며,
+        # Codex는 주간 한도의 하루 몫(약 14.3%)을 다 쓰면, Claude는 주간
+        # 윈도우가 90% 이상이면 빨강으로 덮어써 경고한다.
         codex_pct = _codex_primary_percent(self._codex_quota)
         codex_token = f"{codex_pct:.0f}%" if codex_pct is not None else ""
         codex_color = (
             NSColor.systemRedColor() if _codex_weekly_critical(self._codex_quota)
-            else CODEX_PINK_COLOR
+            else CODEX_LIGHT_PURPLE_COLOR
         )
 
         claude_pct = _claude_five_hour_percent(self._claude_live_quota)
