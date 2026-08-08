@@ -20,6 +20,9 @@
 
 const fm = FileManager.iCloud();
 const statusPath = fm.joinPath(fm.documentsDirectory(), "status.json");
+const cacheFm = FileManager.local();
+const cacheDir = cacheFm.joinPath(cacheFm.documentsDirectory(), "ShiftAlarmWidget");
+const cachePath = cacheFm.joinPath(cacheDir, "status-last-good.json");
 
 const SHIFT_LABELS = {
   Day: "☀️ 주간",
@@ -40,16 +43,33 @@ const COLOR_ORANGE = new Color("#ff9f0a");
 const COLOR_PURPLE = new Color("#bf5af2");
 
 async function loadStatus() {
-  if (!fm.fileExists(statusPath)) return null;
-  try {
-    if (!fm.isFileDownloaded(statusPath)) {
-      await fm.downloadFileFromiCloud(statusPath);
+  // Mac이 iCloud의 status.json을 원자적으로 교체하는 순간이나 iCloud가 파일을
+  // 내려받는 동안에는 WidgetKit에서 fileExists/readString이 일시적으로 실패할
+  // 수 있다. 정상 파일을 읽었을 때 로컬에 마지막 성공본을 저장해두고, 이런 짧은
+  // 동기화 공백에는 캐시를 사용한다.
+  if (fm.fileExists(statusPath)) {
+    try {
+      if (!fm.isFileDownloaded(statusPath)) {
+        await fm.downloadFileFromiCloud(statusPath);
+      }
+      const raw = fm.readString(statusPath);
+      const status = JSON.parse(raw);
+      if (!cacheFm.fileExists(cacheDir)) cacheFm.createDirectory(cacheDir, true);
+      cacheFm.writeString(cachePath, raw);
+      return status;
+    } catch (e) {
+      // 아래의 마지막 정상 캐시로 폴백한다.
     }
-    const raw = fm.readString(statusPath);
-    return JSON.parse(raw);
-  } catch (e) {
-    return null;
   }
+
+  try {
+    if (cacheFm.fileExists(cachePath)) {
+      return JSON.parse(cacheFm.readString(cachePath));
+    }
+  } catch (e) {
+    // iCloud와 로컬 캐시를 모두 읽지 못한 첫 실행에서만 null을 반환한다.
+  }
+  return null;
 }
 
 function addLine(stack, text, { color = COLOR_TEXT, size = 12, bold = false, lineLimit = 1 } = {}) {
@@ -186,7 +206,7 @@ function buildWidget(status, family) {
   if (!status) {
     addLine(widget, "⚠️ status.json을 찾을 수 없습니다", { color: COLOR_WARN, size: 13 });
     widget.addSpacer(4);
-    addLine(widget, "Mac의 shift_alarm 확인 필요", { color: COLOR_DIM, size: 11 });
+    addLine(widget, "Scriptable 앱에서 한 번 실행해주세요", { color: COLOR_DIM, size: 11 });
     return widget;
   }
 

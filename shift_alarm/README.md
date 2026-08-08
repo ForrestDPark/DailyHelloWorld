@@ -289,6 +289,7 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
 **진짜 홈 화면 위젯(아이콘들 사이에 고정되는 타일)을 원하면 이 방법만 쓴다.** 처음엔 Pythonista로 위젯을 만들었었는데, Pythonista의 위젯 기능은 iOS 14 이전 방식인 Today Widget(NCWidget 확장)이고 **iOS 18부터 애플이 이 확장 방식 자체를 완전히 제거해서 더 이상 동작하지 않는다**(2026-08-06 웹 검색으로 확인 — 위젯 목록에 Pythonista가 아예 안 뜨는 게 정상). Scriptable은 최신 WidgetKit을 지원하는 앱이라 진짜 홈 화면 위젯이 가능하다.
 
 - **`shift_alarm/ShiftAlarmWidget.js`**(git 추적됨) — Scriptable의 `FileManager.iCloud()`로 같은 폴더의 `status.json`을 읽어(iCloud 미다운로드 상태면 `downloadFileFromiCloud()`로 먼저 받음) `ListWidget`으로 그린다. Mac 쪽에서 수정하면 Scriptable iCloud Documents 폴더(`iCloud~dk~simonbs~Scriptable/Documents/`)에 다시 복사해야 아이폰에 반영됨(자동 동기화 아님).
+- **★ 2026-08-08 iCloud 일시 오류 대응**: Mac이 `status.json`을 원자적으로 교체하는 순간이나 iCloud 다운로드가 지연될 때 Scriptable의 `fileExists`/`readString`이 잠깐 실패할 수 있다. 예전 코드는 파일 부재·다운로드 실패·JSON 읽기 실패를 전부 `status.json을 찾을 수 없습니다`로 표시했다. 이제 iCloud 파일을 정상적으로 읽을 때 `FileManager.local()`의 `ShiftAlarmWidget/status-last-good.json`에도 마지막 성공본을 저장하고, 일시적 실패 시 그 캐시를 표시한다. iCloud와 캐시가 모두 없는 최초 실행에서만 오류 안내가 뜬다.
 - **추가 방법**: 홈 화면 길게 눌러 편집 모드 → 왼쪽 위 **"+"** → **Scriptable** 검색 → 크기 선택 → 추가 → 그 위젯을 길게 눌러 **"위젯 편집"** → **Script**를 **`ShiftAlarmWidget`**으로 지정.
 - **레이아웃은 `config.widgetFamily`로 위젯 크기에 따라 분기한다(★ 2026-08-06)** — Scriptable은 내용이 위젯 프레임을 넘으면 자동으로 줄여주지 않고 그냥 잘라버리므로, 크기별로 보여줄 내용 자체를 다르게 짰다:
   - **스몰**: 근무·며칠째, 날씨만 (한 줄씩, 최소한만 — 정보 다 넣으면 잘림)
