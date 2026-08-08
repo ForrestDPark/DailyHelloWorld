@@ -51,6 +51,17 @@ AICHALLENGE4ALL_API_URL = "https://aichallenge4all.or.kr/api/competitions"
 AICHALLENGE4ALL_SOURCE = "AI경진대회(정부)"
 AICHALLENGE4ALL_CLOSED_STATUS = "closed"
 
+# 콘테스트코리아(contestkorea.com) — robots.txt Allow:/. 옛날 방식 PHP 게시판
+# 사이트라 JSON/JS 없이 순수 서버 렌더링 HTML이라 정규식으로 바로 파싱 가능
+# (사람인 크롤러와 같은 블록 분리 패턴). "학문・과학・IT" 카테고리(Txt_bcode=
+# 030310001)만 우선 수집 — 다른 카테고리 bcode는 필요해지면 추가.
+CONTESTKOREA_LIST_URL = "https://www.contestkorea.com/sub/list.php"
+CONTESTKOREA_CATEGORY_BCODE = "030310001"
+CONTESTKOREA_CATEGORY_NAME = "학문・과학・IT"
+CONTESTKOREA_MAX_PAGES = 5
+CONTESTKOREA_DELAY_SECONDS = 1.5
+CONTESTKOREA_SOURCE = "콘테스트코리아"
+
 NOTION_VERSION = "2026-03-11"
 # "🎴 이직시스템" 페이지 — job_collector.py의 분석 페이지와 같은 부모 밑에 만든다.
 NOTION_JOBSYSTEM_PAGE_ID = "3b132a1e-ae80-805d-ad0e-d4f2cae02709"
@@ -230,6 +241,82 @@ def fetch_aichallenge4all(config: dict[str, Any]) -> list[Contest]:
     return contests
 
 
+_CK_ITEM_SPLIT_RE = re.compile(
+    r'(?=<li(?:\s+class="[^"]*")?>\s*(?:<!--.*?-->)?\s*<div class="title">)', re.S
+)
+_CK_HREF_RE = re.compile(r'<a href="(view\.php\?[^"]+)">')
+_CK_TITLE_RE = re.compile(r'<span class="txt">([^<]+)</span>')
+_CK_HOST_RE = re.compile(r'<strong>주최</strong>\s*\.\s*([^<]+)</li>')
+_CK_DEADLINE_RE = re.compile(r'<em>접수</em>\s*([^<]*)')
+_CK_STRNO_RE = re.compile(r"str_no=(\d+)")
+
+
+def parse_contestkorea_block(block: str, config: dict[str, Any]) -> Contest | None:
+    href_match = _CK_HREF_RE.search(block)
+    title_match = _CK_TITLE_RE.search(block)
+    if not href_match or not title_match:
+        return None
+    strno_match = _CK_STRNO_RE.search(href_match.group(1))
+    if not strno_match:
+        return None
+    title = plain(title_match.group(1))
+    host_match = _CK_HOST_RE.search(block)
+    organizer = plain(host_match.group(1)) if host_match else ""
+    deadline_match = _CK_DEADLINE_RE.search(block)
+    deadline = plain(deadline_match.group(1)) if deadline_match else ""
+    combined = " ".join((title, organizer))
+    return Contest(
+        source_id=strno_match.group(1), title=title, organizer=organizer,
+        url=f"https://www.contestkorea.com/sub/{href_match.group(1)}",
+        source=CONTESTKOREA_SOURCE, deadline=deadline,
+        score=score_text(combined, config),
+    )
+
+
+def fetch_contestkorea_page(
+    page: int, config: dict[str, Any], bcode: str = CONTESTKOREA_CATEGORY_BCODE
+) -> list[Contest]:
+    """옛날 방식 PHP 게시판이라 JSON 없이 순수 HTML을 정규식으로 파싱한다
+    (사람인 크롤러와 같은 블록 분리 패턴) — `<li class="...">... <div
+    class="title">` 시작 지점 기준으로 항목을 자른다."""
+    params = {"int_gbn": 1, "Txt_bcode": bcode, "page": page}
+    request = urllib.request.Request(
+        f"{CONTESTKOREA_LIST_URL}?{urllib.parse.urlencode(params)}",
+        headers={"User-Agent": USER_AGENT},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            body = response.read().decode("utf-8", "replace")
+    except urllib.error.HTTPError as exc:
+        raise RuntimeError(f"콘테스트코리아 목록 HTTP {exc.code}") from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"콘테스트코리아 목록 연결 실패: {exc.reason}") from exc
+
+    idx = body.find("list_style_2")
+    if idx == -1:
+        return []
+    section = body[idx:idx + 80000]
+    blocks = _CK_ITEM_SPLIT_RE.split(section)
+    contests = []
+    for block in blocks[1:]:
+        contest = parse_contestkorea_block(block, config)
+        if contest:
+            contests.append(contest)
+    return contests
+
+
+def fetch_contestkorea_all(config: dict[str, Any], max_pages: int = CONTESTKOREA_MAX_PAGES) -> list[Contest]:
+    contests: list[Contest] = []
+    for page in range(1, max_pages + 1):
+        page_items = fetch_contestkorea_page(page, config)
+        if not page_items:
+            break
+        contests.extend(page_items)
+        if page < max_pages:
+            time.sleep(CONTESTKOREA_DELAY_SECONDS)
+    return contests
+
+
 def fingerprint(contest: Contest) -> str:
     body = "\x1f".join((contest.title, contest.organizer, contest.deadline))
     return hashlib.sha256(body.encode()).hexdigest()
@@ -279,6 +366,14 @@ def collect(args: argparse.Namespace) -> None:
         contests.extend(ai_contests)
     except RuntimeError as exc:
         print(f"  ⚠️ 전국민 AI 경진대회 수집 실패: {exc}")
+
+    print(f"콘테스트코리아({CONTESTKOREA_CATEGORY_NAME}) 목록 수집 중(최대 {CONTESTKOREA_MAX_PAGES}페이지)...")
+    try:
+        ck_contests = fetch_contestkorea_all(config)
+        print(f"  {len(ck_contests)}건 수신")
+        contests.extend(ck_contests)
+    except RuntimeError as exc:
+        print(f"  ⚠️ 콘테스트코리아 수집 실패: {exc}")
 
     inserted, updated = upsert_contests(conn, contests)
     print(f"\n완료: 신규 {inserted}건 / 기존 갱신 {updated}건")

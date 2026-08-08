@@ -108,7 +108,7 @@ python3 job_collector.py analyze <source_id> [--source "사람인(크롤링)"]
 채용공고와 별개로 공모전·경진대회를 같은 철학("공고를 학습 커리큘럼으로 쓴다")으로 다룬다 — 실력 검증 기회이자, 참가하지 않더라도 "이 대회가 뭘 원하는지" 분석 자체가 학습 재료다. `data/contests.db`에 별도 저장하며, `job_collector.py`와 완전히 분리된 파일이다(도메인이 달라 스키마도 다름).
 
 ```bash
-python3 contest_collector.py collect        # 링커리어(최대 100건) + 전국민 AI 경진대회(전체) 수집
+python3 contest_collector.py collect        # 링커리어(최대 100건) + 전국민 AI 경진대회(전체) + 콘테스트코리아(최대 60건) 수집
 python3 contest_collector.py list --limit 20
 python3 contest_collector.py analyze-top     # 적합도 1위를 AI로 분석해 Notion에 발행(모든 소스 통합 순위)
 ```
@@ -118,7 +118,7 @@ python3 contest_collector.py analyze-top     # 적합도 1위를 AI로 분석해
 - 공모전 상세 페이지(`https://linkareer.com/activity/{id}`)는 서버 렌더링이라 curl로 본문(참여대상/시상규모/접수기간/상세내용)이 바로 잡힌다.
 - AI 분석은 4개 항목: ①참여자격/공모분야/평가기준 요약 ②이 대회가 검증하려는 역량 추론 ③참가 시 접근 전략 ④1인 사업자 관점 상품화(이 문제를 사업 아이템으로 본다면).
 - Notion 발행은 `job_collector.py`와 같은 "🎴 이직시스템" 페이지 밑, 페이지 하나만 매일 갱신하는 방식을 그대로 재사용(`_notion_publish`가 두 파일에 거의 동일하게 존재 — 도메인별 파일 분리 원칙을 지키려고 공용 모듈로 합치지 않음).
-- **아직 미구현(후속 예정)**: 데이콘(dacon.io, 순수 클라이언트 렌더링이라 실제 API 엔드포인트 발견 필요), 콘테스트코리아(contestkorea.com), allforyoung.com, 위비티(wevity.com), 씽굿(thinkcontest.com), 해외 플랫폼(Devpost 등).
+- **아직 미구현(후속 예정)**: 데이콘(dacon.io, 순수 클라이언트 렌더링이라 실제 API 엔드포인트 발견 필요), allforyoung.com, 위비티(wevity.com), 씽굿(thinkcontest.com), 해외 플랫폼(Devpost 등).
 
 ### 3-3-1. 전국민 AI 경진대회(aichallenge4all.or.kr, 정부 주관) (★ 2026-08-08 추가)
 
@@ -127,6 +127,15 @@ python3 contest_collector.py analyze-top     # 적합도 1위를 AI로 분석해
 - `fetch_aichallenge4all()`이 `badgeStatus == "closed"`(종료)만 걸러내고 나머지(모집중/참가중/상시/준비중)는 전부 후보로 남긴다 — 정부 주관 큐레이션 플랫폼이라 33건 전체가 이미 AI 관련이라서 링커리어처럼 페이지를 여러 장 넘길 필요가 없다.
 - 응모기간(`applyPeriod`)에 `<br/>` 같은 HTML 태그가 그대로 섞여 있는 경우가 있어(실측 확인) 태그를 `" / "`로 치환해 여러 시즌 정보를 한 줄로 정리한다.
 - `organizer`는 API에 별도 필드가 없어 `"전국민 AI 경진대회(정부 주관)"` 고정값을 쓴다. `url`은 `detailUrl` → `externalUrl` → 없으면 `aichallenge4all.or.kr/competitions/{slug}` 순으로 폴백.
+
+### 3-3-2. 콘테스트코리아(contestkorea.com) (★ 2026-08-08 추가)
+
+`collect()`의 세 번째 소스. 옛날 방식 PHP 게시판 사이트라 링커리어·전국민AI경진대회와 달리 JSON이 전혀 없고, 사람인 크롤러(3-1)와 같은 순수 정규식 HTML 블록 분리 방식으로 파싱한다.
+
+- 목록 URL: `https://www.contestkorea.com/sub/list.php?int_gbn=1&Txt_bcode={카테고리코드}&page={N}`. 카테고리는 "학문・과학・IT"(`Txt_bcode=030310001`)만 우선 수집 — 다른 카테고리(문학・문예, 아이디어・건축・창업 등)도 각자 다른 `bcode`를 쓰는데, 필요해지면 `CONTESTKOREA_CATEGORY_BCODE`를 추가하면 된다. 페이지당 12건, 최대 5페이지(60건)까지.
+- `list_style_2` 클래스 안 `<li>` 블록마다 `<div class="title">`(제목·상세 URL), `<ul class="host">`(주최), `<div class="date">`(접수기간)가 있어 각각 정규식으로 추출(`_CK_TITLE_RE`/`_CK_HOST_RE`/`_CK_DEADLINE_RE`, `fetch_contestkorea_page`/`parse_contestkorea_block`).
+- 상세 URL은 `view.php?...&str_no={id}` 형태이며 `str_no`를 `source_id`로 쓴다. 상세 페이지도 완전히 서버 렌더링이라 curl로 참가대상/접수기간/시상내역/참가비용이 그대로 잡힌다(실측 확인).
+- **알려진 한계**: `deadline`이 "06.05~08.04"처럼 연도 없는 자유 텍스트라 마감 여부를 코드로 걸러내지 못한다. 실제로 이미 마감된 공고가 analyze-top에 뽑힌 적이 있는데(2026-08-08 실측), 다행히 AI가 원문의 접수 마감 시각을 보고 "현재 날짜 기준으로는 종료된 공모전"이라고 스스로 짚어줬다 — 링커리어(정확한 ISO 날짜)·전국민AI경진대회(`badgeStatus`)처럼 구조화된 마감 필터가 없다는 점을 인지하고 쓸 것.
 
 ## 3-4. 기업 경영 분석 (`company_profile.py`, ★ 2026-08-07 추가)
 
