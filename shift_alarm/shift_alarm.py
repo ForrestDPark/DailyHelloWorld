@@ -8,8 +8,8 @@
 - d_team_schedule_2026.json (근무표에서 추출한 D조 날짜별 근무표)을 읽어서
   매일 자정에 "오늘 날짜"에 해당하는 근무(D/S/G/휴)를 자동으로 찾아
   알람을 자동 설정한다.
-- 메뉴바에서 수동으로 근무를 눌러서 덮어쓰는 것도 여전히 가능하다
-  (수동 선택 시 "자동 모드"는 꺼지고, 다시 켜고 싶으면 메뉴에서 켤 수 있다).
+- 메뉴바에서 수동으로 근무를 눌러 오늘 하루만 덮어쓸 수 있다. 다음 날짜에는
+  근무표 자동 적용으로 복귀한다.
 - 오늘 근무 중 "지금까지 벌어들인 급여" 실시간 추정치
   - 급여명세서를 역산해서 얻은 통상시급을 기본값으로 사용
   - 주간(Day)/오후(Swing): 통상시급 그대로
@@ -306,6 +306,10 @@ SHORTCUT_NAME = "아침루틴음악재생"
 # ── Elmedia로 열 음악 폴더 ─────────────────────────────────────
 PLAYLIST_FOLDER = "/Users/forrestdpark/Desktop/BlogImage/Coffee and Meditation"
 FAVORITES_PLAYLIST_FOLDER = "/Users/forrestdpark/Desktop/BlogImage/좋아요플레이"  # ★ 2026-08-07 추가
+ELMEDIA_PLAYLIST_DB = os.path.expanduser(
+    "~/Library/Containers/com.eltima.elmedia6.mas/Data/Library/Application Support/"
+    "Elmedia Video Player/Playlist.db"
+)
 
 # ── 아산시 좌표 ──────────────────────────────────────────────
 LATITUDE  = 36.78
@@ -926,14 +930,30 @@ def ask_input(title, message, default=""):
 # Elmedia 폴더 재생 (m3u 없이 폴더 자체를 직접 엶)
 # ════════════════════════════════════════════════════════════
 
+def reset_elmedia_playlist():
+    """Elmedia가 영구 저장한 큐만 비운다. 원본 음악 파일은 건드리지 않는다."""
+    subprocess.run(
+        ["/usr/bin/killall", "Elmedia Video Player"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    time.sleep(1)
+    if not os.path.exists(ELMEDIA_PLAYLIST_DB):
+        return
+    with sqlite3.connect(ELMEDIA_PLAYLIST_DB, timeout=5) as conn:
+        conn.execute("DELETE FROM item_order")
+        conn.execute("DELETE FROM playlist_items")
+        conn.commit()
+
+
 def play_folder_in_elmedia(folder=PLAYLIST_FOLDER):
     """Elmedia Video Player로 음악 폴더 자체를 엶(★ 2026-08-07: 폴더를 인자로
     받게 일반화 — 기본 재생 목록과 "좋아요 플레이" 폴더를 같은 함수로 처리)."""
     if not os.path.isdir(folder):
         return False, "폴더를 찾을 수 없습니다."
     try:
-        subprocess.Popen(["open", "-a", "Elmedia Video Player", folder])
-        return True, "Elmedia로 폴더를 열었습니다."
+        reset_elmedia_playlist()
+        subprocess.Popen(["open", "-n", "-a", "Elmedia Video Player", folder])
+        return True, "기존 재생목록을 비우고 선택한 폴더만 열었습니다."
     except Exception as e:
         return False, str(e)
 
@@ -2096,6 +2116,8 @@ def write_alarm_script():
 # 단축어도 실행하지 않아 기상 음악이 클래식으로만 유지된다.
 /usr/bin/killall "Elmedia Video Player" 2>/dev/null || true
 /bin/sleep 1
+/usr/bin/sqlite3 "{ELMEDIA_PLAYLIST_DB}" \
+  'DELETE FROM item_order; DELETE FROM playlist_items;' 2>/dev/null || true
 /usr/bin/open -n -a "Elmedia Video Player" "{PLAYLIST_FOLDER}"
 """
     with open(ALARM_SCRIPT_PATH, "w") as f:
