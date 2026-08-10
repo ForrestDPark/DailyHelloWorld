@@ -65,6 +65,12 @@ _TRASH_RECOVERY_ATTEMPTED = False
 # 다 쓰기 전에는 같은 곡이 다시 안 뽑히게 이력을 영상 처리 "회차 간"에도
 # 영구 저장한다(기존엔 build_bgm_track() 호출 한 번 안에서만 안 겹쳤음).
 BGM_HISTORY_FILE = os.path.expanduser("~/.jp_workout_bgm_history.json")
+# ★ 2026-08-10: BGM_HISTORY_FILE은 "다음에 뭘 안 겹치게 뽑을지"를 위한 로테이션
+# 상태값일 뿐, 사람이 "이 영상에 무슨 곡이 나왔지?"를 나중에 물어봤을 때 답할
+# 기록은 아니다(파일 경로 목록만 있고 어느 영상에 썼는지·언제 썼는지가 없음).
+# 그래서 별도로 영상별 사용 기록을 남긴다 — JSON Lines라 항상 끝에 한 줄만
+# append하면 되고, 파일이 커져도 기존 줄을 다시 쓸 필요가 없다.
+BGM_USAGE_LOG_FILE = os.path.expanduser("~/.jp_workout_bgm_usage_log.jsonl")
 
 
 def format_elapsed(seconds):
@@ -651,7 +657,50 @@ def _save_bgm_history(used):
     os.replace(tmp_path, BGM_HISTORY_FILE)
 
 
-def build_bgm_track(bgm_dir, target_duration, tmp_dir):
+def _log_bgm_usage(video_label, playlist):
+    """★ 2026-08-10 추가: 영상 하나에 어떤 곡들이 쓰였는지 사람이 나중에 물어볼
+    수 있게 영구 기록한다(요청: "음악 사용된 기록이 있으면 보여주고, 없으면
+    보관해뒀다가 알려달라고 하면 알려주게"). 로테이션 상태(BGM_HISTORY_FILE)와는
+    별개 파일 — 저건 "다음에 뭘 뽑을지"만 알고 어느 영상에 썼는지는 모른다."""
+    entry = {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "video": video_label,
+        "tracks": [os.path.basename(p) for p in playlist],
+    }
+    try:
+        with open(BGM_USAGE_LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except OSError as exc:
+        print(f"⚠️ BGM 사용 기록 저장 실패(무시하고 계속): {exc}")
+
+
+def show_bgm_usage_log(limit=20):
+    """최근 BGM 사용 기록을 사람이 읽기 좋게 출력한다. --show-bgm-log로 호출."""
+    if not os.path.exists(BGM_USAGE_LOG_FILE):
+        print("아직 기록된 BGM 사용 이력이 없습니다(운동용 영상을 만들면 그때부터 쌓입니다).")
+        return
+    entries = []
+    with open(BGM_USAGE_LOG_FILE, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+    if not entries:
+        print("아직 기록된 BGM 사용 이력이 없습니다.")
+        return
+    print(f"🎵 최근 BGM 사용 기록 (최신 {min(limit, len(entries))}건 / 전체 {len(entries)}건):\n")
+    for entry in entries[-limit:][::-1]:
+        print(f"[{entry.get('timestamp', '?')}] {entry.get('video', '?')}")
+        for track in entry.get("tracks", []):
+            print(f"   - {track}")
+        print()
+
+
+def build_bgm_track(bgm_dir, target_duration, tmp_dir, video_label=None):
     """bgm_dir 안의 (미리 잘라놓은) mp3들을 무작위 순서로 이어붙여 target_duration초
     이상 되는 오디오 트랙 하나를 만들어 경로를 반환.
 
@@ -661,7 +710,8 @@ def build_bgm_track(bgm_dir, target_duration, tmp_dir):
     보니 같은 곡이 자주 다시 걸려 "계속 반복되는 것 같다"는 느낌을 줬다. 이제
     BGM_HISTORY_FILE에 "이미 쓴 곡" 이력을 영구 저장해서, 폴더 안 모든 곡을 최소 한 번씩
     다 쓰기 전에는 같은 곡이 다시 안 뽑힌다(회차 간에도 이어짐). 폴더가 없거나 mp3가
-    하나도 없으면 None."""
+    하나도 없으면 None. `video_label`을 주면 BGM_USAGE_LOG_FILE에 "이 영상에 이 곡들이
+    쓰였다"는 기록도 함께 남는다(★ 2026-08-10, show_bgm_usage_log()로 나중에 조회)."""
     if not bgm_dir or not os.path.isdir(bgm_dir):
         return None
     mp3s = glob.glob(os.path.join(bgm_dir, "*.mp3"))
@@ -688,6 +738,7 @@ def build_bgm_track(bgm_dir, target_duration, tmp_dir):
         total += durations[p]
 
     _save_bgm_history(used)
+    _log_bgm_usage(video_label or os.path.basename(tmp_dir), playlist)
 
     inputs = []
     for p in playlist:
@@ -918,7 +969,7 @@ def _process_video(video_path, args):
     print(f"🎵 배경음 입히는 중 (볼륨 {args.bgm_volume:.0%})...")
     stage_start = time.perf_counter()
     with tempfile.TemporaryDirectory() as tmp_dir:
-        bgm_track = build_bgm_track(args.bgm_dir, video_duration, tmp_dir)
+        bgm_track = build_bgm_track(args.bgm_dir, video_duration, tmp_dir, video_label=os.path.basename(bgm_out))
         bgm_ok = bool(bgm_track) and mix_background_audio(
             out_path, bgm_track, bgm_out, bgm_volume=args.bgm_volume,
         )
@@ -954,7 +1005,10 @@ def main():
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("path", help="영상 파일 경로 또는 영상들이 담긴 폴더 경로")
+    ap.add_argument("path", nargs="?", help="영상 파일 경로 또는 영상들이 담긴 폴더 경로")
+    ap.add_argument("--show-bgm-log", nargs="?", type=int, const=20, default=None, metavar="N",
+                     help="영상 처리 없이 최근 BGM 사용 기록만 N건(기본 20) 출력하고 종료 "
+                          "(★ 2026-08-10 추가 — '이 영상에 무슨 곡 나왔지' 나중에 조회용)")
     ap.add_argument("--top-percent", type=float, default=None,
                      help=f"고음 판정 기준: 유성음 pitch 분포 중 상위 N%% (기본 {DEFAULT_TOP_PERCENT:.0f} — 실전 비교 후 확정, 2026-07-24). "
                           f"명시적으로 주면 그 값을 그대로 쓰고, 평균-최고 음역 차이가 작아도 자동조정하지 않는다 "
@@ -980,6 +1034,13 @@ def main():
     ap.add_argument("--no-bgm", action="store_true",
                      help="배경음 입히기 건너뛰고 운동용 영상만 생성")
     args = ap.parse_args()
+
+    if args.show_bgm_log is not None:
+        show_bgm_usage_log(args.show_bgm_log)
+        return
+
+    if not args.path:
+        ap.error("path가 필요합니다(또는 --show-bgm-log만 단독으로 쓸 수 있습니다)")
 
     videos = collect_videos(args.path)
     if not videos:
