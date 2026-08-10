@@ -442,6 +442,21 @@ def _looks_student_only(detail_text: str) -> bool:
     return not any(m in detail_text for m in _OPEN_TO_ALL_MARKERS)
 
 
+_ORGANIZATION_ONLY_PATTERNS = (
+    re.compile(r"(?:참가|참여|신청)\s*(?:대상|자격)[^。.!?]{0,80}(?:전체\s*)?공공기관"),
+    re.compile(r"ALIO\s*공시\s*기준[^。.!?]{0,80}공공기관"),
+)
+
+
+def _looks_organization_only(detail_text: str) -> bool:
+    """개인이 아니라 공공기관 등 기관만 참가하는 대회를 제외한다.
+
+    기관이 주최하거나 본문에 단순히 '공공기관'이 등장하는 경우는 제외하지 않고,
+    참가 대상/자격 문맥에서 기관으로 제한된 경우만 보수적으로 판정한다.
+    """
+    return any(pattern.search(detail_text) for pattern in _ORGANIZATION_ONLY_PATTERNS)
+
+
 _DEADLINE_YMD_RE = re.compile(r"(20\d{2})[.\-](\d{1,2})[.\-](\d{1,2})")
 _DEADLINE_MD_RE = re.compile(r"(?<!\d)(\d{1,2})[.\-](\d{1,2})(?!\d)")
 
@@ -527,6 +542,33 @@ def build_contest_prompt(row: sqlite3.Row, detail_text: str) -> str:
    (모르는 부분은 "정보 부족 — 추정:"으로 표시하고 근거 있는 추정만 적을 것)."""
 
 
+_AI_TOOL_TRACE_MARKERS = (
+    "**Bash**:", "<tool_use>", "tool_uses", "Check memory index",
+    "cat \"/Users/", "functions.exec", "assistant to=",
+)
+
+
+def _valid_contest_analysis(text: str) -> bool:
+    """최종 분석문 대신 AI 에이전트의 도구 실행 로그가 반환되는 사고를 막는다.
+
+    Claude CLI가 종료 코드 0으로 Bash 도구 호출 한 줄만 출력한 사례가 실제로
+    발생했다. 길이, 다섯 필수 섹션, 도구 흔적을 함께 검사해 통과한 답만 Notion에
+    발행한다.
+    """
+    required = (
+        "경진대회 주제 맞춤 출품 아이디어",
+        "참여자격",
+        "검증하려는 역량",
+        "참가 시 접근 전략",
+        "1인 사업자 관점 상품화",
+    )
+    return (
+        len(text.strip()) >= 1200
+        and all(marker in text for marker in required)
+        and not any(marker in text for marker in _AI_TOOL_TRACE_MARKERS)
+    )
+
+
 def run_contest_analysis(row: sqlite3.Row) -> str | None:
     print(f"[{row['source']}] {row['organizer']} — {row['title']}")
     print(f"공모전 페이지 가져오는 중: {row['url']}")
@@ -540,11 +582,16 @@ def run_contest_analysis(row: sqlite3.Row) -> str | None:
     if _looks_student_only(detail_text):
         print("\n⚠️  참가자격이 학생(대학생/대학원생 등)으로 제한된 것으로 보여 건너뜁니다.\n")
         return None
+    if _looks_organization_only(detail_text):
+        print("\n⚠️  참가자격이 공공기관 등 기관으로 제한된 것으로 보여 건너뜁니다.\n")
+        return None
     prompt = build_contest_prompt(row, detail_text)
     print("\nAI로 분석 중... (codex 실패 시 claude로 자동 전환)\n")
     from ai_exec import run_ai_exec
     try:
-        stdout, engine = run_ai_exec(prompt, BASE_DIR, timeout=300)
+        stdout, engine = run_ai_exec(
+            prompt, BASE_DIR, timeout=300, validator=_valid_contest_analysis,
+        )
     except RuntimeError as exc:
         print(f"⚠️  AI 분석 실패: {exc}")
         return None

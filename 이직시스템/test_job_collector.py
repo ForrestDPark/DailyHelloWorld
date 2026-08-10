@@ -164,6 +164,26 @@ class JobCollectorTest(unittest.TestCase):
         self.assertIn("1인이 짧게 만들 최소", prompt)
         self.assertIn("최우선 추천", prompt)
 
+    def test_contest_analysis_rejects_agent_tool_trace(self):
+        leaked = """**Bash**: Check memory index for relevant prior guidance
+```\ncat \"/Users/example/.claude/MEMORY.md\"\n```"""
+        self.assertFalse(cc._valid_contest_analysis(leaked))
+
+    def test_contest_analysis_accepts_complete_answer(self):
+        sections = "\n".join([
+            "1. 경진대회 주제 맞춤 출품 아이디어 3개",
+            "2. 참여자격/공모분야/평가기준 요약",
+            "3. 이 대회가 검증하려는 역량 추론",
+            "4. 참가 시 접근 전략",
+            "5. 1인 사업자 관점 상품화",
+        ])
+        self.assertTrue(cc._valid_contest_analysis(sections + "\n" + "구체적 분석 " * 250))
+
+    def test_organization_only_contest_is_excluded(self):
+        detail = "참가 대상: ALIO 공시 기준 전체 공공기관. 단독 또는 컨소시엄 참가 가능."
+        self.assertTrue(cc._looks_organization_only(detail))
+        self.assertFalse(cc._looks_organization_only("공공기관이 주최하며 국민 누구나 참가 가능"))
+
     def test_candidate_profile_is_sanitized_and_used_in_job_prompt(self):
         profile = jc.load_candidate_profile()
         self.assertTrue(profile["projects"])

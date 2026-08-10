@@ -137,7 +137,8 @@ python3 contest_collector.py analyze-top --category general  # 링커리어+콘�
 - **`?keyword=` 검색 파라미터는 서버 렌더링에 반영되지 않는다** — 항상 "최신 20건"만 내려준다(확인됨). 그래서 검색 대신 `?page=1~5`로 여러 페이지(최대 100건)를 모은 뒤, `job_collector.py`의 `score_job()`과 동일한 방식(`config.json`의 include/exclude_keywords 재사용)으로 로컬 점수를 매긴다.
 - 공모전 상세 페이지(`https://linkareer.com/activity/{id}`)는 서버 렌더링이라 curl로 본문(참여대상/시상규모/접수기간/상세내용)이 바로 잡힌다.
 - AI 분석은 **경진대회 주제 맞춤 출품 아이디어 3개**를 1번에 배치하고, 이어서 참여자격·공모분야·평가기준 요약, 검증 역량 추론, 참가 전략, 1인 사업자 관점 상품화를 작성한다. 아이디어마다 문제·주제 적합성, 핵심 기능, 1인 MVP, 심사 차별점을 적고 최우선 추천 하나를 표시하므로 Notion에서 바로 출품 후보를 고를 수 있다(★ 2026-08-09 순서 개선).
-- `analyze-top`은 `_is_deadline_expired()`로 ISO 날짜와 연도 없는 `MM.DD~MM.DD` 접수기간을 현재 날짜에 맞춰 해석해 마감 공모전을 제외하고, `_looks_student_only()`로 대학생·대학원생만 참가 가능한 대회를 제외한다. 날짜가 불명확하면 임의로 탈락시키지 않고 후보로 남긴다.
+- **AI 도구 로그 발행 방지(★ 2026-08-10)**: Codex 실패 후 Claude 폴백이 최종 답변 대신 `Bash: Check memory index...` 같은 내부 도구 실행 로그만 종료 코드 0으로 반환한 사례가 있었다. `ai_exec.run_ai_exec()`의 선택적 응답 검증기와 `_valid_contest_analysis()`가 최소 길이·필수 5개 섹션·도구 흔적 부재를 모두 확인하며, 검증에 실패한 출력은 Notion에 발행하지 않고 다음 엔진/후보로 넘긴다.
+- `analyze-top`은 `_is_deadline_expired()`로 ISO 날짜와 연도 없는 `MM.DD~MM.DD` 접수기간을 현재 날짜에 맞춰 해석해 마감 공모전을 제외한다. `_looks_student_only()`는 대학생·대학원생 전용 대회를, `_looks_organization_only()`는 참가 대상이 ALIO 공시 공공기관 등 기관으로 제한된 대회를 제외한다(★ 2026-08-10). 기관이 주최한다는 이유만으로 제외하지 않고 참가 대상·자격 문맥에 제한이 명시된 경우만 거른다. 날짜·자격이 불명확하면 임의로 탈락시키지 않고 후보로 남긴다.
 - Notion 발행은 `job_collector.py`와 같은 "🎴 이직시스템" 페이지 밑, 페이지 하나만 매일 갱신하는 방식을 그대로 재사용(`_notion_publish`가 두 파일에 거의 동일하게 존재 — 도메인별 파일 분리 원칙을 지키려고 공용 모듈로 합치지 않음).
 - **아직 미구현(후속 예정)**: 데이콘(dacon.io, 순수 클라이언트 렌더링이라 실제 API 엔드포인트 발견 필요), allforyoung.com, 위비티(wevity.com), 씽굿(thinkcontest.com), 해외 플랫폼(Devpost 등).
 

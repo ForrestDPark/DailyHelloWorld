@@ -31,7 +31,7 @@ def _run_one(engine, prompt, cwd, timeout):
     )
 
 
-def run_ai_exec(prompt, cwd, timeout=600, primary="codex"):
+def run_ai_exec(prompt, cwd, timeout=600, primary="codex", validator=None):
     """primary 엔진으로 먼저 시도하고, 실패하면(종료 코드 비정상 또는 빈 응답)
     나머지 하나로 자동 전환한다. 성공한 stdout 텍스트와 실제 사용된 엔진 이름을
     (stdout, engine) 튜플로 반환한다. 둘 다 실패하면 두 엔진의 에러를 합쳐
@@ -47,9 +47,13 @@ def run_ai_exec(prompt, cwd, timeout=600, primary="codex"):
         except FileNotFoundError:
             errors.append(f"{engine}: 실행 파일을 찾을 수 없음")
             continue
-        if result.returncode == 0 and result.stdout.strip():
+        output = result.stdout.strip()
+        if result.returncode == 0 and output and (validator is None or validator(output)):
             if i > 0:
                 print(f"   ↪️ {order[0]} 실패로 {engine}(으)로 전환해서 처리함")
             return result.stdout, engine
+        if result.returncode == 0 and output and validator is not None:
+            errors.append(f"{engine}: 응답 형식 검증 실패(도구 로그 또는 필수 섹션 누락)")
+            continue
         errors.append(f"{engine}: {result.stderr.strip() or f'종료 코드 {result.returncode}'}")
     raise RuntimeError(" / ".join(errors))
