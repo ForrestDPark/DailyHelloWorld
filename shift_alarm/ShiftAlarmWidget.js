@@ -106,11 +106,13 @@ function buildLeftColumn(stack, status) {
   const reminders = status.reminders || [];
   const remindersChecked = status.reminders_checked || {};
   if (reminders.length > 0) {
-    addLine(stack, "🔔 오늘의 리마인더", { color: COLOR_DIM, size: 11, bold: true });
+    const reminderHeading = addLine(stack, "🔔 오늘의 리마인더", { color: COLOR_DIM, size: 11, bold: true });
+    if (status.reminder_notion_url) reminderHeading.url = status.reminder_notion_url;
     stack.addSpacer(3);
     reminders.slice(0, MAX_REMINDERS_SHOWN).forEach((r) => {
       const mark = remindersChecked[r] ? "✅" : "⬜";
-      addLine(stack, `${mark} ${r}`, { color: COLOR_SUB, size: 11 });
+      const reminderLine = addLine(stack, `${mark} ${r}`, { color: COLOR_SUB, size: 11 });
+      if (status.reminder_notion_url) reminderLine.url = status.reminder_notion_url;
       stack.addSpacer(2);
     });
     const remaining = reminders.length - MAX_REMINDERS_SHOWN;
@@ -118,7 +120,8 @@ function buildLeftColumn(stack, status) {
       addLine(stack, `외 ${remaining}건`, { color: COLOR_DIM, size: 10 });
     }
   } else {
-    addLine(stack, "🔔 오늘 리마인더 없음", { color: COLOR_DIM, size: 11 });
+    const emptyReminderLine = addLine(stack, "🔔 오늘 리마인더 없음", { color: COLOR_DIM, size: 11 });
+    if (status.reminder_notion_url) emptyReminderLine.url = status.reminder_notion_url;
   }
 }
 

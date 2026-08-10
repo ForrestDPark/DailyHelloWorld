@@ -2614,10 +2614,14 @@ class ShiftAlarmApp(rumps.App):
         self._update_title()
 
     def _today_override(self):
-        """자동 모드가 꺼져있으면(연차 등으로 수동 지정) 근무표 대신 쓸 오늘 근무값."""
-        if self.config.get("auto_mode", True):
-            return None
-        return self.config.get("current_shift")
+        """오늘 날짜에 직접 고른 근무만 근무표 대신 사용한다.
+
+        예전에는 수동 선택 한 번이 auto_mode=False로 영구 저장돼 다음 날까지 전날
+        근무와 알람이 남았다. 이제 수동 선택은 해당 날짜에만 유효하다.
+        """
+        if self.config.get("manual_shift_date") == datetime.date.today().isoformat():
+            return self.config.get("current_shift")
+        return None
 
     def _update_title(self):
         # NSStatusItem의 attributedTitle을 건드리므로 반드시 메인 스레드에서 실행돼야
@@ -2782,6 +2786,7 @@ class ShiftAlarmApp(rumps.App):
             "weather": self.weather_str or None,
             "reminders": get_today_reminders(self.schedule),
             "reminders_checked": self._checklist_state,
+            "reminder_notion_url": REMINDER_CHECKLIST_NOTION_URL,
             "storage_free_gb": self.storage_free_gb,
             "earnings_short": self._earnings_short_text(),
             "codex_percent": _codex_primary_percent(self._codex_quota),
@@ -2806,8 +2811,24 @@ class ShiftAlarmApp(rumps.App):
                 with open(tmp_path, "w", encoding="utf-8") as f:
                     json.dump(status, f, ensure_ascii=False, indent=2)
                 os.replace(tmp_path, target_file)
-            except OSError:
-                continue
+            except OSError as atomic_exc:
+                # Scriptable의 iCloud File Provider는 파일이 클라우드에 열린 상태면
+                # 같은 폴더의 tmp→status.json 원자 교체를 거절할 때가 있다. 이전
+                # 코드는 이를 조용히 무시해 위젯이 전날 GY 상태를 계속 표시했다.
+                # 작은 JSON이므로 직접 쓰기로 한 번 더 시도하고, 둘 다 실패하면
+                # 반드시 로그를 남겨 다음 진단에서 보이게 한다.
+                try:
+                    with open(target_file, "w", encoding="utf-8") as f:
+                        json.dump(status, f, ensure_ascii=False, indent=2)
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+                except OSError as direct_exc:
+                    print(
+                        f"⚠️ 모바일 상태 저장 실패: {target_file} "
+                        f"(원자 교체: {atomic_exc}; 직접 쓰기: {direct_exc})"
+                    )
 
     # ── 저장공간 ─────────────────────────────────────────────
 
@@ -2890,6 +2911,9 @@ class ShiftAlarmApp(rumps.App):
         today = datetime.date.today()
         if today != self._last_checked_date:
             self._last_checked_date = today
+            # 전날의 수동 근무 예외는 날짜가 바뀌는 순간 폐기한다.
+            self.config.pop("manual_shift_date", None)
+            save_config(self.config)
             if self.config.get("auto_mode", True):
                 self.apply_today_shift(notify=True)
             self._maybe_notify_reminders()
@@ -2933,6 +2957,8 @@ class ShiftAlarmApp(rumps.App):
                 )
             return False
 
+        if date == datetime.date.today():
+            self.config.pop("manual_shift_date", None)
         self._set_shift_internal(shift, notify=notify)
         return True
 
@@ -3077,8 +3103,8 @@ class ShiftAlarmApp(rumps.App):
 
     def make_shift_callback(self, shift):
         def callback(_):
-            # 메뉴에서 수동으로 누르면 자동 모드를 끈다 (덮어쓰기 방지)
-            self.config["auto_mode"] = False
+            # 수동 선택은 오늘 하루만 근무표를 덮어쓴다. 다음 날짜에는 자동 복귀한다.
+            self.config["manual_shift_date"] = datetime.date.today().isoformat()
             save_config(self.config)
             self._set_shift_internal(shift, notify=True)
         return callback
@@ -3097,6 +3123,10 @@ class ShiftAlarmApp(rumps.App):
 
     def refresh_today_now(self, _):
         """수동으로 '오늘 근무 다시 불러오기' 버튼"""
+        # 잘못 남은 과거 수동 상태까지 한 번에 복구한다.
+        self.config["auto_mode"] = True
+        self.config.pop("manual_shift_date", None)
+        save_config(self.config)
         ok = self.apply_today_shift(notify=True)
         if not ok:
             rumps.alert("근무표 조회 실패", "근무표 JSON에서 오늘 날짜를 찾을 수 없습니다.")
