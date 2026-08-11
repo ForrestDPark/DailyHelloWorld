@@ -310,6 +310,13 @@ ELMEDIA_PLAYLIST_DB = os.path.expanduser(
     "~/Library/Containers/com.eltima.elmedia6.mas/Data/Library/Application Support/"
     "Elmedia Video Player/Playlist.db"
 )
+ELMEDIA_PLAYLIST_DIR = os.path.expanduser("~/.shift_alarm_playlists")
+CLASSIC_PLAYLIST_PATH = os.path.join(ELMEDIA_PLAYLIST_DIR, "classic.m3u8")
+FAVORITES_PLAYLIST_PATH = os.path.join(ELMEDIA_PLAYLIST_DIR, "favorites.m3u8")
+ELMEDIA_AUDIO_EXTENSIONS = {
+    ".aac", ".aif", ".aiff", ".alac", ".flac", ".m4a", ".mp3", ".ogg",
+    ".opus", ".wav", ".wma",
+}
 
 # ── 아산시 좌표 ──────────────────────────────────────────────
 LATITUDE  = 36.78
@@ -927,8 +934,28 @@ def ask_input(title, message, default=""):
 
 
 # ════════════════════════════════════════════════════════════
-# Elmedia 폴더 재생 (m3u 없이 폴더 자체를 직접 엶)
+# Elmedia 전용 재생목록 생성·재생
 # ════════════════════════════════════════════════════════════
+
+def write_elmedia_playlist(folder, playlist_path):
+    """폴더의 실제 음원만 담은 UTF-8 M3U8을 원자적으로 갱신한다."""
+    tracks = []
+    for root, _dirs, files in os.walk(folder):
+        for name in files:
+            if os.path.splitext(name)[1].lower() in ELMEDIA_AUDIO_EXTENSIONS:
+                tracks.append(os.path.abspath(os.path.join(root, name)))
+    tracks.sort(key=lambda path: path.casefold())
+    if not tracks:
+        raise ValueError("재생 가능한 음원 파일이 없습니다.")
+
+    os.makedirs(os.path.dirname(playlist_path), exist_ok=True)
+    temp_path = playlist_path + ".tmp"
+    with open(temp_path, "w", encoding="utf-8", newline="\n") as file:
+        file.write("#EXTM3U\n")
+        for track in tracks:
+            file.write(track + "\n")
+    os.replace(temp_path, playlist_path)
+    return len(tracks)
 
 def reset_elmedia_playlist():
     """Elmedia가 영구 저장한 큐만 비운다. 원본 음악 파일은 건드리지 않는다."""
@@ -936,7 +963,16 @@ def reset_elmedia_playlist():
         ["/usr/bin/killall", "Elmedia Video Player"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
     )
-    time.sleep(1)
+    # open -n으로 복수 인스턴스가 생겼던 환경에서도 DB를 프로세스가 다시 쓰지
+    # 않도록 완전히 종료될 때까지 잠시 기다린다.
+    for _ in range(20):
+        result = subprocess.run(
+            ["/usr/bin/pgrep", "-x", "Elmedia Video Player"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+        )
+        if result.returncode != 0:
+            break
+        time.sleep(0.25)
     if not os.path.exists(ELMEDIA_PLAYLIST_DB):
         return
     with sqlite3.connect(ELMEDIA_PLAYLIST_DB, timeout=5) as conn:
@@ -946,14 +982,18 @@ def reset_elmedia_playlist():
 
 
 def play_folder_in_elmedia(folder=PLAYLIST_FOLDER):
-    """Elmedia Video Player로 음악 폴더 자체를 엶(★ 2026-08-07: 폴더를 인자로
-    받게 일반화 — 기본 재생 목록과 "좋아요 플레이" 폴더를 같은 함수로 처리)."""
+    """선택한 폴더의 음원만 담은 전용 M3U8을 Elmedia로 연다."""
     if not os.path.isdir(folder):
         return False, "폴더를 찾을 수 없습니다."
     try:
+        playlist_path = (
+            CLASSIC_PLAYLIST_PATH if os.path.abspath(folder) == os.path.abspath(PLAYLIST_FOLDER)
+            else FAVORITES_PLAYLIST_PATH
+        )
+        track_count = write_elmedia_playlist(folder, playlist_path)
         reset_elmedia_playlist()
-        subprocess.Popen(["open", "-n", "-a", "Elmedia Video Player", folder])
-        return True, "기존 재생목록을 비우고 선택한 폴더만 열었습니다."
+        subprocess.Popen(["open", "-a", "Elmedia Video Player", playlist_path])
+        return True, f"기존 재생목록을 비우고 선택한 음원 {track_count}곡만 열었습니다."
     except Exception as e:
         return False, str(e)
 
@@ -2108,17 +2148,25 @@ def open_ebook_study_build_terminal(book_path):
 def write_alarm_script():
     """실제 알람 시 Elmedia를 새 세션으로 열어 클래식만 재생한다."""
     os.makedirs(os.path.dirname(ALARM_SCRIPT_PATH), exist_ok=True)
+    track_count = write_elmedia_playlist(PLAYLIST_FOLDER, CLASSIC_PLAYLIST_PATH)
     script = f"""#!/bin/bash
 # 교대근무 아침 알람 실행 스크립트
 
 # 전날 재생하던 좋아요 큐가 남아 있으면 클래식과 섞이므로 Elmedia를 완전히
-# 종료한 뒤 클래식 폴더만 새 인스턴스로 연다. 알람에서는 유튜브 랜덤 음악
+# 종료한 뒤 클래식 전용 M3U8({track_count}곡)만 연다. 알람에서는 유튜브 랜덤 음악
 # 단축어도 실행하지 않아 기상 음악이 클래식으로만 유지된다.
 /usr/bin/killall "Elmedia Video Player" 2>/dev/null || true
-/bin/sleep 1
+for i in {{1..20}}; do
+  /usr/bin/pgrep -x "Elmedia Video Player" >/dev/null 2>&1 || break
+  /bin/sleep 0.25
+done
 /usr/bin/sqlite3 "{ELMEDIA_PLAYLIST_DB}" \
   'DELETE FROM item_order; DELETE FROM playlist_items;' 2>/dev/null || true
-/usr/bin/open -n -a "Elmedia Video Player" "{PLAYLIST_FOLDER}"
+if [ ! -s "{CLASSIC_PLAYLIST_PATH}" ]; then
+  echo "Shift Alarm: classic playlist is empty" >&2
+  exit 1
+fi
+/usr/bin/open -a "Elmedia Video Player" "{CLASSIC_PLAYLIST_PATH}"
 """
     with open(ALARM_SCRIPT_PATH, "w") as f:
         f.write(script)

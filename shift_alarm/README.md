@@ -25,7 +25,7 @@
 - 근무표 패턴: 휴무 2일 + 근무 6일 반복이 기본이지만, 실제로는 1일/2일/4일짜리 휴무 블록이 섞여있음(연 1일×10회, 2일×35회, 4일×3회) — 로직 짤 때 "휴무는 항상 2일"이라고 가정하면 안 됨.
 
 ## 2. 알람(기상) 시간 — `SHIFT_TIMES`
-근무 시작 전 깨워주는 알람. macOS `launchd` plist(`~/Library/LaunchAgents/com.shfitalarm.music.plist`)로 등록되며, 울릴 때 `~/Library/Scripts/shift_alarm_run.sh`가 실행된다. 전날의 좋아요 재생 큐가 클래식과 섞이지 않도록 기존 Elmedia 프로세스를 종료하고 `Playlist.db`의 `playlist_items`/`item_order`만 비운 뒤 `Coffee and Meditation` 폴더만 새 인스턴스로 연다. 음악 원본은 삭제하지 않는다. 메뉴의 `🎬 Elmedia 지금 바로 재생`과 `⭐ 좋아요 플레이하기`도 같은 초기화 경로를 사용하므로 선택한 폴더끼리 합쳐지지 않는다. 기상 알람에서는 "아침루틴음악재생" 단축어(유튜브 랜덤 음악)를 실행하지 않아 클래식만 재생한다(★ 2026-08-08, 2026-08-10 큐 DB 초기화 강화).
+근무 시작 전 깨워주는 알람. macOS `launchd` plist(`~/Library/LaunchAgents/com.shfitalarm.music.plist`)로 등록되며, 울릴 때 `~/Library/Scripts/shift_alarm_run.sh`가 실행된다. 전날의 좋아요 재생 큐가 클래식과 섞이지 않도록 기존 Elmedia 프로세스를 완전히 종료하고 `Playlist.db`의 `playlist_items`/`item_order`만 비운다. 그 뒤 폴더 자체를 넘기지 않고 `Coffee and Meditation` 안의 실제 음원만 나열한 `~/.shift_alarm_playlists/classic.m3u8`을 열기 때문에 Elmedia의 `Nothing to open` 오류와 기존 목록 혼합을 함께 방지한다. 음악 원본은 삭제하지 않는다. 메뉴의 `🎬 Elmedia 지금 바로 재생`과 `⭐ 좋아요 플레이하기`도 각각 독립된 M3U8을 매번 다시 만들며, `open -n`을 쓰지 않아 Elmedia 복수 인스턴스도 만들지 않는다. 기상 알람에서는 "아침루틴음악재생" 단축어(유튜브 랜덤 음악)를 실행하지 않아 클래식만 재생한다(★ 2026-08-08, 2026-08-10 큐 DB 초기화 강화, 2026-08-11 명시적 M3U8 재생으로 변경).
 
 | 근무 | 알람 시각 |
 |---|---|
