@@ -121,6 +121,32 @@ REMINDER_CHECKLIST_NOTION_PAGE_ID = "3b532a1e-ae80-8034-90af-fd8c9b658711"
 REMINDER_CHECKLIST_NOTION_URL = (
     f"https://www.notion.so/{REMINDER_CHECKLIST_NOTION_PAGE_ID.replace('-', '')}"
 )
+# 하위 원본 페이지의 아침 루틴. 사용자가 정한 순서가 실행 순서이므로 재정렬하지 않는다.
+# https://app.notion.com/p/3b932a1eae808021912bd160fe6cb629
+DAILY_ROUTINE_ITEMS = [
+    "화장실물기있나?",
+    "향피웠나?",
+    "젖가락입에 물었나?",
+    "노트정위치 했나?",
+    "그라인딩 했나?",
+    "방탄커피 탔나?",
+    "영양제 먹었나?",
+    "영어듣기했나?",
+    "오늘일기썼나?",
+    "얼룩이없는가?",
+    "커피컵,통 정렬됬나?",
+    "쓰레기없는가?",
+    "이불 갰는가?",
+    "습도정위치및 71이하인가?",
+    "안개인 옷있나?",
+    "노트,썬글,나또,그릭챙겼나?",
+    "자세교정기입었나?",
+    "소금식초물탔나?",
+    "싱크대 물기있나?",
+    "커피컵정렬됬나?",
+]
+DAILY_ROUTINE_HEADING = "🌅 일일 루틴 체크리스트"
+DAILY_REMINDER_HEADING = "🔔 오늘의 리마인더"
 NOTION_VERSION = "2026-03-11"
 # "🔔 오늘: ..." 메뉴 항목에서 리마인더마다 색을 다르게 입혀 알록달록하게
 # 보이게 한다(★ 2026-08-07: 콜백 없어 회색으로 보이던 걸 개선하면서 같이 추가).
@@ -3035,7 +3061,7 @@ class ShiftAlarmApp(rumps.App):
     # ── 리마인더 (헬스장/엄마 전화/카톡 정리 등) ────────────────
 
     def _maybe_notify_reminders(self):
-        """오늘 하루에 한 번만, 오늘 요일에 해당하는 리마인더를 알림으로 띄운다."""
+        """리마인더를 알리고, 리마인더 유무와 무관하게 오늘 체크리스트를 만든다."""
         today = datetime.date.today()
         if self._last_reminder_notified == today:
             return
@@ -3044,41 +3070,92 @@ class ShiftAlarmApp(rumps.App):
         todays = get_today_reminders(self.schedule)
         if todays:
             rumps.notification("오늘의 리마인더", "", "\n".join(todays))
-            threading.Thread(
-                target=self._sync_reminder_checklist_to_notion,
-                args=(today, todays), daemon=True,
-            ).start()
+        threading.Thread(
+            target=self._sync_daily_checklist_to_notion,
+            args=(today, todays), daemon=True,
+        ).start()
 
-    def _sync_reminder_checklist_to_notion(self, today, todays):
-        """오늘의 리마인더를 "🎎 일일 체크리스트" Notion 페이지에 날짜별 토글 +
-        체크박스(to_do)로 추가한다(★ 2026-08-07 추가) — 휴대폰 Notion 앱에서 체크
-        해가며 하루를 보낼 수 있게. 네트워크 호출이라 백그라운드 스레드에서만 돌리고
-        AppKit은 전혀 건드리지 않는다(크래시 이력 있는 패턴이라 신중하게 분리).
+    def _sync_daily_checklist_to_notion(self, today, todays):
+        """날짜 토글 아래에 매일 루틴과 조건부 리마인더를 서로 분리해 기록한다.
 
-        앱을 하루에 여러 번 재시작해도(코드 수정 후 kickstart 등) 같은 날짜가
-        중복으로 안 생기게, config에 마지막으로 동기화한 날짜를 영구 저장해서
-        확인한다 — 한 번 만든 뒤엔 사용자가 체크한 상태를 다시 덮어쓰지 않는다."""
+        루틴은 리마인더가 없는 날에도 반드시 생성한다. 이미 오늘 토글이 있으면 사용자가
+        체크한 기존 리마인더는 그대로 두고, 루틴 구역이 없을 때만 뒤에 추가한다."""
         date_str = today.isoformat()
-        if self.config.get("reminder_notion_synced_date") == date_str:
+        if self.config.get("daily_checklist_notion_synced_date") == date_str:
             return
         token = _notion_keychain_token()
         if not token:
             return  # Notion 미설정은 정상 상태일 수 있음 — 조용히 건너뜀
-        children = [{
+
+        def notion_get(path):
+            request = urllib.request.Request(
+                f"https://api.notion.com/v1/{path}",
+                headers={"Authorization": f"Bearer {token}", "Notion-Version": NOTION_VERSION},
+            )
+            with urllib.request.urlopen(request, timeout=15) as response:
+                return json.load(response)
+
+        def todo_block(label):
+            return {
             "object": "block", "type": "to_do",
             "to_do": {"rich_text": [{"type": "text", "text": {"content": label}}], "checked": False},
-        } for label in todays]
-        toggle_block = {
-            "object": "block", "type": "toggle",
-            "toggle": {
-                "rich_text": [{"type": "text", "text": {"content": date_str}}],
-                "children": children,
-            },
-        }
+            }
+
+        def heading_block(label):
+            return {
+                "object": "block", "type": "heading_3",
+                "heading_3": {"rich_text": [{"type": "text", "text": {"content": label}}]},
+            }
+
         try:
+            page = notion_get(
+                f"blocks/{REMINDER_CHECKLIST_NOTION_PAGE_ID}/children?page_size=100"
+            )
+            toggle_id = None
+            for block in page.get("results", []):
+                if block.get("type") != "toggle":
+                    continue
+                text = "".join(
+                    item.get("plain_text", "")
+                    for item in block.get("toggle", {}).get("rich_text", [])
+                )
+                if text == date_str:
+                    toggle_id = block["id"]
+                    break
+
+            if toggle_id:
+                existing = notion_get(f"blocks/{toggle_id}/children?page_size=100")
+                existing_text = {
+                    "".join(item.get("plain_text", "") for item in block.get(block.get("type"), {}).get("rich_text", []))
+                    for block in existing.get("results", [])
+                }
+                if DAILY_ROUTINE_HEADING in existing_text:
+                    self.config["daily_checklist_notion_synced_date"] = date_str
+                    save_config(self.config)
+                    return
+                target_id = toggle_id
+                children = [heading_block(DAILY_ROUTINE_HEADING)] + [
+                    todo_block(label) for label in DAILY_ROUTINE_ITEMS
+                ]
+            else:
+                nested_children = [heading_block(DAILY_ROUTINE_HEADING)] + [
+                    todo_block(label) for label in DAILY_ROUTINE_ITEMS
+                ]
+                if todays:
+                    nested_children.append(heading_block(DAILY_REMINDER_HEADING))
+                    nested_children.extend(todo_block(label) for label in todays)
+                target_id = REMINDER_CHECKLIST_NOTION_PAGE_ID
+                children = [{
+                    "object": "block", "type": "toggle",
+                    "toggle": {
+                        "rich_text": [{"type": "text", "text": {"content": date_str}}],
+                        "children": nested_children,
+                    },
+                }]
+
             request = urllib.request.Request(
-                f"https://api.notion.com/v1/blocks/{REMINDER_CHECKLIST_NOTION_PAGE_ID}/children",
-                data=json.dumps({"children": [toggle_block]}).encode("utf-8"),
+                f"https://api.notion.com/v1/blocks/{target_id}/children",
+                data=json.dumps({"children": children}).encode("utf-8"),
                 method="PATCH",
                 headers={
                     "Authorization": f"Bearer {token}",
@@ -3089,9 +3166,9 @@ class ShiftAlarmApp(rumps.App):
             with urllib.request.urlopen(request, timeout=15) as response:
                 response.read()
         except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
-            print(f"⚠️ 리마인더 Notion 동기화 실패: {exc}")
+            print(f"⚠️ 일일 체크리스트 Notion 동기화 실패: {exc}")
             return
-        self.config["reminder_notion_synced_date"] = date_str
+        self.config["daily_checklist_notion_synced_date"] = date_str
         save_config(self.config)
 
     def _load_cached_checklist_state(self):
