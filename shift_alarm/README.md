@@ -29,6 +29,8 @@
 
 **★ 2026-08-12 `Nothing to open` 근본 원인 발견·수정**: 2026-08-11에 "폴더째 넘기지 않고 `~/.shift_alarm_playlists/classic.m3u8`(실제 음원만 나열)을 여는 방식이 `Nothing to open` 오류를 막아준다"고 판단해 M3U8 방식으로 바꿨는데, **이 판단 자체가 틀렸다** — 알람이 그 뒤로도 계속 안 울리는 신고가 이어졌다(3번째 재발). 실제 원인: Elmedia는 Mac App Store 샌드박스 빌드라서, `open -a`로 M3U8 파일 하나만 건네면 macOS가 그 M3U8 자체에는 접근 권한을 주지만 **M3U8 안에 적힌 다른 절대경로(진짜 mp3들)에는 권한을 주지 않는다** — Launch Services는 `open` 인자로 직접 넘어온 파일에만 개별 샌드박스 접근 권한을 부여하고, 앱이 나중에 파일을 파싱해서 알아낸 경로는 전혀 모른다. 그래서 Elmedia 입장에서는 재생목록이 통째로 비어 보여 자체적으로 "Nothing to open. Couldn't find any supported files." 대화상자를 띄웠다(직접 재현 확인: `osascript`로 대화상자의 static text를 읽어 문구 그대로 확인함). **수정**: M3U8을 열지 않고, 폴더 안 트랙 절대경로 전부를 `open -a "Elmedia Video Player"`의 인자로 직접 나열한다(`list_audio_tracks()` → `play_folder_in_elmedia()`/`write_alarm_script()`) — 이러면 각 파일이 사용자가 직접 선택한 것으로 취급돼 macOS가 파일마다 개별 접근 권한을 내준다. 실제로 알람 스크립트를 재생성해 수동 실행한 뒤 Elmedia UI에서 곡 제목·재생 경과 시간이 정상 표시되는 것까지 확인함. `write_elmedia_playlist()`로 M3U8 자체는 여전히 만들지만 이제 "사람이 확인할 트랙 목록" 기록용일 뿐, 실제로 여는 데는 쓰지 않는다.
 
+**★ 2026-08-12 같은 세션에서 큐 뒤섞임 방지 강화**: 위 수정 직후 "좋아요 플레이를 틀어놓고 안 끄고 자면 다음날 아침 알람 때 클래식과 좋아요가 랜덤으로 섞여 재생된다"는 지적을 받았다. 원인은 `reset_elmedia_playlist()`가 `killall`(SIGTERM)만 보내고 5초 안에 안 죽으면 그냥 포기하고 다음 단계로 넘어갔다는 것 — 전날 프로세스가 여전히 살아있는 상태에서 새 트랙들을 `open`으로 열면 재생목록이 "교체"가 아니라 "추가"되는 것으로 보여, 좋아요 큐 뒤에 클래식이 덧붙어 섞인다. `reset_elmedia_playlist()`(Python, 메뉴 클릭용)와 `write_alarm_script()`가 생성하는 셸 스크립트(launchd 알람용) 둘 다에 SIGTERM으로 5초 기다려도 안 죽으면 SIGKILL을 한 번 더 보내는 단계를 추가했다. Python 쪽은 그래도 살아있으면 종료 확인 실패를 호출부에 알려 "성공한 것처럼" 조용히 넘어가지 않고 사용자에게 경고 메시지를 보여준다.
+
 | 근무 | 알람 시각 |
 |---|---|
 | Day | 02:55 |

@@ -969,28 +969,54 @@ def write_elmedia_playlist(folder, playlist_path):
     os.replace(temp_path, playlist_path)
     return len(tracks)
 
+def _elmedia_is_running():
+    result = subprocess.run(
+        ["/usr/bin/pgrep", "-x", "Elmedia Video Player"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    return result.returncode == 0
+
+
 def reset_elmedia_playlist():
-    """Elmedia가 영구 저장한 큐만 비운다. 원본 음악 파일은 건드리지 않는다."""
+    """Elmedia를 완전히 종료하고 영구 저장된 큐를 비운다. 원본 음악 파일은
+    건드리지 않는다. 반환값: 종료가 실제로 확인됐는지(True/False).
+
+    ★ 2026-08-12 강화: "좋아요 플레이를 틀어놓고 자면 다음날 아침 알람 때 클래식과
+    뒤섞여 재생된다"는 신고로 발견 — `killall`(SIGTERM)만 보내고 5초 안에 안 죽으면
+    그냥 포기하고 넘어갔다. 이러면 이전 프로세스가 여전히 살아있는 채로 새 트랙들을
+    `open`으로 열게 되는데, 이미 떠 있는 인스턴스에 파일을 열면 새 재생목록으로
+    "교체"가 아니라 기존 큐에 "추가"되는 것으로 보인다(대기 중이던 좋아요 큐 +
+    클래식이 섞여 재생됨). SIGTERM으로 5초 기다려도 안 죽으면 SIGKILL로 한 번 더
+    강제 종료하고, 그래도 살아있으면 True/False로 호출부에 알려서 무작정 진행하지
+    않게 한다."""
     subprocess.run(
         ["/usr/bin/killall", "Elmedia Video Player"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
     )
-    # open -n으로 복수 인스턴스가 생겼던 환경에서도 DB를 프로세스가 다시 쓰지
-    # 않도록 완전히 종료될 때까지 잠시 기다린다.
     for _ in range(20):
-        result = subprocess.run(
-            ["/usr/bin/pgrep", "-x", "Elmedia Video Player"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
-        )
-        if result.returncode != 0:
+        if not _elmedia_is_running():
             break
         time.sleep(0.25)
-    if not os.path.exists(ELMEDIA_PLAYLIST_DB):
-        return
-    with sqlite3.connect(ELMEDIA_PLAYLIST_DB, timeout=5) as conn:
-        conn.execute("DELETE FROM item_order")
-        conn.execute("DELETE FROM playlist_items")
-        conn.commit()
+    else:
+        # SIGTERM으로 5초를 기다려도 안 죽었으면 SIGKILL로 강제 종료.
+        subprocess.run(
+            ["/usr/bin/killall", "-9", "Elmedia Video Player"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+        )
+        for _ in range(8):
+            if not _elmedia_is_running():
+                break
+            time.sleep(0.25)
+
+    if _elmedia_is_running():
+        return False  # 강제 종료도 실패 — 호출부가 "새로 연 게 아니라 섞였을 수 있다"고 판단할 수 있게 알림
+
+    if os.path.exists(ELMEDIA_PLAYLIST_DB):
+        with sqlite3.connect(ELMEDIA_PLAYLIST_DB, timeout=5) as conn:
+            conn.execute("DELETE FROM item_order")
+            conn.execute("DELETE FROM playlist_items")
+            conn.commit()
+    return True
 
 
 def play_folder_in_elmedia(folder=PLAYLIST_FOLDER):
@@ -1016,8 +1042,13 @@ def play_folder_in_elmedia(folder=PLAYLIST_FOLDER):
         tracks = list_audio_tracks(folder)
         if not tracks:
             return False, "재생 가능한 음원 파일이 없습니다."
-        reset_elmedia_playlist()
+        reset_ok = reset_elmedia_playlist()
         subprocess.Popen(["open", "-a", "Elmedia Video Player", *tracks])
+        if not reset_ok:
+            # ★ 2026-08-12: 기존 프로세스를 강제 종료도 못 시켰다는 뜻 — 새로 여는
+            # 트랙이 "교체"가 아니라 이미 떠 있던 큐(예: 좋아요 플레이)에 "추가"돼
+            # 섞여 재생될 수 있다. 조용히 성공한 것처럼 보고하지 않는다.
+            return False, "Elmedia가 응답이 없어 기존 재생목록을 비우지 못했습니다 — 새 음원이 기존 큐와 섞여 재생될 수 있습니다. Elmedia를 수동으로 완전히 종료한 뒤 다시 시도하세요."
         return True, f"기존 재생목록을 비우고 선택한 음원 {len(tracks)}곡만 열었습니다."
     except Exception as e:
         return False, str(e)
@@ -2193,11 +2224,22 @@ def write_alarm_script():
 # 전날 재생하던 좋아요 큐가 남아 있으면 클래식과 섞이므로 Elmedia를 완전히
 # 종료한 뒤 클래식 트랙({len(tracks)}곡)만 연다. 알람에서는 유튜브 랜덤 음악
 # 단축어도 실행하지 않아 기상 음악이 클래식으로만 유지된다.
+# ★ 2026-08-12: SIGTERM(killall)만으로 5초 안에 안 죽으면 그냥 넘어갔었는데,
+# 그러면 전날 좋아요 큐가 살아있는 프로세스에 클래식 트랙이 "추가"돼 섞여
+# 재생된다("좋아요 플레이 틀어놓고 자면 다음날 섞인다" 신고로 발견) — SIGKILL로
+# 한 번 더 강제 종료를 시도한다.
 /usr/bin/killall "Elmedia Video Player" 2>/dev/null || true
 for i in {{1..20}}; do
   /usr/bin/pgrep -x "Elmedia Video Player" >/dev/null 2>&1 || break
   /bin/sleep 0.25
 done
+if /usr/bin/pgrep -x "Elmedia Video Player" >/dev/null 2>&1; then
+  /usr/bin/killall -9 "Elmedia Video Player" 2>/dev/null || true
+  for i in {{1..8}}; do
+    /usr/bin/pgrep -x "Elmedia Video Player" >/dev/null 2>&1 || break
+    /bin/sleep 0.25
+  done
+fi
 /usr/bin/sqlite3 "{ELMEDIA_PLAYLIST_DB}" \
   'DELETE FROM item_order; DELETE FROM playlist_items;' 2>/dev/null || true
 {open_line}
