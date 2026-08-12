@@ -941,14 +941,22 @@ def ask_input(title, message, default=""):
 # Elmedia 전용 재생목록 생성·재생
 # ════════════════════════════════════════════════════════════
 
-def write_elmedia_playlist(folder, playlist_path):
-    """폴더의 실제 음원만 담은 UTF-8 M3U8을 원자적으로 갱신한다."""
+def list_audio_tracks(folder):
+    """폴더 안의 실제 음원 파일 절대경로 목록(정렬됨)을 반환한다."""
     tracks = []
     for root, _dirs, files in os.walk(folder):
         for name in files:
             if os.path.splitext(name)[1].lower() in ELMEDIA_AUDIO_EXTENSIONS:
                 tracks.append(os.path.abspath(os.path.join(root, name)))
     tracks.sort(key=lambda path: path.casefold())
+    return tracks
+
+
+def write_elmedia_playlist(folder, playlist_path):
+    """폴더의 실제 음원만 담은 UTF-8 M3U8을 원자적으로 갱신한다(기록·트랙 수 확인용 —
+    ★ 2026-08-12: Elmedia(Mac App Store 샌드박스 빌드)에 실제로 여는 데는 더 이상
+    이 파일을 쓰지 않는다. 아래 참고)."""
+    tracks = list_audio_tracks(folder)
     if not tracks:
         raise ValueError("재생 가능한 음원 파일이 없습니다.")
 
@@ -986,7 +994,17 @@ def reset_elmedia_playlist():
 
 
 def play_folder_in_elmedia(folder=PLAYLIST_FOLDER):
-    """선택한 폴더의 음원만 담은 전용 M3U8을 Elmedia로 연다."""
+    """선택한 폴더의 음원을 Elmedia로 연다.
+    ★ 2026-08-12 버그 수정: "3번째 계속 안 울린다, Nothing to Open 메시지가 뜬다"는
+    신고로 원인을 찾았다 — Elmedia는 Mac App Store 샌드박스 빌드라, M3U8 파일
+    하나만 `open`으로 건네면 macOS가 그 M3U8 파일 자체에는 접근 권한을 주지만
+    M3U8 "안에 적힌" 다른 경로들(실제 mp3 파일들)에는 권한을 안 준다 — 앱이 그
+    파일을 열 때가 돼서야 직접 읽으려 하기 때문에 Launch Services가 미리 알고
+    권한을 부여할 방법이 없다. 그래서 Elmedia 입장에서는 재생목록이 텅 비어
+    보여 "Nothing to Open"을 띄운다. 반대로 각 음원 파일을 `open -a`의 인자로
+    직접 나열하면, 그 요청 자체가 각 파일에 대한 사용자 선택으로 취급돼
+    macOS가 파일마다 개별적으로 샌드박스 접근 권한을 부여한다 — 그래서 이제
+    M3U8을 열지 않고 트랙 경로를 전부 인자로 직접 넘긴다."""
     if not os.path.isdir(folder):
         return False, "폴더를 찾을 수 없습니다."
     try:
@@ -994,10 +1012,13 @@ def play_folder_in_elmedia(folder=PLAYLIST_FOLDER):
             CLASSIC_PLAYLIST_PATH if os.path.abspath(folder) == os.path.abspath(PLAYLIST_FOLDER)
             else FAVORITES_PLAYLIST_PATH
         )
-        track_count = write_elmedia_playlist(folder, playlist_path)
+        write_elmedia_playlist(folder, playlist_path)  # 기록용(사람이 확인할 수 있는 트랙 목록)
+        tracks = list_audio_tracks(folder)
+        if not tracks:
+            return False, "재생 가능한 음원 파일이 없습니다."
         reset_elmedia_playlist()
-        subprocess.Popen(["open", "-a", "Elmedia Video Player", playlist_path])
-        return True, f"기존 재생목록을 비우고 선택한 음원 {track_count}곡만 열었습니다."
+        subprocess.Popen(["open", "-a", "Elmedia Video Player", *tracks])
+        return True, f"기존 재생목록을 비우고 선택한 음원 {len(tracks)}곡만 열었습니다."
     except Exception as e:
         return False, str(e)
 
@@ -2150,14 +2171,27 @@ def open_ebook_study_build_terminal(book_path):
 # ════════════════════════════════════════════════════════════
 
 def write_alarm_script():
-    """실제 알람 시 Elmedia를 새 세션으로 열어 클래식만 재생한다."""
+    """실제 알람 시 Elmedia를 새 세션으로 열어 클래식만 재생한다.
+    ★ 2026-08-12 버그 수정: "Nothing to Open" 반복 신고 원인 — Elmedia(Mac App
+    Store 샌드박스 빌드)는 M3U8 파일 하나만 건네받으면 그 안에 적힌 다른 경로
+    (실제 mp3들)에는 macOS가 미리 샌드박스 접근 권한을 못 준다(앱이 나중에 직접
+    읽으려 할 때는 이미 늦음) — 그래서 재생목록이 비어 보여 "Nothing to Open"을
+    띄웠다. play_folder_in_elmedia()와 동일한 수정 — M3U8을 열지 않고 각 트랙
+    경로를 `open -a`의 인자로 직접 나열해 macOS가 파일마다 개별 접근 권한을
+    부여하게 한다(자세한 이유는 play_folder_in_elmedia() 주석 참고)."""
     os.makedirs(os.path.dirname(ALARM_SCRIPT_PATH), exist_ok=True)
-    track_count = write_elmedia_playlist(PLAYLIST_FOLDER, CLASSIC_PLAYLIST_PATH)
+    write_elmedia_playlist(PLAYLIST_FOLDER, CLASSIC_PLAYLIST_PATH)  # 기록용(사람이 확인할 트랙 목록)
+    tracks = list_audio_tracks(PLAYLIST_FOLDER)
+    open_line = (
+        f'echo "Shift Alarm: no classic tracks found" >&2\nexit 1'
+        if not tracks
+        else "/usr/bin/open -a \"Elmedia Video Player\" " + " ".join(shlex.quote(t) for t in tracks)
+    )
     script = f"""#!/bin/bash
 # 교대근무 아침 알람 실행 스크립트
 
 # 전날 재생하던 좋아요 큐가 남아 있으면 클래식과 섞이므로 Elmedia를 완전히
-# 종료한 뒤 클래식 전용 M3U8({track_count}곡)만 연다. 알람에서는 유튜브 랜덤 음악
+# 종료한 뒤 클래식 트랙({len(tracks)}곡)만 연다. 알람에서는 유튜브 랜덤 음악
 # 단축어도 실행하지 않아 기상 음악이 클래식으로만 유지된다.
 /usr/bin/killall "Elmedia Video Player" 2>/dev/null || true
 for i in {{1..20}}; do
@@ -2166,11 +2200,7 @@ for i in {{1..20}}; do
 done
 /usr/bin/sqlite3 "{ELMEDIA_PLAYLIST_DB}" \
   'DELETE FROM item_order; DELETE FROM playlist_items;' 2>/dev/null || true
-if [ ! -s "{CLASSIC_PLAYLIST_PATH}" ]; then
-  echo "Shift Alarm: classic playlist is empty" >&2
-  exit 1
-fi
-/usr/bin/open -a "Elmedia Video Player" "{CLASSIC_PLAYLIST_PATH}"
+{open_line}
 """
     with open(ALARM_SCRIPT_PATH, "w") as f:
         f.write(script)
