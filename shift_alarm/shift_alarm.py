@@ -27,6 +27,7 @@ import rumps
 import subprocess
 import os
 import json
+import hashlib
 import re
 import shlex
 import sqlite3
@@ -121,30 +122,7 @@ REMINDER_CHECKLIST_NOTION_PAGE_ID = "3b532a1e-ae80-8034-90af-fd8c9b658711"
 REMINDER_CHECKLIST_NOTION_URL = (
     f"https://www.notion.so/{REMINDER_CHECKLIST_NOTION_PAGE_ID.replace('-', '')}"
 )
-# 하위 원본 페이지의 아침 루틴. 사용자가 정한 순서가 실행 순서이므로 재정렬하지 않는다.
-# https://app.notion.com/p/3b932a1eae808021912bd160fe6cb629
-DAILY_ROUTINE_ITEMS = [
-    "화장실물기있나?",
-    "향피웠나?",
-    "젖가락입에 물었나?",
-    "노트정위치 했나?",
-    "그라인딩 했나?",
-    "방탄커피 탔나?",
-    "영양제 먹었나?",
-    "영어듣기했나?",
-    "오늘일기썼나?",
-    "얼룩이없는가?",
-    "커피컵,통 정렬됬나?",
-    "쓰레기없는가?",
-    "이불 갰는가?",
-    "습도정위치및 71이하인가?",
-    "안개인 옷있나?",
-    "노트,썬글,나또,그릭챙겼나?",
-    "자세교정기입었나?",
-    "소금식초물탔나?",
-    "싱크대 물기있나?",
-    "커피컵정렬됬나?",
-]
+DAILY_ROUTINE_SOURCE_PAGE_ID = "3b932a1e-ae80-8021-912b-d160fe6cb629"
 DAILY_ROUTINE_HEADING = "🌅 일일 루틴 체크리스트"
 DAILY_REMINDER_HEADING = "🔔 오늘의 리마인더"
 NOTION_VERSION = "2026-03-11"
@@ -3081,8 +3059,6 @@ class ShiftAlarmApp(rumps.App):
         루틴은 리마인더가 없는 날에도 반드시 생성한다. 이미 오늘 토글이 있으면 사용자가
         체크한 기존 리마인더는 그대로 두고, 루틴 구역이 없을 때만 뒤에 추가한다."""
         date_str = today.isoformat()
-        if self.config.get("daily_checklist_notion_synced_date") == date_str:
-            return
         token = _notion_keychain_token()
         if not token:
             return  # Notion 미설정은 정상 상태일 수 있음 — 조용히 건너뜀
@@ -3095,6 +3071,44 @@ class ShiftAlarmApp(rumps.App):
             with urllib.request.urlopen(request, timeout=15) as response:
                 return json.load(response)
 
+        # 생성 직전에 원본 하위 페이지를 읽는다. paragraph는 체크 항목, divider는
+        # 단계 구분선으로 취급하므로 사용자가 원본을 고치면 코드 수정 없이 따라간다.
+        try:
+            source = notion_get(
+                f"blocks/{DAILY_ROUTINE_SOURCE_PAGE_ID}/children?page_size=100"
+            )
+            routine_sequence = []
+            for block in source.get("results", []):
+                block_type = block.get("type")
+                if block_type == "divider":
+                    if routine_sequence and routine_sequence[-1] is not None:
+                        routine_sequence.append(None)
+                    continue
+                if block_type != "paragraph":
+                    continue
+                text = "".join(
+                    item.get("plain_text", "")
+                    for item in block.get("paragraph", {}).get("rich_text", [])
+                ).strip()
+                if text:
+                    routine_sequence.append(text)
+            while routine_sequence and routine_sequence[-1] is None:
+                routine_sequence.pop()
+            if not routine_sequence:
+                raise ValueError("일일 루틴 원본 페이지에 항목이 없습니다.")
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError, ValueError) as exc:
+            print(f"⚠️ 일일 루틴 원본 동기화 실패: {exc}")
+            return
+
+        template_version = hashlib.sha256(
+            json.dumps(routine_sequence, ensure_ascii=False).encode("utf-8")
+        ).hexdigest()
+        if (
+            self.config.get("daily_checklist_notion_synced_date") == date_str
+            and self.config.get("daily_routine_template_version") == template_version
+        ):
+            return
+
         def todo_block(label):
             return {
             "object": "block", "type": "to_do",
@@ -3106,6 +3120,18 @@ class ShiftAlarmApp(rumps.App):
                 "object": "block", "type": "heading_3",
                 "heading_3": {"rich_text": [{"type": "text", "text": {"content": label}}]},
             }
+
+        def routine_blocks(checked_by_label=None):
+            checked_by_label = checked_by_label or {}
+            blocks = [heading_block(DAILY_ROUTINE_HEADING)]
+            for item in routine_sequence:
+                if item is None:
+                    blocks.append({"object": "block", "type": "divider", "divider": {}})
+                else:
+                    block = todo_block(item)
+                    block["to_do"]["checked"] = bool(checked_by_label.get(item))
+                    blocks.append(block)
+            return blocks
 
         try:
             page = notion_get(
@@ -3125,22 +3151,42 @@ class ShiftAlarmApp(rumps.App):
 
             if toggle_id:
                 existing = notion_get(f"blocks/{toggle_id}/children?page_size=100")
-                existing_text = {
-                    "".join(item.get("plain_text", "") for item in block.get(block.get("type"), {}).get("rich_text", []))
-                    for block in existing.get("results", [])
-                }
-                if DAILY_ROUTINE_HEADING in existing_text:
-                    self.config["daily_checklist_notion_synced_date"] = date_str
-                    save_config(self.config)
-                    return
+                results = existing.get("results", [])
+                routine_start = None
+                routine_end = None
+                checked_by_label = {}
+                for index, block in enumerate(results):
+                    block_type = block.get("type")
+                    text = "".join(
+                        item.get("plain_text", "")
+                        for item in block.get(block_type, {}).get("rich_text", [])
+                    )
+                    if text == DAILY_ROUTINE_HEADING:
+                        routine_start = index
+                    elif routine_start is not None and text == DAILY_REMINDER_HEADING:
+                        routine_end = index
+                        break
+                    elif routine_start is not None and block_type == "to_do":
+                        checked_by_label[text] = bool(block.get("to_do", {}).get("checked"))
+
+                # 템플릿이 갱신됐으면 기존 루틴 구역만 보관 처리하고 최신 순서를
+                # 다시 붙인다. 이름이 같은 항목의 오늘 체크 상태는 유지한다.
+                if routine_start is not None:
+                    for block in results[routine_start:routine_end]:
+                        request = urllib.request.Request(
+                            f"https://api.notion.com/v1/blocks/{block['id']}",
+                            method="DELETE",
+                            headers={
+                                "Authorization": f"Bearer {token}",
+                                "Notion-Version": NOTION_VERSION,
+                            },
+                        )
+                        with urllib.request.urlopen(request, timeout=15) as response:
+                            response.read()
                 target_id = toggle_id
-                children = [heading_block(DAILY_ROUTINE_HEADING)] + [
-                    todo_block(label) for label in DAILY_ROUTINE_ITEMS
-                ]
+                children = routine_blocks(checked_by_label)
             else:
-                nested_children = [heading_block(DAILY_ROUTINE_HEADING)] + [
-                    todo_block(label) for label in DAILY_ROUTINE_ITEMS
-                ]
+                nested_children = routine_blocks()
                 if todays:
                     nested_children.append(heading_block(DAILY_REMINDER_HEADING))
                     nested_children.extend(todo_block(label) for label in todays)
@@ -3169,6 +3215,7 @@ class ShiftAlarmApp(rumps.App):
             print(f"⚠️ 일일 체크리스트 Notion 동기화 실패: {exc}")
             return
         self.config["daily_checklist_notion_synced_date"] = date_str
+        self.config["daily_routine_template_version"] = template_version
         save_config(self.config)
 
     def _load_cached_checklist_state(self):
