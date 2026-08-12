@@ -2243,6 +2243,30 @@ fi
 /usr/bin/sqlite3 "{ELMEDIA_PLAYLIST_DB}" \
   'DELETE FROM item_order; DELETE FROM playlist_items;' 2>/dev/null || true
 {open_line}
+
+# ★ 2026-08-12 추가: 알람이 "진짜로" 재생을 시작했는지 자가 검증해서 기록한다.
+# launchd 알람은 사람이 그 순간 지켜보는 게 아니라서, 문제가 있어도 다음에
+# Claude/Codex 세션이 열릴 때야 알게 된다 — 그때 바로 확인할 수 있게 결과를
+# ~/.shift_alarm_alarm_verify.jsonl에 한 줄 남긴다.
+/bin/sleep 4
+VERIFY_LOG="$HOME/.shift_alarm_alarm_verify.jsonl"
+RUNNING="false"
+/usr/bin/pgrep -x "Elmedia Video Player" >/dev/null 2>&1 && RUNNING="true"
+STATUS="unknown"
+if [ "$RUNNING" = "true" ]; then
+  TEXTS=$(/usr/bin/osascript -e 'tell application "System Events" to tell process "Elmedia Video Player" to get value of every static text of every window' 2>/dev/null)
+  if echo "$TEXTS" | grep -qi "Nothing to open"; then
+    STATUS="nothing_to_open"
+  elif echo "$TEXTS" | grep -qi "Elapsed time"; then
+    STATUS="playing"
+  else
+    STATUS="unclear"
+  fi
+else
+  STATUS="not_running"
+fi
+TS=$(/bin/date -u +%Y-%m-%dT%H:%M:%SZ)
+/bin/echo "{{\\"timestamp\\":\\"$TS\\",\\"status\\":\\"$STATUS\\",\\"track_count\\":{len(tracks)}}}" >> "$VERIFY_LOG"
 """
     with open(ALARM_SCRIPT_PATH, "w") as f:
         f.write(script)
