@@ -28,20 +28,49 @@ python3 app_uninstaller.py "Command" --delete --yes
 python3 build_launchpad_app.py
 ```
 
-`~/Applications/App Uninstaller.app`을 만든다 — 🗑️ 이모지를 렌더링해 아이콘으로
-쓰고, Launchpad에서 "App Uninstaller"로 검색하면 보인다. 더블클릭하면:
-1. 삭제할 앱 이름을 묻는 대화상자가 뜨고
-2. 입력하면 Terminal이 열려서 `app_uninstaller.py <이름> --delete`를 실행한다
-   (미리보기 목록 → `y/N` 확인은 CLI가 이미 하므로 그대로 안전하게 이어진다).
+`~/Applications/Uninstall App.app`을 만든다 — 🗑️ 이모지를 렌더링해 아이콘으로
+쓴다. 더블클릭(또는 Spotlight에서 실행)하면:
+1. **Applications 폴더를 직접 보고 고르는 표준 Finder 열기 대화상자**가 뜬다
+   (처음엔 이름을 타이핑하는 방식이었는데, "폴더에서 눈으로 보고 고르게 해달라"는
+   피드백으로 바꿨다 — `choose file ... default location (path to applications
+   folder) of type {"com.apple.application-bundle"}`로 .app만 선택 가능).
+2. 앱을 고르면 Terminal이 열려서 `app_uninstaller.py <선택한 앱 경로> --delete`를
+   실행한다(미리보기 목록 → `y/N` 확인은 CLI가 이미 하므로 그대로 안전하게 이어짐).
+   취소를 누르면 조용히 아무 일도 안 일어난다.
 
 스크립트나 아이콘을 바꾸면 `build_launchpad_app.py`를 다시 실행해서 재빌드하면
 된다(기존 앱을 지우고 새로 만든다).
 
-**실측 함정**: 빌드 스크립트에서 파이썬 f-string에 경로를 넣을 때 `!r`(파이썬
+### 알려진 문제 — Launchpad 아이콘 그리드에 바로 안 보일 수 있음
+
+빌드된 앱은 **Spotlight(⌘+Space)로는 항상 바로 찾아지고 정상 실행**되지만,
+Launchpad를 열어서 아이콘을 눈으로 스크롤해 찾으려 하면 한동안 안 보일 수 있다.
+2026-08-13에 원인을 깊게 파봤는데:
+
+- `mdfind`(Spotlight)와 `lsregister -f`(Launch Services 강제 등록)는 항상 성공한다.
+- 하지만 Launchpad 자체의 캐시 DB(`~/Library/.../com.apple.dock.launchpad/db/db`,
+  경로는 `getconf DARWIN_USER_DIR`로 확인)에는 안 들어갈 때가 있다.
+- `defaults write com.apple.dock ResetLaunchPad -bool true` + `killall Dock`으로
+  캐시를 강제로 다시 만들어도, `lsregister -kill`로 Launch Services 데이터베이스를
+  통째로 재구성해도 고쳐지지 않았다.
+- **이건 이 앱만의 문제가 아니다** — 같은 방식(osacompile)으로 예전에 만든
+  `음악재생.app`, `아침루틴음악재생.app`, `유튜브에서 동영상 다운.app` 등 기존
+  커스텀 앱들도 대부분 Launchpad DB에 없었다(`speakPDF.app` 하나만 예외). 즉 이
+  맥에서 커스텀으로 만든 .app들이 원래부터 Launchpad 그리드에 잘 안 올라가는
+  경향이 있는 것으로 보인다 — 정확한 근본 원인(코드사인 관련 추정)은 못 밝혔다.
+
+**실용적인 해결책**: Spotlight로 실행하거나, Finder에서 `~/Applications/Uninstall
+App.app`을 Dock에 직접 끌어다 놓으면 확실하게 아이콘으로 뜬다. 맥을 재시동하면
+Launchpad 캐시가 완전히 다시 만들어지면서 보이는 경우도 있다.
+
+**다른 실측 함정**: 빌드 스크립트에서 파이썬 f-string에 경로를 넣을 때 `!r`(파이썬
 repr)을 쓰면 작은따옴표로 감싸지는데, AppleScript 문자열은 큰따옴표만 허용한다
 — `osacompile`이 실제 오류 지점보다 앞선 줄을 가리키며 "Expected expression but
 found unknown token"을 내서 원인 찾기 까다로웠다. AppleScript 소스를 파이썬으로
-생성할 때는 항상 큰따옴표로 직접 감쌀 것.
+생성할 때는 항상 큰따옴표로 직접 감쌀 것. 또한 `plutil -insert`로 `Info.plist`를
+수정한 뒤에는 반드시 `codesign --force -s -`로 다시 서명해야 한다 — 안 하면
+`codesign -v`가 "invalid Info.plist (plist or signature have been modified)"로
+실패한다(다만 이게 Launchpad 미표시의 원인은 아니었다 — 위 참고).
 
 ## CLI 사용법
 
