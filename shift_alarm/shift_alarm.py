@@ -326,6 +326,11 @@ ELMEDIA_AUDIO_EXTENSIONS = {
     ".aac", ".aif", ".aiff", ".alac", ".flac", ".m4a", ".mp3", ".ogg",
     ".opus", ".wav", ".wma",
 }
+HUE_COMMAND_PREFS = os.path.expanduser(
+    "~/Library/Group Containers/group.com.leporati.huecommand.shared/Library/Preferences/"
+    "group.com.leporati.huecommand.shared.plist"
+)
+HUE_WAKE_ROOM_NAME = "거실1"
 
 # ── 아산시 좌표 ──────────────────────────────────────────────
 LATITUDE  = 36.78
@@ -2249,6 +2254,31 @@ def write_alarm_script():
     )
     script = f"""#!/bin/bash
 # 교대근무 아침 알람 실행 스크립트
+
+# Command for Philips Hue가 저장한 로컬 Bridge 연결로 거실 조명을 먼저 켠다.
+# appKey는 실행 순간에만 읽고 파일·로그·Git에는 남기지 않는다.
+HUE_PREFS={shlex.quote(HUE_COMMAND_PREFS)}
+if [ -f "$HUE_PREFS" ]; then
+  HUE_CREDENTIALS=$(/usr/bin/plutil -extract shared_credentials raw -o - "$HUE_PREFS" 2>/dev/null | /usr/bin/base64 -D 2>/dev/null)
+  HUE_ROOMS=$(/usr/bin/plutil -extract shared_rooms raw -o - "$HUE_PREFS" 2>/dev/null | /usr/bin/base64 -D 2>/dev/null)
+  HUE_IP=$(printf '%s' "$HUE_CREDENTIALS" | /usr/bin/jq -r '.[0].ip // empty' 2>/dev/null)
+  HUE_KEY=$(printf '%s' "$HUE_CREDENTIALS" | /usr/bin/jq -r '.[0].appKey // empty' 2>/dev/null)
+  HUE_ROOM_ID=$(printf '%s' "$HUE_ROOMS" | /usr/bin/jq -r --arg name {shlex.quote(HUE_WAKE_ROOM_NAME)} '.[] | select(.name == $name) | .id' 2>/dev/null | /usr/bin/head -1)
+  if [ -n "$HUE_IP" ] && [ -n "$HUE_KEY" ] && [ -n "$HUE_ROOM_ID" ]; then
+    HUE_RESPONSE=$(/usr/bin/curl -ksS --connect-timeout 5 --max-time 10 \
+      -X PUT "https://$HUE_IP/clip/v2/resource/room/$HUE_ROOM_ID" \
+      -H "hue-application-key: $HUE_KEY" -H 'Content-Type: application/json' \
+      -d '{{"on":{{"on":true}}}}' 2>/dev/null)
+    if printf '%s' "$HUE_RESPONSE" | /usr/bin/jq -e '.errors | length == 0' >/dev/null 2>&1; then
+      /usr/bin/logger -t shift_alarm "Hue room {HUE_WAKE_ROOM_NAME} turned on"
+    else
+      /usr/bin/logger -t shift_alarm "Hue turn-on failed; music alarm continues"
+    fi
+  else
+    /usr/bin/logger -t shift_alarm "Hue Command connection not found; music alarm continues"
+  fi
+  unset HUE_CREDENTIALS HUE_ROOMS HUE_KEY HUE_RESPONSE
+fi
 
 # 전날 재생하던 좋아요 큐가 남아 있으면 클래식과 섞이므로 Elmedia를 완전히
 # 종료한 뒤 클래식 트랙({len(tracks)}곡)만 연다. 알람에서는 유튜브 랜덤 음악
