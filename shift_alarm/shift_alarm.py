@@ -36,7 +36,7 @@ import sqlite3
 import sys
 import urllib.request
 import urllib.error
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, quote
 import threading
 import datetime
 import random
@@ -128,6 +128,7 @@ DAILY_ROUTINE_SOURCE_PAGE_ID = "3b932a1e-ae80-8021-912b-d160fe6cb629"
 DAILY_ROUTINE_HEADING = "🌅 일일 루틴 체크리스트"
 DAILY_REMINDER_HEADING = "🔔 오늘의 리마인더"
 DAILY_ROUTINE_TOGGLE_PREFIX = "🌅 오늘의 일일 루틴 — "
+UNCHECKED_INDEX_TOGGLE_TITLE = "체크안된것"
 NOTION_VERSION = "2026-03-11"
 # "🔔 오늘: ..." 메뉴 항목에서 리마인더마다 색을 다르게 입혀 알록달록하게
 # 보이게 한다(★ 2026-08-07: 콜백 없어 회색으로 보이던 걸 개선하면서 같이 추가).
@@ -250,6 +251,106 @@ def fetch_reminder_checklist_state(token, date_str):
         text = "".join(t.get("plain_text", "") for t in rich_text)
         state[text] = bool(block.get("to_do", {}).get("checked"))
     return state
+
+
+def _notion_block_text(block):
+    block_type = block.get("type", "")
+    return "".join(
+        item.get("plain_text", "")
+        for item in block.get(block_type, {}).get("rich_text", [])
+    ).strip()
+
+
+def _notion_block_url(block_id):
+    page = REMINDER_CHECKLIST_NOTION_PAGE_ID.replace("-", "")
+    anchor = str(block_id).replace("-", "")
+    return f"https://www.notion.so/{page}#{anchor}"
+
+
+def sync_unchecked_checklist_index(token):
+    """모든 날짜/고정 루틴 토글의 미체크 항목 링크를 `체크안된것`에 동기화한다."""
+    headers = {"Authorization": f"Bearer {token}", "Notion-Version": NOTION_VERSION}
+
+    def request_json(path, method="GET", payload=None):
+        request = urllib.request.Request(
+            f"https://api.notion.com/v1/{path}",
+            data=(json.dumps(payload).encode("utf-8") if payload is not None else None),
+            method=method,
+            headers={**headers, "Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(request, timeout=15) as response:
+            return json.load(response)
+
+    def children(block_id):
+        results = []
+        cursor = None
+        while True:
+            path = f"blocks/{block_id}/children?page_size=100"
+            if cursor:
+                path += "&start_cursor=" + quote(cursor, safe="")
+            response = request_json(path)
+            results.extend(response.get("results", []))
+            if not response.get("has_more"):
+                return results
+            cursor = response.get("next_cursor")
+
+    page_children = children(REMINDER_CHECKLIST_NOTION_PAGE_ID)
+    index_toggle = None
+    entries = []
+    for toggle in page_children:
+        if toggle.get("type") != "toggle":
+            continue
+        title = _notion_block_text(toggle)
+        if title.replace(" ", "") == UNCHECKED_INDEX_TOGGLE_TITLE:
+            index_toggle = toggle
+            continue
+        for block in children(toggle["id"]):
+            if block.get("type") != "to_do" or block.get("to_do", {}).get("checked"):
+                continue
+            label = _notion_block_text(block)
+            if label:
+                entries.append((title, label, _notion_block_url(block["id"])))
+
+    if not index_toggle:
+        created = request_json(
+            f"blocks/{REMINDER_CHECKLIST_NOTION_PAGE_ID}/children", "PATCH",
+            {"children": [{
+                "object": "block", "type": "toggle",
+                "toggle": {"rich_text": [{"type": "text", "text": {
+                    "content": UNCHECKED_INDEX_TOGGLE_TITLE,
+                }}]},
+            }]},
+        )
+        index_toggle = created["results"][-1]
+
+    old_children = children(index_toggle["id"])
+    old_signature = [
+        (_notion_block_text(block), next((
+            item.get("href") or item.get("text", {}).get("link", {}).get("url")
+            for item in block.get(block.get("type", ""), {}).get("rich_text", [])
+            if item.get("href") or item.get("text", {}).get("link")
+        ), None))
+        for block in old_children if block.get("type") == "bulleted_list_item"
+    ]
+    new_signature = [(f"{title} · {label}", url) for title, label, url in entries]
+    if old_signature == new_signature and len(old_children) == len(new_signature):
+        return len(entries)
+
+    for block in old_children:
+        request_json(f"blocks/{block['id']}", "DELETE")
+    if entries:
+        request_json(
+            f"blocks/{index_toggle['id']}/children", "PATCH",
+            {"children": [{
+                "object": "block", "type": "bulleted_list_item",
+                "bulleted_list_item": {"rich_text": [{
+                    "type": "text", "text": {
+                        "content": f"{title} · {label}", "link": {"url": url},
+                    },
+                }]},
+            } for title, label, url in entries]},
+        )
+    return len(entries)
 
 # ── 근무표 코드(D/S/G/휴) → 앱 내부 근무 이름 매핑 ───────────────
 CODE_TO_SHIFT = {
@@ -2837,6 +2938,7 @@ class ShiftAlarmApp(rumps.App):
         )
         # build_menu()가 바로 이어서 _checklist_state를 참조하므로 그 전에 초기화해둔다.
         self._checklist_state = self._load_cached_checklist_state()
+        self._unchecked_index_sync_running = False
         self.build_menu()
 
         # 날씨 10분마다 갱신
@@ -3471,6 +3573,44 @@ class ShiftAlarmApp(rumps.App):
                     incomplete = [
                         label for label, checked in checked_by_label.items() if not checked
                     ]
+                    # 고정 루틴은 오늘 목록으로 초기화되므로, 미완료 항목만 전날
+                    # 날짜 토글에 보존한다. 사용자가 나중에 여기서 체크하면
+                    # `체크안된것` 인덱스에서도 자동으로 빠진다.
+                    if incomplete and previous_date:
+                        previous_toggle = next((
+                            block for block in page_results
+                            if block.get("type") == "toggle"
+                            and _notion_block_text(block) == previous_date
+                        ), None)
+                        if previous_toggle:
+                            previous_children = notion_get(
+                                f"blocks/{previous_toggle['id']}/children?page_size=100"
+                            ).get("results", [])
+                            previous_labels = {
+                                _notion_block_text(block) for block in previous_children
+                                if block.get("type") == "to_do"
+                            }
+                            archived = [
+                                label for label in incomplete if label not in previous_labels
+                            ]
+                            if archived:
+                                notion_request(
+                                    f"blocks/{previous_toggle['id']}/children", "PATCH",
+                                    {"children": [todo_block(label) for label in archived]},
+                                )
+                        else:
+                            notion_request(
+                                f"blocks/{REMINDER_CHECKLIST_NOTION_PAGE_ID}/children", "PATCH",
+                                {"children": [{
+                                    "object": "block", "type": "toggle",
+                                    "toggle": {
+                                        "rich_text": [{"type": "text", "text": {
+                                            "content": previous_date,
+                                        }}],
+                                        "children": [todo_block(label) for label in incomplete],
+                                    },
+                                }]},
+                            )
                     if (
                         incomplete
                         and self.config.get("daily_routine_incomplete_notified_date") != previous_date
@@ -3568,6 +3708,10 @@ class ShiftAlarmApp(rumps.App):
         self.config["daily_checklist_notion_synced_date"] = date_str
         self.config["daily_routine_template_version"] = template_version
         save_config(self.config)
+        try:
+            sync_unchecked_checklist_index(token)
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
+            print(f"⚠️ 미완료 체크리스트 인덱스 동기화 실패: {exc}")
 
     def _notify_incomplete_daily_routine(self, previous_date, incomplete):
         """전날 미완료 루틴을 메인 스레드에서 한 번만 알린다."""
@@ -3607,6 +3751,14 @@ class ShiftAlarmApp(rumps.App):
         except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
             print(f"⚠️ 체크리스트 상태 동기화 실패: {exc}")
             return
+        if not self._unchecked_index_sync_running:
+            self._unchecked_index_sync_running = True
+            try:
+                sync_unchecked_checklist_index(token)
+            except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
+                print(f"⚠️ 미완료 체크리스트 인덱스 동기화 실패: {exc}")
+            finally:
+                self._unchecked_index_sync_running = False
         self._checklist_state = state
         try:
             with open(CHECKLIST_STATE_CACHE_PATH, "w", encoding="utf-8") as f:
