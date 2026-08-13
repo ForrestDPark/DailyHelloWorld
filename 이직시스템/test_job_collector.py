@@ -95,6 +95,41 @@ class JobCollectorTest(unittest.TestCase):
         )["total"]
         self.assertGreater(practical_score, opaque_score)
 
+    def test_parttime_rejects_remote_store_job_outside_asan_commute_area(self):
+        row = self._job_row(
+            source="알바천국(크롤링)", source_id="gumi-lotteria",
+            company="롯데리아 구미원평", title="롯데리아 아르바이트 모집",
+            location="경북 구미시", keywords="매장 서빙", skills="", matched_query="",
+        )
+        accepted, reasons = jc._parttime_recommendation_eligibility(row, self.config)
+        self.assertFalse(accepted)
+        self.assertIn("활용 근거 없음", reasons[0])
+
+    def test_parttime_accepts_remote_ai_or_asan_coding_job(self):
+        remote = self._job_row(
+            source="알바몬(크롤링)", source_id="remote-ai", title="재택 AI 데이터 라벨링",
+            location="전국", keywords="온라인 원격", skills="AI",
+        )
+        asan = self._job_row(
+            source="알바몬(크롤링)", source_id="asan-code", title="Python 코딩 보조 알바",
+            location="충남 아산시", keywords="데이터", skills="Python",
+        )
+        self.assertTrue(jc._parttime_recommendation_eligibility(remote, self.config)[0])
+        self.assertTrue(jc._parttime_recommendation_eligibility(asan, self.config)[0])
+
+    def test_parttime_daily_pool_hides_scores_below_50(self):
+        low = self._job_row(
+            source="알바몬(크롤링)", source_id="low", title="재택 AI 보조",
+            location="전국", employment_type="", salary="", keywords="", skills="AI",
+            posted_at="", deadline="", matched_query="",
+        )
+        with mock.patch("company_profile._dart_api_key", return_value=""), \
+             mock.patch("company_profile.fetch_company_news", return_value=[]), \
+             mock.patch("company_profile.search_related_jobs", return_value=[]):
+            ranked, info = jc._rank_candidates_by_analyzability([low], self.config, "parttime")
+        self.assertLess(info["알바몬(크롤링):low"]["total"], jc.PARTTIME_RECOMMENDATION_MIN_SCORE)
+        self.assertEqual(ranked, [])
+
     def test_score_breakdown_lists_each_news_source_link(self):
         row = self._job_row()
         detail = jc.score_recommendation_candidate(

@@ -112,6 +112,7 @@ JOB_COLLECTOR_REFRESH_SECONDS = 24 * 60 * 60  # 하루 1번
 # ★ 2026-08-08: 취업/알바는 성격이 달라 카테고리별로 분리(job_collector.py의
 # JOB_CATEGORY_LABELS와 키를 맞춘다).
 JOB_CATEGORIES = {"career": "커리어", "parttime": "알바"}
+PARTTIME_RECOMMENDATION_MIN_SCORE = 50
 JOB_TOP_ANALYSIS_STATE = {
     cat: os.path.join(JOB_COLLECTOR_DIR, "data", f"top_job_notion_{cat}.json") for cat in JOB_CATEGORIES
 }
@@ -2678,7 +2679,12 @@ def get_top_job_analysis(category="career"):
         return None
     try:
         with open(path, encoding="utf-8") as f:
-            return json.load(f)
+            result = json.load(f)
+        # 오래된 상태 파일이 남아 있어도 낮은 점수의 알바가 메뉴·위젯에 다시
+        # 나타나지 않도록 표시 계층에서도 한 번 더 방어한다.
+        if category == "parttime" and int(result.get("score") or 0) < PARTTIME_RECOMMENDATION_MIN_SCORE:
+            return None
+        return result
     except (OSError, json.JSONDecodeError):
         return None
 

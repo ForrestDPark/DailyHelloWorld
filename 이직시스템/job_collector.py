@@ -323,7 +323,7 @@ def score_recommendation_candidate(
         schedule_hits = re.findall(r"(?:\d{1,2}\s*시|주\s*\d\s*일|오전|오후|야간|시간협의|스케줄)", schedule_text)
         schedule_score = min(20, len(set(schedule_hits)) * 5 + (5 if re.search(r"알바|파트|계약", schedule_text) else 0))
         add("근무시간 명확성", schedule_score, 20, sorted(set(schedule_hits)) or ["시간 정보 부족"])
-        locations = config.get("parttime_locations") or config.get("locations") or []
+        locations = config.get("parttime_locations") or list(PARTTIME_DEFAULT_COMMUTABLE_LOCATIONS)
         location_text = str(row["location"] or "")
         if locations:
             location_hits = [loc for loc in locations if loc.casefold() in location_text.casefold()]
@@ -1122,10 +1122,45 @@ JOB_SOURCE_CATEGORY = {
     "알바몬(크롤링)": "parttime", "알바천국(크롤링)": "parttime",
 }
 JOB_CATEGORY_LABELS = {"career": "커리어 공고", "parttime": "알바·단기 공고"}
+PARTTIME_RECOMMENDATION_MIN_SCORE = 50
+PARTTIME_DEFAULT_COMMUTABLE_LOCATIONS = ("아산", "천안")
+PARTTIME_TECH_TERMS = (
+    "python", "java", "javascript", "typescript", "코딩", "개발", "프로그래밍",
+    "ai", "인공지능", "llm", "데이터", "sql", "자동화", "온라인", "인터넷",
+    "웹", "앱", "소프트웨어", "qa", "테스트", "라벨링", "어노테이션", "프롬프트",
+)
+PARTTIME_REMOTE_TERMS = ("재택", "원격", "리모트", "remote", "온라인 근무", "비대면")
 
 
 def top_job_state_path(category: str) -> Path:
     return BASE_DIR / "data" / f"top_job_notion_{category}.json"
+
+
+def _parttime_recommendation_eligibility(
+    row: sqlite3.Row,
+    config: dict[str, Any],
+) -> tuple[bool, list[str]]:
+    """알바 추천은 기술 활용 가능성과 실제 근무 가능성을 모두 만족해야 한다.
+
+    재택·온라인 공고는 지역 제한을 받지 않는다. 출근형 공고는 개인 설정의
+    ``parttime_locations``를 우선하고, 설정이 없으면 아산·천안 통근권만 허용한다.
+    """
+    # `matched_query`는 수집기가 던진 검색어일 뿐 공고 자체의 업무 근거가 아니다.
+    # 여기에 AI 같은 단어가 있다는 이유로 일반 매장 공고가 통과하지 않게 한다.
+    haystack = " ".join(str(row[key] or "") for key in ("title", "keywords", "skills", "employment_type")).casefold()
+    tech_hits = [term for term in PARTTIME_TECH_TERMS if term in haystack]
+    remote_hits = [term for term in PARTTIME_REMOTE_TERMS if term in haystack]
+    if not tech_hits:
+        return False, ["코딩·AI·데이터·온라인 활용 근거 없음"]
+    if remote_hits:
+        return True, [f"재택·온라인: {', '.join(remote_hits[:3])}", f"기술 활용: {', '.join(tech_hits[:5])}"]
+
+    locations = config.get("parttime_locations") or list(PARTTIME_DEFAULT_COMMUTABLE_LOCATIONS)
+    location_text = str(row["location"] or "").casefold()
+    location_hits = [str(loc) for loc in locations if str(loc).casefold() in location_text]
+    if not location_hits:
+        return False, [f"출근 지역 불일치: {row['location'] or '미기재'}", f"허용 통근권: {', '.join(map(str, locations))}"]
+    return True, [f"통근 가능: {', '.join(location_hits)}", f"기술 활용: {', '.join(tech_hits[:5])}"]
 
 
 def _notion_token() -> str:
@@ -1448,6 +1483,15 @@ def _rank_candidates_by_analyzability(
         fetch_dart_financial_summary, fetch_company_news, search_related_jobs,
     )
     info_map: dict[str, dict[str, Any]] = {}
+    if category == "parttime":
+        eligible = []
+        for row in candidates:
+            accepted, reasons = _parttime_recommendation_eligibility(row, config)
+            if accepted:
+                eligible.append(row)
+            else:
+                print(f"  제외: {row['company']} — {'; '.join(reasons)}")
+        candidates = eligible
     initial: list[tuple[int, sqlite3.Row]] = []
     for row in candidates:
         key = f"{row['source']}:{row['source_id']}"
@@ -1494,6 +1538,11 @@ def _rank_candidates_by_analyzability(
         info_map[key] = {**signals, "score_detail": detail, "total": detail["total"]}
 
     ranked = sorted(candidates, key=lambda row: info_map[f"{row['source']}:{row['source_id']}"]["total"], reverse=True)
+    if category == "parttime":
+        ranked = [
+            row for row in ranked
+            if info_map[f"{row['source']}:{row['source_id']}"]["total"] >= PARTTIME_RECOMMENDATION_MIN_SCORE
+        ]
     if ranked:
         top = ranked[0]
         total = info_map[f"{top['source']}:{top['source_id']}"]["total"]
@@ -1584,7 +1633,10 @@ def analyze_top_job(args: argparse.Namespace) -> None:
     config = load_config(args.config)
     candidates, richness_info = _rank_candidates_by_analyzability(candidates, config, category)
     if not candidates:
-        print(f"[{JOB_CATEGORY_LABELS[category]}] 추천 후보가 없습니다.")
+        if category == "parttime":
+            print(f"[{JOB_CATEGORY_LABELS[category]}] 코딩·AI·온라인 적합성과 {PARTTIME_RECOMMENDATION_MIN_SCORE}점 기준을 만족한 후보가 없어 오늘은 표시하지 않습니다.")
+        else:
+            print(f"[{JOB_CATEGORY_LABELS[category]}] 추천 후보가 없습니다.")
         return
     candidates, used = _apply_no_repeat_rotation(candidates, category)
 
@@ -1704,6 +1756,7 @@ def analyze_top_job(args: argparse.Namespace) -> None:
         "score": recommendation_score, "collection_score": row["score"],
         "source": row["source"], "job_url": row["url"],
         "company_notion_url": company_notion_url,
+        "recommendation_eligible": True,
     }
     try:
         url = _notion_publish(token, title, blocks, meta, top_job_state_path(category))
