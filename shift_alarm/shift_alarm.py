@@ -148,6 +148,7 @@ REMINDER_MENU_COLOR_CYCLE = [
 # 보이지 않게 한다.
 CHECKLIST_STATE_CACHE_PATH = os.path.expanduser("~/.shift_alarm_checklist_state.json")
 CHECKLIST_SYNC_INTERVAL_SECONDS = 60
+MOBILE_STATUS_REFRESH_SECONDS = 60
 
 # ★ 2026-08-09: Claude 라이브 quota는 OAuth 액세스 토큰(수 시간짜리)이 있어야
 # 조회되는데, 이 토큰은 claude CLI를 실제로 켜서 쓸 때만 갱신된다. 밤새
@@ -3041,6 +3042,14 @@ class ShiftAlarmApp(rumps.App):
         self.checklist_timer.start()
         self._refresh_checklist_state(None)
 
+        # 상태 변화 콜백이 없는 시간에도 updated_at과 iCloud 파일을 매분 새로 써서
+        # iPhone이 다음 WidgetKit 실행 때 항상 최신 상태를 읽을 수 있게 한다.
+        self.mobile_status_timer = rumps.Timer(
+            self._refresh_mobile_status, MOBILE_STATUS_REFRESH_SECONDS
+        )
+        self.mobile_status_timer.start()
+        self._write_mobile_status()
+
         # Codex/Claude 사용량(quota) 12분마다 갱신 + 앱 시작 시 1회
         self.ai_usage_timer = rumps.Timer(self._refresh_ai_usage, AI_USAGE_NORMAL_INTERVAL)
         self.ai_usage_timer.start()
@@ -3350,6 +3359,10 @@ class ShiftAlarmApp(rumps.App):
         # 위젯 소스가 바뀐 커밋을 배포한 뒤 앱만 재시작해도 Scriptable 쪽 파일이
         # 자동으로 따라오게 한다. 내용이 같으면 실제 쓰기는 생략한다.
         sync_scriptable_widget_file()
+
+    def _refresh_mobile_status(self, _):
+        """Scriptable용 상태를 매분 강제 갱신한다(네트워크·AI 호출 없음)."""
+        self._write_mobile_status()
 
     # ── 저장공간 ─────────────────────────────────────────────
 
@@ -3920,33 +3933,15 @@ class ShiftAlarmApp(rumps.App):
 
     def build_menu(self):
         self.menu.clear()
-        auto_on = self.config.get("auto_mode", True)
-
-        auto_label = f"{'✓ ' if auto_on else ''}근무표 자동 적용 (매일 자정)"
-        self.menu.add(rumps.MenuItem(auto_label, callback=self.toggle_auto_mode))
-        self.menu.add(rumps.MenuItem("오늘 근무 다시 불러오기", callback=self.refresh_today_now))
-
-        self.menu.add(None)
-
-        self.menu.add(self.earnings_item)
-        self.menu.add(self.weather_item)
-        storage_text = (
-            f"💾 저장공간: {self.storage_free_gb}GB 남음"
-            if self.storage_free_gb is not None else "💾 저장공간: 확인 실패"
-        )
-        self.menu.add(rumps.MenuItem(storage_text))
-        self.menu.add(self.stay_awake_item)
-        always_awake_on = self.config.get("stay_awake_always", False)
-        always_awake_label = f"{'✓ ' if always_awake_on else ''}🌙 절전 방지 항상 켜기 (원격 접속용)"
-        self.menu.add(rumps.MenuItem(always_awake_label, callback=self.toggle_stay_awake_always))
-
-        self.menu.add(None)
-        self.menu.add(self.codex_usage_item)
-        self.menu.add(self.claude_usage_item)
-        self.menu.add(self.claude_stats_item)
+        # ★ 2026-08-13: 매일 누르는 항목을 최상단에 모은다. 설정·상태·보조 도구는
+        # 아래 `기타` 하위 메뉴로 접어 메뉴를 열자마자 필요한 작업에 도달하게 한다.
+        today_reminders = get_today_reminders(self.schedule)
+        self.menu.add(_build_reminder_status_menu_item(
+            today_reminders, self.make_open_url_callback(REMINDER_CHECKLIST_NOTION_URL),
+            checklist_state=self._checklist_state,
+        ))
         self.menu.add(self.gmail_item)
 
-        self.menu.add(None)
         # ★ 2026-08-07: "N건 저장됨"/상위 공고 목록은 키워드 개수로만 매기는
         # 점수(score_job())라 의미 없는 매칭이 섞여 노이즈가 많다는 사용자 피드백으로
         # 메뉴 노출을 없앴다. collect는 계속 원료 수집용으로만 백그라운드에서 돌고,
@@ -3971,87 +3966,100 @@ class ShiftAlarmApp(rumps.App):
                 self.menu.add(rumps.MenuItem(label, callback=self.make_open_url_callback(top_contest["url"])))
 
         self.menu.add(None)
-
-        today_reminders = get_today_reminders(self.schedule)
-        self.menu.add(_build_reminder_status_menu_item(
-            today_reminders, self.make_open_url_callback(REMINDER_CHECKLIST_NOTION_URL),
-            checklist_state=self._checklist_state,
-        ))
-
-        reminder_menu = rumps.MenuItem("🔔 리마인더 켜기/끄기")
-        for key, r in REMINDERS.items():
-            check = "✓ " if r["enabled"] else ""
-            reminder_menu.add(rumps.MenuItem(
-                f"{check}{r['label']}",
-                callback=self.make_reminder_toggle_callback(key)
-            ))
-        self.menu.add(reminder_menu)
-
-        self.menu.add(None)
-
-        time_menu = rumps.MenuItem("⏰ 알람 시간 설정")
-        for shift in ["Day", "Swing", "GY"]:
-            t = SHIFT_TIMES[shift]
-            time_menu.add(rumps.MenuItem(
-                f"{shift} 시간 변경  (현재 {t['hour']:02d}:{t['minute']:02d})",
-                callback=self.make_time_change_callback(shift)
-            ))
-        self.menu.add(time_menu)
-
-        self.menu.add(None)
-        self.menu.add(rumps.MenuItem(
-            f"💡 Hue {HUE_WAKE_ROOM_NAME} 켜기/끄기", callback=self.toggle_hue_now
-        ))
-        self.menu.add(rumps.MenuItem("🎬 Elmedia 지금 바로 재생", callback=self.play_elmedia_now))
-        self.menu.add(rumps.MenuItem("⭐ 좋아요 플레이하기", callback=self.play_favorites_now))
-        self.menu.add(None)
-
+        self.menu.add(rumps.MenuItem("🎥 일본어 자막 추출 - 연달아 (폴더 선택)", callback=self.run_jp_subtitle_now))
         last_ebook = load_last_ebook_state()
         if last_ebook:
             short_name = truncate_title(last_ebook['file_name'])
             resume_label = f"📖 이어하기: {short_name} (P.{last_ebook['page']})"
             self.menu.add(rumps.MenuItem(resume_label, callback=self.resume_ebook_now))
-        self.menu.add(rumps.MenuItem("📖 다른 책 선택해서 읽기", callback=self.choose_ebook_now))
-        self.menu.add(rumps.MenuItem("☁️ 독서 Notion 기록 동기화", callback=self.sync_ebook_notion_now))
-        self.menu.add(rumps.MenuItem("📘 독서 기록 → 학습판 EPUB", callback=self.build_ebook_study_now))
-
-        self.menu.add(None)
         self.menu.add(rumps.MenuItem("🎲 추천 사이트 열기 (天 폴더 랜덤 3개)", callback=self.open_random_bookmarks_now))
-        self.menu.add(None)
+        self.menu.add(rumps.MenuItem("⭐ 좋아요 Elmedia 플레이하기", callback=self.play_favorites_now))
+        self.menu.add(rumps.MenuItem(f"💡 Hue {HUE_WAKE_ROOM_NAME} 켜기/끄기", callback=self.toggle_hue_now))
 
-        self.menu.add(rumps.MenuItem("🎥 일본어 자막 추출 - 연달아 (폴더 선택)", callback=self.run_jp_subtitle_now))
-        self.menu.add(rumps.MenuItem("🏃 운동용 영상만 추출 (폴더 선택)", callback=self.run_jp_workout_only_now))
-        self.menu.add(rumps.MenuItem("📝 자막·번역·낭독판만 (폴더 선택)", callback=self.run_jp_subtitle_stage2_now))
-        self.menu.add(rumps.MenuItem(
+        self.menu.add(None)
+        more_menu = rumps.MenuItem("기타")
+
+        # 근무·알람 설정
+        auto_on = self.config.get("auto_mode", True)
+        auto_label = f"{'✓ ' if auto_on else ''}근무표 자동 적용 (매일 자정)"
+        more_menu.add(rumps.MenuItem(auto_label, callback=self.toggle_auto_mode))
+        more_menu.add(rumps.MenuItem("오늘 근무 다시 불러오기", callback=self.refresh_today_now))
+        time_menu = rumps.MenuItem("⏰ 알람 시간 설정")
+        for shift in ["Day", "Swing", "GY"]:
+            t = SHIFT_TIMES[shift]
+            time_menu.add(rumps.MenuItem(
+                f"{shift} 시간 변경  (현재 {t['hour']:02d}:{t['minute']:02d})",
+                callback=self.make_time_change_callback(shift),
+            ))
+        more_menu.add(time_menu)
+        reminder_menu = rumps.MenuItem("🔔 리마인더 켜기/끄기")
+        for key, reminder in REMINDERS.items():
+            check = "✓ " if reminder["enabled"] else ""
+            reminder_menu.add(rumps.MenuItem(
+                f"{check}{reminder['label']}",
+                callback=self.make_reminder_toggle_callback(key),
+            ))
+        more_menu.add(reminder_menu)
+
+        # 상태·기기 제어
+        # rumps/NSMenuItem은 한 객체를 메뉴 갱신 때 새 하위 메뉴에 재부착할 수 없다.
+        # 상태 원본의 현재 title만 복제한 새 항목을 매 build마다 만든다.
+        more_menu.add(rumps.MenuItem(self.earnings_item.title))
+        more_menu.add(rumps.MenuItem(self.weather_item.title))
+        storage_text = (
+            f"💾 저장공간: {self.storage_free_gb}GB 남음"
+            if self.storage_free_gb is not None else "💾 저장공간: 확인 실패"
+        )
+        more_menu.add(rumps.MenuItem(storage_text))
+        more_menu.add(rumps.MenuItem(self.stay_awake_item.title))
+        always_awake_on = self.config.get("stay_awake_always", False)
+        always_awake_label = f"{'✓ ' if always_awake_on else ''}🌙 절전 방지 항상 켜기 (원격 접속용)"
+        more_menu.add(rumps.MenuItem(always_awake_label, callback=self.toggle_stay_awake_always))
+        more_menu.add(rumps.MenuItem(self.codex_usage_item.title))
+        more_menu.add(rumps.MenuItem(self.claude_usage_item.title))
+        more_menu.add(rumps.MenuItem(self.claude_stats_item.title))
+
+        reading_menu = rumps.MenuItem("📚 독서 도구")
+        reading_menu.add(rumps.MenuItem("📖 다른 책 선택해서 읽기", callback=self.choose_ebook_now))
+        reading_menu.add(rumps.MenuItem("☁️ 독서 Notion 기록 동기화", callback=self.sync_ebook_notion_now))
+        reading_menu.add(rumps.MenuItem("📘 독서 기록 → 학습판 EPUB", callback=self.build_ebook_study_now))
+        more_menu.add(reading_menu)
+
+        media_menu = rumps.MenuItem("🎬 일본어·미디어 도구")
+        media_menu.add(rumps.MenuItem("🎬 Elmedia 지금 바로 재생", callback=self.play_elmedia_now))
+        media_menu.add(rumps.MenuItem("🏃 운동용 영상만 추출 (폴더 선택)", callback=self.run_jp_workout_only_now))
+        media_menu.add(rumps.MenuItem("📝 자막·번역·낭독판만 (폴더 선택)", callback=self.run_jp_subtitle_stage2_now))
+        media_menu.add(rumps.MenuItem(
             "📖 EPUB 폴더 → 낭독판 EPUB (문장 강조)",
             callback=self.build_jp_readaloud_epub_now,
         ))
-        self.menu.add(rumps.MenuItem(
+        media_menu.add(rumps.MenuItem(
             "🎵 플레이리스트 MP4 → 곡별 MP3 (폴더 선택)",
             callback=self.run_bgm_playlist_split_now,
         ))
-        self.menu.add(rumps.MenuItem(
+        media_menu.add(rumps.MenuItem(
             "🏷️ MP3 Shazam 제목 변경 (폴더 선택)",
             callback=self.run_mp3_shazam_rename_now,
         ))
-        self.menu.add(rumps.MenuItem(
+        media_menu.add(rumps.MenuItem(
             "🎵 YouTube → MP3 다운로드",
             callback=self.download_youtube_mp3_now,
         ))
+        more_menu.add(media_menu)
 
         sunzi_entry = get_latest_sunzi_entry()
         if sunzi_entry:
             short_title = truncate_title(sunzi_entry["title"])
-            self.menu.add(rumps.MenuItem(
+            more_menu.add(rumps.MenuItem(
                 f"⚔️ 손자병법 최신: {short_title}", callback=self.open_latest_sunzi
             ))
 
         trash_size = get_trash_size_str()
         trash_label = f"🗑️ 저장공간 관리 (휴지통 {trash_size})" if trash_size else "🗑️ 저장공간 관리"
-        self.menu.add(rumps.MenuItem(trash_label, callback=self.open_storage_settings))
-        self.menu.add(rumps.MenuItem("현재 설정 확인", callback=self.show_status))
-        self.menu.add(None)
-        self.menu.add(rumps.MenuItem("종료", callback=self.quit_app))
+        more_menu.add(rumps.MenuItem(trash_label, callback=self.open_storage_settings))
+        more_menu.add(rumps.MenuItem("현재 설정 확인", callback=self.show_status))
+        more_menu.add(rumps.MenuItem("종료", callback=self.quit_app))
+        self.menu.add(more_menu)
 
     # ── 시간 변경 (osascript 입력창) ─────────────────────────
 

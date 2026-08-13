@@ -7,11 +7,11 @@
   - **★ 2026-08-07 KeepAlive 추가**: 예전엔 `KeepAlive: false`라 앱이 정말로 죽으면(크래시 등) launchd가 자동으로 다시 안 띄워줘서, 수동으로 kickstart 해줄 때까지 메뉴바 아이콘이 계속 사라진 채로 남는 문제가 있었다. `KeepAlive: {SuccessfulExit: false}`로 바꿔서 **비정상 종료(크래시/kill)일 때만** 자동 재시작하고, 메뉴의 "종료"로 정상 종료(exit 0, `rumps.quit_application()`)했을 땐 재시작 안 함. `StandardOutPath`/`StandardErrorPath`를 `~/Library/Logs/shift_alarm.{out,err}.log`로 지정해서 다음에 또 죽으면 원인을 사후에 확인할 수 있게 했다. plist를 고친 뒤엔 `launchctl kickstart -k`만으로는 반영이 안 되고(플리스트 자체를 다시 안 읽음) `launchctl bootout gui/$(id -u)/com.shiftalarm.menubar && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.shiftalarm.menubar.plist`로 재로드해야 한다.
 - 사용자는 3교대(Day/Swing/GY) + 휴무로 도는 D조 근무자.
 
-## 0. 메뉴 구성 원칙 (2026-08-01 재확정)
+## 0. 메뉴 구성 원칙 (2026-08-13 사용 빈도 기준 재설계)
 
-기능을 `일본어·전자책 도구`, `미디어 도구`, `설정·관리` 같은 묶음으로 통합하지 않는다. 사용자가 예전처럼 전체 기능을 한눈에 확인할 수 있도록 모든 실행 항목을 메인 메뉴에 직접 펼쳐 표시한다. 리마인더별 켜기/끄기와 근무별 알람 시간처럼 원래부터 세부 선택지가 여러 개인 항목만 기존 하위 메뉴를 유지한다.
+메인 메뉴 최상단은 매일 확인하는 `오늘 리마인더 → 메일 → 추천 공고·경진대회`, 그 아래는 자주 직접 실행하는 `일본어 자막 추출 → 전자책 이어하기 → 추천 사이트 → 좋아요 Elmedia → Hue 거실 켜기/끄기` 순서로 고정한다. 설정·상태·가끔 쓰는 보조 도구는 `기타` 하위 메뉴로 접는다. `기타` 안에서도 독서 보조 기능은 `독서 도구`, 일본어 후처리·음원 기능은 `일본어·미디어 도구`로 묶는다.
 
-`시급 설정`은 제거된 상태를 유지하며 기존 고정 시급값과 급여 계산은 그대로 쓴다. 북마크 최신화도 별도 항목 없이 앱 시작 시 및 6시간마다 자동 실행한다. `🗑️ 저장공간 관리`, `현재 설정 확인`, `종료`는 모두 메인 메뉴에 표시한다.
+`시급 설정`은 제거된 상태를 유지하며 기존 고정 시급값과 급여 계산은 그대로 쓴다. 북마크 최신화도 별도 항목 없이 앱 시작 시 및 6시간마다 자동 실행한다. `🗑️ 저장공간 관리`, `현재 설정 확인`, `종료`는 `기타`에서 접근한다.
 
 **★ 2026-08-08 재설계**: 원래 `🗑️ 휴지통 비우기`가 `osascript`로 Finder에게 직접 휴지통을 비우게 시켰는데, launchd로 뜬 백그라운드 프로세스에서는 AppleEvent 자동화 권한이 제대로 안 붙어서 클릭해도 조용히 아무 반응이 없었다(이 프로젝트에서 반복적으로 겪은 launchd·AppleEvent 문제와 같은 패턴 — 8-1 참조). 게다가 실패했을 때 띄우려던 오류창(`rumps.alert`)이 백그라운드 스레드에서 호출돼 그 자체가 `NSInternalInconsistencyException`으로 크래시했다는 게 로그로 확인됐다 — 즉 "반응 없음"의 정체는 실패 알림 자체의 크래시였다. 자동 삭제를 억지로 고치는 대신, 클릭하면 시스템 설정의 저장 공간 화면(`open x-apple.systempreferences:com.apple.settings.Storage`)을 열어 사용자가 직접 정리하도록 단순화했다. 휴지통 현재 용량 표시(`get_trash_size_str()`, 순수 파이썬으로 `~/.Trash` 크기 계산)는 메뉴 라벨에 그대로 남겨 정보 제공용으로만 쓴다.
 
@@ -311,6 +311,7 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
 - **★ 2026-08-08 iCloud 일시 오류 대응**: Mac이 `status.json`을 원자적으로 교체하는 순간이나 iCloud 다운로드가 지연될 때 Scriptable의 `fileExists`/`readString`이 잠깐 실패할 수 있다. 예전 코드는 파일 부재·다운로드 실패·JSON 읽기 실패를 전부 `status.json을 찾을 수 없습니다`로 표시했다. 이제 iCloud 파일을 정상적으로 읽을 때 `FileManager.local()`의 `ShiftAlarmWidget/status-last-good.json`에도 마지막 성공본을 저장하고, 일시적 실패 시 그 캐시를 표시한다. iCloud와 캐시가 모두 없는 최초 실행에서만 오류 안내가 뜬다.
 - **★ 2026-08-13 상태 형식 버전 검사**: Mac은 `widget_schema_version`을 status.json에 기록하고 Scriptable은 현재 버전보다 오래된 iCloud 파일·로컬 캐시를 표시하지 않는다. 예전 `휴 🛌`·구지 15구절 같은 낡은 캐시가 최신 데이터처럼 계속 남는 일을 막는다. 휴무 표시는 이모지 없이 `휴 (N일째)`로 통일했다.
 - **★ iCloud 충돌 우회용 V3(2026-08-13)**: 기존 `ShiftAlarmWidget.js`가 iPhone WidgetKit의 충돌 버전으로 고정돼 새 레이아웃 대신 예전 급여 칸을 계속 표시한 사례가 있어, 같은 소스를 `ShiftAlarmWidgetV3.js`에도 자동 배포한다. 이 증상이 발생한 기기는 홈 화면 위젯 편집에서 스크립트를 `ShiftAlarmWidgetV3`로 한 번 다시 선택한다. 이후 `sync_scriptable_widget_file()`이 기존 이름과 V3를 모두 같은 내용으로 유지한다.
+- **★ 준실시간 상태 밀어내기(2026-08-13)**: Mac은 상태 변화가 생길 때뿐 아니라 `MOBILE_STATUS_REFRESH_SECONDS=60` 타이머로 세 곳의 `status.json`을 매분 다시 기록한다. Scriptable도 `refreshAfterDate`를 1분 뒤로 요청하며, 위젯의 링크가 없는 영역을 누르면 `ShiftAlarmWidgetV3`가 즉시 실행돼 iCloud 파일을 다시 읽는다. 다만 홈 화면의 자동 실행 시각은 iOS WidgetKit이 배터리·실행 예산에 따라 결정하므로 정확한 1분 자동 갱신은 보장할 수 없다.
 - **★ 휴무 마지막 날 위젯 표기(2026-08-13)**: Mac이 내일 근무표까지 계산해 `shift_is_last_day`를 내려준다. iPhone 위젯에서만 휴무 블록의 마지막 날은 `휴 (2일째/3일째)` 대신 `휴 (마지막날)`로 표시하며 Mac 메뉴바 표기는 바꾸지 않는다.
 - **추가 방법**: 홈 화면 길게 눌러 편집 모드 → 왼쪽 위 **"+"** → **Scriptable** 검색 → 크기 선택 → 추가 → 그 위젯을 길게 눌러 **"위젯 편집"** → **Script**를 **`ShiftAlarmWidget`**으로 지정.
 - **레이아웃은 `config.widgetFamily`로 위젯 크기에 따라 분기한다(★ 2026-08-06)** — Scriptable은 내용이 위젯 프레임을 넘으면 자동으로 줄여주지 않고 그냥 잘라버리므로, 크기별로 보여줄 내용 자체를 다르게 짰다:

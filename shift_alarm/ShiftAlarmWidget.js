@@ -211,6 +211,9 @@ function buildWidget(status, family) {
   const widget = new ListWidget();
   widget.backgroundColor = new Color("#1c1c1e");
   widget.setPadding(14, 14, 14, 14);
+  // 위젯의 링크 없는 영역을 누르면 Scriptable에서 V3 스크립트를 즉시 다시 실행해
+  // iCloud status.json을 새로 읽는다. 개별 리마인더·공고 링크는 각 줄 URL이 우선한다.
+  widget.url = "scriptable:///run/ShiftAlarmWidgetV3";
 
   if (!status) {
     addLine(widget, "⚠️ status.json을 찾을 수 없습니다", { color: COLOR_WARN, size: 13 });
