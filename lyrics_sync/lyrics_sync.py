@@ -137,7 +137,10 @@ def whisper_transcribe_to_lrc(mp3_path: Path, tmp_dir: Path) -> str | None:
     subprocess.run(cmd, check=True, capture_output=True)
     lrc_path = out_prefix.with_suffix(".lrc")
     if lrc_path.exists():
-        return lrc_path.read_text(encoding="utf-8")
+        # whisper.cpp가 드물게 깨진(비UTF-8) 바이트를 섞어 내보내는 경우가
+        # 있어서(2026-08-13, "Gymnopédie No. 1"에서 실측) 엄격 디코딩 대신
+        # replace로 읽는다 — 곡 전체를 실패시키는 것보다 낫다.
+        return lrc_path.read_bytes().decode("utf-8", errors="replace")
     return None
 
 
