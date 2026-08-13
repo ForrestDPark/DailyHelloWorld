@@ -245,6 +245,7 @@ def get_free_storage_gb(path="/"):
 # - 허민준한테 전화: 한 달에 한 번. 그 달의 첫 번째 휴무 블록 시작일
 # - 동찬이형한테 전화: 2026-08-03을 기준으로 21일마다 한 번
 # - 손동주한테 전화: 2026-08-05를 기준으로 7일마다(주 1회) 한 번
+# - 화장실 잔떼 및 배수 점검: 2026-08-13을 기준으로 7일마다(주 1회) 한 번
 # - 에이전틱 코딩 책 읽기: 2026-08-08을 기준으로 3일마다 한 번
 # - 손동주 쉬는 날: 동주 본인 근무표(주간 2주/야간 2주 로테이션, 5일 근무+2일 휴무
 #   반복) 기준. 2026-08-04(야간 첫날)를 14일 주기 1일째로 놓으면, 주/야간 구분과
@@ -265,6 +266,7 @@ REMINDERS = {
     "call_dongchan":   {"label": "📞 동찬이형한테 전화하는 날(21일에 1회)", "enabled": True},
     "call_sondongju":  {"label": "📞 손동주한테 전화하는 날(1주일에 1회)",   "enabled": True},
     "coding_academy":  {"label": "💬 코딩학원 카톡방에 연락하는 날(1주일에 1회)", "enabled": True},
+    "bathroom_drain_check": {"label": "🚿 화장실 잔떼 및 배수 점검일(1주일에 1회)", "enabled": True},
     "agentic_coding_reading": {"label": "📚 에이전틱 코딩 책 읽기(3일에 1회)", "enabled": True},
     "sondongju_off":   {"label": "🎉 손동주 쉬는 날(동주 근무 주기 기준)",         "enabled": True},
     "nose_hair_trim":  {"label": "🪒 코털 정리하는 날(4일에 1회)",       "enabled": True},
@@ -654,6 +656,8 @@ CALL_SONDONGJU_ANCHOR = datetime.date(2026, 8, 5)
 CALL_SONDONGJU_INTERVAL_DAYS = 7
 CODING_ACADEMY_CHAT_ANCHOR = datetime.date(2026, 8, 7)
 CODING_ACADEMY_CHAT_INTERVAL_DAYS = 7
+BATHROOM_DRAIN_CHECK_ANCHOR = datetime.date(2026, 8, 13)
+BATHROOM_DRAIN_CHECK_INTERVAL_DAYS = 7
 AGENTIC_CODING_READING_ANCHOR = datetime.date(2026, 8, 8)
 AGENTIC_CODING_READING_INTERVAL_DAYS = 3
 # 동주 본인 근무표: 야간 2주(14일) → 주간 2주(14일) 로테이션, 각 14일 블록 안에서
@@ -724,6 +728,12 @@ def _is_coding_academy_chat_day(d):
     """기준일부터 7일마다(주 1회) 돌아오는 코딩학원 카톡방 연락일인지 반환."""
     days = (d - CODING_ACADEMY_CHAT_ANCHOR).days
     return days >= 0 and days % CODING_ACADEMY_CHAT_INTERVAL_DAYS == 0
+
+
+def _is_bathroom_drain_check_day(d):
+    """2026-08-13부터 7일마다 돌아오는 화장실 잔떼·배수 점검일인지 반환."""
+    days = (d - BATHROOM_DRAIN_CHECK_ANCHOR).days
+    return days >= 0 and days % BATHROOM_DRAIN_CHECK_INTERVAL_DAYS == 0
 
 
 def _is_agentic_coding_reading_day(d):
@@ -807,6 +817,7 @@ def get_today_reminders(schedule, now=None):
     - 동찬이형한테 전화: 2026-08-03부터 21일마다 한 번
     - 손동주한테 전화: 2026-08-05부터 7일마다(주 1회) 한 번
     - 코딩학원 카톡방 연락: 2026-08-07부터 7일마다(주 1회) 한 번
+    - 화장실 잔떼 및 배수 점검: 2026-08-13부터 7일마다(주 1회) 한 번
     - 에이전틱 코딩 책 읽기: 2026-08-08(오늘)을 시작일로 3일마다 한 번
     - 손동주 쉬는 날: 동주 본인 근무표(야간 2주/주간 2주 로테이션, 5일 근무+2일 휴무
       반복) 기준. 2026-08-04(야간 첫날)를 14일 주기 1일째로 놓고 계산.
@@ -862,6 +873,9 @@ def get_today_reminders(schedule, now=None):
 
     if REMINDERS["coding_academy"]["enabled"] and _is_coding_academy_chat_day(today):
         reminders.append(REMINDERS["coding_academy"]["label"])
+
+    if REMINDERS["bathroom_drain_check"]["enabled"] and _is_bathroom_drain_check_day(today):
+        reminders.append(REMINDERS["bathroom_drain_check"]["label"])
 
     if REMINDERS["agentic_coding_reading"]["enabled"] and _is_agentic_coding_reading_day(today):
         reminders.append(REMINDERS["agentic_coding_reading"]["label"])
