@@ -92,6 +92,7 @@ SCRIPTABLE_WIDGET_SOURCE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "ShiftAlarmWidget.js"
 )
 SCRIPTABLE_WIDGET_FILE = os.path.join(SCRIPTABLE_ICLOUD_DIR, "ShiftAlarmWidget.js")
+SCRIPTABLE_WIDGET_V3_FILE = os.path.join(SCRIPTABLE_ICLOUD_DIR, "ShiftAlarmWidgetV3.js")
 WIDGET_SCHEMA_VERSION = 3
 
 # ── 근무표 JSON 경로 (엑셀에서 추출한 D조 날짜별 근무) ─────────────
@@ -1365,21 +1366,24 @@ def sync_scriptable_widget_file():
     try:
         with open(SCRIPTABLE_WIDGET_SOURCE, "rb") as file:
             source = file.read()
-        try:
-            with open(SCRIPTABLE_WIDGET_FILE, "rb") as file:
-                if file.read() == source:
-                    return False
-        except OSError:
-            pass
         os.makedirs(SCRIPTABLE_ICLOUD_DIR, exist_ok=True)
-        tmp_path = SCRIPTABLE_WIDGET_FILE + ".tmp"
-        with open(tmp_path, "wb") as file:
-            file.write(source)
-        os.replace(tmp_path, SCRIPTABLE_WIDGET_FILE)
-        with open(SCRIPTABLE_WIDGET_FILE, "rb") as file:
-            if file.read() != source:
-                raise OSError("Scriptable 위젯 배포 후 내용 검증 실패")
-        return True
+        changed = False
+        for target in (SCRIPTABLE_WIDGET_FILE, SCRIPTABLE_WIDGET_V3_FILE):
+            try:
+                with open(target, "rb") as file:
+                    if file.read() == source:
+                        continue
+            except OSError:
+                pass
+            tmp_path = target + ".tmp"
+            with open(tmp_path, "wb") as file:
+                file.write(source)
+            os.replace(tmp_path, target)
+            with open(target, "rb") as file:
+                if file.read() != source:
+                    raise OSError(f"Scriptable 위젯 배포 후 내용 검증 실패: {target}")
+            changed = True
+        return changed
     except OSError as exc:
         print(f"⚠️ Scriptable 위젯 자동 배포 실패: {exc}")
         return False
