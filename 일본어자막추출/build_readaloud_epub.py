@@ -602,9 +602,9 @@ def make_opf(title, pages, image_names, has_cover, identifier, intro_pages, stud
     audio_items = []
     duration_meta = []
     spine = []
-    study_before = {}
+    study_after = {}
     for item in study_pages:
-        study_before.setdefault(item["before_page"], []).append(item)
+        study_after.setdefault(item["after_page"], []).append(item)
     for page in pages:
         number = page["number"]
         page_items.append(
@@ -623,8 +623,8 @@ def make_opf(title, pages, image_names, has_cover, identifier, intro_pages, stud
             f'<meta property="media:duration" refines="#smil{number:04d}">'
             f'{clock(page["duration"])}</meta>'
         )
-        spine.extend(f'<itemref idref="{item["id"]}"/>' for item in study_before.get(number, []))
         spine.append(f'<itemref idref="page{number:04d}"/>')
+        spine.extend(f'<itemref idref="{item["id"]}"/>' for item in study_after.get(number, []))
     images = []
     for index, name in enumerate(image_names, 1):
         media_type = "image/png" if name.lower().endswith(".png") else "image/jpeg"
@@ -853,12 +853,15 @@ def build_book(book_dir, output):
             })
 
         # 학습카드는 대사와 같은 고정 페이지에 넣지 않는다. 내용량을 기준으로
-        # 여러 페이지로 나눠 각 장면의 첫 대사 페이지 바로 앞에 삽입한다.
+        # 여러 페이지로 나눠 각 장면의 마지막 대사 페이지 바로 뒤에 삽입한다.
         scene_first_pages = {}
+        scene_last_pages = {}
         for page in pages:
             match = re.match(r"(\d+)편 장면 (\d+)", page["title"])
             if match:
-                scene_first_pages.setdefault((int(match.group(1)), int(match.group(2))), page)
+                scene_key = (int(match.group(1)), int(match.group(2)))
+                scene_first_pages.setdefault(scene_key, page)
+                scene_last_pages[scene_key] = page
         study_pages = []
         study_index = 0
         for (part, scene), first_page in sorted(scene_first_pages.items()):
@@ -893,7 +896,7 @@ def build_book(book_dir, output):
                 study_pages.append({
                     "id": study_id, "href": study_href,
                     "smil_id": study_smil_id, "smil_href": study_smil_href,
-                    "before_page": first_page["number"],
+                    "after_page": scene_last_pages[(part, scene)]["number"],
                     "audio_entries": audio_entries, "duration": study_duration,
                 })
 

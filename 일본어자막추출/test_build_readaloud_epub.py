@@ -34,7 +34,7 @@ class StudyCardAudioTest(unittest.TestCase):
         study_pages = [{
             "id": "study0001", "href": "study/study0001.xhtml",
             "smil_id": "study0001-smil", "smil_href": "overlays/study0001.smil",
-            "before_page": 1, "duration": 4.6,
+            "after_page": 1, "duration": 4.6,
             "audio_entries": [{
                 "target_id": "study0001-vocab-01", "filename": "word.m4a", "duration": 4.6,
             }],
@@ -44,6 +44,10 @@ class StudyCardAudioTest(unittest.TestCase):
         self.assertIn('href="audio/word.m4a"', opf)
         self.assertIn(builder.clock(4.6), opf)
         self.assertNotIn('id="study-silence"', opf)
+        self.assertLess(
+            opf.index('<itemref idref="page0001"/>'),
+            opf.index('<itemref idref="study0001"/>'),
+        )
         ElementTree.fromstring(opf)
 
 
