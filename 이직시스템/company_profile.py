@@ -353,6 +353,97 @@ def fetch_homepage_text(url: str) -> str:
     return re.sub(r"\s+", " ", text).strip()[:6000]
 
 
+_HOMEPAGE_SECTION_RULES = (
+    ("공식 채용공고", re.compile(r"채용공고|채용정보|recruit", re.I)),
+    ("인사제도", re.compile(r"인사제도|인재상|인사관리", re.I)),
+    ("복리후생", re.compile(r"복리후생|복지|benefit", re.I)),
+    ("기업소개", re.compile(r"기업소개|회사소개|인사말|company", re.I)),
+    ("경영방침", re.compile(r"경영방침|경영이념|비전|mission", re.I)),
+    ("제품소개", re.compile(r"제품소개|제품|product|반도체|display|자동화|챔버", re.I)),
+    ("연구·기술", re.compile(r"연구.?기술|연구소|특허|인증", re.I)),
+)
+
+
+def fetch_homepage_sources(homepage_url: str, max_pages: int = 10) -> list[dict[str, str]]:
+    """공식 홈페이지의 핵심 메뉴를 같은 도메인 안에서만 제한적으로 따라간다.
+
+    대표 URL 한 페이지만 AI에 넘기던 방식은 채용·인사·제품 정보가 별도 메뉴에
+    숨어 있으면 전혀 보지 못했다. 첫 화면의 링크 텍스트/URL에서 핵심 섹션을
+    찾아 카테고리별 첫 페이지를 수집하고, 실제 출처 URL과 함께 보존한다.
+    """
+    parsed = urllib.parse.urlparse(homepage_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return []
+
+    def fetch(url: str) -> str:
+        request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                return response.read().decode("utf-8", "replace")
+        except (urllib.error.HTTPError, urllib.error.URLError):
+            return ""
+
+    root = f"{parsed.scheme}://{parsed.netloc}/"
+    landing_html = fetch(homepage_url) or (fetch(root) if homepage_url != root else "")
+    if not landing_html:
+        return []
+    candidates: list[tuple[str, str]] = [("공식 홈페이지", homepage_url)]
+    for attrs, inner in re.findall(r"<a\b([^>]*)>(.*?)</a>", landing_html, re.S | re.I):
+        href_match = re.search(r'href=["\']([^"\']+)', attrs, re.I)
+        if not href_match:
+            continue
+        href = urllib.parse.urljoin(homepage_url, html.unescape(href_match.group(1)))
+        target = urllib.parse.urlparse(href)
+        if target.netloc != parsed.netloc or target.scheme not in {"http", "https"}:
+            continue
+        label = plain(html.unescape(re.sub(r"<[^>]+>", " ", inner)))
+        haystack = f"{label} {target.path} {target.query}"
+        for category, pattern in _HOMEPAGE_SECTION_RULES:
+            if pattern.search(haystack):
+                candidates.append((category, href))
+                break
+
+    sources: list[dict[str, str]] = []
+    seen_categories: set[str] = set()
+    seen_urls: set[str] = set()
+    for category, url in candidates:
+        url = urllib.parse.urldefrag(url)[0]
+        if category in seen_categories or url in seen_urls:
+            continue
+        page_html = landing_html if url == homepage_url else fetch(url)
+        if not page_html:
+            continue
+        # 공통 메뉴보다 본문을 우선하되, 사이트마다 마크업이 달라 실패 시 전체를 쓴다.
+        main_match = re.search(
+            r'<(?:main\b[^>]*|div\b[^>]*id=["\'](?:sub_content|content)["\'][^>]*)>(.*?)(?:</main>|<!--\s*(?:sub_)?content\s*-->)',
+            page_html, re.S | re.I,
+        )
+        body = main_match.group(1) if main_match else page_html
+        body = re.sub(r"<(script|style)\b[^>]*>.*?</\1>", " ", body, flags=re.S | re.I)
+        text = re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", body))).strip()
+        if len(text) < 20:
+            continue
+        sources.append({"category": category, "url": url, "text": text[:2400]})
+        seen_categories.add(category)
+        seen_urls.add(url)
+        if len(sources) >= max_pages:
+            break
+    return sources
+
+
+def homepage_sources_markdown(sources: list[dict[str, str]]) -> str:
+    """추천공고 상단에 넣을 공식 홈페이지 출처 하위 목록."""
+    lines = []
+    for source in sources:
+        if source["category"] == "공식 홈페이지":
+            continue
+        summary = source["text"][:260].strip()
+        if len(source["text"]) > 260:
+            summary += "…"
+        lines.append(f"  - [{source['category']} 바로가기]({source['url']}) — {summary}")
+    return "\n".join(lines)
+
+
 def ensure_company_overview_links(
     text: str,
     company_name: str,

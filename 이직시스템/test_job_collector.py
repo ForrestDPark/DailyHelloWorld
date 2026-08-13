@@ -95,6 +95,41 @@ class JobCollectorTest(unittest.TestCase):
         )["total"]
         self.assertGreater(practical_score, opaque_score)
 
+    def test_score_breakdown_lists_each_news_source_link(self):
+        row = self._job_row()
+        detail = jc.score_recommendation_candidate(
+            row, self.config, "career",
+            {"dart_registered": True, "financial_years": 0, "news_count": 2, "related_jobs": 1},
+            today=datetime(2026, 8, 9),
+        )
+        text = jc._format_score_breakdown(row, self.config, {
+            "score_detail": detail,
+            "news_items": [
+                {"title": "첫 번째 기사", "url": "https://news.example/1"},
+                {"title": "두 번째 기사", "url": "https://news.example/2"},
+            ],
+        })
+        self.assertIn("뉴스 2건", text)
+        self.assertIn("뉴스 1: [첫 번째 기사](https://news.example/1)", text)
+        self.assertIn("뉴스 2: [두 번째 기사](https://news.example/2)", text)
+        blocks = jc._markdown_to_notion_blocks(text)
+        company_block = next(
+            block for block in blocks
+            if block["type"] == "bulleted_list_item"
+            and "회사 정보 신뢰도" in block["bulleted_list_item"]["rich_text"][0]["text"]["content"]
+        )
+        self.assertEqual(len(company_block["bulleted_list_item"]["children"]), 2)
+
+    def test_homepage_sources_are_linked_subitems(self):
+        text = cp.homepage_sources_markdown([
+            {"category": "공식 홈페이지", "url": "https://company.example", "text": "대표"},
+            {"category": "공식 채용공고", "url": "https://company.example/jobs", "text": "개발자 채용"},
+            {"category": "복리후생", "url": "https://company.example/benefits", "text": "기숙사와 교육 지원"},
+        ])
+        self.assertIn("[공식 채용공고 바로가기](https://company.example/jobs)", text)
+        self.assertIn("[복리후생 바로가기](https://company.example/benefits)", text)
+        self.assertTrue(all(line.startswith("  - ") for line in text.splitlines()))
+
     def test_expired_and_duplicate_jobs_do_not_enter_daily_pool(self):
         first = self._job_row(source_id="dup-1", company="중복 회사", title="Python 개발자", deadline="2026-08-31")
         duplicate = self._job_row(source_id="dup-2", company="중복회사", title="Python  개발자", deadline="2026-08-31")

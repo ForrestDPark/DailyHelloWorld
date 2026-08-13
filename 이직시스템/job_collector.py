@@ -354,6 +354,15 @@ def _format_score_breakdown(row: sqlite3.Row, config: dict[str, Any], score_info
     for item in detail["dimensions"]:
         reasons = ", ".join(item["reasons"])
         lines.append(f"- {item['label']}: {item['score']}/{item['max']}점 — {reasons}")
+        if item["label"] in {"회사 정보 신뢰도", "사업자·회사 정보"}:
+            news_items = (score_info or {}).get("news_items", [])
+            for index, news in enumerate(news_items, 1):
+                title = str(news.get("title") or f"뉴스 {index}").strip()
+                # 기사 제목 자체의 대괄호는 Markdown 링크 라벨을 깨뜨리므로 제거한다.
+                title = title.replace("[", "").replace("]", "")
+                url = str(news.get("url") or "").strip()
+                if url:
+                    lines.append(f"  - 뉴스 {index}: [{title}]({url})")
     if detail["penalty"]:
         lines.append(f"- 불일치 감점: -{detail['penalty']}점 — {', '.join(detail['exclude_hits'])}")
     lines.append("- DART·재무 정보가 없어도 제외하지 않으며, 회사 정보 항목에서 가점만 받지 못한다.")
@@ -1173,6 +1182,7 @@ def _markdown_to_notion_blocks(text: str) -> list[dict[str, Any]]:
 
     blocks = []
     for raw in text.splitlines():
+        indent = len(raw) - len(raw.lstrip())
         line = raw.strip()
         if not line:
             continue
@@ -1186,10 +1196,19 @@ def _markdown_to_notion_blocks(text: str) -> list[dict[str, Any]]:
             block_type, content = "bulleted_list_item", line[2:].strip()
         else:
             block_type, content = "paragraph", line
-        blocks.append({
+        block = {
             "object": "block", "type": block_type,
             block_type: {"rich_text": rich_text(content[:1900])},
-        })
+        }
+        # 두 칸 이상 들여쓴 불릿은 직전 불릿의 실제 하위 블록으로 만든다.
+        # 점수 근거 아래 뉴스·홈페이지 출처가 평면 목록으로 섞이지 않게 한다.
+        if (
+            indent >= 2 and block_type == "bulleted_list_item" and blocks
+            and blocks[-1]["type"] == "bulleted_list_item"
+        ):
+            blocks[-1]["bulleted_list_item"].setdefault("children", []).append(block)
+        else:
+            blocks.append(block)
     return blocks
 
 
@@ -1435,7 +1454,7 @@ def _rank_candidates_by_analyzability(
         detail = score_recommendation_candidate(row, config, category)
         info_map[key] = {
             "dart_registered": False, "financial_years": 0, "news_count": 0,
-            "related_jobs": 0, "score_detail": detail, "total": detail["total"],
+            "news_items": [], "related_jobs": 0, "score_detail": detail, "total": detail["total"],
         }
         initial.append((detail["total"], row))
     initial.sort(key=lambda item: item[0], reverse=True)
@@ -1468,7 +1487,7 @@ def _rank_candidates_by_analyzability(
             related = []
         signals = {
             "dart_registered": bool(corp_code), "financial_years": len(financials),
-            "news_count": len(news), "related_jobs": len(related),
+            "news_count": len(news), "news_items": news, "related_jobs": len(related),
         }
         detail = score_recommendation_candidate(row, config, category, signals)
         key = f"{row['source']}:{row['source_id']}"
@@ -1593,12 +1612,14 @@ def analyze_top_job(args: argparse.Namespace) -> None:
     # "이 회사는 어떻게 경영해왔는가/누가 운영하는가/업계 위치는" 질문에 답한다.
     company_notion_url = None
     homepage_url = None
+    homepage_sources: list[dict[str, str]] = []
     financials: list[dict] = []
     try:
         from company_profile import (
             _dart_api_key, fetch_dart_company_info, fetch_dart_corp_code_map, fetch_dart_financial_summary,
             find_dart_corp_code, search_related_contests, search_related_jobs, fetch_company_news,
-            build_company_prompt, ensure_company_overview_links,
+            build_company_prompt, ensure_company_overview_links, fetch_homepage_sources,
+            homepage_sources_markdown,
             _markdown_to_notion_blocks as company_blocks,
             _notion_publish as company_publish, COMPANY_PROFILE_STATE_DIR,
         )
@@ -1619,12 +1640,16 @@ def analyze_top_job(args: argparse.Namespace) -> None:
                 homepage_url = None
             elif homepage_url and not homepage_url.startswith("http"):
                 homepage_url = f"https://{homepage_url}"
+        homepage_sources = fetch_homepage_sources(homepage_url) if homepage_url else []
+        homepage_text = "\n\n".join(
+            f"[{item['category']}] {item['url']}\n{item['text']}" for item in homepage_sources
+        )
         jobs_related = search_related_jobs(row["company"])
         contests_related = search_related_contests(row["company"])
         news_related = fetch_company_news(row["company"])
         prompt = build_company_prompt(
             row["company"], dart_info, financials, jobs_related, contests_related,
-            "", news_related, homepage_url,
+            homepage_text, news_related, homepage_url,
         )
         from ai_exec import run_ai_exec
         stdout, _ = run_ai_exec(prompt, BASE_DIR, timeout=300)
@@ -1660,7 +1685,9 @@ def analyze_top_job(args: argparse.Namespace) -> None:
         _format_score_breakdown(row, config, richness_info.get(row_key)),
     ]
     if homepage_url:
-        meta_lines.append(f"회사 홈페이지: [회사 홈페이지 바로가기]({homepage_url})")
+        homepage_line = f"- 회사 홈페이지: [회사 홈페이지 바로가기]({homepage_url})"
+        homepage_details = homepage_sources_markdown(homepage_sources)
+        meta_lines.append(homepage_line + ("\n" + homepage_details if homepage_details else ""))
     if company_notion_url:
         meta_lines.append(f"기업 경영 분석 상세(병법적 해석 등): [기업 경영분석 상세 바로가기]({company_notion_url})")
     meta_line = "\n".join(meta_lines)

@@ -343,6 +343,12 @@ Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으
 
 `이직시스템/job_collector.py`(사람인·워크넷 API + 사람인 크롤링, 자세한 내용은 `이직시스템/README.md` 참조)를 shift_alarm이 하루 1번 자동으로 실행하고, 신규 공고가 있으면 macOS 알림으로 알려준다.
 
+### Gmail 전체 새 메일 분석·메일 확인 메뉴 (★ 2026-08-13)
+
+채용·경진대회 메일만 보지 않고 Gmail Inbox의 모든 새 메일을 5분마다 읽기 전용으로 확인한다. `gog` CLI를 `--readonly --gmail-no-send`로 고정 호출하며, 발신자·제목·Gmail snippet을 이용해 `채용 / 경진대회 / 결제·금융 / 보안 / 배송·예약 / 뉴스레터·홍보 / 일반 메일`로 즉시 분류하고 한 줄 요약을 macOS 알림으로 보여준다. 본문이나 OAuth 토큰은 Shift Alarm 설정 파일에 저장하지 않고, 중복 알림 방지용 메일 ID만 최근 200개 보존한다.
+
+메뉴에는 `📧 메일 확인: 최근 N건` 항목이 항상 있으며 누르면 Gmail Inbox를 연다. 인증 전에는 `Gmail 1회 연결 필요`로 표시한다. 최초 한 번은 Google Cloud의 Desktop OAuth client를 만든 뒤 `gog auth credentials <다운로드한 JSON>`과 `gog --readonly auth add <Gmail 주소> --services gmail`로 읽기 전용 동의를 해야 한다. 이후 refresh token은 macOS Keychain에서 관리된다.
+
 - `JOB_COLLECTOR_DIR`/`JOB_COLLECTOR_SCRIPT`: `shift_alarm.py`의 부모 폴더(`DailyHelloWorld_/`) 기준으로 `이직시스템/job_collector.py`를 가리킨다(상대경로, 폴더 이동에도 안전).
 - 실행은 `subprocess.run([sys.executable, JOB_COLLECTOR_SCRIPT, "collect"], cwd=JOB_COLLECTOR_DIR, ...)` — shift_alarm과 같은 파이썬 인터프리터(`/opt/anaconda3/bin/python3`)로 돌린다. `job_collector.py`가 표준 라이브러리만 쓰므로 별도 venv 없이도 그대로 동작.
 - **마지막 실행 시각을 `~/.shift_alarm_config.json`의 `job_collector_last_run`에 저장하고, 그로부터 24시간(`JOB_COLLECTOR_REFRESH_SECONDS`)이 안 지났으면 건너뛴다.** 앱을 자주 재시작해도(코드 수정 후 매번 kickstart) 사람인 서버에 매번 크롤링 요청을 보내지 않기 위한 안전장치 — 타이머 자체는 24시간 주기지만, 앱이 그보다 자주 재시작되는 경우를 이 저장된 타임스탬프가 실질적으로 막아준다.

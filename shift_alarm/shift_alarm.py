@@ -150,6 +150,72 @@ CHECKLIST_SYNC_INTERVAL_SECONDS = 60
 AI_USAGE_NORMAL_INTERVAL = 12 * 60
 AI_USAGE_RETRY_INTERVAL = 2 * 60
 
+# Gmail은 gog CLI의 읽기 전용 OAuth 토큰을 사용한다. 비밀번호나 메일 본문은
+# 설정 파일에 저장하지 않고, Shift Alarm에는 최근 항목의 짧은 분석과 ID만 남긴다.
+GMAIL_CLI = "/opt/homebrew/bin/gog"
+GMAIL_INBOX_URL = "https://mail.google.com/mail/u/0/#inbox"
+GMAIL_REFRESH_SECONDS = 5 * 60
+
+
+def _gmail_records(payload):
+    """gog 버전별 JSON envelope 차이를 견디며 메일/스레드 레코드를 찾는다."""
+    found = []
+    if isinstance(payload, dict):
+        if payload.get("id") and (payload.get("subject") or payload.get("snippet")):
+            found.append(payload)
+        for value in payload.values():
+            found.extend(_gmail_records(value))
+    elif isinstance(payload, list):
+        for value in payload:
+            found.extend(_gmail_records(value))
+    return found
+
+
+def analyze_gmail_record(record):
+    """외부 AI 호출 없이 발신자·제목·snippet으로 즉시 분류/요약한다."""
+    sender = str(record.get("from") or record.get("sender") or "발신자 미상").strip()
+    subject = str(record.get("subject") or "제목 없음").strip()
+    snippet = re.sub(r"\s+", " ", str(record.get("snippet") or record.get("summary") or "")).strip()
+    haystack = f"{sender} {subject} {snippet}".casefold()
+    rules = (
+        ("채용", ("채용", "지원", "면접", "recruit", "career", "job")),
+        ("경진대회", ("경진대회", "공모전", "contest", "competition")),
+        ("결제·금융", ("결제", "승인", "청구", "입금", "출금", "카드", "invoice", "payment")),
+        ("보안", ("로그인", "보안", "인증", "비밀번호", "security", "verification")),
+        ("배송·예약", ("배송", "주문", "예약", "출발", "도착", "delivery", "reservation")),
+        ("뉴스레터·홍보", ("뉴스레터", "소식", "할인", "이벤트", "newsletter", "promotion")),
+    )
+    category = next((name for name, words in rules if any(word in haystack for word in words)), "일반 메일")
+    summary = snippet[:140] + ("…" if len(snippet) > 140 else "")
+    if not summary:
+        summary = f"{sender}가 보낸 ‘{subject}’ 메일입니다."
+    return {"id": str(record.get("id")), "category": category, "sender": sender,
+            "subject": subject, "summary": summary}
+
+
+def fetch_gmail_snapshot():
+    """최근 Inbox 메일을 읽기 전용으로 조회한다. 인증 미완료는 별도 상태로 반환."""
+    if not os.path.exists(GMAIL_CLI):
+        return {"status": "unavailable", "error": "gog CLI 없음", "items": []}
+    command = [
+        GMAIL_CLI, "--readonly", "--gmail-no-send", "--no-input", "--json",
+        "gmail", "search", "in:inbox newer_than:2d -in:spam -in:trash", "--max", "30",
+    ]
+    result = subprocess.run(command, capture_output=True, text=True, timeout=45)
+    if result.returncode != 0:
+        error = (result.stderr or result.stdout).strip()
+        status = "auth_required" if re.search(r"auth|credential|account|token|keyring", error, re.I) else "error"
+        return {"status": status, "error": error[:240], "items": []}
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return {"status": "error", "error": "Gmail JSON 해석 실패", "items": []}
+    unique = {}
+    for record in _gmail_records(payload):
+        item = analyze_gmail_record(record)
+        unique[item["id"]] = item
+    return {"status": "ok", "items": list(unique.values())}
+
 
 def fetch_reminder_checklist_state(token, date_str):
     """오늘 날짜 토글 밑 체크박스들의 현재 체크 상태를 Notion에서 읽어온다.
@@ -2766,6 +2832,9 @@ class ShiftAlarmApp(rumps.App):
         self.codex_usage_item = rumps.MenuItem("🪙 Codex: 확인 중...")
         self.claude_usage_item = rumps.MenuItem("🪙 Claude: 확인 중...")
         self.claude_stats_item = rumps.MenuItem("🪙 Claude 로컬: 확인 중...")
+        self.gmail_item = rumps.MenuItem(
+            "📧 메일 확인: 연결 확인 중...", callback=self.make_open_url_callback(GMAIL_INBOX_URL)
+        )
         # build_menu()가 바로 이어서 _checklist_state를 참조하므로 그 전에 초기화해둔다.
         self._checklist_state = self._load_cached_checklist_state()
         self.build_menu()
@@ -2842,6 +2911,13 @@ class ShiftAlarmApp(rumps.App):
         )
         self.job_collector_timer.start()
         self._refresh_job_collector(None)
+
+        # Gmail Inbox를 5분마다 읽기 전용으로 확인한다. 새 메일은 종류와 요지를
+        # 알림으로 보여주고, 메뉴의 '메일 확인' 항목은 Gmail Inbox를 연다.
+        self._gmail_running = False
+        self.gmail_timer = rumps.Timer(self._refresh_gmail, GMAIL_REFRESH_SECONDS)
+        self.gmail_timer.start()
+        self._refresh_gmail(None)
 
     # ── 날씨 ────────────────────────────────────────────────
 
@@ -3672,6 +3748,7 @@ class ShiftAlarmApp(rumps.App):
         self.menu.add(self.codex_usage_item)
         self.menu.add(self.claude_usage_item)
         self.menu.add(self.claude_stats_item)
+        self.menu.add(self.gmail_item)
 
         self.menu.add(None)
         # ★ 2026-08-07: "N건 저장됨"/상위 공고 목록은 키워드 개수로만 매기는
@@ -3904,6 +3981,52 @@ class ShiftAlarmApp(rumps.App):
             rumps.notification("북마크 자동 최신화 완료", "", msg)
         finally:
             self._bookmark_refresh_running = False
+
+    # ── Gmail 새 메일 분석 ───────────────────────────────────
+
+    def _refresh_gmail(self, _):
+        if self._gmail_running:
+            return
+        self._gmail_running = True
+        threading.Thread(target=self._refresh_gmail_thread, daemon=True).start()
+
+    def _refresh_gmail_thread(self):
+        try:
+            snapshot = fetch_gmail_snapshot()
+            if snapshot["status"] != "ok":
+                AppHelper.callAfter(self._apply_gmail_snapshot, snapshot, [])
+                return
+            previous = set(self.config.get("gmail_seen_ids", []))
+            items = snapshot["items"]
+            new_items = [item for item in items if item["id"] not in previous]
+            self.config["gmail_seen_ids"] = [item["id"] for item in items][:200]
+            save_config(self.config)
+            for item in new_items[:10]:
+                rumps.notification(
+                    f"📧 새 메일 · {item['category']}",
+                    f"{item['sender']} — {truncate_title(item['subject'], 55)}",
+                    item["summary"],
+                )
+            AppHelper.callAfter(self._apply_gmail_snapshot, snapshot, new_items)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            AppHelper.callAfter(
+                self._apply_gmail_snapshot,
+                {"status": "error", "error": str(exc), "items": []}, [],
+            )
+        finally:
+            self._gmail_running = False
+
+    def _apply_gmail_snapshot(self, snapshot, new_items):
+        status = snapshot.get("status")
+        if status == "ok":
+            count = len(snapshot.get("items", []))
+            new_text = f" · 새 메일 {len(new_items)}건" if new_items else ""
+            self.gmail_item.title = f"📧 메일 확인: 최근 {count}건{new_text}"
+        elif status == "auth_required":
+            self.gmail_item.title = "📧 메일 확인: Gmail 1회 연결 필요"
+        else:
+            self.gmail_item.title = "📧 메일 확인: 일시적 확인 실패"
+        self.build_menu()
 
     # ── 이직시스템(job_collector.py) 자동 수집 ─────────────────
 
