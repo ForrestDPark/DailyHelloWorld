@@ -203,7 +203,14 @@ def main() -> None:
     total = len(mp3_files)
     for i, mp3_path in enumerate(mp3_files, 1):
         print(f"[{i}/{total}] {mp3_path.name}", flush=True)
-        result = process_file(mp3_path, args.overwrite, output_dir)
+        try:
+            result = process_file(mp3_path, args.overwrite, output_dir)
+        except Exception as e:
+            # 다운로드가 깨진 0바이트 mp3 등 개별 파일 문제로 전체 배치가
+            # 죽는 걸 막는다(2026-08-14, 661번 곡의 빈 mp3에서 mutagen이
+            # HeaderNotFoundError를 던지며 실측).
+            print(f"  ❌ 실패(처리 중 예외: {e})")
+            result = "fail"
         counts[result] += 1
         label = {
             "lrclib": "✅ lrclib에서 찾음",
