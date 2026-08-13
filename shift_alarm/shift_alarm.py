@@ -92,7 +92,7 @@ SCRIPTABLE_WIDGET_SOURCE = os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "ShiftAlarmWidget.js"
 )
 SCRIPTABLE_WIDGET_FILE = os.path.join(SCRIPTABLE_ICLOUD_DIR, "ShiftAlarmWidget.js")
-WIDGET_SCHEMA_VERSION = 2
+WIDGET_SCHEMA_VERSION = 3
 
 # ── 근무표 JSON 경로 (엑셀에서 추출한 D조 날짜별 근무) ─────────────
 # 스크립트와 같은 폴더에 d_team_schedule_2026.json 을 두거나,
@@ -3287,6 +3287,10 @@ class ShiftAlarmApp(rumps.App):
             "date": today.isoformat(),
             "shift": current,
             "shift_day_number": day_num,
+            "shift_is_last_day": bool(
+                current == "휴무"
+                and get_shift_for_date(self.schedule, today + datetime.timedelta(days=1)) != "휴무"
+            ),
             "weather": self.weather_str or None,
             "reminders": get_today_reminders(self.schedule),
             "reminders_checked": self._checklist_state,

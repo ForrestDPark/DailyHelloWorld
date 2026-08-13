@@ -23,7 +23,7 @@ const statusPath = fm.joinPath(fm.documentsDirectory(), "status.json");
 const cacheFm = FileManager.local();
 const cacheDir = cacheFm.joinPath(cacheFm.documentsDirectory(), "ShiftAlarmWidget");
 const cachePath = cacheFm.joinPath(cacheDir, "status-last-good.json");
-const STATUS_SCHEMA_VERSION = 2;
+const STATUS_SCHEMA_VERSION = 3;
 
 const SHIFT_LABELS = {
   Day: "☀️ 주간",
@@ -88,6 +88,9 @@ function addLine(stack, text, { color = COLOR_TEXT, size = 12, bold = false, lin
 function shiftTitle(status) {
   const shiftLabel = SHIFT_LABELS[status.shift] || status.shift || "미설정";
   const dayNum = status.shift_day_number;
+  if (status.shift === "휴무" && status.shift_is_last_day) {
+    return `${shiftLabel} (마지막날)`;
+  }
   return dayNum ? `${shiftLabel} (${dayNum}일째)` : shiftLabel;
 }
 
@@ -98,14 +101,6 @@ function buildLeftColumn(stack, status) {
   if (status.weather) {
     addLine(stack, `🌤 ${status.weather}`, { size: 12 });
     stack.addSpacer(3);
-  }
-
-  if (status.storage_free_gb !== null && status.storage_free_gb !== undefined) {
-    const low = status.storage_free_gb <= 5;
-    addLine(stack, `💾 저장공간 ${status.storage_free_gb}GB`, {
-      color: low ? COLOR_WARN : COLOR_TEXT,
-    });
-    stack.addSpacer(6);
   }
 
   const reminders = status.reminders || [];
@@ -131,15 +126,6 @@ function buildLeftColumn(stack, status) {
 }
 
 function buildRightColumn(stack, status) {
-  addLine(stack, "오늘", { color: COLOR_DIM, size: 11, bold: true });
-  stack.addSpacer(3);
-  if (status.earnings_short) {
-    addLine(stack, status.earnings_short, { size: 12, lineLimit: 2 });
-  } else {
-    addLine(stack, "💰 -", { color: COLOR_DIM, size: 12 });
-  }
-  stack.addSpacer(10);
-
   addLine(stack, "🪙 AI 사용량", { color: COLOR_DIM, size: 11, bold: true });
   stack.addSpacer(3);
 
