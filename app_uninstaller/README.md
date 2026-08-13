@@ -17,6 +17,34 @@ python3 app_uninstaller.py "Command" --delete
 python3 app_uninstaller.py "Command" --delete --yes
 ```
 
+## Launchpad에서 아이콘으로 실행하기
+
+이 스크립트는 원래 CLI라 `/Users/forrestdpark/Desktop/PDG/DailyHelloWorld_/app_uninstaller/`에만
+있고 Launchpad에는 안 뜬다("어디 설치돼 있냐"는 질문이 나온 이유 — 이건 설치된 앱이
+아니라 저장소 안의 스크립트일 뿐이었다). 더블클릭으로 쓰고 싶으면 아래로 한 번
+빌드하면 된다(2026-08-13 추가):
+
+```bash
+python3 build_launchpad_app.py
+```
+
+`~/Applications/App Uninstaller.app`을 만든다 — 🗑️ 이모지를 렌더링해 아이콘으로
+쓰고, Launchpad에서 "App Uninstaller"로 검색하면 보인다. 더블클릭하면:
+1. 삭제할 앱 이름을 묻는 대화상자가 뜨고
+2. 입력하면 Terminal이 열려서 `app_uninstaller.py <이름> --delete`를 실행한다
+   (미리보기 목록 → `y/N` 확인은 CLI가 이미 하므로 그대로 안전하게 이어진다).
+
+스크립트나 아이콘을 바꾸면 `build_launchpad_app.py`를 다시 실행해서 재빌드하면
+된다(기존 앱을 지우고 새로 만든다).
+
+**실측 함정**: 빌드 스크립트에서 파이썬 f-string에 경로를 넣을 때 `!r`(파이썬
+repr)을 쓰면 작은따옴표로 감싸지는데, AppleScript 문자열은 큰따옴표만 허용한다
+— `osacompile`이 실제 오류 지점보다 앞선 줄을 가리키며 "Expected expression but
+found unknown token"을 내서 원인 찾기 까다로웠다. AppleScript 소스를 파이썬으로
+생성할 때는 항상 큰따옴표로 직접 감쌀 것.
+
+## CLI 사용법
+
 앱 이름은 부분 일치로 찾는다(`/Applications`, `~/Applications` 우선, 없으면
 Spotlight로 확장 검색). 여러 개가 일치하면 후보 목록을 보여주고 정확한 이름이나
 `.app` 경로를 다시 지정하라고 안내한다.
