@@ -31,6 +31,7 @@ from book_title import display_title, filename_title
 
 
 VOICE = "ja-JP-NanamiNeural"
+KOREAN_VOICE = "ko-KR-SunHiNeural"
 RATE = "-10%"
 LINES_PER_PAGE = 4
 VIEWPORT_WIDTH = 960
@@ -57,7 +58,7 @@ def audio_duration(path):
     return float(result.stdout.strip())
 
 
-async def synthesize_page(text, mp3_path, timing_path):
+async def synthesize_page(text, mp3_path, timing_path, voice=VOICE):
     """오디오와 Edge TTS WordBoundary 타이밍을 한 번의 요청으로 함께 저장한다."""
     temp_mp3 = mp3_path + ".partial"
     last_error = None
@@ -65,7 +66,7 @@ async def synthesize_page(text, mp3_path, timing_path):
         boundaries = []
         try:
             with open(temp_mp3, "wb") as audio_file:
-                communicate = edge_tts.Communicate(text, VOICE, rate=RATE)
+                communicate = edge_tts.Communicate(text, voice, rate=RATE)
                 async for chunk in communicate.stream():
                     if chunk["type"] == "audio":
                         audio_file.write(chunk["data"])
@@ -267,7 +268,7 @@ def kanji_only_ruby(ja, reading):
     return "".join(output)
 
 
-def render_study_card(study_card, heading="장면 학습 카드"):
+def render_study_card(study_card, heading="장면 학습 카드", study_id="study"):
     # ★ 2026-08-06: h2/h3/card-ja/card-ko가 커스텀 색상(color:...)을 쓰는데
     # ibooks-dark-theme-use-custom-text-color 마커가 빠져 있었다. Apple Books는
     # 이 마커가 없는 커스텀 색상 텍스트를 다크모드에서 검정으로 강제 override해서
@@ -280,7 +281,7 @@ def render_study_card(study_card, heading="장면 학습 카드"):
 
     sections = []
     vocabulary_items = []
-    for item in study_card.get("vocabulary", []):
+    for index, item in enumerate(study_card.get("vocabulary", []), 1):
         hanja = ""
         if item.get("hanja_sound") or item.get("hanja_hun"):
             hanja = (
@@ -288,15 +289,16 @@ def render_study_card(study_card, heading="장면 학습 카드"):
                 f' / 훈: {html.escape(item.get("hanja_hun", ""))}'
             )
         vocabulary_items.append(
-            f'<div class="vocab-line"><span class="card-ja {DARK}">{ruby_text(item)}</span>'
+            f'<div id="{study_id}-vocab-{index:02d}" class="vocab-line">'
+            f'<span class="card-ja {DARK}">{ruby_text(item)}</span>'
             f' — {html.escape(item.get("ko", ""))}{hanja}</div>'
         )
     if vocabulary_items:
         sections.append(f'<div class="card-section"><h3 class="{DARK}">주요 단어와 뜻</h3>' + "".join(vocabulary_items) + '</div>')
     expressions = "".join(
-        f'<li><span class="card-ja {DARK}">{ruby_text(item)}</span>'
+        f'<li id="{study_id}-expression-{index:02d}"><span class="card-ja {DARK}">{ruby_text(item)}</span>'
         f'<span class="card-ko {DARK}">{html.escape(item.get("ko", ""))}</span></li>'
-        for item in study_card.get("expressions", [])
+        for index, item in enumerate(study_card.get("expressions", []), 1)
     )
     if expressions:
         sections.append(f'<div class="card-section"><h3 class="{DARK}">핵심 일본어 표현</h3><ol class="expressions">{expressions}</ol></div>')
@@ -386,29 +388,46 @@ def make_page_xhtml(title, page_number, records, image_href=None):
 """
 
 
-def make_study_xhtml(title, card, heading):
+def make_study_xhtml(title, card, heading, study_id):
     return f"""<?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="ko">
+<html xmlns="http://www.w3.org/1999/xhtml"
+      xmlns:epub="http://www.idpf.org/2007/ops"
+      xmlns:ibooks="http://apple.com/ibooks/html-extensions"
+      epub:prefix="ibooks: http://vocabulary.itunes.apple.com/rdf/ibooks/vocabulary-extensions-1.0"
+      xml:lang="ko">
 <head><title>{html.escape(heading)}</title>
 <meta name="viewport" content="width={VIEWPORT_WIDTH}, height={VIEWPORT_HEIGHT}"/>
 <link rel="stylesheet" type="text/css" href="../styles/readaloud.css"/></head>
 <body><section id="study-content" class="study-page" epub:type="bodymatter">
 <h1 class="ibooks-dark-theme-use-custom-text-color">{html.escape(title)}</h1>
-{render_study_card(card, heading)}
+<p class="read-control ibooks-dark-theme-use-custom-text-color"
+   ibooks:readaloud="startstop" ibooks:readaloud-turn-style="automatic">▶ 단어·표현 듣기</p>
+{render_study_card(card, heading, study_id)}
 </section></body></html>"""
 
 
-def make_study_smil(study_id, duration=STUDY_DWELL_SECONDS):
-    """Apple Books가 학습카드를 즉시 건너뛰지 않도록 무음 체류 구간을 붙인다."""
+def make_study_smil(study_id, audio_entries, duration=STUDY_DWELL_SECONDS):
+    """단어는 일본어만, 표현은 일본어+한국어 뜻을 항목별로 연결한다."""
+    if audio_entries:
+        pars = "".join(
+            f'<par id="par-{entry["target_id"]}">'
+            f'<text src="../study/{study_id}.xhtml#{entry["target_id"]}"/>'
+            f'<audio src="../audio/{entry["filename"]}" clipBegin="00:00:00.000" '
+            f'clipEnd="{clock(entry["duration"])}"/></par>'
+            for entry in audio_entries
+        )
+    else:
+        pars = (
+            f'<par id="par-{study_id}"><text src="../study/{study_id}.xhtml#study-content"/>'
+            f'<audio src="../audio/study-silence.m4a" clipBegin="00:00:00.000" '
+            f'clipEnd="{clock(duration)}"/></par>'
+        )
     return f"""<?xml version="1.0" encoding="utf-8"?>
 <smil xmlns="http://www.w3.org/ns/SMIL" version="3.0">
   <body>
     <seq id="seq-{study_id}" textref="../study/{study_id}.xhtml">
-      <par id="par-{study_id}">
-        <text src="../study/{study_id}.xhtml#study-content"/>
-        <audio src="../audio/study-silence.m4a" clipBegin="00:00:00.000" clipEnd="{clock(duration)}"/>
-      </par>
+      {pars}
     </seq>
   </body>
 </smil>
@@ -425,6 +444,52 @@ def create_study_silence(path, duration=STUDY_DWELL_SECONDS):
         ],
         check=True,
     )
+
+
+def cached_tts_mp3(text, voice, cache_dir):
+    """학습카드의 같은 단어·문장은 작품/재빌드 사이에도 합성을 재사용한다."""
+    key = hashlib.sha256(f"study\0{voice}\0{RATE}\0{text}".encode("utf-8")).hexdigest()
+    mp3_path = os.path.join(cache_dir, key + ".mp3")
+    timing_path = os.path.join(cache_dir, key + ".json")
+    if not os.path.isfile(mp3_path) or not os.path.isfile(timing_path):
+        asyncio.run(synthesize_page(text, mp3_path, timing_path, voice=voice))
+    return mp3_path
+
+
+def build_study_audio(card, study_id, cache_dir, audio_dir):
+    """단어(일본어)와 표현(일본어→한국어 뜻)의 항목별 m4a를 만든다."""
+    entries = []
+    for kind, items in (
+        ("vocab", card.get("vocabulary", [])),
+        ("expression", card.get("expressions", [])),
+    ):
+        for index, item in enumerate(items, 1):
+            ja = str(item.get("ja") or "").strip()
+            if not ja:
+                continue
+            filename = f"{study_id}-{kind}-{index:02d}.m4a"
+            output = os.path.join(audio_dir, filename)
+            ja_mp3 = cached_tts_mp3(ja, VOICE, cache_dir)
+            if kind == "expression" and str(item.get("ko") or "").strip():
+                ko_mp3 = cached_tts_mp3(str(item["ko"]).strip(), KOREAN_VOICE, cache_dir)
+                subprocess.run([
+                    "ffmpeg", "-y", "-i", ja_mp3, "-i", ko_mp3,
+                    "-filter_complex",
+                    "[0:a]apad=pad_dur=0.4[ja];[ja][1:a]concat=n=2:v=0:a=1[out]",
+                    "-map", "[out]", "-c:a", "aac", "-b:a", "96k", output,
+                    "-loglevel", "error",
+                ], check=True)
+            else:
+                subprocess.run([
+                    "ffmpeg", "-y", "-i", ja_mp3, "-c:a", "aac", "-b:a", "96k",
+                    output, "-loglevel", "error",
+                ], check=True)
+            entries.append({
+                "target_id": f"{study_id}-{kind}-{index:02d}",
+                "filename": filename,
+                "duration": audio_duration(output),
+            })
+    return entries
 
 
 def make_smil(page_number, count, timings, duration):
@@ -530,7 +595,7 @@ def make_opf(title, pages, image_names, has_cover, identifier, intro_pages, stud
     modified = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     total_duration = (
         sum(page["duration"] for page in pages)
-        + len(study_pages) * STUDY_DWELL_SECONDS
+        + sum(item["duration"] for item in study_pages)
     )
     page_items = []
     smil_items = []
@@ -588,9 +653,15 @@ def make_opf(title, pages, image_names, has_cover, identifier, intro_pages, stud
     )
     study_duration_meta = "".join(
         f'<meta property="media:duration" refines="#{item["smil_id"]}">'
-        f'{clock(STUDY_DWELL_SECONDS)}</meta>'
+        f'{clock(item["duration"])}</meta>'
         for item in study_pages
     )
+    study_audio_items = "".join(
+        f'<item id="{item["id"]}-audio-{index:02d}" href="audio/{entry["filename"]}" '
+        f'media-type="audio/m4a"/>'
+        for item in study_pages for index, entry in enumerate(item["audio_entries"], 1)
+    )
+    needs_study_silence = any(not item["audio_entries"] for item in study_pages)
     return f"""<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0"
          unique-identifier="bookid" prefix="media: http://www.idpf.org/epub/vocab/overlays/#">
@@ -614,7 +685,8 @@ def make_opf(title, pages, image_names, has_cover, identifier, intro_pages, stud
   {intro_items}
   {study_items}
   {study_smil_items}
-  {'<item id="study-silence" href="audio/study-silence.m4a" media-type="audio/m4a"/>' if study_pages else ''}
+  {study_audio_items}
+  {'<item id="study-silence" href="audio/study-silence.m4a" media-type="audio/m4a"/>' if needs_study_silence else ''}
   {''.join(page_items)}
   {''.join(smil_items)}
   {''.join(audio_items)}
@@ -801,19 +873,31 @@ def build_book(book_dir, output):
                 study_href = f"study/{study_id}.xhtml"
                 study_smil_id = f"{study_id}-smil"
                 study_smil_href = f"overlays/{study_id}.smil"
+                print(
+                    f"🎧 {base_name} 학습카드 음성 생성 "
+                    f"({part}편 장면 {scene} · {chunk_number}/{len(chunks)})"
+                )
+                audio_entries = build_study_audio(
+                    chunk, study_id, cache_dir, os.path.join(oebps, "audio")
+                )
+                study_duration = (
+                    sum(entry["duration"] for entry in audio_entries)
+                    if audio_entries else STUDY_DWELL_SECONDS
+                )
                 with open(os.path.join(oebps, study_href), "w", encoding="utf-8") as file:
                     file.write(make_study_xhtml(
-                        f"{part}편 장면 {scene}", chunk, heading
+                        f"{part}편 장면 {scene}", chunk, heading, study_id
                     ))
                 with open(os.path.join(oebps, study_smil_href), "w", encoding="utf-8") as file:
-                    file.write(make_study_smil(study_id))
+                    file.write(make_study_smil(study_id, audio_entries))
                 study_pages.append({
                     "id": study_id, "href": study_href,
                     "smil_id": study_smil_id, "smil_href": study_smil_href,
                     "before_page": first_page["number"],
+                    "audio_entries": audio_entries, "duration": study_duration,
                 })
 
-        if study_pages:
+        if any(not item["audio_entries"] for item in study_pages):
             create_study_silence(os.path.join(oebps, "audio", "study-silence.m4a"))
 
         cover_source = os.path.join(book_dir, "cover.jpg")
