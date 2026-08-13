@@ -125,6 +125,7 @@ REMINDER_CHECKLIST_NOTION_URL = (
 DAILY_ROUTINE_SOURCE_PAGE_ID = "3b932a1e-ae80-8021-912b-d160fe6cb629"
 DAILY_ROUTINE_HEADING = "🌅 일일 루틴 체크리스트"
 DAILY_REMINDER_HEADING = "🔔 오늘의 리마인더"
+DAILY_ROUTINE_TOGGLE_PREFIX = "🌅 오늘의 일일 루틴 — "
 NOTION_VERSION = "2026-03-11"
 # "🔔 오늘: ..." 메뉴 항목에서 리마인더마다 색을 다르게 입혀 알록달록하게
 # 보이게 한다(★ 2026-08-07: 콜백 없어 회색으로 보이던 걸 개선하면서 같이 추가).
@@ -246,6 +247,7 @@ def get_free_storage_gb(path="/"):
 # - 동찬이형한테 전화: 2026-08-03을 기준으로 21일마다 한 번
 # - 손동주한테 전화: 2026-08-05를 기준으로 7일마다(주 1회) 한 번
 # - 화장실 잔떼 및 배수 점검: 2026-08-13을 기준으로 7일마다(주 1회) 한 번
+# - 머리 깎기: 2026-08-13을 기준으로 25일마다 한 번
 # - 에이전틱 코딩 책 읽기: 2026-08-08을 기준으로 3일마다 한 번
 # - 손동주 쉬는 날: 동주 본인 근무표(주간 2주/야간 2주 로테이션, 5일 근무+2일 휴무
 #   반복) 기준. 2026-08-04(야간 첫날)를 14일 주기 1일째로 놓으면, 주/야간 구분과
@@ -267,6 +269,7 @@ REMINDERS = {
     "call_sondongju":  {"label": "📞 손동주한테 전화하는 날(1주일에 1회)",   "enabled": True},
     "coding_academy":  {"label": "💬 코딩학원 카톡방에 연락하는 날(1주일에 1회)", "enabled": True},
     "bathroom_drain_check": {"label": "🚿 화장실 잔떼 및 배수 점검일(1주일에 1회)", "enabled": True},
+    "haircut":          {"label": "💇 머리 깎는 날(25일에 1회)", "enabled": True},
     "agentic_coding_reading": {"label": "📚 에이전틱 코딩 책 읽기(3일에 1회)", "enabled": True},
     "sondongju_off":   {"label": "🎉 손동주 쉬는 날(동주 근무 주기 기준)",         "enabled": True},
     "nose_hair_trim":  {"label": "🪒 코털 정리하는 날(4일에 1회)",       "enabled": True},
@@ -658,6 +661,8 @@ CODING_ACADEMY_CHAT_ANCHOR = datetime.date(2026, 8, 7)
 CODING_ACADEMY_CHAT_INTERVAL_DAYS = 7
 BATHROOM_DRAIN_CHECK_ANCHOR = datetime.date(2026, 8, 13)
 BATHROOM_DRAIN_CHECK_INTERVAL_DAYS = 7
+HAIRCUT_ANCHOR = datetime.date(2026, 8, 13)
+HAIRCUT_INTERVAL_DAYS = 25
 AGENTIC_CODING_READING_ANCHOR = datetime.date(2026, 8, 8)
 AGENTIC_CODING_READING_INTERVAL_DAYS = 3
 # 동주 본인 근무표: 야간 2주(14일) → 주간 2주(14일) 로테이션, 각 14일 블록 안에서
@@ -734,6 +739,12 @@ def _is_bathroom_drain_check_day(d):
     """2026-08-13부터 7일마다 돌아오는 화장실 잔떼·배수 점검일인지 반환."""
     days = (d - BATHROOM_DRAIN_CHECK_ANCHOR).days
     return days >= 0 and days % BATHROOM_DRAIN_CHECK_INTERVAL_DAYS == 0
+
+
+def _is_haircut_day(d):
+    """2026-08-13부터 25일마다 돌아오는 머리 깎는 날인지 반환."""
+    days = (d - HAIRCUT_ANCHOR).days
+    return days >= 0 and days % HAIRCUT_INTERVAL_DAYS == 0
 
 
 def _is_agentic_coding_reading_day(d):
@@ -818,6 +829,7 @@ def get_today_reminders(schedule, now=None):
     - 손동주한테 전화: 2026-08-05부터 7일마다(주 1회) 한 번
     - 코딩학원 카톡방 연락: 2026-08-07부터 7일마다(주 1회) 한 번
     - 화장실 잔떼 및 배수 점검: 2026-08-13부터 7일마다(주 1회) 한 번
+    - 머리 깎기: 2026-08-13부터 25일마다 한 번
     - 에이전틱 코딩 책 읽기: 2026-08-08(오늘)을 시작일로 3일마다 한 번
     - 손동주 쉬는 날: 동주 본인 근무표(야간 2주/주간 2주 로테이션, 5일 근무+2일 휴무
       반복) 기준. 2026-08-04(야간 첫날)를 14일 주기 1일째로 놓고 계산.
@@ -876,6 +888,9 @@ def get_today_reminders(schedule, now=None):
 
     if REMINDERS["bathroom_drain_check"]["enabled"] and _is_bathroom_drain_check_day(today):
         reminders.append(REMINDERS["bathroom_drain_check"]["label"])
+
+    if REMINDERS["haircut"]["enabled"] and _is_haircut_day(today):
+        reminders.append(REMINDERS["haircut"]["label"])
 
     if REMINDERS["agentic_coding_reading"]["enabled"] and _is_agentic_coding_reading_day(today):
         reminders.append(REMINDERS["agentic_coding_reading"]["label"])
@@ -3164,10 +3179,7 @@ class ShiftAlarmApp(rumps.App):
         ).start()
 
     def _sync_daily_checklist_to_notion(self, today, todays):
-        """날짜 토글 아래에 매일 루틴과 조건부 리마인더를 서로 분리해 기록한다.
-
-        루틴은 리마인더가 없는 날에도 반드시 생성한다. 이미 오늘 토글이 있으면 사용자가
-        체크한 기존 리마인더는 그대로 두고, 루틴 구역이 없을 때만 뒤에 추가한다."""
+        """고정 루틴 하나를 매일 초기화하고, 조건부 리마인더만 날짜별로 기록한다."""
         date_str = today.isoformat()
         token = _notion_keychain_token()
         if not token:
@@ -3177,6 +3189,20 @@ class ShiftAlarmApp(rumps.App):
             request = urllib.request.Request(
                 f"https://api.notion.com/v1/{path}",
                 headers={"Authorization": f"Bearer {token}", "Notion-Version": NOTION_VERSION},
+            )
+            with urllib.request.urlopen(request, timeout=15) as response:
+                return json.load(response)
+
+        def notion_request(path, method, payload=None):
+            request = urllib.request.Request(
+                f"https://api.notion.com/v1/{path}",
+                data=(json.dumps(payload).encode("utf-8") if payload is not None else None),
+                method=method,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Notion-Version": NOTION_VERSION,
+                    "Content-Type": "application/json",
+                },
             )
             with urllib.request.urlopen(request, timeout=15) as response:
                 return json.load(response)
@@ -3213,27 +3239,15 @@ class ShiftAlarmApp(rumps.App):
         template_version = hashlib.sha256(
             json.dumps(routine_sequence, ensure_ascii=False).encode("utf-8")
         ).hexdigest()
-        if (
-            self.config.get("daily_checklist_notion_synced_date") == date_str
-            and self.config.get("daily_routine_template_version") == template_version
-        ):
-            return
-
         def todo_block(label):
             return {
             "object": "block", "type": "to_do",
             "to_do": {"rich_text": [{"type": "text", "text": {"content": label}}], "checked": False},
             }
 
-        def heading_block(label):
-            return {
-                "object": "block", "type": "heading_3",
-                "heading_3": {"rich_text": [{"type": "text", "text": {"content": label}}]},
-            }
-
         def routine_blocks(checked_by_label=None):
             checked_by_label = checked_by_label or {}
-            blocks = [heading_block(DAILY_ROUTINE_HEADING)]
+            blocks = []
             for item in routine_sequence:
                 if item is None:
                     blocks.append({"object": "block", "type": "divider", "divider": {}})
@@ -3247,7 +3261,9 @@ class ShiftAlarmApp(rumps.App):
             page = notion_get(
                 f"blocks/{REMINDER_CHECKLIST_NOTION_PAGE_ID}/children?page_size=100"
             )
-            toggle_id = None
+            page_results = page.get("results", [])
+            routine_toggle = None
+            reminder_toggle = None
             for block in page.get("results", []):
                 if block.get("type") != "toggle":
                     continue
@@ -3255,78 +3271,145 @@ class ShiftAlarmApp(rumps.App):
                     item.get("plain_text", "")
                     for item in block.get("toggle", {}).get("rich_text", [])
                 )
-                if text == date_str:
-                    toggle_id = block["id"]
-                    break
+                if text.startswith(DAILY_ROUTINE_TOGGLE_PREFIX):
+                    routine_toggle = (block, text)
+                elif text == date_str:
+                    reminder_toggle = block
 
-            if toggle_id:
-                existing = notion_get(f"blocks/{toggle_id}/children?page_size=100")
-                results = existing.get("results", [])
-                routine_start = None
-                routine_end = None
+            # 고정 루틴: 날짜가 바뀌기 전에 미완료를 읽고, 같은 블록들을 모두 해제한다.
+            if routine_toggle:
+                routine_block, routine_title = routine_toggle
+                routine_id = routine_block["id"]
+                previous_date = routine_title[len(DAILY_ROUTINE_TOGGLE_PREFIX):].strip()
+                existing = notion_get(f"blocks/{routine_id}/children?page_size=100")
+                routine_children = existing.get("results", [])
                 checked_by_label = {}
-                for index, block in enumerate(results):
-                    block_type = block.get("type")
-                    text = "".join(
+                for block in routine_children:
+                    if block.get("type") != "to_do":
+                        continue
+                    label = "".join(
                         item.get("plain_text", "")
-                        for item in block.get(block_type, {}).get("rich_text", [])
+                        for item in block.get("to_do", {}).get("rich_text", [])
                     )
-                    if text == DAILY_ROUTINE_HEADING:
-                        routine_start = index
-                    elif routine_start is not None and text == DAILY_REMINDER_HEADING:
-                        routine_end = index
-                        break
-                    elif routine_start is not None and block_type == "to_do":
-                        checked_by_label[text] = bool(block.get("to_do", {}).get("checked"))
+                    checked_by_label[label] = bool(block.get("to_do", {}).get("checked"))
 
-                # 템플릿이 갱신됐으면 기존 루틴 구역만 보관 처리하고 최신 순서를
-                # 다시 붙인다. 이름이 같은 항목의 오늘 체크 상태는 유지한다.
-                if routine_start is not None:
-                    for block in results[routine_start:routine_end]:
-                        request = urllib.request.Request(
-                            f"https://api.notion.com/v1/blocks/{block['id']}",
-                            method="DELETE",
-                            headers={
-                                "Authorization": f"Bearer {token}",
-                                "Notion-Version": NOTION_VERSION,
-                            },
+                date_changed = previous_date != date_str
+                template_changed = (
+                    self.config.get("daily_routine_template_version") != template_version
+                )
+                if date_changed:
+                    incomplete = [
+                        label for label, checked in checked_by_label.items() if not checked
+                    ]
+                    if (
+                        incomplete
+                        and self.config.get("daily_routine_incomplete_notified_date") != previous_date
+                    ):
+                        self.config["daily_routine_incomplete_notified_date"] = previous_date
+                        AppHelper.callAfter(
+                            self._notify_incomplete_daily_routine, previous_date, incomplete
                         )
-                        with urllib.request.urlopen(request, timeout=15) as response:
-                            response.read()
-                target_id = toggle_id
-                children = routine_blocks(checked_by_label)
+
+                if date_changed or template_changed:
+                    preserved = {} if date_changed else checked_by_label
+                    for block in routine_children:
+                        notion_request(f"blocks/{block['id']}", "DELETE")
+                    notion_request(
+                        f"blocks/{routine_id}/children", "PATCH",
+                        {"children": routine_blocks(preserved)},
+                    )
+                    notion_request(
+                        f"blocks/{routine_id}", "PATCH",
+                        {"toggle": {"rich_text": [{
+                            "type": "text", "text": {
+                                "content": DAILY_ROUTINE_TOGGLE_PREFIX + date_str
+                            },
+                        }]}},
+                    )
             else:
-                nested_children = routine_blocks()
-                if todays:
-                    nested_children.append(heading_block(DAILY_REMINDER_HEADING))
-                    nested_children.extend(todo_block(label) for label in todays)
-                target_id = REMINDER_CHECKLIST_NOTION_PAGE_ID
-                children = [{
+                notion_request(
+                    f"blocks/{REMINDER_CHECKLIST_NOTION_PAGE_ID}/children", "PATCH",
+                    {"children": [{
                     "object": "block", "type": "toggle",
                     "toggle": {
-                        "rich_text": [{"type": "text", "text": {"content": date_str}}],
-                        "children": nested_children,
+                        "rich_text": [{"type": "text", "text": {
+                            "content": DAILY_ROUTINE_TOGGLE_PREFIX + date_str
+                        }}],
+                        "children": routine_blocks(),
                     },
-                }]
+                    }]},
+                )
 
-            request = urllib.request.Request(
-                f"https://api.notion.com/v1/blocks/{target_id}/children",
-                data=json.dumps({"children": children}).encode("utf-8"),
-                method="PATCH",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Notion-Version": NOTION_VERSION,
-                    "Content-Type": "application/json",
-                },
-            )
-            with urllib.request.urlopen(request, timeout=15) as response:
-                response.read()
+            # 날짜별 영역에는 루틴을 복제하지 않고 조건부 리마인더만 보관한다.
+            if todays:
+                if reminder_toggle:
+                    reminder_children = notion_get(
+                        f"blocks/{reminder_toggle['id']}/children?page_size=100"
+                    ).get("results", [])
+                    # 고정형 전환 당일에만 남아 있는 예전 날짜별 루틴 복사본을
+                    # 제거한다. 리마인더 구역과 과거 날짜 기록은 건드리지 않는다.
+                    legacy_start = None
+                    legacy_end = None
+                    for index, block in enumerate(reminder_children):
+                        block_type = block.get("type")
+                        text = "".join(
+                            item.get("plain_text", "")
+                            for item in block.get(block_type, {}).get("rich_text", [])
+                        )
+                        if text == DAILY_ROUTINE_HEADING:
+                            legacy_start = index
+                        elif legacy_start is not None and text == DAILY_REMINDER_HEADING:
+                            legacy_end = index
+                            break
+                    if legacy_start is not None:
+                        for block in reminder_children[legacy_start:legacy_end]:
+                            notion_request(f"blocks/{block['id']}", "DELETE")
+                        reminder_children = (
+                            reminder_children[:legacy_start]
+                            + reminder_children[legacy_end:]
+                        )
+                    existing_labels = {
+                        "".join(
+                            item.get("plain_text", "")
+                            for item in block.get("to_do", {}).get("rich_text", [])
+                        )
+                        for block in reminder_children if block.get("type") == "to_do"
+                    }
+                    missing = [label for label in todays if label not in existing_labels]
+                    if missing:
+                        notion_request(
+                            f"blocks/{reminder_toggle['id']}/children", "PATCH",
+                            {"children": [todo_block(label) for label in missing]},
+                        )
+                else:
+                    notion_request(
+                        f"blocks/{REMINDER_CHECKLIST_NOTION_PAGE_ID}/children", "PATCH",
+                        {"children": [{
+                            "object": "block", "type": "toggle",
+                            "toggle": {
+                                "rich_text": [{"type": "text", "text": {"content": date_str}}],
+                                "children": [todo_block(label) for label in todays],
+                            },
+                        }]},
+                    )
         except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
             print(f"⚠️ 일일 체크리스트 Notion 동기화 실패: {exc}")
             return
         self.config["daily_checklist_notion_synced_date"] = date_str
         self.config["daily_routine_template_version"] = template_version
         save_config(self.config)
+
+    def _notify_incomplete_daily_routine(self, previous_date, incomplete):
+        """전날 미완료 루틴을 메인 스레드에서 한 번만 알린다."""
+        preview = incomplete[:8]
+        body = "\n".join(f"• {label}" for label in preview)
+        if len(incomplete) > len(preview):
+            body += f"\n• 그 외 {len(incomplete) - len(preview)}개"
+        rumps.notification(
+            f"어제 하지 않은 일일 루틴 {len(incomplete)}개",
+            previous_date,
+            body,
+        )
 
     def _load_cached_checklist_state(self):
         """오늘 날짜분 캐시만 유효 — 날짜가 바뀌었으면 빈 상태로 시작(어제 체크
