@@ -245,6 +245,7 @@ def get_free_storage_gb(path="/"):
 # 대부분 요일이 아니라 근무표의 "휴무 블록"을 기준으로 잡는다.
 # - 헬스장: 근무·휴무와 무관하게 격일 간격 반복. 상체/하체를 번갈아 표시
 # - 엄마한테 전화: 휴무 블록의 첫날 (근무 마치고 쉬기 시작하는 날)
+# - 카페에서 밥·커피·병법 공부: 휴무 블록의 첫날
 # - 허민준한테 전화: 한 달에 한 번. 그 달의 첫 번째 휴무 블록 시작일
 # - 동찬이형한테 전화: 2026-08-03을 기준으로 21일마다 한 번
 # - 손동주한테 전화: 2026-08-05를 기준으로 7일마다(주 1회) 한 번
@@ -266,6 +267,7 @@ def get_free_storage_gb(path="/"):
 REMINDERS = {
     "gym":             {"label": "🏋️ 헬스장 가는 날(상체/하체·격일)", "enabled": True},
     "call_mom":        {"label": "📞 엄마한테 전화하는 날(휴무 시작일)",   "enabled": True},
+    "cafe_strategy_study": {"label": "☕ 카페에서 밥먹고 커피마시면서 병법공부하기(휴무 첫날)", "enabled": True},
     "call_heo_minjun": {"label": "📞 허민준한테 전화하는 날(월 1회)", "enabled": True},
     "call_dongchan":   {"label": "📞 동찬이형한테 전화하는 날(21일에 1회)", "enabled": True},
     "call_sondongju":  {"label": "📞 손동주한테 전화하는 날(1주일에 1회)",   "enabled": True},
@@ -883,6 +885,7 @@ def get_today_reminders(schedule, now=None):
     - 헬스장: 근무·휴무와 무관하게 2026-08-03부터 격일(2일 간격)로 반복한다.
       상체/하체는 매회 번갈아 표시하며 운영시간 때문에 알림을 생략하지 않는다.
     - 엄마한테 전화: 오늘이 휴무 블록의 첫날 (어제는 근무였음)
+    - 카페에서 밥·커피·병법 공부: 오늘이 휴무 블록의 첫날
     - 허민준한테 전화: 월 1회, 이번 달의 첫 번째 휴무 블록 시작일
     - 동찬이형한테 전화: 2026-08-03부터 21일마다 한 번
     - 손동주한테 전화: 2026-08-05부터 7일마다(주 1회) 한 번
@@ -922,6 +925,8 @@ def get_today_reminders(schedule, now=None):
         is_block_end = get_shift_for_date(schedule, tomorrow) != "휴무"
         if is_block_start and REMINDERS["call_mom"]["enabled"]:
             reminders.append(REMINDERS["call_mom"]["label"])
+        if is_block_start and REMINDERS["cafe_strategy_study"]["enabled"]:
+            reminders.append(REMINDERS["cafe_strategy_study"]["label"])
         if is_block_end and REMINDERS["kakao_cleanup"]["enabled"]:
             reminders.append(REMINDERS["kakao_cleanup"]["label"])
         if REMINDERS["laundry"]["enabled"]:
