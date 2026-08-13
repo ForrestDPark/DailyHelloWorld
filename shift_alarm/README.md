@@ -59,6 +59,7 @@
 - 날씨 아이콘(★ 2026-08-05 이모지→한자로 교체): 강수확률 기준 晴(20% 미만) / 曇(20~50%) / 雨(50%+). 임계값은 기존과 동일, Open-Meteo API·아산시 좌표(`LATITUDE=36.78, LONGITUDE=127.00`) 사용. 근무 표기 바로 뒤에 `-`로 이어붙인다(`_update_title()`).
 - **근무 며칠째 표기 + 색상 (★ 2026-08-05 추가)**: `_shift_block_day_number()`가 오늘 근무 코드가 며칠째 연속인지(과거는 근무표 원본 기준) 세서 코드 뒤에 붙인다(`G3`, `D1`, `휴2` 등). GY 숫자는 노란색(`NSColor.systemYellowColor`), 휴무 숫자는 빨간색(`systemRedColor`)으로 표시하고 Day/Swing 숫자는 기본색. 비 오는 날(雨)은 파란색(`systemBlueColor`)으로 표시.
 - **저장공간 숫자 색상(★ 2026-08-07: 이모지 제거)**: `💾` 이모지 없이 숫자만 표시하고 항상 색을 입힌다 — 평소엔 초록(`systemGreenColor`), `LOW_STORAGE_WARNING_GB`(5GB) 이하일 때만 빨간색.
+- **급여·휴무 항목 색상(★ 2026-08-13)**: 콜백 없는 메뉴 항목이 비활성 회색으로 흐려지지 않도록 근무 중 급여는 초록, 다음 근무 예상은 주황, `오늘은 휴무입니다`는 밝은 청록(`systemTealColor`)으로 명시해 가독성을 유지한다.
   - 구현은 `rumps.App.title`(plain 문자열)을 먼저 설정한 뒤 `NSMutableAttributedString` + `setAttributedTitle_()`로 특정 range에만 색을 덮어씌우는 방식이다. rumps의 `title` setter가 내부적으로 `setTitle_()`을 호출해 attributedTitle을 초기화시키므로, **반드시 plain title 설정 → attributedTitle 설정 순서**를 지켜야 한다.
   - **★ 주의(UTF-16 서로게이트 페어)**: `NSRange`는 UTF-16 코드 유닛 기준인데 `💾` 같은 이모지는 서로게이트 페어라 2유닛을 차지하는 반면 Python `len()`은 1글자로 센다. 색상 범위 계산에 Python `len()`을 그대로 쓰면 💾 뒤에 오는 글자의 색이 한 칸씩 밀리는 버그가 생긴다 — `_utf16_len(s)`(`len(s.encode("utf-16-le"))//2`)로 반드시 UTF-16 유닛 길이를 재서 range를 계산한다.
 - **★ 2026-07-24 버그 수정**: 오늘의 리마인더 이모지들을 공백 없이(`"".join`) 이어붙이고 있었는데, 휴무일처럼 리마인더가 여러 개 동시에 뜨는 날은 이모지가 다닥다닥 붙어서 찌그러진 것처럼 보였다 — `" ".join`으로 공백을 넣어 고침.
@@ -306,8 +307,9 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
 
 **진짜 홈 화면 위젯(아이콘들 사이에 고정되는 타일)을 원하면 이 방법만 쓴다.** 처음엔 Pythonista로 위젯을 만들었었는데, Pythonista의 위젯 기능은 iOS 14 이전 방식인 Today Widget(NCWidget 확장)이고 **iOS 18부터 애플이 이 확장 방식 자체를 완전히 제거해서 더 이상 동작하지 않는다**(2026-08-06 웹 검색으로 확인 — 위젯 목록에 Pythonista가 아예 안 뜨는 게 정상). Scriptable은 최신 WidgetKit을 지원하는 앱이라 진짜 홈 화면 위젯이 가능하다.
 
-- **`shift_alarm/ShiftAlarmWidget.js`**(git 추적됨) — Scriptable의 `FileManager.iCloud()`로 같은 폴더의 `status.json`을 읽어(iCloud 미다운로드 상태면 `downloadFileFromiCloud()`로 먼저 받음) `ListWidget`으로 그린다. Mac 쪽에서 수정하면 Scriptable iCloud Documents 폴더(`iCloud~dk~simonbs~Scriptable/Documents/`)에 다시 복사해야 아이폰에 반영됨(자동 동기화 아님).
+- **`shift_alarm/ShiftAlarmWidget.js`**(git 추적됨) — Scriptable의 `FileManager.iCloud()`로 같은 폴더의 `status.json`을 읽어(iCloud 미다운로드 상태면 `downloadFileFromiCloud()`로 먼저 받음) `ListWidget`으로 그린다. ★ 2026-08-13부터 `sync_scriptable_widget_file()`이 앱 시작과 상태 저장 때 저장소 원본과 iCloud 배포본의 바이트를 비교해 달라질 때만 자동 복사하고 재검증한다. 따라서 Shift Alarm의 위젯 관련 변경은 앱 재시작만으로 Scriptable 파일까지 함께 최신화된다.
 - **★ 2026-08-08 iCloud 일시 오류 대응**: Mac이 `status.json`을 원자적으로 교체하는 순간이나 iCloud 다운로드가 지연될 때 Scriptable의 `fileExists`/`readString`이 잠깐 실패할 수 있다. 예전 코드는 파일 부재·다운로드 실패·JSON 읽기 실패를 전부 `status.json을 찾을 수 없습니다`로 표시했다. 이제 iCloud 파일을 정상적으로 읽을 때 `FileManager.local()`의 `ShiftAlarmWidget/status-last-good.json`에도 마지막 성공본을 저장하고, 일시적 실패 시 그 캐시를 표시한다. iCloud와 캐시가 모두 없는 최초 실행에서만 오류 안내가 뜬다.
+- **★ 2026-08-13 상태 형식 버전 검사**: Mac은 `widget_schema_version`을 status.json에 기록하고 Scriptable은 현재 버전보다 오래된 iCloud 파일·로컬 캐시를 표시하지 않는다. 예전 `휴 🛌`·구지 15구절 같은 낡은 캐시가 최신 데이터처럼 계속 남는 일을 막는다. 휴무 표시는 이모지 없이 `휴 (N일째)`로 통일했다.
 - **추가 방법**: 홈 화면 길게 눌러 편집 모드 → 왼쪽 위 **"+"** → **Scriptable** 검색 → 크기 선택 → 추가 → 그 위젯을 길게 눌러 **"위젯 편집"** → **Script**를 **`ShiftAlarmWidget`**으로 지정.
 - **레이아웃은 `config.widgetFamily`로 위젯 크기에 따라 분기한다(★ 2026-08-06)** — Scriptable은 내용이 위젯 프레임을 넘으면 자동으로 줄여주지 않고 그냥 잘라버리므로, 크기별로 보여줄 내용 자체를 다르게 짰다:
   - **스몰**: 근무·며칠째, 날씨만 (한 줄씩, 최소한만 — 정보 다 넣으면 잘림)
@@ -315,6 +317,7 @@ Codex와 Claude Code(자기 자신)의 남은 quota/사용량을 메뉴바 드�
     - 왼쪽: 근무·며칠째, 날씨, 저장공간(5GB 이하 빨강), 오늘의 리마인더 최대 3개(초과분은 "외 N건")
     - 오른쪽: 오늘 급여(근무 중이면 지금까지 번 금액, 근무 전이면 예상 금액), 🪙 AI 사용량 — Codex는 현재 진행일까지의 누적 권장량(1일째 14.3%, 2일째 28.6% …)에 도달하면 빨강, Claude는 주간 90% 이상이면 빨강(그 전에는 Codex=연보라/Claude=오렌지)
   - **라지(★ 권장)**: 미디엄 레이아웃 그대로 + 아래에 **⚔️ 손자병법 최신 구절**(`손자병법/README.md`의 "완료된 구절" 표 마지막 줄 — 구절 인용문 「」 포함), **🎯 오늘의 추천 공고**, **🏆 오늘의 추천 경진대회** 추가. 손자병법 제목이나 구절을 탭하면 해당 Notion 페이지(`sunzi_url`)가 열린다(★ 2026-08-08). **★ 2026-08-08 카테고리 2건씩으로 변경**: `job_items`/`contest_items` 배열을 순회해 카테고리(커리어/알바, AI/일반)당 한 줄씩 찍는다 — 항목당 여러 줄(헤딩+본문+링크)을 쓰던 예전 방식으로는 2배로 늘어난 항목이 라지 위젯 프레임을 넘치므로, `[점수] [카테고리] 회사 — 제목` 한 줄로 압축하고 그 줄 자체를 탭하면 바로 Notion AI 분석(`notion_url`)으로 이동하게 했다(원본 공고 링크는 생략 — 분석 페이지 안에 원문 URL이 이미 링크로 들어있다). 두 카테고리 모두 분석 전이면(배열이 비어 있으면) 해당 섹션 전체가 생략된다.
+  - 손자병법 완료 표에는 실제 Notion 배포가 끝난 구절을 반드시 한 줄씩 추가한다. 2026-08-13 점검에서 16구절은 완료됐지만 표가 15에서 멈춰 위젯도 15를 표시한 것을 발견해, 16구절 Notion 링크(`3af32a1e...`)를 복구했다.
   - 앱 안에서 재생(▶)으로 직접 실행하면(위젯이 아닐 때) `config.widgetFamily`가 없어서 large로 간주하고 `presentLarge()`로 미리보기를 보여준다.
   - 맨 아래에 갱신시각(스몰 제외)
 - Scriptable 앱 안에서 스크립트를 직접 실행하면(위젯이 아닐 때) `presentMedium()`으로 같은 내용을 미리보기로 보여준다(디버깅용).
@@ -347,7 +350,7 @@ Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으
 
 채용·경진대회 메일만 보지 않고 Gmail Inbox의 모든 새 메일을 5분마다 읽기 전용으로 확인한다. `gog` CLI를 `--readonly --gmail-no-send`로 고정 호출하며, 발신자·제목·Gmail snippet을 이용해 `채용 / 경진대회 / 결제·금융 / 보안 / 배송·예약 / 뉴스레터·홍보 / 일반 메일`로 즉시 분류하고 한 줄 요약을 macOS 알림으로 보여준다. 본문이나 OAuth 토큰은 Shift Alarm 설정 파일에 저장하지 않고, 중복 알림 방지용 메일 ID만 최근 200개 보존한다.
 
-메뉴에는 `📧 메일 확인: 최근 N건` 항목이 항상 있으며 누르면 Gmail Inbox를 연다. 인증 전에는 `Gmail 1회 연결 필요`로 표시한다. 최초 한 번은 Google Cloud의 Desktop OAuth client를 만든 뒤 `gog auth credentials <다운로드한 JSON>`과 `gog --readonly auth add <Gmail 주소> --services gmail`로 읽기 전용 동의를 해야 한다. 이후 refresh token은 macOS Keychain에서 관리된다.
+메뉴에는 `📧 메일 확인: 최근 N건` 항목이 항상 있으며 연결 후 누르면 Gmail Inbox를 연다. 인증 전에는 `Gmail 1회 연결 필요`로 표시하고, 이때 항목을 누르면 단순히 Gmail 웹을 여는 대신 Terminal에서 `gog --readonly --gmail-no-send auth setup` 안내를 시작한다. 최초 한 번 Google Cloud의 Desktop OAuth client와 Gmail 계정을 읽기 전용으로 연결해야 하며 이후 refresh token은 macOS Keychain에서 관리된다. 이 문구는 미확인 메일 1건이라는 뜻이 아니라 **분석기 최초 연결이 필요하다**는 뜻이다.
 
 - `JOB_COLLECTOR_DIR`/`JOB_COLLECTOR_SCRIPT`: `shift_alarm.py`의 부모 폴더(`DailyHelloWorld_/`) 기준으로 `이직시스템/job_collector.py`를 가리킨다(상대경로, 폴더 이동에도 안전).
 - 실행은 `subprocess.run([sys.executable, JOB_COLLECTOR_SCRIPT, "collect"], cwd=JOB_COLLECTOR_DIR, ...)` — shift_alarm과 같은 파이썬 인터프리터(`/opt/anaconda3/bin/python3`)로 돌린다. `job_collector.py`가 표준 라이브러리만 쓰므로 별도 venv 없이도 그대로 동작.

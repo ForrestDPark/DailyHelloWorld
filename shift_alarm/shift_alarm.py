@@ -88,6 +88,11 @@ SCRIPTABLE_ICLOUD_DIR = os.path.expanduser(
     "~/Library/Mobile Documents/iCloud~dk~simonbs~Scriptable/Documents"
 )
 SCRIPTABLE_STATUS_FILE = os.path.join(SCRIPTABLE_ICLOUD_DIR, "status.json")
+SCRIPTABLE_WIDGET_SOURCE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "ShiftAlarmWidget.js"
+)
+SCRIPTABLE_WIDGET_FILE = os.path.join(SCRIPTABLE_ICLOUD_DIR, "ShiftAlarmWidget.js")
+WIDGET_SCHEMA_VERSION = 2
 
 # ── 근무표 JSON 경로 (엑셀에서 추출한 D조 날짜별 근무) ─────────────
 # 스크립트와 같은 폴더에 d_team_schedule_2026.json 을 두거나,
@@ -1353,6 +1358,31 @@ def get_latest_sunzi_entry():
         return {"title": title, "url": url}
     except Exception:
         return None
+
+
+def sync_scriptable_widget_file():
+    """저장소의 위젯 스크립트를 Scriptable iCloud Documents에 자동 배포한다."""
+    try:
+        with open(SCRIPTABLE_WIDGET_SOURCE, "rb") as file:
+            source = file.read()
+        try:
+            with open(SCRIPTABLE_WIDGET_FILE, "rb") as file:
+                if file.read() == source:
+                    return False
+        except OSError:
+            pass
+        os.makedirs(SCRIPTABLE_ICLOUD_DIR, exist_ok=True)
+        tmp_path = SCRIPTABLE_WIDGET_FILE + ".tmp"
+        with open(tmp_path, "wb") as file:
+            file.write(source)
+        os.replace(tmp_path, SCRIPTABLE_WIDGET_FILE)
+        with open(SCRIPTABLE_WIDGET_FILE, "rb") as file:
+            if file.read() != source:
+                raise OSError("Scriptable 위젯 배포 후 내용 검증 실패")
+        return True
+    except OSError as exc:
+        print(f"⚠️ Scriptable 위젯 자동 배포 실패: {exc}")
+        return False
 
 
 def truncate_title(name, length=14):
@@ -2933,12 +2963,14 @@ class ShiftAlarmApp(rumps.App):
         self.codex_usage_item = rumps.MenuItem("🪙 Codex: 확인 중...")
         self.claude_usage_item = rumps.MenuItem("🪙 Claude: 확인 중...")
         self.claude_stats_item = rumps.MenuItem("🪙 Claude 로컬: 확인 중...")
+        self._gmail_status = "checking"
         self.gmail_item = rumps.MenuItem(
-            "📧 메일 확인: 연결 확인 중...", callback=self.make_open_url_callback(GMAIL_INBOX_URL)
+            "📧 메일 확인: 연결 확인 중...", callback=self.open_gmail_or_setup
         )
         # build_menu()가 바로 이어서 _checklist_state를 참조하므로 그 전에 초기화해둔다.
         self._checklist_state = self._load_cached_checklist_state()
         self._unchecked_index_sync_running = False
+        sync_scriptable_widget_file()
         self.build_menu()
 
         # 날씨 10분마다 갱신
@@ -3250,6 +3282,7 @@ class ShiftAlarmApp(rumps.App):
                 })
         codex_progress = _codex_primary_window_progress(self._codex_quota)
         status = {
+            "widget_schema_version": WIDGET_SCHEMA_VERSION,
             "updated_at": datetime.datetime.now().isoformat(timespec="seconds"),
             "date": today.isoformat(),
             "shift": current,
@@ -3300,6 +3333,9 @@ class ShiftAlarmApp(rumps.App):
                         f"⚠️ 모바일 상태 저장 실패: {target_file} "
                         f"(원자 교체: {atomic_exc}; 직접 쓰기: {direct_exc})"
                     )
+        # 위젯 소스가 바뀐 커밋을 배포한 뒤 앱만 재시작해도 Scriptable 쪽 파일이
+        # 자동으로 따라오게 한다. 내용이 같으면 실제 쓰기는 생략한다.
+        sync_scriptable_widget_file()
 
     # ── 저장공간 ─────────────────────────────────────────────
 
@@ -3324,17 +3360,21 @@ class ShiftAlarmApp(rumps.App):
     def _refresh_earnings(self, _):
         status = get_earnings_status(self.schedule, today_override=self._today_override())
         if status["state"] == "active":
-            self.earnings_item.title = (
+            text = (
                 f"💰 오늘 급여: {status['earned_so_far']:,}원 "
                 f"(근무 {status['elapsed_hours']}h / 완료 시 {status['total_when_done']:,}원)"
             )
+            _set_menu_item_color(self.earnings_item, text, NSColor.systemGreenColor())
         elif status["state"] == "waiting":
             start_str = status["start_time"].strftime("%H:%M")
-            self.earnings_item.title = (
+            text = (
                 f"💰 다음 근무({status['shift']}, {start_str} 시작) 예상: {status['total_when_done']:,}원"
             )
+            _set_menu_item_color(self.earnings_item, text, NSColor.systemOrangeColor())
         else:
-            self.earnings_item.title = "💰 오늘은 휴무입니다"
+            _set_menu_item_color(
+                self.earnings_item, "💰 오늘은 휴무입니다", NSColor.systemTealColor()
+            )
         self._update_title()
 
     def _earnings_short_text(self):
@@ -3866,17 +3906,7 @@ class ShiftAlarmApp(rumps.App):
 
     def build_menu(self):
         self.menu.clear()
-        current = self.config.get("current_shift")
         auto_on = self.config.get("auto_mode", True)
-
-        for shift, time in SHIFT_TIMES.items():
-            if time:
-                label = f"{'✓ ' if shift == current else ''}{shift}  ({time['hour']:02d}:{time['minute']:02d} 알람)"
-            else:
-                label = f"{'✓ ' if shift == current else ''}{shift}"
-            self.menu.add(rumps.MenuItem(label, callback=self.make_shift_callback(shift)))
-
-        self.menu.add(None)
 
         auto_label = f"{'✓ ' if auto_on else ''}근무표 자동 적용 (매일 자정)"
         self.menu.add(rumps.MenuItem(auto_label, callback=self.toggle_auto_mode))
@@ -4170,6 +4200,7 @@ class ShiftAlarmApp(rumps.App):
 
     def _apply_gmail_snapshot(self, snapshot, new_items):
         status = snapshot.get("status")
+        self._gmail_status = status
         if status == "ok":
             count = len(snapshot.get("items", []))
             new_text = f" · 새 메일 {len(new_items)}건" if new_items else ""
@@ -4179,6 +4210,23 @@ class ShiftAlarmApp(rumps.App):
         else:
             self.gmail_item.title = "📧 메일 확인: 일시적 확인 실패"
         self.build_menu()
+
+    def open_gmail_or_setup(self, _):
+        """연결 전에는 gog OAuth 안내를, 연결 후에는 Gmail Inbox를 연다."""
+        if self._gmail_status == "auth_required":
+            command = (
+                "/opt/homebrew/bin/gog --readonly --gmail-no-send auth setup; "
+                "echo; echo '연결이 끝났습니다. Shift Alarm은 최대 5분 안에 자동 확인합니다.'"
+            )
+            script = (
+                'tell application "Terminal"\n'
+                'activate\n'
+                f'do script {json.dumps(command)}\n'
+                'end tell'
+            )
+            subprocess.Popen(["osascript", "-e", script])
+            return
+        subprocess.Popen(["open", GMAIL_INBOX_URL])
 
     # ── 이직시스템(job_collector.py) 자동 수집 ─────────────────
 

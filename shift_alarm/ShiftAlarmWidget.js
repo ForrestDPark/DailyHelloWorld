@@ -23,12 +23,13 @@ const statusPath = fm.joinPath(fm.documentsDirectory(), "status.json");
 const cacheFm = FileManager.local();
 const cacheDir = cacheFm.joinPath(cacheFm.documentsDirectory(), "ShiftAlarmWidget");
 const cachePath = cacheFm.joinPath(cacheDir, "status-last-good.json");
+const STATUS_SCHEMA_VERSION = 2;
 
 const SHIFT_LABELS = {
   Day: "☀️ 주간",
   Swing: "🌇 오후",
   GY: "🌙 야간",
-  휴무: "휴 🛌",
+  휴무: "휴",
 };
 
 const MAX_REMINDERS_SHOWN = 3;
@@ -54,6 +55,9 @@ async function loadStatus() {
       }
       const raw = fm.readString(statusPath);
       const status = JSON.parse(raw);
+      if ((status.widget_schema_version || 0) < STATUS_SCHEMA_VERSION) {
+        throw new Error("오래된 Shift Alarm 상태 형식");
+      }
       if (!cacheFm.fileExists(cacheDir)) cacheFm.createDirectory(cacheDir, true);
       cacheFm.writeString(cachePath, raw);
       return status;
@@ -64,7 +68,8 @@ async function loadStatus() {
 
   try {
     if (cacheFm.fileExists(cachePath)) {
-      return JSON.parse(cacheFm.readString(cachePath));
+      const cached = JSON.parse(cacheFm.readString(cachePath));
+      if ((cached.widget_schema_version || 0) >= STATUS_SCHEMA_VERSION) return cached;
     }
   } catch (e) {
     // iCloud와 로컬 캐시를 모두 읽지 못한 첫 실행에서만 null을 반환한다.
