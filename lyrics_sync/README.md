@@ -28,6 +28,11 @@ python3 lyrics_sync.py --limit 5
 
 # 이미 있는 .lrc도 다시 생성
 python3 lyrics_sync.py --overwrite
+
+# mp3 옆이 아니라 별도 폴더에 .lrc만 모아서 저장
+# (맥과 폰의 mp3 목록이 서로 달라서, .lrc가 있는 곡만 골라 폰으로 옮겨
+#  테스트해보고 싶을 때 — 파일명은 mp3와 동일하게 유지된다)
+python3 lyrics_sync.py --output-dir "/Users/forrestdpark/Desktop/BlogImage/좋아요플레이_lrc"
 ```
 
 ## lrclib.net 조회 방식

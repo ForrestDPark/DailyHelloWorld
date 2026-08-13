@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""mp3 폴더를 훑어서 각 곡 옆에 동기화된 가사(.lrc)를 만든다. nPlayer(아이폰
+"""mp3 폴더를 훑어서 각 곡의 동기화된 가사(.lrc)를 만든다. nPlayer(아이폰
 음악 플레이어)는 mp3와 같은 폴더에 같은 이름의 .lrc가 있으면 자막처럼 가사를
-보여준다.
+보여준다. --output-dir을 주면 mp3 옆이 아니라 별도 폴더에 .lrc만 모아서
+저장한다(맥과 폰의 mp3 목록이 달라서, .lrc만 골라 폰으로 옮기고 싶을 때).
 
 순서(사용자 지정): 1) lrclib.net(공개 동기화 가사 DB)에서 먼저 찾고,
 2) 못 찾은 곡만 whisper-cli(로컬 음성 인식, -olrc로 LRC 직접 출력)로 자체
@@ -140,8 +141,8 @@ def whisper_transcribe_to_lrc(mp3_path: Path, tmp_dir: Path) -> str | None:
     return None
 
 
-def process_file(mp3_path: Path, overwrite: bool) -> str:
-    lrc_path = mp3_path.with_suffix(".lrc")
+def process_file(mp3_path: Path, overwrite: bool, output_dir: Path | None) -> str:
+    lrc_path = (output_dir / mp3_path.with_suffix(".lrc").name) if output_dir else mp3_path.with_suffix(".lrc")
     if lrc_path.exists() and not overwrite:
         return "skip"
 
@@ -176,11 +177,20 @@ def main() -> None:
     parser.add_argument("folder", nargs="?", default=str(DEFAULT_DIR), help="mp3가 있는 폴더")
     parser.add_argument("--overwrite", action="store_true", help="이미 .lrc가 있어도 다시 만듦")
     parser.add_argument("--limit", type=int, default=None, help="처리할 최대 곡 수(테스트용)")
+    parser.add_argument(
+        "--output-dir", default=None,
+        help="mp3 옆이 아니라 이 폴더에 .lrc를 모아서 저장(파일명은 mp3와 동일하게 유지)",
+    )
     args = parser.parse_args()
 
     folder = Path(args.folder).expanduser()
     if not folder.is_dir():
         raise SystemExit(f"폴더를 찾을 수 없습니다: {folder}")
+
+    output_dir = None
+    if args.output_dir:
+        output_dir = Path(args.output_dir).expanduser()
+        output_dir.mkdir(parents=True, exist_ok=True)
 
     mp3_files = sorted(folder.glob("*.mp3"))
     if args.limit:
@@ -189,8 +199,8 @@ def main() -> None:
     counts = {"lrclib": 0, "whisper": 0, "skip": 0, "fail": 0}
     total = len(mp3_files)
     for i, mp3_path in enumerate(mp3_files, 1):
-        print(f"[{i}/{total}] {mp3_path.name}")
-        result = process_file(mp3_path, args.overwrite)
+        print(f"[{i}/{total}] {mp3_path.name}", flush=True)
+        result = process_file(mp3_path, args.overwrite, output_dir)
         counts[result] += 1
         label = {
             "lrclib": "✅ lrclib에서 찾음",
@@ -198,7 +208,7 @@ def main() -> None:
             "skip": "⏭️  이미 있음(건너뜀)",
             "fail": "❌ 실패",
         }[result]
-        print(f"  {label}")
+        print(f"  {label}", flush=True)
 
     print()
     print(f"완료: lrclib {counts['lrclib']}곡 · whisper {counts['whisper']}곡 · "
