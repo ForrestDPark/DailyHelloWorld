@@ -350,20 +350,32 @@ def toggle_hue_room(room_name=HUE_WAKE_ROOM_NAME):
     if not room:
         raise ValueError(f"Hue 방을 찾을 수 없습니다: {room_name}")
 
-    base_url = f"https://{credential['ip']}/clip/v2/resource/room/{room['id']}"
+    bridge_url = f"https://{credential['ip']}/clip/v2/resource"
     headers = {"hue-application-key": credential["appKey"]}
     context = ssl._create_unverified_context()
-    request = urllib.request.Request(base_url, headers=headers)
+    # Hue v2의 room은 방 이름·서비스 연결만 가진 메타데이터다. 실제 전원은
+    # room.services가 가리키는 grouped_light에 GET/PUT해야 한다.
+    request = urllib.request.Request(f"{bridge_url}/room/{room['id']}", headers=headers)
+    with urllib.request.urlopen(request, timeout=10, context=context) as response:
+        room_resource = json.load(response)
+    services = room_resource.get("data", [{}])[0].get("services", [])
+    grouped_light_id = next(
+        (item.get("rid") for item in services if item.get("rtype") == "grouped_light"),
+        None,
+    )
+    if not grouped_light_id:
+        raise RuntimeError("Hue 방의 조명 제어 대상을 찾지 못했습니다.")
+    grouped_light_url = f"{bridge_url}/grouped_light/{grouped_light_id}"
+    request = urllib.request.Request(grouped_light_url, headers=headers)
     with urllib.request.urlopen(request, timeout=10, context=context) as response:
         current = json.load(response)
-    errors = current.get("errors", [])
-    if errors or not current.get("data"):
+    if current.get("errors") or not current.get("data"):
         raise RuntimeError("Hue 현재 상태를 확인하지 못했습니다.")
     is_on = bool(current["data"][0].get("on", {}).get("on"))
     new_state = not is_on
 
     request = urllib.request.Request(
-        base_url,
+        grouped_light_url,
         data=json.dumps({"on": {"on": new_state}}).encode("utf-8"),
         method="PUT",
         headers={**headers, "Content-Type": "application/json"},
@@ -2307,8 +2319,13 @@ if [ -f "$HUE_PREFS" ]; then
   HUE_KEY=$(printf '%s' "$HUE_CREDENTIALS" | /usr/bin/jq -r '.[0].appKey // empty' 2>/dev/null)
   HUE_ROOM_ID=$(printf '%s' "$HUE_ROOMS" | /usr/bin/jq -r --arg name {shlex.quote(HUE_WAKE_ROOM_NAME)} '.[] | select(.name == $name) | .id' 2>/dev/null | /usr/bin/head -1)
   if [ -n "$HUE_IP" ] && [ -n "$HUE_KEY" ] && [ -n "$HUE_ROOM_ID" ]; then
+    HUE_ROOM=$(/usr/bin/curl -ksS --connect-timeout 5 --max-time 10 \
+      "https://$HUE_IP/clip/v2/resource/room/$HUE_ROOM_ID" \
+      -H "hue-application-key: $HUE_KEY" 2>/dev/null)
+    HUE_GROUP_ID=$(printf '%s' "$HUE_ROOM" | /usr/bin/jq -r \
+      '.data[0].services[] | select(.rtype == "grouped_light") | .rid' 2>/dev/null | /usr/bin/head -1)
     HUE_RESPONSE=$(/usr/bin/curl -ksS --connect-timeout 5 --max-time 10 \
-      -X PUT "https://$HUE_IP/clip/v2/resource/room/$HUE_ROOM_ID" \
+      -X PUT "https://$HUE_IP/clip/v2/resource/grouped_light/$HUE_GROUP_ID" \
       -H "hue-application-key: $HUE_KEY" -H 'Content-Type: application/json' \
       -d '{{"on":{{"on":true}}}}' 2>/dev/null)
     if printf '%s' "$HUE_RESPONSE" | /usr/bin/jq -e '.errors | length == 0' >/dev/null 2>&1; then
@@ -2319,7 +2336,7 @@ if [ -f "$HUE_PREFS" ]; then
   else
     /usr/bin/logger -t shift_alarm "Hue Command connection not found; music alarm continues"
   fi
-  unset HUE_CREDENTIALS HUE_ROOMS HUE_KEY HUE_RESPONSE
+  unset HUE_CREDENTIALS HUE_ROOMS HUE_KEY HUE_ROOM HUE_RESPONSE
 fi
 
 # 전날 재생하던 좋아요 큐가 남아 있으면 클래식과 섞이므로 Elmedia를 완전히
