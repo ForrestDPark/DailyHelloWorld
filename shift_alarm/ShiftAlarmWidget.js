@@ -28,7 +28,7 @@ const SHIFT_LABELS = {
   Day: "☀️ 주간",
   Swing: "🌇 오후",
   GY: "🌙 야간",
-  휴무: "🛌 휴무",
+  휴무: "휴 🛌",
 };
 
 const MAX_REMINDERS_SHOWN = 3;

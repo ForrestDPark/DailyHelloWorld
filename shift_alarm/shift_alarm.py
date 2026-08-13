@@ -28,6 +28,8 @@ import subprocess
 import os
 import json
 import hashlib
+import plistlib
+import ssl
 import re
 import shlex
 import sqlite3
@@ -331,6 +333,46 @@ HUE_COMMAND_PREFS = os.path.expanduser(
     "group.com.leporati.huecommand.shared.plist"
 )
 HUE_WAKE_ROOM_NAME = "거실1"
+
+
+def toggle_hue_room(room_name=HUE_WAKE_ROOM_NAME):
+    """Command 앱의 Bridge 연결로 방의 현재 전원 상태를 읽고 반대로 바꾼다."""
+    with open(HUE_COMMAND_PREFS, "rb") as file:
+        prefs = plistlib.load(file)
+    credentials = json.loads(prefs["shared_credentials"])
+    rooms = json.loads(prefs["shared_rooms"])
+    active_bridge = prefs.get("activeBridgeId")
+    credential = next(
+        (item for item in credentials if item.get("id") == active_bridge),
+        credentials[0],
+    )
+    room = next((item for item in rooms if item.get("name") == room_name), None)
+    if not room:
+        raise ValueError(f"Hue 방을 찾을 수 없습니다: {room_name}")
+
+    base_url = f"https://{credential['ip']}/clip/v2/resource/room/{room['id']}"
+    headers = {"hue-application-key": credential["appKey"]}
+    context = ssl._create_unverified_context()
+    request = urllib.request.Request(base_url, headers=headers)
+    with urllib.request.urlopen(request, timeout=10, context=context) as response:
+        current = json.load(response)
+    errors = current.get("errors", [])
+    if errors or not current.get("data"):
+        raise RuntimeError("Hue 현재 상태를 확인하지 못했습니다.")
+    is_on = bool(current["data"][0].get("on", {}).get("on"))
+    new_state = not is_on
+
+    request = urllib.request.Request(
+        base_url,
+        data=json.dumps({"on": {"on": new_state}}).encode("utf-8"),
+        method="PUT",
+        headers={**headers, "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=10, context=context) as response:
+        result = json.load(response)
+    if result.get("errors"):
+        raise RuntimeError("Hue 전원 변경에 실패했습니다.")
+    return new_state
 
 # ── 아산시 좌표 ──────────────────────────────────────────────
 LATITUDE  = 36.78
@@ -3555,6 +3597,21 @@ class ShiftAlarmApp(rumps.App):
         self._update_title()
         self.build_menu()
 
+    def toggle_hue_now(self, _):
+        """Hue 호출 중 메뉴가 멈추지 않도록 백그라운드에서 전원을 전환한다."""
+        threading.Thread(target=self._toggle_hue_thread, daemon=True).start()
+
+    def _toggle_hue_thread(self):
+        try:
+            is_on = toggle_hue_room()
+            title = "켜짐" if is_on else "꺼짐"
+            message = f"{HUE_WAKE_ROOM_NAME} 조명을 {title} 상태로 바꿨습니다."
+        except (OSError, KeyError, IndexError, ValueError, RuntimeError,
+                json.JSONDecodeError, urllib.error.HTTPError, urllib.error.URLError) as exc:
+            title = "제어 실패"
+            message = str(exc)
+        AppHelper.callAfter(rumps.notification, "Philips Hue", title, message)
+
     # ── 메뉴 빌드 ────────────────────────────────────────────
 
     def build_menu(self):
@@ -3647,6 +3704,9 @@ class ShiftAlarmApp(rumps.App):
         self.menu.add(time_menu)
 
         self.menu.add(None)
+        self.menu.add(rumps.MenuItem(
+            f"💡 Hue {HUE_WAKE_ROOM_NAME} 켜기/끄기", callback=self.toggle_hue_now
+        ))
         self.menu.add(rumps.MenuItem("🎬 Elmedia 지금 바로 재생", callback=self.play_elmedia_now))
         self.menu.add(rumps.MenuItem("⭐ 좋아요 플레이하기", callback=self.play_favorites_now))
         self.menu.add(None)
