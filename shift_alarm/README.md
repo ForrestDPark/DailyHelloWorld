@@ -441,3 +441,7 @@ Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으
 - 긴 에러 메시지나 메일 본문 요약이 과하게 길어지는 걸 막기 위해 낭독 텍스트는 400자로 자른다(`SPEAK_MAX_CHARS`). 음성 자체는 `SPEAK_VOICE = "Yuna"`로 고정 — 다른 목소리로 바꾸려면 `say -v '?'`로 설치된 한국어 음성 목록을 확인.
 
 **교훈(다른 백그라운드 스레드 추가 시에도 적용)**: `threading.Thread(target=self.XXX)`로 새 백그라운드 작업을 추가할 때, 그 함수가 끝에서 `self.title =`, `self._update_title()`, `MenuItem.title =`, `setAttributedTitle_` 등 AppKit을 직접 건드리면 반드시 `AppHelper.callAfter()`로 메인 스레드에 넘겨야 한다. `rumps.notification()`과 파일 I/O(`save_config` 등)는 AppKit 뷰 레이어를 직접 안 건드리므로 백그라운드 스레드에서 그대로 호출해도 안전하다(기존 북마크 자동 최신화 스레드도 이 패턴).
+
+## 18. 📧 Gmail 메일 딥링크 (★ 2026-08-14 추가)
+
+"🤖 [분류] 발신자 · 제목" 메뉴 항목과 그 안의 "Gmail에서 열기"를 클릭하면, 인박스 홈이 아니라 **해당 메일 본문으로 바로 이동**한다. `_gmail_message_url(message_id)`가 Gmail API 메시지 id로 `https://mail.google.com/mail/u/0/#all/{id}` 딥링크를 만들고(id 없으면 인박스로 폴백), `make_open_url_callback()`으로 연다. Chrome에서 실제로 열어 본문이 정확히 뜨는 것을 확인했다(id가 Gmail 내부적으로 `#all/{thread-f:...|msg-f:...}` 형태로 리다이렉트됨).

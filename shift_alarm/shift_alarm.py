@@ -164,6 +164,15 @@ AI_USAGE_RETRY_INTERVAL = 2 * 60
 GMAIL_CLI = "/opt/homebrew/bin/gog"
 GMAIL_INBOX_URL = "https://mail.google.com/mail/u/0/#inbox"
 GMAIL_REFRESH_SECONDS = 5 * 60
+
+
+def _gmail_message_url(message_id):
+    """Gmail API 메시지 id로 받은 메일을 인박스 목록이 아니라 해당 메일
+    본문으로 바로 여는 딥링크를 만든다(★ 2026-08-14, id 없으면 인박스로 폴백)."""
+    if not message_id:
+        return GMAIL_INBOX_URL
+    return f"https://mail.google.com/mail/u/0/#all/{message_id}"
+
 GMAIL_ACCOUNT = "pulpilisory@gmail.com"
 GOG_KEYRING_SERVICE = "com.shiftalarm.gog-keyring"
 GMAIL_SUMMARY_HISTORY_LIMIT = 10
@@ -4327,12 +4336,16 @@ class ShiftAlarmApp(rumps.App):
                 sender = truncate_title(str(item.get("sender") or "발신자 미상"), 24)
                 subject = truncate_title(str(item.get("subject") or "제목 없음"), 34)
                 summary = str(item.get("summary") or "요약 없음")[:180]
+                # ★ 2026-08-14: 인박스 홈이 아니라 이 메일 자체로 바로 이동하도록
+                # Gmail API 메시지 id로 딥링크를 만든다(id 없으면 인박스로 폴백).
+                message_url = _gmail_message_url(item.get("id"))
+                open_message_callback = self.make_open_url_callback(message_url)
                 summary_menu = rumps.MenuItem(
                     f"🤖 [{category}] {sender} · {subject}",
-                    callback=self.open_gmail_or_setup,
+                    callback=open_message_callback,
                 )
                 summary_menu.add(rumps.MenuItem(f"요약: {summary}"))
-                summary_menu.add(rumps.MenuItem("Gmail에서 열기", callback=self.open_gmail_or_setup))
+                summary_menu.add(rumps.MenuItem("Gmail에서 열기", callback=open_message_callback))
                 self.menu.add(summary_menu)
         else:
             self.menu.add(rumps.MenuItem("🤖 최근 AI 요약: 새 메일 대기 중"))
