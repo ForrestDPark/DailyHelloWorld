@@ -10,6 +10,7 @@ Claude 라이브 quota(get_claude_live_quota)는 macOS 키체인에 Claude Code
 import glob
 import json
 import os
+import shutil
 import subprocess
 import time
 import urllib.error
@@ -19,6 +20,9 @@ CODEX_SESSIONS_GLOB = os.path.expanduser("~/.codex/sessions/**/*.jsonl")
 CLAUDE_PROJECTS_GLOB = os.path.expanduser("~/.claude/projects/**/*.jsonl")
 CLAUDE_STATS_LOOKBACK_SECONDS = 24 * 60 * 60
 CLAUDE_USAGE_URL = "https://api.anthropic.com/api/oauth/usage"
+# launchd로 뜬 프로세스는 PATH가 최소화돼 있어("claude"만으로는 못 찾음) 절대경로가
+# 필요하다. shutil.which는 이 스크립트를 터미널에서 직접 돌릴 때를 위한 보험.
+CLAUDE_CLI_PATH = shutil.which("claude") or "/opt/homebrew/bin/claude"
 
 
 def get_codex_quota():
@@ -127,9 +131,12 @@ def get_claude_local_stats():
     }
 
 
-def _claude_access_token():
-    """macOS 키체인에서 Claude Code 자신이 저장해둔 OAuth 액세스 토큰을 읽는다.
-    실패 시 None. 반환값은 곧바로 Authorization 헤더에만 쓰고 절대 노출하지 말 것."""
+CLAUDE_TOKEN_REFRESH_MARGIN_SECONDS = 5 * 60
+
+
+def _claude_keychain_credentials():
+    """macOS 키체인에서 Claude Code OAuth 크리덴셜(JSON) 전체를 읽는다.
+    실패 시 None."""
     user = os.environ.get("USER", "")
     if not user:
         return None
@@ -149,7 +156,38 @@ def _claude_access_token():
         data = json.loads(result.stdout.strip())
     except json.JSONDecodeError:
         return None
-    return data.get("claudeAiOauth", {}).get("accessToken")
+    return data.get("claudeAiOauth")
+
+
+def _claude_access_token():
+    """macOS 키체인에서 Claude Code 자신이 저장해둔 OAuth 액세스 토큰을 읽는다.
+
+    이 토큰은 몇 시간짜리라 사람이 claude 세션을 열 때만 자연스럽게 갱신됐는데,
+    그러면 밤새 세션이 없을 때 계속 "확인 불가"로 남는다. 만료됐거나 곧
+    만료될 예정이면 `claude auth status`를 조용히 실행해 CLI 자신의 리프레시
+    토큰으로 갱신을 유도한 뒤 키체인을 다시 읽는다 — 이러면 Mac이 켜져 있고
+    shift_alarm이 주기적으로(12분마다) 조회하는 한, 사람이 직접 세션을 열지
+    않아도 토큰이 계속 살아있다.
+    실패 시 None. 반환값은 곧바로 Authorization 헤더에만 쓰고 절대 노출하지 말 것."""
+    creds = _claude_keychain_credentials()
+    if creds is None:
+        return None
+
+    expires_at = creds.get("expiresAt")
+    now_ms = time.time() * 1000
+    if expires_at is None or now_ms >= expires_at - CLAUDE_TOKEN_REFRESH_MARGIN_SECONDS * 1000:
+        try:
+            subprocess.run(
+                [CLAUDE_CLI_PATH, "auth", "status", "--json"],
+                capture_output=True, text=True, timeout=20,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        creds = _claude_keychain_credentials()
+        if creds is None:
+            return None
+
+    return creds.get("accessToken")
 
 
 def get_claude_live_quota():
