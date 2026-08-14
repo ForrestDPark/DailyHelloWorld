@@ -161,6 +161,9 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
 
     if "<table_of_contents" not in text:
         errors.append("페이지 맨 위 자동 목차가 없습니다")
+    subtitle = next((line for line in text.splitlines() if line.startswith("> ")), "")
+    if not re.search(r"[一-龥]+\([가-힣]+\)\s*—\s*\S", subtitle):
+        errors.append("맨 위 부제가 '핵심 한자(독음) — 간단 요약' 구조가 아닙니다")
     if "prod-files-secure" in text or "X-Amz-Expires" in text:
         errors.append("만료되는 임시 이미지 URL이 남아 있습니다")
 
@@ -173,13 +176,17 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         image for image in permanent_images
         if "/generated/jiudi" in image
     ]
-    expected_generated_images = 12
-    if len(generated_images) != expected_generated_images:
+    if not 10 <= len(generated_images) <= 12:
         errors.append(
             f"신규 핵심 이미지가 {len(generated_images)}개입니다"
-            f"(정상: 전투별 6종 × 2 = {expected_generated_images}개; "
-            "보존 참고 이미지는 별도 허용)"
+            "(정상: 전투별 핵심 5종 × 2 = 10개; "
+            "선택 병사 안내판 포함 시 최대 12개)"
         )
+
+    for section_number in range(2, 6):
+        heading = re.search(rf"^## {section_number}\..*$", text, re.MULTILINE)
+        if not heading or 'toggle="true"' not in heading.group(0):
+            errors.append(f"{section_number}번 섹션 제목에 기준본 대형 토글이 없습니다")
 
     if text.count("🏳️ <span color=\"red\">**패군 측 결과**</span>") != 2:
         errors.append("패군 측 결과 라벨이 정확히 2개가 아닙니다")
@@ -373,19 +380,23 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         law_heading = re.search(
             r"^\s*#### 法 한눈 비교 — 곡제·관도·주용\s*$", case, re.MULTILINE
         )
-        if len(deception_headings) < 1:
-            errors.append(f"{index + 1}번째 역사 사례에 속임수 전투서사가 없습니다")
-        if len(structure_headings) != 1:
+        has_deception_bundle = bool(
+            deception_headings or structure_headings or questions_headings
+            or selected_deception_headings
+        )
+        if has_deception_bundle and len(deception_headings) < 1:
+            errors.append(f"{index + 1}번째 역사 사례의 선택 속임수 묶음에 전투서사가 없습니다")
+        if has_deception_bundle and len(structure_headings) != 1:
             errors.append(
                 f"{index + 1}번째 역사 사례의 속임수 작동 구조 제목이 "
                 f"{len(structure_headings)}개입니다(정상: 1개)"
             )
-        if len(questions_headings) != 1:
+        if has_deception_bundle and len(questions_headings) > 1:
             errors.append(
                 f"{index + 1}번째 역사 사례의 속임수 일곱 질문 제목이 "
-                f"{len(questions_headings)}개입니다(정상: 1개)"
+                f"{len(questions_headings)}개입니다(정상: 0~1개)"
             )
-        if len(selected_deception_headings) != 1:
+        if has_deception_bundle and len(selected_deception_headings) != 1:
             errors.append(
                 f"{index + 1}번째 역사 사례의 시계편 해당 길 선별 제목이 "
                 f"{len(selected_deception_headings)}개입니다(정상: 1개)"
@@ -416,11 +427,12 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
                     errors.append(
                         f"{index + 1}번째 속임수 작동 구조 서사의 필수 문단 누락: {beat}"
                     )
-        for question in DECEPTION_QUESTIONS:
-            if case.count(f"**{question}**") != 1:
-                errors.append(
-                    f"{index + 1}번째 역사 사례의 속임수 질문 누락·중복: {question}"
-                )
+        if questions_headings:
+            for question in DECEPTION_QUESTIONS:
+                if case.count(f"**{question}**") != 1:
+                    errors.append(
+                        f"{index + 1}번째 역사 사례의 선택 일곱 질문 누락·중복: {question}"
+                    )
         if selected_deception_headings and law_heading:
             selected_block = case[selected_deception_headings[0].end():law_heading.start()]
             selected_tables = tables(selected_block)
@@ -497,7 +509,7 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         warnings.append("장수 이름 전수 진영색 검사는 인물 별칭 목록과 사람이 함께 확인해야 합니다")
     warnings.append("자연지형 전수 이모지·배경색 검사는 지명 목록과 사람이 함께 확인해야 합니다")
     warnings.append(
-        "이미지의 내용·배치·가독성과 셔먼·손책 기준본 대비 품질은 "
+        "이미지의 내용·배치·가독성과 카우펜스·채주 기준본 대비 품질은 "
         "실제 이미지를 나란히 열어 확인해야 합니다"
     )
     return errors, warnings

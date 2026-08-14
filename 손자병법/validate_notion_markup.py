@@ -103,11 +103,19 @@ def validate(
             if count != 1:
                 errors.append(f"{number}번 섹션 헤더 개수가 {count}개입니다(정상: 1개)")
 
-        for match in re.finditer(r"^##\s+[1-5]\.\s+.*?(?:\{[^}]+\})?$", text, re.MULTILINE):
-            heading = match.group(0)
-            if 'toggle="true"' in heading or re.search(r'color="(?:blue|green|purple|orange|yellow|red)(?:_bg)?"', heading):
+        expected_section_attrs = {
+            "1": None,
+            "2": '{toggle="true" color="blue_bg"}',
+            "3": '{toggle="true" color="green_bg"}',
+            "4": '{toggle="true"}',
+            "5": '{toggle="true" color="purple_bg"}',
+        }
+        for match in re.finditer(r"^##\s+([1-5])\.\s+.*?(?:\{[^}]+\})?$", text, re.MULTILINE):
+            number, heading = match.group(1), match.group(0)
+            expected = expected_section_attrs[number]
+            if (expected is None and "{" in heading) or (expected and not heading.endswith(expected)):
                 line = text.count("\n", 0, match.start()) + 1
-                errors.append(f"{line}행: 1~5번 섹션 제목은 일반 제목·기본 검은색이어야 합니다")
+                errors.append(f"{line}행: {number}번 섹션 토글 서식이 기준본과 다릅니다")
 
         for match in re.finditer(r"<details\b[^>]*>(.*?)</details>", text, re.DOTALL):
             if re.search(r"^##\s+[1-5]\.\s+", match.group(1), re.MULTILINE):
@@ -120,9 +128,10 @@ def validate(
         section_two = text[section_two_start:section_three_start]
         section_three = text[section_three_start:section_four_start]
         for number, section in ((2, section_two), (3, section_three)):
-            color_match = re.search(r'<span\s+color="[^"]+">|\{[^}]*color="[^"]+"[^}]*\}', section)
+            section_body = section.split("\n", 1)[1] if "\n" in section else ""
+            color_match = re.search(r'<span\s+color="[^"]+">|\{[^}]*color="[^"]+"[^}]*\}', section_body)
             if color_match:
-                line = text.count("\n", 0, (section_two_start if number == 2 else section_three_start) + color_match.start()) + 1
+                line = text.count("\n", 0, (section_two_start if number == 2 else section_three_start) + color_match.start()) + 2
                 errors.append(f"{line}행: {number}번 섹션에 불필요한 색상 강조가 남아 있습니다")
 
     if require_latest_five_tables:
