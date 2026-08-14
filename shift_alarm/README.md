@@ -445,3 +445,14 @@ Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으
 ## 18. 📧 Gmail 메일 딥링크 (★ 2026-08-14 추가)
 
 "🤖 [분류] 발신자 · 제목" 메뉴 항목과 그 안의 "Gmail에서 열기"를 클릭하면, 인박스 홈이 아니라 **해당 메일 본문으로 바로 이동**한다. `_gmail_message_url(message_id)`가 Gmail API 메시지 id로 `https://mail.google.com/mail/u/0/#all/{id}` 딥링크를 만들고(id 없으면 인박스로 폴백), `make_open_url_callback()`으로 연다. Chrome에서 실제로 열어 본문이 정확히 뜨는 것을 확인했다(id가 Gmail 내부적으로 `#all/{thread-f:...|msg-f:...}` 형태로 리다이렉트됨).
+
+## 19. 📬 채용 메일 → 이직시스템 파이프라인 자동 연동 (★ 2026-08-14 추가)
+
+`gmail search`(목록 조회)는 발신자·제목만 주고 본문/snippet을 주지 않으므로, 지금까지 메뉴에 뜨는 "AI 요약"은 실제 본문이 아니라 발신자+제목 기반 추정이었다. 새 메일 발신자가 사람인(`saramin.co.kr`)이면 `fetch_gmail_message_body(message_id)`(`gog gmail get`)로 전체 HTML 본문을 한 번 더 조회해, `이직시스템/job_collector.py ingest-email`(stdin JSON: sender/subject/body)로 넘긴다.
+
+- `job_collector.py`의 `extract_job_postings_from_email()`이 사람인 뉴스레터의 클릭트래킹 링크(`api-mail.saramin.co.kr/mail-bridge?url=...`)를 복원해 실제 채용공고 URL과 `rec_idx`를 뽑고, AI(`ai_exec.run_ai_exec`)에게 "본문 텍스트 + 후보 링크 순번 목록"을 주고 회사명·제목·마감일을 어느 링크와 짝인지 골라내게 한다(URL 자체를 AI가 베끼게 하면 쿼리스트링을 잘못 옮겨 적을 위험이 있어 인덱스만 고르게 함). rec_idx가 숫자가 아닌 후보(광고 배너 등 깨진 href)는 자동으로 걸러진다.
+- 잡코리아 링크는 robots.txt 크롤링 금지(AGENTS.md)로 항상 제외한다. 지금은 사람인만 지원 — 다른 발신자는 `extract_job_postings_from_email()`이 빈 리스트를 반환해 조용히 건너뛴다.
+- 추출된 공고는 `source="사람인"`, `source_id=rec_idx`로 `upsert_jobs()`된다 — 기존 사람인 API/크롤링 공고와 **같은 `(source, source_id)` 키로 자연스럽게 중복 제거**되고, `JOB_SOURCE_CATEGORY`에서 이미 `"사람인": "career"`이므로 새 카테고리 등록도 필요 없다. `fetch_job_detail_text()`도 `source_id`(rec_idx)만 있으면 자동으로 크롤링 가능한 구버전 URL로 치환하므로, 이후 파이프라인(점수화·상세 크롤링·AI 분석·Notion 발행)은 기존 사람인 공고와 완전히 동일하게 동작한다.
+- **여기서 Notion에 바로 발행하지 않는다.** DB에 반영만 해두면 하루 1번 도는 `_run_job_analysis_top()`(analyze-top --category career)이 점수 1위일 때 자연스럽게 골라 분석·발행한다 — 메일마다 즉시 AI 분석·Notion 발행을 하면 호출 빈도가 너무 잦아지기 때문.
+- **검증**: 실제 사람인 뉴스레터 메일(id `19ffedb9d8539413`, 회사 20건 포함)로 별도 테스트 DB에 end-to-end 실행 — mail-bridge 링크 21개 중 숫자 rec_idx 19개 정확히 추출, AI가 19건 전부 회사명·제목·마감일을 실제 메일 내용과 정확히 일치시켜 매칭, `fetch_job_detail_text()`로 그중 1건의 상세 페이지도 정상 크롤링(5356자, `_content_available()` True)됨을 확인.
+- `_ingest_job_email_thread(item)`은 `_refresh_gmail_thread`의 새 메일 알림 루프 안에서 발신자가 사람인 도메인일 때만 별도 스레드로 띄운다(AI 호출이 껴 있어 몇십 초 걸릴 수 있어 5분 주기 메일 확인 자체를 막지 않기 위함).

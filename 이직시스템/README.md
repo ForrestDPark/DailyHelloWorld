@@ -122,6 +122,18 @@ python3 job_collector.py analyze-top --category parttime  # 알바(알바몬·�
 - 상세 페이지 하나당 요청 1건이라(최대 100건) 만료·삭제된 공고 하나가 전체 배치를 죽이지 않게, 개별 조회 실패는 `RuntimeError`를 잡아 건너뛴다(`fetch_alba_crawl`).
 - 요청 사이 `ALBA_CRAWL_DELAY_SECONDS`(1초) 딜레이.
 
+## 3-2-2. Gmail 채용 뉴스레터 수집 (`ingest-email`, ★ 2026-08-14 추가)
+
+`collect`의 검색어/사이트맵 루프와 무관하게, shift_alarm이 Gmail 새 메일을 5분마다 확인하다가 사람인(`saramin.co.kr`) 발신 메일을 보면 본문을 통째로 넘겨 호출하는 **push 방식** 수집원이다(다른 소스는 전부 이쪽에서 pull하는 방식과 반대).
+
+- `python3 job_collector.py ingest-email`은 stdin으로 `{"sender":..., "subject":..., "body":...}` JSON을 받는다(본문이 수만 자라 argv로 넘기기엔 부적합). shift_alarm 쪽 호출부는 `shift_alarm/README.md` 18번 항목 참고.
+- `extract_job_postings_from_email()`이 사람인 뉴스레터의 클릭트래킹 링크(`api-mail.saramin.co.kr/mail-bridge?url=...`)에서 실제 채용공고 URL과 `rec_idx`를 정규식으로 복원한다. AI에게는 URL 자체를 베끼게 하지 않고 "후보 링크 순번 목록 + 본문 텍스트"만 주고 회사명·제목·마감일이 몇 번 링크와 짝인지 고르게 한다 — URL의 긴 쿼리스트링을 AI가 그대로 옮겨 적게 하면 오타가 날 위험이 있어서다.
+- `rec_idx`가 숫자가 아닌 후보(광고 배너 등 href가 깨진 경우, 실사용 중 확인)는 자동으로 걸러진다. 잡코리아 링크는 robots.txt 크롤링 금지 원칙(운영 원칙 참고)에 따라 항상 제외한다.
+- 추출된 공고는 `source="사람인"`, `source_id=rec_idx`로 `upsert_jobs()`된다 — API/크롤링으로 이미 수집된 같은 공고와 `(source, source_id)` 키가 같으면 그대로 병합되고, `JOB_SOURCE_CATEGORY`가 이미 `"사람인": "career"`라 새 카테고리 등록도 필요 없다. `fetch_job_detail_text()`도 `source_id`만 있으면 자동으로 크롤링 가능한 구버전 URL로 치환하므로, 이후 점수화·AI 분석·Notion 발행은 기존 사람인 공고와 완전히 동일한 경로를 탄다.
+- **지금은 사람인만 지원한다** — 다른 발신자(점핏 등)는 `extract_job_postings_from_email()`이 빈 리스트를 반환해 조용히 건너뛴다. 확장하려면 발신자별로 실제 링크를 안전하게 복원할 방법(클릭트래킹 우회, robots.txt 확인)을 먼저 검증해야 한다.
+- **검증(2026-08-14)**: 실제 사람인 뉴스레터(회사 20건)로 별도 테스트 DB에 end-to-end 실행 — mail-bridge 링크 21개 중 숫자 `rec_idx` 19개 추출, AI가 19건 전부 회사명·제목·마감일을 메일 원문과 정확히 일치시켜 매칭, 그중 1건은 `fetch_job_detail_text()` 상세 크롤링도 정상 동작(5356자, `_content_available()` True)함을 확인.
+- Notion에 즉시 발행하지 않는다 — DB 반영까지만 하고, 하루 1번 도는 `analyze-top --category career`가 점수 1위일 때 자연스럽게 골라 분석·발행한다(메일마다 즉시 AI 호출하면 빈도가 너무 잦아짐).
+
 ## 3-3. 공모전·경진대회 수집 (`contest_collector.py`, ★ 2026-08-07 추가, ★ 2026-08-08 다중 소스로 확장)
 
 채용공고와 별개로 공모전·경진대회를 같은 철학("공고를 학습 커리큘럼으로 쓴다")으로 다룬다 — 실력 검증 기회이자, 참가하지 않더라도 "이 대회가 뭘 원하는지" 분석 자체가 학습 재료다. `data/contests.db`에 별도 저장하며, `job_collector.py`와 완전히 분리된 파일이다(도메인이 달라 스키마도 다름).

@@ -179,6 +179,33 @@ GMAIL_SUMMARY_HISTORY_LIMIT = 10
 GMAIL_SUMMARY_MENU_LIMIT = 5
 
 
+def fetch_gmail_message_body(message_id):
+    """채용 메일로 판단된 건에 한해 전체 본문(HTML)을 가져온다(★ 2026-08-14).
+    목록 조회(gmail search)는 발신자·제목만 주고 본문/snippet을 안 주므로,
+    실제 공고 링크를 뽑으려면 메시지 단건 조회(gmail get)가 따로 필요하다.
+    실패하면 조용히 None — 이 메일의 채용공고 파이프라인 연동만 건너뛴다."""
+    if not os.path.exists(GMAIL_CLI):
+        return None
+    command = [
+        GMAIL_CLI, "--account", GMAIL_ACCOUNT,
+        "--readonly", "--gmail-no-send", "--no-input", "--json",
+        "gmail", "get", message_id,
+    ]
+    try:
+        result = subprocess.run(
+            command, capture_output=True, text=True, timeout=30, env=_gog_env()
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    try:
+        data = json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+    return data.get("body")
+
+
 def _gog_env():
     """백그라운드 launchd에서도 gog 파일 키링을 열 수 있게 암호를 Keychain에서 읽는다."""
     env = os.environ.copy()
@@ -4685,6 +4712,14 @@ class ShiftAlarmApp(rumps.App):
                     f"{item['sender']} — {truncate_title(item['subject'], 55)}",
                     item["summary"],
                 )
+                # ★ 2026-08-14: 채용 뉴스레터(지금은 사람인만 지원 — 실제 판정은
+                # job_collector.ingest-email 안의 발신자 검사가 최종 근거)면 본문에서
+                # 공고를 추출해 이직시스템 DB에 반영한다. AI 호출이 끼어 있어 몇십초
+                # 걸릴 수 있으므로 메일 알림 루프를 막지 않게 별도 스레드로 돌린다.
+                if "saramin.co.kr" in item.get("sender", "").casefold():
+                    threading.Thread(
+                        target=self._ingest_job_email_thread, args=(item,), daemon=True
+                    ).start()
             AppHelper.callAfter(self._apply_gmail_snapshot, snapshot, new_items)
         except (OSError, subprocess.TimeoutExpired) as exc:
             AppHelper.callAfter(
@@ -4839,6 +4874,36 @@ class ShiftAlarmApp(rumps.App):
                     print(f"⚠️ {cat_label} 경진대회 AI 분석 실패: {analyze_result.stderr.strip()[:300]}")
         except (OSError, subprocess.TimeoutExpired) as exc:
             print(f"⚠️ 경진대회 수집/분석 실행 오류: {exc}")
+
+    def _ingest_job_email_thread(self, item):
+        """채용 뉴스레터 메일 본문에서 실제 채용공고를 추출해 이직시스템 DB에
+        반영한다(★ 2026-08-14). 지금은 사람인 발신 메일만 지원 — 실제 판정은
+        job_collector.py의 extract_job_postings_from_email()이 발신자로 다시
+        검사하므로, 여기 호출 조건(사람인 도메인)이 최종 게이트는 아니다.
+
+        여기서 Notion에 바로 발행하지 않는다 — DB에 반영만 해두면 하루 1번 도는
+        `_run_job_analysis_top()`의 analyze-top이 점수 1위일 때 자연스럽게 골라
+        분석·발행한다(기존 사람인 API/크롤링 공고와 동일한 파이프라인 재사용)."""
+        body = fetch_gmail_message_body(item["id"])
+        if not body:
+            return
+        payload = json.dumps({
+            "sender": item.get("sender", ""),
+            "subject": item.get("subject", ""),
+            "body": body,
+        })
+        try:
+            result = subprocess.run(
+                [sys.executable, JOB_COLLECTOR_SCRIPT, "ingest-email"],
+                cwd=JOB_COLLECTOR_DIR,
+                input=payload, capture_output=True, text=True, timeout=200,
+            )
+            if result.returncode == 0:
+                print(f"📬 채용 메일 파이프라인: {result.stdout.strip()}")
+            else:
+                print(f"⚠️ 채용 메일 파이프라인 실패: {result.stderr.strip()[:300]}")
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            print(f"⚠️ 채용 메일 파이프라인 실행 오류: {exc}")
 
     def _prompt_jp_workout_settings(self):
         """운동용 영상 목표 길이(분)와 고음 구간 앞뒤 여유(초)를 키패드로 물어본다.
