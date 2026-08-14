@@ -17,12 +17,12 @@ LOG_FILE="$LOG_DIR/$STAMP.log"
 LAST_LOG="$LOG_DIR/latest.log"
 
 finalize_run() {
-  local status=$?
+  local exit_code=$?
   rmdir "$LOCK_DIR" 2>/dev/null || true
   if [[ -f "$LOG_FILE" ]]; then
     cp "$LOG_FILE" "$LAST_LOG"
   fi
-  if (( status == 0 )); then
+  if (( exit_code == 0 )); then
     /usr/bin/osascript -e 'display notification "야간 병법 해석을 완료했습니다. 결과 로그를 확인하세요." with title "Codex 손자병법"' >/dev/null 2>&1 || true
   else
     /usr/bin/osascript -e 'display notification "야간 병법 해석이 중단되었습니다. 실패 로그를 확인하세요." with title "Codex 손자병법"' >/dev/null 2>&1 || true
@@ -45,10 +45,8 @@ fi
 git fetch origin >> "$LOG_FILE" 2>&1
 git merge --ff-only origin/main >> "$LOG_FILE" 2>&1
 
-/usr/bin/caffeinate -i "$CODEX_BIN" exec \
+/usr/bin/caffeinate -i "$CODEX_BIN" --ask-for-approval never --search exec \
   --cd "$REPO_DIR" \
   --sandbox workspace-write \
-  --ask-for-approval never \
-  --search \
   --output-last-message "$LOG_DIR/latest-message.txt" \
   - < "$SOURCE_PROMPT" >> "$LOG_FILE" 2>&1
