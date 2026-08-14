@@ -3061,6 +3061,39 @@ def _claude_five_hour_percent(data):
     return None
 
 
+SPEAK_VOICE = "Yuna"
+SPEAK_MAX_CHARS = 400
+_EMOJI_PATTERN = re.compile(
+    "[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF]+"
+)
+
+
+def _speak_text(text):
+    """macOS `say`로 알림 내용을 한국어 음성(Yuna)으로 읽어준다.
+    별도 스레드에서 돌려서(say 자체가 몇 초 걸릴 수 있음) 메인/호출 스레드를
+    막지 않는다. say가 없거나 실패해도 조용히 넘어간다(알림 자체는 이미 떴으므로)."""
+    text = _EMOJI_PATTERN.sub("", text).strip()
+    if not text:
+        return
+    text = text[:SPEAK_MAX_CHARS]
+
+    def _run():
+        try:
+            subprocess.run(["say", "-v", SPEAK_VOICE, text], timeout=60)
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def notify_spoken(title, subtitle, message):
+    """예고 없이 뜨는 알림(추천 공고·경진대회, 리마인더, 근무 알람, 메일 요약,
+    동기화 실패 등)에만 쓴다 — 사람이 직접 클릭해서 생기는 즉각 반응성 알림
+    (Elmedia 재생, Hue 등)은 rumps.notification을 그대로 쓴다(2026-08-14)."""
+    rumps.notification(title, subtitle, message)
+    _speak_text(" ".join(part for part in (title, subtitle, message) if part))
+
+
 def _set_menu_item_color(menu_item, text, color):
     """MenuItem 표시 텍스트에 색을 입힌다(NSMenuItem.attributedTitle 직접 조작).
     color가 None이면 기본색(plain title)으로 표시.
@@ -3562,7 +3595,7 @@ class ShiftAlarmApp(rumps.App):
             and self._last_storage_warning_date != today
         ):
             self._last_storage_warning_date = today
-            rumps.notification(
+            notify_spoken(
                 "💾 저장공간 부족",
                 f"남은 용량 {self.storage_free_gb}GB",
                 "5GB 이하입니다. Shift Alarm 메뉴의 '저장공간 관리'로 정리해주세요.",
@@ -3656,7 +3689,7 @@ class ShiftAlarmApp(rumps.App):
         if self._last_electronics_off_notified == today:
             return
         self._last_electronics_off_notified = today
-        rumps.notification(
+        notify_spoken(
             "🔌 전자제품 전원 끄기",
             f"{current} 근무 기준",
             "지금부터 전자제품 전원을 꺼주세요."
@@ -3674,7 +3707,7 @@ class ShiftAlarmApp(rumps.App):
 
         if shift is None:
             if notify:
-                rumps.notification(
+                notify_spoken(
                     "근무표 자동 설정 실패",
                     f"{date.isoformat()} 근무 정보 없음",
                     "근무표 JSON에 해당 날짜가 없습니다. 수동으로 선택해주세요."
@@ -3697,7 +3730,7 @@ class ShiftAlarmApp(rumps.App):
 
         todays = get_today_reminders(self.schedule)
         if todays:
-            rumps.notification("오늘의 리마인더", "", "\n".join(todays))
+            notify_spoken("오늘의 리마인더", "", "\n".join(todays))
         threading.Thread(
             target=self._sync_daily_checklist_to_notion,
             args=(today, todays), daemon=True,
@@ -3972,7 +4005,7 @@ class ShiftAlarmApp(rumps.App):
         body = "\n".join(f"• {label}" for label in preview)
         if len(incomplete) > len(preview):
             body += f"\n• 그 외 {len(incomplete) - len(preview)}개"
-        rumps.notification(
+        notify_spoken(
             f"어제 하지 않은 일일 루틴 {len(incomplete)}개",
             previous_date,
             body,
@@ -4107,7 +4140,7 @@ class ShiftAlarmApp(rumps.App):
         AppHelper.callAfter(self._write_mobile_status)
         if error:
             AppHelper.callAfter(
-                rumps.notification, "리마인더 동기화 실패", label, error
+                notify_spoken, "리마인더 동기화 실패", label, error
             )
 
     def make_daily_routine_callback(self, label):
@@ -4148,7 +4181,7 @@ class ShiftAlarmApp(rumps.App):
         AppHelper.callAfter(self.build_menu)
         if error:
             AppHelper.callAfter(
-                rumps.notification, "일일 루틴 동기화 실패", label, error
+                notify_spoken, "일일 루틴 동기화 실패", label, error
             )
 
     def make_open_url_callback(self, url):
@@ -4178,12 +4211,12 @@ class ShiftAlarmApp(rumps.App):
         if time:
             register_alarm(time["hour"], time["minute"])
             if notify:
-                rumps.notification("교대근무 알람 설정", f"{shift} 근무",
+                notify_spoken("교대근무 알람 설정", f"{shift} 근무",
                                    f"알람이 {time['hour']:02d}:{time['minute']:02d}으로 설정되었습니다.")
         else:
             unregister_alarm()
             if notify:
-                rumps.notification("교대근무 알람", "휴무", "알람이 해제되었습니다.")
+                notify_spoken("교대근무 알람", "휴무", "알람이 해제되었습니다.")
 
         self.config["current_shift"] = shift
         save_config(self.config)
@@ -4634,7 +4667,7 @@ class ShiftAlarmApp(rumps.App):
             self.config["gmail_initialized"] = True
             save_config(self.config)
             for item in new_items[:10]:
-                rumps.notification(
+                notify_spoken(
                     f"📧 새 메일 · {item['category']}",
                     f"{item['sender']} — {truncate_title(item['subject'], 55)}",
                     item["summary"],
@@ -4714,7 +4747,7 @@ class ShiftAlarmApp(rumps.App):
             if match:
                 inserted, updated = int(match.group(1)), int(match.group(2))
                 if inserted > 0:
-                    rumps.notification(
+                    notify_spoken(
                         "💼 이직시스템 새 공고",
                         f"신규 {inserted}건 / 갱신 {updated}건 수집됨",
                         "터미널에서 job_collector.py list로 확인하세요.",
@@ -4747,7 +4780,7 @@ class ShiftAlarmApp(rumps.App):
                     if top:
                         score = top.get("score")
                         score_text = f"[{score}점] " if score is not None else ""
-                        rumps.notification(
+                        notify_spoken(
                             "🎯 추천 공고",
                             f"{score_text}{top.get('company', '')} — {truncate_title(top.get('title', ''), 40)}",
                             "메뉴바에서 클릭하면 Notion 분석으로 이동합니다.",
@@ -4784,7 +4817,7 @@ class ShiftAlarmApp(rumps.App):
                     if top:
                         score = top.get("score")
                         score_text = f"[{score}점] " if score is not None else ""
-                        rumps.notification(
+                        notify_spoken(
                             "🏆 추천 경진",
                             f"{score_text}{top.get('organizer', '')} — {truncate_title(top.get('title', ''), 40)}",
                             "메뉴바에서 클릭하면 Notion 분석으로 이동합니다.",

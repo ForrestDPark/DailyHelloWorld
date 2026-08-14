@@ -432,4 +432,12 @@ Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으
 - `_init_weather()`/`_fetch_ai_usage()`는 이제 네트워크 조회만 백그라운드에서 하고, UI 반영은 각각 `_apply_weather()`/`_apply_ai_usage()`로 분리해서 `AppHelper.callAfter()`로 메인 스레드에 넘긴다.
 - 검증: `job_collector_last_run`을 지워서 앱 시작 시 날씨·AI 사용량·이직시스템 스레드가 동시에 뜨는 크래시 재현 조건을 그대로 만든 뒤 재시작 → 55초 이상 안정적으로 생존, 이직시스템 수집도 정상 완료됨을 확인.
 
+## 17. 🔊 알림 음성 낭독 (`notify_spoken`, ★ 2026-08-14 추가)
+
+"예고 없이 뜨는" 알림(추천 공고·경진대회, 오늘의 리마인더, 근무 알람, 새 메일 요약, 동기화 실패 등)은 macOS `say`(한국어 음성 "Yuna")로 함께 읽어준다. `_check_storage`/`play_elmedia_now`처럼 **사람이 방금 직접 클릭해서 생기는 즉각 반응성 알림(Elmedia 재생, Hue on/off, 근무표 자동 모드 토글, 추천 사이트 열기, 북마크 자동 최신화, 일본어 자막·BGM 분할 등 `_now` 계열 "시작됨" 알림)은 제외**하고 `rumps.notification`을 그대로 쓴다 — 매번 소리까지 나면 오히려 방해가 된다는 판단.
+
+- `notify_spoken(title, subtitle, message)`가 `rumps.notification(...)`을 그대로 띄운 뒤, 이모지를 제거한 텍스트를 별도 스레드에서 `subprocess.run(["say", "-v", "Yuna", text])`로 읽는다. 별도 스레드라 메인(UI) 스레드나 호출한 백그라운드 스레드를 막지 않는다.
+- 대상 호출부: `_check_storage`(저장공간 부족), `_check_electronics_off`, `apply_today_shift`(근무표 자동 설정 실패), `_maybe_notify_reminders`(오늘의 리마인더), `_notify_incomplete_daily_routine`, `_update_checklist_item_thread`/`_update_daily_routine_thread`(동기화 실패), `_set_shift_internal`(교대근무 알람 설정/해제), `_refresh_gmail_thread`(새 메일), `_run_job_collector_thread`/`_run_job_analysis_top`/`_run_contest_collector_and_analysis`(이직시스템·추천 공고·추천 경진).
+- 긴 에러 메시지나 메일 본문 요약이 과하게 길어지는 걸 막기 위해 낭독 텍스트는 400자로 자른다(`SPEAK_MAX_CHARS`). 음성 자체는 `SPEAK_VOICE = "Yuna"`로 고정 — 다른 목소리로 바꾸려면 `say -v '?'`로 설치된 한국어 음성 목록을 확인.
+
 **교훈(다른 백그라운드 스레드 추가 시에도 적용)**: `threading.Thread(target=self.XXX)`로 새 백그라운드 작업을 추가할 때, 그 함수가 끝에서 `self.title =`, `self._update_title()`, `MenuItem.title =`, `setAttributedTitle_` 등 AppKit을 직접 건드리면 반드시 `AppHelper.callAfter()`로 메인 스레드에 넘겨야 한다. `rumps.notification()`과 파일 I/O(`save_config` 등)는 AppKit 뷰 레이어를 직접 안 건드리므로 백그라운드 스레드에서 그대로 호출해도 안전하다(기존 북마크 자동 최신화 스레드도 이 패턴).
