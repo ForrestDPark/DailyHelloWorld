@@ -159,11 +159,11 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         if label not in text:
             errors.append(f"국가·역사 세력 식별 이모지 표기 누락: {label}")
 
-    if "<table_of_contents" not in text:
-        errors.append("페이지 맨 위 자동 목차가 없습니다")
+    if "<table_of_contents" in text:
+        errors.append("폐기된 자동 목차가 남아 있습니다")
     subtitle = next((line for line in text.splitlines() if line.startswith("> ")), "")
-    if not re.search(r"[一-龥]+\([가-힣]+\)\s*—\s*\S", subtitle):
-        errors.append("맨 위 부제가 '핵심 한자(독음) — 간단 요약' 구조가 아닙니다")
+    if not re.search(r"^> (?:\S+ )?[가-힣, .]+\. — \S", subtitle):
+        errors.append("맨 위 부제가 '원문 전체 한글 독음. — 간단 요약' 구조가 아닙니다")
     if "prod-files-secure" in text or "X-Amz-Expires" in text:
         errors.append("만료되는 임시 이미지 URL이 남아 있습니다")
 
@@ -187,6 +187,18 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         heading = re.search(rf"^## {section_number}\..*$", text, re.MULTILINE)
         if not heading or 'toggle="true"' not in heading.group(0):
             errors.append(f"{section_number}번 섹션 제목에 기준본 대형 토글이 없습니다")
+            continue
+        section_end = text.find("\n---", heading.end())
+        if section_end < 0:
+            section_end = len(text)
+        body_lines = [
+            line for line in text[heading.end():section_end].splitlines()
+            if line.strip()
+        ]
+        if not body_lines or any(not line.startswith("\t") for line in body_lines):
+            errors.append(
+                f"{section_number}번 섹션 본문 전체가 대형 토글의 자식으로 들여쓰기되지 않았습니다"
+            )
 
     if text.count("🏳️ <span color=\"red\">**패군 측 결과**</span>") != 2:
         errors.append("패군 측 결과 라벨이 정확히 2개가 아닙니다")
@@ -203,8 +215,8 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
     details_match = re.search(r"<details(?P<attrs>[^>]*)>", section_one)
     if not details_match:
         errors.append("1번 섹션에 원문·독음 토글이 없습니다")
-    elif re.search(r"\bcolor\s*=", details_match.group("attrs")):
-        errors.append("1번 섹션 원문·독음 토글에 금지된 색상 속성이 있습니다")
+    elif 'color="orange_bg"' not in details_match.group("attrs"):
+        errors.append("1번 섹션 원문·독음 토글이 기준본의 주황 배경이 아닙니다")
     summary_match = re.search(
         r"<summary>(.*?)<br>(.*?)</summary>",
         section_one,
