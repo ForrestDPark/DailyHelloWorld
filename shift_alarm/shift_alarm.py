@@ -39,6 +39,7 @@ import urllib.error
 from urllib.parse import urlparse, parse_qs, quote
 import threading
 import datetime
+import tempfile
 import random
 import math
 import concurrent.futures
@@ -3103,21 +3104,81 @@ _EMOJI_PATTERN = re.compile(
     "[\U0001F300-\U0001FAFF\U00002600-\U000027BF\U0001F1E6-\U0001F1FF]+"
 )
 
+# ── 취침 시간대 음량 축소 (★ 2026-08-16 추가) ──────────────────────
+# "퇴근 후 3시간부터는 자고 있을 시간"이라는 사용자 기준으로, 그 시점부터
+# 다음 근무의 기상 알람(SHIFT_TIMES) 전까지는 같은 알림이라도 음량만 낮춰서
+# 재생한다. 알림 자체를 끄지는 않는다 — 자다가도 급한 소식은 들려야 하므로.
+QUIET_HOURS_AFTER_SHIFT_END = 3
+SPEAK_QUIET_VOLUME = 0.15
+
+
+def _quiet_hours_window(shift):
+    """근무 `shift`의 "퇴근 후 QUIET_HOURS_AFTER_SHIFT_END시간부터 다음 기상
+    알람까지" 조용한 시간대를 (시작 time, 끝 time)으로 반환한다. 근무 정보가
+    없으면(휴무 등) None."""
+    work_hours = SHIFT_WORK_HOURS.get(shift)
+    alarm = SHIFT_TIMES.get(shift)
+    if not work_hours or not alarm:
+        return None
+    end_hour, end_minute = work_hours["end"]
+    quiet_start_minutes = (
+        end_hour * 60 + end_minute + QUIET_HOURS_AFTER_SHIFT_END * 60
+    ) % (24 * 60)
+    quiet_start = datetime.time(quiet_start_minutes // 60, quiet_start_minutes % 60)
+    quiet_end = datetime.time(alarm["hour"], alarm["minute"])
+    return quiet_start, quiet_end
+
+
+def _in_time_window(now, start, end):
+    """자정을 넘어가는 구간(예: 17:00~02:55)도 처리하는 시각 범위 판정."""
+    if start <= end:
+        return start <= now < end
+    return now >= start or now < end
+
+
+def _is_quiet_hours():
+    """지금이 현재 근무 기준 조용한 시간대(퇴근 3시간 후 ~ 다음 기상 알람)인지."""
+    shift = load_config().get("current_shift")
+    window = _quiet_hours_window(shift)
+    if not window:
+        return False
+    quiet_start, quiet_end = window
+    return _in_time_window(datetime.datetime.now().time(), quiet_start, quiet_end)
+
 
 def _speak_text(text):
     """macOS `say`로 알림 내용을 한국어 음성(Yuna)으로 읽어준다.
     별도 스레드에서 돌려서(say 자체가 몇 초 걸릴 수 있음) 메인/호출 스레드를
-    막지 않는다. say가 없거나 실패해도 조용히 넘어간다(알림 자체는 이미 떴으므로)."""
+    막지 않는다. say가 없거나 실패해도 조용히 넘어간다(알림 자체는 이미 떴으므로).
+    조용한 시간대(취침 추정 구간)에는 say로 파일에 렌더링한 뒤 afplay로 음량을
+    낮춰 재생한다 — say 자체에는 음량 조절 옵션이 없다."""
     text = _EMOJI_PATTERN.sub("", text).strip()
     if not text:
         return
     text = text[:SPEAK_MAX_CHARS]
+    quiet = _is_quiet_hours()
 
     def _run():
+        if not quiet:
+            try:
+                subprocess.run(["say", "-v", SPEAK_VOICE, text], timeout=60)
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+            return
+        aiff_path = None
         try:
-            subprocess.run(["say", "-v", SPEAK_VOICE, text], timeout=60)
+            with tempfile.NamedTemporaryFile(suffix=".aiff", delete=False) as f:
+                aiff_path = f.name
+            subprocess.run(["say", "-v", SPEAK_VOICE, "-o", aiff_path, text], timeout=60)
+            subprocess.run(["afplay", "-v", str(SPEAK_QUIET_VOLUME), aiff_path], timeout=60)
         except (OSError, subprocess.TimeoutExpired):
             pass
+        finally:
+            if aiff_path:
+                try:
+                    os.remove(aiff_path)
+                except OSError:
+                    pass
 
     threading.Thread(target=_run, daemon=True).start()
 
