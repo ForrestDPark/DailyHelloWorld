@@ -29,6 +29,7 @@ import os
 import json
 import hashlib
 import plistlib
+import queue
 import ssl
 import re
 import shlex
@@ -3311,6 +3312,11 @@ _EMOJI_PATTERN = re.compile(
 # 재생한다. 알림 자체를 끄지는 않는다 — 자다가도 급한 소식은 들려야 하므로.
 QUIET_HOURS_AFTER_SHIFT_END = 3
 SPEAK_QUIET_VOLUME = 0.15
+# ★ 2026-08-17: 평소(조용한 시간대가 아닐 때) 음량도 "너무 크다"는 피드백으로
+# 기존 대비 50%로 낮춤. say 자체엔 음량 옵션이 없어 afplay로 재생하는데,
+# afplay -v는 절대 음량이 아니라 시스템 출력 볼륨에 곱해지는 배율이라 "기존의
+# 50%"를 1.0(원래 그대로 재생)로 두고 0.5를 곱한 값이다.
+SPEAK_NORMAL_VOLUME = 0.5
 
 
 def _quiet_hours_window(shift):
@@ -3347,41 +3353,74 @@ def _is_quiet_hours():
     return _in_time_window(datetime.datetime.now().time(), quiet_start, quiet_end)
 
 
+# ── 알림 음성 재생 큐 (★ 2026-08-17 추가) ────────────────────────
+# 예전에는 _speak_text()가 호출될 때마다 새 스레드에서 곧바로 say를 실행했다.
+# 알림이 짧은 시간 안에 여러 개 뜨면(예: 새 메일 여러 건) 그 여러 개가 동시에
+# 재생되면서 소리가 겹쳐 뭉개지는 문제가 있었다("소리가 이상하게 들려"라는
+# 피드백). 이제는 재생 작업 하나짜리 워커 스레드가 큐를 순서대로 처리해서,
+# 몇 개가 몰려도 항상 하나씩만 재생된다.
+_SPEECH_QUEUE = queue.Queue()
+_SPEECH_WORKER_LOCK = threading.Lock()
+_SPEECH_WORKER_STARTED = False
+
+
+def _play_speech(text, volume):
+    """say로 파일에 렌더링한 뒤 afplay로 지정한 음량에 맞춰 재생한다.
+    항상 파일을 거치는 이유: say 자체에는 음량 옵션이 없어서, 평소 음량이든
+    취침 시간대 음량이든 afplay -v로 낮춰 재생하려면 파일이 필요하다."""
+    aiff_path = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".aiff", delete=False) as f:
+            aiff_path = f.name
+        subprocess.run(["say", "-v", SPEAK_VOICE, "-o", aiff_path, text], timeout=60)
+        subprocess.run(["afplay", "-v", str(volume), aiff_path], timeout=60)
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    finally:
+        if aiff_path:
+            try:
+                os.remove(aiff_path)
+            except OSError:
+                pass
+
+
+def _speech_worker():
+    """큐에 쌓인 (텍스트, 음량)을 하나씩 순서대로 재생하는 유일한 워커.
+    항상 이 스레드 하나만 돌아서 여러 알림이 겹쳐 재생되지 않는다."""
+    while True:
+        text, volume = _SPEECH_QUEUE.get()
+        try:
+            _play_speech(text, volume)
+        finally:
+            _SPEECH_QUEUE.task_done()
+
+
+def _ensure_speech_worker():
+    global _SPEECH_WORKER_STARTED
+    with _SPEECH_WORKER_LOCK:
+        if not _SPEECH_WORKER_STARTED:
+            threading.Thread(target=_speech_worker, daemon=True).start()
+            _SPEECH_WORKER_STARTED = True
+
+
 def _speak_text(text):
-    """macOS `say`로 알림 내용을 한국어 음성(Yuna)으로 읽어준다.
-    별도 스레드에서 돌려서(say 자체가 몇 초 걸릴 수 있음) 메인/호출 스레드를
-    막지 않는다. say가 없거나 실패해도 조용히 넘어간다(알림 자체는 이미 떴으므로).
-    조용한 시간대(취침 추정 구간)에는 say로 파일에 렌더링한 뒤 afplay로 음량을
-    낮춰 재생한다 — say 자체에는 음량 조절 옵션이 없다."""
+    """macOS `say`/`afplay`로 알림 내용을 한국어 음성(Yuna)으로 읽어준다.
+    실제 재생은 `_speech_worker` 큐에 맡기고 여기서는 큐에 넣기만 하므로
+    호출한 스레드를 막지 않는다. say/afplay가 없거나 실패해도 조용히
+    넘어간다(알림 자체는 이미 떴으므로). 조용한 시간대(취침 추정 구간)에는
+    평소보다 더 낮은 음량으로 재생한다."""
     text = _EMOJI_PATTERN.sub("", text).strip()
     if not text:
         return
     text = text[:SPEAK_MAX_CHARS]
-    quiet = _is_quiet_hours()
-
-    def _run():
-        if not quiet:
-            try:
-                subprocess.run(["say", "-v", SPEAK_VOICE, text], timeout=60)
-            except (OSError, subprocess.TimeoutExpired):
-                pass
-            return
-        aiff_path = None
-        try:
-            with tempfile.NamedTemporaryFile(suffix=".aiff", delete=False) as f:
-                aiff_path = f.name
-            subprocess.run(["say", "-v", SPEAK_VOICE, "-o", aiff_path, text], timeout=60)
-            subprocess.run(["afplay", "-v", str(SPEAK_QUIET_VOLUME), aiff_path], timeout=60)
-        except (OSError, subprocess.TimeoutExpired):
-            pass
-        finally:
-            if aiff_path:
-                try:
-                    os.remove(aiff_path)
-                except OSError:
-                    pass
-
-    threading.Thread(target=_run, daemon=True).start()
+    # ★ 2026-08-17: 리마인더처럼 항목을 "\n".join()해서 한 번에 넘기면(예:
+    # _maybe_notify_reminders) say가 줄바꿈을 거의 쉬지 않고 읽어서 항목들이
+    # 바로 붙어 나온다는 피드백 — 줄바꿈마다 [[slnc 700]](0.7초 무음) 임베디드
+    # 커맨드를 넣어 항목 사이에 뚜렷한 텀을 준다.
+    text = re.sub(r"\n+", " [[slnc 700]] ", text)
+    volume = SPEAK_QUIET_VOLUME if _is_quiet_hours() else SPEAK_NORMAL_VOLUME
+    _ensure_speech_worker()
+    _SPEECH_QUEUE.put((text, volume))
 
 
 def notify_spoken(title, subtitle, message):
