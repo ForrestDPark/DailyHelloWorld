@@ -150,6 +150,10 @@ REMINDER_MENU_COLOR_CYCLE = [
 CHECKLIST_STATE_CACHE_PATH = os.path.expanduser("~/.shift_alarm_checklist_state.json")
 CHECKLIST_SYNC_INTERVAL_SECONDS = 60
 MOBILE_STATUS_REFRESH_SECONDS = 60
+# ★ 2026-08-17: "체크 안 한 지 일주일 넘으면 그냥 알아서 체크되게 해달라"는
+# 요청 — 날짜별 토글(리마인더 + 보관된 루틴 미완료분)의 날짜가 오늘 기준
+# 이 일수보다 오래되면 남은 미체크 항목을 자동으로 체크 처리한다.
+CHECKLIST_STALE_DAYS = 7
 
 # ★ 2026-08-09: Claude 라이브 quota는 OAuth 액세스 토큰(수 시간짜리)이 있어야
 # 조회되는데, 이 토큰은 claude CLI를 실제로 켜서 쓸 때만 갱신된다. 밤새
@@ -552,7 +556,15 @@ def sync_unchecked_checklist_index(token):
         return len(entries)
 
     for block in old_children:
-        request_json(f"blocks/{block['id']}", "DELETE")
+        try:
+            request_json(f"blocks/{block['id']}", "DELETE")
+        except urllib.error.HTTPError as exc:
+            # 직전 실행이 중간에 끊겨 이미 보관(archive) 처리된 블록을 다시
+            # 지우려 하면 400을 낸다 — 결과적으로 이미 지워진 것과 같으므로
+            # 건너뛴다(★ 2026-08-17, 정리 작업 중 실측).
+            if exc.code == 400 and b"archived" in exc.read():
+                continue
+            raise
     if entries:
         request_json(
             f"blocks/{index_toggle['id']}/children", "PATCH",
@@ -566,6 +578,137 @@ def sync_unchecked_checklist_index(token):
             } for title, label, url in entries]},
         )
     return len(entries)
+
+
+def _maintain_checklist_date_toggles(token, today, routine_labels):
+    """날짜별 토글(`YYYY-MM-DD` 제목)을 한 번 훑으면서 두 가지를 정리한다
+    (2026-08-17 요청):
+    1) 예전에 미완료 일일 루틴이 섞여 들어간 항목이 있으면 제거한다 — 루틴은
+       하루 지나면 의미가 없으므로 날짜 토글에는 그날의 리마인더만 남긴다.
+    2) 토글 날짜가 오늘 기준 `CHECKLIST_STALE_DAYS`일보다 오래됐는데 아직
+       미체크인 리마인더가 있으면 자동으로 체크 처리한다.
+    오늘의 일일 루틴 토글(`DAILY_ROUTINE_TOGGLE_PREFIX`)과 미체크 인덱스
+    (`체크안된것`)는 이 함수가 다루는 대상이 아니므로 건너뛴다.
+    반환: (제거한 루틴 항목 수, 자동 체크한 리마인더 수)."""
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Notion-Version": NOTION_VERSION,
+        "Content-Type": "application/json",
+    }
+
+    def request_json(path, method="GET", payload=None):
+        request = urllib.request.Request(
+            f"https://api.notion.com/v1/{path}",
+            data=(json.dumps(payload).encode("utf-8") if payload is not None else None),
+            method=method, headers=headers,
+        )
+        with urllib.request.urlopen(request, timeout=15) as response:
+            return json.load(response)
+
+    page_children = request_json(
+        f"blocks/{REMINDER_CHECKLIST_NOTION_PAGE_ID}/children?page_size=100"
+    ).get("results", [])
+
+    stripped = 0
+    auto_checked = 0
+    for block in page_children:
+        if block.get("type") != "toggle":
+            continue
+        title = _notion_block_text(block)
+        if title.replace(" ", "") == UNCHECKED_INDEX_TOGGLE_TITLE:
+            continue
+        if title.startswith(DAILY_ROUTINE_TOGGLE_PREFIX):
+            continue
+        try:
+            toggle_date = datetime.date.fromisoformat(title)
+        except ValueError:
+            continue
+        is_stale = (today - toggle_date).days > CHECKLIST_STALE_DAYS
+
+        children = request_json(f"blocks/{block['id']}/children?page_size=100").get("results", [])
+        for child in children:
+            if child.get("type") != "to_do":
+                continue
+            label = _notion_block_text(child)
+            if label in routine_labels:
+                request_json(f"blocks/{child['id']}", "DELETE")
+                stripped += 1
+                continue
+            if is_stale and not child.get("to_do", {}).get("checked"):
+                request_json(f"blocks/{child['id']}", "PATCH", {"to_do": {
+                    "rich_text": child.get("to_do", {}).get("rich_text", []),
+                    "checked": True,
+                }})
+                auto_checked += 1
+    return stripped, auto_checked
+
+
+def _move_daily_routine_toggle_to_bottom(token):
+    """🌅 오늘의 일일 루틴 토글이 항상 페이지 맨 아래에 오도록 유지한다
+    (2026-08-17 요청). Notion API는 기존 블록을 다른 위치로 옮기는 기능이
+    없어서, 이미 맨 아래가 아니면 통째로 지우고 같은 내용으로 다시 만든다 —
+    새로 추가되는 블록은 항상 부모의 끝에 붙으므로 그러면 자연히 맨 아래로
+    온다(같은 기법을 `sync_unchecked_checklist_index`가 이미 씀)."""
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Notion-Version": NOTION_VERSION,
+        "Content-Type": "application/json",
+    }
+
+    def request_json(path, method="GET", payload=None):
+        request = urllib.request.Request(
+            f"https://api.notion.com/v1/{path}",
+            data=(json.dumps(payload).encode("utf-8") if payload is not None else None),
+            method=method, headers=headers,
+        )
+        with urllib.request.urlopen(request, timeout=15) as response:
+            return json.load(response)
+
+    page_children = request_json(
+        f"blocks/{REMINDER_CHECKLIST_NOTION_PAGE_ID}/children?page_size=100"
+    ).get("results", [])
+    if not page_children:
+        return
+
+    routine_index = next((
+        i for i, block in enumerate(page_children)
+        if block.get("type") == "toggle"
+        and _notion_block_text(block).startswith(DAILY_ROUTINE_TOGGLE_PREFIX)
+    ), None)
+    if routine_index is None or routine_index == len(page_children) - 1:
+        return  # 없거나 이미 맨 아래
+
+    routine_block = page_children[routine_index]
+    title = _notion_block_text(routine_block)
+    children = request_json(
+        f"blocks/{routine_block['id']}/children?page_size=100"
+    ).get("results", [])
+    rebuilt_children = []
+    for child in children:
+        child_type = child.get("type")
+        if child_type == "divider":
+            rebuilt_children.append({"object": "block", "type": "divider", "divider": {}})
+        elif child_type == "to_do":
+            rebuilt_children.append({
+                "object": "block", "type": "to_do",
+                "to_do": {
+                    "rich_text": child.get("to_do", {}).get("rich_text", []),
+                    "checked": bool(child.get("to_do", {}).get("checked")),
+                },
+            })
+
+    request_json(f"blocks/{routine_block['id']}", "DELETE")
+    request_json(
+        f"blocks/{REMINDER_CHECKLIST_NOTION_PAGE_ID}/children", "PATCH",
+        {"children": [{
+            "object": "block", "type": "toggle",
+            "toggle": {
+                "rich_text": [{"type": "text", "text": {"content": title}}],
+                "children": rebuilt_children,
+            },
+        }]},
+    )
+
 
 # ── 근무표 코드(D/S/G/휴) → 앱 내부 근무 이름 매핑 ───────────────
 CODE_TO_SHIFT = {
@@ -816,6 +959,11 @@ JP_BUILD_READALOUD_EPUB_SCRIPT = os.path.join(
     "일본어자막추출", "build_readaloud_epub.py"
 )
 JP_COMPLETED_EPUB_DIR = "/Users/forrestdpark/Desktop/BlogImage/av완성작"
+# 일본어 EPUB을 그냥 열기만 하는 기능(★ 2026-08-17 추가)의 "마지막으로 연 책"
+# 기록. TTS·번역·Notion 기록이 있는 ebook_reader.py의 EBOOK_LAST_STATE_FILE과는
+# 완전히 별개 — 여기서는 open으로 기본 EPUB 뷰어(Apple Books 등)를 띄우기만
+# 하므로, 진행 페이지 개념이 없고 "마지막으로 연 파일 경로"만 저장한다.
+JP_EPUB_READER_LAST_FILE = os.path.expanduser("~/.jp_epub_reader_last.json")
 BGM_PLAYLIST_BATCH_SCRIPT = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "일본어자막추출", "bgm_playlist_batch.py"
@@ -1545,6 +1693,59 @@ def load_last_ebook_state():
         return state
     except Exception:
         return None
+
+
+# ════════════════════════════════════════════════════════════
+# 일본어 EPUB 그냥 열기 (★ 2026-08-17 추가)
+# TTS·번역·Notion 기록이 있는 ebook_reader.py와 달리, 여기서는 macOS 기본
+# EPUB 뷰어(보통 Apple Books)로 그냥 여는 것뿐이다 — "이어보기"는 마지막으로
+# 연 파일을 다시 열어줄 뿐, 어디까지 읽었는지는 뷰어 자체가 기억한다.
+# ════════════════════════════════════════════════════════════
+
+def load_jp_epub_reader_last():
+    """마지막으로 연 일본어 EPUB 경로를 불러온다. 파일이 지워졌으면 None."""
+    if not os.path.exists(JP_EPUB_READER_LAST_FILE):
+        return None
+    try:
+        with open(JP_EPUB_READER_LAST_FILE, encoding="utf-8") as f:
+            state = json.load(f)
+        if not os.path.exists(state.get("file", "")):
+            return None
+        return state
+    except Exception:
+        return None
+
+
+def save_jp_epub_reader_last(path):
+    try:
+        with open(JP_EPUB_READER_LAST_FILE, "w", encoding="utf-8") as f:
+            json.dump({"file": path, "file_name": os.path.basename(path)}, f, ensure_ascii=False)
+    except OSError:
+        pass
+
+
+def choose_jp_epub_file():
+    """macOS 파일 선택 다이얼로그로 일본어 EPUB 한 권을 고른다(기본 위치는
+    일본어자막추출 파이프라인의 완성 EPUB 폴더). 취소하면 None."""
+    apple_script = (
+        'POSIX path of (choose file of type {"epub"} '
+        'with prompt "읽을 일본어 EPUB을 선택하세요" '
+        f'default location (POSIX file "{JP_COMPLETED_EPUB_DIR}"))'
+    )
+    try:
+        result = subprocess.run(["osascript", "-e", apple_script], capture_output=True, text=True, timeout=120)
+        path = result.stdout.strip()
+        return path or None
+    except Exception:
+        return None
+
+
+def open_jp_epub(path):
+    """일본어 EPUB을 macOS 기본 EPUB 뷰어로 연다. `open`은 Launch Services를
+    통하는 호출이라 launchd 백그라운드 프로세스에서도 자동화 권한 없이 항상
+    동작한다(ebook_reader의 .command 런처와 같은 이유, README 8-1 참고)."""
+    subprocess.Popen(["open", path])
+    save_jp_epub_reader_last(path)
 
 
 # ════════════════════════════════════════════════════════════
@@ -3916,7 +4117,6 @@ class ShiftAlarmApp(rumps.App):
             page = notion_get(
                 f"blocks/{REMINDER_CHECKLIST_NOTION_PAGE_ID}/children?page_size=100"
             )
-            page_results = page.get("results", [])
             routine_toggle = None
             reminder_toggle = None
             for block in page.get("results", []):
@@ -3956,44 +4156,10 @@ class ShiftAlarmApp(rumps.App):
                     incomplete = [
                         label for label, checked in checked_by_label.items() if not checked
                     ]
-                    # 고정 루틴은 오늘 목록으로 초기화되므로, 미완료 항목만 전날
-                    # 날짜 토글에 보존한다. 사용자가 나중에 여기서 체크하면
-                    # `체크안된것` 인덱스에서도 자동으로 빠진다.
-                    if incomplete and previous_date:
-                        previous_toggle = next((
-                            block for block in page_results
-                            if block.get("type") == "toggle"
-                            and _notion_block_text(block) == previous_date
-                        ), None)
-                        if previous_toggle:
-                            previous_children = notion_get(
-                                f"blocks/{previous_toggle['id']}/children?page_size=100"
-                            ).get("results", [])
-                            previous_labels = {
-                                _notion_block_text(block) for block in previous_children
-                                if block.get("type") == "to_do"
-                            }
-                            archived = [
-                                label for label in incomplete if label not in previous_labels
-                            ]
-                            if archived:
-                                notion_request(
-                                    f"blocks/{previous_toggle['id']}/children", "PATCH",
-                                    {"children": [todo_block(label) for label in archived]},
-                                )
-                        else:
-                            notion_request(
-                                f"blocks/{REMINDER_CHECKLIST_NOTION_PAGE_ID}/children", "PATCH",
-                                {"children": [{
-                                    "object": "block", "type": "toggle",
-                                    "toggle": {
-                                        "rich_text": [{"type": "text", "text": {
-                                            "content": previous_date,
-                                        }}],
-                                        "children": [todo_block(label) for label in incomplete],
-                                    },
-                                }]},
-                            )
+                    # ★ 2026-08-17: 일일 루틴은 하루가 지나면 더 이상 쓸모가
+                    # 없어서(그날 하루의 습관 체크일 뿐) 날짜별 토글에는 보존하지
+                    # 않는다 — 날짜 토글에는 그날의 리마인더만 남긴다. 미완료
+                    # 알림 자체는 그대로 유지(정보로서는 여전히 유용하므로).
                     if (
                         incomplete
                         and self.config.get("daily_routine_incomplete_notified_date") != previous_date
@@ -4095,6 +4261,20 @@ class ShiftAlarmApp(rumps.App):
             sync_unchecked_checklist_index(token)
         except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
             print(f"⚠️ 미완료 체크리스트 인덱스 동기화 실패: {exc}")
+        try:
+            routine_labels = {item for item in routine_sequence if item is not None}
+            stripped, auto_checked = _maintain_checklist_date_toggles(token, today, routine_labels)
+            if stripped or auto_checked:
+                print(
+                    f"🧹 일일 체크리스트 정리: 루틴 잔재 {stripped}개 제거, "
+                    f"일주일({CHECKLIST_STALE_DAYS}일) 넘은 미체크 리마인더 {auto_checked}개 자동 체크"
+                )
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
+            print(f"⚠️ 날짜별 체크리스트 정리 실패: {exc}")
+        try:
+            _move_daily_routine_toggle_to_bottom(token)
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
+            print(f"⚠️ 일일 루틴 토글을 맨 아래로 옮기지 못했습니다: {exc}")
 
     def _notify_incomplete_daily_routine(self, previous_date, incomplete):
         """전날 미완료 루틴을 메인 스레드에서 한 번만 알린다."""
@@ -4489,6 +4669,12 @@ class ShiftAlarmApp(rumps.App):
             short_name = truncate_title(last_ebook['file_name'])
             resume_label = f"📖 이어하기: {short_name} (P.{last_ebook['page']})"
             self.menu.add(rumps.MenuItem(resume_label, callback=self.resume_ebook_now))
+        last_jp_epub = load_jp_epub_reader_last()
+        if last_jp_epub:
+            short_jp_name = truncate_title(last_jp_epub['file_name'])
+            self.menu.add(rumps.MenuItem(
+                f"🇯🇵 일본어 EPUB 이어보기: {short_jp_name}", callback=self.resume_jp_epub_now
+            ))
 
         self.menu.add(None)
         self.menu.add(rumps.MenuItem("⭐ 좋아요 Elmedia 플레이하기", callback=self.play_favorites_now))
@@ -4570,6 +4756,7 @@ class ShiftAlarmApp(rumps.App):
         reading_menu.add(rumps.MenuItem("📖 다른 책 선택해서 읽기", callback=self.choose_ebook_now))
         reading_menu.add(rumps.MenuItem("☁️ 독서 Notion 기록 동기화", callback=self.sync_ebook_notion_now))
         reading_menu.add(rumps.MenuItem("📘 독서 기록 → 학습판 EPUB", callback=self.build_ebook_study_now))
+        reading_menu.add(rumps.MenuItem("🇯🇵 다른 일본어 EPUB 선택", callback=self.choose_jp_epub_now))
         more_menu.add(reading_menu)
 
         media_menu = rumps.MenuItem("🎬 일본어·미디어 도구")
@@ -4681,6 +4868,18 @@ class ShiftAlarmApp(rumps.App):
         path = choose_ebook_file()
         if path:
             open_ebook_reader_terminal(path)
+
+    def resume_jp_epub_now(self, _):
+        last = load_jp_epub_reader_last()
+        if not last:
+            rumps.alert("오류", "이어서 읽을 일본어 EPUB 정보가 없습니다.")
+            return
+        open_jp_epub(last["file"])
+
+    def choose_jp_epub_now(self, _):
+        path = choose_jp_epub_file()
+        if path:
+            open_jp_epub(path)
 
     def sync_ebook_notion_now(self, _):
         open_ebook_notion_sync_terminal()

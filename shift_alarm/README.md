@@ -466,3 +466,21 @@ Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으
 - `_is_quiet_hours()`가 `load_config()`로 매번 최신 `current_shift`를 읽어 지금이 조용한 시간대인지 판정한다 — 근무를 바꾸면(교대근무 알람 재설정) 바로 반영된다.
 - `say` 자체에는 음량 조절 옵션이 없어서, 조용한 시간대에는 `say -v Yuna -o <임시.aiff>`로 파일에 렌더링한 뒤 `afplay -v SPEAK_QUIET_VOLUME(0.15)`로 낮춰 재생하고 임시 파일을 지운다. 평소(조용한 시간대가 아닐 때)는 기존처럼 `say`를 바로 실행해 지연 없이 들린다.
 - `_speak_text()` 안에서만 판정하므로 `notify_spoken()`을 쓰는 모든 알림(리마인더·근무 알람·새 메일·추천 공고 등, 17번 항목 참고)에 자동으로 적용된다 — 알림 종류별로 따로 설정할 필요 없음.
+
+## 21. 🇯🇵 일본어 EPUB 그냥 열기 (★ 2026-08-17 추가)
+
+기존 8번 항목의 `ebook_reader.py`(TTS 낭독 + 번역 + Notion 기록)와 별개로, 일본어 공부용 EPUB(일본어자막추출 파이프라인이 만드는 낭독판 등)은 **그냥 macOS 기본 EPUB 뷰어(Apple Books)로 열기만** 하면 된다는 요청으로 추가했다. TTS·번역·Notion 기록 없음 — `open` 한 번으로 끝.
+
+- `choose_jp_epub_file()`이 파일 선택 다이얼로그(타입 `epub`만, 기본 위치는 일본어자막추출의 완성 EPUB 폴더 `JP_COMPLETED_EPUB_DIR`)로 한 권을 고른다.
+- `open_jp_epub(path)`가 `subprocess.Popen(["open", path])`로 여는 게 전부다. `open`은 Launch Services를 통하는 호출이라 launchd 백그라운드 프로세스에서도 자동화 권한 없이 항상 동작한다(8-1번 항목의 `.command` 런처와 같은 이유).
+- 마지막으로 연 파일은 `~/.jp_epub_reader_last.json`에 경로만 저장한다(`EBOOK_LAST_STATE_FILE`과는 완전히 별개 파일 — 페이지/진행률 개념이 없으므로 그냥 "마지막 파일 경로"만 기록).
+- **메뉴 위치**: `📖 이어하기` 바로 아래에 `🇯🇵 일본어 EPUB 이어보기: {파일명}`이 마지막으로 연 파일이 있을 때만 뜨고, `기타 → 📚 독서 도구` 안에 `🇯🇵 다른 일본어 EPUB 선택`이 항상 뜬다 — 기존 ebook_reader의 "이어하기/다른 책 선택" 배치를 그대로 따른 것.
+
+## 22. 🎎 일일 체크리스트 Notion 페이지 정리 (★ 2026-08-17 추가)
+
+세 가지를 한 번에 요청받아 같은 동기화 흐름(`_sync_daily_checklist_to_notion`, 하루 1번)에 묶어 넣었다.
+
+- **일주일 넘게 미체크인 항목 자동 체크**: "체크 안 한 지 일주일 넘으면 그냥 알아서 체크되게 해달라"는 요청. `_maintain_checklist_date_toggles(token, today, routine_labels)`가 `YYYY-MM-DD` 형식 제목의 날짜별 토글을 훑어, `(오늘 - 토글 날짜).days > CHECKLIST_STALE_DAYS`(기본 7일)면 남은 미체크 리마인더를 전부 체크 처리한다.
+- **날짜 토글에 일일 루틴이 섞여 들어가던 문제 제거**: 예전에는 날짜가 바뀔 때 그날 미완료 일일 루틴 항목을 리마인더와 같은 날짜 토글에 함께 보관했는데(`_sync_daily_checklist_to_notion`의 `date_changed` 분기), "일일 루틴은 하루 지나면 쓸모없으니 리마인더만 남겨달라"는 요청으로 이 보관 로직 자체를 없앴다(전날 미완료 루틴 **알림**은 그대로 유지 — `_notify_incomplete_daily_routine`). 같은 `_maintain_checklist_date_toggles()`가 매일 훑으면서, 혹시 남아있는 루틴 라벨(`DAILY_ROUTINE_SOURCE_PAGE_ID` 원본의 현재 항목 텍스트와 일치하는 to_do)이 날짜 토글 안에 있으면 삭제해 자기 치유(self-healing)한다. 실측: 배포 시점에 이미 섞여 있던 8/14\~8/16 토글에서 루틴 잔재 80개를 제거.
+- **🌅 오늘의 일일 루틴 토글을 항상 페이지 맨 아래로**: Notion API에는 기존 블록을 다른 위치로 옮기는 기능이 없어서, `_move_daily_routine_toggle_to_bottom(token)`이 라우틴 토글이 이미 맨 아래가 아니면 통째로 지우고 같은 내용(체크 상태 포함)으로 다시 만든다 — 새 블록은 항상 부모의 끝에 붙으므로 자연히 맨 아래로 온다. `sync_unchecked_checklist_index()`가 이미 쓰던 것과 같은 기법.
+- **부수 버그 수정**: `sync_unchecked_checklist_index()`가 직전 실행이 중간에 끊겨 이미 보관(archive)된 블록을 다시 지우려 하면 `400 Bad Request`(`Can't edit block that is archived`)로 전체가 실패하던 문제를 고쳤다 — 이미 archived된 블록의 삭제 실패는 조용히 건너뛴다(결과적으로 이미 지워진 것과 같으므로).
