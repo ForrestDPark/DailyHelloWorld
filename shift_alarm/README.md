@@ -493,3 +493,11 @@ Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으
 - **날짜 토글에 일일 루틴이 섞여 들어가던 문제 제거**: 예전에는 날짜가 바뀔 때 그날 미완료 일일 루틴 항목을 리마인더와 같은 날짜 토글에 함께 보관했는데(`_sync_daily_checklist_to_notion`의 `date_changed` 분기), "일일 루틴은 하루 지나면 쓸모없으니 리마인더만 남겨달라"는 요청으로 이 보관 로직 자체를 없앴다(전날 미완료 루틴 **알림**은 그대로 유지 — `_notify_incomplete_daily_routine`). 같은 `_maintain_checklist_date_toggles()`가 매일 훑으면서, 혹시 남아있는 루틴 라벨(`DAILY_ROUTINE_SOURCE_PAGE_ID` 원본의 현재 항목 텍스트와 일치하는 to_do)이 날짜 토글 안에 있으면 삭제해 자기 치유(self-healing)한다. 실측: 배포 시점에 이미 섞여 있던 8/14\~8/16 토글에서 루틴 잔재 80개를 제거.
 - **🌅 오늘의 일일 루틴 토글을 항상 페이지 맨 아래로**: Notion API에는 기존 블록을 다른 위치로 옮기는 기능이 없어서, `_move_daily_routine_toggle_to_bottom(token)`이 라우틴 토글이 이미 맨 아래가 아니면 통째로 지우고 같은 내용(체크 상태 포함)으로 다시 만든다 — 새 블록은 항상 부모의 끝에 붙으므로 자연히 맨 아래로 온다. `sync_unchecked_checklist_index()`가 이미 쓰던 것과 같은 기법.
 - **부수 버그 수정**: `sync_unchecked_checklist_index()`가 직전 실행이 중간에 끊겨 이미 보관(archive)된 블록을 다시 지우려 하면 `400 Bad Request`(`Can't edit block that is archived`)로 전체가 실패하던 문제를 고쳤다 — 이미 archived된 블록의 삭제 실패는 조용히 건너뛴다(결과적으로 이미 지워진 것과 같으므로).
+
+## 24. ✅ 일일 루틴 전부 체크 + 관련 버그 2건 수정 (★ 2026-08-17 추가)
+
+**사용자 요청**: "일일 루틴 체크리스트 하나씩 다 체크하기 귀찮은데 전부체크하기 기능 없나?"
+
+- 루틴 메뉴(`🌅 일일 루틴 체크리스트`)에 아직 안 한 항목이 하나라도 있으면 맨 위에 `✅ 전부 체크` 항목이 나타난다. 누르면 `check_all_daily_routine_now` → `_check_all_daily_routine_thread`가 미체크 항목 라벨을 모아 `update_all_daily_routine_items(token, date_str, labels)`로 한 번에 처리한다 — 토글/자식 목록은 한 번만 조회하고 PATCH만 항목 수만큼 반복하므로, 항목마다 따로 API 왕복하는 것보다 빠르고 Notion 쪽 인덱스 동기화도 마지막에 딱 한 번만 돈다.
+- **동시성 버그 발견 및 수정**: 이 기능을 만들다가 로그에 `⚠️ 미완료 체크리스트 인덱스 동기화 실패: HTTP Error 400: Bad Request`가 반복 찍힌 걸 확인했다 — 원인은 리마인더·일일 루틴 항목을 각각 별도 스레드(항목별 락)로 처리하면서 끝날 때마다 `sync_unchecked_checklist_index()`를 부르는데, 짧은 시간에 항목을 여러 개 누르면 이 함수가 동시에 여러 번 실행돼 같은 인덱스 토글 블록(`체크안된것`)을 서로 지웠다 다시 만들며 충돌한 것. 함수 자체를 전역 락(`_UNCHECKED_INDEX_SYNC_LOCK`)으로 감싸 항상 한 번에 하나만 실행되게 고쳤다 — 항목별 락과 무관하게 호출부가 어디든 자동으로 직렬화된다.
+- **일본어 EPUB 선택창이 멈춰서 반응 없던 문제 수정**: `choose_jp_epub_file()`/`choose_jp_epub_folder()`/`choose_ebook_file()`가 여는 `choose file`/`choose folder` 패널이 launchd 백그라운드 프로세스(Dock 아이콘 없는 메뉴바 앱)에서 뜨면 포커스를 못 받아 클릭도 안 되고 멈춘 것처럼 보였다(1935번 줄 `NSPanel` 키패드에서 이미 겪었던 것과 같은 원인 — 이 환경에서 배경 프로세스가 띄우는 창은 명시적으로 activate시키지 않으면 다른 앱 창 뒤에서 포커스를 못 받는다). 각 AppleScript 첫 줄에 `activate`를 추가해 osascript 자신을 앞으로 가져오도록 고쳤다.

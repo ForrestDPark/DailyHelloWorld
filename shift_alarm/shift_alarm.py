@@ -473,6 +473,54 @@ def update_daily_routine_item(token, date_str, label, checked):
     return True
 
 
+def update_all_daily_routine_items(token, date_str, labels):
+    """일일 루틴 여러 건을 한 번에 체크 처리한다("전부 체크" 기능, ★2026-08-17).
+    항목마다 update_daily_routine_item()을 따로 부르면 토글을 매번 새로 조회하고
+    끝날 때마다 sync_unchecked_checklist_index()까지 같이 돌아, 여러 개를
+    한꺼번에 누르면 스레드끼리 겹쳐 Notion 쪽 인덱스 블록을 동시에 지웠다 다시
+    만들다 충돌(HTTP 400)이 났다. 토글/자식 목록은 한 번만 조회하고 PATCH만
+    항목 수만큼 반복한다."""
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Notion-Version": NOTION_VERSION,
+        "Content-Type": "application/json",
+    }
+
+    def request_json(path, method="GET", payload=None):
+        request = urllib.request.Request(
+            f"https://api.notion.com/v1/{path}",
+            data=(json.dumps(payload).encode("utf-8") if payload is not None else None),
+            method=method, headers=headers,
+        )
+        with urllib.request.urlopen(request, timeout=15) as response:
+            return json.load(response)
+
+    page = request_json(f"blocks/{REMINDER_CHECKLIST_NOTION_PAGE_ID}/children?page_size=100")
+    expected_title = DAILY_ROUTINE_TOGGLE_PREFIX + date_str
+    routine_toggle = next((
+        block for block in page.get("results", [])
+        if block.get("type") == "toggle" and _notion_block_text(block) == expected_title
+    ), None)
+    if not routine_toggle:
+        raise ValueError("오늘의 일일 루틴을 Notion에서 찾지 못했습니다.")
+    children = request_json(f"blocks/{routine_toggle['id']}/children?page_size=100").get("results", [])
+    remaining = set(labels)
+    for block in children:
+        if block.get("type") != "to_do":
+            continue
+        label = _notion_block_text(block)
+        if label not in remaining:
+            continue
+        remaining.discard(label)
+        request_json(f"blocks/{block['id']}", "PATCH", {"to_do": {
+            "rich_text": block.get("to_do", {}).get("rich_text", []),
+            "checked": True,
+        }})
+    if remaining:
+        raise ValueError(f"Notion에서 {len(remaining)}개 항목을 찾지 못했습니다.")
+    return True
+
+
 def _notion_block_text(block):
     block_type = block.get("type", "")
     return "".join(
@@ -487,8 +535,22 @@ def _notion_block_url(block_id):
     return f"https://www.notion.so/{page}#{anchor}"
 
 
+# ★ 2026-08-17: 체크리스트/루틴 항목을 여러 개 연달아 누르면(각각 자기 라벨의
+# 락만 잡는 별도 스레드) sync_unchecked_checklist_index()가 동시에 여러 번
+# 실행돼 같은 인덱스 토글 블록을 서로 지웠다 다시 만들며 충돌해 로그에
+# "HTTP Error 400: Bad Request"가 반복 찍혔다(실측). 호출부가 여럿이라
+# 각자 락을 걸게 하는 대신 함수 자체를 전역 락으로 감싸 항상 한 번에
+# 하나만 돌게 한다.
+_UNCHECKED_INDEX_SYNC_LOCK = threading.Lock()
+
+
 def sync_unchecked_checklist_index(token):
     """모든 날짜/고정 루틴 토글의 미체크 항목 링크를 `체크안된것`에 동기화한다."""
+    with _UNCHECKED_INDEX_SYNC_LOCK:
+        return _sync_unchecked_checklist_index_locked(token)
+
+
+def _sync_unchecked_checklist_index_locked(token):
     headers = {"Authorization": f"Bearer {token}", "Notion-Version": NOTION_VERSION}
 
     def request_json(path, method="GET", payload=None):
@@ -1728,7 +1790,13 @@ def save_jp_epub_reader_last(path):
 def choose_jp_epub_file():
     """macOS 파일 선택 다이얼로그로 일본어 EPUB 한 권을 고른다(기본 위치는
     일본어자막추출 파이프라인의 완성 EPUB 폴더). 취소하면 None."""
+    # ★ 2026-08-17: launchd 백그라운드 프로세스(메뉴바 앱, Dock 아이콘 없음)에서
+    # 뜨는 choose file 패널은 앞에 있는 다른 앱 창에 가려진 채 포커스를 못 받아
+    # "창은 뜨는데 멈춰서 반응이 없다"는 증상으로 나타난다(1877번 줄 NSPanel
+    # 케이스와 같은 원인). 스크립트 첫 줄에서 osascript 자신을 activate시켜
+    # 패널이 확실히 맨 앞으로 오도록 한다.
     apple_script = (
+        'activate\n'
         'POSIX path of (choose file of type {"epub"} '
         'with prompt "읽을 일본어 EPUB을 선택하세요" '
         f'default location (POSIX file "{JP_COMPLETED_EPUB_DIR}"))'
@@ -1810,7 +1878,10 @@ def truncate_title(name, length=14):
 
 def choose_ebook_file():
     """macOS 파일 선택 다이얼로그로 pdf/epub 파일을 고른다. 취소하면 None."""
-    apple_script = 'POSIX path of (choose file of type {"pdf", "epub"} with prompt "읽을 파일을 선택하세요")'
+    apple_script = (
+        'activate\n'
+        'POSIX path of (choose file of type {"pdf", "epub"} with prompt "읽을 파일을 선택하세요")'
+    )
     try:
         result = subprocess.run(["osascript", "-e", apple_script], capture_output=True, text=True, timeout=120)
         path = result.stdout.strip()
@@ -2046,6 +2117,7 @@ def choose_jp_epub_folder(
 ):
     """사용자가 실제로 보는 완성 EPUB 폴더를 고른다. 내부 library 경로는 노출하지 않는다."""
     apple_script = (
+        'activate\n'
         'POSIX path of (choose folder with prompt '
         f'"{prompt}" '
         f'default location (POSIX file "{JP_COMPLETED_EPUB_DIR}"))'
@@ -4474,6 +4546,57 @@ class ShiftAlarmApp(rumps.App):
             self._reopen_status_menu()
         return callback
 
+    def check_all_daily_routine_now(self, _):
+        """★ 2026-08-17: 하나씩 체크하기 귀찮다는 요청으로 추가 — 아직 안 한
+        루틴을 한 번에 전부 체크한다."""
+        unchecked = [label for label, checked in self._daily_routine_state.items() if not checked]
+        if not unchecked:
+            return
+        for label in unchecked:
+            self._daily_routine_updates_running[label] = True
+            self._daily_routine_state[label] = True
+        self._save_checklist_state_cache()
+        self.build_menu()
+        threading.Thread(
+            target=self._check_all_daily_routine_thread,
+            args=(unchecked,), daemon=True,
+        ).start()
+        self._reopen_status_menu()
+
+    def _check_all_daily_routine_thread(self, labels):
+        # 개별 토글 스레드(_update_daily_routine_thread)와 같은 라벨을 동시에
+        # 건드리지 않도록 관련된 락을 모두 잡는다(정렬은 데드락 방지용).
+        locks = [
+            self._daily_routine_update_locks.setdefault(label, threading.Lock())
+            for label in sorted(labels)
+        ]
+        for lock in locks:
+            lock.acquire()
+        error = None
+        try:
+            token = _notion_keychain_token()
+            if not token:
+                raise ValueError("Notion 연결 토큰을 찾지 못했습니다.")
+            update_all_daily_routine_items(token, datetime.date.today().isoformat(), labels)
+            sync_unchecked_checklist_index(token)
+        except (urllib.error.HTTPError, urllib.error.URLError, OSError, ValueError) as exc:
+            error = str(exc)
+            for label in labels:
+                if self._daily_routine_updates_running.get(label) is True:
+                    self._daily_routine_updates_running.pop(label, None)
+                    self._daily_routine_state[label] = False
+            self._save_checklist_state_cache()
+        else:
+            self._fetch_checklist_state_thread()
+        finally:
+            for lock in locks:
+                lock.release()
+        AppHelper.callAfter(self.build_menu)
+        if error:
+            AppHelper.callAfter(
+                notify_spoken, "일일 루틴 전부 체크 실패", "", error
+            )
+
     def _update_daily_routine_thread(self, label, checked, old_checked):
         lock = self._daily_routine_update_locks.setdefault(label, threading.Lock())
         with lock:
@@ -4623,6 +4746,11 @@ class ShiftAlarmApp(rumps.App):
             self.menu.add(reminder_item)
         routine_menu = rumps.MenuItem("🌅 일일 루틴 체크리스트")
         if self._daily_routine_state:
+            if any(not checked for checked in self._daily_routine_state.values()):
+                routine_menu.add(rumps.MenuItem(
+                    "✅ 전부 체크", callback=self.check_all_daily_routine_now,
+                ))
+                routine_menu.add(None)
             for label, checked in self._daily_routine_state.items():
                 routine_menu.add(rumps.MenuItem(
                     f"{'✅' if checked else '⬜'} {label}",
