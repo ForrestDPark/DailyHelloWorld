@@ -1795,9 +1795,14 @@ def choose_jp_epub_file():
     # "창은 뜨는데 멈춰서 반응이 없다"는 증상으로 나타난다(1877번 줄 NSPanel
     # 케이스와 같은 원인). 스크립트 첫 줄에서 osascript 자신을 activate시켜
     # 패널이 확실히 맨 앞으로 오도록 한다.
+    # ★ 2026-08-17(2차): `of type {"epub"}`로 확장자 필터를 걸었더니 폴더 안의
+    # 진짜 epub 파일들까지 전부 회색으로 선택 불가 처리됐다 — osascript처럼
+    # UTI를 등록하지 않은 프로세스에서는 확장자→UTI 매칭이 신뢰할 수 없다는
+    # 알려진 AppleScript 문제. 필터를 아예 빼고 사용자가 직접 골라 고른다
+    # (어차피 default location이 epub 전용 폴더라 실질적으로 문제 없음).
     apple_script = (
         'activate\n'
-        'POSIX path of (choose file of type {"epub"} '
+        'POSIX path of (choose file '
         'with prompt "읽을 일본어 EPUB을 선택하세요" '
         f'default location (POSIX file "{JP_COMPLETED_EPUB_DIR}"))'
     )
@@ -1878,9 +1883,12 @@ def truncate_title(name, length=14):
 
 def choose_ebook_file():
     """macOS 파일 선택 다이얼로그로 pdf/epub 파일을 고른다. 취소하면 None."""
+    # ★ 2026-08-17: `of type {...}` 확장자 필터가 osascript 프로세스에서는
+    # UTI 매칭이 안 돼 진짜 대상 파일까지 회색으로 선택 불가 처리되는 문제가
+    # choose_jp_epub_file()에서 확인됐다 — 같은 패턴이라 여기서도 필터를 뺐다.
     apple_script = (
         'activate\n'
-        'POSIX path of (choose file of type {"pdf", "epub"} with prompt "읽을 파일을 선택하세요")'
+        'POSIX path of (choose file with prompt "읽을 파일을 선택하세요")'
     )
     try:
         result = subprocess.run(["osascript", "-e", apple_script], capture_output=True, text=True, timeout=120)
