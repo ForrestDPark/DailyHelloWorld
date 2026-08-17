@@ -7,3 +7,5 @@
 .claude/
 일본어자막추출/.venv-shazam/
 nodeBackendDeveloper/chapter08/hello-nestjs/node_modules
+__pycache__/
+*.pyc
