@@ -1299,8 +1299,18 @@ PARTTIME_TECH_TERMS = (
 PARTTIME_REMOTE_TERMS = ("재택", "원격", "리모트", "remote", "온라인 근무", "비대면")
 
 
-def top_job_state_path(category: str) -> Path:
-    return BASE_DIR / "data" / f"top_job_notion_{category}.json"
+def top_job_state_path(category: str, row: sqlite3.Row | None = None) -> Path:
+    """카테고리 + 공고 고유키(source:source_id)로 상태 파일을 키잉해, 공고마다
+    자기 자신의 Notion 페이지를 갖게 한다. ★ 2026-08-18 버그 수정: 예전엔
+    category만으로 키를 잡아 같은 카테고리의 모든 회사가 페이지 하나를
+    돌려썼다 — "🎯 오늘의 추천 공고" 인덱스에 쌓인 과거 항목 14건이 전부
+    최신 회사(한중에스에스) 페이지로 잘못 연결되는 결과로 발견됨(사용자
+    리포트). row를 안 주면(하위호환 기본값 등) 예전처럼 카테고리 공용
+    경로를 반환한다."""
+    if row is None:
+        return BASE_DIR / "data" / f"top_job_notion_{category}.json"
+    key = re.sub(r"[^\w가-힣-]+", "_", f"{row['source']}_{row['source_id']}")
+    return BASE_DIR / "data" / f"top_job_notion_{category}_{key}.json"
 
 
 def _parttime_recommendation_eligibility(
@@ -1437,11 +1447,17 @@ def _notion_publish(
     state_path: Path = None,
 ) -> str:
     """저장된 페이지가 있으면 내용을 통째로 교체(기존 자식 블록 archive 후 재작성)
-    하고, 없으면 "🎴 이직시스템" 밑에 새로 만든다. 매일 같은 페이지를 갱신해서
-    실행할 때마다 새 페이지가 쌓이지 않게 한다. 반환값은 Notion 페이지 URL.
+    하고, 없으면 "🎴 이직시스템" 밑에 새로 만든다. 같은 state_path로 다시
+    호출하면(=같은 공고를 재분석하면) 새 페이지 대신 그 페이지를 갱신해서
+    같은 공고가 중복 페이지로 쌓이지 않게 한다. 반환값은 Notion 페이지 URL.
     ★ 2026-08-08: state_path를 인자로 받게 바꿔서 커리어/알바 등 카테고리별로
     서로 다른 상태 파일(=서로 다른 Notion 페이지)을 쓸 수 있게 함
-    (contest_collector.py의 동명 함수와 같은 시그니처)."""
+    (contest_collector.py의 동명 함수와 같은 시그니처).
+    ★ 2026-08-18: state_path가 카테고리에만 묶여 있던 시절엔 같은 카테고리의
+    서로 다른 회사 공고가 전부 페이지 하나를 돌려썼다(회사 A→B→C로 이어서
+    분석하면 A·B의 상세는 사라지고 C만 남음) — top_job_state_path/
+    top_contest_state_path를 공고 고유키(source:source_id)로 키잉하도록
+    고쳐서 공고마다 자기 페이지를 갖게 했다."""
     if state_path is None:
         state_path = top_job_state_path("career")  # 하위호환 기본값
     state = {}
@@ -1926,7 +1942,7 @@ def analyze_top_job(args: argparse.Namespace) -> None:
         "recommendation_eligible": True,
     }
     try:
-        url = _notion_publish(token, title, blocks, meta, top_job_state_path(category))
+        url = _notion_publish(token, title, blocks, meta, top_job_state_path(category, row))
     except RuntimeError as exc:
         print(f"⚠️  Notion 페이지 갱신 실패: {exc}")
         print(text)

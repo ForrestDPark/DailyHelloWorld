@@ -75,8 +75,14 @@ CONTEST_SOURCE_CATEGORY = {
 CONTEST_CATEGORY_LABELS = {"ai": "AI 경진대회", "general": "일반 공모전"}
 
 
-def top_contest_state_path(category: str) -> Path:
-    return BASE_DIR / "data" / f"top_contest_notion_{category}.json"
+def top_contest_state_path(category: str, row: sqlite3.Row | None = None) -> Path:
+    """job_collector.py의 top_job_state_path()와 동일한 이유로 공모전 고유키
+    (source:source_id)까지 키에 포함한다 — ★ 2026-08-18 버그 수정, 자세한
+    배경은 그쪽 함수 docstring 참고. row가 없으면 카테고리 공용 경로(하위호환)."""
+    if row is None:
+        return BASE_DIR / "data" / f"top_contest_notion_{category}.json"
+    key = re.sub(r"[^\w가-힣-]+", "_", f"{row['source']}_{row['source_id']}")
+    return BASE_DIR / "data" / f"top_contest_notion_{category}_{key}.json"
 
 
 def top_contest_history_path(category: str) -> Path:
@@ -826,7 +832,7 @@ def analyze_top_contest(args: argparse.Namespace) -> None:
         "deadline": row["deadline"], "contest_url": row["url"],
     }
     try:
-        url = _notion_publish(token, title, blocks, meta, top_contest_state_path(category))
+        url = _notion_publish(token, title, blocks, meta, top_contest_state_path(category, row))
     except RuntimeError as exc:
         print(f"⚠️  Notion 페이지 갱신 실패: {exc}")
         print(text)
