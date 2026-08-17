@@ -873,6 +873,7 @@ REMINDERS = {
     "laundry":         {"label": "🧺 빨래 돌리는 날(휴무일마다)",         "enabled": True},
     "outing":          {"label": "🗺️ 나들이 추천(월 1회)",    "enabled": True},
     "beef_bbq":        {"label": "🥩 소고기 구워먹는 날(월 1회·휴무일)", "enabled": True},
+    "electricity_bill": {"label": "⚡ 전기세 확인하는 날(매월 13일)", "enabled": True},
 }
 
 # ── 월 1회 나들이 추천 장소 (아산시 기준 + 근교) ────────────────────
@@ -1426,6 +1427,13 @@ def _is_nail_trim_day(d):
     return days >= 0 and days % NAIL_TRIM_INTERVAL_DAYS == 0
 
 
+def _is_electricity_bill_check_day(d):
+    """매달 13일마다 돌아오는 전기세 확인일인지 반환(★ 2026-08-18 추가). 다른
+    리마인더처럼 기준일부터의 간격이 아니라 달력의 날짜(day-of-month)로
+    고정 — 전기요금 고지·검침일이 매달 같은 날짜에 맞춰져 있어서다."""
+    return d.day == 13
+
+
 def _is_walk_20k_day(d):
     """근무·휴무와 무관하게 7일 주기 안 이틀(0·3일째)에 해당하면 True — 매주 2회."""
     days = (d - WALK_20K_ANCHOR).days
@@ -1570,6 +1578,9 @@ def get_today_reminders(schedule, now=None):
 
     if REMINDERS["beef_bbq"]["enabled"] and _is_last_off_block_start_of_month(schedule, today):
         reminders.append(REMINDERS["beef_bbq"]["label"])
+
+    if REMINDERS["electricity_bill"]["enabled"] and _is_electricity_bill_check_day(today):
+        reminders.append(REMINDERS["electricity_bill"]["label"])
 
     return reminders
 
