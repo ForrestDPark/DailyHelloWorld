@@ -56,14 +56,37 @@ class JobCollectorTest(unittest.TestCase):
 
     def test_career_score_is_100_point_explainable_model(self):
         row = self._job_row()
+        # related_jobs=2(자기 자신 + 다른 공고 1건 이상)라 information_void 조건에는
+        # 안 걸린다 — DART 미등록 자체는 여전히 감점일 뿐 총점을 0으로 만들지 않는다.
         detail = jc.score_recommendation_candidate(
             row, self.config, "career",
-            {"dart_registered": False, "financial_years": 0, "news_count": 0, "related_jobs": 0},
+            {"dart_registered": False, "financial_years": 0, "news_count": 0, "related_jobs": 2},
             today=datetime(2026, 8, 9),
         )
         self.assertGreater(detail["total"], 0)
         self.assertLessEqual(detail["total"], 100)
         self.assertEqual(sum(item["max"] for item in detail["dimensions"]), 100)
+        # DART 미등록이라 만점(10점)은 못 받지만, 다른 공고도 있어 정보 공백은
+        # 아니므로 완전 0점 처리(information_void)까지는 가지 않는다.
+        self.assertLess(next(item for item in detail["dimensions"] if item["label"] == "회사 정보 신뢰도")["score"], 10)
+
+    def test_information_void_forces_total_to_zero(self):
+        """★ 2026-08-18: DART 미등록+재무 0개년+관련 공고 1건 이하(=지금 채점 중인
+        공고 자기 자신 외에 다른 공고 없음)가 모두 겹치면(실제 사례: 한중에스에스 —
+        뉴스도 이 회사와 무관한 노이즈뿐이었음) 직무 적합도가 아무리 높아도 총점을
+        0으로 강제한다 — 사용자가 "분석할 정보 없음이면 점수도 빵점 처리해"라고
+        명시적으로 요청한 정책. related_jobs는 search_related_jobs()가 jobs 테이블을
+        회사명으로만 조회해 자기 자신도 포함하므로 "0건"이 아니라 "1건 이하"가
+        현실적인 기준이다."""
+        row = self._job_row()
+        detail = jc.score_recommendation_candidate(
+            row, self.config, "career",
+            {"dart_registered": False, "financial_years": 0, "news_count": 8, "related_jobs": 1},
+            today=datetime(2026, 8, 9),
+        )
+        self.assertTrue(detail["information_void"])
+        self.assertEqual(detail["total"], 0)
+        self.assertGreater(detail["subtotal"], 0)  # 다른 항목은 정상 채점됐으나 총점만 0으로 덮임
         self.assertEqual(next(item for item in detail["dimensions"] if item["label"] == "회사 정보 신뢰도")["score"], 0)
 
     def test_dart_and_financials_are_bonus_not_filter(self):

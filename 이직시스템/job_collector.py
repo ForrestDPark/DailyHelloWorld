@@ -241,7 +241,11 @@ def score_recommendation_candidate(
 
     수집 단계의 `score_job()`은 후보를 빠르게 줄이는 1차 점수로만 유지한다. 여기서는
     커리어와 알바의 목적을 분리하고, DART·재무제표가 없어도 0점 가점일 뿐 후보에서
-    제외하지 않는다.
+    제외하지 않는다. ★ 단, career 카테고리에서 DART 미등록·재무 0개년·관련 공고
+    0건이 전부 겹치면(회사 존재를 뒷받침할 근거가 전혀 없는 "정보 공백") 예외적으로
+    총점 자체를 0으로 강제한다 — 다른 항목 점수와 무관하게 추천 목록에서 사실상
+    배제되며, 이때 `company_profile.py`의 경영 분석도 7개 항목을 다 채우지 않고
+    "분석할 정보 없음"으로 짧게 끝낸다(2026-08-18, 사용자 명시 요청).
     """
     if category not in JOB_CATEGORY_LABELS:
         raise ValueError(f"알 수 없는 카테고리: {category}")
@@ -265,6 +269,7 @@ def score_recommendation_candidate(
     related_jobs = int(company_signals.get("related_jobs", 0))
     dart_registered = bool(company_signals.get("dart_registered", False))
     date_points, date_reasons = _date_score(row, today)
+    information_void = False
 
     if category == "career":
         role_score = min(30, len(title_hits) * 6 + len(body_hits) * 3)
@@ -315,7 +320,23 @@ def score_recommendation_candidate(
         add("선호조건·정보 완성도", preference, 5, preference_reasons or ["추가 선호 근거 없음"])
         company_score = min(10, (2 if dart_registered else 0) + min(4, financial_years * 2) + min(2, news_count) + min(2, related_jobs))
         company_reasons = [f"DART {'등록' if dart_registered else '미등록'}", f"재무 {financial_years}개년", f"뉴스 {news_count}건", f"관련 공고 {related_jobs}건"]
-        add("회사 정보 신뢰도", company_score, 10, company_reasons)
+        # ★ 2026-08-18: DART 미등록 + 재무 0개년이면 회사 존재 자체를 검증할 근거가
+        # 없다는 뜻이다. related_jobs는 지금 채점 중인 공고 자신도 포함해서 세므로
+        # (search_related_jobs가 jobs 테이블에서 회사명으로 자기 자신까지 조회함)
+        # 실제로 다른 공고가 전혀 없는 회사도 항상 최소 1이 나온다 — 그래서 "0건"이
+        # 아니라 "1건 이하(=자기 자신 외에 없음)"를 기준으로 삼는다. 이 경우 뉴스
+        # 건수(관련성 미검증 — 회사명 부분 일치로 걸린 노이즈일 수 있음)만으로 점수를
+        # 받는 것을 막고, 회사 정보 항목을 0점 처리한다. 사용자가 실제로 이런 "정보
+        # 공백" 회사(한중에스에스 — DART 미등록·재무 0개년·관련 공고 1건(자기 자신)·
+        # 뉴스는 전부 무관)를 보고 "이런 경우엔 아예 분석할 정보 없음으로 하고 점수도
+        # 빵점 처리해"라고 명시적으로 요청했으므로, 회사 정보 부재를 최종 총점에도
+        # 그대로 반영해 후보 전체를 0점으로 만든다(단순 감점이 아니라 "판단 불가"로
+        # 취급).
+        information_void = not dart_registered and financial_years == 0 and related_jobs <= 1
+        if information_void:  # noqa: SIM108 (가독성을 위해 분기 유지)
+            add("회사 정보 신뢰도", 0, 10, ["정보 공백 — " + ", ".join(company_reasons) + " (뉴스는 관련성 미검증이라 가점 제외)"])
+        else:
+            add("회사 정보 신뢰도", company_score, 10, company_reasons)
     else:
         add("업무 적합도", min(30, len(title_hits) * 6 + len(body_hits) * 3), 30, title_hits + body_hits or ["업무 핵심어 없음"])
         add("내 기술 활용도", min(10, len(evidence_hits) * 2), 10, evidence_hits or ["확인된 기술 교집합 없음"])
@@ -342,7 +363,12 @@ def score_recommendation_candidate(
     penalty = min(30, len(exclude_hits) * 15)
     subtotal = sum(item["score"] for item in dimensions)
     total = max(0, min(100, subtotal - penalty))
-    return {"total": total, "subtotal": subtotal, "penalty": penalty, "exclude_hits": exclude_hits, "dimensions": dimensions}
+    if information_void:
+        # 회사 실체를 뒷받침할 근거(DART·재무·관련 공고)가 전혀 없으면 직무 적합도 등
+        # 다른 항목 점수가 아무리 높아도 총점을 0으로 처리한다 — "판단 불가"는
+        # "낮은 점수"와 달리 추천 목록에 아예 올리지 않는다는 사용자 지시에 따른 것.
+        total = 0
+    return {"total": total, "subtotal": subtotal, "penalty": penalty, "exclude_hits": exclude_hits, "dimensions": dimensions, "information_void": information_void}
 
 
 def _format_score_breakdown(row: sqlite3.Row, config: dict[str, Any], score_info: dict[str, Any] | None = None) -> str:
@@ -365,7 +391,10 @@ def _format_score_breakdown(row: sqlite3.Row, config: dict[str, Any], score_info
                     lines.append(f"  - 뉴스 {index}: [{title}]({url})")
     if detail["penalty"]:
         lines.append(f"- 불일치 감점: -{detail['penalty']}점 — {', '.join(detail['exclude_hits'])}")
-    lines.append("- DART·재무 정보가 없어도 제외하지 않으며, 회사 정보 항목에서 가점만 받지 못한다.")
+    if detail.get("information_void"):
+        lines.append(f"- **분석할 정보 없음**: DART 미등록·재무제표 없음·관련 공고 없음이 모두 겹쳐 회사 실체를 검증할 근거가 전혀 없다. 다른 항목 점수(원래 소계 {detail['subtotal']}점)와 무관하게 총점을 0점으로 처리한다.")
+    else:
+        lines.append("- DART·재무 정보가 없어도 제외하지 않으며, 회사 정보 항목에서 가점만 받지 못한다.")
     return "\n".join(lines)
 
 
