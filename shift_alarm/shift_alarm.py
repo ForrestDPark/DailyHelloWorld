@@ -97,6 +97,45 @@ SCRIPTABLE_WIDGET_FILE = os.path.join(SCRIPTABLE_ICLOUD_DIR, "ShiftAlarmWidget.j
 SCRIPTABLE_WIDGET_V3_FILE = os.path.join(SCRIPTABLE_ICLOUD_DIR, "ShiftAlarmWidgetV3.js")
 WIDGET_SCHEMA_VERSION = 3
 
+# ── iCloud Drive 쓰기 우회 (★ 2026-08-18 추가) ──────────────────
+# launchd가 직접 띄우는 백그라운드 프로세스는 iCloud Drive(~/Library/Mobile
+# Documents/...)에 대한 쓰기가 macOS 권한 체계상 항상 거부된다(Operation not
+# permitted, Errno 1) — 실행 바이너리에 전체 디스크 접근 권한을 직접 줘도
+# 안 바뀐다(실측). 반면 Launch Services로 뜨는 앱(`open -a`)은 같은 쓰기가
+# 바로 성공한다 — StyleEbookTerminal.app(AppleEvents 우회)과 같은 유형의
+# 문제라 같은 원리로 우회한다. iCloudSync.app(작은 컴파일된 앱, osacompile로
+# 빌드)에 실제 파일 복사를 위임한다. `open --args`로 인자를 넘기면 osacompile
+# 애플릿의 `on run argv`가 인자를 못 받는 버그가 실측되어, 대신 로컬 고정
+# 경로의 매니페스트 파일(줄마다 "원본\t대상")을 써두고 앱이 그걸 읽어 처리한다.
+ICLOUD_SYNC_APP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "iCloudSync.app")
+ICLOUD_SYNC_STAGING_DIR = os.path.expanduser("~/.shift_alarm_icloud_sync")
+ICLOUD_SYNC_MANIFEST = os.path.join(ICLOUD_SYNC_STAGING_DIR, "manifest.txt")
+ICLOUD_SYNC_ERROR_LOG = os.path.join(ICLOUD_SYNC_STAGING_DIR, "error.log")
+
+
+def _sync_files_via_icloud_helper(pairs):
+    """(원본 로컬 경로, iCloud 대상 경로) 쌍의 목록을 iCloudSync.app에 위임해
+    비동기로 복사시킨다(써놓고 바로 반환 — 결과 확인은 안 함, eventual
+    consistency로 충분한 60초 주기 갱신용). 직전 실행의 오류 로그가 남아있으면
+    먼저 출력해 진단에 남긴다."""
+    if os.path.exists(ICLOUD_SYNC_ERROR_LOG):
+        try:
+            with open(ICLOUD_SYNC_ERROR_LOG, "r", encoding="utf-8") as f:
+                stale_errors = f.read().strip()
+            if stale_errors:
+                print(f"⚠️ iCloudSync.app 이전 실행 오류:\n{stale_errors}")
+        except OSError:
+            pass
+        try:
+            os.remove(ICLOUD_SYNC_ERROR_LOG)
+        except OSError:
+            pass
+    os.makedirs(ICLOUD_SYNC_STAGING_DIR, exist_ok=True)
+    manifest_text = "\n".join(f"{src}\t{dst}" for src, dst in pairs) + "\n"
+    with open(ICLOUD_SYNC_MANIFEST, "w", encoding="utf-8") as f:
+        f.write(manifest_text)
+    subprocess.run(["open", "-na", ICLOUD_SYNC_APP], check=False)
+
 # ── 근무표 JSON 경로 (엑셀에서 추출한 D조 날짜별 근무) ─────────────
 # 스크립트와 같은 폴더에 d_team_schedule_2026.json 을 두거나,
 # 아래 경로를 실제 위치로 바꿔주세요.
@@ -1909,31 +1948,28 @@ def get_latest_sunzi_entry():
 
 
 def sync_scriptable_widget_file():
-    """저장소의 위젯 스크립트를 Scriptable iCloud Documents에 자동 배포한다."""
+    """저장소의 위젯 스크립트를 Scriptable iCloud Documents에 자동 배포한다.
+    실제 복사는 iCloudSync.app에 위임한다(★ 2026-08-18, 위 설명 참고) — 비동기라
+    반환값은 "이번에 변경분을 보냈는지"만 의미하고, 실제 반영 확인은 아니다."""
     try:
         with open(SCRIPTABLE_WIDGET_SOURCE, "rb") as file:
             source = file.read()
-        os.makedirs(SCRIPTABLE_ICLOUD_DIR, exist_ok=True)
-        changed = False
-        for target in (SCRIPTABLE_WIDGET_FILE, SCRIPTABLE_WIDGET_V3_FILE):
-            try:
-                with open(target, "rb") as file:
-                    if file.read() == source:
-                        continue
-            except OSError:
-                pass
-            tmp_path = target + ".tmp"
-            with open(tmp_path, "wb") as file:
-                file.write(source)
-            os.replace(tmp_path, target)
-            with open(target, "rb") as file:
-                if file.read() != source:
-                    raise OSError(f"Scriptable 위젯 배포 후 내용 검증 실패: {target}")
-            changed = True
-        return changed
     except OSError as exc:
         print(f"⚠️ Scriptable 위젯 자동 배포 실패: {exc}")
         return False
+    pairs = []
+    for target in (SCRIPTABLE_WIDGET_FILE, SCRIPTABLE_WIDGET_V3_FILE):
+        try:
+            with open(target, "rb") as file:
+                if file.read() == source:
+                    continue
+        except OSError:
+            pass
+        pairs.append((SCRIPTABLE_WIDGET_SOURCE, target))
+    if pairs:
+        _sync_files_via_icloud_helper(pairs)
+        return True
+    return False
 
 
 def truncate_title(name, length=14):
@@ -4026,35 +4062,22 @@ class ShiftAlarmApp(rumps.App):
             "job_items": job_items,
             "contest_items": contest_items,
         }
-        for target_dir, target_file in (
-            (MOBILE_STATUS_DIR, MOBILE_STATUS_FILE),
-            (PYTHONISTA_ICLOUD_DIR, PYTHONISTA_STATUS_FILE),
-            (SCRIPTABLE_ICLOUD_DIR, SCRIPTABLE_STATUS_FILE),
-        ):
-            try:
-                os.makedirs(target_dir, exist_ok=True)
-                tmp_path = target_file + ".tmp"
-                with open(tmp_path, "w", encoding="utf-8") as f:
-                    json.dump(status, f, ensure_ascii=False, indent=2)
-                os.replace(tmp_path, target_file)
-            except OSError as atomic_exc:
-                # Scriptable의 iCloud File Provider는 파일이 클라우드에 열린 상태면
-                # 같은 폴더의 tmp→status.json 원자 교체를 거절할 때가 있다. 이전
-                # 코드는 이를 조용히 무시해 위젯이 전날 GY 상태를 계속 표시했다.
-                # 작은 JSON이므로 직접 쓰기로 한 번 더 시도하고, 둘 다 실패하면
-                # 반드시 로그를 남겨 다음 진단에서 보이게 한다.
-                try:
-                    with open(target_file, "w", encoding="utf-8") as f:
-                        json.dump(status, f, ensure_ascii=False, indent=2)
-                    try:
-                        os.unlink(tmp_path)
-                    except OSError:
-                        pass
-                except OSError as direct_exc:
-                    print(
-                        f"⚠️ 모바일 상태 저장 실패: {target_file} "
-                        f"(원자 교체: {atomic_exc}; 직접 쓰기: {direct_exc})"
-                    )
+        # 실제 iCloud 대상 3곳에 대한 쓰기는 iCloudSync.app에 위임한다(★ 2026-08-18,
+        # ICLOUD_SYNC_APP 정의부 설명 참고) — launchd 프로세스 직접 쓰기는 항상
+        # Operation not permitted로 거부된다. 로컬 스테이징 파일에 한 번만 쓰고
+        # 그 경로를 세 대상에 복사하도록 매니페스트로 넘긴다.
+        try:
+            os.makedirs(ICLOUD_SYNC_STAGING_DIR, exist_ok=True)
+            staging_file = os.path.join(ICLOUD_SYNC_STAGING_DIR, "status.json")
+            with open(staging_file, "w", encoding="utf-8") as f:
+                json.dump(status, f, ensure_ascii=False, indent=2)
+            _sync_files_via_icloud_helper([
+                (staging_file, MOBILE_STATUS_FILE),
+                (staging_file, PYTHONISTA_STATUS_FILE),
+                (staging_file, SCRIPTABLE_STATUS_FILE),
+            ])
+        except OSError as exc:
+            print(f"⚠️ 모바일 상태 저장 실패(스테이징 단계): {exc}")
         # 위젯 소스가 바뀐 커밋을 배포한 뒤 앱만 재시작해도 Scriptable 쪽 파일이
         # 자동으로 따라오게 한다. 내용이 같으면 실제 쓰기는 생략한다.
         sync_scriptable_widget_file()
