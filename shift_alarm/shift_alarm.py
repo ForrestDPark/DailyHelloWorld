@@ -227,7 +227,7 @@ GMAIL_ACCOUNT = "pulpilisory@gmail.com"
 GOG_KEYRING_SERVICE = "com.shiftalarm.gog-keyring"
 GMAIL_SUMMARY_HISTORY_LIMIT = 10
 GMAIL_SUMMARY_MENU_LIMIT = 5
-MOBILE_STATUS_MAIL_LIMIT = 3  # 위젯 공간이 좁아 메뉴(5건)보다 적게 노출
+MOBILE_STATUS_MAIL_LIMIT = 1  # ★ 2026-08-19: 안읽은 메일 중 가장 중요한 1건만 위젯에 노출
 
 # ★ 2026-08-18: 메일 목록을 "안읽은 메일 위주로, 쓸만한 정보 순"으로 보여달라는
 # 요청 대응. 채용공고·경진대회가 최우선, 로그인 알림 같은 계정 인증성 메일은
@@ -4057,29 +4057,43 @@ class ShiftAlarmApp(rumps.App):
             _shift_block_day_number(self.schedule, today, current) if current else None
         )
         sunzi_entry = get_latest_sunzi_entry()
-        # ★ 2026-08-08: 카테고리별(커리어/알바, AI/일반) 2건씩 배열로 넘긴다.
+        # ★ 2026-08-08: 메뉴바는 카테고리별(커리어/알바, AI/일반) 각 1건씩 보여주지만
+        # (build_menu 안 별도 루프 참고), 위젯은 화면이 좁다는 피드백(★ 2026-08-19)으로
+        # 카테고리 통틀어 점수 가장 높은 1건만 보여준다.
         job_items = []
+        best_job, best_job_category, best_job_label = None, None, None
         for category, cat_label in JOB_CATEGORIES.items():
             top_job = get_top_job_analysis(category)
-            if top_job:
-                job_items.append({
-                    "category": category, "label": cat_label,
-                    "company": top_job.get("company"), "title": top_job.get("title"),
-                    "score": top_job.get("score"), "url": top_job.get("job_url"),
-                    "notion_url": top_job.get("url"),
-                })
+            if top_job and (best_job is None or (top_job.get("score") or 0) > (best_job.get("score") or 0)):
+                best_job, best_job_category, best_job_label = top_job, category, cat_label
+        if best_job:
+            job_items.append({
+                "category": best_job_category, "label": best_job_label,
+                "company": best_job.get("company"), "title": best_job.get("title"),
+                "score": best_job.get("score"), "url": best_job.get("job_url"),
+                "notion_url": best_job.get("url"),
+            })
         contest_items = []
+        best_contest, best_contest_category, best_contest_label = None, None, None
         for category, cat_label in CONTEST_CATEGORIES.items():
             top_contest = get_top_contest_analysis(category)
-            if top_contest:
-                contest_items.append({
-                    "category": category, "label": cat_label,
-                    "organizer": top_contest.get("organizer"), "title": top_contest.get("title"),
-                    "score": top_contest.get("score"), "url": top_contest.get("contest_url"),
-                    "notion_url": top_contest.get("url"),
-                })
+            if top_contest and (
+                best_contest is None
+                or (top_contest.get("score") or 0) > (best_contest.get("score") or 0)
+            ):
+                best_contest, best_contest_category, best_contest_label = top_contest, category, cat_label
+        if best_contest:
+            contest_items.append({
+                "category": best_contest_category, "label": best_contest_label,
+                "organizer": best_contest.get("organizer"), "title": best_contest.get("title"),
+                "score": best_contest.get("score"), "url": best_contest.get("contest_url"),
+                "notion_url": best_contest.get("url"),
+            })
         # ★ 2026-08-18: 메뉴에 이미 쌓아둔 최근 메일 AI 요약을 위젯에도 그대로
         # 노출한다 — 폰 화면에서 메뉴바를 열지 않고도 최근 메일을 볼 수 있게.
+        # ★ 2026-08-19: 안읽은 메일 중 가장 중요해 보이는 1건만 보여달라는 요청으로
+        # 축소 — gmail_recent_summaries는 이미 (안읽음 우선 → priority 높은 순)으로
+        # 정렬돼 있으므로 안읽은 것만 걸러 맨 앞 1건만 쓰면 된다.
         mail_items = [
             {
                 "category": item.get("category"),
@@ -4088,8 +4102,9 @@ class ShiftAlarmApp(rumps.App):
                 "summary": item.get("summary"),
                 "url": _gmail_message_url(item.get("id")),
             }
-            for item in self.config.get("gmail_recent_summaries", [])[:MOBILE_STATUS_MAIL_LIMIT]
-        ]
+            for item in self.config.get("gmail_recent_summaries", [])
+            if item.get("unread")
+        ][:MOBILE_STATUS_MAIL_LIMIT]
         codex_progress = _codex_primary_window_progress(self._codex_quota)
         status = {
             "widget_schema_version": WIDGET_SCHEMA_VERSION,
