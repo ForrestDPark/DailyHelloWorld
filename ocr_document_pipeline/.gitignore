@@ -1,0 +1,7 @@
+# 실제 문서(가짜 샘플이 아닌 진짜 회사 문서)는 절대 커밋하지 않는다.
+samples_private/
+*.db
+*.env
+config.json
+__pycache__/
+*.pyc
