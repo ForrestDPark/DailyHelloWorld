@@ -153,11 +153,8 @@ JOB_COLLECTOR_REFRESH_SECONDS = 24 * 60 * 60  # 하루 1번
 # ★ 2026-08-08: 취업/알바는 성격이 달라 카테고리별로 분리(job_collector.py의
 # JOB_CATEGORY_LABELS와 키를 맞춘다).
 JOB_CATEGORIES = {"career": "커리어", "parttime": "알바"}
-PARTTIME_RECOMMENDATION_MIN_SCORE = 50
 # ★ 2026-08-18: 채용 메일에서 추출된 공고의 1차 키워드 점수(0~100)가 이 이상이면
 # 하루 1번 도는 배치(analyze-top)를 기다리지 않고 즉시 분석을 트리거한다.
-# PARTTIME_RECOMMENDATION_MIN_SCORE와 같은 50점 기준을 그대로 재사용(이미
-# 검증된 "이 정도는 볼 만하다" 기준).
 JOB_EMAIL_IMMEDIATE_ANALYSIS_MIN_SCORE = 50
 JOB_TOP_ANALYSIS_STATE = {
     cat: os.path.join(JOB_COLLECTOR_DIR, "data", f"top_job_notion_{cat}.json") for cat in JOB_CATEGORIES
@@ -3306,18 +3303,16 @@ def _notion_keychain_token():
 def get_top_job_analysis(category="career"):
     """job_collector.py analyze-top --category가 써 둔 상태 파일을 읽는다. 없거나
     깨졌으면 None — 메뉴에서 항목을 아예 생략한다(★ 2026-08-08: career/parttime
-    카테고리별 파일로 분리)."""
+    카테고리별 파일로 분리). ★ 2026-08-19: parttime 50점 미만을 여기서 다시
+    숨기던 방어 로직은 제거했다 — job_collector.py 쪽 점수 하드컷도 없앴으니
+    (analyze_top_job이 매일 무언가는 새로 뽑아 발행함) 여기서까지 이중으로
+    숨기면 "점수 낮아도 매일 다른 게 보이면 좋겠다"는 요청과 어긋난다."""
     path = JOB_TOP_ANALYSIS_STATE[category]
     if not os.path.exists(path):
         return None
     try:
         with open(path, encoding="utf-8") as f:
-            result = json.load(f)
-        # 오래된 상태 파일이 남아 있어도 낮은 점수의 알바가 메뉴·위젯에 다시
-        # 나타나지 않도록 표시 계층에서도 한 번 더 방어한다.
-        if category == "parttime" and int(result.get("score") or 0) < PARTTIME_RECOMMENDATION_MIN_SCORE:
-            return None
-        return result
+            return json.load(f)
     except (OSError, json.JSONDecodeError):
         return None
 

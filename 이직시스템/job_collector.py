@@ -1709,11 +1709,13 @@ def _rank_candidates_by_analyzability(
         info_map[key] = {**signals, "score_detail": detail, "total": detail["total"]}
 
     ranked = sorted(candidates, key=lambda row: info_map[f"{row['source']}:{row['source_id']}"]["total"], reverse=True)
-    if category == "parttime":
-        ranked = [
-            row for row in ranked
-            if info_map[f"{row['source']}:{row['source_id']}"]["total"] >= PARTTIME_RECOMMENDATION_MIN_SCORE
-        ]
+    # ★ 2026-08-19: PARTTIME_RECOMMENDATION_MIN_SCORE(50점) 미만이면 전부 걸러내던
+    # 예전 로직은 "적합한 후보가 없는 날은 아예 갱신을 건너뛴다"는 뜻이라, 며칠씩
+    # 조건을 만족하는 알바가 없으면 훨씬 예전에 발행된 결과가 계속 그대로 남아
+    # "매일 똑같은 것만 보인다"는 문제로 이어졌다("점수 낮아도 매일 다른 게 보이면
+    # 좋겠다"는 요청). 주제 적합성(코딩·AI·온라인/통근권)은 위 eligible 필터가 이미
+    # 걸렀으니, 점수 자체로 후보를 통째로 비우지는 않고 순위만 매긴다 — 최저 점수
+    # 후보라도 오늘의 순환 대상에는 남는다.
     if ranked:
         top = ranked[0]
         total = info_map[f"{top['source']}:{top['source_id']}"]["total"]
@@ -1805,7 +1807,7 @@ def analyze_top_job(args: argparse.Namespace) -> None:
     candidates, richness_info = _rank_candidates_by_analyzability(candidates, config, category)
     if not candidates:
         if category == "parttime":
-            print(f"[{JOB_CATEGORY_LABELS[category]}] 코딩·AI·온라인 적합성과 {PARTTIME_RECOMMENDATION_MIN_SCORE}점 기준을 만족한 후보가 없어 오늘은 표시하지 않습니다.")
+            print(f"[{JOB_CATEGORY_LABELS[category]}] 코딩·AI·온라인/통근권 적합성을 만족한 후보가 없어 오늘은 표시하지 않습니다.")
         else:
             print(f"[{JOB_CATEGORY_LABELS[category]}] 추천 후보가 없습니다.")
         return

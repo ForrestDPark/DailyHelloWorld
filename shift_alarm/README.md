@@ -512,6 +512,15 @@ Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으
 
 ## 25. 📧 위젯 메일 요약 + 채용 메일 즉시 분석 + 메뉴 표시 개선 (★ 2026-08-18 추가)
 
-- **위젯에 최근 메일 요약 노출**: 지금까지 메뉴바에만 쌓이던 `gmail_recent_summaries`(최근 AI 요약 메일)를 `status.json`의 `mail_items`(최근 `MOBILE_STATUS_MAIL_LIMIT=3`건)로도 내보낸다. `ShiftAlarmWidget.js`의 large 레이아웃 `buildBottomSection()`에 "📧 최근 메일" 섹션을 추가해 손자병법/추천 공고·경진대회 아래에 카테고리·발신자·제목 한 줄로 표시하고, 탭하면 해당 Gmail 메일로 바로 이동한다.
+- **위젯에 최근 메일 요약 노출**: 지금까지 메뉴바에만 쌓이던 `gmail_recent_summaries`(최근 AI 요약 메일)를 `status.json`의 `mail_items`로도 내보낸다. `ShiftAlarmWidget.js`의 large 레이아웃 `buildBottomSection()`에 "📧 최근 메일" 섹션을 추가해 손자병법/추천 공고·경진대회 아래에 카테고리·발신자·제목 한 줄로 표시하고, 탭하면 해당 Gmail 메일로 바로 이동한다(★ 표시 개수는 26번 항목에서 1건으로 축소됨).
 - **채용 메일 감지 시 즉시 분석**: 예전엔 발신자가 정확히 `saramin.co.kr`일 때만 `ingest-email`을 호출했는데, AI가 분류한 메일 카테고리에 "채용"이 포함되면(발신자 도메인 무관) 폭넓게 트리거하도록 넓혔다 — 실제 추출 지원 여부는 어차피 `job_collector.py`의 `extract_job_postings_from_email()`이 발신자로 다시 검사하므로 안전하다(미지원 발신자면 조용히 "추출된 공고 없음"으로 끝남). `job_collector.py ingest_email()`이 이제 `MAX_SCORE=N` 기계 판독용 줄을 stdout에 추가로 남기고, `_ingest_job_email_thread()`가 이를 파싱해 `JOB_EMAIL_IMMEDIATE_ANALYSIS_MIN_SCORE`(50점, `PARTTIME_RECOMMENDATION_MIN_SCORE`와 동일 기준 재사용) 이상이면 `"[N점] 점수가 높으므로 추천 채용공고 분석 진행하겠습니다"`를 음성으로 안내한 뒤 하루 1번 배치(`_run_job_analysis_top`)를 기다리지 않고 바로 `career` 카테고리 `analyze-top`을 실행한다. 두 흐름이 같은 analyze-top 로직을 쓰도록 `_run_job_analysis_top_for_category(category, cat_label=None)`로 공통 분리했다.
 - **메뉴바 메일 요약 가독성 개선**: "요약이 화살표를 눌러야(하위 메뉴를 펼쳐야) 보이고 회색이라 잘 안 보인다"는 피드백으로 상위/하위 항목 배치를 뒤집었다 — 상위(항상 바로 보임)에 `🤖 [카테고리] {요약 60자}`를 놓고, 제목·보낸사람은 하위 항목으로 내렸다.
+
+## 26. 📱 위젯 표시 1건 축소 + parttime 추천이 며칠씩 안 바뀌던 문제 해결 (★ 2026-08-19 추가)
+
+**사용자 요청**: "메일도 한개, 공고도 한개, 경진대회도 한개씩만 보이게 해줘. 그리고 점수 낮아도 매일매일 다른 게 보이게 해줘."
+
+- **위젯 항목을 카테고리 통틀어 1건으로 축소**: 예전엔 `job_items`/`contest_items`가 카테고리(커리어·알바 / AI·일반)별로 각 1건씩 최대 2건 나왔는데, "폰 화면이 좁다"는 지적으로 카테고리 통틀어 점수가 가장 높은 1건만 남기도록 `_write_mobile_status()`를 고쳤다(메뉴바 드롭다운은 화면이 넓어 기존처럼 카테고리별로 계속 보여준다 — 위젯만의 축소). `mail_items`도 `MOBILE_STATUS_MAIL_LIMIT=1`로 축소하고, `gmail_recent_summaries`를 안읽음 우선 → 유용도(`infer_mail_priority`, 채용/경진대회 최우선·계정 인증 후순위) 순으로 정렬해 그중 안읽은 것 1건만 노출한다.
+- **근본 원인 발견 — parttime(알바) 추천이 며칠씩 안 바뀌던 이유**: `job_collector.py`의 `_rank_candidates_by_analyzability()`가 parttime 카테고리에 한해 `PARTTIME_RECOMMENDATION_MIN_SCORE`(50점) 미만 후보를 전부 걸러내는 하드컷을 갖고 있었다 — 조건을 만족하는 알바가 하루도 없으면 `analyze_top_job()`이 "오늘은 표시하지 않습니다"만 출력하고 **아무것도 갱신하지 않은 채 그냥 끝났다.** 그 결과 예전에 우연히 50점을 넘겨 발행됐던 결과가 이후 며칠(심하면 몇 주)씩 그대로 메뉴·위젯에 남아 "매일 똑같은 것만 보인다"는 증상으로 나타났다.
+- **해결**: 점수 하드컷 자체를 없애고 순위만 매기도록 고쳤다 — 주제 적합성(코딩·AI·온라인 재택 또는 아산 통근권)은 별도의 `_parttime_recommendation_eligibility()` 필터가 이미 걸러주므로, 그 필터를 통과한 후보라면 점수가 아무리 낮아도 오늘의 순환(`_apply_no_repeat_rotation`) 대상에 남는다 — 즉 조건을 만족하는 알바가 있는 한 매일 무언가는 새로 뽑혀 발행된다. 표시 계층(`shift_alarm.py`의 `get_top_job_analysis()`)에도 있던 "parttime 50점 미만이면 다시 숨긴다"는 이중 방어 로직도 같이 제거했다 — 안 그러면 DB에는 발행됐는데 메뉴·위젯에서만 다시 숨겨지는 모순이 생긴다.
+- career/경진대회 카테고리는 애초에 이런 점수 하드컷이 없어서(순수 순위·로테이션만 사용) 영향 없음 — parttime 전용 버그였다.

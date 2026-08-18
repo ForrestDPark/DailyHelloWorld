@@ -140,7 +140,12 @@ class JobCollectorTest(unittest.TestCase):
         self.assertTrue(jc._parttime_recommendation_eligibility(remote, self.config)[0])
         self.assertTrue(jc._parttime_recommendation_eligibility(asan, self.config)[0])
 
-    def test_parttime_daily_pool_hides_scores_below_50(self):
+    def test_parttime_low_score_still_ranked_not_hidden(self):
+        """★ 2026-08-19: 예전엔 50점 미만이면 후보군을 통째로 비워 "적합한 후보가
+        없는 날은 갱신을 건너뛴다"는 뜻이었는데, 이게 며칠씩 이어지면 훨씬 예전
+        결과가 그대로 남아 "매일 똑같은 것만 보인다"는 문제로 이어졌다("점수 낮아도
+        매일 다른 게 보이면 좋겠다"는 요청). 주제 적합성(코딩·AI·온라인)은 별도
+        eligibility 필터가 걸러주므로, 점수 자체로는 더 이상 후보를 비우지 않는다."""
         low = self._job_row(
             source="알바몬(크롤링)", source_id="low", title="재택 AI 보조",
             location="전국", employment_type="", salary="", keywords="", skills="AI",
@@ -151,7 +156,8 @@ class JobCollectorTest(unittest.TestCase):
              mock.patch("company_profile.search_related_jobs", return_value=[]):
             ranked, info = jc._rank_candidates_by_analyzability([low], self.config, "parttime")
         self.assertLess(info["알바몬(크롤링):low"]["total"], jc.PARTTIME_RECOMMENDATION_MIN_SCORE)
-        self.assertEqual(ranked, [])
+        self.assertEqual(len(ranked), 1)
+        self.assertEqual(ranked[0]["source_id"], "low")
 
     def test_score_breakdown_lists_each_news_source_link(self):
         row = self._job_row()
