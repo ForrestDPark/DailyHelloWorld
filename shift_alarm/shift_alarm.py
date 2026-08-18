@@ -829,6 +829,41 @@ def get_free_storage_gb(path="/"):
     except OSError:
         return None
 
+
+# ── 저장공간 부족 시 안전한 캐시 자동 정리 (★ 2026-08-18 추가) ──────────
+# "System Data"가 너무 크다는 요청 — 다만 launchd 백그라운드 항목을 함부로
+# 끄면 필요한 기능이 멈출 수 있어(사용자가 직접 "안전한 캐시만 자동 삭제"를
+# 선택함) macOS 자신이 "안전하게 지워도 된다"고 명시한 ~/Library/Caches만
+# 건드린다 — 이 디렉터리에 뭔가 저장하는 앱은 전부 그게 지워져도 알아서
+# 다시 만들어낼 책임이 있다는 것이 Apple의 설계 규약이다.
+USER_CACHES_DIR = os.path.expanduser("~/Library/Caches")
+CACHE_CLEANUP_COOLDOWN_HOURS = 24
+
+
+def clear_user_caches():
+    """~/Library/Caches 안의 항목들을 지우고 (성공 개수, 실패 개수, 확보한 GB)를
+    반환한다. 권한이 없거나 사용 중이라 못 지우는 항목은 조용히 건너뛴다 —
+    시스템/다른 앱이 잠근 파일이라는 뜻이라 애초에 안전 대상이 아니다."""
+    if not os.path.isdir(USER_CACHES_DIR):
+        return 0, 0, 0.0
+    before_free = shutil.disk_usage(USER_CACHES_DIR).free
+    freed_count = 0
+    failed_count = 0
+    for name in os.listdir(USER_CACHES_DIR):
+        entry = os.path.join(USER_CACHES_DIR, name)
+        try:
+            if os.path.isdir(entry) and not os.path.islink(entry):
+                shutil.rmtree(entry)
+            else:
+                os.remove(entry)
+            freed_count += 1
+        except OSError:
+            failed_count += 1
+    after_free = shutil.disk_usage(USER_CACHES_DIR).free
+    freed_gb = max(0.0, (after_free - before_free) / (1024 ** 3))
+    return freed_count, failed_count, freed_gb
+
+
 # ── 주간 리마인더 설정 ───────────────────────────────────────
 # 대부분 요일이 아니라 근무표의 "휴무 블록"을 기준으로 잡는다.
 # - 헬스장: 근무·휴무와 무관하게 격일 간격 반복. 상체/하체를 번갈아 표시
@@ -865,7 +900,7 @@ REMINDERS = {
     "agentic_coding_reading": {"label": "📚 에이전틱 코딩 책 읽기(3일에 1회)", "enabled": True},
     "sondongju_off":   {"label": "🎉 손동주 쉬는 날(동주 근무 주기 기준)",         "enabled": True},
     "nose_hair_trim":  {"label": "🪒 코털 정리하는 날(4일에 1회)",       "enabled": True},
-    "nail_trim":       {"label": "💅 손톱발톱 정리하는 날(2주에 1회)",   "enabled": True},
+    "nail_trim":       {"label": "💅 손톱발톱 정리하는 날(11일에 1회)",   "enabled": True},
     "earphone_charge": {"label": "🎧 이어폰 충전하는 날(4일에 1회)",     "enabled": True},
     "kakao_cleanup":   {"label": "🧹 카톡 정리하는 날(휴무 마지막날)",       "enabled": True},
     "outlet_shopping": {"label": "🛍️ 아울렛 쇼핑하는 날(월 1회)",    "enabled": True},
@@ -925,8 +960,10 @@ HUE_COMMAND_PREFS = os.path.expanduser(
 HUE_WAKE_ROOM_NAME = "거실1"
 
 
-def toggle_hue_room(room_name=HUE_WAKE_ROOM_NAME):
-    """Command 앱의 Bridge 연결로 방의 현재 전원 상태를 읽고 반대로 바꾼다."""
+def _hue_grouped_light_url(room_name):
+    """Command 앱이 저장해둔 Bridge 연결 정보로 room_name의 grouped_light
+    제어 URL과 요청 헤더/컨텍스트를 찾는다. toggle_hue_room()과
+    set_hue_room_power() 둘 다 방을 찾는 과정은 같아서 여기로 뺐다."""
     with open(HUE_COMMAND_PREFS, "rb") as file:
         prefs = plistlib.load(file)
     credentials = json.loads(prefs["shared_credentials"])
@@ -955,7 +992,12 @@ def toggle_hue_room(room_name=HUE_WAKE_ROOM_NAME):
     )
     if not grouped_light_id:
         raise RuntimeError("Hue 방의 조명 제어 대상을 찾지 못했습니다.")
-    grouped_light_url = f"{bridge_url}/grouped_light/{grouped_light_id}"
+    return f"{bridge_url}/grouped_light/{grouped_light_id}", headers, context
+
+
+def toggle_hue_room(room_name=HUE_WAKE_ROOM_NAME):
+    """방의 현재 전원 상태를 읽고 반대로 바꾼다."""
+    grouped_light_url, headers, context = _hue_grouped_light_url(room_name)
     request = urllib.request.Request(grouped_light_url, headers=headers)
     with urllib.request.urlopen(request, timeout=10, context=context) as response:
         current = json.load(response)
@@ -975,6 +1017,25 @@ def toggle_hue_room(room_name=HUE_WAKE_ROOM_NAME):
     if result.get("errors"):
         raise RuntimeError("Hue 전원 변경에 실패했습니다.")
     return new_state
+
+
+def set_hue_room_power(room_name, on):
+    """방의 전원을 (현재 상태와 무관하게) on/off로 명시적으로 맞춘다.
+    ★ 2026-08-18: 이어서보기(이북/일본어 EPUB) 실행 시 거실 조명을
+    무조건 켜달라는 요청 — toggle과 달리 이미 켜져 있어도 그대로 두고
+    꺼져 있으면 켠다(반대로 꺼버리는 일이 없어야 하므로 toggle 대신 사용)."""
+    grouped_light_url, headers, context = _hue_grouped_light_url(room_name)
+    request = urllib.request.Request(
+        grouped_light_url,
+        data=json.dumps({"on": {"on": bool(on)}}).encode("utf-8"),
+        method="PUT",
+        headers={**headers, "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=10, context=context) as response:
+        result = json.load(response)
+    if result.get("errors"):
+        raise RuntimeError("Hue 전원 변경에 실패했습니다.")
+    return bool(on)
 
 # ── 아산시 좌표 ──────────────────────────────────────────────
 LATITUDE  = 36.78
@@ -1328,8 +1389,10 @@ SONDONGJU_CYCLE_DAYS = 14
 SONDONGJU_OFF_DAY_OFFSETS = (5, 6, 12, 13)
 NOSE_HAIR_TRIM_ANCHOR = datetime.date(2026, 8, 3)
 NOSE_HAIR_TRIM_INTERVAL_DAYS = 4  # ★ 2026-08-07: 7일→14일→4일로 재조정(사용자 요청)
-NAIL_TRIM_ANCHOR = datetime.date(2026, 8, 7)
-NAIL_TRIM_INTERVAL_DAYS = 14  # ★ 2026-08-07 추가: 2주에 1회
+NAIL_TRIM_ANCHOR = datetime.date(2026, 8, 18)
+# ★ 2026-08-18: 지난 알림(8/7)과 실제로 다시 깎은 오늘(8/18) 사이 실측 주기가
+# 14일이 아니라 11일이라(2주보다 짧게 자람) 그 주기로 재조정, 기준일도 오늘로.
+NAIL_TRIM_INTERVAL_DAYS = 11
 EARPHONE_CHARGE_ANCHOR = datetime.date(2026, 8, 3)
 EARPHONE_CHARGE_INTERVAL_DAYS = 4
 # ★ 2026-08-07: 원래 휴무 블록 시작·마지막날에만 떴는데, 휴무 블록이 뜸한 주에는
@@ -1489,7 +1552,7 @@ def get_today_reminders(schedule, now=None):
     - 손동주 쉬는 날: 동주 본인 근무표(야간 2주/주간 2주 로테이션, 5일 근무+2일 휴무
       반복) 기준. 2026-08-04(야간 첫날)를 14일 주기 1일째로 놓고 계산.
     - 코털 정리: 근무표와 무관하게 2026-08-03부터 4일마다 한 번
-    - 손톱발톱 정리: 근무표와 무관하게 2026-08-07부터 14일(2주)마다 한 번
+    - 손톱발톱 정리: 근무표와 무관하게 2026-08-18부터 11일마다 한 번(★2026-08-18: 실측 주기로 재조정, 14일→11일)
     - 이어폰 충전: 근무표와 무관하게 2026-08-03부터 4일마다 한 번
     - 카톡 정리: 오늘이 휴무 블록의 마지막날 (내일은 근무)
     - 2만보 걷기: 근무·휴무와 무관하게 2026-08-07부터 7일 주기 안 이틀(0·3일째)
@@ -4009,14 +4072,54 @@ class ShiftAlarmApp(rumps.App):
         if (
             self.storage_free_gb is not None
             and self.storage_free_gb <= LOW_STORAGE_WARNING_GB
-            and self._last_storage_warning_date != today
         ):
-            self._last_storage_warning_date = today
-            notify_spoken(
-                "💾 저장공간 부족",
-                f"남은 용량 {self.storage_free_gb}GB",
-                "5GB 이하입니다. Shift Alarm 메뉴의 '저장공간 관리'로 정리해주세요.",
-            )
+            if self._last_storage_warning_date != today:
+                self._last_storage_warning_date = today
+                notify_spoken(
+                    "💾 저장공간 부족",
+                    f"남은 용량 {self.storage_free_gb}GB",
+                    "5GB 이하입니다. Shift Alarm 메뉴의 '저장공간 관리'로 정리해주세요.",
+                )
+            self._maybe_auto_clear_caches()
+
+    def _maybe_auto_clear_caches(self):
+        """★ 2026-08-18: 저장공간이 부족할 때 안전하게 지워도 되는
+        ~/Library/Caches를 자동으로 정리한다(사용자가 "안전한 캐시만 자동
+        삭제"를 선택). 너무 자주 돌면 낭비라 CACHE_CLEANUP_COOLDOWN_HOURS
+        동안은 다시 돌지 않는다."""
+        last_iso = self.config.get("last_cache_cleanup_at")
+        if last_iso:
+            try:
+                last_dt = datetime.datetime.fromisoformat(last_iso)
+                if datetime.datetime.now() - last_dt < datetime.timedelta(hours=CACHE_CLEANUP_COOLDOWN_HOURS):
+                    return
+            except ValueError:
+                pass
+        self.config["last_cache_cleanup_at"] = datetime.datetime.now().isoformat()
+        save_config(self.config)
+        threading.Thread(target=self._run_cache_cleanup, args=(False,), daemon=True).start()
+
+    def clean_caches_now(self, _):
+        """메뉴에서 수동으로 누르는 "지금 캐시 정리" — 쿨다운 없이 바로 실행."""
+        self.config["last_cache_cleanup_at"] = datetime.datetime.now().isoformat()
+        save_config(self.config)
+        threading.Thread(target=self._run_cache_cleanup, args=(True,), daemon=True).start()
+
+    def _run_cache_cleanup(self, manual):
+        freed_count, failed_count, freed_gb = clear_user_caches()
+        self.storage_free_gb = get_free_storage_gb()
+        AppHelper.callAfter(self._update_title)
+        notify_fn = notify_spoken if not manual else (
+            lambda title, subtitle, message: rumps.notification(title, subtitle, message)
+        )
+        AppHelper.callAfter(
+            notify_fn,
+            "🧹 캐시 정리 완료",
+            f"{freed_gb:.1f}GB 확보",
+            f"{freed_count}개 정리됨"
+            + (f" · {failed_count}개는 사용 중이라 건너뜀" if failed_count else "")
+            + f" · 남은 용량 {self.storage_free_gb}GB",
+        )
 
     # ── 급여 갱신 ────────────────────────────────────────────
 
@@ -4723,6 +4826,18 @@ class ShiftAlarmApp(rumps.App):
             message = str(exc)
         AppHelper.callAfter(rumps.notification, "Philips Hue", title, message)
 
+    def _turn_on_hue_for_reading(self):
+        """★ 2026-08-18: "이어서보기 할 때 거실 불이 켜지면 좋겠다"는 요청 —
+        이북/일본어 EPUB 이어하기를 누르면 거실 조명을 켠다. toggle이 아니라
+        set_hue_room_power(on=True)라서 이미 켜져 있으면 그대로 두고, 꺼진
+        경우에만 켠다(실수로 꺼버리는 일이 없음). 실패해도 책은 이미 열렸으니
+        조용한 알림으로만 알리고 음성으로 방해하지 않는다."""
+        try:
+            set_hue_room_power(HUE_WAKE_ROOM_NAME, True)
+        except (OSError, KeyError, IndexError, ValueError, RuntimeError,
+                json.JSONDecodeError, urllib.error.HTTPError, urllib.error.URLError) as exc:
+            AppHelper.callAfter(rumps.notification, "Philips Hue", "조명 켜기 실패", str(exc))
+
     # ── 메뉴 빌드 ────────────────────────────────────────────
 
     def build_menu(self):
@@ -4886,6 +5001,7 @@ class ShiftAlarmApp(rumps.App):
         trash_size = get_trash_size_str()
         trash_label = f"🗑️ 저장공간 관리 (휴지통 {trash_size})" if trash_size else "🗑️ 저장공간 관리"
         self.menu.add(rumps.MenuItem(trash_label, callback=self.open_storage_settings))
+        self.menu.add(rumps.MenuItem("🧹 지금 캐시 정리", callback=self.clean_caches_now))
 
         self.menu.add(None)
         more_menu = rumps.MenuItem("기타")
@@ -5038,6 +5154,7 @@ class ShiftAlarmApp(rumps.App):
             rumps.alert("오류", "이어서 읽을 책 정보가 없습니다.")
             return
         open_ebook_reader_terminal(last["file"])
+        threading.Thread(target=self._turn_on_hue_for_reading, daemon=True).start()
 
     def choose_ebook_now(self, _):
         path = choose_ebook_file()
@@ -5050,6 +5167,7 @@ class ShiftAlarmApp(rumps.App):
             rumps.alert("오류", "이어서 읽을 일본어 EPUB 정보가 없습니다.")
             return
         open_jp_epub(last["file"])
+        threading.Thread(target=self._turn_on_hue_for_reading, daemon=True).start()
 
     def choose_jp_epub_now(self, _):
         path = choose_jp_epub_file()
