@@ -3630,6 +3630,14 @@ def _speak_text(text):
     text = _EMOJI_PATTERN.sub("", text).strip()
     if not text:
         return
+    # ★ 2026-08-19: 리마인더 라벨 대부분이 "손톱발톱 정리하는 날(11일마다 한 번)"처럼
+    # 괄호로 부가 설명(주기 등)을 달고 있는데, 음성으로 그대로 읽으면 어색하다는
+    # 피드백 — 화면 표시(메뉴·알림 배너)에는 그대로 남기고 음성에서만 괄호 안
+    # 내용을 뺀다. 괄호 제거 후 생기는 중복 공백도 정리한다.
+    text = re.sub(r"[\(（][^\)）]*[\)）]", "", text)
+    text = re.sub(r"[ \t]{2,}", " ", text).strip()
+    if not text:
+        return
     text = text[:SPEAK_MAX_CHARS]
     # ★ 2026-08-17: 리마인더처럼 항목을 "\n".join()해서 한 번에 넘기면(예:
     # _maybe_notify_reminders) say가 줄바꿈을 거의 쉬지 않고 읽어서 항목들이
