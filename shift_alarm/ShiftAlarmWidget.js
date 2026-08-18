@@ -198,19 +198,25 @@ function buildBottomSection(widget, status) {
     if (item.notion_url || item.url) line.url = item.notion_url || item.url;
   });
 
-  // ★ 2026-08-18: 메뉴바에 쌓아둔 최근 메일 AI 요약(발신자/제목/카테고리)을
-  // 위젯에도 그대로 노출한다. 탭하면 Gmail의 해당 메일로 바로 이동.
+  // ★ 2026-08-18: 메뉴바에 쌓아둔 최근 메일 AI 요약을 위젯에도 노출한다.
+  // 메뉴바와 같은 순서로(안읽음 우선 → 유용도 순) 넘어오므로 그대로 나열.
+  // 제목 줄은 카테고리+제목만 최대한 짧게, 실제 궁금한 내용인 요약을 아래
+  // 줄에 더 크게 보여준다(발신자는 생략 — 탭하면 Gmail에서 확인 가능).
   const mailItems = status.mail_items || [];
   mailItems.forEach((item, i) => {
     if (i === 0) {
       widget.addSpacer(jobItems.length || contestItems.length ? 8 : 0);
       addLine(widget, "📧 최근 메일", { color: COLOR_DIM, size: 11, bold: true });
     }
-    widget.addSpacer(2);
+    widget.addSpacer(i === 0 ? 2 : 5);
     const category = item.category ? `[${item.category}] ` : "";
-    const label = `${category}${item.sender || "발신자 미상"} — ${item.subject || "제목 없음"}`;
-    const line = addLine(widget, label, { color: COLOR_SUB, size: 11, lineLimit: 2 });
-    if (item.url) line.url = item.url;
+    const titleLine = `${category}${item.subject || "제목 없음"}`;
+    const titleText = addLine(widget, titleLine, { color: COLOR_DIM, size: 10, lineLimit: 1 });
+    if (item.url) titleText.url = item.url;
+    const summaryLine = addLine(widget, item.summary || "요약 없음", {
+      color: COLOR_SUB, size: 11, lineLimit: 2,
+    });
+    if (item.url) summaryLine.url = item.url;
   });
 }
 

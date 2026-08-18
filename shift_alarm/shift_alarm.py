@@ -230,21 +230,29 @@ GMAIL_SUMMARY_MENU_LIMIT = 5
 MOBILE_STATUS_MAIL_LIMIT = 3  # 위젯 공간이 좁아 메뉴(5건)보다 적게 노출
 
 # ★ 2026-08-18: 메일 목록을 "안읽은 메일 위주로, 쓸만한 정보 순"으로 보여달라는
-# 요청 대응. 분류(category) 규칙과 1:1로 대응하는 기본 유용도 점수 — AI 요약이
-# 성공하면 AI가 실제 본문 맥락을 보고 매기는 priority로 덮어쓰고, AI가 실패하거나
-# 아직 요약되지 않은 항목은 이 기본값으로 정렬한다. 채용공고·경진대회가 최우선,
-# 로그인 알림 같은 계정 인증성 메일은 후순위로 내려달라는 피드백(★ 2026-08-18)을
-# 반영해 "보안" 카테고리 기본값을 낮게 잡는다.
-MAIL_CATEGORY_PRIORITY = {
-    "채용": 5,
-    "경진대회": 5,
-    "결제·금융": 3,
-    "배송·예약": 3,
-    "일반 메일": 2,
-    "뉴스레터·홍보": 1,
-    "보안": 1,
-}
+# 요청 대응. 채용공고·경진대회가 최우선, 로그인 알림 같은 계정 인증성 메일은
+# 후순위. AI가 붙이는 category는 "보안 알림"/"채용정보/뉴스레터"처럼 규칙 문자열과
+# 다른 자유 텍스트라서 dict 매칭이 아니라 키워드 포함 여부로 판정한다 — 이래야
+# AI 분류든 예전에 캐시된 항목(과거엔 priority 필드 자체가 없었다)이든 전부
+# 같은 기준으로 유용도를 매길 수 있다. AI가 준 priority(1~5)가 있으면 그게 우선.
+MAIL_PRIORITY_RULES = (
+    (5, ("채용", "공채", "지원", "면접", "recruit", "career", "job",
+         "경진대회", "공모전", "contest", "competition")),
+    (3, ("결제", "승인", "청구", "입금", "출금", "카드", "invoice", "payment",
+         "배송", "주문", "예약", "출발", "도착", "delivery", "reservation")),
+    (1, ("보안", "인증", "로그인", "sign-in", "sign in", "signed in", "otp", "2단계",
+         "verification", "security",
+         "뉴스레터", "소식", "할인", "이벤트", "newsletter", "promotion", "광고")),
+)
 MAIL_DEFAULT_PRIORITY = 2
+
+
+def infer_mail_priority(category, subject, summary):
+    haystack = f"{category or ''} {subject or ''} {summary or ''}".casefold()
+    for score, words in MAIL_PRIORITY_RULES:
+        if any(word in haystack for word in words):
+            return score
+    return MAIL_DEFAULT_PRIORITY
 
 
 def fetch_gmail_message_body(message_id):
@@ -325,7 +333,7 @@ def analyze_gmail_record(record):
     if not summary:
         summary = f"{sender}가 보낸 ‘{subject}’ 메일입니다."
     unread = "UNREAD" in (record.get("labels") or [])
-    priority = MAIL_CATEGORY_PRIORITY.get(category, MAIL_DEFAULT_PRIORITY)
+    priority = infer_mail_priority(category, subject, summary)
     return {"id": str(record.get("id")), "category": category, "sender": sender,
             "subject": subject, "summary": summary, "unread": unread, "priority": priority}
 
@@ -5341,6 +5349,12 @@ class ShiftAlarmApp(rumps.App):
                 latest = latest_by_id.get(old.get("id"))
                 if latest is not None and latest.get("unread") != old.get("unread"):
                     old = dict(old, unread=latest.get("unread"))
+                # 이 기능이 생기기 전에 캐시된 항목은 priority 필드 자체가 없다 —
+                # 그대로 두면 기본값(2)으로 묶여 사실상 예전 "최신순"과 똑같이
+                # 보인다. category/subject/summary로 그때그때 다시 추론한다.
+                if not isinstance(old.get("priority"), int):
+                    old = dict(old, priority=infer_mail_priority(
+                        old.get("category"), old.get("subject"), old.get("summary")))
                 merged.append(old)
             merged.sort(key=lambda it: it.get("received_at", ""), reverse=True)
             merged.sort(key=lambda it: (
