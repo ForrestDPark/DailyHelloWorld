@@ -1021,6 +1021,10 @@ def ingest_email(args: argparse.Namespace) -> None:
     conn = connect(args.db)
     inserted, updated = upsert_jobs(conn, jobs)
     print(f"완료: 신규 {inserted}건 / 기존 갱신 {updated}건 (이메일 수집, {sender})")
+    # ★ 2026-08-18: shift_alarm이 "이 메일에서 나온 공고 중 제일 점수 높은 게
+    # 몇 점인지"를 바로 파싱할 수 있게 기계 판독용 줄을 하나 더 남긴다 — 점수가
+    # 높으면 하루 1번 도는 analyze-top을 기다리지 않고 바로 분석을 트리거한다.
+    print(f"MAX_SCORE={max(job.score for job in jobs)}")
 
 
 def collect(args: argparse.Namespace) -> None:

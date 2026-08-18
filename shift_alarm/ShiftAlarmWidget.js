@@ -197,6 +197,21 @@ function buildBottomSection(widget, status) {
     const line = addLine(widget, label, { color: COLOR_SUB, size: 11, lineLimit: 2 });
     if (item.notion_url || item.url) line.url = item.notion_url || item.url;
   });
+
+  // ★ 2026-08-18: 메뉴바에 쌓아둔 최근 메일 AI 요약(발신자/제목/카테고리)을
+  // 위젯에도 그대로 노출한다. 탭하면 Gmail의 해당 메일로 바로 이동.
+  const mailItems = status.mail_items || [];
+  mailItems.forEach((item, i) => {
+    if (i === 0) {
+      widget.addSpacer(jobItems.length || contestItems.length ? 8 : 0);
+      addLine(widget, "📧 최근 메일", { color: COLOR_DIM, size: 11, bold: true });
+    }
+    widget.addSpacer(2);
+    const category = item.category ? `[${item.category}] ` : "";
+    const label = `${category}${item.sender || "발신자 미상"} — ${item.subject || "제목 없음"}`;
+    const line = addLine(widget, label, { color: COLOR_SUB, size: 11, lineLimit: 2 });
+    if (item.url) line.url = item.url;
+  });
 }
 
 function buildSmall(widget, status) {

@@ -154,6 +154,11 @@ JOB_COLLECTOR_REFRESH_SECONDS = 24 * 60 * 60  # 하루 1번
 # JOB_CATEGORY_LABELS와 키를 맞춘다).
 JOB_CATEGORIES = {"career": "커리어", "parttime": "알바"}
 PARTTIME_RECOMMENDATION_MIN_SCORE = 50
+# ★ 2026-08-18: 채용 메일에서 추출된 공고의 1차 키워드 점수(0~100)가 이 이상이면
+# 하루 1번 도는 배치(analyze-top)를 기다리지 않고 즉시 분석을 트리거한다.
+# PARTTIME_RECOMMENDATION_MIN_SCORE와 같은 50점 기준을 그대로 재사용(이미
+# 검증된 "이 정도는 볼 만하다" 기준).
+JOB_EMAIL_IMMEDIATE_ANALYSIS_MIN_SCORE = 50
 JOB_TOP_ANALYSIS_STATE = {
     cat: os.path.join(JOB_COLLECTOR_DIR, "data", f"top_job_notion_{cat}.json") for cat in JOB_CATEGORIES
 }
@@ -222,6 +227,7 @@ GMAIL_ACCOUNT = "pulpilisory@gmail.com"
 GOG_KEYRING_SERVICE = "com.shiftalarm.gog-keyring"
 GMAIL_SUMMARY_HISTORY_LIMIT = 10
 GMAIL_SUMMARY_MENU_LIMIT = 5
+MOBILE_STATUS_MAIL_LIMIT = 3  # 위젯 공간이 좁아 메뉴(5건)보다 적게 노출
 
 
 def fetch_gmail_message_body(message_id):
@@ -4034,6 +4040,18 @@ class ShiftAlarmApp(rumps.App):
                     "score": top_contest.get("score"), "url": top_contest.get("contest_url"),
                     "notion_url": top_contest.get("url"),
                 })
+        # ★ 2026-08-18: 메뉴에 이미 쌓아둔 최근 메일 AI 요약을 위젯에도 그대로
+        # 노출한다 — 폰 화면에서 메뉴바를 열지 않고도 최근 메일을 볼 수 있게.
+        mail_items = [
+            {
+                "category": item.get("category"),
+                "sender": item.get("sender"),
+                "subject": item.get("subject"),
+                "summary": item.get("summary"),
+                "url": _gmail_message_url(item.get("id")),
+            }
+            for item in self.config.get("gmail_recent_summaries", [])[:MOBILE_STATUS_MAIL_LIMIT]
+        ]
         codex_progress = _codex_primary_window_progress(self._codex_quota)
         status = {
             "widget_schema_version": WIDGET_SCHEMA_VERSION,
@@ -4061,6 +4079,7 @@ class ShiftAlarmApp(rumps.App):
             "sunzi_url": sunzi_entry["url"] if sunzi_entry else None,
             "job_items": job_items,
             "contest_items": contest_items,
+            "mail_items": mail_items,
         }
         # 실제 iCloud 대상 3곳에 대한 쓰기는 iCloudSync.app에 위임한다(★ 2026-08-18,
         # ICLOUD_SYNC_APP 정의부 설명 참고) — launchd 프로세스 직접 쓰기는 항상
@@ -4913,19 +4932,25 @@ class ShiftAlarmApp(rumps.App):
         recent_gmail_summaries = self.config.get("gmail_recent_summaries", [])
         if recent_gmail_summaries:
             for item in recent_gmail_summaries[:GMAIL_SUMMARY_MENU_LIMIT]:
+                # ★ 2026-08-18: 예전엔 제목을 상위 항목에, 요약은 회색 하위 항목(펼쳐야
+                # 보임)에 넣었는데 "화살표에 커서를 올려야 보이고 잘 안 보인다"는
+                # 피드백으로 순서를 뒤집었다 — 실제로 궁금한 요약을 상위(항상 보임)로
+                # 올리고, 제목·보낸사람은 하위로 내렸다.
                 category = truncate_title(str(item.get("category") or "일반 메일"), 14)
                 sender = truncate_title(str(item.get("sender") or "발신자 미상"), 24)
-                subject = truncate_title(str(item.get("subject") or "제목 없음"), 34)
-                summary = str(item.get("summary") or "요약 없음")[:180]
+                subject = truncate_title(str(item.get("subject") or "제목 없음"), 20)
+                summary = str(item.get("summary") or "요약 없음")
+                summary_title = truncate_title(summary, 60)
                 # ★ 2026-08-14: 인박스 홈이 아니라 이 메일 자체로 바로 이동하도록
                 # Gmail API 메시지 id로 딥링크를 만든다(id 없으면 인박스로 폴백).
                 message_url = _gmail_message_url(item.get("id"))
                 open_message_callback = self.make_open_url_callback(message_url)
                 summary_menu = rumps.MenuItem(
-                    f"🤖 [{category}] {sender} · {subject}",
+                    f"🤖 [{category}] {summary_title}",
                     callback=open_message_callback,
                 )
-                summary_menu.add(rumps.MenuItem(f"요약: {summary}"))
+                summary_menu.add(rumps.MenuItem(f"제목: {subject}"))
+                summary_menu.add(rumps.MenuItem(f"보낸사람: {sender}"))
                 summary_menu.add(rumps.MenuItem("Gmail에서 열기", callback=open_message_callback))
                 self.menu.add(summary_menu)
         else:
@@ -5288,11 +5313,19 @@ class ShiftAlarmApp(rumps.App):
                     f"{item['sender']} — {truncate_title(item['subject'], 55)}",
                     item["summary"],
                 )
-                # ★ 2026-08-14: 채용 뉴스레터(지금은 사람인만 지원 — 실제 판정은
-                # job_collector.ingest-email 안의 발신자 검사가 최종 근거)면 본문에서
-                # 공고를 추출해 이직시스템 DB에 반영한다. AI 호출이 끼어 있어 몇십초
-                # 걸릴 수 있으므로 메일 알림 루프를 막지 않게 별도 스레드로 돌린다.
-                if "saramin.co.kr" in item.get("sender", "").casefold():
+                # ★ 2026-08-14: 채용 관련 메일이면 본문에서 공고를 추출해 이직시스템
+                # DB에 반영한다. 실제 추출 지원 여부는 job_collector.ingest-email
+                # 안의 발신자 검사가 최종 근거(지금은 사람인만 지원)라서, 여기서는
+                # AI가 분류한 카테고리에 "채용"이 들어있는지까지 폭넓게 검사해도
+                # 안전하다(미지원 발신자면 그냥 "추출된 공고 없음"으로 조용히 끝남).
+                # ★ 2026-08-18: 판정에서 점수가 높게 나오면 하루 1번 도는 배치를
+                # 기다리지 않고 바로 분석하도록 확장 — AI 호출이 끼어 있어 몇십초~
+                # 몇 분 걸릴 수 있으므로 메일 알림 루프를 막지 않게 별도 스레드로 돌린다.
+                is_job_related = (
+                    "saramin.co.kr" in item.get("sender", "").casefold()
+                    or "채용" in item.get("category", "")
+                )
+                if is_job_related:
                     threading.Thread(
                         target=self._ingest_job_email_thread, args=(item,), daemon=True
                     ).start()
@@ -5389,30 +5422,36 @@ class ShiftAlarmApp(rumps.App):
     def _run_job_analysis_top(self):
         """적합도 1위 공고를 AI로 분석해 Notion에 올린다(★ 2026-08-07 추가).
         collect 직후 같은 백그라운드 스레드에서 이어서 돌아 하루 1번 주기를 그대로
-        공유한다. codex/claude 폴백 호출이 상위 후보 여러 개를 시도할 수 있어
-        collect보다 훨씬 오래 걸릴 수 있으므로 타임아웃을 넉넉히 둔다.
-        ★ 2026-08-08: 커리어/알바 카테고리별로 각각 analyze-top을 돌린다."""
+        공유한다. ★ 2026-08-08: 커리어/알바 카테고리별로 각각 analyze-top을 돌린다."""
         for category, cat_label in JOB_CATEGORIES.items():
-            try:
-                result = subprocess.run(
-                    [sys.executable, JOB_COLLECTOR_SCRIPT, "analyze-top", "--category", category],
-                    cwd=JOB_COLLECTOR_DIR,
-                    capture_output=True, text=True, timeout=1800,
-                )
-                if "Notion 페이지 갱신 완료" in result.stdout:
-                    top = get_top_job_analysis(category)
-                    if top:
-                        score = top.get("score")
-                        score_text = f"[{score}점] " if score is not None else ""
-                        notify_spoken(
-                            "🎯 추천 공고",
-                            f"{score_text}{top.get('company', '')} — {truncate_title(top.get('title', ''), 40)}",
-                            "메뉴바에서 클릭하면 Notion 분석으로 이동합니다.",
-                        )
-                elif result.returncode != 0:
-                    print(f"⚠️ {cat_label} 공고 AI 분석 실패: {result.stderr.strip()[:300]}")
-            except (OSError, subprocess.TimeoutExpired) as exc:
-                print(f"⚠️ {cat_label} 공고 AI 분석 실행 오류: {exc}")
+            self._run_job_analysis_top_for_category(category, cat_label)
+
+    def _run_job_analysis_top_for_category(self, category, cat_label=None):
+        """analyze-top 단일 카테고리 실행 — 하루 1번 도는 `_run_job_analysis_top()`과
+        채용 메일 감지 시 즉시 트리거(`_ingest_job_email_thread`, ★ 2026-08-18)가
+        같은 로직을 공유하도록 분리했다. codex/claude 폴백 호출이 상위 후보 여러
+        개를 시도할 수 있어 오래 걸릴 수 있으므로 타임아웃을 넉넉히 둔다."""
+        cat_label = cat_label or JOB_CATEGORIES.get(category, category)
+        try:
+            result = subprocess.run(
+                [sys.executable, JOB_COLLECTOR_SCRIPT, "analyze-top", "--category", category],
+                cwd=JOB_COLLECTOR_DIR,
+                capture_output=True, text=True, timeout=1800,
+            )
+            if "Notion 페이지 갱신 완료" in result.stdout:
+                top = get_top_job_analysis(category)
+                if top:
+                    score = top.get("score")
+                    score_text = f"[{score}점] " if score is not None else ""
+                    notify_spoken(
+                        "🎯 추천 공고",
+                        f"{score_text}{top.get('company', '')} — {truncate_title(top.get('title', ''), 40)}",
+                        "메뉴바에서 클릭하면 Notion 분석으로 이동합니다.",
+                    )
+            elif result.returncode != 0:
+                print(f"⚠️ {cat_label} 공고 AI 분석 실패: {result.stderr.strip()[:300]}")
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            print(f"⚠️ {cat_label} 공고 AI 분석 실행 오류: {exc}")
 
     def _run_contest_collector_and_analysis(self):
         """링커리어 공모전·경진대회를 수집하고 적합도 1위를 AI로 분석해 Notion에
@@ -5452,14 +5491,18 @@ class ShiftAlarmApp(rumps.App):
             print(f"⚠️ 경진대회 수집/분석 실행 오류: {exc}")
 
     def _ingest_job_email_thread(self, item):
-        """채용 뉴스레터 메일 본문에서 실제 채용공고를 추출해 이직시스템 DB에
+        """채용 관련 메일 본문에서 실제 채용공고를 추출해 이직시스템 DB에
         반영한다(★ 2026-08-14). 지금은 사람인 발신 메일만 지원 — 실제 판정은
         job_collector.py의 extract_job_postings_from_email()이 발신자로 다시
-        검사하므로, 여기 호출 조건(사람인 도메인)이 최종 게이트는 아니다.
+        검사하므로, 여기 호출 조건(사람인 도메인 또는 AI 분류 카테고리에 "채용"
+        포함)이 최종 게이트는 아니다.
 
-        여기서 Notion에 바로 발행하지 않는다 — DB에 반영만 해두면 하루 1번 도는
-        `_run_job_analysis_top()`의 analyze-top이 점수 1위일 때 자연스럽게 골라
-        분석·발행한다(기존 사람인 API/크롤링 공고와 동일한 파이프라인 재사용)."""
+        기본적으로는 DB에 반영만 해두고 Notion에 바로 발행하지 않는다 — 하루
+        1번 도는 `_run_job_analysis_top()`의 analyze-top이 점수 1위일 때
+        자연스럽게 골라 분석·발행한다(기존 사람인 API/크롤링 공고와 동일한
+        파이프라인 재사용). ★ 2026-08-18: 다만 이 메일에서 나온 공고의 점수가
+        JOB_EMAIL_IMMEDIATE_ANALYSIS_MIN_SCORE 이상이면 배치를 기다리지 않고
+        음성으로 안내한 뒤 바로 career 카테고리 analyze-top을 돌린다."""
         body = fetch_gmail_message_body(item["id"])
         if not body:
             return
@@ -5476,6 +5519,15 @@ class ShiftAlarmApp(rumps.App):
             )
             if result.returncode == 0:
                 print(f"📬 채용 메일 파이프라인: {result.stdout.strip()}")
+                score_match = re.search(r"MAX_SCORE=(\d+)", result.stdout)
+                max_score = int(score_match.group(1)) if score_match else 0
+                if max_score >= JOB_EMAIL_IMMEDIATE_ANALYSIS_MIN_SCORE:
+                    notify_spoken(
+                        "💼 채용 메일 감지",
+                        f"[{max_score}점] 점수가 높으므로 추천 채용공고 분석 진행하겠습니다",
+                        truncate_title(item.get("subject", ""), 55),
+                    )
+                    self._run_job_analysis_top_for_category("career")
             else:
                 print(f"⚠️ 채용 메일 파이프라인 실패: {result.stderr.strip()[:300]}")
         except (OSError, subprocess.TimeoutExpired) as exc:
