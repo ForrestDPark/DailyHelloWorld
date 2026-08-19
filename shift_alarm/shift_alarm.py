@@ -223,7 +223,7 @@ def _gmail_message_url(message_id):
 GMAIL_ACCOUNT = "pulpilisory@gmail.com"
 GOG_KEYRING_SERVICE = "com.shiftalarm.gog-keyring"
 GMAIL_SUMMARY_HISTORY_LIMIT = 10
-GMAIL_SUMMARY_MENU_LIMIT = 5
+GMAIL_SUMMARY_MENU_LIMIT = 1  # ★ 2026-08-19: 메뉴 드롭다운도 위젯처럼 가장 중요한 1건만
 MOBILE_STATUS_MAIL_LIMIT = 1  # ★ 2026-08-19: 안읽은 메일 중 가장 중요한 1건만 위젯에 노출
 
 # ★ 2026-08-18: 메일 목록을 "안읽은 메일 위주로, 쓸만한 정보 순"으로 보여달라는
