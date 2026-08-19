@@ -840,7 +840,7 @@ def analyze_top_contest(args: argparse.Namespace) -> None:
         today = datetime.now().date().isoformat()
         line = f"(점수 {row['score']}) [{today}][{category}] {title}"
         record_top_index_entry(token, "contest", line, url)
-    except RuntimeError as exc:
+    except Exception as exc:  # noqa: BLE001 — 인덱스 갱신 실패로 본 발행까지 죽이지 않는다(★ 2026-08-19: RuntimeError만 잡던 예전 코드는 TimeoutError 같은 순수 네트워크 예외를 못 잡아 스크립트가 죽었다)
         print(f"⚠️  최상위 페이지 목록 갱신 실패(본 발행은 정상 완료): {exc}")
 
 

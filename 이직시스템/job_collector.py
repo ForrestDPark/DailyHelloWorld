@@ -1891,7 +1891,7 @@ def analyze_top_job(args: argparse.Namespace) -> None:
         if is_new_company:
             try:
                 record_top_index_entry(token, "company", company_title, company_notion_url)
-            except RuntimeError as exc:
+            except Exception as exc:  # noqa: BLE001 — 인덱스 갱신 실패로 본 발행까지 죽이지 않는다(★ 2026-08-19: RuntimeError만 잡던 예전 코드는 TimeoutError 같은 순수 네트워크 예외를 못 잡아 스크립트가 죽었다)
                 print(f"⚠️  최상단 기업 목록 갱신 실패(본 발행은 정상 완료): {exc}")
     except Exception as exc:  # noqa: BLE001 — 기업 분석 실패해도 공고 분석 발행은 계속 진행
         print(f"⚠️  기업 경영 분석 생성 실패(공고 분석은 계속 진행): {exc}")
@@ -1948,7 +1948,7 @@ def analyze_top_job(args: argparse.Namespace) -> None:
         today = datetime.now().date().isoformat()
         line = f"(점수 {recommendation_score}) [{today}][{category}] {title}"
         record_top_index_entry(token, "job", line, url)
-    except RuntimeError as exc:
+    except Exception as exc:  # noqa: BLE001 — 인덱스 갱신 실패로 본 발행까지 죽이지 않는다(★ 2026-08-19: RuntimeError만 잡던 예전 코드는 TimeoutError 같은 순수 네트워크 예외를 못 잡아 스크립트가 죽었다)
         print(f"⚠️  최상위 페이지 목록 갱신 실패(본 발행은 정상 완료): {exc}")
 
 

@@ -32,6 +32,7 @@ import plistlib
 import queue
 import ssl
 import re
+import uuid
 import shlex
 import sqlite3
 import sys
@@ -109,7 +110,6 @@ WIDGET_SCHEMA_VERSION = 3
 # 경로의 매니페스트 파일(줄마다 "원본\t대상")을 써두고 앱이 그걸 읽어 처리한다.
 ICLOUD_SYNC_APP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "iCloudSync.app")
 ICLOUD_SYNC_STAGING_DIR = os.path.expanduser("~/.shift_alarm_icloud_sync")
-ICLOUD_SYNC_MANIFEST = os.path.join(ICLOUD_SYNC_STAGING_DIR, "manifest.txt")
 ICLOUD_SYNC_ERROR_LOG = os.path.join(ICLOUD_SYNC_STAGING_DIR, "error.log")
 
 
@@ -117,7 +117,13 @@ def _sync_files_via_icloud_helper(pairs):
     """(원본 로컬 경로, iCloud 대상 경로) 쌍의 목록을 iCloudSync.app에 위임해
     비동기로 복사시킨다(써놓고 바로 반환 — 결과 확인은 안 함, eventual
     consistency로 충분한 60초 주기 갱신용). 직전 실행의 오류 로그가 남아있으면
-    먼저 출력해 진단에 남긴다."""
+    먼저 출력해 진단에 남긴다.
+
+    ★ 2026-08-19: 고정된 manifest.txt 하나를 여러 iCloudSync.app 인스턴스가
+    동시에(60초 주기 갱신 + 메일/채용/경진대회 즉시분석 트리거) 열면 서로
+    덮어쓰거나 상대방의 임시파일을 가로채 "mv: No such file or directory"가
+    실측됐다 — 매 호출마다 고유한 manifest_<uuid>.txt를 쓰고, 앱 쪽은 그 순간
+    존재하는 manifest_*.txt를 전부 훑어 처리 후 지우도록 바꿔 경쟁을 없앴다."""
     if os.path.exists(ICLOUD_SYNC_ERROR_LOG):
         try:
             with open(ICLOUD_SYNC_ERROR_LOG, "r", encoding="utf-8") as f:
@@ -132,7 +138,8 @@ def _sync_files_via_icloud_helper(pairs):
             pass
     os.makedirs(ICLOUD_SYNC_STAGING_DIR, exist_ok=True)
     manifest_text = "\n".join(f"{src}\t{dst}" for src, dst in pairs) + "\n"
-    with open(ICLOUD_SYNC_MANIFEST, "w", encoding="utf-8") as f:
+    manifest_path = os.path.join(ICLOUD_SYNC_STAGING_DIR, f"manifest_{uuid.uuid4().hex}.txt")
+    with open(manifest_path, "w", encoding="utf-8") as f:
         f.write(manifest_text)
     subprocess.run(["open", "-na", ICLOUD_SYNC_APP], check=False)
 
@@ -969,21 +976,21 @@ def clear_user_caches():
 # 각 항목은 메뉴의 "🔔 리마인더 켜기/끄기"에서 개별적으로 켜고 끌 수 있음.
 REMINDERS = {
     "gym":             {"label": "🏋️ 헬스장 가는 날(상체/하체·격일)", "enabled": True},
-    "call_mom":        {"label": "📞 엄마한테 전화하는 날(휴무 시작일)",   "enabled": True},
+    "call_mom":        {"label": "📞 엄마한테 전화(휴무 시작일)",   "enabled": True},
     "cafe_strategy_study": {"label": "☕ 카페에서 밥먹고 커피마시면서 병법공부하기(휴무 첫날)", "enabled": True},
-    "call_heo_minjun": {"label": "📞 허민준한테 전화하는 날(월 1회)", "enabled": True},
-    "call_dongchan":   {"label": "📞 동찬이형한테 전화하는 날(21일에 1회)", "enabled": True},
-    "call_sondongju":  {"label": "📞 손동주한테 전화하는 날(1주일에 1회)",   "enabled": True},
-    "coding_academy":  {"label": "💬 코딩학원 카톡방에 연락하는 날(1주일에 1회)", "enabled": True},
+    "call_heo_minjun": {"label": "📞 허민준한테 전화(월 1회)", "enabled": True},
+    "call_dongchan":   {"label": "📞 동찬이형한테 전화(21일에 1회)", "enabled": True},
+    "call_sondongju":  {"label": "📞 손동주한테 전화(1주일에 1회)",   "enabled": True},
+    "coding_academy":  {"label": "💬 코딩학원 카톡방에 연락(1주일에 1회)", "enabled": True},
     "bathroom_drain_check": {"label": "🚿 화장실 잔떼 및 배수 점검일(1주일에 1회)", "enabled": True},
     "haircut":          {"label": "💇 머리 깎는 날(25일에 1회)", "enabled": True},
     "agentic_coding_reading": {"label": "📚 에이전틱 코딩 책 읽기(3일에 1회)", "enabled": True},
     "sondongju_off":   {"label": "🎉 손동주 쉬는 날(동주 근무 주기 기준)",         "enabled": True},
-    "nose_hair_trim":  {"label": "🪒 코털 정리하는 날(4일에 1회)",       "enabled": True},
-    "nail_trim":       {"label": "💅 손톱발톱 정리하는 날(11일에 1회)",   "enabled": True},
-    "earphone_charge": {"label": "🎧 이어폰 충전하는 날(4일에 1회)",     "enabled": True},
-    "kakao_cleanup":   {"label": "🧹 카톡 정리하는 날(휴무 마지막날)",       "enabled": True},
-    "outlet_shopping": {"label": "🛍️ 아울렛 쇼핑하는 날(월 1회)",    "enabled": True},
+    "nose_hair_trim":  {"label": "🪒 코털 정리(4일에 1회)",       "enabled": True},
+    "nail_trim":       {"label": "💅 손톱발톱 정리(11일에 1회)",   "enabled": True},
+    "earphone_charge": {"label": "🎧 이어폰 충전(4일에 1회)",     "enabled": True},
+    "kakao_cleanup":   {"label": "🧹 카톡 정리(휴무 마지막날)",       "enabled": True},
+    "outlet_shopping": {"label": "🛍️ 아울렛 쇼핑(월 1회)",    "enabled": True},
     "walk_20k":        {"label": "🚶 2만보 걷는 날(주 2회)",         "enabled": True},
     "laundry":         {"label": "🧺 빨래 돌리는 날(휴무일마다)",         "enabled": True},
     "outing":          {"label": "🗺️ 나들이 추천(월 1회)",    "enabled": True},
@@ -1652,7 +1659,7 @@ def get_today_reminders(schedule, now=None):
     if gym_index is not None:
         # 실제 운동 순서 기준: 2026-08-03은 하체, 다음 회차부터 상체/하체 교대.
         workout = "하체" if gym_index % 2 == 0 else "상체"
-        reminders.append(f"🏋️ {workout} 운동 하는 날")
+        reminders.append(f"🏋️ {workout} 운동")
 
     if get_shift_for_date(schedule, today) == "휴무":
         yesterday = today - datetime.timedelta(days=1)
@@ -3331,6 +3338,30 @@ def get_top_contest_analysis(category="general"):
         return None
 
 
+def get_best_job_recommendation():
+    """카테고리(커리어/알바) 통틀어 점수가 가장 높은 공고 1건을 고른다
+    (★ 2026-08-19). 위젯(`_write_mobile_status`)과 메뉴(`build_menu`)가 같은
+    선정 로직을 쓰도록 공통화했다. (분석결과, 카테고리, 카테고리 라벨) 튜플을
+    반환하며, 발행된 공고가 하나도 없으면 (None, None, None)."""
+    best, best_category, best_label = None, None, None
+    for category, cat_label in JOB_CATEGORIES.items():
+        top = get_top_job_analysis(category)
+        if top and (best is None or (top.get("score") or 0) > (best.get("score") or 0)):
+            best, best_category, best_label = top, category, cat_label
+    return best, best_category, best_label
+
+
+def get_best_contest_recommendation():
+    """카테고리(AI/일반) 통틀어 점수가 가장 높은 경진대회 1건을 고른다
+    (★ 2026-08-19). get_best_job_recommendation()과 같은 이유로 공통화."""
+    best, best_category, best_label = None, None, None
+    for category, cat_label in CONTEST_CATEGORIES.items():
+        top = get_top_contest_analysis(category)
+        if top and (best is None or (top.get("score") or 0) > (best.get("score") or 0)):
+            best, best_category, best_label = top, category, cat_label
+    return best, best_category, best_label
+
+
 def fetch_weather():
     try:
         url = (
@@ -3630,7 +3661,7 @@ def _speak_text(text):
     text = _EMOJI_PATTERN.sub("", text).strip()
     if not text:
         return
-    # ★ 2026-08-19: 리마인더 라벨 대부분이 "손톱발톱 정리하는 날(11일마다 한 번)"처럼
+    # ★ 2026-08-19: 리마인더 라벨 대부분이 "손톱발톱 정리(11일마다 한 번)"처럼
     # 괄호로 부가 설명(주기 등)을 달고 있는데, 음성으로 그대로 읽으면 어색하다는
     # 피드백 — 화면 표시(메뉴·알림 배너)에는 그대로 남기고 음성에서만 괄호 안
     # 내용을 뺀다. 괄호 제거 후 생기는 중복 공백도 정리한다.
@@ -4063,15 +4094,11 @@ class ShiftAlarmApp(rumps.App):
             _shift_block_day_number(self.schedule, today, current) if current else None
         )
         sunzi_entry = get_latest_sunzi_entry()
-        # ★ 2026-08-08: 메뉴바는 카테고리별(커리어/알바, AI/일반) 각 1건씩 보여주지만
-        # (build_menu 안 별도 루프 참고), 위젯은 화면이 좁다는 피드백(★ 2026-08-19)으로
-        # 카테고리 통틀어 점수 가장 높은 1건만 보여준다.
+        # ★ 2026-08-19: 메뉴도 위젯도 이제 카테고리(커리어/알바, AI/일반) 통틀어
+        # 점수 가장 높은 1건만 보여준다 — get_best_job_recommendation()/
+        # get_best_contest_recommendation()으로 선정 로직을 공통화했다.
         job_items = []
-        best_job, best_job_category, best_job_label = None, None, None
-        for category, cat_label in JOB_CATEGORIES.items():
-            top_job = get_top_job_analysis(category)
-            if top_job and (best_job is None or (top_job.get("score") or 0) > (best_job.get("score") or 0)):
-                best_job, best_job_category, best_job_label = top_job, category, cat_label
+        best_job, best_job_category, best_job_label = get_best_job_recommendation()
         if best_job:
             job_items.append({
                 "category": best_job_category, "label": best_job_label,
@@ -4080,14 +4107,7 @@ class ShiftAlarmApp(rumps.App):
                 "notion_url": best_job.get("url"),
             })
         contest_items = []
-        best_contest, best_contest_category, best_contest_label = None, None, None
-        for category, cat_label in CONTEST_CATEGORIES.items():
-            top_contest = get_top_contest_analysis(category)
-            if top_contest and (
-                best_contest is None
-                or (top_contest.get("score") or 0) > (best_contest.get("score") or 0)
-            ):
-                best_contest, best_contest_category, best_contest_label = top_contest, category, cat_label
+        best_contest, best_contest_category, best_contest_label = get_best_contest_recommendation()
         if best_contest:
             contest_items.append({
                 "category": best_contest_category, "label": best_contest_label,
@@ -4758,6 +4778,47 @@ class ShiftAlarmApp(rumps.App):
             self._reopen_status_menu()
         return callback
 
+    def _attach_mail_analysis_url(self, item_id, url):
+        """★ 2026-08-19: 채용/경진대회 메일이 즉시분석을 트리거해 결과가 나오면,
+        그 결과를 만든 메일 항목(gmail_recent_summaries) 자체에 분석 결과 URL을
+        달아둔다 — 메뉴의 메일 하위 항목에서 "이직시스템 분석 결과 보기"로 바로
+        연결하기 위해서(메일 본문이 아니라 이 메일이 촉발한 분석 결과이므로,
+        같은 카테고리 전체에서 뽑힌 결과가 이 메일 하나만의 것이라는 보장은
+        없다 — 트리거 시점 기준 최선의 근사치)."""
+        if not url:
+            return
+        summaries = self.config.get("gmail_recent_summaries", [])
+        changed = False
+        for entry in summaries:
+            if entry.get("id") == item_id:
+                entry["analysis_url"] = url
+                changed = True
+                break
+        if changed:
+            save_config(self.config)
+            AppHelper.callAfter(self.build_menu)
+
+    def _is_job_reco_checked(self):
+        """★ 2026-08-19: "추천 공고도 리마인더처럼 체크하면 오늘은 그만 보이게
+        해달라"는 요청 — 리마인더 체크리스트처럼 Notion과 동기화하지는 않고
+        메뉴바 로컬 상태(config)만 오늘 날짜 기준으로 관리한다. 새 날이 되면
+        날짜가 안 맞아 자동으로 다시 보인다(내용이 그날의 새 추천으로 바뀌었든
+        아니든 매일 리셋)."""
+        return self.config.get("job_reco_checked_date") == datetime.date.today().isoformat()
+
+    def check_job_reco(self, _):
+        self.config["job_reco_checked_date"] = datetime.date.today().isoformat()
+        save_config(self.config)
+        self.build_menu()
+
+    def _is_contest_reco_checked(self):
+        return self.config.get("contest_reco_checked_date") == datetime.date.today().isoformat()
+
+    def check_contest_reco(self, _):
+        self.config["contest_reco_checked_date"] = datetime.date.today().isoformat()
+        save_config(self.config)
+        self.build_menu()
+
     def check_all_daily_routine_now(self, _):
         """★ 2026-08-17: 하나씩 체크하기 귀찮다는 요청으로 추가 — 아직 안 한
         루틴을 한 번에 전부 체크한다."""
@@ -5011,6 +5072,13 @@ class ShiftAlarmApp(rumps.App):
                 summary_menu.add(rumps.MenuItem(f"제목: {subject}"))
                 summary_menu.add(rumps.MenuItem(f"보낸사람: {sender}"))
                 summary_menu.add(rumps.MenuItem("Gmail에서 열기", callback=open_message_callback))
+                # ★ 2026-08-19: 이 메일이 채용/경진대회 즉시분석을 촉발했으면
+                # (_attach_mail_analysis_url) 그 결과 링크도 하위 항목으로 노출한다.
+                if item.get("analysis_url"):
+                    summary_menu.add(rumps.MenuItem(
+                        "📊 이직시스템 분석 결과 보기",
+                        callback=self.make_open_url_callback(item["analysis_url"]),
+                    ))
                 self.menu.add(summary_menu)
         else:
             self.menu.add(rumps.MenuItem("🤖 최근 AI 요약: 새 메일 대기 중"))
@@ -5028,28 +5096,37 @@ class ShiftAlarmApp(rumps.App):
         # 점수(score_job())라 의미 없는 매칭이 섞여 노이즈가 많다는 사용자 피드백으로
         # 메뉴 노출을 없앴다. collect는 계속 원료 수집용으로만 백그라운드에서 돌고,
         # analyze-top이 그중 실제로 깊이 분석할 가치가 있는 1건만 골라 보여준다.
-        # ★ 2026-08-08: 취업/알바는 결이 달라 하나로 뭉치면 한쪽이 묻힌다는 지적으로
-        # 카테고리별(커리어/알바) 각 1건씩 보여준다.
-        for category, cat_label in JOB_CATEGORIES.items():
-            top_analysis = get_top_job_analysis(category)
-            if top_analysis:
-                score = top_analysis.get("score")
-                score_text = f"[{score}점] " if score is not None else ""
-                company = truncate_title(top_analysis.get("company", ""), 12)
-                title = truncate_title(top_analysis.get("title", ""), 22)
-                label = f"🎯 {score_text}추천 공고: {company} — {title}"
-                self.menu.add(rumps.MenuItem(label, callback=self.make_open_url_callback(top_analysis["url"])))
+        # ★ 2026-08-19: 카테고리(커리어/알바, AI/일반)별로 각 1건씩 보여주던 걸
+        # 위젯처럼 통틀어 1건으로 줄이고, 리마인더 체크리스트와 같은 방식(체크하면
+        # 오늘은 그만 보이게)을 추가했다 — "화살표를 열어야 링크가 보이게" 해달라는
+        # 요청으로 상위 항목 자체엔 콜백을 안 걸고 하위 항목에서만 열게 한다.
+        best_job, _, _ = get_best_job_recommendation()
+        if best_job and not self._is_job_reco_checked():
+            score = best_job.get("score")
+            score_text = f"[{score}점] " if score is not None else ""
+            company = truncate_title(best_job.get("company", ""), 12)
+            title = truncate_title(best_job.get("title", ""), 22)
+            job_menu = rumps.MenuItem(f"🎯 {score_text}추천 공고: {company} — {title}")
+            if best_job.get("url"):
+                job_menu.add(rumps.MenuItem("📝 Notion 분석 보기", callback=self.make_open_url_callback(best_job["url"])))
+            if best_job.get("job_url"):
+                job_menu.add(rumps.MenuItem("🔗 원문 공고 보기", callback=self.make_open_url_callback(best_job["job_url"])))
+            job_menu.add(rumps.MenuItem("✅ 확인함(오늘 그만 보기)", callback=self.check_job_reco))
+            self.menu.add(job_menu)
 
-        # ★ 2026-08-08: 경진대회도 같은 이유로 AI 특화/일반 카테고리별 각 1건씩.
-        for category, cat_label in CONTEST_CATEGORIES.items():
-            top_contest = get_top_contest_analysis(category)
-            if top_contest:
-                score = top_contest.get("score")
-                score_text = f"[{score}점] " if score is not None else ""
-                organizer = truncate_title(top_contest.get("organizer", ""), 12)
-                title = truncate_title(top_contest.get("title", ""), 22)
-                label = f"🏆 {score_text}추천 경진: {organizer} — {title}"
-                self.menu.add(rumps.MenuItem(label, callback=self.make_open_url_callback(top_contest["url"])))
+        best_contest, _, _ = get_best_contest_recommendation()
+        if best_contest and not self._is_contest_reco_checked():
+            score = best_contest.get("score")
+            score_text = f"[{score}점] " if score is not None else ""
+            organizer = truncate_title(best_contest.get("organizer", ""), 12)
+            title = truncate_title(best_contest.get("title", ""), 22)
+            contest_menu = rumps.MenuItem(f"🏆 {score_text}추천 경진: {organizer} — {title}")
+            if best_contest.get("url"):
+                contest_menu.add(rumps.MenuItem("📝 Notion 분석 보기", callback=self.make_open_url_callback(best_contest["url"])))
+            if best_contest.get("contest_url"):
+                contest_menu.add(rumps.MenuItem("🔗 원문 공고 보기", callback=self.make_open_url_callback(best_contest["contest_url"])))
+            contest_menu.add(rumps.MenuItem("✅ 확인함(오늘 그만 보기)", callback=self.check_contest_reco))
+            self.menu.add(contest_menu)
         self.menu.add(rumps.MenuItem("🎲 추천 사이트 열기 (天 폴더 랜덤 3개)", callback=self.open_random_bookmarks_now))
         sunzi_entry = get_latest_sunzi_entry()
         if sunzi_entry:
@@ -5603,6 +5680,9 @@ class ShiftAlarmApp(rumps.App):
                 truncate_title(item.get("subject", ""), 55),
             )
             self._run_contest_collector_and_analysis()
+            best_contest, _, _ = get_best_contest_recommendation()
+            if best_contest:
+                self._attach_mail_analysis_url(item.get("id"), best_contest.get("url"))
         finally:
             self._contest_email_trigger_running = False
 
@@ -5644,6 +5724,9 @@ class ShiftAlarmApp(rumps.App):
                         truncate_title(item.get("subject", ""), 55),
                     )
                     self._run_job_analysis_top_for_category("career")
+                    top_job = get_top_job_analysis("career")
+                    if top_job:
+                        self._attach_mail_analysis_url(item.get("id"), top_job.get("url"))
             else:
                 print(f"⚠️ 채용 메일 파이프라인 실패: {result.stderr.strip()[:300]}")
         except (OSError, subprocess.TimeoutExpired) as exc:
