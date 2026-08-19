@@ -4,6 +4,8 @@
 개발자를위한머신러닝/면접/datasets
 개발자를위한머신러닝/파이토치트랜스포머활용 심층학습/data
 개발자를위한머신러닝/파이토치트랜스포머활용 심층학습/datasets
-.claude/
+.claude/*
+!.claude/agents/
+!.claude/agents/*.md
 일본어자막추출/.venv-shazam/
 nodeBackendDeveloper/chapter08/hello-nestjs/node_modules
