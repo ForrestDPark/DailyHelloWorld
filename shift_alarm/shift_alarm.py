@@ -3842,6 +3842,9 @@ class ShiftAlarmApp(rumps.App):
         # Gmail Inbox를 5분마다 읽기 전용으로 확인한다. 새 메일은 종류와 요지를
         # 알림으로 보여주고, 메뉴의 '메일 확인' 항목은 Gmail Inbox를 연다.
         self._gmail_running = False
+        # ★ 2026-08-19: 경진대회 메일 감지 시 즉시 트리거하는 분석(아래
+        # _maybe_trigger_contest_analysis_from_email)이 겹쳐 돌지 않게 막는 락.
+        self._contest_email_trigger_running = False
         self.gmail_timer = rumps.Timer(self._refresh_gmail, GMAIL_REFRESH_SECONDS)
         self.gmail_timer.start()
         self._refresh_gmail(None)
@@ -5383,12 +5386,19 @@ class ShiftAlarmApp(rumps.App):
             self.config["gmail_seen_ids"] = [item["id"] for item in items][:200]
             self.config["gmail_initialized"] = True
             save_config(self.config)
-            for item in new_items[:10]:
+            # ★ 2026-08-19: 새 메일이 여러 건 한 번에 몰리면 예전엔 최대 10건을
+            # 전부 각자 알림으로 띄워서 너무 시끄러웠다("이렇게 많이 띄울 필요
+            # 없을 것 같다"는 피드백) — 이번 배치에서 가장 중요해 보이는(우선순위
+            # 최고) 1건만 소리 내어 알린다. 나머지 항목도 DB 반영·분석 트리거는
+            # 그대로 조용히(알림 없이) 진행하므로 데이터 자체는 놓치지 않는다.
+            if new_items:
+                top_item = max(new_items, key=lambda it: it.get("priority", MAIL_DEFAULT_PRIORITY))
                 notify_spoken(
-                    f"📧 새 메일 · {item['category']}",
-                    f"{item['sender']} — {truncate_title(item['subject'], 55)}",
-                    item["summary"],
+                    f"📧 새 메일 · {top_item['category']}",
+                    f"{top_item['sender']} — {truncate_title(top_item['subject'], 55)}",
+                    top_item["summary"],
                 )
+            for item in new_items[:10]:
                 # ★ 2026-08-14: 채용 관련 메일이면 본문에서 공고를 추출해 이직시스템
                 # DB에 반영한다. 실제 추출 지원 여부는 job_collector.ingest-email
                 # 안의 발신자 검사가 최종 근거(지금은 사람인만 지원)라서, 여기서는
@@ -5404,6 +5414,15 @@ class ShiftAlarmApp(rumps.App):
                 if is_job_related:
                     threading.Thread(
                         target=self._ingest_job_email_thread, args=(item,), daemon=True
+                    ).start()
+                # ★ 2026-08-19: 경진대회/공모전 메일이면 이메일 본문에서 개별 대회를
+                # 추출하는 기능은 없지만(job_collector처럼 파서가 없음), "지금
+                # 분석해달라"는 신호로 받아들여 하루 1번 배치를 기다리지 않고
+                # 링커리어 등 수집+analyze-top을 바로 돌린다.
+                elif "경진대회" in item.get("category", ""):
+                    threading.Thread(
+                        target=self._maybe_trigger_contest_analysis_from_email,
+                        args=(item,), daemon=True,
                     ).start()
             AppHelper.callAfter(self._apply_gmail_snapshot, snapshot, new_items)
         except (OSError, subprocess.TimeoutExpired) as exc:
@@ -5565,6 +5584,27 @@ class ShiftAlarmApp(rumps.App):
                     print(f"⚠️ {cat_label} 경진대회 AI 분석 실패: {analyze_result.stderr.strip()[:300]}")
         except (OSError, subprocess.TimeoutExpired) as exc:
             print(f"⚠️ 경진대회 수집/분석 실행 오류: {exc}")
+
+    def _maybe_trigger_contest_analysis_from_email(self, item):
+        """★ 2026-08-19: 경진대회/공모전 메일이 감지되면 하루 1번 도는 배치를
+        기다리지 않고 바로 링커리어 등 수집+analyze-top을 돌린다. 이메일 본문에서
+        이 메일에 언급된 대회 하나만 콕 집어 추출하는 기능은 없어(job_collector의
+        ingest-email 같은 파서가 없음) 기존 `_run_contest_collector_and_analysis()`를
+        그대로 재사용 — 전체 후보군을 다시 수집·재채점해 그중 1위를 분석·발행하고
+        완료되면 "🏆 추천 경진" 알림이 결과(어떤 경진대회가 고득점인지)를 읽어준다.
+        여러 경진대회 메일이 한 번에 몰려도 중복으로 겹쳐 돌지 않게 락을 건다."""
+        if self._contest_email_trigger_running:
+            return
+        self._contest_email_trigger_running = True
+        try:
+            notify_spoken(
+                "🏆 경진대회 메일 감지",
+                "이직시스템으로 분석을 진행하겠습니다",
+                truncate_title(item.get("subject", ""), 55),
+            )
+            self._run_contest_collector_and_analysis()
+        finally:
+            self._contest_email_trigger_running = False
 
     def _ingest_job_email_thread(self, item):
         """채용 관련 메일 본문에서 실제 채용공고를 추출해 이직시스템 DB에
