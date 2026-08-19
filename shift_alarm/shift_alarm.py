@@ -5663,42 +5663,74 @@ class ShiftAlarmApp(rumps.App):
             print(f"⚠️ 경진대회 수집/분석 실행 오류: {exc}")
 
     def _maybe_trigger_contest_analysis_from_email(self, item):
-        """★ 2026-08-19: 경진대회/공모전 메일이 감지되면 하루 1번 도는 배치를
-        기다리지 않고 바로 링커리어 등 수집+analyze-top을 돌린다. 이메일 본문에서
-        이 메일에 언급된 대회 하나만 콕 집어 추출하는 기능은 없어(job_collector의
-        ingest-email 같은 파서가 없음) 기존 `_run_contest_collector_and_analysis()`를
-        그대로 재사용 — 전체 후보군을 다시 수집·재채점해 그중 1위를 분석·발행하고
-        완료되면 "🏆 추천 경진" 알림이 결과(어떤 경진대회가 고득점인지)를 읽어준다.
-        여러 경진대회 메일이 한 번에 몰려도 중복으로 겹쳐 돌지 않게 락을 건다."""
+        """★ 2026-08-20: 경진대회/공모전 메일이 감지되면 이제 job_collector의
+        ingest-email과 대칭되는 contest_collector.py ingest-email로 "이 메일
+        안에 실제로 언급된 대회들"만 추출·채점해 DB에 반영하고, 점수와 무관하게
+        전부 Notion 표로 발행한 뒤(publish_email_contest_summary_table) 그 표
+        링크를 메일 항목에 붙인다(_attach_mail_analysis_url) — 메뉴의 메일
+        하위 메뉴에서 바로 확인 가능. ★ 2026-08-19에는 이 메일 하나만 콕 집어
+        추출하는 기능이 없어 매번 전체 재수집을 돌렸는데, 이제는 그건 점수가
+        높을 때만(채용 메일과 같은 기준, JOB_EMAIL_IMMEDIATE_ANALYSIS_MIN_SCORE)
+        음성 안내와 함께 실행한다 — 어떤 경진대회가 고득점인지는 그 전체
+        analyze-top이 끝나면 기존 "🏆 추천 경진" 알림이 읽어준다. 여러 경진대회
+        메일이 한 번에 몰려도 중복으로 겹쳐 돌지 않게 락을 건다."""
         if self._contest_email_trigger_running:
             return
         self._contest_email_trigger_running = True
         try:
-            notify_spoken(
-                "🏆 경진대회 메일 감지",
-                "이직시스템으로 분석을 진행하겠습니다",
-                truncate_title(item.get("subject", ""), 55),
-            )
-            self._run_contest_collector_and_analysis()
-            best_contest, _, _ = get_best_contest_recommendation()
-            if best_contest:
-                self._attach_mail_analysis_url(item.get("id"), best_contest.get("url"))
+            body = fetch_gmail_message_body(item["id"])
+            if not body:
+                return
+            payload = json.dumps({
+                "sender": item.get("sender", ""),
+                "subject": item.get("subject", ""),
+                "body": body,
+            })
+            try:
+                result = subprocess.run(
+                    [sys.executable, CONTEST_COLLECTOR_SCRIPT, "ingest-email"],
+                    cwd=JOB_COLLECTOR_DIR,
+                    input=payload, capture_output=True, text=True, timeout=200,
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                print(f"⚠️ 경진대회 메일 파이프라인 실행 오류: {exc}")
+                return
+            if result.returncode != 0:
+                print(f"⚠️ 경진대회 메일 파이프라인 실패: {result.stderr.strip()[:300]}")
+                return
+            print(f"📬 경진대회 메일 파이프라인: {result.stdout.strip()}")
+            table_match = re.search(r"TABLE_URL=(\S+)", result.stdout)
+            if table_match:
+                self._attach_mail_analysis_url(item.get("id"), table_match.group(1))
+            score_match = re.search(r"MAX_SCORE=(\d+)", result.stdout)
+            max_score = int(score_match.group(1)) if score_match else 0
+            if max_score >= JOB_EMAIL_IMMEDIATE_ANALYSIS_MIN_SCORE:
+                notify_spoken(
+                    "🏆 경진대회 메일 감지",
+                    f"[{max_score}점] 점수가 높으므로 추천 경진대회 분석 진행하겠습니다",
+                    truncate_title(item.get("subject", ""), 55),
+                )
+                self._run_contest_collector_and_analysis()
         finally:
             self._contest_email_trigger_running = False
 
     def _ingest_job_email_thread(self, item):
         """채용 관련 메일 본문에서 실제 채용공고를 추출해 이직시스템 DB에
-        반영한다(★ 2026-08-14). 지금은 사람인 발신 메일만 지원 — 실제 판정은
-        job_collector.py의 extract_job_postings_from_email()이 발신자로 다시
-        검사하므로, 여기 호출 조건(사람인 도메인 또는 AI 분류 카테고리에 "채용"
-        포함)이 최종 게이트는 아니다.
+        반영한다(★ 2026-08-14). ★ 2026-08-20: 사람인·점핏 전용 처리가 없는
+        발신자도 job_collector.py의 범용 AI 추출(_extract_jobs_via_generic_ai)로
+        처리되므로 더 이상 특정 발신자로 제한되지 않는다 — 여기 호출 조건
+        (AI 분류 카테고리에 "채용" 포함)이 사실상 유일한 게이트다.
 
         기본적으로는 DB에 반영만 해두고 Notion에 바로 발행하지 않는다 — 하루
         1번 도는 `_run_job_analysis_top()`의 analyze-top이 점수 1위일 때
         자연스럽게 골라 분석·발행한다(기존 사람인 API/크롤링 공고와 동일한
         파이프라인 재사용). ★ 2026-08-18: 다만 이 메일에서 나온 공고의 점수가
         JOB_EMAIL_IMMEDIATE_ANALYSIS_MIN_SCORE 이상이면 배치를 기다리지 않고
-        음성으로 안내한 뒤 바로 career 카테고리 analyze-top을 돌린다."""
+        음성으로 안내한 뒤 바로 career 카테고리 analyze-top을 돌린다.
+        ★ 2026-08-20: 점수와 무관하게 이 메일에서 나온 공고 전부를 정리한
+        Notion 표(publish_email_job_summary_table)가 항상 발행되므로, 그
+        링크는 점수 게이트 밖에서 붙인다 — "며칠 전 결과"가 아니라 "이 메일
+        자체에서 뭐가 나왔는지"를 항상 확인할 수 있게."""
         body = fetch_gmail_message_body(item["id"])
         if not body:
             return
@@ -5715,6 +5747,9 @@ class ShiftAlarmApp(rumps.App):
             )
             if result.returncode == 0:
                 print(f"📬 채용 메일 파이프라인: {result.stdout.strip()}")
+                table_match = re.search(r"TABLE_URL=(\S+)", result.stdout)
+                if table_match:
+                    self._attach_mail_analysis_url(item.get("id"), table_match.group(1))
                 score_match = re.search(r"MAX_SCORE=(\d+)", result.stdout)
                 max_score = int(score_match.group(1)) if score_match else 0
                 if max_score >= JOB_EMAIL_IMMEDIATE_ANALYSIS_MIN_SCORE:
@@ -5724,9 +5759,6 @@ class ShiftAlarmApp(rumps.App):
                         truncate_title(item.get("subject", ""), 55),
                     )
                     self._run_job_analysis_top_for_category("career")
-                    top_job = get_top_job_analysis("career")
-                    if top_job:
-                        self._attach_mail_analysis_url(item.get("id"), top_job.get("url"))
             else:
                 print(f"⚠️ 채용 메일 파이프라인 실패: {result.stderr.strip()[:300]}")
         except (OSError, subprocess.TimeoutExpired) as exc:
