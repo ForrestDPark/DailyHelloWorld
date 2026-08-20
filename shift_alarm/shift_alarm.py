@@ -996,6 +996,7 @@ REMINDERS = {
     "outing":          {"label": "🗺️ 나들이 추천(월 1회)",    "enabled": True},
     "beef_bbq":        {"label": "🥩 소고기 구워먹는 날(월 1회·휴무일)", "enabled": True},
     "day_shift_last_day_routine": {"label": "☕ 점심 먹고 아아 한잔·헬스장 갔다 오후 9시 이후 취침(주간 마지막날)", "enabled": True},
+    "engine_oil_change": {"label": "🛢️ 엔진오일 가는 날(5개월에 1회)", "enabled": True},
 }
 
 # ── 월 1회 나들이 추천 장소 (아산시 기준 + 근교) ────────────────────
@@ -1496,6 +1497,8 @@ EARPHONE_CHARGE_INTERVAL_DAYS = 4
 WALK_20K_ANCHOR = datetime.date(2026, 8, 7)
 WALK_20K_CYCLE_DAYS = 7
 WALK_20K_OFFSETS = (0, 3)
+ENGINE_OIL_CHANGE_ANCHOR = datetime.date(2026, 8, 20)
+ENGINE_OIL_CHANGE_INTERVAL_MONTHS = 5
 
 
 def is_gym_open(dt):
@@ -1597,6 +1600,19 @@ def _is_earphone_charge_day(d):
     return days >= 0 and days % EARPHONE_CHARGE_INTERVAL_DAYS == 0
 
 
+def _is_engine_oil_change_day(d):
+    """기준일(2026-08-20)부터 5개월마다 돌아오는 엔진오일 교체일인지 반환.
+    일(day)이 아니라 달(month) 단위 주기라 다른 리마인더처럼 days % N으로
+    계산할 수 없어 연·월을 직접 더해서 비교한다. 기준일이 20일이라 28일이
+    최소인 2월을 포함해 모든 달에 20일이 존재하므로 말일 보정은 불필요."""
+    if d < ENGINE_OIL_CHANGE_ANCHOR:
+        return False
+    if d.day != ENGINE_OIL_CHANGE_ANCHOR.day:
+        return False
+    months_diff = (d.year - ENGINE_OIL_CHANGE_ANCHOR.year) * 12 + (d.month - ENGINE_OIL_CHANGE_ANCHOR.month)
+    return months_diff % ENGINE_OIL_CHANGE_INTERVAL_MONTHS == 0
+
+
 def _is_first_off_block_start_of_month(schedule, d):
     """d가 이번 달의 '첫 번째' 휴무 블록 시작일인지 반환 (한 달에 한 번 리마인더용)."""
     if not _is_off_block_start(schedule, d):
@@ -1659,6 +1675,7 @@ def get_today_reminders(schedule, now=None):
       휴무일에 있었으면 좋겠다는 요청. (2026-08-07 추가)
     - 주간 마지막날 루틴(점심·아아·헬스장·취침): 오늘이 주간(Day) 근무 블록의 마지막날
       (내일은 주간이 아님, 휴무든 다른 근무든 상관없음). (2026-08-20 추가)
+    - 엔진오일 교체: 근무표와 무관하게 2026-08-20부터 5개월마다 한 번. (2026-08-20 추가)
     """
     now = now or datetime.datetime.now()
     today = now.date()
@@ -1732,6 +1749,9 @@ def get_today_reminders(schedule, now=None):
 
     if REMINDERS["day_shift_last_day_routine"]["enabled"] and _is_day_shift_block_end(schedule, today):
         reminders.append(REMINDERS["day_shift_last_day_routine"]["label"])
+
+    if REMINDERS["engine_oil_change"]["enabled"] and _is_engine_oil_change_day(today):
+        reminders.append(REMINDERS["engine_oil_change"]["label"])
 
     return reminders
 
