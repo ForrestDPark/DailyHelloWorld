@@ -220,3 +220,11 @@ python3 company_profile.py analyze "(주)회사명" --url "https://회사홈페�
 - 알바천국(alba.co.kr) 실제 검색 API 경로 파악 후 크롤러 추가
 
 공식 API(사람인·워크넷)를 우선 사용하고, 로그인·CAPTCHA 우회 없는 공개 검색결과 페이지 크롤링(사람인·알바몬, 잡코리아는 robots.txt로 제외)을 보조 수단으로 병행한다. 로그인 우회, CAPTCHA 우회, 비공개 정보 수집은 여전히 하지 않는다.
+
+## 스크린샷+비전 분석 폴백 (★ 2026-08-20 추가)
+
+정적 크롤링(`fetch_job_detail_text`)으로 본문을 못 가져오는 JS 렌더링 SPA 채용공고(점핏 등)를 위해 Playwright로 스크린샷을 찍고 `claude` CLI의 Read 도구(`--allowedTools Read --add-dir <임시폴더>`)로 이미지를 직접 읽어 텍스트를 추출하는 폴백을 추가했다(`fetch_job_detail_via_screenshot()`, `run_job_analysis()`가 `_content_available()` 실패 시 자동 재시도).
+
+- **"표준 라이브러리만 사용" 원칙의 유일한 예외**: 정적 크롤링으로는 원천적으로 못 읽는 페이지가 실사용 중 다수 확인돼(점핏 포지션 페이지 등), 사용자가 명시적으로 Playwright 도입을 승인했다(2026-08-20). `pip install playwright && python3 -m playwright install chromium` 필요.
+- 사람인 공고는 relay/view가 아니라 서버 렌더링되는 구버전 URL(`zf_user/jobs/view?rec_idx=`)로 재작성한 뒤 스크린샷을 찍는다(`_effective_job_detail_url()` — 텍스트 크롤링과 스크린샷 폴백이 같은 로직을 공유). relay/view URL로 Playwright가 접속하면 봇 탐지로 30초 타임아웃이 실측됐다.
+- **한계**: 일부 사이트(실측: 특정 사람인 공고 rec_idx=54484811)는 서버 렌더링 URL로 재작성해도 Playwright(헤드리스 브라우저) 접속 자체가 봇 탐지로 타임아웃 난다 — 이 경우 폴백도 실패하고 기존과 동일하게(analyze_top_job이 다음 순위 후보로 자동 이동) 처리된다. 순수 `urllib` 요청은 통과하지만 헤드리스 브라우저는 막히는 사이트가 있다는 뜻 — 회귀는 아니고(원래도 실패하던 케이스), 점핏처럼 봇 탐지가 없는 SPA에서는 잘 작동한다(실측 확인).
