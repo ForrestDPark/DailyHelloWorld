@@ -979,6 +979,7 @@ REMINDERS = {
     "call_mom":        {"label": "📞 엄마한테 전화(휴무 시작일)",   "enabled": True},
     "cafe_strategy_study": {"label": "☕ 카페에서 밥먹고 커피마시면서 병법공부하기(휴무 첫날)", "enabled": True},
     "call_heo_minjun": {"label": "📞 허민준한테 전화(월 1회)", "enabled": True},
+    "call_sibling":    {"label": "📞 동생한테 전화(월 1회)", "enabled": True},
     "call_dongchan":   {"label": "📞 동찬이형한테 전화(21일에 1회)", "enabled": True},
     "call_sondongju":  {"label": "📞 손동주한테 전화(1주일에 1회)",   "enabled": True},
     "coding_academy":  {"label": "💬 코딩학원 카톡방에 연락(1주일에 1회)", "enabled": True},
@@ -1653,6 +1654,7 @@ def get_today_reminders(schedule, now=None):
     - 엄마한테 전화: 오늘이 휴무 블록의 첫날 (어제는 근무였음)
     - 카페에서 밥·커피·병법 공부: 오늘이 휴무 블록의 첫날
     - 허민준한테 전화: 월 1회, 이번 달의 첫 번째 휴무 블록 시작일
+    - 동생한테 전화: 월 1회, 이번 달의 첫 번째 휴무 블록 시작일(허민준 전화와 같은 기준)
     - 동찬이형한테 전화: 2026-08-03부터 21일마다 한 번
     - 손동주한테 전화: 2026-08-05부터 7일마다(주 1회) 한 번
     - 코딩학원 카톡방 연락: 2026-08-07부터 7일마다(주 1회) 한 번
@@ -1710,6 +1712,9 @@ def get_today_reminders(schedule, now=None):
     if REMINDERS["call_heo_minjun"]["enabled"] and _is_first_off_block_start_of_month(schedule, today):
         reminders.append(REMINDERS["call_heo_minjun"]["label"])
 
+    if REMINDERS["call_sibling"]["enabled"] and _is_first_off_block_start_of_month(schedule, today):
+        reminders.append(REMINDERS["call_sibling"]["label"])
+
     if REMINDERS["call_dongchan"]["enabled"] and _is_dongchan_call_day(today):
         reminders.append(REMINDERS["call_dongchan"]["label"])
 
@@ -1762,6 +1767,7 @@ def get_today_reminder_title_tokens(schedule, now=None):
     call_tokens = {
         REMINDERS["call_mom"]["label"]: "📞엄마",
         REMINDERS["call_heo_minjun"]["label"]: "📞민준",
+        REMINDERS["call_sibling"]["label"]: "📞동생",
         REMINDERS["call_dongchan"]["label"]: "📞동찬",
         REMINDERS["call_sondongju"]["label"]: "📞동주",
     }
