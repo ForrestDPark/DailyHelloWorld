@@ -569,3 +569,11 @@ Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으
 - **경진대회 메일도 job과 대칭**: `contest_collector.py`에 `ingest_email()`/`extract_contests_from_email()`을 신규 추가했다(예전엔 이메일 수집 기능 자체가 없어 경진대회 메일 감지 시 매번 전체 재크롤링만 돌렸음, 28번 항목). `shift_alarm.py`의 `_maybe_trigger_contest_analysis_from_email()`을 이 새 ingest-email을 쓰도록 재작성 — 이제 "이 메일 안에 실제로 언급된 대회들"만 추출·채점하고, 전체 재크롤링(및 음성 안내)은 점수가 높을 때만(채용 메일과 같은 기준) 돈다.
 - **메일별 Notion 요약 표**: `publish_email_job_summary_table()`/`publish_email_contest_summary_table()` — 점수와 무관하게 그 메일에서 나온 공고/대회 전부를 점수 내림차순 표로 Notion에 발행한다. **회사 | 공고 | 마감일 | 점수 | 준비할 점**(공고 쪽만 — `_suggest_job_prep_tips()`가 한 번의 AI 호출로 각 공고에 지원할 때 미리 준비하면 좋을 자격증·심화 학습 주제를 20자 이내로 제안, 실패해도 표 발행 자체는 계속됨) 형식이다. `ingest_email()`이 `TABLE_URL=` 기계 판독용 줄을 출력하고, `shift_alarm.py`의 `_attach_mail_analysis_url()`이 이를 파싱해 그 메일 항목의 메뉴 하위 메뉴에 "📊 이직시스템 분석 결과 보기"로 연결한다(30번 항목).
 - **실측 버그**: 메일별 표를 처음엔 상태 파일 하나(`email_job_summary_state.json`)로 관리했는데, 그러면 `_notion_publish()`의 "페이지 하나만 갱신" 방식 특성상 **다른 메일을 처리할 때마다 직전 메일의 표가 통째로 덮어써졌다**(점핏 표가 사람인 표로 지워짐 — 실측). 발신자+제목의 SHA1 해시로 메일마다 별도 상태 파일(`data/email_summaries/<hash>.json`, contest는 `contest_<hash>.json`)을 쓰도록 고쳐서 메일마다 독립된 페이지를 유지한다.
+
+## 33. ☕ 주간(Day) 근무 마지막날 루틴 리마인더 (★ 2026-08-20 추가)
+
+**사용자 요청**: "주간근무 맨 마지막은 점심 먹고 아아 한잔하면서 헬스장 갔다 오후 9시 이후에 잠드는 리마인더 생성해".
+
+- `REMINDERS`에 `day_shift_last_day_routine` 항목을 추가하고, 새 헬퍼 `_is_day_shift_block_end(schedule, d)`로 "오늘이 Day이고 내일은 Day가 아님"을 판정한다(다음 근무가 휴무든 Swing/GY든 상관없이 Day 블록이 끝나는 날이면 뜬다 — 기존 `_is_off_block_start`와 대칭 구조).
+- `get_today_reminders()`의 다른 조건들과 같은 자리에 추가해서 메뉴 표시·음성 낭독(`notify_spoken`)·토글 등 기존 리마인더 인프라를 그대로 탄다(별도 배선 불필요).
+- 검증: `d_team_schedule_2026.json` 스캔 결과 2026-08-20, 2026-09-13이 Day 블록 마지막날로 잡히고, 실제로 오늘(2026-08-20) `get_today_reminders()` 호출 시 이 리마인더가 포함되는 것을 확인.

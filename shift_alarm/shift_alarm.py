@@ -995,6 +995,7 @@ REMINDERS = {
     "laundry":         {"label": "🧺 빨래 돌리는 날(휴무일마다)",         "enabled": True},
     "outing":          {"label": "🗺️ 나들이 추천(월 1회)",    "enabled": True},
     "beef_bbq":        {"label": "🥩 소고기 구워먹는 날(월 1회·휴무일)", "enabled": True},
+    "day_shift_last_day_routine": {"label": "☕ 점심 먹고 아아 한잔·헬스장 갔다 오후 9시 이후 취침(주간 마지막날)", "enabled": True},
 }
 
 # ── 월 1회 나들이 추천 장소 (아산시 기준 + 근교) ────────────────────
@@ -1450,6 +1451,12 @@ def _is_off_block_start(schedule, d):
             and get_shift_for_date(schedule, d - datetime.timedelta(days=1)) != "휴무")
 
 
+def _is_day_shift_block_end(schedule, d):
+    """d가 주간(Day) 근무 블록의 마지막날인지 (내일은 주간이 아닌지) 반환."""
+    return (get_shift_for_date(schedule, d) == "Day"
+            and get_shift_for_date(schedule, d + datetime.timedelta(days=1)) != "Day")
+
+
 # ── 헬스장 운영 시간 ─────────────────────────────────────────
 # 평일(월~금)은 24시간, 토/일은 06:00~17:00만 운영.
 GYM_WEEKEND_OPEN  = datetime.time(6, 0)
@@ -1650,6 +1657,8 @@ def get_today_reminders(schedule, now=None):
       겹치지 않게). 아산시 기준 근교 명소를 매달 순환 추천. (2026-07-24 추가)
     - 소고기 구워먹는 날: 월 1회, 나들이 추천과 같은 날('마지막' 휴무 블록 시작일) —
       휴무일에 있었으면 좋겠다는 요청. (2026-08-07 추가)
+    - 주간 마지막날 루틴(점심·아아·헬스장·취침): 오늘이 주간(Day) 근무 블록의 마지막날
+      (내일은 주간이 아님, 휴무든 다른 근무든 상관없음). (2026-08-20 추가)
     """
     now = now or datetime.datetime.now()
     today = now.date()
@@ -1720,6 +1729,9 @@ def get_today_reminders(schedule, now=None):
 
     if REMINDERS["beef_bbq"]["enabled"] and _is_last_off_block_start_of_month(schedule, today):
         reminders.append(REMINDERS["beef_bbq"]["label"])
+
+    if REMINDERS["day_shift_last_day_routine"]["enabled"] and _is_day_shift_block_end(schedule, today):
+        reminders.append(REMINDERS["day_shift_last_day_routine"]["label"])
 
     return reminders
 
