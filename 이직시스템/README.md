@@ -228,3 +228,15 @@ python3 company_profile.py analyze "(주)회사명" --url "https://회사홈페�
 - **"표준 라이브러리만 사용" 원칙의 유일한 예외**: 정적 크롤링으로는 원천적으로 못 읽는 페이지가 실사용 중 다수 확인돼(점핏 포지션 페이지 등), 사용자가 명시적으로 Playwright 도입을 승인했다(2026-08-20). `pip install playwright && python3 -m playwright install chromium` 필요.
 - 사람인 공고는 relay/view가 아니라 서버 렌더링되는 구버전 URL(`zf_user/jobs/view?rec_idx=`)로 재작성한 뒤 스크린샷을 찍는다(`_effective_job_detail_url()` — 텍스트 크롤링과 스크린샷 폴백이 같은 로직을 공유). relay/view URL로 Playwright가 접속하면 봇 탐지로 30초 타임아웃이 실측됐다.
 - **한계**: 일부 사이트(실측: 특정 사람인 공고 rec_idx=54484811)는 서버 렌더링 URL로 재작성해도 Playwright(헤드리스 브라우저) 접속 자체가 봇 탐지로 타임아웃 난다 — 이 경우 폴백도 실패하고 기존과 동일하게(analyze_top_job이 다음 순위 후보로 자동 이동) 처리된다. 순수 `urllib` 요청은 통과하지만 헤드리스 브라우저는 막히는 사이트가 있다는 뜻 — 회귀는 아니고(원래도 실패하던 케이스), 점핏처럼 봇 탐지가 없는 SPA에서는 잘 작동한다(실측 확인).
+
+## 메일 채용공고 요약 표 발행 (`publish_email_job_summary_table`, ★ 2026-08-20 추가, ★ 2026-08-22 링크 보강)
+
+`ingest_email()`이 메일 하나에서 뽑아낸 공고 전부(점수 무관)를 점수 내림차순 표로 Notion에 발행한다. 카테고리별 1건만 보여주는 `_notion_publish()`와 달리 "이 메일에 뭐가 있었는지" 그 자체가 목적이라 별도 경로다. 반환된 URL은 shift_alarm이 메일 항목에 붙여(`_attach_mail_analysis_url`) 메뉴에서 바로 연결한다.
+
+표 컬럼은 회사·공고·마감일·점수·준비할 점이며, 앞의 세 컬럼(회사/공고/준비할 점)에 각각 링크를 건다:
+
+- **회사**: 회사마다(중복 제거) `_generate_company_profile_url()`로 경영 분석 페이지를 만들어 링크(실패하면 평문으로 표시, 다른 회사엔 영향 없음).
+- **공고**: `_effective_job_detail_url(job.url, job.source, job.source_id)`로 원문 채용공고 URL을 건다 — 크롤링·스크린샷 폴백이 쓰는 것과 같은 재작성 로직이라, 사람인 공고는 relay/view 대신 서버 렌더링되는 구버전 URL로 열린다.
+- **준비할 점**: AI가 만든 팁 문구(`_suggest_job_prep_tips`)를 그대로 URL로 쓰지 않는다 — AI가 존재하지 않는 링크를 지어낼 위험이 있어서(이 코드베이스에서 반복되는 원칙: AI가 URL을 직접 만들지 않고, 검증 가능한 방식으로만 링크를 생성한다). 대신 팁 문구로 구글 검색을 거는 URL(`https://www.google.com/search?q=...`)을 걸어 항상 유효한 링크를 보장한다.
+
+상태 파일은 발신자+제목 해시(`data/email_summaries/<hash>.json`)별로 분리돼 있어 다른 메일을 처리해도 이전 메일의 표를 덮어쓰지 않는다.

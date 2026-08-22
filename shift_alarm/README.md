@@ -605,3 +605,17 @@ Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으
 - `_set_shift_internal(self, shift, notify=True, date=None)`에 `date` 매개변수를 추가해 휴무 판정 시 어느 날짜 기준인지 알 수 있게 했다(기존엔 근무 이름만 받아서 날짜를 몰랐다). 휴무인데 `_is_day_to_gy_off_day`가 True면 `unregister_alarm()` 대신 08:00으로 `register_alarm()`한다. `apply_today_shift()`가 이 `date`를 그대로 전달한다.
 - `show_status()`의 "현재: 휴무 (자동, 알람 없음)" 문구도 이 전환 구간이면 "알람 08:00(Day→GY 전환)"으로 바뀌도록 같이 고쳤다(안 고치면 실제로는 알람이 도는데 메뉴에는 "알람 없음"이라고 잘못 표시됐을 것).
 - 검증: 2026년 근무표(`d_team_schedule_2026.json`) 전체를 스캔해 Day 블록 직후 휴무 시작일 15건 전부 `_is_day_to_gy_off_day() == True`, GY/Swing 블록 직후 휴무 시작일(각 15건씩)은 전부 `False`인 것을 확인.
+
+## 37. 📊 메일 분석 결과 고정 메뉴 항목 (★ 2026-08-22 추가)
+
+**사용자 요청**: "[점핏] 메일 요약 표 링크가 shift alarm 항목에서 보이게해주는게 좋겠어".
+
+- 메일 요약 목록(`gmail_recent_summaries`)은 `GMAIL_SUMMARY_MENU_LIMIT`(=1)로 "가장 중요한 메일 1건"만 상위 메뉴에 뜨고, 정렬 기준은 안읽음→priority(31번 항목의 `infer_mail_priority` 참고)다. 이직시스템 분석까지 끝난 메일(`analysis_url`이 붙은 메일)이 이미 읽음 처리됐거나 priority가 낮으면 그 1건에 못 들어서, 표까지 다 만들어놓고도 메뉴에서 링크를 볼 방법이 없었다(실제로 점핏 메일이 이 상태였음 — 표는 이미 발행됐는데 메뉴엔 다른 메일만 보임).
+- 새 헬퍼 `get_latest_mail_analysis_entry(config)`: `gmail_recent_summaries` 중 `analysis_url`이 있는 항목만 걸러서 `received_at` 최신순으로 1건을 고른다. 정렬 우선순위(안읽음/priority)와 무관하게 항상 "분석까지 끝난 것 중 가장 최근"을 보여주는 게 목적이라 별도 함수로 분리했다.
+- `build_menu()`의 메일 요약 루프 바로 다음에 `📊 메일 분석 결과: {제목}` 고정 항목을 하나 더 추가했다 — 클릭하면 바로 그 메일의 Notion 분석 표로 이동한다(위 1건 목록과 별개로 항상 노출).
+
+## 38. 🔗 채용공고 표: 공고 원문 링크 + 준비할 점 검색 링크 (★ 2026-08-22 추가)
+
+**사용자 요청**: "공고를 클릭하면 채용공고 사이트가 열리는 링크만들면 좋을거같아" / "준비할점도 링크화해서 관련 정보를 볼수있게 해줘".
+
+`이직시스템/job_collector.py`의 `publish_email_job_summary_table()` 변경. 자세한 내용은 [이직시스템/README.md](../이직시스템/README.md)의 해당 절 참고 — 공고 제목 셀에 원문 채용공고 URL을, 준비할 점 셀에 그 문구로 구글 검색을 거는 URL을 건다.

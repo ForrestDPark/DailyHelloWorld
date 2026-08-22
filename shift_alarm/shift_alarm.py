@@ -3421,6 +3421,24 @@ def get_best_contest_recommendation():
     return best, best_category, best_label
 
 
+def get_latest_mail_analysis_entry(config):
+    """메일 요약 목록(gmail_recent_summaries) 중 이직시스템 분석 결과 링크
+    (analysis_url)가 붙은 항목 중 가장 최근 것을 반환한다 (★ 2026-08-22).
+
+    메뉴에 보이는 메일 요약은 GMAIL_SUMMARY_MENU_LIMIT(=1)로 "가장 중요한
+    메일 1건"만 노출되는데, 안읽음/priority 기준 정렬이라 분석까지 끝난
+    메일이 그 1건에 들지 못하면 결과 링크를 볼 방법이 없었다. 분석 결과는
+    정렬 순위와 무관하게 항상 볼 수 있어야 해서 별도로 최신순 1건을 고른다."""
+    candidates = [
+        item for item in config.get("gmail_recent_summaries", [])
+        if item.get("analysis_url")
+    ]
+    if not candidates:
+        return None
+    candidates.sort(key=lambda it: it.get("received_at", ""), reverse=True)
+    return candidates[0]
+
+
 def fetch_weather():
     try:
         url = (
@@ -5148,6 +5166,16 @@ class ShiftAlarmApp(rumps.App):
                 self.menu.add(summary_menu)
         else:
             self.menu.add(rumps.MenuItem("🤖 최근 AI 요약: 새 메일 대기 중"))
+        # ★ 2026-08-22: 위 목록엔 "가장 중요한 메일 1건"만 뜨는데, 분석까지 끝난
+        # 메일이 우선순위 정렬에서 밀려 그 1건에 안 들면 결과 링크를 볼 방법이
+        # 없었다("[점핏] ... 링크가 shift alarm 항목에서 보이게 해주는게 좋겠어"
+        # 요청 대응) — 정렬 순위와 무관하게 항상 노출되는 고정 항목을 따로 둔다.
+        latest_mail_analysis = get_latest_mail_analysis_entry(self.config)
+        if latest_mail_analysis:
+            self.menu.add(rumps.MenuItem(
+                f"📊 메일 분석 결과: {truncate_title(str(latest_mail_analysis.get('subject') or ''), 30)}",
+                callback=self.make_open_url_callback(latest_mail_analysis["analysis_url"]),
+            ))
         self.menu.add(None)
         weather_color = {
             "雨": NSColor.systemBlueColor(),

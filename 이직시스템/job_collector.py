@@ -1320,12 +1320,30 @@ def publish_email_job_summary_table(
     def cell(content: str) -> list[dict[str, Any]]:
         return [{"type": "text", "text": {"content": content[:2000]}}]
 
-    def company_cell(name: str) -> list[dict[str, Any]]:
-        text: dict[str, Any] = {"content": name[:2000]}
-        url = company_urls.get(name)
+    def link_cell(content: str, url: str | None) -> list[dict[str, Any]]:
+        text: dict[str, Any] = {"content": content[:2000]}
         if url:
             text["link"] = {"url": url}
         return [{"type": "text", "text": text}]
+
+    def company_cell(name: str) -> list[dict[str, Any]]:
+        return link_cell(name, company_urls.get(name))
+
+    # ★ 2026-08-22: "공고를 클릭하면 채용공고 사이트가 열리게" 요청 — 공고 제목에
+    # 원문 채용공고 URL을 건다(사람인은 relay/view 대신 크롤링에도 쓰는 서버렌더링
+    # 구버전 URL로 통일 — _effective_job_detail_url).
+    def job_cell(job: Job) -> list[dict[str, Any]]:
+        return link_cell(job.title, _effective_job_detail_url(job.url, job.source, job.source_id))
+
+    # ★ 2026-08-22: "준비할점도 링크화해서 관련 정보를 볼 수 있게" 요청 — AI가
+    # 만든 팁 문구를 그대로 URL로 쓰면 존재하지 않는 링크를 지어낼 위험이 있어서
+    # (이 코드베이스의 기존 원칙: AI가 URL을 직접 만들지 않는다), 팁 문구로 구글
+    # 검색을 거는 방식으로 항상 유효한 링크를 만든다.
+    def tip_cell(tip: str) -> list[dict[str, Any]]:
+        if not tip:
+            return cell("")
+        search_url = f"https://www.google.com/search?q={urllib.parse.quote_plus(tip)}"
+        return link_cell(tip, search_url)
 
     header_row = {
         "object": "block", "type": "table_row",
@@ -1336,8 +1354,8 @@ def publish_email_job_summary_table(
         data_rows.append({
             "object": "block", "type": "table_row",
             "table_row": {"cells": [
-                company_cell(job.company), cell(job.title), cell(job.deadline or "-"),
-                cell(str(job.score)), cell(tips.get(job.source_id, "")),
+                company_cell(job.company), job_cell(job), cell(job.deadline or "-"),
+                cell(str(job.score)), tip_cell(tips.get(job.source_id, "")),
             ]},
         })
     table_block = {
