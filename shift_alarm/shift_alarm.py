@@ -3425,22 +3425,30 @@ def get_best_contest_recommendation():
     return best, best_category, best_label
 
 
-def get_latest_mail_analysis_entry(config):
-    """메일 요약 목록(gmail_recent_summaries) 중 이직시스템 분석 결과 링크
-    (analysis_url)가 붙은 항목 중 가장 최근 것을 반환한다 (★ 2026-08-22).
+MAIL_ANALYSIS_MENU_LIMIT = 5
 
-    메뉴에 보이는 메일 요약은 GMAIL_SUMMARY_MENU_LIMIT(=1)로 "가장 중요한
-    메일 1건"만 노출되는데, 안읽음/priority 기준 정렬이라 분석까지 끝난
-    메일이 그 1건에 들지 못하면 결과 링크를 볼 방법이 없었다. 분석 결과는
-    정렬 순위와 무관하게 항상 볼 수 있어야 해서 별도로 최신순 1건을 고른다."""
+
+def get_unchecked_mail_analysis_entries(config, limit=MAIL_ANALYSIS_MENU_LIMIT):
+    """메일 요약 목록(gmail_recent_summaries) 중 이직시스템 분석 결과 링크
+    (analysis_url)가 붙었고 아직 "확인함" 체크가 안 된 항목을 최신순으로
+    최대 limit개 반환한다 (★ 2026-08-22, "메일 처리 다 끝나면 전부 shift
+    alarm에 항목화해서 링크로 들어가게 해달라"는 요청).
+
+    메뉴에 보이는 메일 요약 자체는 GMAIL_SUMMARY_MENU_LIMIT(=1)로 "가장
+    중요한 메일 1건"만 노출되는데, 안읽음/priority 기준 정렬이라 분석까지
+    끝난 메일이 그 1건에 들지 못하면 결과 링크를 볼 방법이 없었다. 분석
+    결과는 그 정렬 순위와 무관하게 전부 볼 수 있어야 해서 별도로 뽑는다.
+    체크된 항목은 리마인더처럼 "오늘만" 리셋되는 게 아니라 영구적으로
+    사라진다(메일 자체가 그날 하루만 유효한 반복 항목이 아니라 1회성이라
+    매일 다시 보일 이유가 없음) — `mail_analysis_checked_ids`에 id를 남겨
+    관리한다."""
+    checked_ids = set(config.get("mail_analysis_checked_ids", []))
     candidates = [
         item for item in config.get("gmail_recent_summaries", [])
-        if item.get("analysis_url")
+        if item.get("analysis_url") and item.get("id") not in checked_ids
     ]
-    if not candidates:
-        return None
     candidates.sort(key=lambda it: it.get("received_at", ""), reverse=True)
-    return candidates[0]
+    return candidates[:limit]
 
 
 def fetch_weather():
@@ -3966,6 +3974,11 @@ class ShiftAlarmApp(rumps.App):
         # ★ 2026-08-19: 경진대회 메일 감지 시 즉시 트리거하는 분석(아래
         # _maybe_trigger_contest_analysis_from_email)이 겹쳐 돌지 않게 막는 락.
         self._contest_email_trigger_running = False
+        # ★ 2026-08-22: 채용 메일 파이프라인 타임아웃을 1800초로 늘리면서
+        # (200초로는 회사별 AI 분석까지 못 끝냄) 5분 주기 폴링과 겹쳐 여러
+        # 채용 메일이 동시에 job_collector.py를 띄울 가능성이 커졌다 —
+        # sqlite/Notion 상태 파일 동시 접근을 피하려고 같은 방식으로 락을 건다.
+        self._job_email_trigger_running = False
         self.gmail_timer = rumps.Timer(self._refresh_gmail, GMAIL_REFRESH_SECONDS)
         self.gmail_timer.start()
         self._refresh_gmail(None)
@@ -4909,6 +4922,19 @@ class ShiftAlarmApp(rumps.App):
         save_config(self.config)
         self.build_menu()
 
+    def make_check_mail_analysis_callback(self, item_id):
+        """메일 분석 결과 항목의 "확인함"(★ 2026-08-22) — job/contest 추천
+        체크와 달리 매일 리셋되지 않고 영구적으로 사라진다(메일 1건은
+        반복되는 하루짜리 항목이 아니라 그 자체로 끝이라서)."""
+        def callback(_):
+            checked = self.config.setdefault("mail_analysis_checked_ids", [])
+            if item_id not in checked:
+                checked.append(item_id)
+                self.config["mail_analysis_checked_ids"] = checked[-200:]
+            save_config(self.config)
+            self.build_menu()
+        return callback
+
     def check_all_daily_routine_now(self, _):
         """★ 2026-08-17: 하나씩 체크하기 귀찮다는 요청으로 추가 — 아직 안 한
         루틴을 한 번에 전부 체크한다."""
@@ -5181,14 +5207,21 @@ class ShiftAlarmApp(rumps.App):
             self.menu.add(rumps.MenuItem("🤖 최근 AI 요약: 새 메일 대기 중"))
         # ★ 2026-08-22: 위 목록엔 "가장 중요한 메일 1건"만 뜨는데, 분석까지 끝난
         # 메일이 우선순위 정렬에서 밀려 그 1건에 안 들면 결과 링크를 볼 방법이
-        # 없었다("[점핏] ... 링크가 shift alarm 항목에서 보이게 해주는게 좋겠어"
-        # 요청 대응) — 정렬 순위와 무관하게 항상 노출되는 고정 항목을 따로 둔다.
-        latest_mail_analysis = get_latest_mail_analysis_entry(self.config)
-        if latest_mail_analysis:
-            self.menu.add(rumps.MenuItem(
-                f"📊 메일 분석 결과: {truncate_title(str(latest_mail_analysis.get('subject') or ''), 30)}",
-                callback=self.make_open_url_callback(latest_mail_analysis["analysis_url"]),
+        # 없었다("메일 처리 다 끝나면 전부 shift alarm에 항목화해서 링크로
+        # 들어가게 해달라"는 요청 대응) — 분석 완료된 메일 전부를 리마인더
+        # 체크리스트와 같은 방식("확인함"을 누르면 다음부터 안 보임)으로
+        # 별도 노출한다.
+        for entry in get_unchecked_mail_analysis_entries(self.config):
+            subject = truncate_title(str(entry.get("subject") or ""), 30)
+            analysis_menu = rumps.MenuItem(f"📊 메일 분석 결과: {subject}")
+            analysis_menu.add(rumps.MenuItem(
+                "📝 분석 결과 보기", callback=self.make_open_url_callback(entry["analysis_url"])
             ))
+            analysis_menu.add(rumps.MenuItem(
+                "✅ 확인함(다음부터 안 보이기)",
+                callback=self.make_check_mail_analysis_callback(entry["id"]),
+            ))
+            self.menu.add(analysis_menu)
         self.menu.add(None)
         weather_color = {
             "雨": NSColor.systemBlueColor(),
@@ -5801,10 +5834,13 @@ class ShiftAlarmApp(rumps.App):
                 "body": body,
             })
             try:
+                # ★ 2026-08-22: job 쪽과 같은 이유(회사/대회별 AI 호출 누적)로
+                # 200초 타임아웃이 항상 초과돼 자동 트리거가 조용히 실패하던
+                # 문제 — 1800초로 넉넉히 늘림.
                 result = subprocess.run(
                     [sys.executable, CONTEST_COLLECTOR_SCRIPT, "ingest-email"],
                     cwd=JOB_COLLECTOR_DIR,
-                    input=payload, capture_output=True, text=True, timeout=200,
+                    input=payload, capture_output=True, text=True, timeout=1800,
                 )
             except (OSError, subprocess.TimeoutExpired) as exc:
                 print(f"⚠️ 경진대회 메일 파이프라인 실행 오류: {exc}")
@@ -5816,11 +5852,18 @@ class ShiftAlarmApp(rumps.App):
             table_match = re.search(r"TABLE_URL=(\S+)", result.stdout)
             if table_match:
                 self._attach_mail_analysis_url(item.get("id"), table_match.group(1))
+                # ★ 2026-08-22: job 쪽과 동일 — 점수와 무관하게 표 발행(=메뉴
+                # 항목화)이 끝날 때마다 "완료" 알림을 준다.
+                notify_spoken(
+                    "📊 메일 분석 완료",
+                    truncate_title(item.get("subject", ""), 55),
+                    "이직시스템 분석이 끝나 shift alarm 메뉴에 링크로 추가되었습니다.",
+                )
             score_match = re.search(r"MAX_SCORE=(\d+)", result.stdout)
             max_score = int(score_match.group(1)) if score_match else 0
             if max_score >= JOB_EMAIL_IMMEDIATE_ANALYSIS_MIN_SCORE:
                 notify_spoken(
-                    "🏆 경진대회 메일 감지",
+                    "🏆 고득점 경진대회 발견",
                     f"[{max_score}점] 점수가 높으므로 추천 경진대회 분석 진행하겠습니다",
                     truncate_title(item.get("subject", ""), 55),
                 )
@@ -5844,39 +5887,64 @@ class ShiftAlarmApp(rumps.App):
         ★ 2026-08-20: 점수와 무관하게 이 메일에서 나온 공고 전부를 정리한
         Notion 표(publish_email_job_summary_table)가 항상 발행되므로, 그
         링크는 점수 게이트 밖에서 붙인다 — "며칠 전 결과"가 아니라 "이 메일
-        자체에서 뭐가 나왔는지"를 항상 확인할 수 있게."""
-        body = fetch_gmail_message_body(item["id"])
-        if not body:
+        자체에서 뭐가 나왔는지"를 항상 확인할 수 있게.
+
+        ★ 2026-08-22: 타임아웃을 1800초로 늘리면서 5분 폴링 주기와 겹쳐 여러
+        채용 메일이 동시에 job_collector.py를 띄울 수 있어졌다 — 경진대회
+        쪽(_maybe_trigger_contest_analysis_from_email)과 같은 방식으로
+        `_job_email_trigger_running` 락을 걸어 겹쳐 돌지 않게 막는다."""
+        if self._job_email_trigger_running:
             return
-        payload = json.dumps({
-            "sender": item.get("sender", ""),
-            "subject": item.get("subject", ""),
-            "body": body,
-        })
+        self._job_email_trigger_running = True
         try:
-            result = subprocess.run(
-                [sys.executable, JOB_COLLECTOR_SCRIPT, "ingest-email"],
-                cwd=JOB_COLLECTOR_DIR,
-                input=payload, capture_output=True, text=True, timeout=200,
-            )
-            if result.returncode == 0:
-                print(f"📬 채용 메일 파이프라인: {result.stdout.strip()}")
-                table_match = re.search(r"TABLE_URL=(\S+)", result.stdout)
-                if table_match:
-                    self._attach_mail_analysis_url(item.get("id"), table_match.group(1))
-                score_match = re.search(r"MAX_SCORE=(\d+)", result.stdout)
-                max_score = int(score_match.group(1)) if score_match else 0
-                if max_score >= JOB_EMAIL_IMMEDIATE_ANALYSIS_MIN_SCORE:
-                    notify_spoken(
-                        "💼 채용 메일 감지",
-                        f"[{max_score}점] 점수가 높으므로 추천 채용공고 분석 진행하겠습니다",
-                        truncate_title(item.get("subject", ""), 55),
-                    )
-                    self._run_job_analysis_top_for_category("career")
-            else:
+            body = fetch_gmail_message_body(item["id"])
+            if not body:
+                return
+            payload = json.dumps({
+                "sender": item.get("sender", ""),
+                "subject": item.get("subject", ""),
+                "body": body,
+            })
+            try:
+                # ★ 2026-08-22: 회사마다 DART/뉴스 조회 + AI 호출(경영분석) +
+                # 공고별 준비할 점 생성까지 붙으면서 6개 회사 기준 실측 5~8분이
+                # 걸린다 — 기존 200초 타임아웃은 항상 넘겨서(실사용 중 확인) 이
+                # 자동 트리거가 매번 조용히 실패하고 있었다. 하루 1번 도는
+                # analyze-top과 같은 1800초로 맞춘다.
+                result = subprocess.run(
+                    [sys.executable, JOB_COLLECTOR_SCRIPT, "ingest-email"],
+                    cwd=JOB_COLLECTOR_DIR,
+                    input=payload, capture_output=True, text=True, timeout=1800,
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                print(f"⚠️ 채용 메일 파이프라인 실행 오류: {exc}")
+                return
+            if result.returncode != 0:
                 print(f"⚠️ 채용 메일 파이프라인 실패: {result.stderr.strip()[:300]}")
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            print(f"⚠️ 채용 메일 파이프라인 실행 오류: {exc}")
+                return
+            print(f"📬 채용 메일 파이프라인: {result.stdout.strip()}")
+            table_match = re.search(r"TABLE_URL=(\S+)", result.stdout)
+            if table_match:
+                self._attach_mail_analysis_url(item.get("id"), table_match.group(1))
+                # ★ 2026-08-22: "메일 왔다고만 하지 말고 분석 끝나서
+                # shift alarm 항목화 완료됐다고 알려달라"는 요청 — 점수와
+                # 무관하게 표 발행(=메뉴 항목화)이 끝날 때마다 알린다.
+                notify_spoken(
+                    "📊 메일 분석 완료",
+                    truncate_title(item.get("subject", ""), 55),
+                    "이직시스템 분석이 끝나 shift alarm 메뉴에 링크로 추가되었습니다.",
+                )
+            score_match = re.search(r"MAX_SCORE=(\d+)", result.stdout)
+            max_score = int(score_match.group(1)) if score_match else 0
+            if max_score >= JOB_EMAIL_IMMEDIATE_ANALYSIS_MIN_SCORE:
+                notify_spoken(
+                    "💼 고득점 공고 발견",
+                    f"[{max_score}점] 점수가 높으므로 추천 채용공고 분석 진행하겠습니다",
+                    truncate_title(item.get("subject", ""), 55),
+                )
+                self._run_job_analysis_top_for_category("career")
+        finally:
+            self._job_email_trigger_running = False
 
     def _prompt_jp_workout_settings(self):
         """운동용 영상 목표 길이(분)와 고음 구간 앞뒤 여유(초)를 키패드로 물어본다.
