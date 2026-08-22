@@ -1196,6 +1196,9 @@ MP3_SHAZAM_RENAME_SCRIPT = os.path.join(
 SUNZI_README_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "손자병법", "README.md"
 )
+# 손자병법 메뉴·모바일 위젯에서 여는 공개 학습 사이트. 최신 구절명은 README에서
+# 계속 읽되, 클릭 대상은 개별 Notion 페이지가 아니라 구절 목록이 있는 사이트로 통일한다.
+SUNZI_SITE_URL = "https://sunzi-strategy-notes.pulpilisory.chatgpt.site/archive"
 
 
 # ════════════════════════════════════════════════════════════
@@ -2038,7 +2041,8 @@ def open_jp_epub(path):
 def get_latest_sunzi_entry():
     """
     손자병법/README.md의 "완료된 구절" 표에서 마지막 줄(가장 최근 완료된 구절)의
-    구절명 + 노션 링크를 반환. 파일이 없거나 표를 못 찾으면 None.
+    구절명 + 공개 학습 사이트 링크를 반환. README의 마지막 완료 행은 메뉴에 표시할
+    최신 구절명을 구하는 기준으로만 쓰며, 클릭은 목록 페이지가 있는 사이트로 연다.
     """
     if not os.path.exists(SUNZI_README_PATH):
         return None
@@ -2048,8 +2052,8 @@ def get_latest_sunzi_entry():
         rows = re.findall(r'^\|\s*(.+?)\s*\|\s*\[링크\]\((https?://\S+?)\)\s*\|', content, re.MULTILINE)
         if not rows:
             return None
-        title, url = rows[-1]
-        return {"title": title, "url": url}
+        title, _notion_url = rows[-1]
+        return {"title": title, "url": SUNZI_SITE_URL}
     except Exception:
         return None
 
