@@ -240,3 +240,11 @@ python3 company_profile.py analyze "(주)회사명" --url "https://회사홈페�
 - **준비할 점**: AI가 만든 팁 문구(`_suggest_job_prep_tips`)를 그대로 URL로 쓰지 않는다 — AI가 존재하지 않는 링크를 지어낼 위험이 있어서(이 코드베이스에서 반복되는 원칙: AI가 URL을 직접 만들지 않고, 검증 가능한 방식으로만 링크를 생성한다). 대신 팁 문구로 구글 검색을 거는 URL(`https://www.google.com/search?q=...`)을 걸어 항상 유효한 링크를 보장한다.
 
 상태 파일은 발신자+제목 해시(`data/email_summaries/<hash>.json`)별로 분리돼 있어 다른 메일을 처리해도 이전 메일의 표를 덮어쓰지 않는다.
+
+## codex 백그라운드 호출이 "Codex 완료" macOS 알림을 계속 띄우던 문제 (★ 2026-08-22)
+
+**증상**: codex를 직접 켜놓지 않았는데도 "Codex 완료 · {cwd} / 작업을 마쳤습니다. 다음 명령을 기다리고 있습니다." 알림이 계속 떴다. 클릭해도 볼 수 있는 세션이 없다.
+
+**원인**: `ai_exec.py`의 `_run_one()`이 매번 `codex exec`를 서브프로세스로 부르는데, `~/.codex/config.toml`에 걸린 전역 `notify` 훅(원래 Codex Computer Use 앱의 대화형 세션용)이 스코프 구분 없이 **모든** codex 실행(이 헤드리스 1회성 호출 포함)에서 turn 종료 시마다 발동해 `osascript display notification`을 쐈다. `job_collector.py`(공고·경진대회·기업 분석)와 `일본어자막추출`의 자막 보정 파이프라인이 하루에도 수십 번씩 `codex exec`를 배경에서 호출하다 보니 알림이 끊임없이 떴다.
+- 확인 경로: `~/.codex/config.toml`의 `notify = [...]` → `~/.codex/notify_turn_complete.py`가 정확히 이 문구로 `display notification`을 실행.
+- 수정: 두 `ai_exec.py`(이직시스템·일본어자막추출)의 codex 커맨드에 `-c notify=[]`를 추가해 이 헤드리스 호출에서만 훅을 끈다. 전역 `~/.codex/config.toml`은 건드리지 않으므로 사용자가 터미널에서 직접 여는 대화형 codex 세션의 알림은 그대로 유지된다.

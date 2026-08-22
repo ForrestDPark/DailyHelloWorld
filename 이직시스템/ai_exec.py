@@ -6,6 +6,14 @@
 같은 프롬프트를 claude로 그대로 재시도한다. 실패 사유를 특정 문자열로 구분하지
 않고 "codex가 어떤 이유로든 실패하면 claude로" 방식을 쓴다 — usage limit 에러
 메시지가 버전에 따라 바뀔 수 있어서 문자열 매칭보다 안전하다.
+
+★ 2026-08-22: 이 codex exec 호출마다 `~/.codex/config.toml`의 전역 `notify` 훅
+(Codex Computer Use용 turn-ended 알림)이 그대로 발동해서, 이 스크립트가
+백그라운드에서 조용히 도는 중에도 "Codex 완료" macOS 알림이 계속 떴다(실사용
+중 확인 — 코덱스를 직접 켜놓지 않았는데도 알림이 뜨는 원인이었음). 클릭해도
+볼 수 있는 세션이 없다(헤드리스 1회성 호출이라 이미 끝나고 사라짐) — 그냥
+매번 안 뜨게 이 호출에서만 `-c notify=[]`로 훅을 끈다. 사용자가 직접 여는
+대화형 codex 세션에는 영향 없음(전역 설정 파일은 안 건드림).
 """
 
 import subprocess
@@ -18,7 +26,7 @@ def _run_one(engine, prompt, cwd, timeout):
     if engine == "codex":
         cmd = [
             CODEX_BIN, "exec", "--ephemeral", "--sandbox", "read-only",
-            "--skip-git-repo-check", "-C", str(cwd), "-",
+            "--skip-git-repo-check", "-c", "notify=[]", "-C", str(cwd), "-",
         ]
     else:
         cmd = [
