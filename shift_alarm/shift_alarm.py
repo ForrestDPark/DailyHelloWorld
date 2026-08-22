@@ -3757,12 +3757,21 @@ def _speak_text(text):
     _SPEECH_QUEUE.put((text, volume))
 
 
-def notify_spoken(title, subtitle, message):
+def notify_spoken(title, subtitle, message, speak_text=None):
     """예고 없이 뜨는 알림(추천 공고·경진대회, 리마인더, 근무 알람, 메일 요약,
     동기화 실패 등)에만 쓴다 — 사람이 직접 클릭해서 생기는 즉각 반응성 알림
-    (Elmedia 재생, Hue 등)은 rumps.notification을 그대로 쓴다(2026-08-14)."""
+    (Elmedia 재생, Hue 등)은 rumps.notification을 그대로 쓴다(2026-08-14).
+
+    speak_text: 지정하면 음성은 이 내용만 읽고, 화면 알림 배너(title/subtitle/
+    message)는 그대로 둔다. ★ 2026-08-22: 새 메일 알림은 subtitle에 원문 메일
+    제목이 그대로 들어가는데, 음성으로 그 제목까지 읽으면 정작 중요한 AI 요약
+    앞에 장황한 원문 제목이 붙어 나온다는 피드백 — 화면엔 원문 제목을 남기되
+    음성은 정리된 요약만 읽게 분리."""
     rumps.notification(title, subtitle, message)
-    _speak_text(" ".join(part for part in (title, subtitle, message) if part))
+    _speak_text(
+        speak_text if speak_text is not None
+        else " ".join(part for part in (title, subtitle, message) if part)
+    )
 
 
 def _set_menu_item_color(menu_item, text, color):
@@ -5568,6 +5577,7 @@ class ShiftAlarmApp(rumps.App):
                     f"📧 새 메일 · {top_item['category']}",
                     f"{top_item['sender']} — {truncate_title(top_item['subject'], 55)}",
                     top_item["summary"],
+                    speak_text=f"새 메일. {top_item['category']}. {top_item['summary']}",
                 )
             for item in new_items[:10]:
                 # ★ 2026-08-14: 채용 관련 메일이면 본문에서 공고를 추출해 이직시스템
@@ -5618,7 +5628,15 @@ class ShiftAlarmApp(rumps.App):
         self.build_menu()
 
     def open_gmail_or_setup(self, _):
-        """연결 전에는 gog OAuth 안내를, 연결 후에는 Gmail Inbox를 연다."""
+        """연결 전에는 gog OAuth 안내를, 연결 후에는 Gmail Inbox를 연다.
+
+        ★ 2026-08-22: `tell application "Terminal" ... do script`를 launchd로 뜬
+        이 프로세스에서 직접 osascript로 보내면 자동화 권한 팝업 자체가 뜨지
+        않아 클릭해도 조용히 아무 반응이 없었다(open_ebook_reader_terminal의
+        STYLE_TERMINAL_APP과 같은 근본 원인, 2026-07-23에 이미 겪은 문제).
+        같은 해법을 재사용 — `.command` 파일을 만들어 `open -a Terminal`로
+        여는 방식은 Launch Services를 타서 Finder 더블클릭과 동일하게
+        취급되므로 자동화 권한 없이도 항상 동작한다."""
         if self._gmail_status == "auth_required":
             command = (
                 f"export GOG_KEYRING_PASSWORD=$(security find-generic-password "
@@ -5627,14 +5645,12 @@ class ShiftAlarmApp(rumps.App):
                 f"{shlex.quote(GMAIL_ACCOUNT)} --services gmail --login; "
                 "echo; echo '연결이 끝났습니다. Shift Alarm은 최대 5분 안에 자동 확인합니다.'"
             )
-            escaped_command = command.replace("\\", "\\\\").replace('"', '\\"')
-            script = (
-                'tell application "Terminal"\n'
-                'activate\n'
-                f'do script "{escaped_command}"\n'
-                'end tell'
-            )
-            subprocess.Popen(["osascript", "-e", script])
+            launcher_path = "/tmp/_gmail_auth_setup.command"
+            with open(launcher_path, "w", encoding="utf-8") as f:
+                f.write("#!/bin/zsh\n")
+                f.write(command + "\n")
+            os.chmod(launcher_path, 0o755)
+            subprocess.Popen(["open", "-a", "Terminal", launcher_path])
             return
         subprocess.Popen(["open", GMAIL_INBOX_URL])
 
