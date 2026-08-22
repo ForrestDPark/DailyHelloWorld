@@ -879,6 +879,11 @@ SHIFT_TIMES = {
     "휴무":  None
 }
 
+# ── Day → GY 전환 사이 휴무일 기상 알람 ───────────────────────────
+# Day 근무 블록이 끝나고 다음 GY 근무 블록이 시작하기 전 사이의 휴무일에는
+# 생활 리듬이 낮으로 넘어가도록 알람을 해제하지 않고 아침 8시로 맞춘다.
+DAY_TO_GY_OFF_ALARM_TIME = {"hour": 8, "minute": 0}
+
 # ── 근무별 "전자제품 전원 끄기" 알람 시간 ─────────────────────────
 # 근무 끝나고 쉬는(자는) 시간대에 맞춰 전자제품을 끄라고 하루 한 번 알려준다.
 # Day:   17:00~02:00 / GY: 08:00~16:00 / Swing: 23:50~08:00
@@ -1457,6 +1462,22 @@ def _is_day_shift_block_end(schedule, d):
     """d가 주간(Day) 근무 블록의 마지막날인지 (내일은 주간이 아닌지) 반환."""
     return (get_shift_for_date(schedule, d) == "Day"
             and get_shift_for_date(schedule, d + datetime.timedelta(days=1)) != "Day")
+
+
+def _is_day_to_gy_off_day(schedule, d):
+    """d가 휴무일이고, 그 휴무 블록의 직전 근무가 Day, 직후 근무가 GY인지 반환.
+    (Day 근무 마치고 GY 근무 들어가기 전 사이의 휴무 구간)"""
+    if get_shift_for_date(schedule, d) != "휴무":
+        return False
+    cursor = d - datetime.timedelta(days=1)
+    while get_shift_for_date(schedule, cursor) == "휴무":
+        cursor -= datetime.timedelta(days=1)
+    prev_shift = get_shift_for_date(schedule, cursor)
+    cursor = d + datetime.timedelta(days=1)
+    while get_shift_for_date(schedule, cursor) == "휴무":
+        cursor += datetime.timedelta(days=1)
+    next_shift = get_shift_for_date(schedule, cursor)
+    return prev_shift == "Day" and next_shift == "GY"
 
 
 # ── 헬스장 운영 시간 ─────────────────────────────────────────
@@ -4395,7 +4416,7 @@ class ShiftAlarmApp(rumps.App):
 
         if date == datetime.date.today():
             self.config.pop("manual_shift_date", None)
-        self._set_shift_internal(shift, notify=notify)
+        self._set_shift_internal(shift, notify=notify, date=date)
         return True
 
     # ── 리마인더 (헬스장/엄마 전화/카톡 정리 등) ────────────────
@@ -4956,12 +4977,19 @@ class ShiftAlarmApp(rumps.App):
 
     # ── 근무 선택 (메뉴 클릭 / 자동 적용 공통) ─────────────────
 
-    def _set_shift_internal(self, shift, notify=True):
+    def _set_shift_internal(self, shift, notify=True, date=None):
+        date = date or datetime.date.today()
         time = SHIFT_TIMES.get(shift)
         if time:
             register_alarm(time["hour"], time["minute"])
             if notify:
                 notify_spoken("교대근무 알람 설정", f"{shift} 근무",
+                                   f"알람이 {time['hour']:02d}:{time['minute']:02d}으로 설정되었습니다.")
+        elif _is_day_to_gy_off_day(self.schedule, date):
+            time = DAY_TO_GY_OFF_ALARM_TIME
+            register_alarm(time["hour"], time["minute"])
+            if notify:
+                notify_spoken("교대근무 알람 설정", "휴무(Day→GY 전환)",
                                    f"알람이 {time['hour']:02d}:{time['minute']:02d}으로 설정되었습니다.")
         else:
             unregister_alarm()
@@ -6058,7 +6086,12 @@ class ShiftAlarmApp(rumps.App):
                    f"오늘의 리마인더: {reminders_text}\n"
                    f"날씨: {self.weather_str or '로딩 중'}")
         elif current == "휴무":
-            msg = (f"현재: 휴무 ({auto_text}, 알람 없음)\n{earnings_text}\n"
+            if _is_day_to_gy_off_day(self.schedule, datetime.date.today()):
+                t = DAY_TO_GY_OFF_ALARM_TIME
+                alarm_text = f"알람 {t['hour']:02d}:{t['minute']:02d}(Day→GY 전환)"
+            else:
+                alarm_text = "알람 없음"
+            msg = (f"현재: 휴무 ({auto_text}, {alarm_text})\n{earnings_text}\n"
                    f"오늘의 리마인더: {reminders_text}\n날씨: {self.weather_str or '로딩 중'}")
         else:
             msg = f"근무가 설정되지 않았습니다.\n오늘의 리마인더: {reminders_text}"

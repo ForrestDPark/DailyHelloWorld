@@ -595,3 +595,13 @@ Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으
 - `REMINDERS`에 `call_sibling` 항목을 추가하고, 기존 `call_heo_minjun`(월 1회 전화)과 완전히 같은 기준 — `_is_first_off_block_start_of_month()`(이번 달의 첫 번째 휴무 블록 시작일) — 을 그대로 재사용했다. 새 헬퍼는 필요 없었다.
 - 메뉴바 타이틀 축약 토큰(`get_today_reminder_title_tokens`)에도 `📞동생`을 추가해 다른 통화 리마인더들과 동일하게 표시되게 했다.
 - 검증: 2026-09월의 첫 번째 휴무 블록 시작일(2026-09-06)에 `get_today_reminders()`가 이 리마인더를 포함하는 것을 확인.
+
+## 36. ⏰ Day→GY 전환 휴무일 기상 알람 08:00 (★ 2026-08-22 추가)
+
+**사용자 요청**: "shift alarm 에서 근무가 day 에서 gy 로 바뀌는 사이에 휴일에는 알람을 아침 8시로 맞춰주면 좋을거같아".
+
+- 기존엔 `SHIFT_TIMES["휴무"] = None`이라 휴무일은 무조건 `unregister_alarm()`으로 알람이 완전히 해제됐다. 하지만 Day 근무(기상 알람 02:55)를 마치고 며칠 쉰 뒤 GY 근무(저녁 출근)로 넘어가는 구간은 생활 리듬을 낮으로 되돌려야 해서, 이 특정 전환 구간의 휴무일만 아침 8시 알람을 유지하기로 했다.
+- 새 헬퍼 `_is_day_to_gy_off_day(schedule, d)`: `d`가 휴무이고, 그 휴무 블록을 앞뒤로 걸어가며 찾은 직전 근무가 Day, 직후 근무가 GY일 때만 True. 새 상수 `DAY_TO_GY_OFF_ALARM_TIME = {"hour": 8, "minute": 0}`.
+- `_set_shift_internal(self, shift, notify=True, date=None)`에 `date` 매개변수를 추가해 휴무 판정 시 어느 날짜 기준인지 알 수 있게 했다(기존엔 근무 이름만 받아서 날짜를 몰랐다). 휴무인데 `_is_day_to_gy_off_day`가 True면 `unregister_alarm()` 대신 08:00으로 `register_alarm()`한다. `apply_today_shift()`가 이 `date`를 그대로 전달한다.
+- `show_status()`의 "현재: 휴무 (자동, 알람 없음)" 문구도 이 전환 구간이면 "알람 08:00(Day→GY 전환)"으로 바뀌도록 같이 고쳤다(안 고치면 실제로는 알람이 도는데 메뉴에는 "알람 없음"이라고 잘못 표시됐을 것).
+- 검증: 2026년 근무표(`d_team_schedule_2026.json`) 전체를 스캔해 Day 블록 직후 휴무 시작일 15건 전부 `_is_day_to_gy_off_day() == True`, GY/Swing 블록 직후 휴무 시작일(각 15건씩)은 전부 `False`인 것을 확인.
