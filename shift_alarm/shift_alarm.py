@@ -3223,9 +3223,17 @@ def write_alarm_script():
     # 이 Mac엔 없다(jq는 anaconda 경로에만 있음, 실측 `jq: command not
     # found`)는 걸 발견했다. jq가 없으면 HUE_IP/HUE_KEY/HUE_ROOM_ID가 전부
     # 빈 값이 되어 Hue 블록이 매번 조용히 "연결 없음"으로 건너뛰어졌다 —
-    # 실제로 지난 알람들에서 Hue 관련 로그가 전혀 없었던 이유. 생성 시점에
-    # 실제 jq 경로를 찾아 넣는다.
-    jq_bin = shutil.which("jq") or "/usr/bin/jq"
+    # 실제로 지난 알람들에서 Hue 관련 로그가 전혀 없었던 이유.
+    # ★ 실측 2차 버그: shutil.which("jq")는 os.environ["PATH"]를 따라가는데,
+    # launchd가 이 앱을 띄울 때 주는 PATH는 `/usr/bin:/bin:/usr/sbin:/sbin`
+    # 뿐이라(`launchctl print` default environment로 확인) 터미널에서 테스트할
+    # 땐 되다가 실제 배포된 앱에서는 다시 None → 폴백값(하드코딩과 동일)으로
+    # 되돌아갔다. PATH에 의존하지 않고 후보 경로를 직접 존재 확인한다.
+    jq_bin = next(
+        (p for p in ("/opt/anaconda3/bin/jq", "/opt/homebrew/bin/jq", "/usr/local/bin/jq", "/usr/bin/jq")
+         if os.access(p, os.X_OK)),
+        "/usr/bin/jq",
+    )
     script = f"""#!/bin/bash
 # 교대근무 아침 알람 실행 스크립트
 
