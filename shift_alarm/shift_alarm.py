@@ -1307,10 +1307,12 @@ def get_active_shift_window(schedule, now, today_override=None):
 # ════════════════════════════════════════════════════════════
 # 근무 시간 전후 절전 방지 (SSH 원격 접속용, 2026-07-24 추가)
 # ════════════════════════════════════════════════════════════
-# 집 밖에서 SSH(mosh)로 접속하려면 노트북이 잠들면 안 되므로, 근무 시작 1시간
-# 전부터 종료 1시간 후까지 `caffeinate -s`로 시스템 절전을 막는다.
+# 집 밖에서 원격 작업하려면 노트북과 화면 세션이 잠들거나 자동 잠금 상태로
+# 넘어가면 안 되므로, 근무 시작 1시간 전부터 종료 1시간 후까지
+# `caffeinate -d -i -s -u`로 시스템·디스플레이 절전과 유휴 상태를 막는다.
 STAY_AWAKE_MARGIN = datetime.timedelta(hours=1)
 CAFFEINATE_PID_FILE = os.path.expanduser("~/.shift_alarm_caffeinate.pid")
+CAFFEINATE_REMOTE_TIMEOUT_SECONDS = "2147483647"
 
 
 def get_stay_awake_window(schedule, now, today_override=None):
@@ -1359,10 +1361,13 @@ def _caffeinate_running():
 
 
 def start_caffeinate():
-    """이미 떠있지 않으면 `caffeinate -s`(시스템 절전만 방지, 화면은 꺼져도 됨)를 백그라운드로 실행."""
+    """이미 떠있지 않으면 원격 작업용 `caffeinate -d -i -s -u`를 실행."""
     if _caffeinate_running():
         return
-    proc = subprocess.Popen(["caffeinate", "-s"])
+    proc = subprocess.Popen([
+        "caffeinate", "-d", "-i", "-s", "-u",
+        "-t", CAFFEINATE_REMOTE_TIMEOUT_SECONDS,
+    ])
     with open(CAFFEINATE_PID_FILE, "w") as f:
         f.write(str(proc.pid))
 
