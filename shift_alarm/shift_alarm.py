@@ -4384,25 +4384,10 @@ class ShiftAlarmApp(rumps.App):
     # ── 근무 전후 절전 방지 (SSH 접속용) ───────────────────────
 
     def _check_stay_awake(self, _):
-        # ★ 2026-07-31: 근무 전후 1시간만 절전 방지하던 기존 방식과 별개로,
-        # 휴일에 밖에서도 원격 접속하고 싶을 때를 위한 수동 "항상 켜기" 토글을
-        # 추가했다 — 켜져 있으면 근무표 일정과 무관하게 무조건 caffeinate.
-        if self.config.get("stay_awake_always", False):
-            start_caffeinate()
-            self.stay_awake_item.title = "🌙 절전 방지 켜짐 (수동, 항상)"
-            return
-
-        now = datetime.datetime.now()
-        window = get_stay_awake_window(self.schedule, now, today_override=self._today_override())
-        if window:
-            start_caffeinate()
-            shift, s, e = window
-            self.stay_awake_item.title = (
-                f"🌙 절전 방지 켜짐 ({s.strftime('%H:%M')}~{e.strftime('%H:%M')}, {shift})"
-            )
-        else:
-            stop_caffeinate()
-            self.stay_awake_item.title = "🌙 절전 방지 꺼짐 (근무 전후 1시간 아님)"
+        # Shift Alarm 프로세스가 살아 있는 동안에는 시간표나 수동 토글과
+        # 무관하게 원격 UI 접속 가능 상태를 항상 유지한다.
+        start_caffeinate()
+        self.stay_awake_item.title = "🌙 원격 작업 대기 중 (자동 잠금 방지)"
 
     def toggle_stay_awake_always(self, _):
         self.config["stay_awake_always"] = not self.config.get("stay_awake_always", False)
@@ -5367,9 +5352,6 @@ class ShiftAlarmApp(rumps.App):
         )
         more_menu.add(rumps.MenuItem(storage_text))
         more_menu.add(rumps.MenuItem(self.stay_awake_item.title))
-        always_awake_on = self.config.get("stay_awake_always", False)
-        always_awake_label = f"{'✓ ' if always_awake_on else ''}🌙 절전 방지 항상 켜기 (원격 접속용)"
-        more_menu.add(rumps.MenuItem(always_awake_label, callback=self.toggle_stay_awake_always))
 
         more_menu.add(None)
         reading_menu = rumps.MenuItem("📚 독서 도구")

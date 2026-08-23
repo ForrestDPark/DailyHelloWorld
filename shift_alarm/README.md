@@ -244,16 +244,16 @@ Gmail은 로컬 `gog`의 `pulpilisory@gmail.com` 읽기 전용 OAuth를 사용�
 - `.mp3_shazam_rename_state.json`에 파일 지문과 인식 결과를 매 파일 저장한다. 재실행 시 이미 이름을 바꾼 같은 파일은 Shazam 요청 없이 건너뛴다.
 - 작업은 일반 Terminal.app에서 실행되며 진행 결과를 파일별로 바로 확인할 수 있다.
 
-## 12. 🌙 근무 전후 1시간 절전 방지 (SSH 접속용, 2026-07-24 추가)
+## 12. 🌙 앱 실행 중 자동 잠금 방지 (원격 접속용, 2026-08-23 확정)
 
-집 밖에서 mosh/SSH와 원격 UI로 이 맥에 접속하려면 노트북과 화면 세션이 잠기면 안 되므로, 근무 시작 1시간 전부터 종료 1시간 후까지 자동으로 `caffeinate -d -i -s -u -t 2147483647`을 실행한다. 장기 timeout을 명시해 `-u`가 짧게 해제되지 않게 하고, 시스템·디스플레이 절전과 유휴 상태를 함께 억제해 Shift Alarm이 절전 방지를 유지하는 동안 자동 잠금으로 원격 UI가 끊기지 않게 한다.
+집 밖에서 mosh/SSH와 원격 UI로 이 맥에 접속할 수 있도록 **Shift Alarm 앱이 실행 중인 동안은 시간표와 관계없이 항상** `caffeinate -d -i -s -u -t 2147483647`을 실행한다. 장기 timeout을 명시해 `-u`가 짧게 해제되지 않게 하고, 시스템·디스플레이 절전과 유휴 상태를 함께 억제한다.
 
 - `get_stay_awake_window(schedule, now, today_override)`: `get_active_shift_window`와 같은 방식(어제 GY가 자정 넘어오는 경우 + 오늘 근무)으로 근무 시작/종료를 찾되, 앞뒤로 `STAY_AWAKE_MARGIN`(1시간)만큼 패딩해서 반환 — `get_active_shift_window`는 "지금 근무 중"일 때만 값을 주지만, 이건 근무 시작 "전"에도(패딩된 시작 시각부터) 이미 창이 열려야 하므로 별도로 만듦.
 - `start_caffeinate()`/`stop_caffeinate()`: `~/.shift_alarm_caffeinate.pid`에 PID를 기록해서 관리 — 매분(`_check_stay_awake`, `rumps.Timer(60)`) 지금이 그 창 안인지 확인해서 켜거나 끈다. 앱 시작 시에도 1회 즉시 체크(현재 근무 중에 앱을 재시작해도 바로 켜짐).
 - 메뉴바 드롭다운에 `🌙 절전 방지 켜짐 (05:00~15:00, Day)` / `🌙 절전 방지 꺼짐 (근무 전후 1시간 아님)` 형태로 상태 표시(`self.stay_awake_item`).
 - 앱 종료(`quit_app`) 시에도 `stop_caffeinate()` 호출 — 앱이 꺼진 채로 caffeinate만 계속 도는 걸 방지.
 - `caffeinate -d -i -s -u`는 시스템·디스플레이 절전과 유휴 상태를 모두 막는다. Shift Alarm이 절전 방지를 켠 동안 화면이 계속 켜지고 자동 잠금으로 넘어가지 않으므로, 공용 장소에서는 반드시 수동 토글을 끄거나 앱을 종료해야 한다.
-- **★ 2026-07-31 추가 — 수동 "항상 켜기" 토글**: 근무표 기준 자동 창(위 내용)과 별개로, 휴일에도 밖에서 원격 접속하고 싶을 때를 위한 수동 오버라이드. 메뉴의 `🌙 절전 방지 항상 켜기 (원격 접속용)`을 누르면 `config["stay_awake_always"]`가 켜지고, `_check_stay_awake()`가 이 값을 근무표 창보다 먼저 확인해서 켜져 있으면 근무표와 무관하게 `caffeinate -d -i -s -u`를 유지한다(상태 표시는 `🌙 절전 방지 켜짐 (수동, 항상)`). 다시 누르면 원래의 근무 전후 1시간 자동 방식으로 돌아간다.
+- 기존 근무 전후 시간 창과 수동 `항상 켜기` 토글은 더 이상 실행 조건이 아니다. 앱을 종료하면 `stop_caffeinate()`가 호출되어 macOS의 원래 잠금 정책이 다시 적용된다.
 
 ## 13. 자잘한 운영 메모
 - 코드/설정 변경 후에는 `launchctl kickstart -k gui/$(id -u)/com.shiftalarm.menubar`로 재시작해야 반영됨 (rumps 앱이라 hot-reload 없음; ★ 2026-07-23부터 LaunchAgent 등록 방식으로 바뀌어 `nohup` 방식은 더 이상 안 씀 — 1번 항목 참조). `SCHEDULE_FILE`/`EBOOK_READER_SCRIPT` 등은 `__file__` 기준 상대경로라 폴더 위치가 바뀌어도 코드 수정 없이 그대로 동작하지만, **plist의 `ProgramArguments` 자체는 절대경로라 폴더/파일을 옮기면 별도로 고쳐야 함**(1번 항목 참조).
