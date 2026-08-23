@@ -1307,9 +1307,12 @@ def get_active_shift_window(schedule, now, today_override=None):
 # ════════════════════════════════════════════════════════════
 # 근무 시간 전후 절전 방지 (SSH 원격 접속용, 2026-07-24 추가)
 # ════════════════════════════════════════════════════════════
-# 집 밖에서 원격 작업하려면 노트북과 화면 세션이 잠들거나 자동 잠금 상태로
-# 넘어가면 안 되므로, 근무 시작 1시간 전부터 종료 1시간 후까지
-# `caffeinate -d -i -s -u`로 시스템·디스플레이 절전과 유휴 상태를 막는다.
+# 집 밖에서 원격 작업하려면 노트북이 잠들면 안 되므로, 근무 시작 1시간
+# 전부터 종료 1시간 후까지 `caffeinate -i -s`로 시스템 절전·유휴 상태를
+# 막는다. ★ 2026-08-24: "화면꺼짐은 허용해달라"는 요청 — 예전엔 `-d`(디스플레이
+# 절전 방지)와 `-u`(사용자 활성 상태 선언, man 페이지상 꺼진 화면을 강제로
+# 켜고 계속 안 꺼지게 함)도 같이 줬는데, 원격 접속(SSH/화면공유)은 화면이
+# 꺼진 상태에서도 시스템만 깨어 있으면 정상 동작하므로 이 두 플래그를 뺐다.
 STAY_AWAKE_MARGIN = datetime.timedelta(hours=1)
 CAFFEINATE_PID_FILE = os.path.expanduser("~/.shift_alarm_caffeinate.pid")
 CAFFEINATE_REMOTE_TIMEOUT_SECONDS = "2147483647"
@@ -1361,11 +1364,11 @@ def _caffeinate_running():
 
 
 def start_caffeinate():
-    """이미 떠있지 않으면 원격 작업용 `caffeinate -d -i -s -u`를 실행."""
+    """이미 떠있지 않으면 원격 작업용 `caffeinate -i -s`를 실행(화면꺼짐은 허용)."""
     if _caffeinate_running():
         return
     proc = subprocess.Popen([
-        "caffeinate", "-d", "-i", "-s", "-u",
+        "caffeinate", "-i", "-s",
         "-t", CAFFEINATE_REMOTE_TIMEOUT_SECONDS,
     ])
     with open(CAFFEINATE_PID_FILE, "w") as f:
