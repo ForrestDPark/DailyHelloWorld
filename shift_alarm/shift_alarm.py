@@ -3218,29 +3218,38 @@ def write_alarm_script():
         if not tracks
         else "/usr/bin/open -a \"Elmedia Video Player\" " + " ".join(shlex.quote(t) for t in tracks)
     )
+    # ★ 2026-08-23: "알람 시작할 때 거실1 켜지게 해달라"는 요청 확인 중 —
+    # 이 기능은 이미 구현돼 있었는데, 스크립트가 하드코딩한 /usr/bin/jq가
+    # 이 Mac엔 없다(jq는 anaconda 경로에만 있음, 실측 `jq: command not
+    # found`)는 걸 발견했다. jq가 없으면 HUE_IP/HUE_KEY/HUE_ROOM_ID가 전부
+    # 빈 값이 되어 Hue 블록이 매번 조용히 "연결 없음"으로 건너뛰어졌다 —
+    # 실제로 지난 알람들에서 Hue 관련 로그가 전혀 없었던 이유. 생성 시점에
+    # 실제 jq 경로를 찾아 넣는다.
+    jq_bin = shutil.which("jq") or "/usr/bin/jq"
     script = f"""#!/bin/bash
 # 교대근무 아침 알람 실행 스크립트
 
 # Command for Philips Hue가 저장한 로컬 Bridge 연결로 거실 조명을 먼저 켠다.
 # appKey는 실행 순간에만 읽고 파일·로그·Git에는 남기지 않는다.
 HUE_PREFS={shlex.quote(HUE_COMMAND_PREFS)}
+JQ={shlex.quote(jq_bin)}
 if [ -f "$HUE_PREFS" ]; then
   HUE_CREDENTIALS=$(/usr/bin/plutil -extract shared_credentials raw -o - "$HUE_PREFS" 2>/dev/null | /usr/bin/base64 -D 2>/dev/null)
   HUE_ROOMS=$(/usr/bin/plutil -extract shared_rooms raw -o - "$HUE_PREFS" 2>/dev/null | /usr/bin/base64 -D 2>/dev/null)
-  HUE_IP=$(printf '%s' "$HUE_CREDENTIALS" | /usr/bin/jq -r '.[0].ip // empty' 2>/dev/null)
-  HUE_KEY=$(printf '%s' "$HUE_CREDENTIALS" | /usr/bin/jq -r '.[0].appKey // empty' 2>/dev/null)
-  HUE_ROOM_ID=$(printf '%s' "$HUE_ROOMS" | /usr/bin/jq -r --arg name {shlex.quote(HUE_WAKE_ROOM_NAME)} '.[] | select(.name == $name) | .id' 2>/dev/null | /usr/bin/head -1)
+  HUE_IP=$(printf '%s' "$HUE_CREDENTIALS" | $JQ -r '.[0].ip // empty' 2>/dev/null)
+  HUE_KEY=$(printf '%s' "$HUE_CREDENTIALS" | $JQ -r '.[0].appKey // empty' 2>/dev/null)
+  HUE_ROOM_ID=$(printf '%s' "$HUE_ROOMS" | $JQ -r --arg name {shlex.quote(HUE_WAKE_ROOM_NAME)} '.[] | select(.name == $name) | .id' 2>/dev/null | /usr/bin/head -1)
   if [ -n "$HUE_IP" ] && [ -n "$HUE_KEY" ] && [ -n "$HUE_ROOM_ID" ]; then
     HUE_ROOM=$(/usr/bin/curl -ksS --connect-timeout 5 --max-time 10 \
       "https://$HUE_IP/clip/v2/resource/room/$HUE_ROOM_ID" \
       -H "hue-application-key: $HUE_KEY" 2>/dev/null)
-    HUE_GROUP_ID=$(printf '%s' "$HUE_ROOM" | /usr/bin/jq -r \
+    HUE_GROUP_ID=$(printf '%s' "$HUE_ROOM" | $JQ -r \
       '.data[0].services[] | select(.rtype == "grouped_light") | .rid' 2>/dev/null | /usr/bin/head -1)
     HUE_RESPONSE=$(/usr/bin/curl -ksS --connect-timeout 5 --max-time 10 \
       -X PUT "https://$HUE_IP/clip/v2/resource/grouped_light/$HUE_GROUP_ID" \
       -H "hue-application-key: $HUE_KEY" -H 'Content-Type: application/json' \
       -d '{{"on":{{"on":true}}}}' 2>/dev/null)
-    if printf '%s' "$HUE_RESPONSE" | /usr/bin/jq -e '.errors | length == 0' >/dev/null 2>&1; then
+    if printf '%s' "$HUE_RESPONSE" | $JQ -e '.errors | length == 0' >/dev/null 2>&1; then
       /usr/bin/logger -t shift_alarm "Hue room {HUE_WAKE_ROOM_NAME} turned on"
     else
       /usr/bin/logger -t shift_alarm "Hue turn-on failed; music alarm continues"
