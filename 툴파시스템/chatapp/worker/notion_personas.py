@@ -26,13 +26,18 @@ def notion_token():
     return result.stdout.strip() if result.returncode == 0 else ""
 
 
-def _request(path, token, params=None):
+def _request(path, token, params=None, method="GET", payload=None):
     url = f"https://api.notion.com/v1/{path}"
     if params:
         url += "?" + urllib.parse.urlencode(params)
+    body = json.dumps(payload).encode("utf-8") if payload is not None else None
     request = urllib.request.Request(
-        url,
-        headers={"Authorization": f"Bearer {token}", "Notion-Version": NOTION_VERSION},
+        url, data=body, method=method,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Notion-Version": NOTION_VERSION,
+            "Content-Type": "application/json",
+        },
     )
     with urllib.request.urlopen(request, timeout=30) as response:
         return json.load(response)
@@ -106,3 +111,22 @@ def build_system_prompt(persona_title, page_text):
         "자연스럽게 하세요(장황한 설명 금지).\n\n"
         f"--- {persona_title} 기록 ---\n{page_text}\n--- 기록 끝 ---"
     )
+
+
+def append_story_summary(page_id, token, date_label, summary_text):
+    """페르소나 페이지 맨 끝(="함께 만든 이야기" 섹션, 템플릿상 언제나 마지막
+    섹션이라 페이지 끝에 추가하면 자연히 그 아래에 들어간다)에 날짜 소제목과
+    요약 문단을 추가한다. children append는 항상 페이지 맨 끝에 붙는 것만
+    지원하므로, 이 함수는 "함께 만든 이야기"가 마지막 섹션이라는 페이지
+    구조를 전제한다(README 템플릿과 일치)."""
+    children = [
+        {
+            "object": "block", "type": "heading_3",
+            "heading_3": {"rich_text": [{"type": "text", "text": {"content": date_label}}]},
+        },
+        {
+            "object": "block", "type": "paragraph",
+            "paragraph": {"rich_text": [{"type": "text", "text": {"content": summary_text[:2000]}}]},
+        },
+    ]
+    _request(f"blocks/{page_id}/children", token, method="PATCH", payload={"children": children})

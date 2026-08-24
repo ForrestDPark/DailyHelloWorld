@@ -7,15 +7,25 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <header>
-    <h1>툴파시스템</h1>
-    <div id="personas">참여자 불러오는 중...</div>
-  </header>
-  <main id="messages"></main>
-  <form id="composer">
-    <input id="input" type="text" placeholder="메시지 입력 (@이름으로 특정 인물 호출)" autocomplete="off">
-    <button type="submit">보내기</button>
-  </form>
+  <!-- 방 목록 (카카오톡 채팅 목록처럼) -->
+  <div id="room-list-view">
+    <header><h1>툴파시스템</h1></header>
+    <div id="room-list"><div class="empty-hint">불러오는 중...</div></div>
+  </div>
+
+  <!-- 채팅방 -->
+  <div id="chat-view" class="hidden">
+    <header class="chat-header">
+      <button id="back-btn" type="button" aria-label="뒤로">‹</button>
+      <h1 id="room-title"></h1>
+    </header>
+    <main id="messages"></main>
+    <form id="composer">
+      <input id="input" type="text" placeholder="메시지 입력" autocomplete="off">
+      <button type="submit">보내기</button>
+    </form>
+  </div>
+
   <script src="/static/chat.js"></script>
 </body>
 </html>

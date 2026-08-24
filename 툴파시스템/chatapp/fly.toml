@@ -1,6 +1,5 @@
-# Fly.io 배포 설정. `app` 이름은 전역으로 유일해야 하므로 배포 전에 바꿀 것
-# (예: tulpa-chatapp-<본인아이디>). 자세한 배포 절차는 ../README.md 참고.
-app = "tulpa-chatapp"
+# Fly.io 배포 설정. 자세한 배포 절차는 ../README.md 참고.
+app = "tulpa-chatapp-pulpilisory"
 primary_region = "nrt"
 
 [build]

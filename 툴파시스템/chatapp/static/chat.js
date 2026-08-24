@@ -1,16 +1,64 @@
+let currentRoom = null;
 let lastId = 0;
+let pollTimer = null;
+
+const roomListView = document.getElementById("room-list-view");
+const chatView = document.getElementById("chat-view");
+const roomListEl = document.getElementById("room-list");
 const messagesEl = document.getElementById("messages");
 
-async function fetchPersonas() {
+function parseRoomFromHash() {
+  const m = location.hash.match(/^#room=(.+)$/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+async function showRoomList() {
+  currentRoom = null;
+  if (pollTimer) clearTimeout(pollTimer);
+  chatView.classList.add("hidden");
+  roomListView.classList.remove("hidden");
   try {
-    const res = await fetch("/api/personas");
-    const personas = await res.json();
-    document.getElementById("personas").textContent = personas.length
-      ? "참여자: " + personas.join(", ")
-      : "아직 페르소나가 없습니다 (워커가 Notion에서 동기화하기 전)";
+    const res = await fetch("/api/rooms");
+    const rooms = await res.json();
+    roomListEl.innerHTML = "";
+    if (!rooms.length) {
+      roomListEl.innerHTML = '<div class="empty-hint">아직 페르소나가 없습니다</div>';
+      return;
+    }
+    for (const r of rooms) {
+      const item = document.createElement("a");
+      item.href = "#room=" + encodeURIComponent(r.room_id);
+      item.className = "room-item";
+      const avatarChar = r.room_id === "group" ? "☺" : r.label[0];
+      item.innerHTML = `
+        <div class="avatar">${avatarChar}</div>
+        <div class="room-info">
+          <div class="room-name">${escapeHtml(r.label)}</div>
+          <div class="room-preview">${r.last_message ? escapeHtml(r.last_message) : "대화를 시작해보세요"}</div>
+        </div>
+      `;
+      roomListEl.appendChild(item);
+    }
   } catch (e) {
+    roomListEl.innerHTML = '<div class="empty-hint">방 목록을 불러오지 못했습니다</div>';
     console.error(e);
   }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function showChatView(roomId) {
+  currentRoom = roomId;
+  lastId = 0;
+  messagesEl.innerHTML = "";
+  roomListView.classList.add("hidden");
+  chatView.classList.remove("hidden");
+  document.getElementById("room-title").textContent = roomId === "group" ? "전체 채팅방" : roomId;
+  poll();
 }
 
 function appendMessage(m) {
@@ -29,8 +77,9 @@ function appendMessage(m) {
 }
 
 async function poll() {
+  if (!currentRoom) return;
   try {
-    const res = await fetch(`/api/messages?since_id=${lastId}`);
+    const res = await fetch(`/api/messages?room_id=${encodeURIComponent(currentRoom)}&since_id=${lastId}`);
     const messages = await res.json();
     for (const m of messages) {
       appendMessage(m);
@@ -39,11 +88,12 @@ async function poll() {
   } catch (e) {
     console.error(e);
   }
-  setTimeout(poll, 2000);
+  pollTimer = setTimeout(poll, 2000);
 }
 
 document.getElementById("composer").addEventListener("submit", async (e) => {
   e.preventDefault();
+  if (!currentRoom) return;
   const input = document.getElementById("input");
   const content = input.value.trim();
   if (!content) return;
@@ -52,12 +102,25 @@ document.getElementById("composer").addEventListener("submit", async (e) => {
     await fetch("/api/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content }),
+      body: JSON.stringify({ content, room_id: currentRoom }),
     });
   } catch (e) {
     console.error(e);
   }
 });
 
-fetchPersonas();
-poll();
+document.getElementById("back-btn").addEventListener("click", () => {
+  location.hash = "";
+});
+
+function route() {
+  const room = parseRoomFromHash();
+  if (room) {
+    showChatView(room);
+  } else {
+    showRoomList();
+  }
+}
+
+window.addEventListener("hashchange", route);
+route();

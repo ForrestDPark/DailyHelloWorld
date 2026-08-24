@@ -66,15 +66,17 @@ Notion에서 툴파시스템 메인 페이지 → `...` 메뉴 → Connections �
 
 ## 클라우드 배포 (Fly.io)
 
-1. `brew install flyctl` 후 `fly auth login`으로 본인 계정 로그인.
-2. `fly.toml`의 `app = "tulpa-chatapp"`을 전역으로 유일한 이름으로 바꾼다
-   (예: `tulpa-chatapp-<본인아이디>`).
-3. 볼륨 생성(SQLite 데이터 유지용): `fly volumes create chatapp_data --size 1 --region nrt`
-4. 워커-서버 인증 토큰을 정해서 시크릿으로 등록:
-   `fly secrets set WORKER_TOKEN="$(openssl rand -hex 24)"`
-   (이 값을 적어두고, 나중에 Mac 워커의 `CHATAPP_WORKER_TOKEN` 환경변수에도 그대로 넣는다.)
+앱 이름은 `fly.toml`에 이미 `tulpa-chatapp-pulpilisory`로 정해 두었다(전역 유일 이름 필요).
+
+1. `brew install flyctl`(완료됨) 후 `fly auth login`으로 본인 계정 로그인(브라우저 인증 —
+   반드시 사용자가 직접).
+2. `cd 툴파시스템/chatapp && fly apps create tulpa-chatapp-pulpilisory`로 앱 등록.
+3. 볼륨 생성(SQLite 데이터 유지용): `fly volumes create chatapp_data --size 1 --region nrt -a tulpa-chatapp-pulpilisory`
+4. 워커-서버 인증 토큰을 시크릿으로 등록(이 저장소 세션에서 생성해 둔 값 재사용 —
+   Mac 워커 launchd plist의 `CHATAPP_WORKER_TOKEN`과 반드시 동일해야 함):
+   `fly secrets set WORKER_TOKEN=<토큰값> -a tulpa-chatapp-pulpilisory`
 5. `fly deploy`
-6. 배포된 URL(`https://<app이름>.fly.dev`)이 곧 핸드폰에서 접속할 주소다.
+6. 배포된 URL(`https://tulpa-chatapp-pulpilisory.fly.dev`)이 곧 핸드폰에서 접속할 주소다.
 
 ## Mac 워커를 항상 켜두기 (launchd)
 
@@ -96,11 +98,19 @@ Notion에서 툴파시스템 메인 페이지 → `...` 메뉴 → Connections �
 
 ## 사용법 (배포·워커 실행 후)
 
-1. 핸드폰 브라우저로 `https://<app이름>.fly.dev` 접속.
-2. 메시지를 입력해서 보낸다. 아무도 지목하지 않으면 방에 있는 페르소나 전원이
-   한 번씩 응답한다. `@이름`으로 특정 인물만 부를 수도 있다.
+1. 핸드폰 브라우저로 `https://<app이름>.fly.dev` 접속하면 카카오톡처럼 **방 목록**이
+   먼저 뜬다 — "전체 채팅방"(모든 페르소나가 같이 있음) + 페르소나별 1:1 방.
+2. 방을 눌러 들어가서 메시지를 보낸다.
+   - **전체 채팅방**: 아무도 지목 안 하면 방에 있는 페르소나 전원이 한 번씩
+     응답. `@이름`으로 특정 인물만 부를 수도 있다.
+   - **1:1 방**: 방 자체가 그 인물이므로 `@` 없이 보내도 항상 그 사람만 응답.
 3. 페르소나 프로필을 Notion에서 고치면, 워커가 5분 주기로 다시 읽어와 반영한다
    (`PERSONA_SYNC_INTERVAL_SECONDS`).
+4. **대화 내용은 10분 주기로 자동으로 Notion에 반영된다** — 어떤 방에서든
+   (전체 채팅방이든 1:1이든) 한 인물이 등장한 새 메시지가 4개 이상 쌓이면,
+   워커가 그 구간을 AI로 짧게 요약해서 그 인물 페이지의 "함께 만든 이야기"
+   섹션에 날짜와 함께 추가한다(`STORY_SYNC_INTERVAL_SECONDS`,
+   `STORY_SYNC_MIN_NEW_MESSAGES`). 잡담만 있었으면 기록하지 않는다.
 
 ## 로드맵 / 알려진 제약
 
@@ -109,8 +119,6 @@ Notion에서 툴파시스템 메인 페이지 → `...` 메뉴 → Connections �
   만들려면 폭주 방지(최대 턴 수, 종료 조건)를 먼저 설계해야 한다.
 - 여러 페르소나가 동시에 응답 대상이면 워커가 순차 처리한다(폴링 루프가
   한 번에 하나씩 가져옴) — 응답이 조금씩 늦게 순서대로 뜬다.
-- 대화 내용이 Notion의 "함께 만든 이야기" 섹션에 자동으로 요약되지는 않는다.
-  지금은 대화가 끝난 뒤 Claude Code 세션에서 수동으로 요약해 넣어야 한다.
-- 채팅방은 지금 하나뿐이다(모든 페르소나가 한 방에 같이 있음). 페르소나별
-  1:1 방을 분리하고 싶다면 `room_id` 개념을 messages/pending_turns 테이블에
-  추가해야 한다.
+- Notion 이야기 자동 기록은 요약 하나당 AI 호출 1번이 추가로 든다(워커가 하는
+  일이라 여기도 API 키 없이 CLI 재사용). 대화가 아주 활발하면 10분마다 인물
+  수만큼 추가 호출이 생길 수 있다는 점 감안.
