@@ -34,6 +34,9 @@
   어휘·말투·Whisper 교정·복습)으로 분석하는 Opus 에이전트. 자막 추출·EPUB 빌드는 하지 않는다.
 - `jobs-analyst` — 이직시스템 공고 분석 + `candidate_profile.json` 기반 맞춤 포트폴리오·
   자소서 초안 작성 Opus 에이전트. 크롤러 코드 변경은 하지 않는다.
+- `career-pipeline-dev` — 이직시스템 파이프라인 코드(`job_collector.py`·`contest_collector.py`·
+  `company_profile.py`·`ai_exec.py`·`career_profile_pipeline.py`) 수정 전용 에이전트. 분석
+  콘텐츠 작성은 하지 않는다(그건 `jobs-analyst`/`contest-scout` 영역).
 - `contest-scout` — 경진대회시스템 신규 대회 발굴·평가·기록 에이전트. 직무 연관성·포트폴리오
   가치·완주 가능성·주최자 신뢰도를 함께 채점한다.
 - `shift-alarm-dev` — `shift_alarm.py`/`ShiftAlarmWidget.js` 기능 수정 전용 에이전트.
