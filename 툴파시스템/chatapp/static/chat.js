@@ -12,6 +12,14 @@ function parseRoomFromHash() {
   return m ? decodeURIComponent(m[1]) : null;
 }
 
+// ★ "이거 좀 정신건강에 무서우니까 캐릭터이름 뒤에 (가상) 붙여달라"는 요청
+// (2026-08-24) — 실제 인물이 아니라 AI 페르소나라는 걸 화면에서 항상 표시.
+// 서버/워커가 쓰는 실제 이름("동찬이형")은 그대로 두고, 화면 표시에만 붙인다.
+function displayName(name) {
+  if (name === "user" || name === "전체 채팅방") return name;
+  return `${name} (가상)`;
+}
+
 async function showRoomList() {
   currentRoom = null;
   if (pollTimer) clearTimeout(pollTimer);
@@ -30,10 +38,11 @@ async function showRoomList() {
       item.href = "#room=" + encodeURIComponent(r.room_id);
       item.className = "room-item";
       const avatarChar = r.room_id === "group" ? "☺" : r.label[0];
+      const roomLabel = r.room_id === "group" ? r.label : displayName(r.label);
       item.innerHTML = `
         <div class="avatar">${avatarChar}</div>
         <div class="room-info">
-          <div class="room-name">${escapeHtml(r.label)}</div>
+          <div class="room-name">${escapeHtml(roomLabel)}</div>
           <div class="room-preview">${r.last_message ? escapeHtml(r.last_message) : "대화를 시작해보세요"}</div>
         </div>
       `;
@@ -57,7 +66,7 @@ function showChatView(roomId) {
   messagesEl.innerHTML = "";
   roomListView.classList.add("hidden");
   chatView.classList.remove("hidden");
-  document.getElementById("room-title").textContent = roomId === "group" ? "전체 채팅방" : roomId;
+  document.getElementById("room-title").textContent = roomId === "group" ? "전체 채팅방" : displayName(roomId);
   poll();
 }
 
@@ -66,7 +75,7 @@ function appendMessage(m) {
   el.className = "msg " + (m.sender === "user" ? "msg-user" : "msg-persona");
   const sender = document.createElement("div");
   sender.className = "sender";
-  sender.textContent = m.sender === "user" ? "나" : m.sender;
+  sender.textContent = m.sender === "user" ? "나" : displayName(m.sender);
   const body = document.createElement("div");
   body.className = "body";
   body.textContent = m.content;
