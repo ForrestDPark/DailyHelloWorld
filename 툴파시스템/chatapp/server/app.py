@@ -16,10 +16,11 @@ worker/persona_worker.py가 이 서버를 폴링해서 처리한다(자세한 �
 HTTP Basic 인증을 건다 — APP_USERNAME/APP_PASSWORD 둘 다 설정된 경우에만
 강제되고, 로컬 개발(둘 다 미설정)에서는 그대로 인증 없이 쓸 수 있다.
 
-★ 같은 날 추가: "나만 채팅 가능, 남은 구경만"이라는 요청 — 소유자 계정
-(APP_USERNAME/APP_PASSWORD)과 별개로 읽기 전용 계정(VIEWER_USERNAME/
-VIEWER_PASSWORD, 선택)을 둔다. 뷰어 계정으로 로그인하면 조회는 되지만
-POST /api/messages는 403으로 막힌다."""
+★ 같은 날 추가: "pulpilisory(APP_USERNAME/APP_PASSWORD)는 내 전용 쓰기
+계정이고, 이외의 계정은 그냥 읽기 계정으로 하라"는 요청 — 별도 뷰어 계정을
+미리 정해둘 필요 없이, 소유자 계정과 정확히 일치하지 않는 다른 아이디/
+비밀번호는(무엇을 입력하든) 전부 읽기 전용으로 통과된다. 읽기 전용 요청이
+POST /api/messages를 시도하면 403으로 막힌다."""
 import base64
 import datetime
 import os
@@ -39,8 +40,6 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 WORKER_TOKEN = os.environ.get("WORKER_TOKEN", "")
 APP_USERNAME = os.environ.get("APP_USERNAME", "")
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
-VIEWER_USERNAME = os.environ.get("VIEWER_USERNAME", "")
-VIEWER_PASSWORD = os.environ.get("VIEWER_PASSWORD", "")
 MAX_CONTEXT_MESSAGES = 20
 
 
@@ -70,13 +69,14 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
                 username, _, password = base64.b64decode(auth[6:]).decode("utf-8").partition(":")
             except (ValueError, UnicodeDecodeError):
                 username, password = "", ""
-            if _credentials_match(username, password, APP_USERNAME, APP_PASSWORD):
-                request.state.can_write = True
-                return await call_next(request)
-            if VIEWER_USERNAME and VIEWER_PASSWORD and _credentials_match(
-                username, password, VIEWER_USERNAME, VIEWER_PASSWORD
-            ):
-                request.state.can_write = False
+            if username or password:
+                # ★ 2026-08-24: "pulpilisory는 내 전용 쓰기 계정이고 이외의
+                # 계정은 그냥 읽기 계정으로 하라"는 요청 — 별도 뷰어 계정을
+                # 미리 등록해둘 필요 없이, 소유자 계정과 정확히 일치하지 않는
+                # 다른 아이디/비밀번호는(무엇이든) 전부 읽기 전용으로 통과시킨다.
+                # 빈 문자열(=인증 헤더 없음/빈 시도)만 걸러서 브라우저가 처음엔
+                # 로그인 창을 띄우게 한다.
+                request.state.can_write = _credentials_match(username, password, APP_USERNAME, APP_PASSWORD)
                 return await call_next(request)
         return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="tulpa"'})
 
