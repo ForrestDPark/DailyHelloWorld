@@ -14,7 +14,12 @@ worker/persona_worker.py가 이 서버를 폴링해서 처리한다(자세한 �
 지인이 들어와서 "나"인 척 메시지를 보내는 사고가 났다(전체 채팅방에서 발견,
 1:1 방도 구조상 똑같이 뚫려 있었음). /api/worker/*를 제외한 모든 요청에
 HTTP Basic 인증을 건다 — APP_USERNAME/APP_PASSWORD 둘 다 설정된 경우에만
-강제되고, 로컬 개발(둘 다 미설정)에서는 그대로 인증 없이 쓸 수 있다."""
+강제되고, 로컬 개발(둘 다 미설정)에서는 그대로 인증 없이 쓸 수 있다.
+
+★ 같은 날 추가: "나만 채팅 가능, 남은 구경만"이라는 요청 — 소유자 계정
+(APP_USERNAME/APP_PASSWORD)과 별개로 읽기 전용 계정(VIEWER_USERNAME/
+VIEWER_PASSWORD, 선택)을 둔다. 뷰어 계정으로 로그인하면 조회는 되지만
+POST /api/messages는 403으로 막힌다."""
 import base64
 import datetime
 import os
@@ -22,7 +27,7 @@ import secrets
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -34,14 +39,30 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 WORKER_TOKEN = os.environ.get("WORKER_TOKEN", "")
 APP_USERNAME = os.environ.get("APP_USERNAME", "")
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
+VIEWER_USERNAME = os.environ.get("VIEWER_USERNAME", "")
+VIEWER_PASSWORD = os.environ.get("VIEWER_PASSWORD", "")
 MAX_CONTEXT_MESSAGES = 20
+
+
+def _credentials_match(username, password, expected_username, expected_password):
+    # ★ 2026-08-24 실측 버그: secrets.compare_digest(str, str)는 둘 중 하나라도
+    # ASCII가 아닌 문자가 있으면 TypeError를 던진다(문서화된 CPython 제약) —
+    # 다른 아이디로 로그인 시도하는 사람이 실수로건 의도적이건 비ASCII 문자가
+    # 든 아이디/비밀번호를 넣으면 500 에러가 났다. bytes로 인코딩해서
+    # 비교하면 이 제약이 없다.
+    return (
+        secrets.compare_digest(username.encode("utf-8"), expected_username.encode("utf-8"))
+        and secrets.compare_digest(password.encode("utf-8"), expected_password.encode("utf-8"))
+    )
 
 
 class BasicAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         if not APP_USERNAME or not APP_PASSWORD:
+            request.state.can_write = True
             return await call_next(request)  # 로컬 개발용 — 둘 다 미설정 시 인증 생략
         if request.url.path.startswith("/api/worker/"):
+            request.state.can_write = True
             return await call_next(request)  # 워커는 WORKER_TOKEN으로 별도 인증
         auth = request.headers.get("authorization", "")
         if auth.startswith("Basic "):
@@ -49,7 +70,13 @@ class BasicAuthMiddleware(BaseHTTPMiddleware):
                 username, _, password = base64.b64decode(auth[6:]).decode("utf-8").partition(":")
             except (ValueError, UnicodeDecodeError):
                 username, password = "", ""
-            if secrets.compare_digest(username, APP_USERNAME) and secrets.compare_digest(password, APP_PASSWORD):
+            if _credentials_match(username, password, APP_USERNAME, APP_PASSWORD):
+                request.state.can_write = True
+                return await call_next(request)
+            if VIEWER_USERNAME and VIEWER_PASSWORD and _credentials_match(
+                username, password, VIEWER_USERNAME, VIEWER_PASSWORD
+            ):
+                request.state.can_write = False
                 return await call_next(request)
         return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="tulpa"'})
 
@@ -130,7 +157,9 @@ class NewMessage(BaseModel):
 
 
 @app.post("/api/messages")
-def post_message(msg: NewMessage):
+def post_message(msg: NewMessage, request: Request):
+    if not getattr(request.state, "can_write", True):
+        raise HTTPException(status_code=403, detail="읽기 전용 계정입니다")
     content = msg.content.strip()
     if not content:
         raise HTTPException(status_code=400, detail="빈 메시지는 보낼 수 없습니다")
