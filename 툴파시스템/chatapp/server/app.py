@@ -8,24 +8,54 @@ worker/persona_worker.py가 이 서버를 폴링해서 처리한다(자세한 �
 
 /api/worker/* 엔드포인트는 WORKER_TOKEN 환경변수가 설정돼 있으면 그 토큰을
 요구한다(배포 시 반드시 설정 — 안 그러면 누구나 페르소나 프로필을 덮어쓰거나
-가짜 응답을 주입할 수 있다)."""
+가짜 응답을 주입할 수 있다).
+
+★ 2026-08-24: 처음엔 앱 전체가 인증 없이 열려 있었는데, 실제로 URL을 아는
+지인이 들어와서 "나"인 척 메시지를 보내는 사고가 났다(전체 채팅방에서 발견,
+1:1 방도 구조상 똑같이 뚫려 있었음). /api/worker/*를 제외한 모든 요청에
+HTTP Basic 인증을 건다 — APP_USERNAME/APP_PASSWORD 둘 다 설정된 경우에만
+강제되고, 로컬 개발(둘 다 미설정)에서는 그대로 인증 없이 쓸 수 있다."""
+import base64
 import datetime
 import os
+import secrets
 from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, Header, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from server.db import get_conn, init_db
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 WORKER_TOKEN = os.environ.get("WORKER_TOKEN", "")
+APP_USERNAME = os.environ.get("APP_USERNAME", "")
+APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
 MAX_CONTEXT_MESSAGES = 20
 
+
+class BasicAuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if not APP_USERNAME or not APP_PASSWORD:
+            return await call_next(request)  # 로컬 개발용 — 둘 다 미설정 시 인증 생략
+        if request.url.path.startswith("/api/worker/"):
+            return await call_next(request)  # 워커는 WORKER_TOKEN으로 별도 인증
+        auth = request.headers.get("authorization", "")
+        if auth.startswith("Basic "):
+            try:
+                username, _, password = base64.b64decode(auth[6:]).decode("utf-8").partition(":")
+            except (ValueError, UnicodeDecodeError):
+                username, password = "", ""
+            if secrets.compare_digest(username, APP_USERNAME) and secrets.compare_digest(password, APP_PASSWORD):
+                return await call_next(request)
+        return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="tulpa"'})
+
+
 app = FastAPI(title="툴파시스템 채팅앱")
+app.add_middleware(BasicAuthMiddleware)
 init_db()
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
@@ -47,6 +77,13 @@ def index():
 
 
 GROUP_ROOM_ID = "group"
+# ★ 2026-08-24: 그룹방은 아무도 안 부르면 페르소나 전원이 매번 동시에 반응하는
+# 구조라 거의 똑같은 답이 몇 개씩 쏟아지고, 서로 일면식 없어야 할 인물들이
+# Notion에 없는 친분·약속을 지어내는 문제가 실사용 중 확인됐다("이 채팅방은
+# 당분간 폐쇄한다"는 요청). 코드/데이터는 그대로 두고 노출만 끈다 — "당분간"
+# 이라 나중에 그룹 대화 로직을 고친 뒤 다시 켤 수 있게. GROUP_ROOM_ENABLED
+# 환경변수(fly.toml [env])로 제어.
+GROUP_ROOM_ENABLED = os.environ.get("GROUP_ROOM_ENABLED", "true").lower() == "true"
 
 
 @app.get("/api/personas")
@@ -63,7 +100,7 @@ def list_rooms():
     각 방의 마지막 메시지 미리보기도 같이 준다."""
     conn = get_conn()
     persona_names = [r["name"] for r in conn.execute("SELECT name FROM personas ORDER BY name").fetchall()]
-    rooms = [{"room_id": GROUP_ROOM_ID, "label": "전체 채팅방"}]
+    rooms = [{"room_id": GROUP_ROOM_ID, "label": "전체 채팅방"}] if GROUP_ROOM_ENABLED else []
     rooms += [{"room_id": name, "label": name} for name in persona_names]
     for room in rooms:
         last = conn.execute(
@@ -98,6 +135,8 @@ def post_message(msg: NewMessage):
     if not content:
         raise HTTPException(status_code=400, detail="빈 메시지는 보낼 수 없습니다")
     room_id = msg.room_id or GROUP_ROOM_ID
+    if room_id == GROUP_ROOM_ID and not GROUP_ROOM_ENABLED:
+        raise HTTPException(status_code=403, detail="전체 채팅방은 당분간 닫혀 있습니다")
     conn = get_conn()
     now = _now()
     conn.execute(

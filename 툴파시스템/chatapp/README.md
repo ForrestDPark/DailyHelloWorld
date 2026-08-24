@@ -75,15 +75,38 @@ Notion에서 툴파시스템 메인 페이지 → `...` 메뉴 → Connections �
 4. 워커-서버 인증 토큰을 시크릿으로 등록(이 저장소 세션에서 생성해 둔 값 재사용 —
    Mac 워커 launchd plist의 `CHATAPP_WORKER_TOKEN`과 반드시 동일해야 함):
    `fly secrets set WORKER_TOKEN=<토큰값> -a tulpa-chatapp-pulpilisory`
-5. `fly deploy`
-6. 배포된 URL(`https://tulpa-chatapp-pulpilisory.fly.dev`)이 곧 핸드폰에서 접속할 주소다.
+5. **앱 전체 접속 비밀번호도 필수로 등록한다** — 아래 "접속 비밀번호(Basic 인증)" 참고.
+   `fly secrets set APP_USERNAME=<아이디> APP_PASSWORD=<비밀번호> -a tulpa-chatapp-pulpilisory`
+6. `fly deploy`
+7. 배포된 URL(`https://tulpa-chatapp-pulpilisory.fly.dev`)이 곧 핸드폰에서 접속할 주소다.
+
+## 접속 비밀번호 (Basic 인증) — 필수
+
+★ 2026-08-24: 처음엔 앱이 인증 없이 완전히 공개돼 있었고, 실제로 URL을 아는
+지인이 들어와서 채팅을 어지럽힌 사고가 있었다. `APP_USERNAME`/`APP_PASSWORD`
+시크릿을 둘 다 설정하면 `/api/worker/*`를 제외한 모든 요청에 HTTP Basic 인증이
+걸린다(브라우저가 표준 로그인 팝업을 띄운다 — 한 번 입력하면 그 브라우저에서는
+계속 기억됨). 워커는 별도 `WORKER_TOKEN`으로 인증하므로 이 비밀번호와 무관하게
+계속 동작한다. 비밀번호를 아는 사람에게만 공유할 것 — URL만으로는 더 이상
+못 들어온다.
+
+## 전체 채팅방 (당분간 폐쇄됨)
+
+★ 2026-08-24: 전체 채팅방은 아무도 안 부르면 페르소나 전원이 매번 동시에
+반응하는 구조라 거의 똑같은 답이 몇 개씩 쏟아지고, 서로 일면식 없어야 할
+인물들이 Notion에 없는 친분·약속을 지어내는 문제가 실사용 중 확인됐다.
+`fly.toml`의 `GROUP_ROOM_ENABLED = "false"`로 방 목록에서 숨기고 새 메시지도
+거부하는 중 — 1:1 방은 전혀 영향 없다. 재개하려면 그룹 대화 로직(예: 매번
+전원 응답 대신 관련 있는 인물만 반응하게, 서로 모르는 인물끼리는 그 사실을
+인지하게)을 먼저 고친 뒤 `"true"`로 바꾸고 재배포한다.
 
 ## Mac 워커를 항상 켜두기 (launchd)
 
-`shift_alarm.py`와 같은 방식으로 LaunchAgent를 등록해 재부팅해도 자동으로 뜨게
-할 수 있다. 아직 plist는 만들지 않았다 — 필요하면 다음 세션에서 다음을 참고해
-`shift-alarm-dev` 에이전트가 쓰는 것과 같은 패턴(`launchctl bootstrap`,
-`StandardOutPath`/`StandardErrorPath` 로그, `-u` 언버퍼링 플래그)으로 만든다.
+`shift_alarm.py`와 같은 방식으로 LaunchAgent(`~/Library/LaunchAgents/com.tulpachat.worker.plist`)가
+이미 등록돼 있다 — 재부팅해도 자동으로 뜨고, 크래시하면 launchd가 다시 살린다
+(`KeepAlive.SuccessfulExit=false`). 로그는 `~/Library/Logs/tulpachat_worker.{out,err}.log`.
+코드를 고친 뒤에는 `launchctl kickstart -k gui/$(id -u)/com.tulpachat.worker`로
+재시작해야 반영된다(shift_alarm과 동일한 패턴).
 환경변수는 plist의 `EnvironmentVariables`에 넣는다:
 
 ```xml
