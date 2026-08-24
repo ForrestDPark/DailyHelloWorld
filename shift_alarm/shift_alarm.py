@@ -38,7 +38,7 @@ import sqlite3
 import sys
 import urllib.request
 import urllib.error
-from urllib.parse import urlparse, parse_qs, quote
+from urllib.parse import urlparse, parse_qs, quote, urlencode
 import threading
 import datetime
 import tempfile
@@ -1199,6 +1199,23 @@ SUNZI_README_PATH = os.path.join(
 # 손자병법 메뉴·모바일 위젯에서 여는 공개 학습 사이트. 최신 구절명은 README에서
 # 계속 읽되, 클릭 대상은 개별 Notion 페이지가 아니라 구절 목록이 있는 사이트로 통일한다.
 SUNZI_SITE_URL = "https://sunzi-strategy-notes.pulpilisory.chatgpt.site/archive"
+CAREER_LOOP_RECOMMENDATION_URL = (
+    "https://career-loop-donggeun.pulpilisory.chatgpt.site/recommendation"
+)
+
+# ── Muse Trace 점진 업그레이드 ───────────────────────────────
+# 한 번에 큰 개편을 요구하지 않고 2주마다 한 단계씩 검토하도록 메뉴에서 현재
+# 초점과 다음 점검일을 보여준다. 완료 버튼을 누르면 다음 단계로 순환한다.
+MUSE_TRACE_SITE_URL = "https://muse-trace-eye-lab.pulpilisory.chatgpt.site"
+MUSE_TRACE_UPGRADE_INTERVAL_DAYS = 14
+MUSE_TRACE_UPGRADE_STEPS = [
+    ("측정 신뢰성", "보정 오차·추적률·기기별 품질을 수치화"),
+    ("반복 가능한 실험", "작품 A/B·무작위 순서·동일 관람 조건을 지원"),
+    ("해석 지표 확장", "AOI·첫 응시·체류·재방문·스캔패스를 비교"),
+    ("관람자 집단 분석", "여러 참가자의 중앙값·분산·신뢰구간을 표시"),
+    ("작가 피드백 루프", "작품 버전별 결과와 다음 영감 실험을 연결"),
+    ("동의·개인정보", "영상 미저장·익명화·보관 기간·내보내기를 명시"),
+]
 
 
 # ════════════════════════════════════════════════════════════
@@ -2064,6 +2081,26 @@ def get_latest_sunzi_entry():
         return {"title": title, "url": SUNZI_SITE_URL}
     except Exception:
         return None
+
+
+TULPACHAT_TUNNEL_LOG = os.path.expanduser("~/Library/Logs/tulpachat_tunnel.err.log")
+
+
+def get_tulpachat_url():
+    """툴파시스템 채팅앱의 현재 Cloudflare Quick Tunnel 주소를 로그에서 읽는다
+    (★ 2026-08-24). Quick Tunnel은 cloudflared가 재시작될 때마다(재부팅 등)
+    새 URL을 받으므로 고정값으로 저장하지 않고, 메뉴를 만들 때마다 로그
+    파일에서 가장 최근 URL을 다시 찾는다. 로그가 없거나 아직 URL이 안
+    찍혔으면 None(메뉴 항목 자체를 생략)."""
+    if not os.path.exists(TULPACHAT_TUNNEL_LOG):
+        return None
+    try:
+        with open(TULPACHAT_TUNNEL_LOG, encoding="utf-8", errors="replace") as f:
+            content = f.read()
+    except OSError:
+        return None
+    matches = re.findall(r"https://[a-z0-9-]+\.trycloudflare\.com", content)
+    return matches[-1] if matches else None
 
 
 def sync_scriptable_widget_file():
@@ -3450,6 +3487,30 @@ def get_best_contest_recommendation():
     return best, best_category, best_label
 
 
+def career_loop_recommendation_url(item, item_type, category_label=""):
+    """Shift Alarm 추천을 Notion 대신 Career Loop 상세 화면으로 연결한다.
+
+    새 공고·대회도 별도 사이트 배포 없이 표시되도록 상태 파일의 핵심 필드를
+    쿼리로 전달한다. Notion 링크는 근거 원본으로만 상세 화면 안에 남긴다.
+    """
+    is_contest = item_type == "contest"
+    params = {
+        "type": "contest" if is_contest else "job",
+        "title": str(item.get("title") or ""),
+        "score": str(item.get("score") if item.get("score") is not None else ""),
+        "category": str(category_label or item.get("category") or ""),
+        "source": str(item.get("source") or "Shift Alarm 추천 분석"),
+        "original": str(item.get("contest_url" if is_contest else "job_url") or ""),
+        "notion": str(item.get("url") or ""),
+    }
+    if is_contest:
+        params["organizer"] = str(item.get("organizer") or "")
+        params["deadline"] = str(item.get("deadline") or "")
+    else:
+        params["company"] = str(item.get("company") or "")
+    return f"{CAREER_LOOP_RECOMMENDATION_URL}?{urlencode(params)}"
+
+
 MAIL_ANALYSIS_MENU_LIMIT = 5
 
 
@@ -4228,20 +4289,24 @@ class ShiftAlarmApp(rumps.App):
         job_items = []
         best_job, best_job_category, best_job_label = get_best_job_recommendation()
         if best_job:
+            site_url = career_loop_recommendation_url(best_job, "job", best_job_label)
             job_items.append({
                 "category": best_job_category, "label": best_job_label,
                 "company": best_job.get("company"), "title": best_job.get("title"),
                 "score": best_job.get("score"), "url": best_job.get("job_url"),
                 "notion_url": best_job.get("url"),
+                "site_url": site_url,
             })
         contest_items = []
         best_contest, best_contest_category, best_contest_label = get_best_contest_recommendation()
         if best_contest:
+            site_url = career_loop_recommendation_url(best_contest, "contest", best_contest_label)
             contest_items.append({
                 "category": best_contest_category, "label": best_contest_label,
                 "organizer": best_contest.get("organizer"), "title": best_contest.get("title"),
                 "score": best_contest.get("score"), "url": best_contest.get("contest_url"),
                 "notion_url": best_contest.get("url"),
+                "site_url": site_url,
             })
         # ★ 2026-08-18: 메뉴에 이미 쌓아둔 최근 메일 AI 요약을 위젯에도 그대로
         # 노출한다 — 폰 화면에서 메뉴바를 열지 않고도 최근 메일을 볼 수 있게.
@@ -5034,6 +5099,41 @@ class ShiftAlarmApp(rumps.App):
                 subprocess.Popen(["open", url])
         return callback
 
+    def _muse_trace_upgrade_status(self):
+        """현재 로드맵 단계, 점검 기한, 기한 도래 여부를 안전하게 계산한다."""
+        step_index = self.config.get("muse_trace_upgrade_step", 0)
+        if not isinstance(step_index, int):
+            step_index = 0
+        step_index %= len(MUSE_TRACE_UPGRADE_STEPS)
+
+        last_review_text = self.config.get("muse_trace_upgrade_last_review")
+        try:
+            last_review = datetime.date.fromisoformat(last_review_text)
+        except (TypeError, ValueError):
+            last_review = None
+        today = datetime.date.today()
+        next_review = (
+            last_review + datetime.timedelta(days=MUSE_TRACE_UPGRADE_INTERVAL_DAYS)
+            if last_review else today
+        )
+        return step_index, next_review, today >= next_review
+
+    def complete_muse_trace_upgrade_step(self, _):
+        """현재 점검을 기록하고 다음 개선 단계로 넘긴다."""
+        step_index, _, _ = self._muse_trace_upgrade_status()
+        completed_title = MUSE_TRACE_UPGRADE_STEPS[step_index][0]
+        next_index = (step_index + 1) % len(MUSE_TRACE_UPGRADE_STEPS)
+        self.config["muse_trace_upgrade_step"] = next_index
+        self.config["muse_trace_upgrade_last_review"] = datetime.date.today().isoformat()
+        save_config(self.config)
+        self.build_menu()
+        next_title = MUSE_TRACE_UPGRADE_STEPS[next_index][0]
+        rumps.notification(
+            "Muse Trace 업그레이드",
+            f"{completed_title} 점검 완료",
+            f"다음 2주 초점: {next_title}",
+        )
+
     def make_reminder_toggle_callback(self, key):
         def callback(_):
             REMINDERS[key]["enabled"] = not REMINDERS[key]["enabled"]
@@ -5250,34 +5350,39 @@ class ShiftAlarmApp(rumps.App):
         # 위젯처럼 통틀어 1건으로 줄이고, 리마인더 체크리스트와 같은 방식(체크하면
         # 오늘은 그만 보이게)을 추가했다 — "화살표를 열어야 링크가 보이게" 해달라는
         # 요청으로 상위 항목 자체엔 콜백을 안 걸고 하위 항목에서만 열게 한다.
-        best_job, _, _ = get_best_job_recommendation()
+        best_job, _, best_job_label = get_best_job_recommendation()
         if best_job and not self._is_job_reco_checked():
             score = best_job.get("score")
             score_text = f"[{score}점] " if score is not None else ""
             company = truncate_title(best_job.get("company", ""), 12)
             title = truncate_title(best_job.get("title", ""), 22)
             job_menu = rumps.MenuItem(f"🎯 {score_text}추천 공고: {company} — {title}")
-            if best_job.get("url"):
-                job_menu.add(rumps.MenuItem("📝 Notion 분석 보기", callback=self.make_open_url_callback(best_job["url"])))
+            site_url = career_loop_recommendation_url(best_job, "job", best_job_label)
+            job_menu.add(rumps.MenuItem("🌐 Career Loop 분석 보기", callback=self.make_open_url_callback(site_url)))
             if best_job.get("job_url"):
                 job_menu.add(rumps.MenuItem("🔗 원문 공고 보기", callback=self.make_open_url_callback(best_job["job_url"])))
             job_menu.add(rumps.MenuItem("✅ 확인함(오늘 그만 보기)", callback=self.check_job_reco))
             self.menu.add(job_menu)
 
-        best_contest, _, _ = get_best_contest_recommendation()
+        best_contest, _, best_contest_label = get_best_contest_recommendation()
         if best_contest and not self._is_contest_reco_checked():
             score = best_contest.get("score")
             score_text = f"[{score}점] " if score is not None else ""
             organizer = truncate_title(best_contest.get("organizer", ""), 12)
             title = truncate_title(best_contest.get("title", ""), 22)
             contest_menu = rumps.MenuItem(f"🏆 {score_text}추천 경진: {organizer} — {title}")
-            if best_contest.get("url"):
-                contest_menu.add(rumps.MenuItem("📝 Notion 분석 보기", callback=self.make_open_url_callback(best_contest["url"])))
+            site_url = career_loop_recommendation_url(best_contest, "contest", best_contest_label)
+            contest_menu.add(rumps.MenuItem("🌐 Career Loop 분석 보기", callback=self.make_open_url_callback(site_url)))
             if best_contest.get("contest_url"):
                 contest_menu.add(rumps.MenuItem("🔗 원문 공고 보기", callback=self.make_open_url_callback(best_contest["contest_url"])))
             contest_menu.add(rumps.MenuItem("✅ 확인함(오늘 그만 보기)", callback=self.check_contest_reco))
             self.menu.add(contest_menu)
         self.menu.add(rumps.MenuItem("🎲 추천 사이트 열기 (天 폴더 랜덤 3개)", callback=self.open_random_bookmarks_now))
+        tulpachat_url = get_tulpachat_url()
+        if tulpachat_url:
+            self.menu.add(rumps.MenuItem(
+                "🧑‍🤝‍🧑 툴파시스템 채팅 열기", callback=self.make_open_url_callback(tulpachat_url)
+            ))
         sunzi_entry = get_latest_sunzi_entry()
         if sunzi_entry:
             self.menu.add(None)
@@ -5285,6 +5390,31 @@ class ShiftAlarmApp(rumps.App):
             self.menu.add(rumps.MenuItem(
                 f"⚔️ 손자병법 최신: {short_title}", callback=self.open_latest_sunzi
             ))
+
+        step_index, next_review, review_due = self._muse_trace_upgrade_status()
+        step_title, step_goal = MUSE_TRACE_UPGRADE_STEPS[step_index]
+        due_mark = "🔴 점검 필요" if review_due else f"다음 {next_review.strftime('%m/%d')}"
+        muse_menu = rumps.MenuItem(
+            f"🎨 Muse Trace 업그레이드 · {step_index + 1}/{len(MUSE_TRACE_UPGRADE_STEPS)} · {due_mark}"
+        )
+        muse_menu.add(rumps.MenuItem(
+            "🌐 사이트 열기", callback=self.make_open_url_callback(MUSE_TRACE_SITE_URL)
+        ))
+        muse_menu.add(rumps.MenuItem(f"🎯 현재 초점: {step_title}"))
+        muse_menu.add(rumps.MenuItem(f"    {step_goal}"))
+        muse_menu.add(rumps.MenuItem(f"📅 2주 점검일: {next_review.isoformat()}"))
+        muse_menu.add(None)
+        roadmap_menu = rumps.MenuItem("🧭 전체 로드맵")
+        for index, (title, goal) in enumerate(MUSE_TRACE_UPGRADE_STEPS):
+            marker = "▶" if index == step_index else f"{index + 1}."
+            roadmap_menu.add(rumps.MenuItem(f"{marker} {title} — {goal}"))
+        muse_menu.add(roadmap_menu)
+        muse_menu.add(rumps.MenuItem(
+            "✅ 이번 점검 완료 · 다음 단계로",
+            callback=self.complete_muse_trace_upgrade_step,
+        ))
+        self.menu.add(None)
+        self.menu.add(muse_menu)
 
         self.menu.add(None)
         self.menu.add(rumps.MenuItem("🎥 일본어 자막 추출 - 연달아 (폴더 선택)", callback=self.run_jp_subtitle_now))
