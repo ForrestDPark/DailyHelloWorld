@@ -1,0 +1,21 @@
+# Fly.io 배포 설정. `app` 이름은 전역으로 유일해야 하므로 배포 전에 바꿀 것
+# (예: tulpa-chatapp-<본인아이디>). 자세한 배포 절차는 ../README.md 참고.
+app = "tulpa-chatapp"
+primary_region = "nrt"
+
+[build]
+
+[mounts]
+  source = "chatapp_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
