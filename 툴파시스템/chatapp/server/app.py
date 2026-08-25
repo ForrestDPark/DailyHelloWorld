@@ -318,6 +318,31 @@ GROUP_ROOM_ENABLED = os.environ.get("GROUP_ROOM_ENABLED", "true").lower() == "tr
 # import하지 않는 독립 프로세스라 값을 맞춰서 손으로 동기화해야 함).
 OWNER_ONLY_PERSONAS = {"손동주"}
 
+# ★ 2026-08-26: "모든 사람한테 유이(UI 개발자 페르소나) 꾸밀 권한을 주지는
+# 말고, 내 허락하에 그 사람에게만 권한을 줄 수 있게 해달라" 요청 — 손동주처럼
+# 아예 소유자 전용으로 막는 게 아니라, 소유자가 ui_dev_grants 테이블에 특정
+# 계정을 등록해두면 그 계정만 "유이"에게 말을 걸어 응답을 받을 수 있다(그 외
+# 비소유자는 OWNER_ONLY_PERSONAS와 동일하게 취급 — 응답 대기열에 안 들어감).
+# worker/persona_worker.py의 UI_DEV_PERSONA_NAME과 이름이 같아야 한다.
+UI_DEV_PERSONAS = {"유이"}
+
+
+def _require_owner(request):
+    user = getattr(request.state, "user", None)
+    if user:
+        is_owner_request = user["is_owner"]
+    else:
+        # user가 없는 경우가 둘 있다 — ①로컬 개발(무인증, can_write=True)은
+        # 소유자로 간주(기존 관례) ②공유 링크 읽기 전용 방문자(share_guest=True,
+        # can_write=False)는 소유자가 아니다. share_guest를 따로 확인해야
+        # 한다 — can_write만 보면 나중에 다른 읽기전용 경로가 늘었을 때
+        # 실수로 뚫릴 수 있어서 명시적으로 뺐다.
+        is_owner_request = bool(getattr(request.state, "can_write", False)) and not getattr(
+            request.state, "share_guest", False
+        )
+    if not is_owner_request:
+        raise HTTPException(status_code=403, detail="소유자만 할 수 있습니다")
+
 
 @app.get("/api/whoami")
 def whoami(request: Request):
@@ -599,6 +624,14 @@ def post_message(msg: NewMessage, request: Request):
         # 1:1 방은 이미 위에서 막았지만, 단체/그룹 회의방에서는 다른 계정도
         # 메시지를 보낼 수 있다 — 그 경우에도 손동주는 응답 대상에서 뺀다.
         targets = [t for t in targets if t not in OWNER_ONLY_PERSONAS]
+        # ★ 유이(UI_DEV_PERSONAS)는 손동주처럼 무조건 막지는 않는다 — 소유자가
+        # ui_dev_grants에 등록해준 계정만 예외적으로 응답을 받을 수 있다.
+        if any(t in UI_DEV_PERSONAS for t in targets):
+            granted = conn.execute(
+                "SELECT 1 FROM ui_dev_grants WHERE username = ?", (sender,)
+            ).fetchone()
+            if not granted:
+                targets = [t for t in targets if t not in UI_DEV_PERSONAS]
     for persona_name in targets:
         conn.execute(
             "INSERT INTO pending_turns (persona_name, room_id, status, created_at) VALUES (?, ?, 'pending', ?)",
@@ -607,6 +640,47 @@ def post_message(msg: NewMessage, request: Request):
     conn.commit()
     conn.close()
     return {"ok": True, "notified": targets}
+
+
+@app.get("/api/admin/users")
+def admin_list_users(request: Request):
+    """소유자 전용 — 계정 목록과 각자의 유이(UI 개발자) 권한 부여 여부를
+    같이 내려준다. 프론트의 권한 관리 패널(owner에게만 보임)이 쓴다."""
+    _require_owner(request)
+    conn = get_conn()
+    users = conn.execute("SELECT username, is_owner FROM users ORDER BY username").fetchall()
+    granted = {r["username"] for r in conn.execute("SELECT username FROM ui_dev_grants").fetchall()}
+    conn.close()
+    return [
+        {"username": r["username"], "is_owner": bool(r["is_owner"]), "ui_dev_granted": r["username"] in granted}
+        for r in users
+    ]
+
+
+@app.post("/api/admin/ui_dev_grants/{username}")
+def admin_grant_ui_dev(username: str, request: Request):
+    _require_owner(request)
+    conn = get_conn()
+    if not conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="존재하지 않는 계정입니다")
+    conn.execute(
+        "INSERT OR IGNORE INTO ui_dev_grants (username, granted_at) VALUES (?, ?)",
+        (username, _now()),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.delete("/api/admin/ui_dev_grants/{username}")
+def admin_revoke_ui_dev(username: str, request: Request):
+    _require_owner(request)
+    conn = get_conn()
+    conn.execute("DELETE FROM ui_dev_grants WHERE username = ?", (username,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 @app.get("/api/worker/pending")

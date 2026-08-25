@@ -4475,6 +4475,10 @@ class ShiftAlarmApp(rumps.App):
             "job_items": job_items,
             "contest_items": contest_items,
             "mail_items": mail_items,
+            # ★ 2026-08-26: "shift alarm 위젯에서도 링크로 툴파채팅 들어가게 해달라"
+            # 요청 — 메뉴바 앱 메뉴에 이미 있던 get_tulpachat_url()을 그대로 재사용해
+            # 위젯(iOS, Mac에 직접 접근 못 함)에도 현재 Quick Tunnel URL을 실어보낸다.
+            "tulpachat_url": get_tulpachat_url(),
         }
         # 실제 iCloud 대상 3곳에 대한 쓰기는 iCloudSync.app에 위임한다(★ 2026-08-18,
         # ICLOUD_SYNC_APP 정의부 설명 참고) — launchd 프로세스 직접 쓰기는 항상

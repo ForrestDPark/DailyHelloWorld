@@ -29,11 +29,16 @@
   <div id="room-list-view" class="hidden">
     <header>
       <h1>툴파시스템</h1>
+      <button id="admin-btn" type="button" aria-label="권한 관리" class="hidden">⚙️</button>
       <div id="account-chip" class="hidden">
         <span id="account-name"></span>
         <button id="logout-btn" type="button" aria-label="로그아웃">로그아웃</button>
       </div>
     </header>
+    <div id="admin-panel" class="hidden">
+      <div class="invite-panel-title">유이(UI 개발자) 편집 권한 관리</div>
+      <div id="admin-user-list"></div>
+    </div>
     <div id="room-list"><div class="empty-hint">불러오는 중...</div></div>
   </div>
 

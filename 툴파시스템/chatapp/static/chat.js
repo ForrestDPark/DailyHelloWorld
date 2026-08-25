@@ -3,6 +3,7 @@ let lastId = 0;
 let pollTimer = null;
 let canWrite = true; // /api/whoami로 초기화 — 공유 링크로 들어온 읽기 전용 방문자는 false
 let myUsername = null; // 로그인 계정의 실제 아이디(2026-08-26 다중 계정) — 내 메시지 판별용
+let amOwner = false; // 소유자 계정으로 로그인했는지 — 권한 관리(⚙️) 패널 노출 여부에 씀
 
 const authView = document.getElementById("auth-view");
 const roomListView = document.getElementById("room-list-view");
@@ -85,6 +86,7 @@ document.getElementById("auth-form").addEventListener("submit", async (e) => {
       return;
     }
     myUsername = data.username;
+    amOwner = !!data.is_owner;
     canWrite = true;
     authView.classList.add("hidden");
     initAccountChip();
@@ -100,10 +102,15 @@ function initAccountChip() {
   const chip = document.getElementById("account-chip");
   if (!myUsername) {
     chip.classList.add("hidden");
+    document.getElementById("admin-btn").classList.add("hidden");
     return;
   }
   document.getElementById("account-name").textContent = myUsername;
   chip.classList.remove("hidden");
+  // ★ "모든 사람한테 유이 꾸밀 권한을 주지 말고 내 허락하에 그 사람에게
+  // 권한을 줄 수 있게 해달라" 요청(2026-08-26) — 권한 관리 버튼은 소유자
+  // 로그인일 때만 보인다.
+  document.getElementById("admin-btn").classList.toggle("hidden", !amOwner);
 }
 
 document.getElementById("logout-btn").addEventListener("click", async () => {
@@ -113,8 +120,65 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
     console.error(e);
   }
   myUsername = null;
+  amOwner = false;
   location.hash = "";
   showAuthView();
+});
+
+// ★ 2026-08-26: 소유자 전용 권한 관리 패널 — 계정별로 유이(UI 개발자
+// 페르소나)에게 말 걸어 응답받을 권한을 부여/회수한다. 실제 실행(파일
+// 반영) 승인은 항상 소유자만 할 수 있어서(worker의 owner-only 게이트)
+// 이 권한은 어디까지나 "제안을 받아볼 수 있는지"만 결정한다.
+async function renderAdminUsers() {
+  const list = document.getElementById("admin-user-list");
+  list.innerHTML = '<div class="empty-hint">불러오는 중...</div>';
+  try {
+    const res = await apiFetch("/api/admin/users");
+    const users = (await res.json()).filter((u) => !u.is_owner);
+    list.innerHTML = "";
+    if (!users.length) {
+      list.innerHTML = '<div class="empty-hint">다른 계정이 아직 없습니다</div>';
+      return;
+    }
+    for (const u of users) {
+      const row = document.createElement("div");
+      row.className = "admin-user-row";
+      const label = document.createElement("span");
+      label.textContent = u.username;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "admin-grant-btn" + (u.ui_dev_granted ? " granted" : "");
+      btn.textContent = u.ui_dev_granted ? "유이 권한 있음" : "유이 권한 없음";
+      btn.addEventListener("click", async () => {
+        try {
+          await apiFetch(`/api/admin/ui_dev_grants/${encodeURIComponent(u.username)}`, {
+            method: u.ui_dev_granted ? "DELETE" : "POST",
+          });
+          renderAdminUsers();
+        } catch (e) {
+          if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
+        }
+      });
+      row.appendChild(label);
+      row.appendChild(btn);
+      list.appendChild(row);
+    }
+  } catch (e) {
+    if (e.message !== "unauthorized" && e.message !== "forbidden") {
+      list.innerHTML = '<div class="empty-hint">불러오지 못했습니다</div>';
+      console.error(e);
+    }
+  }
+}
+
+document.getElementById("admin-btn").addEventListener("click", () => {
+  const panel = document.getElementById("admin-panel");
+  if (!panel.classList.contains("hidden")) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  renderAdminUsers();
 });
 
 // ★ "링크 공유해서 읽기만 되게 해달라" 요청(2026-08-25) — 쓰기 불가 방문자는
@@ -132,6 +196,7 @@ async function initAuth() {
   }
   canWrite = !!data.can_write;
   myUsername = data.username || null;
+  amOwner = !!data.is_owner;
   if (!data.logged_in && !data.share_guest && !canWrite) {
     showAuthView();
     return false;

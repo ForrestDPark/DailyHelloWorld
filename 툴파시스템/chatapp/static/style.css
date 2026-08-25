@@ -165,6 +165,44 @@ header h1 { font-size: 18px; margin: 0; flex: 1; }
   text-decoration: underline;
 }
 
+/* ★ 권한 관리(2026-08-26) — 소유자만 보이는 ⚙️ 버튼과 패널 */
+#admin-btn {
+  border: none;
+  background: none;
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+#admin-panel {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bubble-persona);
+}
+#admin-user-list { display: flex; flex-direction: column; gap: 6px; }
+.admin-user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+}
+.admin-grant-btn {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  border-radius: 14px;
+  padding: 5px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.admin-grant-btn.granted {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .chat-header #back-btn {
   border: none;
   background: none;

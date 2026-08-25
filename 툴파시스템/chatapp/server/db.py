@@ -5,7 +5,8 @@
 방 구분 — "group"은 전체 채팅방, 그 외엔 해당 페르소나 이름의 1:1 방),
 pending_turns(워커가 처리할 응답 대기열), story_sync(대화 내용을 Notion
 "함께 만든 이야기"에 어디까지 반영했는지 워터마크), users/sessions(로그인
-계정·세션 — 2026-08-26, 아래 참고)."""
+계정·세션 — 2026-08-26, 아래 참고), ui_dev_grants(소유자가 UI 개발자
+페르소나 "유이"에게 말 걸 권한을 선별 부여한 계정 목록 — 2026-08-26)."""
 import os
 import sqlite3
 
@@ -76,6 +77,10 @@ def init_db():
             user_id INTEGER NOT NULL,
             created_at TEXT NOT NULL,
             expires_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS ui_dev_grants (
+            username TEXT PRIMARY KEY,
+            granted_at TEXT NOT NULL
         );
         """
     )

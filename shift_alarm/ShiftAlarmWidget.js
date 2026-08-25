@@ -171,10 +171,24 @@ function buildBottomSection(widget, status) {
     widget.addSpacer(8);
   }
 
+  // ★ 2026-08-26: "위젯에서도 링크로 툴파채팅 들어가게 해달라" 요청 — Mac의
+  // Quick Tunnel URL은 재시작마다 바뀌므로 iOS 쪽에 하드코딩할 수 없다.
+  // shift_alarm.py가 매번 최신 URL을 status.json에 실어보내고(get_tulpachat_url()),
+  // 여기서는 그 값을 그대로 탭 링크로만 쓴다. URL을 못 구했을 때(터널이 아직
+  // 안 떴거나 로그가 없을 때)는 줄 자체를 생략한다.
+  if (status.tulpachat_url) {
+    const tulpaLine = addLine(widget, "🧑‍🤝‍🧑 툴파채팅 열기", {
+      color: COLOR_SUB,
+      size: 12,
+    });
+    tulpaLine.url = status.tulpachat_url;
+    widget.addSpacer(8);
+  }
+
   // ★ 2026-08-08: 커리어/알바(공고), AI/일반(경진대회) 카테고리별 2건씩으로
   // 늘어나서(job_items/contest_items 배열), 라지 위젯 프레임 안에 다 넣으려면
   // 예전처럼 항목당 여러 줄(헤딩+본문+링크)을 쓸 수 없다 — 카테고리 태그를 붙인
-  // 한 줄로 압축하고, 탭하면 바로 AI 분석(Notion)으로 이동하게 했다.
+  // 한 줄로 압축하고, 탭하면 Career Loop의 추천 상세 화면으로 이동하게 했다.
   const jobItems = status.job_items || [];
   jobItems.forEach((item, i) => {
     if (i === 0) addLine(widget, "🎯 오늘의 추천 공고", { color: COLOR_DIM, size: 11, bold: true });
@@ -182,7 +196,7 @@ function buildBottomSection(widget, status) {
     const scoreText = item.score !== null && item.score !== undefined ? `[${item.score}점] ` : "";
     const label = `${scoreText}[${item.label}] ${item.company || ""} — ${item.title || ""}`;
     const line = addLine(widget, label, { color: COLOR_SUB, size: 11, lineLimit: 2 });
-    if (item.notion_url || item.url) line.url = item.notion_url || item.url;
+    if (item.site_url || item.url) line.url = item.site_url || item.url;
   });
 
   const contestItems = status.contest_items || [];
@@ -195,7 +209,7 @@ function buildBottomSection(widget, status) {
     const scoreText = item.score !== null && item.score !== undefined ? `[${item.score}점] ` : "";
     const label = `${scoreText}[${item.label}] ${item.organizer || ""} — ${item.title || ""}`;
     const line = addLine(widget, label, { color: COLOR_SUB, size: 11, lineLimit: 2 });
-    if (item.notion_url || item.url) line.url = item.notion_url || item.url;
+    if (item.site_url || item.url) line.url = item.site_url || item.url;
   });
 
   // ★ 2026-08-18: 메뉴바에 쌓아둔 최근 메일 AI 요약을 위젯에도 노출한다.
