@@ -4320,16 +4320,16 @@ class ShiftAlarmApp(rumps.App):
             else NSColor.systemOrangeColor()
         )
 
-        # ★ 2026-08-25: "맥북 온도 같은거 메뉴바 타이틀에 항상 띄울 수 없나"
-        # 요청 — 원시 온도(°C)는 sudo 없이 못 구해서(get_thermal_status() 참고),
-        # 정상일 땐 온도계만, 실제로 스로틀링 중일 때만 남은 속도 %를 빨강으로
-        # 보여준다. 항상 표시되되 평소엔 눈에 안 띄게 작게 유지.
+        # ★ 2026-08-25: "열 때문에 느려지는 중이면 빨간 🌡️NN%만 있으면 되고
+        # 평소엔 이모지 필요없을듯" — 정상일 땐 아무것도 안 보여주고, 실제로
+        # 스로틀링 중일 때만 빨간 "🌡️NN%"를 띄운다(get_thermal_status() 참고,
+        # 원시 온도는 sudo 없이 못 구해서 CPU 속도 제한 %를 대신 쓴다).
         thermal = self._thermal_status
         if thermal and thermal["throttled"]:
             thermal_token = f"🌡️{thermal['percent']}%"
             thermal_color = NSColor.systemRedColor()
         else:
-            thermal_token = "🌡️"
+            thermal_token = ""
             thermal_color = None
 
         segments = [
