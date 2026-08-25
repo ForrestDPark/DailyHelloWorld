@@ -22,7 +22,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ai_exec import run_ai_exec  # noqa: E402
 from notion_personas import (  # noqa: E402
-    append_story_summary, build_system_prompt, fetch_page_text, list_personas, notion_token,
+    append_story_summary, build_system_prompt, extract_group, fetch_page_text,
+    list_personas, notion_token,
 )
 
 SERVER_URL = os.environ.get("CHATAPP_SERVER_URL", "http://localhost:8000")
@@ -74,12 +75,14 @@ def sync_personas():
             print(f"⚠️ '{persona['title']}' 페이지 조회 실패: {exc}", flush=True)
             continue
         system_prompt = build_system_prompt(persona["title"], page_text)
+        group_name = extract_group(page_text)
         cache[persona["title"]] = {"system_prompt": system_prompt, "page_id": persona["id"]}
         try:
             _api("/api/worker/sync_persona", "POST", {
                 "name": persona["title"],
                 "notion_page_id": persona["id"],
                 "system_prompt": system_prompt,
+                "group_name": group_name,
             })
         except (urllib.error.URLError, urllib.error.HTTPError) as exc:
             print(f"⚠️ '{persona['title']}' 서버 동기화 실패: {exc}", flush=True)

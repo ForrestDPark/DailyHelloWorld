@@ -62,6 +62,14 @@ header h1 { font-size: 18px; margin: 0; flex: 1; }
 
 /* 방 목록 */
 #room-list { flex: 1; overflow-y: auto; }
+.group-header {
+  padding: 10px 16px 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
 .room-item {
   display: flex;
   align-items: center;

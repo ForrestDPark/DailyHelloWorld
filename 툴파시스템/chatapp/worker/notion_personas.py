@@ -7,6 +7,7 @@ Notion 통합 토큰은 이직시스템/일본어자막추출과 동일한 키�
 표준 라이브러리(urllib)만 쓴다."""
 import json
 import os
+import re
 import subprocess
 import urllib.error
 import urllib.parse
@@ -99,6 +100,20 @@ def list_personas(token):
             continue
         personas.append({"id": block["id"], "title": title})
     return personas
+
+
+_GROUP_LINE_RE = re.compile(r"^-\s*그룹\s*:\s*(.+?)\s*$", re.MULTILINE)
+
+
+def extract_group(page_text):
+    """페르소나 페이지의 프로필 섹션에서 "- 그룹: OOO" 줄을 찾아 그룹명을
+    반환한다 (★ 2026-08-25, "페르소나 목록도 그룹화하는 게 좋을거같아" 요청).
+    fetch_page_text()가 Notion의 rich_text plain_text를 그대로 이어붙이므로
+    "**그룹**"처럼 마크다운 굵게 표시가 리터럴 별표로 남지 않는다(굵게는
+    rich_text의 annotation일 뿐 텍스트 자체가 아님) — 그래서 별표 없이 매칭한다.
+    없으면 None — 방 목록에서 "그룹 없음"으로 묶인다."""
+    match = _GROUP_LINE_RE.search(page_text)
+    return match.group(1) if match else None
 
 
 def build_system_prompt(persona_title, page_text):

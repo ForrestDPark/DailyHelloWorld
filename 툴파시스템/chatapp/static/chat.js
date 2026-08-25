@@ -20,6 +20,44 @@ function displayName(name) {
   return `${name} (가상)`;
 }
 
+function renderRoomItem(r) {
+  const item = document.createElement("a");
+  item.href = "#room=" + encodeURIComponent(r.room_id);
+  item.className = "room-item";
+  const avatarChar = r.room_id === "group" ? "☺" : r.label[0];
+  const roomLabel = r.room_id === "group" ? r.label : displayName(r.label);
+  item.innerHTML = `
+    <div class="avatar">${avatarChar}</div>
+    <div class="room-info">
+      <div class="room-name">${escapeHtml(roomLabel)}</div>
+      <div class="room-preview">${r.last_message ? escapeHtml(r.last_message) : "대화를 시작해보세요"}</div>
+    </div>
+  `;
+  return item;
+}
+
+// ★ "페르소나 목록도 그룹화하는 게 좋을거같아" 요청(2026-08-25) — Notion
+// 프로필의 "그룹" 필드(서버가 group_name으로 내려줌)를 기준으로 방 목록을
+// 묶어서 보여준다. 전체 채팅방(group_name 없음, room_id="group")은 그룹
+// 헤더 없이 맨 위에 단독으로 두고, 그룹이 없는 페르소나는 "그룹 없음"으로
+// 모은다.
+function groupRooms(rooms) {
+  const solo = rooms.filter((r) => r.room_id === "group");
+  const rest = rooms.filter((r) => r.room_id !== "group");
+  const groups = new Map();
+  for (const r of rest) {
+    const key = r.group_name || "그룹 없음";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(r);
+  }
+  const orderedKeys = [...groups.keys()].sort((a, b) => {
+    if (a === "그룹 없음") return 1;
+    if (b === "그룹 없음") return -1;
+    return a.localeCompare(b, "ko");
+  });
+  return { solo, groups, orderedKeys };
+}
+
 async function showRoomList() {
   currentRoom = null;
   if (pollTimer) clearTimeout(pollTimer);
@@ -33,20 +71,18 @@ async function showRoomList() {
       roomListEl.innerHTML = '<div class="empty-hint">아직 페르소나가 없습니다</div>';
       return;
     }
-    for (const r of rooms) {
-      const item = document.createElement("a");
-      item.href = "#room=" + encodeURIComponent(r.room_id);
-      item.className = "room-item";
-      const avatarChar = r.room_id === "group" ? "☺" : r.label[0];
-      const roomLabel = r.room_id === "group" ? r.label : displayName(r.label);
-      item.innerHTML = `
-        <div class="avatar">${avatarChar}</div>
-        <div class="room-info">
-          <div class="room-name">${escapeHtml(roomLabel)}</div>
-          <div class="room-preview">${r.last_message ? escapeHtml(r.last_message) : "대화를 시작해보세요"}</div>
-        </div>
-      `;
-      roomListEl.appendChild(item);
+    const { solo, groups, orderedKeys } = groupRooms(rooms);
+    for (const r of solo) {
+      roomListEl.appendChild(renderRoomItem(r));
+    }
+    for (const key of orderedKeys) {
+      const header = document.createElement("div");
+      header.className = "group-header";
+      header.textContent = key;
+      roomListEl.appendChild(header);
+      for (const r of groups.get(key)) {
+        roomListEl.appendChild(renderRoomItem(r));
+      }
     }
   } catch (e) {
     roomListEl.innerHTML = '<div class="empty-hint">방 목록을 불러오지 못했습니다</div>';

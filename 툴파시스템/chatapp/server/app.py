@@ -124,11 +124,17 @@ def list_personas():
 @app.get("/api/rooms")
 def list_rooms():
     """방 목록 — 카카오톡 채팅 목록처럼 전체 채팅방 1개 + 페르소나별 1:1 방.
-    각 방의 마지막 메시지 미리보기도 같이 준다."""
+    각 방의 마지막 메시지 미리보기도 같이 준다.
+
+    ★ 2026-08-25: "페르소나 목록도 그룹화하는 게 좋을거같아" 요청 — 각 방에
+    Notion 프로필의 "그룹" 필드(group_name, 없으면 None)를 실어서 반환한다.
+    실제 그룹 헤더로 묶어 보여주는 건 프론트엔드(static/chat.js)가 한다."""
     conn = get_conn()
-    persona_names = [r["name"] for r in conn.execute("SELECT name FROM personas ORDER BY name").fetchall()]
-    rooms = [{"room_id": GROUP_ROOM_ID, "label": "전체 채팅방"}] if GROUP_ROOM_ENABLED else []
-    rooms += [{"room_id": name, "label": name} for name in persona_names]
+    persona_rows = conn.execute(
+        "SELECT name, group_name FROM personas ORDER BY name"
+    ).fetchall()
+    rooms = [{"room_id": GROUP_ROOM_ID, "label": "전체 채팅방", "group_name": None}] if GROUP_ROOM_ENABLED else []
+    rooms += [{"room_id": r["name"], "label": r["name"], "group_name": r["group_name"]} for r in persona_rows]
     for room in rooms:
         last = conn.execute(
             "SELECT content, created_at FROM messages WHERE room_id = ? ORDER BY id DESC LIMIT 1",
@@ -255,6 +261,7 @@ class PersonaSync(BaseModel):
     name: str
     notion_page_id: str
     system_prompt: str
+    group_name: Optional[str] = None
 
 
 @app.post("/api/worker/sync_persona")
@@ -263,14 +270,15 @@ def sync_persona(persona: PersonaSync, authorization: Optional[str] = Header(Non
     conn = get_conn()
     conn.execute(
         """
-        INSERT INTO personas (name, notion_page_id, system_prompt, synced_at)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO personas (name, notion_page_id, system_prompt, group_name, synced_at)
+        VALUES (?, ?, ?, ?, ?)
         ON CONFLICT(name) DO UPDATE SET
             notion_page_id = excluded.notion_page_id,
             system_prompt = excluded.system_prompt,
+            group_name = excluded.group_name,
             synced_at = excluded.synced_at
         """,
-        (persona.name, persona.notion_page_id, persona.system_prompt, _now()),
+        (persona.name, persona.notion_page_id, persona.system_prompt, persona.group_name, _now()),
     )
     conn.commit()
     conn.close()

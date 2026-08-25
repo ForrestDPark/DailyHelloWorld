@@ -60,5 +60,6 @@ def init_db():
     )
     _ensure_column(conn, "messages", "room_id", "TEXT NOT NULL DEFAULT 'group'")
     _ensure_column(conn, "pending_turns", "room_id", "TEXT NOT NULL DEFAULT 'group'")
+    _ensure_column(conn, "personas", "group_name", "TEXT")
     conn.commit()
     conn.close()
