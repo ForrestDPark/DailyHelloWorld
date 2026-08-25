@@ -445,3 +445,58 @@ room_id 출처를 안 가리므로 코드 변경 없이 재사용됨).
   공유방에 다른 페르소나를 불러올 수 있었는데, 다중 계정 확장 이후엔 그게
   더 위험해서(누구나 남의 공유 공간을 마음대로 바꿀 수 있었음) 일관되게
   맞췄다. 단체톡방(자기 소유)에는 이 제한이 없다.
+
+## 토론방 대표사진 (2026-08-26)
+
+커스텀 방(단체톡방)에 대표 이미지를 올려서 방 목록에서 썸네일로 보이게 하는
+기능. 채팅방 헤더의 🖼️ 버튼(내가 만든 방일 때만 노출)으로 업로드하면
+`POST /api/rooms/{room_id}/thumbnail`이 기존 `/api/upload`와 같은 검증(확장자·
+10MB 제한)을 거쳐 `~/.tulpachat/uploads/`에 저장하고, `custom_rooms.thumbnail_url`
+에 기록한다. 방 목록(`/api/rooms`)이 이 값을 같이 내려주면 프론트가 글자
+아바타 대신 그 이미지를 원형으로 잘라 보여준다(`static/chat.js`
+`renderRoomItem()`). Notion 그룹 회의방·1:1 방에는 이 기능이 없다(커스텀
+방 전용).
+
+## 이름 안 부르고 말해도 대화가 자연스럽게 이어짐 (2026-08-26)
+
+"너 솔직히 말해봐"처럼 이름을 안 부르고 말하면, 이전엔 그 방 페르소나
+전원이 반응해서 대화가 이상하게 흘러가는 문제가 있었다(예: 특정 인물에게
+이어서 하는 말인데 무관한 페르소나까지 끼어듦). `post_message()`의 응답
+대상 결정 로직을 다음 우선순위로 바꿨다(`_default_targets`):
+
+1. 메시지를 탭해서 답장(`reply_to`)했으면 그 사람만.
+2. `@이름` 또는 자연스러운 호칭(아래 항목)으로 지목했으면 그 사람(들)만.
+3. 아무 지목도 없으면 — 그 방에서 **직전에 말한 페르소나**가 있으면 그
+   사람에게만(자연스러운 대화 연속으로 간주). 아직 아무도 말 안 한 방(막
+   만들었거나 막 초대한 직후)이면 예전처럼 전원이 한 번씩 반응해 "인사
+   라운드"를 연다(`_last_persona_speaker`).
+
+같은 날 추가로, `@정확한전체이름`만 인식하던 멘션을 "정민씨"/"경호쌤"처럼
+성을 뗀 이름 호칭까지 인식하도록 넓혔다(`_mentioned_personas`/`_given_name`
+— "한경호 선생님" → "경호", "박정민" → "정민" 식으로 첫 단어에서 성 1글자를
+뗀 부분이 메시지에 포함되면 지목으로 인정).
+
+## 구글/카카오 로그인 (2026-08-26)
+
+`server/oauth.py`에서 표준 라이브러리(urllib)만으로 두 프로바이더의 OAuth
+2.0 authorization code flow를 구현했다(요청 URL 생성·code→토큰 교환·프로필
+조회). 처음 로그인하면 프로필 이름 기반으로 로컬 계정을 자동 생성해
+연결한다(`google_sub`/`kakao_id` 컬럼으로 매칭, 비밀번호는 절대 쓰이지 않는
+무작위값).
+
+- **활성화 조건**: `PUBLIC_BASE_URL` + 해당 프로바이더의 `CLIENT_ID`/`CLIENT_SECRET`
+  이 전부 설정돼야 한다(`oauth.google_enabled()`/`kakao_enabled()`). 하나라도
+  비어 있으면 로그인 화면에 버튼 자체가 안 뜬다(`/api/whoami`의
+  `google_login_enabled`/`kakao_login_enabled`) — 안 될 버튼을 미리 보여주지
+  않기 위함.
+- **왜 고정 도메인이 필요한가**: 두 프로바이더 모두 리다이렉트 URI를 콘솔에
+  미리 등록해야 하는데, Cloudflare Quick Tunnel은 재시작마다 URL이 바뀌어서
+  애초에 등록이 불가능하다 — `tulpa-chat.site`를 Cloudflare에 연결하고
+  Named Tunnel로 고정 주소(`https://chat.tulpa-chat.site` 등)를 만든 뒤에야
+  실제로 켤 수 있다.
+- 필요한 값을 얻는 곳: Google은 [Google Cloud Console](https://console.cloud.google.com/)
+  → APIs & Services → Credentials → OAuth client ID(Web application),
+  리다이렉트 URI는 `{PUBLIC_BASE_URL}/api/auth/google/callback`. 카카오는
+  [Kakao Developers](https://developers.kakao.com/) → 내 애플리케이션 →
+  카카오 로그인 활성화, Redirect URI는 `{PUBLIC_BASE_URL}/api/auth/kakao/callback`
+  (REST API 키가 `KAKAO_CLIENT_ID`).
