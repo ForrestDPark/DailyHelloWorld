@@ -1,0 +1,10 @@
+.camera-icon { width: 150px; height: 105px; margin: 34px 0 24px; border: 1px solid var(--ink); border-radius: 12px; display: grid; place-items: center; background: rgba(255,255,255,.25); }
+.camera-icon span { width: 48px; height: 48px; border: 1px solid var(--ink); border-radius: 50%; box-shadow: 0 0 0 12px var(--acid); }
+.live-camera { background: #111; isolation: isolate; }
+.live-camera:after { z-index: 5; pointer-events: none; }
+.live-camera .face-guide { z-index: 6; }
+.live-camera #webgazerVideoContainer { position: absolute !important; inset: 0 !important; width: 100% !important; height: 100% !important; transform: none !important; z-index: 1 !important; border: 0 !important; }
+.live-camera #webgazerVideoFeed,
+.live-camera #webgazerFaceOverlay,
+.live-camera #webgazerFaceFeedbackBox { width: 100% !important; height: 100% !important; object-fit: cover; }
+.insight small { display: block; margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(23,32,24,.28); font-size: 10px; line-height: 1.5; color: #536047; }

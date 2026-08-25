@@ -1,0 +1,26 @@
+diff --git a/node_modules/webgazer/src/facemesh.mjs b/node_modules/webgazer/src/facemesh.mjs
+index d54c3dd..f72739e 100644
+--- a/node_modules/webgazer/src/facemesh.mjs
++++ b/node_modules/webgazer/src/facemesh.mjs
+@@ -1,5 +1,4 @@
+ import * as faceLandmarksDetection from '@tensorflow-models/face-landmarks-detection';
+-import params from './params.mjs';
+ 
+ // Eye landmark indices for MediaPipe FaceMesh (468 landmarks)
+ // Reference: https://github.com/tensorflow/tfjs-models/blob/master/face-landmarks-detection/mesh_map.jpg
+@@ -39,9 +38,13 @@ TFFaceMesh.prototype.init = async function() {
+     return this.detector;
+   }
+ 
++  // The MediaPipe runtime imports a global FaceMesh constructor that is not
++  // preserved by the Cloudflare/Vite ESM bundle. The tfjs runtime uses the
++  // same landmark model without relying on that missing browser global.
+   const detectorConfig = {
+-    runtime: 'mediapipe',
+-    solutionPath: params.faceMeshSolutionPath,
++    runtime: 'tfjs',
++    refineLandmarks: false,
++    maxFaces: 1,
+   };
+ 
+   this.detector = await faceLandmarksDetection.createDetector(this.model, detectorConfig);
