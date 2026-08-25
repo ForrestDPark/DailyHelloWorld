@@ -59,6 +59,43 @@ header h1 { font-size: 18px; margin: 0; flex: 1; }
   padding: 0 4px;
   cursor: pointer;
 }
+.chat-header #invite-btn {
+  border: none;
+  background: none;
+  color: var(--fg);
+  font-size: 18px;
+  line-height: 1;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
+/* ★ 그룹 회의방 초대 패널(2026-08-25) */
+#invite-panel {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bubble-persona);
+}
+.invite-panel-title { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+#invite-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.invite-candidate {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  border-radius: 14px;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+#member-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.member-chip {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  border-radius: 14px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+#invite-section { margin-top: 4px; }
 
 /* 방 목록 */
 #room-list { flex: 1; overflow-y: auto; }
@@ -92,7 +129,16 @@ header h1 { font-size: 18px; margin: 0; flex: 1; }
   font-weight: 600;
 }
 .room-info { flex: 1; min-width: 0; }
-.room-name { font-size: 15px; font-weight: 600; }
+.room-name { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+/* ★ 안읽음 표시(2026-08-25) */
+.unread-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ff4d4f;
+  display: inline-block;
+  flex-shrink: 0;
+}
 .room-preview {
   font-size: 13px;
   color: var(--muted);
@@ -117,6 +163,7 @@ main#messages {
 .msg-persona { align-self: flex-start; align-items: flex-start; }
 
 .msg .sender { font-size: 12px; opacity: 0.6; padding: 0 4px; }
+.msg .sender-clickable { cursor: pointer; text-decoration: underline dotted; }
 .msg .body {
   padding: 8px 12px;
   border-radius: 16px;
@@ -125,12 +172,48 @@ main#messages {
 }
 .msg-user .body { background: var(--bubble-user); color: var(--bubble-user-fg); }
 .msg-persona .body { background: var(--bubble-persona); color: var(--bubble-persona-fg); }
+.msg .body .chat-image { max-width: 100%; border-radius: 12px; display: block; }
+/* ★ 채팅 친 시각(2026-08-25 요청) — 말풍선 옆에 작게 */
+.msg .msg-time { font-size: 11px; opacity: 0.45; padding: 0 4px; }
+
+#reply-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  font-size: 13px;
+  background: var(--bubble-persona);
+  color: var(--bubble-persona-fg);
+  border-top: 1px solid var(--border);
+}
+#reply-banner button {
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
 
 form#composer {
   display: flex;
+  align-items: center;
   gap: 8px;
   padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
+}
+#upload-btn {
+  border: none;
+  background: none;
+  font-size: 22px;
+  line-height: 1;
+  padding: 4px;
+  cursor: pointer;
+}
+
+/* ★ 읽기 전용 공유 링크 방문자(2026-08-25) — 입력 관련 UI를 통째로 숨김 */
+body.read-only form#composer,
+body.read-only #reply-banner {
+  display: none !important;
 }
 #input {
   flex: 1;

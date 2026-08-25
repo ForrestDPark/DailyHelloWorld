@@ -27,6 +27,7 @@ import rumps
 import subprocess
 import os
 import json
+import base64
 import hashlib
 import plistlib
 import queue
@@ -2175,6 +2176,28 @@ def get_tulpachat_url():
     return matches[-1] if matches else None
 
 
+# ★ 2026-08-25: "툴파 채팅창에 새 메시지 오면 shift alarm에서 알람띄워줘" 요청.
+# 서버·워커가 이 Mac에 같이 떠 있으니 로컬 주소로 직접 폴링한다(터널 URL은
+# 재시작마다 바뀌어서 부적합). 계정/비번은 소스에 하드코딩하지 않고 이미
+# launchd plist에 있는 값을 그대로 읽어서 쓴다 — 나중에 비번이 바뀌어도 이
+# 파일을 손대지 않아도 됨.
+TULPACHAT_LOCAL_URL = "http://127.0.0.1:8000"
+TULPACHAT_SERVER_PLIST = os.path.expanduser("~/Library/LaunchAgents/com.tulpachat.server.plist")
+
+
+def _get_tulpachat_credentials():
+    try:
+        with open(TULPACHAT_SERVER_PLIST, "rb") as f:
+            plist = plistlib.load(f)
+        env = plist.get("EnvironmentVariables", {}) or {}
+        username, password = env.get("APP_USERNAME"), env.get("APP_PASSWORD")
+        if username and password:
+            return username, password
+    except Exception:
+        pass
+    return None, None
+
+
 def sync_scriptable_widget_file():
     """저장소의 위젯 스크립트를 Scriptable iCloud Documents에 자동 배포한다.
     실제 복사는 iCloudSync.app에 위임한다(★ 2026-08-18, 위 설명 참고) — 비동기라
@@ -4075,6 +4098,10 @@ class ShiftAlarmApp(rumps.App):
         self.high_cpu_timer = rumps.Timer(self._check_high_cpu, HIGH_CPU_CHECK_INTERVAL_SECONDS)
         self.high_cpu_timer.start()
 
+        # 툴파시스템 채팅 새 메시지 알림 (1분마다 확인)
+        self.tulpachat_timer = rumps.Timer(self._check_tulpachat_messages, 60)
+        self.tulpachat_timer.start()
+
         # 5분마다 메뉴 재빌드 — 손자병법 최신 링크, 이북 이어하기 등
         # 외부(클라우드 루틴 등)에서 파일이 갱신돼도 자정까지 기다리지 않고 반영되게
         self.menu_refresh_timer = rumps.Timer(self._periodic_menu_refresh, 300)
@@ -4609,6 +4636,45 @@ class ShiftAlarmApp(rumps.App):
             f"{current} 근무 기준",
             "지금부터 전자제품 전원을 꺼주세요."
         )
+
+    def _check_tulpachat_messages(self, _):
+        """1분마다 툴파시스템 채팅에 새 메시지(페르소나 응답)가 있는지 확인한다.
+        HTTP 호출이라 백그라운드 스레드에서 돈다."""
+        threading.Thread(target=self._check_tulpachat_messages_thread, daemon=True).start()
+
+    def _check_tulpachat_messages_thread(self):
+        username, password = _get_tulpachat_credentials()
+        if not username or not password:
+            return  # 서버가 아직 안 떠 있거나 plist를 못 찾음 — 조용히 건너뜀
+        # 이 기능을 처음 켜는 시점(config에 아직 키가 없음)엔 그동안 쌓인
+        # 과거 메시지 전체를 새 메시지로 오인해 한꺼번에 알림 폭탄을 던지지
+        # 않도록, 첫 조회에서는 현재 시점까지만 "읽음"으로 표시하고 넘어간다.
+        is_first_run = "tulpachat_last_seen_id" not in self.config
+        since_id = self.config.get("tulpachat_last_seen_id", 0)
+        try:
+            req = urllib.request.Request(f"{TULPACHAT_LOCAL_URL}/api/all_messages?since_id={since_id}")
+            credentials = base64.b64encode(f"{username}:{password}".encode("utf-8")).decode("ascii")
+            req.add_header("Authorization", f"Basic {credentials}")
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                messages = json.loads(resp.read())
+        except Exception:
+            return  # 서버 미기동 등 — 다음 주기에 다시 시도
+        if not messages:
+            return
+        self.config["tulpachat_last_seen_id"] = max(m["id"] for m in messages)
+        save_config(self.config)
+        if is_first_run:
+            return
+        from_personas = [m for m in messages if m["sender"] != "user"]
+        if not from_personas:
+            return
+        if len(from_personas) == 1:
+            m = from_personas[0]
+            preview = m["content"][:60] + ("…" if len(m["content"]) > 60 else "")
+            notify_spoken("🧑‍🤝‍🧑 툴파시스템 새 메시지", m["sender"], preview)
+        else:
+            names = ", ".join(sorted({m["sender"] for m in from_personas}))
+            notify_spoken("🧑‍🤝‍🧑 툴파시스템 새 메시지", f"{len(from_personas)}건", names)
 
     def _check_high_cpu(self, _):
         """1분마다 CPU 과부하 프로세스를 표본 조사한다. `ps` 호출이 느려질

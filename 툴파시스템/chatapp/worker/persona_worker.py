@@ -13,6 +13,8 @@ Services 앱에 위임하는 것과 같은 이유로, "민감한 작업은 신�
 전담"하는 이 저장소의 기존 패턴을 그대로 따른다."""
 import json
 import os
+import re
+import shutil
 import sys
 import time
 import urllib.error
@@ -26,11 +28,167 @@ from notion_personas import (  # noqa: E402
     fetch_page_text, list_personas, notion_token,
 )
 
+# ★ 2026-08-25: "업로드된 이미지 보고 서로 분석하면 좋겠다" 요청 — server/app.py의
+# IMAGE_MARKER_RE와 같은 마커를 워커 쪽에서도 찾아, 실제 로컬 파일 경로로
+# 바꿔서 ai_exec의 image_paths로 넘긴다(서버·워커가 같은 Mac에 있어서 그냥
+# 파일 경로로 직접 읽을 수 있다 — 별도 다운로드 불필요).
+IMAGE_MARKER_RE = re.compile(r"!\[\]\(/uploads/([^)]+)\)")
+UPLOADS_DIR = Path(os.path.expanduser("~/.tulpachat/uploads"))
+
+
+def _display_content(content):
+    """AI에게 보여줄 대화 텍스트 — 이미지 마커는 사람이 읽을 안내문으로 바꾼다."""
+    return IMAGE_MARKER_RE.sub(lambda m: f"[사진 첨부: {m.group(1)}]", content)
+
+
+def extract_image_paths(context):
+    paths = []
+    for msg in context:
+        for m in IMAGE_MARKER_RE.finditer(msg["content"]):
+            p = UPLOADS_DIR / m.group(1)
+            if p.exists():
+                paths.append(p)
+    return paths
+
+
+# ★ 2026-08-25: "맥북 파일 정리하고 요약해줄 에이전트 만들어줘, 손동주로 하고
+# 프로그램개발그룹에 넣어줘" 요청 — 사용자가 직접 승인 흐름을 골랐다:
+# ①대상 폴더는 홈 폴더 전체(~) ②이동/삭제 자동 정리 허용 ③단, 실행 전에
+# 매번 채팅으로 명시 승인.
+#
+# 안전 설계: AI(claude/codex)에게는 절대 Bash나 mv/rm 권한을 주지 않는다 —
+# Read/Glob(읽기 전용)만 주고, 실제 파일 이동·휴지통 이동은 이 파일의
+# 결정론적 파이썬 코드(_execute_organize_plan)만 수행한다. AI는 대화 중
+# ```plan JSON 코드 블록으로 "제안"만 하고, 사용자가 바로 다음 메시지에서
+# "승인"/"진행"이라는 단어를 포함해 답할 때만 그 계획이 실행된다 — 그 외의
+# 답이면 계획은 자동으로 취소된다(오래된 계획이 뒤늦게 실행되는 사고 방지).
+# 삭제는 항상 완전 삭제가 아니라 ~/.Trash로 옮겨서 복구 가능하게 하고,
+# 숨김 파일/폴더나 Library·.ssh·.aws 등 시스템·보안 폴더는 경로 검증에서
+# 걸러 절대 건드리지 못하게 한다.
+FILE_ORGANIZER_PERSONA_NAME = "손동주"
+HOME_DIR = Path.home().resolve()
+TRASH_DIR = HOME_DIR / ".Trash"
+ORGANIZE_DENY_NAMES = {"Library", ".ssh", ".aws", ".codex", ".claude", ".gnupg", ".git", ".Trash", ".tulpachat"}
+ORGANIZE_PLAN_RE = re.compile(r"```plan\s*\n(.*?)\n```", re.DOTALL)
+ORGANIZE_APPROVE_KEYWORDS = ("승인", "진행")
+
+FILE_ORGANIZER_ADDENDUM = (
+    "\n\n---\n"
+    f'"{FILE_ORGANIZER_PERSONA_NAME}"은(는) 이 채팅에서 특별히 사용자의 맥북 홈 폴더(~)를 '
+    "Read/Glob 도구로 직접 훑어보고 파일을 요약하거나 정리를 제안할 수 있다. "
+    "정리를 제안할 때는 다음 형식을 반드시 지켜라:\n"
+    "1) 먼저 사람이 읽을 자연스러운 설명(무엇이 있고 어떻게 정리하면 좋을지)을 쓴다.\n"
+    "2) 그다음 실제로 실행할 작업을 ```plan 코드 블록 안에 JSON 배열로 정확히 적는다. "
+    '각 항목은 {"action":"move","from":"절대경로","to":"절대경로"} 또는 '
+    '{"action":"trash","path":"절대경로"} 형식이며, 경로는 반드시 Glob/Read로 직접 확인한 '
+    "실제 경로만 쓴다(지어내지 말 것). 삭제는 항상 trash로만 제안한다(영구 삭제 액션은 없음).\n"
+    "3) 스스로는 절대 파일을 옮기거나 지우지 않는다 — 이 계획은 사용자가 다음 메시지에서 "
+    '"승인" 또는 "진행"이라는 단어를 포함해 답해야만 실제로 실행된다. 사용자가 다른 이야기를 '
+    "하면 계획은 자동으로 취소된다.\n"
+    "4) 숨김 파일/폴더(.으로 시작)나 Library, .ssh, .aws 등 시스템·보안 폴더는 절대 건드리지 않는다."
+)
+
+_pending_organize_plans = {}  # room_id -> [action, ...] — 워커 재시작하면 초기화됨(의도적)
+
+
+def _is_organize_path_allowed(p):
+    try:
+        rp = p.resolve()
+    except OSError:
+        return False
+    if rp != HOME_DIR and HOME_DIR not in rp.parents:
+        return False
+    try:
+        rel_parts = rp.relative_to(HOME_DIR).parts
+    except ValueError:
+        return False
+    return not any(part.startswith(".") or part in ORGANIZE_DENY_NAMES for part in rel_parts)
+
+
+def _resolve_home_path(raw):
+    p = Path(os.path.expanduser(raw))
+    return p if p.is_absolute() else HOME_DIR / p
+
+
+def _do_move(from_str, to_str):
+    src = _resolve_home_path(from_str)
+    dst = _resolve_home_path(to_str)
+    if not (_is_organize_path_allowed(src) and _is_organize_path_allowed(dst)):
+        return f"❌ 허용 범위 밖이라 건너뜀: {from_str} → {to_str}"
+    if not src.exists():
+        return f"❌ 원본 없음: {from_str}"
+    final_dst = dst / src.name if dst.is_dir() else dst
+    if final_dst.exists():
+        final_dst = final_dst.with_name(f"{final_dst.stem}_{int(time.time())}{final_dst.suffix}")
+    final_dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(src), str(final_dst))
+    return f"✅ 이동: {from_str} → {final_dst}"
+
+
+def _do_trash(path_str):
+    src = _resolve_home_path(path_str)
+    if not _is_organize_path_allowed(src):
+        return f"❌ 허용 범위 밖이라 건너뜀: {path_str}"
+    if not src.exists():
+        return f"❌ 없음: {path_str}"
+    TRASH_DIR.mkdir(exist_ok=True)
+    dest = TRASH_DIR / src.name
+    if dest.exists():
+        dest = TRASH_DIR / f"{dest.stem}_{int(time.time())}{dest.suffix}"
+    shutil.move(str(src), str(dest))
+    return f"🗑️ 휴지통으로 이동: {path_str}"
+
+
+def _execute_organize_plan(actions):
+    results = []
+    for action in actions:
+        try:
+            kind = action.get("action")
+            if kind == "move":
+                results.append(_do_move(action["from"], action["to"]))
+            elif kind == "trash":
+                results.append(_do_trash(action["path"]))
+            else:
+                results.append(f"❌ 알 수 없는 작업: {kind}")
+        except (KeyError, OSError, shutil.Error) as exc:
+            results.append(f"❌ 실패({action}): {exc}")
+    return results
+
+
+def _capture_pending_plan(room_id, reply_text):
+    m = ORGANIZE_PLAN_RE.search(reply_text)
+    if not m:
+        return
+    try:
+        actions = json.loads(m.group(1))
+    except json.JSONDecodeError:
+        return
+    if isinstance(actions, list) and actions:
+        _pending_organize_plans[room_id] = actions
+
+
+def _maybe_execute_pending_plan(room_id, context):
+    """대기 중인 정리 계획이 있으면, 이번 사용자 메시지가 승인인지 확인해서
+    승인이면 결정론적으로 실행하고 결과 문자열을 반환한다. 계획이 없거나
+    이번이 승인이 아니면 None(평소처럼 AI가 응답하게 함) — 승인이 아닌
+    경우에도 계획 자체는 1회성으로 소모(취소)된다."""
+    plan = _pending_organize_plans.pop(room_id, None)
+    if not plan:
+        return None
+    user_msgs = [m for m in context if m["sender"] == "user"]
+    if not user_msgs:
+        return None
+    if not any(k in user_msgs[-1]["content"] for k in ORGANIZE_APPROVE_KEYWORDS):
+        return None
+    results = _execute_organize_plan(plan)
+    return "정리를 실행했습니다.\n" + "\n".join(results)
+
 SERVER_URL = os.environ.get("CHATAPP_SERVER_URL", "http://localhost:8000")
 WORKER_TOKEN = os.environ.get("CHATAPP_WORKER_TOKEN", "")
 POLL_INTERVAL_SECONDS = 3
 PERSONA_SYNC_INTERVAL_SECONDS = 300
 AI_TIMEOUT_SECONDS = 120
+ORGANIZER_TIMEOUT_SECONDS = 300  # 손동주는 홈 폴더를 Glob/Read로 훑어봐야 해서 더 오래 걸릴 수 있음
 WORK_DIR = Path(__file__).resolve().parent
 # worker/ -> chatapp/ -> 툴파시스템/ -> 저장소 루트
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -102,6 +260,8 @@ def sync_personas():
         project_names = extract_projects(page_text)
         project_context = load_project_context(project_names) if project_names else ""
         system_prompt = build_system_prompt(persona["title"], page_text, project_context)
+        if persona["title"] == FILE_ORGANIZER_PERSONA_NAME:
+            system_prompt += FILE_ORGANIZER_ADDENDUM
         group_name = extract_group(page_text)
         cache[persona["title"]] = {"system_prompt": system_prompt, "page_id": persona["id"]}
         try:
@@ -117,12 +277,14 @@ def sync_personas():
     return cache
 
 
-def build_prompt(persona_name, system_prompt, context):
+def build_prompt(persona_name, system_prompt, context, has_images=False):
     lines = [system_prompt, "", "--- 최근 대화 ---"]
     for msg in context:
         speaker = "나" if msg["sender"] == "user" else msg["sender"]
-        lines.append(f"{speaker}: {msg['content']}")
+        lines.append(f"{speaker}: {_display_content(msg['content'])}")
     lines.append("")
+    if has_images:
+        lines.append("(최근 대화에 첨부된 사진이 있습니다 — 실제로 열어서 내용을 확인하고 답에 반영하세요.)")
     lines.append(
         f'위 대화 흐름에 이어서 "{persona_name}"으로서 다음 메시지 하나만 답하세요. '
         f'"{persona_name}:" 같은 이름표는 붙이지 말고 대사만 쓰세요.'
@@ -132,14 +294,30 @@ def build_prompt(persona_name, system_prompt, context):
 
 def process_turn(turn, persona_cache):
     persona_name = turn["persona_name"]
+    room_id = turn["room_id"]
     entry = persona_cache.get(persona_name)
     if not entry:
         print(f"⚠️ 페르소나 '{persona_name}' 프로필 캐시 없음 — 다음 동기화 주기까지 대기", flush=True)
         return
-    prompt = build_prompt(persona_name, entry["system_prompt"], turn["context"])
+    is_organizer = persona_name == FILE_ORGANIZER_PERSONA_NAME
+    if is_organizer:
+        executed = _maybe_execute_pending_plan(room_id, turn["context"])
+        if executed is not None:
+            _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": executed})
+            print(f"🗂️ {persona_name} 정리 실행: {executed[:80]}", flush=True)
+            return
+    image_paths = extract_image_paths(turn["context"])
+    prompt = build_prompt(persona_name, entry["system_prompt"], turn["context"], has_images=bool(image_paths))
+    exec_kwargs = {"image_paths": image_paths or None}
+    if is_organizer:
+        exec_kwargs["allow_tools"] = ["Read", "Glob"]
+        exec_kwargs["add_dirs"] = [str(HOME_DIR)]
+    timeout = ORGANIZER_TIMEOUT_SECONDS if is_organizer else AI_TIMEOUT_SECONDS
     try:
-        reply, engine = run_ai_exec(prompt, WORK_DIR, timeout=AI_TIMEOUT_SECONDS)
+        reply, engine = run_ai_exec(prompt, WORK_DIR, timeout=timeout, **exec_kwargs)
         reply = reply.strip()
+        if is_organizer:
+            _capture_pending_plan(room_id, reply)
         _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": reply})
         print(f"💬 {persona_name} ({engine}): {reply[:60]}", flush=True)
     except Exception as exc:  # noqa: BLE001 — 이 턴만 실패 처리하고 워커는 계속 돈다

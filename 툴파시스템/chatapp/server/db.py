@@ -56,6 +56,12 @@ def init_db():
             last_message_id INTEGER NOT NULL DEFAULT 0,
             synced_at TEXT
         );
+        CREATE TABLE IF NOT EXISTS room_invites (
+            room_id TEXT NOT NULL,
+            persona_name TEXT NOT NULL,
+            invited_at TEXT NOT NULL,
+            PRIMARY KEY (room_id, persona_name)
+        );
         """
     )
     _ensure_column(conn, "messages", "room_id", "TEXT NOT NULL DEFAULT 'group'")

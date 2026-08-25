@@ -18,9 +18,24 @@
     <header class="chat-header">
       <button id="back-btn" type="button" aria-label="뒤로">‹</button>
       <h1 id="room-title"></h1>
+      <button id="invite-btn" type="button" aria-label="참여자 보기" class="hidden">👥</button>
     </header>
+    <div id="invite-panel" class="hidden">
+      <div class="invite-panel-title">현재 참여자</div>
+      <div id="member-list"></div>
+      <div id="invite-section" class="hidden">
+        <div class="invite-panel-title">초대하기</div>
+        <div id="invite-list"></div>
+      </div>
+    </div>
     <main id="messages"></main>
+    <div id="reply-banner" class="hidden">
+      <span id="reply-banner-text"></span>
+      <button id="reply-cancel-btn" type="button" aria-label="답장 취소">✕</button>
+    </div>
     <form id="composer">
+      <button id="upload-btn" type="button" aria-label="사진 첨부">📷</button>
+      <input id="image-input" type="file" accept="image/*" class="hidden">
       <input id="input" type="text" placeholder="메시지 입력" autocomplete="off">
       <button type="submit">보내기</button>
     </form>
