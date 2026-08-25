@@ -310,6 +310,14 @@ GROUP_ROOM_ID = "group"
 # 환경변수로 제어.
 GROUP_ROOM_ENABLED = os.environ.get("GROUP_ROOM_ENABLED", "true").lower() == "true"
 
+# ★ 2026-08-26: "손동주는 내 말에만 응답하게 해달라" 요청 — 1:1 방은 이미
+# 소유자만 쓸 수 있게 막았으니(위 post_message) 이 목록은 단체 채팅방/그룹
+# 회의방에서 다른 계정이 손동주를 부르거나 @멘션해도 응답 대기열에 아예
+# 안 들어가게 거르는 용도다. worker/persona_worker.py의
+# FILE_ORGANIZER_PERSONA_NAME과 같은 이름을 가리켜야 한다(두 파일은 서로
+# import하지 않는 독립 프로세스라 값을 맞춰서 손으로 동기화해야 함).
+OWNER_ONLY_PERSONAS = {"손동주"}
+
 
 @app.get("/api/whoami")
 def whoami(request: Request):
@@ -392,7 +400,7 @@ def invite_to_room(room_id: str, body: InviteRequest, request: Request):
 
 
 @app.get("/api/rooms")
-def list_rooms():
+def list_rooms(request: Request):
     """방 목록 — 카카오톡 채팅 목록처럼 전체 채팅방 1개 + 그룹 회의방 +
     페르소나별 1:1 방. 각 방의 마지막 메시지 미리보기도 같이 준다.
 
@@ -407,11 +415,18 @@ def list_rooms():
     큐가 한 번에 하나씩 처리되므로, 뒤 순서 페르소나는 앞선 페르소나의
     답까지 컨텍스트에 포함돼 자연스럽게 "회의"처럼 이어진다). is_group_room
     플래그로 1:1 방과 구분해서 프론트가 그룹 헤더 없이 맨 위에 따로 보여준다
-    (그룹 회의방 자신을 그 그룹의 "구성원"처럼 묶어버리는 걸 방지)."""
+    (그룹 회의방 자신을 그 그룹의 "구성원"처럼 묶어버리는 걸 방지).
+
+    ★ 2026-08-26: "1:1 방은 다른 참여자들에게 아예 안 보이게 해달라" 요청 —
+    소유자가 아니면 페르소나 1:1 방 자체를 목록에서 뺀다(전체 채팅방·그룹
+    회의방만 보임). /api/messages도 같은 기준으로 직접 접근을 막으므로,
+    URL 해시를 직접 편집해도 못 들어간다."""
     conn = get_conn()
     persona_rows = conn.execute(
         "SELECT name, group_name FROM personas ORDER BY name"
     ).fetchall()
+    user = getattr(request.state, "user", None)
+    is_owner_request = user["is_owner"] if user else True
     rooms = [{"room_id": GROUP_ROOM_ID, "label": "전체 채팅방", "group_name": None, "is_group_room": False}] if GROUP_ROOM_ENABLED else []
 
     seen_groups = []
@@ -424,10 +439,11 @@ def list_rooms():
             "group_name": None, "is_group_room": True,
         })
 
-    rooms += [
-        {"room_id": r["name"], "label": r["name"], "group_name": r["group_name"], "is_group_room": False}
-        for r in persona_rows
-    ]
+    if is_owner_request:
+        rooms += [
+            {"room_id": r["name"], "label": r["name"], "group_name": r["group_name"], "is_group_room": False}
+            for r in persona_rows
+        ]
     for room in rooms:
         # ★ 2026-08-25: "안 읽은 메시지 있으면 안읽음 표시해달라" 요청 —
         # last_message_id를 같이 내려주면 프론트가 로컬(localStorage)에 저장한
@@ -445,9 +461,18 @@ def list_rooms():
 
 
 @app.get("/api/messages")
-def get_messages(room_id: str = GROUP_ROOM_ID, since_id: int = 0):
+def get_messages(request: Request, room_id: str = GROUP_ROOM_ID, since_id: int = 0):
     conn = get_conn()
     persona_names = _persona_name_set(conn)
+    # ★ 2026-08-26: list_rooms()와 같은 기준 — 소유자가 아니면 페르소나 1:1
+    # 방은 목록뿐 아니라 직접 조회도 막는다(해시를 직접 편집해서 들어오는
+    # 우회 방지).
+    if room_id in persona_names:
+        user = getattr(request.state, "user", None)
+        is_owner_request = user["is_owner"] if user else True
+        if not is_owner_request:
+            conn.close()
+            raise HTTPException(status_code=403, detail="다른 계정은 이 1:1 대화를 볼 수 없습니다")
     rows = conn.execute(
         "SELECT id, sender, content, created_at FROM messages WHERE room_id = ? AND id > ? ORDER BY id",
         (room_id, since_id),
@@ -522,14 +547,25 @@ def post_message(msg: NewMessage, request: Request):
     # 이 값으로 판단하기 때문에 정확해야 한다. 인증이 꺼진 로컬 개발에서는
     # user가 없으므로 예전 그대로 'user'로 남겨 하위 호환한다.
     sender = user["username"] if user else "user"
+    # ★ 로컬 개발(무인증)에서는 user 자체가 없다 — 이 경우 예전처럼 제약 없이
+    # 다 허용한다(단일 사용자 전제이므로 "소유자 아님" 개념이 의미가 없음).
+    is_owner_request = user["is_owner"] if user else True
     conn = get_conn()
     now = _now()
+    persona_rows = conn.execute("SELECT name, group_name FROM personas").fetchall()
+    all_personas = [r["name"] for r in persona_rows]
+    # ★ 2026-08-26: "나 말고 다른 사람은 페르소나들과 개인 메시지 못 하게
+    # 막고 단체 채팅방에서만 메시지 입력이 가능하게 해달라"는 요청 — 1:1
+    # 방(room_id가 페르소나 이름과 정확히 같음)은 소유자만 쓸 수 있고, 다른
+    # 계정은 전체 채팅방/그룹 회의방에서만 메시지를 보낼 수 있다. 읽기는
+    # 그대로 전부 허용(공유 방 정책 유지) — 막는 건 "쓰기"뿐이다.
+    if room_id in all_personas and not is_owner_request:
+        conn.close()
+        raise HTTPException(status_code=403, detail="다른 계정은 1:1 대화를 보낼 수 없습니다 — 단체 채팅방을 이용해주세요")
     conn.execute(
         "INSERT INTO messages (room_id, sender, content, created_at) VALUES (?, ?, ?, ?)",
         (room_id, sender, content, now),
     )
-    persona_rows = conn.execute("SELECT name, group_name FROM personas").fetchall()
-    all_personas = [r["name"] for r in persona_rows]
     if room_id == GROUP_ROOM_ID:
         # ★ "@이름"으로 특정 인물을 지목하면 그 인물만 응답, 아무도 안 부르면
         # 방에 있는 페르소나 전원이 한 번씩 응답한다(서로 이어서 계속 대화하는
@@ -559,6 +595,10 @@ def post_message(msg: NewMessage, request: Request):
             targets = [msg.reply_to]
         else:
             targets = mentioned if mentioned else group_members
+    if not is_owner_request:
+        # 1:1 방은 이미 위에서 막았지만, 단체/그룹 회의방에서는 다른 계정도
+        # 메시지를 보낼 수 있다 — 그 경우에도 손동주는 응답 대상에서 뺀다.
+        targets = [t for t in targets if t not in OWNER_ONLY_PERSONAS]
     for persona_name in targets:
         conn.execute(
             "INSERT INTO pending_turns (persona_name, room_id, status, created_at) VALUES (?, ?, 'pending', ?)",

@@ -252,6 +252,105 @@ def load_project_context(project_names):
     return "\n\n".join(sections)
 
 
+# ★ 2026-08-26: "개발그룹채팅창에 전용 UI 개발자 페르소나를 참여시키고, 그를
+# 통해 다른 사람이 툴파시스템 채팅의 UI를 변경할 수 있게 해달라" 요청 —
+# 같은 대화에서 "다른 사용자가 페르소나를 조종해 내 프로젝트를 망치면
+# 안 된다"는 요청도 함께 나왔으므로, 손동주 파일정리와 완전히 같은 안전
+# 설계를 그대로 재사용한다:
+# ①누구나 이 페르소나에게 UI 변경을 요청·제안받을 수 있다(그룹방 멤버라면).
+# ②실제 파일 반영은 오직 소유자(OWNER_USERNAME)의 "승인"/"진행" 메시지가
+# 있어야만 실행된다(다른 사용자가 승인해도 무시).
+# ③AI에게는 Read/Glob(읽기 전용)만 주고, 실제 파일 쓰기는 이 파일의
+# 결정론적 코드(_execute_ui_plan)만 한다.
+# ④수정 가능한 파일은 static/index.html·chat.js·style.css 세 개로 고정 —
+# server/·worker/·launchd plist 등 인증·백엔드 코드는 이 역할의 범위 밖이라
+# 절대 건드릴 수 없다(허용 목록에 없으면 무조건 거부).
+UI_DEV_PERSONA_NAME = "유이"
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+UI_ALLOWED_FILES = {"index.html", "chat.js", "style.css"}
+UI_BACKUP_DIR = Path(os.path.expanduser("~/.tulpachat/ui_backups"))
+UI_PLAN_RE = re.compile(r"```uiplan\s*\n(.*?)\n```", re.DOTALL)
+UI_DEV_TIMEOUT_SECONDS = 180
+
+_pending_ui_plans = {}  # room_id -> [{"file":..., "content":...}, ...] — 워커 재시작하면 초기화(의도적)
+
+
+def _build_ui_dev_addendum():
+    readme_path = REPO_ROOT / "툴파시스템" / "chatapp" / "README.md"
+    try:
+        readme_text = readme_path.read_text(encoding="utf-8", errors="replace")[:PROJECT_README_MAX_CHARS]
+    except OSError as exc:
+        readme_text = f"(chatapp/README.md 읽기 실패: {exc})"
+    return (
+        "\n\n---\n"
+        f'"{UI_DEV_PERSONA_NAME}"은(는) 이 채팅에서 특별히 툴파시스템 채팅앱의 프론트엔드 '
+        "파일(index.html/chat.js/style.css, Read 도구로 직접 읽을 수 있음)을 수정 제안할 수 "
+        "있다. 제안할 때는 다음 형식을 반드시 지켜라:\n"
+        "1) 먼저 사람이 읽을 자연스러운 설명(무엇을 왜 바꾸는지)을 쓴다.\n"
+        "2) 그다음 실제로 적용할 변경을 ```uiplan 코드 블록 안에 JSON 배열로 정확히 적는다. "
+        '각 항목은 {"file":"index.html 또는 chat.js 또는 style.css","content":"그 파일 전체의 '
+        '새 내용"} 형식이며, 반드시 Read로 기존 파일을 먼저 읽고 그 구조를 유지한 채 필요한 '
+        "부분만 바꾼 전체 파일 내용을 담는다(일부 발췌 금지 — 파일이 통째로 교체된다).\n"
+        "3) 스스로는 절대 파일을 직접 바꾸지 않는다 — 이 계획은 소유자가 다음 메시지에서 "
+        '"승인" 또는 "진행"이라는 단어를 포함해 답해야만 실제로 적용된다(다른 사용자가 승인해도 '
+        "무시된다). 그 외의 답이면 계획은 자동으로 취소된다.\n"
+        "4) index.html/chat.js/style.css 세 파일 외에는(서버·워커·인증 코드 포함) 절대 언급도 "
+        "제안도 하지 않는다 — 이 역할은 화면(UI)만 다룬다.\n\n"
+        f"--- 참고: chatapp/README.md 발췌 ---\n{readme_text}\n--- 발췌 끝 ---"
+    )
+
+
+def _execute_ui_plan(actions):
+    results = []
+    UI_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    for action in actions:
+        filename = action.get("file") if isinstance(action, dict) else None
+        content = action.get("content") if isinstance(action, dict) else None
+        if filename not in UI_ALLOWED_FILES:
+            results.append(f"❌ 허용되지 않은 파일이라 건너뜀: {filename}")
+            continue
+        if not content or not content.strip():
+            results.append(f"❌ 빈 내용이라 건너뜀: {filename}")
+            continue
+        try:
+            target = STATIC_DIR / filename
+            backup_name = f"{int(time.time())}_{filename}"
+            if target.exists():
+                shutil.copy2(target, UI_BACKUP_DIR / backup_name)
+            target.write_text(content, encoding="utf-8")
+            results.append(f"✅ 적용: {filename} ({len(content)}자, 백업: {backup_name})")
+        except OSError as exc:
+            results.append(f"❌ 실패({filename}): {exc}")
+    return results
+
+
+def _capture_pending_ui_plan(room_id, reply_text):
+    m = UI_PLAN_RE.search(reply_text)
+    if not m:
+        return
+    try:
+        actions = json.loads(m.group(1))
+    except json.JSONDecodeError:
+        return
+    if isinstance(actions, list) and actions:
+        _pending_ui_plans[room_id] = actions
+
+
+def _maybe_execute_pending_ui_plan(room_id, context):
+    """손동주의 _maybe_execute_pending_plan과 완전히 같은 규칙 — 소유자
+    (OWNER_USERNAME)의 가장 최근 메시지에 승인 키워드가 있을 때만 실행한다."""
+    plan = _pending_ui_plans.pop(room_id, None)
+    if not plan:
+        return None
+    owner_msgs = [m for m in context if m["sender"] == OWNER_USERNAME]
+    if not owner_msgs:
+        return None
+    if not any(k in owner_msgs[-1]["content"] for k in ORGANIZE_APPROVE_KEYWORDS):
+        return None
+    results = _execute_ui_plan(plan)
+    return "UI 변경을 적용했습니다(새로고침하면 바로 보입니다).\n" + "\n".join(results)
+
+
 def sync_personas():
     """Notion에서 페르소나 목록·본문을 읽어 이름→{system_prompt, page_id} 캐시를
     만들고, 서버에도 참고용으로 올려둔다(서버가 /api/personas로 목록을 보여줄
@@ -277,6 +376,8 @@ def sync_personas():
         system_prompt = build_system_prompt(persona["title"], page_text, project_context)
         if persona["title"] == FILE_ORGANIZER_PERSONA_NAME:
             system_prompt += FILE_ORGANIZER_ADDENDUM
+        elif persona["title"] == UI_DEV_PERSONA_NAME:
+            system_prompt += _build_ui_dev_addendum()
         group_name = extract_group(page_text)
         cache[persona["title"]] = {"system_prompt": system_prompt, "page_id": persona["id"]}
         try:
@@ -340,11 +441,18 @@ def process_turn(turn, persona_cache):
         print(f"⚠️ 페르소나 '{persona_name}' 프로필 캐시 없음 — 다음 동기화 주기까지 대기", flush=True)
         return
     is_organizer = persona_name == FILE_ORGANIZER_PERSONA_NAME
+    is_ui_dev = persona_name == UI_DEV_PERSONA_NAME
     if is_organizer:
         executed = _maybe_execute_pending_plan(room_id, turn["context"])
         if executed is not None:
             _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": executed})
             print(f"🗂️ {persona_name} 정리 실행: {executed[:80]}", flush=True)
+            return
+    if is_ui_dev:
+        executed = _maybe_execute_pending_ui_plan(room_id, turn["context"])
+        if executed is not None:
+            _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": executed})
+            print(f"🎨 {persona_name} UI 적용: {executed[:80]}", flush=True)
             return
     image_paths = extract_image_paths(turn["context"])
     prompt = build_prompt(
@@ -354,12 +462,17 @@ def process_turn(turn, persona_cache):
     if is_organizer:
         exec_kwargs["allow_tools"] = ["Read", "Glob"]
         exec_kwargs["add_dirs"] = [str(HOME_DIR)]
-    timeout = ORGANIZER_TIMEOUT_SECONDS if is_organizer else AI_TIMEOUT_SECONDS
+    elif is_ui_dev:
+        exec_kwargs["allow_tools"] = ["Read", "Glob"]
+        exec_kwargs["add_dirs"] = [str(STATIC_DIR)]
+    timeout = ORGANIZER_TIMEOUT_SECONDS if is_organizer else UI_DEV_TIMEOUT_SECONDS if is_ui_dev else AI_TIMEOUT_SECONDS
     try:
         reply, engine = run_ai_exec(prompt, WORK_DIR, timeout=timeout, **exec_kwargs)
         reply = reply.strip()
         if is_organizer:
             _capture_pending_plan(room_id, reply)
+        elif is_ui_dev:
+            _capture_pending_ui_plan(room_id, reply)
         _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": reply})
         print(f"💬 {persona_name} ({engine}): {reply[:60]}", flush=True)
     except Exception as exc:  # noqa: BLE001 — 이 턴만 실패 처리하고 워커는 계속 돈다

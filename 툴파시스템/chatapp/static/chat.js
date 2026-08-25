@@ -21,6 +21,16 @@ async function apiFetch(url, opts) {
     showAuthView("세션이 만료되었습니다. 다시 로그인해주세요.");
     throw new Error("unauthorized");
   }
+  if (res.status === 403) {
+    // ★ 2026-08-26: "1:1 방은 다른 참여자에게 안 보이게 해달라" 요청 — 방
+    // 목록에서 이미 빠지지만, URL 해시를 직접 편집해서 들어오려는 시도까지
+    // 막아야 해서 서버도 403을 준다. 여기서 방 목록으로 튕겨보낸다.
+    if (pollTimer) clearTimeout(pollTimer);
+    const data = await res.clone().json().catch(() => ({}));
+    alert(data.detail || "접근할 수 없습니다");
+    location.hash = "";
+    throw new Error("forbidden");
+  }
   return res;
 }
 
@@ -423,7 +433,7 @@ async function poll() {
     }
     if (messages.length) markRoomRead(currentRoom, lastId);
   } catch (e) {
-    if (e.message === "unauthorized") return; // apiFetch가 이미 로그인 화면으로 돌려보냄 — 폴링 중단
+    if (e.message === "unauthorized" || e.message === "forbidden") return; // apiFetch가 이미 처리하고 돌려보냄 — 폴링 중단
     console.error(e);
   }
   pollTimer = setTimeout(poll, 2000);
@@ -438,7 +448,7 @@ async function sendMessage(content) {
       body: JSON.stringify({ content, room_id: currentRoom, reply_to: replyTarget }),
     });
   } catch (e) {
-    if (e.message !== "unauthorized") console.error(e);
+    if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
   }
   setReplyTarget(null);
 }
