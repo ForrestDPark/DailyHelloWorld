@@ -893,6 +893,41 @@ ELECTRONICS_OFF_TIMES = {
     "Swing": {"hour": 23, "minute": 50},
 }
 
+# ── CPU 과부하 감지 (★ 2026-08-25 추가) ────────────────────────
+# "CPU 70% 이상으로 30분 넘게 붙잡혀있는 프로세스가 있으면 메뉴에서 확인할 수
+# 있게 하고, 알아채는 즉시 알람 울려달라"는 요청 — replayd/저장공간 스캔이
+# 몇 시간씩 CPU를 붙잡고 있었는데 아무 알림도 없었던 실사용 사례에서 나옴.
+HIGH_CPU_THRESHOLD_PERCENT = 70.0
+HIGH_CPU_STUCK_MINUTES = 30
+HIGH_CPU_CHECK_INTERVAL_SECONDS = 60
+
+
+def _sample_high_cpu_processes(threshold=HIGH_CPU_THRESHOLD_PERCENT):
+    """지금 이 순간 threshold% 이상 CPU를 쓰고 있는 프로세스를
+    [(pid, 프로세스명, cpu퍼센트), ...]로 반환한다. `ps`가 실패하거나 시간
+    초과되면 빈 리스트(이번 주기는 그냥 건너뜀 — 다음 주기에 다시 시도)."""
+    try:
+        result = subprocess.run(
+            ["ps", "-Ao", "pid,pcpu,comm"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    processes = []
+    for line in result.stdout.splitlines()[1:]:  # 첫 줄은 헤더
+        parts = line.strip().split(None, 2)
+        if len(parts) < 3:
+            continue
+        pid_str, cpu_str, comm = parts
+        try:
+            pid = int(pid_str)
+            cpu = float(cpu_str)
+        except ValueError:
+            continue
+        if cpu >= threshold:
+            processes.append((pid, comm, cpu))
+    return processes
+
 # ── 근무별 실제 근무 시작/종료 시각 (근로계약서 기준) ─────────────
 SHIFT_WORK_HOURS = {
     "Day":   {"start": (6, 0),  "end": (14, 0), "crosses_midnight": False},
@@ -3992,6 +4027,13 @@ class ShiftAlarmApp(rumps.App):
         self.electronics_off_timer = rumps.Timer(self._check_electronics_off, 60)
         self.electronics_off_timer.start()
 
+        # CPU 과부하 감지 (1분마다 표본, 70% 이상이 30분 이상 이어지면 알람)
+        self._high_cpu_tracking = {}   # {(pid, comm): 처음 70% 넘긴 시각}
+        self._high_cpu_alerted = set()  # 이번 "붙잡힘" 동안 이미 알람 울린 (pid, comm)
+        self._high_cpu_stuck = {}       # {(pid, comm): (cpu퍼센트, 처음 넘긴 시각)} — 메뉴 표시용
+        self.high_cpu_timer = rumps.Timer(self._check_high_cpu, HIGH_CPU_CHECK_INTERVAL_SECONDS)
+        self.high_cpu_timer.start()
+
         # 5분마다 메뉴 재빌드 — 손자병법 최신 링크, 이북 이어하기 등
         # 외부(클라우드 루틴 등)에서 파일이 갱신돼도 자정까지 기다리지 않고 반영되게
         self.menu_refresh_timer = rumps.Timer(self._periodic_menu_refresh, 300)
@@ -4513,6 +4555,50 @@ class ShiftAlarmApp(rumps.App):
             f"{current} 근무 기준",
             "지금부터 전자제품 전원을 꺼주세요."
         )
+
+    def _check_high_cpu(self, _):
+        """1분마다 CPU 과부하 프로세스를 표본 조사한다. `ps` 호출이 느려질
+        가능성을 대비해 백그라운드 스레드에서 돈다(AppKit을 건드리지 않는
+        subprocess/딕셔너리 작업만 하므로 안전 — build_menu만 메인 스레드로
+        넘긴다)."""
+        threading.Thread(target=self._check_high_cpu_thread, daemon=True).start()
+
+    def _check_high_cpu_thread(self):
+        now = datetime.datetime.now()
+        current = _sample_high_cpu_processes()
+        current_keys = set()
+        newly_stuck = []
+        for pid, comm, cpu in current:
+            key = (pid, comm)
+            current_keys.add(key)
+            first_seen = self._high_cpu_tracking.get(key)
+            if first_seen is None:
+                self._high_cpu_tracking[key] = now
+                continue
+            elapsed = now - first_seen
+            if elapsed >= datetime.timedelta(minutes=HIGH_CPU_STUCK_MINUTES):
+                self._high_cpu_stuck[key] = (cpu, first_seen)
+                if key not in self._high_cpu_alerted:
+                    self._high_cpu_alerted.add(key)
+                    newly_stuck.append((comm, cpu, elapsed))
+        # 더 이상 threshold를 안 넘거나(내려갔거나) 프로세스 자체가 끝났으면
+        # 추적을 해제한다 — "계속 이어져야" 붙잡힌 것으로 치므로, 잠깐이라도
+        # 내려가면 그 다음부터 새로 30분을 센다.
+        for key in list(self._high_cpu_tracking):
+            if key not in current_keys:
+                self._high_cpu_tracking.pop(key, None)
+                self._high_cpu_alerted.discard(key)
+                self._high_cpu_stuck.pop(key, None)
+        if newly_stuck:
+            for comm, cpu, elapsed in newly_stuck:
+                minutes = int(elapsed.total_seconds() // 60)
+                name = os.path.basename(comm)
+                notify_spoken(
+                    "⚠️ CPU 과부하 감지",
+                    f"{name} — {cpu:.0f}%, {minutes}분째 붙잡힘",
+                    "메뉴바에서 확인하세요.",
+                )
+            AppHelper.callAfter(self.build_menu)
 
     def _periodic_menu_refresh(self, _):
         """5분마다 메뉴 재빌드 (외부 파일 변경 반영용)."""
@@ -5253,6 +5339,20 @@ class ShiftAlarmApp(rumps.App):
             earnings_color = NSColor.systemGreenColor()
         _set_menu_item_color(self.earnings_item, earnings_text, earnings_color)
         self.menu.add(self.earnings_item)
+
+        # ★ 2026-08-25: "CPU 70% 이상으로 30분 넘게 붙잡혀있으면 메뉴로 알 수
+        # 있게 해달라"는 요청 — 있을 때만 눈에 띄게 맨 위쪽에 둔다.
+        if self._high_cpu_stuck:
+            cpu_alert_menu = rumps.MenuItem(f"⚠️ CPU 과부하 프로세스 {len(self._high_cpu_stuck)}개")
+            for (pid, comm), (cpu, first_seen) in sorted(
+                self._high_cpu_stuck.items(), key=lambda kv: -kv[1][0]
+            ):
+                elapsed_min = int((datetime.datetime.now() - first_seen).total_seconds() // 60)
+                name = os.path.basename(comm)
+                cpu_alert_menu.add(rumps.MenuItem(f"{name} — {cpu:.0f}%, {elapsed_min}분째 (PID {pid})"))
+            cpu_alert_menu.add(None)
+            cpu_alert_menu.add(rumps.MenuItem("Activity Monitor 열기", callback=self.open_activity_monitor))
+            self.menu.add(cpu_alert_menu)
 
         self.menu.add(None)
         today_reminders = get_today_reminders(self.schedule)
@@ -6313,6 +6413,11 @@ class ShiftAlarmApp(rumps.App):
         대신, 사용자가 직접 정리할 수 있게 시스템 설정의 저장 공간 화면을
         열어주는 것으로 단순화했다."""
         subprocess.Popen(["open", "x-apple.systempreferences:com.apple.settings.Storage"])
+
+    # ── CPU 과부하 ──────────────────────────────────────────
+
+    def open_activity_monitor(self, _):
+        subprocess.Popen(["open", "-a", "Activity Monitor"])
 
     # ── 상태 확인 ────────────────────────────────────────────
 

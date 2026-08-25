@@ -670,3 +670,14 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - 툴파시스템 채팅앱(`툴파시스템/chatapp/`)은 Fly.io 대신 이 Mac + Cloudflare Quick Tunnel로 자체 호스팅한다(해당 프로젝트 README 참고) — 계정·도메인 없이 쓰는 Quick Tunnel이라 `cloudflared`가 재시작될 때마다(Mac 재부팅 등) URL이 바뀐다.
 - 새 헬퍼 `get_tulpachat_url()`: 고정 URL을 저장하지 않고, `~/Library/Logs/tulpachat_tunnel.err.log`에서 가장 최근에 찍힌 `https://*.trycloudflare.com` 패턴을 정규식으로 찾아 매번 새로 반환한다 — 메뉴를 열 때마다 최신 URL을 보장한다.
 - `build_menu()`의 "🎲 추천 사이트 열기" 바로 아래에 URL이 있을 때만 "🧑‍🤝‍🧑 툴파시스템 채팅 열기" 항목을 추가한다(터널이 아직 안 떴으면 조용히 생략).
+
+## 42. ⚠️ CPU 과부하 감지 알람 (★ 2026-08-25 추가)
+
+**사용자 요청**: "앞으로 cpu 70%이상 과부화되는 상태로 30분이상 붙잡혀있거나 멈춰있는 프로세스가있으면 shift alarm 에서 항목으로 발견할수있게하고 인지하는즉시 맥알람 발생하게 해줘" — `replayd`/저장공간 스캔 프로세스가 몇 시간씩 CPU를 붙잡고 있었는데 아무 알림도 없이 넘어갔던 실사용 사례에서 나온 요청.
+
+- 새 헬퍼 `_sample_high_cpu_processes(threshold=70.0)`: `ps -Ao pid,pcpu,comm`을 파싱해 threshold% 이상인 프로세스를 `(pid, comm, cpu)`로 반환. `comm` 필드에 공백이 들어있는 경로(`Codex Computer Use.app/...`)도 `split(None, 2)`로 안전하게 처리.
+- 1분마다(`HIGH_CPU_CHECK_INTERVAL_SECONDS=60`) `_check_high_cpu`가 백그라운드 스레드에서 표본을 뜬다 — `ps` 호출이 느려질 가능성을 대비해 메인 스레드를 막지 않는다(AppKit 호출은 없으므로 안전, `build_menu`만 `AppHelper.callAfter`로 넘김).
+- 상태는 `(pid, comm)` 키로 추적한다: 처음 70% 넘긴 시각을 기록해두고, **끊기지 않고** 30분(`HIGH_CPU_STUCK_MINUTES`) 이상 이어지면 그때 알람을 울린다. 한 번 울린 뒤로는 같은 "붙잡힘" 동안 다시 안 울리고, 프로세스가 threshold 밑으로 내려가거나 사라지면 추적을 리셋해서 다음에 다시 잡히면 처음부터 30분을 다시 센다.
+- 알람은 `notify_spoken`(소리+음성, 예고 없는 알림 규칙에 맞음)으로 "⚠️ CPU 과부하 감지 · {프로세스명} — {cpu}%, {분}분째"를 알린다.
+- 메뉴 최상단(급여 항목 바로 아래)에 걸린 프로세스가 있을 때만 "⚠️ CPU 과부하 프로세스 N개" 하위 메뉴가 뜨고, 각 프로세스의 이름·퍼센트·경과 시간·PID를 보여준다. 하위 항목에 "Activity Monitor 열기"도 추가.
+- 검증: 실제 상태 전이 로직(추적 시작 → 29분(무음) → 31분(알람 1회) → 32분(재알림 없음) → 프로세스 소멸(추적 해제) → 재등장 시 처음부터 다시 30분)을 독립 시뮬레이션으로 확인. `_sample_high_cpu_processes()`도 실제 시스템에서 호출해 정상 파싱 확인(`fileproviderd`, `ApplicationsStorageExtension` 등 실제 고CPU 프로세스 정상 추출).
