@@ -24,8 +24,9 @@ function renderRoomItem(r) {
   const item = document.createElement("a");
   item.href = "#room=" + encodeURIComponent(r.room_id);
   item.className = "room-item";
+  const isMeta = r.room_id === "group" || r.is_group_room;
   const avatarChar = r.room_id === "group" ? "☺" : r.label[0];
-  const roomLabel = r.room_id === "group" ? r.label : displayName(r.label);
+  const roomLabel = isMeta ? r.label : displayName(r.label);
   item.innerHTML = `
     <div class="avatar">${avatarChar}</div>
     <div class="room-info">
@@ -38,12 +39,13 @@ function renderRoomItem(r) {
 
 // ★ "페르소나 목록도 그룹화하는 게 좋을거같아" 요청(2026-08-25) — Notion
 // 프로필의 "그룹" 필드(서버가 group_name으로 내려줌)를 기준으로 방 목록을
-// 묶어서 보여준다. 전체 채팅방(group_name 없음, room_id="group")은 그룹
-// 헤더 없이 맨 위에 단독으로 두고, 그룹이 없는 페르소나는 "그룹 없음"으로
-// 모은다.
+// 묶어서 보여준다. 전체 채팅방(room_id="group")과 그룹 회의방
+// (is_group_room=true, "동찬이형+양승윤 묶어서 회의방" 요청으로 추가)은
+// 그룹 헤더 없이 맨 위에 단독으로 두고, 그룹이 없는 개별 페르소나는
+// "그룹 없음"으로 모은다.
 function groupRooms(rooms) {
-  const solo = rooms.filter((r) => r.room_id === "group");
-  const rest = rooms.filter((r) => r.room_id !== "group");
+  const solo = rooms.filter((r) => r.room_id === "group" || r.is_group_room);
+  const rest = rooms.filter((r) => r.room_id !== "group" && !r.is_group_room);
   const groups = new Map();
   for (const r of rest) {
     const key = r.group_name || "그룹 없음";
@@ -58,6 +60,8 @@ function groupRooms(rooms) {
   return { solo, groups, orderedKeys };
 }
 
+let roomsCache = new Map(); // room_id -> room object, showChatView()에서 제목/메타 표시용
+
 async function showRoomList() {
   currentRoom = null;
   if (pollTimer) clearTimeout(pollTimer);
@@ -66,6 +70,7 @@ async function showRoomList() {
   try {
     const res = await fetch("/api/rooms");
     const rooms = await res.json();
+    roomsCache = new Map(rooms.map((r) => [r.room_id, r]));
     roomListEl.innerHTML = "";
     if (!rooms.length) {
       roomListEl.innerHTML = '<div class="empty-hint">아직 페르소나가 없습니다</div>';
@@ -102,7 +107,14 @@ function showChatView(roomId) {
   messagesEl.innerHTML = "";
   roomListView.classList.add("hidden");
   chatView.classList.remove("hidden");
-  document.getElementById("room-title").textContent = roomId === "group" ? "전체 채팅방" : displayName(roomId);
+  // ★ 그룹 회의방(예: "예술가부흥프로젝트")은 페르소나 이름이 아니라 방
+  // 제목이므로 (가상) 라벨을 안 붙인다 — roomsCache로 room_id가 그룹
+  // 회의방인지 확인한다(캐시에 없으면 URL을 직접 편집해 들어온 경우일
+  // 수 있으니 안전하게 페르소나 이름으로 간주).
+  const cached = roomsCache.get(roomId);
+  const isMeta = roomId === "group" || (cached && cached.is_group_room);
+  const title = cached ? cached.label : roomId;
+  document.getElementById("room-title").textContent = isMeta ? title : displayName(title);
   poll();
 }
 

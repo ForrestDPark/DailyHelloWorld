@@ -123,18 +123,41 @@ def list_personas():
 
 @app.get("/api/rooms")
 def list_rooms():
-    """방 목록 — 카카오톡 채팅 목록처럼 전체 채팅방 1개 + 페르소나별 1:1 방.
-    각 방의 마지막 메시지 미리보기도 같이 준다.
+    """방 목록 — 카카오톡 채팅 목록처럼 전체 채팅방 1개 + 그룹 회의방 +
+    페르소나별 1:1 방. 각 방의 마지막 메시지 미리보기도 같이 준다.
 
-    ★ 2026-08-25: "페르소나 목록도 그룹화하는 게 좋을거같아" 요청 — 각 방에
-    Notion 프로필의 "그룹" 필드(group_name, 없으면 None)를 실어서 반환한다.
-    실제 그룹 헤더로 묶어 보여주는 건 프론트엔드(static/chat.js)가 한다."""
+    ★ 2026-08-25: "페르소나 목록도 그룹화하는 게 좋을거같아" 요청 — 각 1:1
+    방에 Notion 프로필의 "그룹" 필드(group_name, 없으면 None)를 실어서
+    반환한다. 실제 그룹 헤더로 묶어 보여주는 건 프론트엔드(static/chat.js)가
+    한다.
+
+    ★ 같은 날 추가: "동찬이형+양승윤 묶어서 그 안에서 회의하는 식으로"
+    요청 — 그룹명 자체를 방 하나로도 노출한다(room_id=그룹명). 이 방에
+    메시지를 보내면 그 그룹 소속 페르소나 전원이 순서대로 응답한다(폴링
+    큐가 한 번에 하나씩 처리되므로, 뒤 순서 페르소나는 앞선 페르소나의
+    답까지 컨텍스트에 포함돼 자연스럽게 "회의"처럼 이어진다). is_group_room
+    플래그로 1:1 방과 구분해서 프론트가 그룹 헤더 없이 맨 위에 따로 보여준다
+    (그룹 회의방 자신을 그 그룹의 "구성원"처럼 묶어버리는 걸 방지)."""
     conn = get_conn()
     persona_rows = conn.execute(
         "SELECT name, group_name FROM personas ORDER BY name"
     ).fetchall()
-    rooms = [{"room_id": GROUP_ROOM_ID, "label": "전체 채팅방", "group_name": None}] if GROUP_ROOM_ENABLED else []
-    rooms += [{"room_id": r["name"], "label": r["name"], "group_name": r["group_name"]} for r in persona_rows]
+    rooms = [{"room_id": GROUP_ROOM_ID, "label": "전체 채팅방", "group_name": None, "is_group_room": False}] if GROUP_ROOM_ENABLED else []
+
+    seen_groups = []
+    for r in persona_rows:
+        if r["group_name"] and r["group_name"] not in seen_groups:
+            seen_groups.append(r["group_name"])
+    for group_name in seen_groups:
+        rooms.append({
+            "room_id": group_name, "label": f"👥 {group_name}",
+            "group_name": None, "is_group_room": True,
+        })
+
+    rooms += [
+        {"room_id": r["name"], "label": r["name"], "group_name": r["group_name"], "is_group_room": False}
+        for r in persona_rows
+    ]
     for room in rooms:
         last = conn.execute(
             "SELECT content, created_at FROM messages WHERE room_id = ? ORDER BY id DESC LIMIT 1",
@@ -178,16 +201,26 @@ def post_message(msg: NewMessage, request: Request):
         "INSERT INTO messages (room_id, sender, content, created_at) VALUES (?, 'user', ?, ?)",
         (room_id, content, now),
     )
-    all_personas = [r["name"] for r in conn.execute("SELECT name FROM personas").fetchall()]
+    persona_rows = conn.execute("SELECT name, group_name FROM personas").fetchall()
+    all_personas = [r["name"] for r in persona_rows]
     if room_id == GROUP_ROOM_ID:
         # ★ "@이름"으로 특정 인물을 지목하면 그 인물만 응답, 아무도 안 부르면
         # 방에 있는 페르소나 전원이 한 번씩 응답한다(서로 이어서 계속 대화하는
         # 자동 체이닝은 폭주 방지를 위해 하지 않음 — README 로드맵 참고).
         mentioned = [p for p in all_personas if f"@{p}" in content]
         targets = mentioned if mentioned else all_personas
-    else:
+    elif room_id in all_personas:
         # 1:1 방은 방 이름 = 그 페르소나 이름이므로 항상 그 한 명만 응답한다.
-        targets = [room_id] if room_id in all_personas else []
+        targets = [room_id]
+    else:
+        # ★ 2026-08-25: "그룹 안에서 회의하는 식으로" 요청 — room_id가
+        # 그룹명이면 그 그룹 소속 페르소나 전원(또는 @멘션된 사람만)이
+        # 응답한다. 워커 폴링 큐는 한 번에 하나씩 처리되므로, 뒤 순서
+        # 페르소나는 앞서 답한 페르소나의 메시지까지 컨텍스트에 포함된
+        # 상태로 응답하게 되어 자연스럽게 순서대로 이어지는 회의가 된다.
+        group_members = [r["name"] for r in persona_rows if r["group_name"] == room_id]
+        mentioned = [p for p in group_members if f"@{p}" in content]
+        targets = mentioned if mentioned else group_members
     for persona_name in targets:
         conn.execute(
             "INSERT INTO pending_turns (persona_name, room_id, status, created_at) VALUES (?, ?, 'pending', ?)",
