@@ -29,6 +29,8 @@
   <div id="room-list-view" class="hidden">
     <header>
       <h1>툴파시스템</h1>
+      <button id="new-room-btn" type="button" aria-label="새 채팅방 만들기" class="hidden">➕</button>
+      <button id="persona-manager-btn" type="button" aria-label="내 페르소나 관리" class="hidden">🎭</button>
       <button id="admin-btn" type="button" aria-label="권한 관리" class="hidden">⚙️</button>
       <div id="account-chip" class="hidden">
         <span id="account-name"></span>
@@ -38,6 +40,19 @@
     <div id="admin-panel" class="hidden">
       <div class="invite-panel-title">유이(UI 개발자) 편집 권한 관리</div>
       <div id="admin-user-list"></div>
+    </div>
+    <div id="persona-manager-panel" class="hidden">
+      <div class="invite-panel-title">내가 만든 페르소나</div>
+      <div id="my-personas-list"></div>
+      <form id="my-persona-form">
+        <input id="my-persona-name" type="text" placeholder="이름 (1~20자)" maxlength="20">
+        <textarea id="my-persona-desc" placeholder="성격, 말투, 배경 등을 자유롭게 적어주세요" rows="4" maxlength="2000"></textarea>
+        <div id="my-persona-error" class="hidden"></div>
+        <div class="my-persona-form-actions">
+          <button type="submit" id="my-persona-submit">만들기</button>
+          <button type="button" id="my-persona-cancel-edit" class="hidden">취소</button>
+        </div>
+      </form>
     </div>
     <div id="room-list"><div class="empty-hint">불러오는 중...</div></div>
   </div>

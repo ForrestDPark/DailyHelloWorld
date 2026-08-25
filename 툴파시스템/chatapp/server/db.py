@@ -82,10 +82,23 @@ def init_db():
             username TEXT PRIMARY KEY,
             granted_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS custom_rooms (
+            room_id TEXT PRIMARY KEY,
+            label TEXT NOT NULL,
+            owner_username TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
         """
     )
     _ensure_column(conn, "messages", "room_id", "TEXT NOT NULL DEFAULT 'group'")
     _ensure_column(conn, "pending_turns", "room_id", "TEXT NOT NULL DEFAULT 'group'")
     _ensure_column(conn, "personas", "group_name", "TEXT")
+    # ★ 2026-08-26: "사용자가 자기만의 페르소나를 만들고 수정·대화할 수 있게
+    # 해달라" 요청 — owner_username이 NULL이면 Notion에서 동기화된 기존
+    # 페르소나(모두가 공유), 값이 있으면 그 계정이 직접 만든 개인 페르소나.
+    # description은 사용자가 입력한 원문(수정 화면에 그대로 보여주기 위함) —
+    # 실제 AI에 넘기는 system_prompt는 이걸 감싸서 별도로 만든다.
+    _ensure_column(conn, "personas", "owner_username", "TEXT")
+    _ensure_column(conn, "personas", "description", "TEXT")
     conn.commit()
     conn.close()

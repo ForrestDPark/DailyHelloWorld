@@ -103,6 +103,8 @@ function initAccountChip() {
   if (!myUsername) {
     chip.classList.add("hidden");
     document.getElementById("admin-btn").classList.add("hidden");
+    document.getElementById("new-room-btn").classList.add("hidden");
+    document.getElementById("persona-manager-btn").classList.add("hidden");
     return;
   }
   document.getElementById("account-name").textContent = myUsername;
@@ -111,6 +113,10 @@ function initAccountChip() {
   // 권한을 줄 수 있게 해달라" 요청(2026-08-26) — 권한 관리 버튼은 소유자
   // 로그인일 때만 보인다.
   document.getElementById("admin-btn").classList.toggle("hidden", !amOwner);
+  // ★ "사용자가 자기만의 페르소나를 만들고, 단체톡방도 만들 수 있게 해달라"
+  // 요청(2026-08-26) — 로그인한 계정이면 누구나 쓸 수 있다(소유자 전용 아님).
+  document.getElementById("new-room-btn").classList.remove("hidden");
+  document.getElementById("persona-manager-btn").classList.remove("hidden");
 }
 
 document.getElementById("logout-btn").addEventListener("click", async () => {
@@ -179,6 +185,161 @@ document.getElementById("admin-btn").addEventListener("click", () => {
   }
   panel.classList.remove("hidden");
   renderAdminUsers();
+});
+
+// ★ 2026-08-26: "사용자가 자신만의 페르소나를 생성하고 수정하거나 대화가
+// 가능하게 만들어달라" 요청 — 로그인한 계정이면 누구나(소유자 아니어도)
+// 자기만의 페르소나를 만들고, 1:1로 대화하고, 나중에 설정을 고치거나 지울
+// 수 있다. worker/persona_worker.py가 이 페르소나들을 별도로 캐시에 합쳐서
+// 실제 응답을 생성한다(Notion을 거치지 않음).
+let editingPersonaName = null;
+
+function resetMyPersonaForm() {
+  editingPersonaName = null;
+  document.getElementById("my-persona-name").value = "";
+  document.getElementById("my-persona-name").disabled = false;
+  document.getElementById("my-persona-desc").value = "";
+  document.getElementById("my-persona-submit").textContent = "만들기";
+  document.getElementById("my-persona-cancel-edit").classList.add("hidden");
+  document.getElementById("my-persona-error").classList.add("hidden");
+}
+
+function startEditPersona(p) {
+  editingPersonaName = p.name;
+  document.getElementById("my-persona-name").value = p.name;
+  document.getElementById("my-persona-name").disabled = true;
+  document.getElementById("my-persona-desc").value = p.description || "";
+  document.getElementById("my-persona-submit").textContent = "수정 저장";
+  document.getElementById("my-persona-cancel-edit").classList.remove("hidden");
+  document.getElementById("my-persona-error").classList.add("hidden");
+}
+
+document.getElementById("my-persona-cancel-edit").addEventListener("click", resetMyPersonaForm);
+
+async function deleteMyPersona(name) {
+  if (!confirm(`"${name}"을(를) 삭제할까요? 그동안 나눈 대화 내용도 함께 사라집니다.`)) return;
+  try {
+    await apiFetch(`/api/my_personas/${encodeURIComponent(name)}`, { method: "DELETE" });
+    if (editingPersonaName === name) resetMyPersonaForm();
+    await renderMyPersonas();
+    await showRoomList();
+  } catch (e) {
+    if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
+  }
+}
+
+async function renderMyPersonas() {
+  const list = document.getElementById("my-personas-list");
+  list.innerHTML = '<div class="empty-hint">불러오는 중...</div>';
+  try {
+    const res = await apiFetch("/api/my_personas");
+    const personas = await res.json();
+    list.innerHTML = "";
+    if (!personas.length) {
+      list.innerHTML = '<div class="empty-hint">아직 만든 페르소나가 없습니다</div>';
+    }
+    for (const p of personas) {
+      const row = document.createElement("div");
+      row.className = "my-persona-row";
+      const label = document.createElement("span");
+      label.textContent = p.name;
+      const editBtn = document.createElement("button");
+      editBtn.type = "button";
+      editBtn.textContent = "수정";
+      editBtn.addEventListener("click", () => startEditPersona(p));
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.textContent = "삭제";
+      delBtn.addEventListener("click", () => deleteMyPersona(p.name));
+      row.appendChild(label);
+      row.appendChild(editBtn);
+      row.appendChild(delBtn);
+      list.appendChild(row);
+    }
+  } catch (e) {
+    if (e.message !== "unauthorized" && e.message !== "forbidden") {
+      list.innerHTML = '<div class="empty-hint">불러오지 못했습니다</div>';
+      console.error(e);
+    }
+  }
+}
+
+document.getElementById("persona-manager-btn").addEventListener("click", () => {
+  const panel = document.getElementById("persona-manager-panel");
+  if (!panel.classList.contains("hidden")) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  resetMyPersonaForm();
+  renderMyPersonas();
+});
+
+document.getElementById("my-persona-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const errorEl = document.getElementById("my-persona-error");
+  errorEl.classList.add("hidden");
+  const name = document.getElementById("my-persona-name").value.trim();
+  const description = document.getElementById("my-persona-desc").value.trim();
+  try {
+    const res = editingPersonaName
+      ? await apiFetch(`/api/my_personas/${encodeURIComponent(editingPersonaName)}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ description }),
+        })
+      : await apiFetch("/api/my_personas", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, description }),
+        });
+    const data = await res.json();
+    if (!res.ok) {
+      errorEl.textContent = data.detail || "실패했습니다";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+    resetMyPersonaForm();
+    await renderMyPersonas();
+    await showRoomList(); // 새/수정된 페르소나의 1:1 방이 목록에 바로 보이게
+  } catch (err) {
+    if (err.message !== "unauthorized" && err.message !== "forbidden") {
+      errorEl.textContent = "네트워크 오류입니다";
+      errorEl.classList.remove("hidden");
+      console.error(err);
+    }
+  }
+});
+
+// ★ "사용자가 단체톡방 만들기가 가능하게 해달라, 초대할 수 있는 사람들을
+// 초대하는 것도 가능하게 해달라" 요청(2026-08-26) — 방 이름 하나만 받으면
+// 되는 단순한 입력이라 별도 폼 없이 prompt()로 처리한다. 만든 뒤엔 그 방의
+// 참여자 초대 UI(기존 👥 버튼)로 바로 이어서 페르소나를 부를 수 있다.
+document.getElementById("new-room-btn").addEventListener("click", async () => {
+  const label = prompt("새 채팅방 이름을 입력하세요");
+  if (!label || !label.trim()) return;
+  try {
+    const res = await apiFetch("/api/rooms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: label.trim() }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.detail || "채팅방을 만들지 못했습니다");
+      return;
+    }
+    // ★ showChatView()가 roomsCache에서 제목/초대버튼 표시 여부를 읽는데,
+    // 방금 만든 방은 아직 /api/rooms를 다시 안 불러왔으니 캐시에 없다 — 서버가
+    // 내려줄 모양 그대로 미리 심어둬서 바로 정상 표시되게 한다.
+    roomsCache.set(data.room_id, {
+      room_id: data.room_id, label: `👥 ${data.label}`, group_name: null,
+      is_group_room: true, is_mine: true, last_message_id: null,
+    });
+    location.hash = "#room=" + encodeURIComponent(data.room_id);
+  } catch (e) {
+    if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
+  }
 });
 
 // ★ "링크 공유해서 읽기만 되게 해달라" 요청(2026-08-25) — 쓰기 불가 방문자는
@@ -369,10 +530,14 @@ async function toggleInvitePanel() {
       chip.textContent = displayName(name);
       memberList.appendChild(chip);
     }
-    // ★ 초대 후보 목록은 쓰기 권한이 있을 때만 — 읽기 전용 방문자는 참여자
-    // 목록만 보고, 초대 버튼은 보이지 않는다.
-    inviteSection.classList.toggle("hidden", !canWrite);
-    if (canWrite) {
+    // ★ 초대 후보 목록은 쓰기 권한이 있고, "소유자이거나 내가 만든 방"일
+    // 때만 보여준다(2026-08-26) — 공유 Notion 그룹 회의방은 소유자만
+    // 초대할 수 있게 서버에서 막아뒀으므로, 어차피 실패할 초대 버튼을
+    // non-owner에게 보여주지 않는다(눌렀다가 방 밖으로 튕겨나가는 걸 방지).
+    const cachedRoom = roomsCache.get(currentRoom);
+    const canInviteHere = canWrite && (amOwner || (cachedRoom && cachedRoom.is_mine));
+    inviteSection.classList.toggle("hidden", !canInviteHere);
+    if (canInviteHere) {
       inviteList.innerHTML = "";
       if (!available.length) {
         inviteList.innerHTML = '<div class="empty-hint">초대할 수 있는 사람이 없습니다</div>';

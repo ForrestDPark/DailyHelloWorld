@@ -393,6 +393,24 @@ def sync_personas():
     return cache
 
 
+# ★ 2026-08-26: "사용자가 자기만의 페르소나를 만들고 대화할 수 있게 해달라"
+# 요청 — 이런 페르소나는 Notion을 거치지 않고 서버 DB에 바로 생성되므로,
+# sync_personas()의 Notion 동기화 주기와 별개로 더 짧은 주기(30초)로 서버에서
+# 직접 끌어와 캐시에 합친다 — 방금 만들거나 수정한 페르소나를 오래 기다리지
+# 않고 바로 쓸 수 있게.
+USER_PERSONA_SYNC_INTERVAL_SECONDS = 30
+
+
+def sync_user_personas(cache):
+    try:
+        rows = _api("/api/worker/user_personas") or []
+    except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+        print(f"⚠️ 사용자 개인 페르소나 조회 실패: {exc}", flush=True)
+        return
+    for row in rows:
+        cache[row["name"]] = {"system_prompt": row["system_prompt"], "page_id": None}
+
+
 def _speaker_label(sender, persona_names):
     # ★ 2026-08-26: 다중 계정 로그인 전에는 사람 메시지가 전부 sender='user'
     # 리터럴이라 "나"로만 표시했다. 이제 sender에는 실제 로그인 아이디가
@@ -505,6 +523,8 @@ def sync_stories(persona_cache):
         return
     max_id = all_messages[-1]["id"]
     for persona_name, entry in persona_cache.items():
+        if not entry.get("page_id"):
+            continue  # 사용자가 직접 만든 페르소나는 Notion 페이지가 없어 기록할 곳이 없음(2026-08-26)
         last_id = watermarks.get(persona_name, 0)
         new_msgs = [m for m in all_messages if m["id"] > last_id]
         relevant = [m for m in new_msgs if m["sender"] == persona_name or f"@{persona_name}" in m["content"]]
@@ -543,7 +563,9 @@ def sync_stories(persona_cache):
 def main():
     print(f"툴파시스템 워커 시작 — 서버: {SERVER_URL}", flush=True)
     persona_cache = sync_personas() or {}
+    sync_user_personas(persona_cache)
     last_sync = time.time()
+    last_user_persona_sync = time.time()
     last_story_sync = time.time()
     while True:
         now = time.time()
@@ -551,7 +573,11 @@ def main():
             new_cache = sync_personas()
             if new_cache is not None:
                 persona_cache = new_cache
+            sync_user_personas(persona_cache)
             last_sync = time.time()
+        if now - last_user_persona_sync > USER_PERSONA_SYNC_INTERVAL_SECONDS:
+            sync_user_personas(persona_cache)
+            last_user_persona_sync = time.time()
         if now - last_story_sync > STORY_SYNC_INTERVAL_SECONDS:
             sync_stories(persona_cache)
             last_story_sync = time.time()

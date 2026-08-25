@@ -203,6 +203,72 @@ header h1 { font-size: 18px; margin: 0; flex: 1; }
   font-weight: 600;
 }
 
+/* ★ 내 페르소나 만들기 + 단체톡방 만들기(2026-08-26) — 로그인한 계정이면
+   누구나 쓰는 버튼이라 admin-btn과 달리 소유자 전용 스타일을 안 씀 */
+#new-room-btn, #persona-manager-btn {
+  border: none;
+  background: none;
+  font-size: 16px;
+  line-height: 1;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+#persona-manager-panel {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bubble-persona);
+}
+#my-personas-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.my-persona-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+}
+.my-persona-row span { flex: 1; font-size: 14px; font-weight: 600; }
+.my-persona-row button {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  border-radius: 12px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+#my-persona-form { display: flex; flex-direction: column; gap: 6px; }
+#my-persona-form input, #my-persona-form textarea {
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+}
+#my-persona-error { color: var(--danger); font-size: 12px; }
+.my-persona-form-actions { display: flex; gap: 8px; }
+.my-persona-form-actions button[type="submit"] {
+  border: none;
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-radius: 12px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+#my-persona-cancel-edit {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  border-radius: 12px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
 .chat-header #back-btn {
   border: none;
   background: none;

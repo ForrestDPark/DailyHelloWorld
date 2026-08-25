@@ -225,6 +225,30 @@ def _persona_name_set(conn):
     return {r["name"] for r in conn.execute("SELECT name FROM personas").fetchall()}
 
 
+# ★ 2026-08-26: "사용자가 자기만의 페르소나를 만들 수 있게 해달라" 요청 —
+# Notion 동기화 페르소나(owner_username=NULL)의 1:1 방은 기존처럼 소유자만
+# 쓸 수 있고, 사용자가 직접 만든 페르소나(owner_username=계정)의 1:1 방은
+# 그 계정 본인 + 소유자만 쓸 수 있다.
+def _can_access_persona_room(owner_username, requesting_username, is_owner_request):
+    if is_owner_request:
+        return True
+    return owner_username is not None and owner_username == requesting_username
+
+
+PERSONA_NAME_RE = re.compile(r"^[A-Za-z0-9_ 가-힣]{1,20}$")
+USER_PERSONA_DESC_MAX_CHARS = 2000
+
+
+def _build_user_persona_prompt(name, owner_username, description):
+    return (
+        f'당신은 "{name}"이라는 이름의 가상 페르소나입니다. 사용자 계정 "{owner_username}"이(가) '
+        "직접 만든 캐릭터입니다. 아래는 그 사용자가 적어준 설정입니다 — 이 설정에 따라 자연스럽게 "
+        "대화하세요(설정에 명시되지 않은 사실을 지어내 단정하지 말고, 대화 중 자연스럽게 드러나는 "
+        "성격·반응 정도만 보완하세요).\n\n"
+        f"--- 캐릭터 설정 ---\n{description}"
+    )
+
+
 def _with_sender_type(rows, persona_names):
     return [{**dict(r), "is_persona": r["sender"] in persona_names} for r in rows]
 
@@ -299,6 +323,140 @@ def logout(request: Request, response: Response):
         conn.close()
     response.delete_cookie(SESSION_COOKIE_NAME)
     return {"ok": True}
+
+
+class PersonaCreate(BaseModel):
+    name: str
+    description: str
+
+
+class PersonaUpdate(BaseModel):
+    description: str
+
+
+@app.get("/api/my_personas")
+def list_my_personas(request: Request):
+    """내가 만든 페르소나 목록 — 방 목록이 아니라 "관리" 화면(생성·수정·삭제)에서
+    쓴다. description을 그대로 돌려줘서 수정 폼에 원문을 채워 넣을 수 있게 한다."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT name, description, synced_at FROM personas WHERE owner_username = ? ORDER BY name",
+        (user["username"],),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+@app.post("/api/my_personas")
+def create_my_persona(body: PersonaCreate, request: Request):
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    name = body.name.strip()
+    if not PERSONA_NAME_RE.match(name):
+        raise HTTPException(status_code=400, detail="이름은 한글/영문/숫자/공백/밑줄 1~20자로 입력하세요")
+    description = body.description.strip()
+    if not description:
+        raise HTTPException(status_code=400, detail="캐릭터 설정을 입력하세요")
+    if len(description) > USER_PERSONA_DESC_MAX_CHARS:
+        raise HTTPException(status_code=400, detail=f"설정은 {USER_PERSONA_DESC_MAX_CHARS}자 이내로 입력하세요")
+    conn = get_conn()
+    try:
+        if conn.execute("SELECT 1 FROM personas WHERE name = ?", (name,)).fetchone():
+            raise HTTPException(status_code=409, detail="이미 사용 중인 이름입니다")
+        prompt = _build_user_persona_prompt(name, user["username"], description)
+        conn.execute(
+            "INSERT INTO personas (name, notion_page_id, system_prompt, group_name, owner_username, description, synced_at) "
+            "VALUES (?, '', ?, NULL, ?, ?, ?)",
+            (name, prompt, user["username"], description, _now()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True, "name": name}
+
+
+@app.put("/api/my_personas/{name}")
+def update_my_persona(name: str, body: PersonaUpdate, request: Request):
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    description = body.description.strip()
+    if not description:
+        raise HTTPException(status_code=400, detail="캐릭터 설정을 입력하세요")
+    if len(description) > USER_PERSONA_DESC_MAX_CHARS:
+        raise HTTPException(status_code=400, detail=f"설정은 {USER_PERSONA_DESC_MAX_CHARS}자 이내로 입력하세요")
+    conn = get_conn()
+    try:
+        row = conn.execute("SELECT owner_username FROM personas WHERE name = ?", (name,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="존재하지 않는 페르소나입니다")
+        if row["owner_username"] != user["username"]:
+            raise HTTPException(status_code=403, detail="본인이 만든 페르소나만 수정할 수 있습니다")
+        prompt = _build_user_persona_prompt(name, user["username"], description)
+        conn.execute(
+            "UPDATE personas SET system_prompt = ?, description = ?, synced_at = ? WHERE name = ?",
+            (prompt, description, _now(), name),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True}
+
+
+@app.delete("/api/my_personas/{name}")
+def delete_my_persona(name: str, request: Request):
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    conn = get_conn()
+    try:
+        row = conn.execute("SELECT owner_username FROM personas WHERE name = ?", (name,)).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="존재하지 않는 페르소나입니다")
+        if row["owner_username"] != user["username"]:
+            raise HTTPException(status_code=403, detail="본인이 만든 페르소나만 삭제할 수 있습니다")
+        conn.execute("DELETE FROM personas WHERE name = ?", (name,))
+        conn.execute("DELETE FROM messages WHERE room_id = ?", (name,))
+        conn.execute("DELETE FROM pending_turns WHERE room_id = ?", (name,))
+        conn.execute("DELETE FROM room_invites WHERE persona_name = ?", (name,))
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True}
+
+
+# ★ 2026-08-26: "사용자가 단체톡방 만들기가 가능하게 해달라"는 요청 — Notion
+# "그룹" 필드에서 자동으로 생기는 그룹 회의방과 달리, 계정이 직접 임의의
+# 이름으로 만드는 방이다. 멤버 관리는 기존 room_invites 테이블/엔드포인트를
+# 그대로 재사용한다(_group_members가 room_id로만 조회하므로 출처를 안 가림).
+CUSTOM_ROOM_ID_PREFIX = "custom_"
+
+
+class CustomRoomCreate(BaseModel):
+    label: str
+
+
+@app.post("/api/rooms")
+def create_custom_room(body: CustomRoomCreate, request: Request):
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    label = body.label.strip()
+    if not label or len(label) > 30:
+        raise HTTPException(status_code=400, detail="방 이름은 1~30자로 입력하세요")
+    room_id = f"{CUSTOM_ROOM_ID_PREFIX}{uuid.uuid4().hex[:10]}"
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO custom_rooms (room_id, label, owner_username, created_at) VALUES (?, ?, ?, ?)",
+        (room_id, label, user["username"], _now()),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True, "room_id": room_id, "label": label}
 
 
 GROUP_ROOM_ID = "group"
@@ -384,16 +542,43 @@ def _group_members(conn, room_id, persona_rows):
     return list(dict.fromkeys(base + invited))
 
 
+def _custom_room_access(conn, room_id, username, is_owner_request):
+    """room_id가 사용자 커스텀 방이면 (그 방인지 여부, 접근 가능 여부, 방
+    소유 계정)을 반환한다. Notion 그룹 회의방이면 (False, True, None) —
+    그쪽은 기존처럼 로그인만 하면 누구나 볼 수 있다(단, 초대는 아래에서
+    소유자로 별도 제한)."""
+    row = conn.execute("SELECT owner_username FROM custom_rooms WHERE room_id = ?", (room_id,)).fetchone()
+    if not row:
+        return False, True, None
+    allowed = is_owner_request or row["owner_username"] == username
+    return True, allowed, row["owner_username"]
+
+
 @app.get("/api/rooms/{room_id}/members")
-def get_room_members(room_id: str):
+def get_room_members(room_id: str, request: Request):
     """이 그룹 회의방의 현재 참여자 목록과, 아직 초대 안 된 나머지 페르소나
-    목록을 같이 준다 — 프론트의 초대 패널이 "누굴 더 부를 수 있는지" 보여줄 때 씀."""
+    목록을 같이 준다 — 프론트의 초대 패널이 "누굴 더 부를 수 있는지" 보여줄 때 씀.
+
+    ★ 2026-08-26: "단체톡방 만들기 + 초대" 요청으로 사용자 커스텀 방도 지원.
+    커스텀 방은 방 주인 + 소유자만 조회 가능, 초대 후보는 공개 페르소나(Notion) +
+    그 방 주인이 직접 만든 페르소나로 제한한다(다른 사람의 개인 페르소나가
+    남의 방에 노출되지 않게)."""
+    user = getattr(request.state, "user", None)
+    username = user["username"] if user else None
+    is_owner_request = user["is_owner"] if user else True
     conn = get_conn()
-    persona_rows = conn.execute("SELECT name, group_name FROM personas ORDER BY name").fetchall()
+    is_custom, allowed, room_owner = _custom_room_access(conn, room_id, username, is_owner_request)
+    if is_custom and not allowed:
+        conn.close()
+        raise HTTPException(status_code=403, detail="이 채팅방에 접근할 수 없습니다")
+    persona_rows = conn.execute("SELECT name, group_name, owner_username FROM personas ORDER BY name").fetchall()
     members = _group_members(conn, room_id, persona_rows)
     conn.close()
-    all_names = [r["name"] for r in persona_rows]
-    available = [n for n in all_names if n not in members]
+    if is_custom:
+        candidates = [r["name"] for r in persona_rows if r["owner_username"] is None or r["owner_username"] == room_owner]
+    else:
+        candidates = [r["name"] for r in persona_rows if r["owner_username"] is None]
+    available = [n for n in candidates if n not in members]
     return {"members": members, "available": available}
 
 
@@ -405,15 +590,35 @@ class InviteRequest(BaseModel):
 def invite_to_room(room_id: str, body: InviteRequest, request: Request):
     if not getattr(request.state, "can_write", True):
         raise HTTPException(status_code=403, detail="읽기 전용 계정입니다")
+    user = getattr(request.state, "user", None)
+    username = user["username"] if user else None
+    is_owner_request = user["is_owner"] if user else True
     conn = get_conn()
-    persona_rows = conn.execute("SELECT name, group_name FROM personas ORDER BY name").fetchall()
-    if body.persona_name not in [r["name"] for r in persona_rows]:
+    is_custom, allowed, room_owner = _custom_room_access(conn, room_id, username, is_owner_request)
+    if is_custom and not allowed:
+        conn.close()
+        raise HTTPException(status_code=403, detail="이 채팅방에 초대할 수 없습니다")
+    persona_rows = conn.execute("SELECT name, group_name, owner_username FROM personas ORDER BY name").fetchall()
+    persona_map = {r["name"]: r["owner_username"] for r in persona_rows}
+    if body.persona_name not in persona_map:
         conn.close()
         raise HTTPException(status_code=404, detail="존재하지 않는 페르소나입니다")
-    is_known_group = any(r["group_name"] == room_id for r in persona_rows)
-    if not is_known_group:
+    if is_custom:
+        is_known_room = True
+    else:
+        is_known_room = any(r["group_name"] == room_id for r in persona_rows)
+        if is_known_room and not is_owner_request:
+            # ★ Notion 그룹 회의방(모두가 공유하는 방)에 누구든 다른 사람을
+            # 부를 수 있으면 위험하니, 소유자만 초대할 수 있게 좁힌다.
+            conn.close()
+            raise HTTPException(status_code=403, detail="이 회의방은 소유자만 초대할 수 있습니다")
+    if not is_known_room:
         conn.close()
         raise HTTPException(status_code=404, detail="그룹 회의방이 아닙니다")
+    persona_owner = persona_map[body.persona_name]
+    if persona_owner is not None and persona_owner != room_owner:
+        conn.close()
+        raise HTTPException(status_code=403, detail="이 페르소나는 초대할 수 없습니다")
     conn.execute(
         "INSERT OR IGNORE INTO room_invites (room_id, persona_name, invited_at) VALUES (?, ?, ?)",
         (room_id, body.persona_name, _now()),
@@ -445,14 +650,19 @@ def list_rooms(request: Request):
     ★ 2026-08-26: "1:1 방은 다른 참여자들에게 아예 안 보이게 해달라" 요청 —
     소유자가 아니면 페르소나 1:1 방 자체를 목록에서 뺀다(전체 채팅방·그룹
     회의방만 보임). /api/messages도 같은 기준으로 직접 접근을 막으므로,
-    URL 해시를 직접 편집해도 못 들어간다."""
+    URL 해시를 직접 편집해도 못 들어간다. 단, "내가 만든 페르소나"는 예외 —
+    본인의 1:1 방은 본인에게 보인다(_can_access_persona_room).
+
+    ★ 같은 날 추가: "단체톡방 만들기" 요청 — 계정이 직접 만든 커스텀 방도
+    본인/소유자에게만 노출한다."""
     conn = get_conn()
     persona_rows = conn.execute(
-        "SELECT name, group_name FROM personas ORDER BY name"
+        "SELECT name, group_name, owner_username FROM personas ORDER BY name"
     ).fetchall()
     user = getattr(request.state, "user", None)
     is_owner_request = user["is_owner"] if user else True
-    rooms = [{"room_id": GROUP_ROOM_ID, "label": "전체 채팅방", "group_name": None, "is_group_room": False}] if GROUP_ROOM_ENABLED else []
+    username = user["username"] if user else None
+    rooms = [{"room_id": GROUP_ROOM_ID, "label": "전체 채팅방", "group_name": None, "is_group_room": False, "is_mine": False}] if GROUP_ROOM_ENABLED else []
 
     seen_groups = []
     for r in persona_rows:
@@ -461,14 +671,27 @@ def list_rooms(request: Request):
     for group_name in seen_groups:
         rooms.append({
             "room_id": group_name, "label": f"👥 {group_name}",
-            "group_name": None, "is_group_room": True,
+            "group_name": None, "is_group_room": True, "is_mine": False,
         })
 
-    if is_owner_request:
-        rooms += [
-            {"room_id": r["name"], "label": r["name"], "group_name": r["group_name"], "is_group_room": False}
-            for r in persona_rows
-        ]
+    custom_rows = conn.execute(
+        "SELECT room_id, label, owner_username FROM custom_rooms ORDER BY created_at"
+    ).fetchall()
+    for cr in custom_rows:
+        if is_owner_request or cr["owner_username"] == username:
+            rooms.append({
+                "room_id": cr["room_id"], "label": f"👥 {cr['label']}",
+                "group_name": None, "is_group_room": True, "is_mine": cr["owner_username"] == username,
+            })
+
+    rooms += [
+        {
+            "room_id": r["name"], "label": r["name"], "group_name": r["group_name"], "is_group_room": False,
+            "is_mine": r["owner_username"] == username if username else False,
+        }
+        for r in persona_rows
+        if _can_access_persona_room(r["owner_username"], username, is_owner_request)
+    ]
     for room in rooms:
         # ★ 2026-08-25: "안 읽은 메시지 있으면 안읽음 표시해달라" 요청 —
         # last_message_id를 같이 내려주면 프론트가 로컬(localStorage)에 저장한
@@ -488,16 +711,24 @@ def list_rooms(request: Request):
 @app.get("/api/messages")
 def get_messages(request: Request, room_id: str = GROUP_ROOM_ID, since_id: int = 0):
     conn = get_conn()
-    persona_names = _persona_name_set(conn)
-    # ★ 2026-08-26: list_rooms()와 같은 기준 — 소유자가 아니면 페르소나 1:1
-    # 방은 목록뿐 아니라 직접 조회도 막는다(해시를 직접 편집해서 들어오는
-    # 우회 방지).
+    user = getattr(request.state, "user", None)
+    username = user["username"] if user else None
+    is_owner_request = user["is_owner"] if user else True
+    # ★ 2026-08-26: list_rooms()와 같은 기준 — 소유자/본인이 아니면 페르소나
+    # 1:1 방은 목록뿐 아니라 직접 조회도 막는다(해시를 직접 편집해서 들어오는
+    # 우회 방지). 내가 만든 페르소나는 본인에게 허용.
+    persona_owner_rows = conn.execute("SELECT name, owner_username FROM personas").fetchall()
+    persona_owner = {r["name"]: r["owner_username"] for r in persona_owner_rows}
+    persona_names = set(persona_owner)
     if room_id in persona_names:
-        user = getattr(request.state, "user", None)
-        is_owner_request = user["is_owner"] if user else True
-        if not is_owner_request:
+        if not _can_access_persona_room(persona_owner[room_id], username, is_owner_request):
             conn.close()
             raise HTTPException(status_code=403, detail="다른 계정은 이 1:1 대화를 볼 수 없습니다")
+    else:
+        is_custom, allowed, _room_owner = _custom_room_access(conn, room_id, username, is_owner_request)
+        if is_custom and not allowed:
+            conn.close()
+            raise HTTPException(status_code=403, detail="이 채팅방을 볼 수 없습니다")
     rows = conn.execute(
         "SELECT id, sender, content, created_at FROM messages WHERE room_id = ? AND id > ? ORDER BY id",
         (room_id, since_id),
@@ -577,16 +808,24 @@ def post_message(msg: NewMessage, request: Request):
     is_owner_request = user["is_owner"] if user else True
     conn = get_conn()
     now = _now()
-    persona_rows = conn.execute("SELECT name, group_name FROM personas").fetchall()
+    persona_rows = conn.execute("SELECT name, group_name, owner_username FROM personas").fetchall()
     all_personas = [r["name"] for r in persona_rows]
+    persona_owner = {r["name"]: r["owner_username"] for r in persona_rows}
     # ★ 2026-08-26: "나 말고 다른 사람은 페르소나들과 개인 메시지 못 하게
     # 막고 단체 채팅방에서만 메시지 입력이 가능하게 해달라"는 요청 — 1:1
     # 방(room_id가 페르소나 이름과 정확히 같음)은 소유자만 쓸 수 있고, 다른
     # 계정은 전체 채팅방/그룹 회의방에서만 메시지를 보낼 수 있다. 읽기는
-    # 그대로 전부 허용(공유 방 정책 유지) — 막는 건 "쓰기"뿐이다.
-    if room_id in all_personas and not is_owner_request:
+    # 그대로 전부 허용(공유 방 정책 유지) — 막는 건 "쓰기"뿐이다. 단, 내가
+    # 만든 페르소나는 예외로 본인에게 허용한다.
+    if room_id in all_personas and not _can_access_persona_room(persona_owner[room_id], sender, is_owner_request):
         conn.close()
-        raise HTTPException(status_code=403, detail="다른 계정은 1:1 대화를 보낼 수 없습니다 — 단체 채팅방을 이용해주세요")
+        raise HTTPException(status_code=403, detail="이 1:1 대화를 이용할 수 없습니다")
+    # ★ "단체톡방 만들기" 요청 — 커스텀 방도 방 주인/소유자만 메시지를 보낼 수 있다.
+    if room_id not in all_personas and room_id != GROUP_ROOM_ID:
+        is_custom, allowed, _room_owner = _custom_room_access(conn, room_id, sender, is_owner_request)
+        if is_custom and not allowed:
+            conn.close()
+            raise HTTPException(status_code=403, detail="이 채팅방에 메시지를 보낼 수 없습니다")
     conn.execute(
         "INSERT INTO messages (room_id, sender, content, created_at) VALUES (?, ?, ?, ?)",
         (room_id, sender, content, now),
@@ -768,6 +1007,20 @@ def sync_persona(persona: PersonaSync, authorization: Optional[str] = Header(Non
     conn.commit()
     conn.close()
     return {"ok": True}
+
+
+@app.get("/api/worker/user_personas")
+def worker_user_personas(authorization: Optional[str] = Header(None)):
+    """워커가 사용자가 직접 만든 페르소나(owner_username IS NOT NULL)의
+    system_prompt를 가져가 자기 캐시에 합칠 때 쓴다(2026-08-26 — Notion을
+    거치지 않는 페르소나이므로 별도 엔드포인트가 필요)."""
+    _check_worker_auth(authorization)
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT name, system_prompt FROM personas WHERE owner_username IS NOT NULL"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 @app.get("/api/worker/all_messages")
