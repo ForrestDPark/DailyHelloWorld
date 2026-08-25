@@ -2157,23 +2157,19 @@ def get_latest_sunzi_entry():
 
 
 TULPACHAT_TUNNEL_LOG = os.path.expanduser("~/Library/Logs/tulpachat_tunnel.err.log")
+# ★ 2026-08-26: "구글/카카오 로그인은 고정 도메인이 있어야 가능하다"는 이유로
+# tulpa-chat.site를 사서 Cloudflare Named Tunnel로 옮겼다 — 이제 Quick
+# Tunnel(재시작마다 URL이 바뀌던 방식)이 아니라 항상 이 주소로 고정된다.
+TULPACHAT_FIXED_URL = "https://chat.tulpa-chat.site"
 
 
 def get_tulpachat_url():
-    """툴파시스템 채팅앱의 현재 Cloudflare Quick Tunnel 주소를 로그에서 읽는다
-    (★ 2026-08-24). Quick Tunnel은 cloudflared가 재시작될 때마다(재부팅 등)
-    새 URL을 받으므로 고정값으로 저장하지 않고, 메뉴를 만들 때마다 로그
-    파일에서 가장 최근 URL을 다시 찾는다. 로그가 없거나 아직 URL이 안
-    찍혔으면 None(메뉴 항목 자체를 생략)."""
-    if not os.path.exists(TULPACHAT_TUNNEL_LOG):
-        return None
-    try:
-        with open(TULPACHAT_TUNNEL_LOG, encoding="utf-8", errors="replace") as f:
-            content = f.read()
-    except OSError:
-        return None
-    matches = re.findall(r"https://[a-z0-9-]+\.trycloudflare\.com", content)
-    return matches[-1] if matches else None
+    """툴파시스템 채팅앱 접속 주소. Named Tunnel로 전환한 뒤로는 고정
+    주소(TULPACHAT_FIXED_URL)를 그대로 쓴다 — 예전엔 Quick Tunnel이 재시작마다
+    새 URL을 발급해서 로그 파일에서 매번 최신 URL을 긁어와야 했지만, 이제는
+    그럴 필요가 없다. 옛 로그에 아직 trycloudflare.com 주소가 남아있을 수도
+    있어 혹시 몰라 폴백으로만 참고(고정 주소가 항상 우선)."""
+    return TULPACHAT_FIXED_URL
 
 
 # ★ 2026-08-25: "툴파 채팅창에 새 메시지 오면 shift alarm에서 알람띄워줘" 요청.

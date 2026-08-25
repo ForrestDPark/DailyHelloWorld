@@ -55,7 +55,7 @@ chatapp/
 | Label | 역할 | plist |
 |---|---|---|
 | `com.tulpachat.server` | FastAPI 서버 (127.0.0.1:8000) | `~/Library/LaunchAgents/com.tulpachat.server.plist` |
-| `com.tulpachat.tunnel` | Cloudflare Quick Tunnel | `~/Library/LaunchAgents/com.tulpachat.tunnel.plist` |
+| `com.tulpachat.tunnel` | Cloudflare Named Tunnel(고정 도메인) | `~/Library/LaunchAgents/com.tulpachat.tunnel.plist` |
 | `com.tulpachat.worker` | AI 응답 생성 워커 | `~/Library/LaunchAgents/com.tulpachat.worker.plist` |
 
 로그는 각각 `~/Library/Logs/tulpachat_{server,tunnel,worker}.{out,err}.log`.
@@ -66,20 +66,39 @@ chatapp/
 서버 환경변수(`com.tulpachat.server.plist`의 `EnvironmentVariables`):
 `CHATAPP_DB_PATH`, `APP_USERNAME`/`APP_PASSWORD`(접속 비밀번호), `WORKER_TOKEN`
 (워커 인증, 워커 plist의 `CHATAPP_WORKER_TOKEN`과 반드시 동일해야 함),
-`GROUP_ROOM_ENABLED`.
+`GROUP_ROOM_ENABLED`, `PUBLIC_BASE_URL`(구글/카카오 로그인용 고정 주소,
+아래 참고), `READ_SHARE_TOKEN`, `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`,
+`KAKAO_CLIENT_ID`/`KAKAO_CLIENT_SECRET`.
 
-## URL 확인하기
+## 고정 도메인 (Cloudflare Named Tunnel) — 2026-08-26
 
-Quick Tunnel은 재시작마다 새 URL(`https://<임의단어4개>.trycloudflare.com`)을
-받는다. 현재 URL은 tunnel 로그 첫 부분에 찍힌다:
+처음엔 Cloudflare Quick Tunnel(`cloudflared tunnel --url ...`)을 썼는데,
+cloudflared가 재시작될 때마다 URL이 랜덤으로 바뀌어서(북마크 불가, 구글/카카오
+로그인처럼 리다이렉트 URI를 고정 등록해야 하는 기능을 못 씀) 도메인을 사서
+고정 주소로 옮겼다.
 
-```bash
-grep -A2 "quick Tunnel has been created" ~/Library/Logs/tulpachat_tunnel.err.log | tail -3
-```
-
-매번 바뀌는 게 불편하면(북마크가 안 됨) 나중에 Cloudflare 계정 + 소유한
-도메인으로 "이름 있는 터널"을 만들어 고정 주소로 바꿀 수 있다 — 지금은
-범위 밖으로 남겨둔다.
+- 도메인: `tulpa-chat.site`(가비아 구매) → Cloudflare로 네임서버 이전
+  (`lara.ns.cloudflare.com`, `mitchell.ns.cloudflare.com`).
+- 채팅앱 주소: `https://chat.tulpa-chat.site` (Cloudflare DNS에 CNAME으로
+  터널을 라우팅 — `cloudflared tunnel route dns tulpachat chat.tulpa-chat.site`).
+- 터널 설정: `~/.cloudflared/config.yml`
+  ```yaml
+  tunnel: 16334c1d-6db6-41bf-9d76-c2b4237601bf
+  credentials-file: /Users/forrestdpark/.cloudflared/16334c1d-6db6-41bf-9d76-c2b4237601bf.json
+  ingress:
+    - hostname: chat.tulpa-chat.site
+      service: http://localhost:8000
+    - service: http_status:404
+  ```
+  `com.tulpachat.tunnel.plist`는 이제 `cloudflared tunnel run tulpachat`을
+  돌린다(예전엔 `cloudflared tunnel --url http://localhost:8000`).
+- **주의**: `cloudflared tunnel login`으로 이 터널을 다시 인증해야 할 일이
+  생기면, Cloudflare 계정 이메일이 인증돼 있어야 한다("Please verify your
+  email" 에러로 API 토큰 발급 자체가 막힘 — 처음 설정할 때 이걸로 한참
+  헤맸다).
+- shift_alarm.py의 `get_tulpachat_url()`은 이제 로그를 파싱하지 않고
+  `TULPACHAT_FIXED_URL = "https://chat.tulpa-chat.site"`를 그대로 반환한다
+  (예전엔 Quick Tunnel 로그에서 `trycloudflare.com` URL을 정규식으로 긁어옴).
 
 ## 로컬에서 먼저 테스트
 
@@ -278,8 +297,9 @@ Notion 프로필에 `- 그룹: OOO` 줄을 추가하면 방 목록에서 그 이
 
 ## 로드맵 / 알려진 제약
 
-- **Quick Tunnel URL이 재시작마다 바뀐다** — 고정 주소가 필요해지면 Cloudflare
-  계정 + 도메인으로 이름 있는 터널을 만든다.
+- ~~Quick Tunnel URL이 재시작마다 바뀐다~~ → 2026-08-26 `tulpa-chat.site` 구매 +
+  Cloudflare Named Tunnel로 해결(위 "고정 도메인" 절 참고). 이제
+  `https://chat.tulpa-chat.site`로 항상 고정.
 - **페르소나끼리 자동으로 서로 계속 이어 대화하지는 않는다** — 사용자 메시지 1건당
   대상 페르소나가 한 번씩만 응답한다.
 - 여러 페르소나가 동시에 응답 대상이면 워커가 순차 처리한다(폴링 루프가
@@ -491,9 +511,10 @@ room_id 출처를 안 가리므로 코드 변경 없이 재사용됨).
   않기 위함.
 - **왜 고정 도메인이 필요한가**: 두 프로바이더 모두 리다이렉트 URI를 콘솔에
   미리 등록해야 하는데, Cloudflare Quick Tunnel은 재시작마다 URL이 바뀌어서
-  애초에 등록이 불가능하다 — `tulpa-chat.site`를 Cloudflare에 연결하고
-  Named Tunnel로 고정 주소(`https://chat.tulpa-chat.site` 등)를 만든 뒤에야
-  실제로 켤 수 있다.
+  애초에 등록이 불가능했다. 2026-08-26에 `tulpa-chat.site`를 Cloudflare에
+  연결하고 Named Tunnel로 `https://chat.tulpa-chat.site` 고정 주소를
+  만들어 해결했고(`PUBLIC_BASE_URL`도 이 값으로 설정해둠) — 이제 남은 건
+  아래 두 콘솔에서 CLIENT_ID/SECRET을 발급받아 plist에 넣는 것뿐이다.
 - 필요한 값을 얻는 곳: Google은 [Google Cloud Console](https://console.cloud.google.com/)
   → APIs & Services → Credentials → OAuth client ID(Web application),
   리다이렉트 URI는 `{PUBLIC_BASE_URL}/api/auth/google/callback`. 카카오는
