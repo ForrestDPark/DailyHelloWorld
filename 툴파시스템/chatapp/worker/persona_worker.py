@@ -51,6 +51,46 @@ def extract_image_paths(context):
     return paths
 
 
+# ★ 2026-08-26 실측 문제: 사용자가 채팅에 Notion 링크를 붙여넣어도 페르소나는
+# 그걸 열어볼 방법이 없어서 자기 시스템 프롬프트(README 등)만 근거로 추측성
+# 답을 했다("링크 주셔도 제가 열어볼 권한이 없어서..."). 이미지 첨부와 같은
+# 패턴으로, 대화 중 Notion 링크가 보이면 워커가 이미 갖고 있는 Notion
+# 통합 토큰(notion_token())으로 실제 페이지를 읽어서 프롬프트에 끼워 넣는다
+# — 새 권한을 추가하는 게 아니라 이미 페르소나 동기화에 쓰는 것과 같은
+# 읽기 전용 토큰을 재사용하는 것이라 별도 승인 절차 없이 바로 적용.
+NOTION_URL_RE = re.compile(r"https?://(?:www\.notion\.so|app\.notion\.com)/\S+")
+NOTION_PAGE_ID_RE = re.compile(r"([0-9a-fA-F]{32})")
+NOTION_REFERENCE_MAX_CHARS = 3000
+NOTION_REFERENCE_MAX_PAGES = 2  # 한 턴에 너무 많이 읽지 않게 상한
+
+
+def extract_notion_page_ids(context):
+    ids = []
+    for msg in context:
+        for url in NOTION_URL_RE.findall(msg["content"]):
+            id_match = NOTION_PAGE_ID_RE.search(url.replace("-", ""))
+            if id_match and id_match.group(1) not in ids:
+                ids.append(id_match.group(1))
+    return ids
+
+
+def load_notion_references(page_ids):
+    if not page_ids:
+        return ""
+    token = notion_token()
+    if not token:
+        return ""
+    sections = []
+    for page_id in page_ids[:NOTION_REFERENCE_MAX_PAGES]:
+        try:
+            text = fetch_page_text(page_id, token)
+        except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+            sections.append(f"### Notion 페이지 {page_id}\n(읽기 실패 — 이 워크스페이스에 통합이 공유 안 됐을 수 있음: {exc})")
+            continue
+        sections.append(f"### Notion 페이지 {page_id}\n{text[:NOTION_REFERENCE_MAX_CHARS]}")
+    return "\n\n".join(sections)
+
+
 # ★ 2026-08-25: "맥북 파일 정리하고 요약해줄 에이전트 만들어줘, 손동주로 하고
 # 프로그램개발그룹에 넣어줘" 요청 — 사용자가 직접 승인 흐름을 골랐다:
 # ①대상 폴더는 홈 폴더 전체(~) ②이동/삭제 자동 정리 허용 ③단, 실행 전에
@@ -433,7 +473,7 @@ def _speaker_label(sender, persona_names):
     return "나" if sender == OWNER_USERNAME else sender
 
 
-def build_prompt(persona_name, system_prompt, context, persona_names, has_images=False):
+def build_prompt(persona_name, system_prompt, context, persona_names, has_images=False, notion_reference=""):
     lines = [system_prompt, "", "--- 최근 대화 ---"]
     other_humans = False
     for msg in context:
@@ -455,6 +495,12 @@ def build_prompt(persona_name, system_prompt, context, persona_names, has_images
         )
     if has_images:
         lines.append("(최근 대화에 첨부된 사진이 있습니다 — 실제로 열어서 내용을 확인하고 답에 반영하세요.)")
+    if notion_reference:
+        lines.append(
+            "\n(대화 중 공유된 Notion 페이지를 실제로 읽어왔습니다 — 아래 내용을 근거로 답하세요. "
+            "여기 없는 내용을 지어내지 마세요.)\n"
+            f"{notion_reference}"
+        )
     lines.append(
         f'위 대화 흐름에 이어서 "{persona_name}"으로서 다음 메시지 하나만 답하세요. '
         f'"{persona_name}:" 같은 이름표는 붙이지 말고 대사만 쓰세요.'
@@ -484,8 +530,11 @@ def process_turn(turn, persona_cache):
             print(f"🎨 {persona_name} UI 적용: {executed[:80]}", flush=True)
             return
     image_paths = extract_image_paths(turn["context"])
+    notion_page_ids = extract_notion_page_ids(turn["context"])
+    notion_reference = load_notion_references(notion_page_ids)
     prompt = build_prompt(
-        persona_name, entry["system_prompt"], turn["context"], persona_cache.keys(), has_images=bool(image_paths),
+        persona_name, entry["system_prompt"], turn["context"], persona_cache.keys(),
+        has_images=bool(image_paths), notion_reference=notion_reference,
     )
     exec_kwargs = {"image_paths": image_paths or None}
     if is_organizer:
