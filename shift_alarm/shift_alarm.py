@@ -4665,7 +4665,11 @@ class ShiftAlarmApp(rumps.App):
         save_config(self.config)
         if is_first_run:
             return
-        from_personas = [m for m in messages if m["sender"] != "user"]
+        # ★ 2026-08-26: 툴파채팅이 다중 로그인 계정을 지원하면서 사람 메시지의
+        # sender가 더 이상 항상 'user' 리터럴이 아니게 됐다(실제 로그인 아이디가
+        # 들어옴) — 서버가 내려주는 is_persona 필드로 판별한다(구버전 서버 대비
+        # 필드가 없으면 예전 방식으로 폴백).
+        from_personas = [m for m in messages if m.get("is_persona", m.get("sender") != "user")]
         if not from_personas:
             return
         if len(from_personas) == 1:

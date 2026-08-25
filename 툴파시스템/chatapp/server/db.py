@@ -1,10 +1,11 @@
 """툴파시스템 채팅앱의 SQLite 저장소.
 
 표준 라이브러리 sqlite3만 쓴다 — 클라우드에 배포되는 부분이라 의존성을 최소로
-유지한다. 스키마 네 개: personas(페르소나 캐시), messages(채팅 로그, room_id로
+유지한다. 스키마: personas(페르소나 캐시), messages(채팅 로그, room_id로
 방 구분 — "group"은 전체 채팅방, 그 외엔 해당 페르소나 이름의 1:1 방),
 pending_turns(워커가 처리할 응답 대기열), story_sync(대화 내용을 Notion
-"함께 만든 이야기"에 어디까지 반영했는지 워터마크)."""
+"함께 만든 이야기"에 어디까지 반영했는지 워터마크), users/sessions(로그인
+계정·세션 — 2026-08-26, 아래 참고)."""
 import os
 import sqlite3
 
@@ -61,6 +62,20 @@ def init_db():
             persona_name TEXT NOT NULL,
             invited_at TEXT NOT NULL,
             PRIMARY KEY (room_id, persona_name)
+        );
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            salt TEXT NOT NULL,
+            is_owner INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS sessions (
+            token TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            expires_at TEXT NOT NULL
         );
         """
     )

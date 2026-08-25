@@ -1,8 +1,8 @@
-"""툴파시스템 채팅앱 서버 (클라우드에 배포).
+"""툴파시스템 채팅앱 서버 (이 Mac에서 실행, Cloudflare Tunnel로 노출).
 
 이 서버는 채팅 UI를 제공하고 메시지·대기열을 SQLite에 저장할 뿐, 실제 AI 응답은
-절대 생성하지 않는다 — Claude/Codex CLI 인증 정보를 이 서버(공개 인터넷에
-노출됨)로 옮기지 않기 위해서다. 응답 생성은 항상 사용자의 Mac에서 도는
+절대 생성하지 않는다 — Claude/Codex CLI 인증 정보를 공개 인터넷에 노출된
+프로세스로 옮기지 않기 위해서다. 응답 생성은 항상 사용자의 Mac에서 도는
 worker/persona_worker.py가 이 서버를 폴링해서 처리한다(자세한 이유는
 ../README.md 참고).
 
@@ -11,16 +11,21 @@ worker/persona_worker.py가 이 서버를 폴링해서 처리한다(자세한 �
 가짜 응답을 주입할 수 있다).
 
 ★ 2026-08-24: 처음엔 앱 전체가 인증 없이 열려 있었는데, 실제로 URL을 아는
-지인이 들어와서 "나"인 척 메시지를 보내는 사고가 났다(전체 채팅방에서 발견,
-1:1 방도 구조상 똑같이 뚫려 있었음). /api/worker/*를 제외한 모든 요청에
-HTTP Basic 인증을 건다 — APP_USERNAME/APP_PASSWORD 둘 다 설정된 경우에만
-강제되고, 로컬 개발(둘 다 미설정)에서는 그대로 인증 없이 쓸 수 있다.
+지인이 들어와서 "나"인 척 메시지를 보내는 사고가 났다. 그래서 처음엔 소유자
+1계정만 쓰기 가능하고 나머지는 전부 읽기 전용으로 통일하는 Basic Auth를
+붙였었다.
 
-★ 같은 날 추가: "pulpilisory(APP_USERNAME/APP_PASSWORD)는 내 전용 쓰기
-계정이고, 이외의 계정은 그냥 읽기 계정으로 하라"는 요청 — 별도 뷰어 계정을
-미리 정해둘 필요 없이, 소유자 계정과 정확히 일치하지 않는 다른 아이디/
-비밀번호는(무엇을 입력하든) 전부 읽기 전용으로 통과된다. 읽기 전용 요청이
-POST /api/messages를 시도하면 403으로 막힌다."""
+★ 2026-08-26: "다른 사용자들도 메시지를 남길 수 있으면 좋겠다"는 요청으로
+로그인/회원가입 기반 다중 계정으로 확장했다. 이제 계정만 있으면 누구나 쓸 수
+있다 — 대신 "다른 사용자가 페르소나를 조종해서 내 파일/프로젝트에 실제 행동을
+시키면 안 된다"는 요청에 따라, 실제 부작용이 있는 동작(손동주의 파일 정리
+등)은 worker/persona_worker.py 쪽에서 세션의 실제 사용자명이 소유자 계정과
+정확히 일치할 때만 실행되도록 별도로 게이트한다(이 파일은 "누가 로그인했는지"
+정보만 정확히 넘겨주면 됨 — 승인 판단 자체는 여기서 하지 않는다).
+
+기존 Basic Auth(APP_USERNAME/APP_PASSWORD)는 shift_alarm.py가 소유자 자격으로
+/api/all_messages를 폴링할 때 여전히 쓰므로(브라우저 로그인 세션이 없는
+백그라운드 프로세스라 쿠키를 못 씀) 소유자 전용 대체 인증 경로로 남겨뒀다."""
 import base64
 import datetime
 import os
@@ -31,11 +36,12 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, File, Header, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from server import auth
 from server.db import get_conn, init_db
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -44,13 +50,18 @@ APP_USERNAME = os.environ.get("APP_USERNAME", "")
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
 MAX_CONTEXT_MESSAGES = 20
 
-# ★ 2026-08-25: "링크로 공유해서 다른 사람이 채팅을 읽기만(쓰기는 못하게) 할
-# 수 있게 해달라" 요청 — Basic Auth 로그인 팝업 없이 URL 하나로 바로 보이게
-# 하려고, 쿼리스트링에 이 토큰을 실어 보내면(?share=...) 로그인 없이 읽기
-# 전용으로 통과시키고, 이후 요청을 위해 쿠키에도 저장해둔다(같은 브라우저로
-# 다시 들어올 때 쿼리스트링 없이도 유지). 소유자 계정(Authorization 헤더)이
-# 있으면 항상 그게 우선한다 — 소유자가 같은 브라우저로 공유 링크를 먼저
-# 열어봤다고 자기 계정 쓰기 권한이 막히는 일은 없어야 하므로.
+SESSION_COOKIE_NAME = "tulpa_session"
+SESSION_COOKIE_MAX_AGE = auth.SESSION_MAX_AGE_SECONDS  # 180일
+USERNAME_RE = re.compile(r"^[A-Za-z0-9_가-힣]{2,20}$")
+
+# ★ 인증 없이 접근 가능한 경로 — 로그인 자체를 하려면 "/"와 정적 파일, 그리고
+# 회원가입/로그인 API는 인증 이전에 열려 있어야 한다. /api/whoami는 로그인
+# 여부를 프론트가 확인하는 용도라 항상 응답한다(그 자체로 정보 노출 없음).
+PUBLIC_PATHS = {"/", "/api/whoami", "/api/auth/signup", "/api/auth/login", "/api/auth/logout"}
+
+# ★ "링크로 공유해서 다른 사람이 채팅을 읽기만(쓰기는 못하게) 할 수 있게
+# 해달라" 요청(2026-08-25) — 계정 없이도 쿼리스트링(?share=...)의 토큰이
+# 맞으면 읽기 전용으로 통과시키고 쿠키에 저장해 재방문에도 유지한다.
 READ_SHARE_TOKEN = os.environ.get("READ_SHARE_TOKEN", "")
 SHARE_COOKIE_NAME = "tulpa_share"
 SHARE_COOKIE_MAX_AGE = 60 * 60 * 24 * 180  # 180일
@@ -88,47 +99,82 @@ def _credentials_match(username, password, expected_username, expected_password)
     )
 
 
-class BasicAuthMiddleware(BaseHTTPMiddleware):
+def _resolve_auth(request):
+    """세션 쿠키 → 소유자 Basic Auth(하위 호환) → 공유 링크 순서로 확인해
+    request.state.user/can_write/share_guest를 채운다. 어디에도 해당 없으면
+    user=None, can_write=False, share_guest=False로 남고 False를 반환한다
+    (보호된 경로면 이때 401).
+
+    ★ share_guest를 user/can_write와 별도로 두는 이유: 공유 링크 읽기 전용
+    방문자와 완전 비로그인(차단 대상) 방문자가 둘 다 user=None,
+    can_write=False라 이 둘을 구분할 방법이 없으면 프론트가 "로그인 필요"와
+    "읽기 전용으로 정상 접속"을 구분 못 한다(/api/whoami가 이 필드로 알려줌)."""
+    request.state.user = None
+    request.state.can_write = False
+    request.state.share_guest = False
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if token:
+        conn = get_conn()
+        try:
+            user = auth.get_session_user(conn, token)
+        finally:
+            conn.close()
+        if user:
+            request.state.user = user
+            request.state.can_write = True
+            return True
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Basic ") and APP_USERNAME and APP_PASSWORD:
+        try:
+            username, _, password = base64.b64decode(auth_header[6:]).decode("utf-8").partition(":")
+        except (ValueError, UnicodeDecodeError):
+            username, password = "", ""
+        if username and _credentials_match(username, password, APP_USERNAME, APP_PASSWORD):
+            request.state.user = {"id": None, "username": APP_USERNAME, "is_owner": True}
+            request.state.can_write = True
+            return True
+    if READ_SHARE_TOKEN:
+        shared_token = request.query_params.get("share") or request.cookies.get(SHARE_COOKIE_NAME)
+        if shared_token and secrets.compare_digest(
+            shared_token.encode("utf-8"), READ_SHARE_TOKEN.encode("utf-8")
+        ):
+            request.state.can_write = False
+            request.state.share_guest = True
+            return True
+    return False
+
+
+class SessionAuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
+        path = request.url.path
+        if path.startswith("/api/worker/"):
+            request.state.user = None
+            request.state.can_write = True  # 워커는 WORKER_TOKEN으로 각 라우트에서 별도 인증
+            request.state.share_guest = False
+            return await call_next(request)
         if not APP_USERNAME or not APP_PASSWORD:
-            request.state.can_write = True
-            return await call_next(request)  # 로컬 개발용 — 둘 다 미설정 시 인증 생략
-        if request.url.path.startswith("/api/worker/"):
-            request.state.can_write = True
-            return await call_next(request)  # 워커는 WORKER_TOKEN으로 별도 인증
-        auth = request.headers.get("authorization", "")
-        if not auth and READ_SHARE_TOKEN:
-            shared_token = request.query_params.get("share") or request.cookies.get(SHARE_COOKIE_NAME)
-            if shared_token and secrets.compare_digest(
-                shared_token.encode("utf-8"), READ_SHARE_TOKEN.encode("utf-8")
-            ):
-                request.state.can_write = False
-                response = await call_next(request)
-                if request.query_params.get("share"):
-                    response.set_cookie(
-                        SHARE_COOKIE_NAME, READ_SHARE_TOKEN,
-                        max_age=SHARE_COOKIE_MAX_AGE, httponly=True, samesite="lax",
-                    )
-                return response
-        if auth.startswith("Basic "):
-            try:
-                username, _, password = base64.b64decode(auth[6:]).decode("utf-8").partition(":")
-            except (ValueError, UnicodeDecodeError):
-                username, password = "", ""
-            if username or password:
-                # ★ 2026-08-24: "pulpilisory는 내 전용 쓰기 계정이고 이외의
-                # 계정은 그냥 읽기 계정으로 하라"는 요청 — 별도 뷰어 계정을
-                # 미리 등록해둘 필요 없이, 소유자 계정과 정확히 일치하지 않는
-                # 다른 아이디/비밀번호는(무엇이든) 전부 읽기 전용으로 통과시킨다.
-                # 빈 문자열(=인증 헤더 없음/빈 시도)만 걸러서 브라우저가 처음엔
-                # 로그인 창을 띄우게 한다.
-                request.state.can_write = _credentials_match(username, password, APP_USERNAME, APP_PASSWORD)
-                return await call_next(request)
-        return Response(status_code=401, headers={"WWW-Authenticate": 'Basic realm="tulpa"'})
+            request.state.user = None
+            request.state.can_write = True  # 로컬 개발용 — 둘 다 미설정 시 인증 생략
+            request.state.share_guest = False
+            return await call_next(request)
+        allowed = _resolve_auth(request)
+        is_public = path in PUBLIC_PATHS or path.startswith("/static/")
+        if not (allowed or is_public):
+            return JSONResponse(status_code=401, content={"detail": "로그인이 필요합니다"})
+        response = await call_next(request)
+        share_param = request.query_params.get("share")
+        if READ_SHARE_TOKEN and share_param and not request.state.user and secrets.compare_digest(
+            share_param.encode("utf-8"), READ_SHARE_TOKEN.encode("utf-8")
+        ):
+            response.set_cookie(
+                SHARE_COOKIE_NAME, READ_SHARE_TOKEN,
+                max_age=SHARE_COOKIE_MAX_AGE, httponly=True, samesite="lax",
+            )
+        return response
 
 
 app = FastAPI(title="툴파시스템 채팅앱")
-app.add_middleware(BasicAuthMiddleware)
+app.add_middleware(SessionAuthMiddleware)
 init_db()
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
@@ -138,6 +184,36 @@ def _now() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
 
 
+def _bootstrap_owner():
+    """서버가 뜰 때 APP_USERNAME/APP_PASSWORD를 users 테이블의 is_owner=1
+    계정으로 만들어둔다(이미 있으면 아무것도 안 함).
+
+    ★ 2026-08-26: 이걸 안 하면 서버 시작 직후 "다른 누군가가 소유자 아이디를
+    먼저 가입해서 선점"하는 경쟁 상태가 생긴다 — worker/persona_worker.py의
+    파일 정리 승인 게이트는 로그인 세션의 실제 sender 문자열이
+    CHATAPP_OWNER_USERNAME과 일치하는지만 보므로, 그 아이디를 다른 사람이
+    먼저 계정으로 가지면 그 사람이 "소유자 승인"을 위조할 수 있게 된다.
+    서버 시작 시점(첫 요청을 받기도 전)에 동기적으로 미리 만들어두면 이
+    경쟁 자체가 없다."""
+    if not APP_USERNAME or not APP_PASSWORD:
+        return
+    conn = get_conn()
+    try:
+        if conn.execute("SELECT id FROM users WHERE username = ?", (APP_USERNAME,)).fetchone():
+            return
+        salt, digest = auth.hash_password(APP_PASSWORD)
+        conn.execute(
+            "INSERT INTO users (username, password_hash, salt, is_owner, created_at) VALUES (?, ?, ?, 1, ?)",
+            (APP_USERNAME, digest, salt, _now()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+_bootstrap_owner()
+
+
 def _check_worker_auth(authorization: Optional[str]) -> None:
     if not WORKER_TOKEN:
         return  # 로컬 개발용 — 토큰 미설정 시 인증 생략
@@ -145,9 +221,84 @@ def _check_worker_auth(authorization: Optional[str]) -> None:
         raise HTTPException(status_code=401, detail="워커 인증 실패")
 
 
+def _persona_name_set(conn):
+    return {r["name"] for r in conn.execute("SELECT name FROM personas").fetchall()}
+
+
+def _with_sender_type(rows, persona_names):
+    return [{**dict(r), "is_persona": r["sender"] in persona_names} for r in rows]
+
+
 @app.get("/")
 def index():
     return FileResponse(str(BASE_DIR / "static" / "index.html"))
+
+
+class SignupRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+@app.post("/api/auth/signup")
+def signup(body: SignupRequest, response: Response):
+    username = body.username.strip()
+    if not USERNAME_RE.match(username):
+        raise HTTPException(status_code=400, detail="아이디는 한글/영문/숫자/밑줄 2~20자로 입력하세요")
+    if len(body.password) < 4:
+        raise HTTPException(status_code=400, detail="비밀번호는 4자 이상이어야 합니다")
+    # ★ _bootstrap_owner()가 서버 시작 시 APP_USERNAME을 이미 선점해두므로
+    # 정상 흐름에서는 아래 UNIQUE 체크에서 걸러진다. 그래도 혹시 순서가
+    # 꼬이는 경우(예: 서버 재기동 사이 잠깐)를 대비해 명시적으로 한 번 더 막는다.
+    if APP_USERNAME and username == APP_USERNAME:
+        raise HTTPException(status_code=409, detail="이미 사용 중인 아이디입니다")
+    conn = get_conn()
+    try:
+        if conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone():
+            raise HTTPException(status_code=409, detail="이미 사용 중인 아이디입니다")
+        salt, digest = auth.hash_password(body.password)
+        cur = conn.execute(
+            "INSERT INTO users (username, password_hash, salt, is_owner, created_at) VALUES (?, ?, ?, 0, ?)",
+            (username, digest, salt, _now()),
+        )
+        conn.commit()
+        token = auth.create_session(conn, cur.lastrowid)
+    finally:
+        conn.close()
+    response.set_cookie(SESSION_COOKIE_NAME, token, max_age=SESSION_COOKIE_MAX_AGE, httponly=True, samesite="lax")
+    return {"ok": True, "username": username, "is_owner": False}
+
+
+@app.post("/api/auth/login")
+def login(body: LoginRequest, response: Response):
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT id, username, password_hash, salt, is_owner FROM users WHERE username = ?",
+            (body.username.strip(),),
+        ).fetchone()
+        if not row or not auth.verify_password(body.password, row["salt"], row["password_hash"]):
+            raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다")
+        token = auth.create_session(conn, row["id"])
+    finally:
+        conn.close()
+    response.set_cookie(SESSION_COOKIE_NAME, token, max_age=SESSION_COOKIE_MAX_AGE, httponly=True, samesite="lax")
+    return {"ok": True, "username": row["username"], "is_owner": bool(row["is_owner"])}
+
+
+@app.post("/api/auth/logout")
+def logout(request: Request, response: Response):
+    token = request.cookies.get(SESSION_COOKIE_NAME)
+    if token:
+        conn = get_conn()
+        auth.delete_session(conn, token)
+        conn.close()
+    response.delete_cookie(SESSION_COOKIE_NAME)
+    return {"ok": True}
 
 
 GROUP_ROOM_ID = "group"
@@ -156,15 +307,26 @@ GROUP_ROOM_ID = "group"
 # Notion에 없는 친분·약속을 지어내는 문제가 실사용 중 확인됐다("이 채팅방은
 # 당분간 폐쇄한다"는 요청). 코드/데이터는 그대로 두고 노출만 끈다 — "당분간"
 # 이라 나중에 그룹 대화 로직을 고친 뒤 다시 켤 수 있게. GROUP_ROOM_ENABLED
-# 환경변수(fly.toml [env])로 제어.
+# 환경변수로 제어.
 GROUP_ROOM_ENABLED = os.environ.get("GROUP_ROOM_ENABLED", "true").lower() == "true"
 
 
 @app.get("/api/whoami")
 def whoami(request: Request):
-    """프론트엔드가 쓰기 가능 여부를 미리 알아서, 읽기 전용 방문자에겐 아예
-    입력창을 숨길 수 있게 한다(2026-08-25 — 공유 링크 요청과 함께 추가)."""
-    return {"can_write": getattr(request.state, "can_write", True)}
+    """프론트엔드가 로그인 여부·쓰기 가능 여부를 미리 알아서, 비로그인
+    방문자에겐 로그인/가입 화면을, 공유 링크 읽기 전용 방문자·로그인은
+    했지만 읽기 전용인 방문자에겐 입력창을 숨긴 채팅 화면을 보여줄 수 있게
+    한다. share_guest=False, logged_in=False인 조합만 진짜 "로그인이
+    필요한" 상태다(공유 링크 방문자는 share_guest=True라 로그인 없이도
+    채팅 화면을 그대로 봄)."""
+    user = getattr(request.state, "user", None)
+    return {
+        "can_write": getattr(request.state, "can_write", True),
+        "logged_in": user is not None,
+        "username": user["username"] if user else None,
+        "is_owner": bool(user["is_owner"]) if user else False,
+        "share_guest": getattr(request.state, "share_guest", False),
+    }
 
 
 @app.get("/api/personas")
@@ -270,8 +432,7 @@ def list_rooms():
         # ★ 2026-08-25: "안 읽은 메시지 있으면 안읽음 표시해달라" 요청 —
         # last_message_id를 같이 내려주면 프론트가 로컬(localStorage)에 저장한
         # "이 방에서 마지막으로 읽은 id"와 비교해서 배지를 띄울 수 있다.
-        # 읽음 상태 자체는 서버에 저장하지 않는다(단일 사용자 개인 앱이라
-        # 기기별 localStorage로 충분 — 여러 기기 동기화는 범위 밖).
+        # 읽음 상태 자체는 서버에 저장하지 않는다(기기별 localStorage로 충분).
         last = conn.execute(
             "SELECT id, content, created_at FROM messages WHERE room_id = ? ORDER BY id DESC LIMIT 1",
             (room["room_id"],),
@@ -286,29 +447,32 @@ def list_rooms():
 @app.get("/api/messages")
 def get_messages(room_id: str = GROUP_ROOM_ID, since_id: int = 0):
     conn = get_conn()
+    persona_names = _persona_name_set(conn)
     rows = conn.execute(
         "SELECT id, sender, content, created_at FROM messages WHERE room_id = ? AND id > ? ORDER BY id",
         (room_id, since_id),
     ).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return _with_sender_type(rows, persona_names)
 
 
 @app.get("/api/all_messages")
 def all_messages(since_id: int = 0):
     """방 구분 없이 새 메시지를 전부 반환한다 — /api/worker/all_messages와 같은
-    조회지만 워커 토큰이 아니라 일반 Basic 인증(읽기 전용 계정도 가능)으로
+    조회지만 워커 토큰이 아니라 일반 세션 인증(읽기 전용 계정도 가능)으로
     쓴다. ★ 2026-08-25: shift_alarm이 "새 메시지 있으면 알람 띄워달라"는
-    요청으로 로컬에서 이 엔드포인트를 주기적으로 폴링한다. 방 하나씩은
+    요청으로 로컬에서 이 엔드포인트를 주기적으로 폴링한다(소유자 Basic Auth로
+    인증 — 브라우저 세션 쿠키가 없는 백그라운드 프로세스라서). 방 하나씩은
     /api/messages로 이미 누구나 볼 수 있으므로, 여러 방을 합쳐서 보여주는
     것 자체는 새로운 노출이 아니다."""
     conn = get_conn()
+    persona_names = _persona_name_set(conn)
     rows = conn.execute(
         "SELECT id, room_id, sender, content, created_at FROM messages WHERE id > ? ORDER BY id",
         (since_id,),
     ).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return _with_sender_type(rows, persona_names)
 
 
 @app.post("/api/upload")
@@ -350,11 +514,19 @@ def post_message(msg: NewMessage, request: Request):
     room_id = msg.room_id or GROUP_ROOM_ID
     if room_id == GROUP_ROOM_ID and not GROUP_ROOM_ENABLED:
         raise HTTPException(status_code=403, detail="전체 채팅방은 당분간 닫혀 있습니다")
+    user = getattr(request.state, "user", None)
+    # ★ 2026-08-26: 예전엔 sender가 항상 'user' 리터럴이었다(단일 사용자
+    # 전제). 다중 계정으로 바뀌면서 실제 로그인 아이디를 그대로 저장한다 —
+    # 페르소나가 "누가 말하는지" 구분할 수 있어야 하고(worker/persona_worker.py
+    # build_prompt), 손동주의 파일 정리 승인도 "소유자 본인의 메시지인지"를
+    # 이 값으로 판단하기 때문에 정확해야 한다. 인증이 꺼진 로컬 개발에서는
+    # user가 없으므로 예전 그대로 'user'로 남겨 하위 호환한다.
+    sender = user["username"] if user else "user"
     conn = get_conn()
     now = _now()
     conn.execute(
-        "INSERT INTO messages (room_id, sender, content, created_at) VALUES (?, 'user', ?, ?)",
-        (room_id, content, now),
+        "INSERT INTO messages (room_id, sender, content, created_at) VALUES (?, ?, ?, ?)",
+        (room_id, sender, content, now),
     )
     persona_rows = conn.execute("SELECT name, group_name FROM personas").fetchall()
     all_personas = [r["name"] for r in persona_rows]

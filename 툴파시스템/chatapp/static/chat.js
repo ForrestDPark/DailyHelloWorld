@@ -2,25 +2,134 @@ let currentRoom = null;
 let lastId = 0;
 let pollTimer = null;
 let canWrite = true; // /api/whoami로 초기화 — 공유 링크로 들어온 읽기 전용 방문자는 false
+let myUsername = null; // 로그인 계정의 실제 아이디(2026-08-26 다중 계정) — 내 메시지 판별용
 
-// ★ "링크 공유해서 읽기만 되게 해달라" 요청(2026-08-25) — 쓰기 불가 방문자는
-// 아예 입력창/사진첨부/답장 UI를 숨긴다(서버도 403으로 막지만, UI에서부터
-// 안 보이게 해서 혼란을 줄임).
-async function initWriteAccess() {
-  try {
-    const res = await fetch("/api/whoami");
-    const data = await res.json();
-    canWrite = !!data.can_write;
-  } catch (e) {
-    canWrite = true; // 조회 실패 시 기존 동작(서버가 어차피 막아줌) 유지
-  }
-  if (!canWrite) document.body.classList.add("read-only");
-}
-
+const authView = document.getElementById("auth-view");
 const roomListView = document.getElementById("room-list-view");
 const chatView = document.getElementById("chat-view");
 const roomListEl = document.getElementById("room-list");
 const messagesEl = document.getElementById("messages");
+
+// ★ 2026-08-26: 세션 쿠키가 만료됐거나(180일 지남) 로그인 자체가 안 된
+// 상태에서 API를 호출하면 서버가 401을 준다. fetch를 감싸서 401을 만나면
+// 바로 로그인 화면으로 돌려보낸다 — 사용 중간에 세션이 끊겨도 흰 화면/무한
+// 로딩 대신 다시 로그인하면 되는 걸 바로 알 수 있게.
+async function apiFetch(url, opts) {
+  const res = await fetch(url, opts);
+  if (res.status === 401) {
+    if (pollTimer) clearTimeout(pollTimer);
+    showAuthView("세션이 만료되었습니다. 다시 로그인해주세요.");
+    throw new Error("unauthorized");
+  }
+  return res;
+}
+
+// ★ "로그인/가입 기능을 만들면 좋겠다"는 요청(2026-08-26) — 다른 사용자도
+// 계정만 있으면 채팅에 메시지를 남길 수 있게 열면서, 예전엔 브라우저
+// 네이티브 Basic Auth 팝업이 하던 로그인을 화면 안 폼으로 옮겼다(가입
+// 흐름은 팝업으로는 만들 수 없어서 필수적인 변경).
+let authMode = "login";
+
+function setAuthMode(mode) {
+  authMode = mode;
+  document.querySelectorAll(".auth-tab").forEach((el) => {
+    el.classList.toggle("active", el.dataset.mode === mode);
+  });
+  document.getElementById("auth-submit").textContent = mode === "login" ? "로그인" : "가입하기";
+  document.getElementById("auth-error").classList.add("hidden");
+}
+
+document.querySelectorAll(".auth-tab").forEach((el) => {
+  el.addEventListener("click", () => setAuthMode(el.dataset.mode));
+});
+
+function showAuthView(message) {
+  authView.classList.remove("hidden");
+  roomListView.classList.add("hidden");
+  chatView.classList.add("hidden");
+  const errorEl = document.getElementById("auth-error");
+  if (message) {
+    errorEl.textContent = message;
+    errorEl.classList.remove("hidden");
+  } else {
+    errorEl.classList.add("hidden");
+  }
+}
+
+document.getElementById("auth-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const username = document.getElementById("auth-username").value.trim();
+  const password = document.getElementById("auth-password").value;
+  const errorEl = document.getElementById("auth-error");
+  errorEl.classList.add("hidden");
+  try {
+    const res = await fetch(`/api/auth/${authMode === "login" ? "login" : "signup"}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      errorEl.textContent = data.detail || "실패했습니다";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+    myUsername = data.username;
+    canWrite = true;
+    authView.classList.add("hidden");
+    initAccountChip();
+    route();
+  } catch (err) {
+    errorEl.textContent = "네트워크 오류입니다";
+    errorEl.classList.remove("hidden");
+    console.error(err);
+  }
+});
+
+function initAccountChip() {
+  const chip = document.getElementById("account-chip");
+  if (!myUsername) {
+    chip.classList.add("hidden");
+    return;
+  }
+  document.getElementById("account-name").textContent = myUsername;
+  chip.classList.remove("hidden");
+}
+
+document.getElementById("logout-btn").addEventListener("click", async () => {
+  try {
+    await fetch("/api/auth/logout", { method: "POST" });
+  } catch (e) {
+    console.error(e);
+  }
+  myUsername = null;
+  location.hash = "";
+  showAuthView();
+});
+
+// ★ "링크 공유해서 읽기만 되게 해달라" 요청(2026-08-25) — 쓰기 불가 방문자는
+// 아예 입력창/사진첨부/답장 UI를 숨긴다(서버도 403으로 막지만, UI에서부터
+// 안 보이게 해서 혼란을 줄임). 2026-08-26: 로그인 자체가 안 된 방문자(공유
+// 링크도 아닌 경우)는 아예 채팅 화면 대신 로그인 화면을 보여준다.
+async function initAuth() {
+  let data;
+  try {
+    const res = await fetch("/api/whoami");
+    data = await res.json();
+  } catch (e) {
+    canWrite = true; // 조회 실패 시 기존 동작(서버가 어차피 막아줌) 유지
+    return true;
+  }
+  canWrite = !!data.can_write;
+  myUsername = data.username || null;
+  if (!data.logged_in && !data.share_guest && !canWrite) {
+    showAuthView();
+    return false;
+  }
+  if (!canWrite) document.body.classList.add("read-only");
+  initAccountChip();
+  return true;
+}
 
 function parseRoomFromHash() {
   const m = location.hash.match(/^#room=(.+)$/);
@@ -96,10 +205,11 @@ let roomsCache = new Map(); // room_id -> room object, showChatView()에서 제�
 async function showRoomList() {
   currentRoom = null;
   if (pollTimer) clearTimeout(pollTimer);
+  authView.classList.add("hidden");
   chatView.classList.add("hidden");
   roomListView.classList.remove("hidden");
   try {
-    const res = await fetch("/api/rooms");
+    const res = await apiFetch("/api/rooms");
     const rooms = await res.json();
     roomsCache = new Map(rooms.map((r) => [r.room_id, r]));
     roomListEl.innerHTML = "";
@@ -172,7 +282,7 @@ async function toggleInvitePanel() {
   memberList.innerHTML = '<div class="empty-hint">불러오는 중...</div>';
   panel.classList.remove("hidden");
   try {
-    const res = await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/members`);
+    const res = await apiFetch(`/api/rooms/${encodeURIComponent(currentRoom)}/members`);
     const { members, available } = await res.json();
     memberList.innerHTML = "";
     if (!members.length) {
@@ -210,7 +320,7 @@ async function toggleInvitePanel() {
 
 async function inviteToRoom(personaName) {
   try {
-    await fetch(`/api/rooms/${encodeURIComponent(currentRoom)}/invite`, {
+    await apiFetch(`/api/rooms/${encodeURIComponent(currentRoom)}/invite`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ persona_name: personaName }),
@@ -254,16 +364,23 @@ function setReplyTarget(name) {
 document.getElementById("reply-cancel-btn").addEventListener("click", () => setReplyTarget(null));
 
 function appendMessage(m) {
+  // ★ 2026-08-26: 다중 계정 로그인 전에는 sender==='user' 하나로 "내 메시지"를
+  // 판별했다. 이제 여러 사람이 같은 방에 쓸 수 있어 서버가 내려주는
+  // is_persona로 페르소나 여부를 판별하고, 사람 메시지 중에서도 "나"(현재
+  // 로그인 계정)와 "다른 사람"을 구분해서 보여준다.
+  const isPersona = !!m.is_persona;
+  const isMine = !isPersona && m.sender === myUsername;
   const el = document.createElement("div");
-  el.className = "msg " + (m.sender === "user" ? "msg-user" : "msg-persona");
+  el.className = "msg " + (isPersona ? "msg-persona" : isMine ? "msg-user" : "msg-other");
   const sender = document.createElement("div");
   sender.className = "sender";
-  sender.textContent = m.sender === "user" ? "나" : displayName(m.sender);
+  sender.textContent = isPersona ? displayName(m.sender) : isMine ? "나" : m.sender;
   const cached = roomsCache.get(currentRoom);
   const isMetaRoom = currentRoom === "group" || (cached && cached.is_group_room);
-  if (m.sender !== "user" && isMetaRoom && canWrite) {
+  if (isPersona && isMetaRoom && canWrite) {
     // 그룹/회의방에서만 "답장" 대상 지정이 의미가 있다(1:1 방은 이미 그 한
-    // 명뿐이라 필요 없음).
+    // 명뿐이라 필요 없음). 페르소나에게만 답장 가능 — 다른 사람 메시지는
+    // 답장 대상이 아니다.
     sender.classList.add("sender-clickable");
     sender.title = "탭해서 이 사람에게만 답장";
     sender.addEventListener("click", () => setReplyTarget(m.sender));
@@ -298,7 +415,7 @@ function appendMessage(m) {
 async function poll() {
   if (!currentRoom) return;
   try {
-    const res = await fetch(`/api/messages?room_id=${encodeURIComponent(currentRoom)}&since_id=${lastId}`);
+    const res = await apiFetch(`/api/messages?room_id=${encodeURIComponent(currentRoom)}&since_id=${lastId}`);
     const messages = await res.json();
     for (const m of messages) {
       appendMessage(m);
@@ -306,6 +423,7 @@ async function poll() {
     }
     if (messages.length) markRoomRead(currentRoom, lastId);
   } catch (e) {
+    if (e.message === "unauthorized") return; // apiFetch가 이미 로그인 화면으로 돌려보냄 — 폴링 중단
     console.error(e);
   }
   pollTimer = setTimeout(poll, 2000);
@@ -314,13 +432,13 @@ async function poll() {
 async function sendMessage(content) {
   if (!currentRoom || !content) return;
   try {
-    await fetch("/api/messages", {
+    await apiFetch("/api/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content, room_id: currentRoom, reply_to: replyTarget }),
     });
   } catch (e) {
-    console.error(e);
+    if (e.message !== "unauthorized") console.error(e);
   }
   setReplyTarget(null);
 }
@@ -347,7 +465,7 @@ imageInput.addEventListener("change", async () => {
   const formData = new FormData();
   formData.append("file", file);
   try {
-    const res = await fetch("/api/upload", { method: "POST", body: formData });
+    const res = await apiFetch("/api/upload", { method: "POST", body: formData });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       alert(err.detail || "이미지 업로드 실패");
@@ -375,4 +493,6 @@ function route() {
 }
 
 window.addEventListener("hashchange", route);
-initWriteAccess().then(route);
+initAuth().then((ok) => {
+  if (ok) route();
+});
