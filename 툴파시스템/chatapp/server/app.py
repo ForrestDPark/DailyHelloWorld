@@ -667,6 +667,34 @@ def _given_name(persona_name):
     return first_word[1:] if len(first_word) >= 3 else first_word
 
 
+def _last_persona_speaker(conn, room_id, candidates):
+    if not candidates:
+        return None
+    placeholders = ",".join("?" * len(candidates))
+    row = conn.execute(
+        f"SELECT sender FROM messages WHERE room_id = ? AND sender IN ({placeholders}) ORDER BY id DESC LIMIT 1",
+        (room_id, *candidates),
+    ).fetchone()
+    return row["sender"] if row else None
+
+
+def _default_targets(conn, room_id, candidates, mentioned, reply_to):
+    """이름/호칭으로 아무도 안 지목했을 때 누구에게 보낼지 정한다.
+
+    ★ 2026-08-26: "너 솔직히 말해봐"처럼 대명사로만 말하면 방에 있는 페르소나
+    전원이 반응해서 대화가 이상하게 흘러가는 문제 — 이전엔 "멘션 없으면
+    전원 응답"이었는데, 그 방에서 누군가 이미 말을 섞고 있었다면(직전 발화자가
+    있다면) 자연스러운 대화 흐름상 그 사람에게 이어서 말하는 것으로 보고
+    그 한 명에게만 보낸다. 아직 아무도 말을 안 한 방(막 만들었거나 막
+    초대한 직후)에서는 기존처럼 전원이 한 번씩 반응해 "인사 라운드"를 연다."""
+    if reply_to and reply_to in candidates:
+        return [reply_to]
+    if mentioned:
+        return mentioned
+    last_speaker = _last_persona_speaker(conn, room_id, candidates)
+    return [last_speaker] if last_speaker else candidates
+
+
 def _mentioned_personas(content, candidates):
     """@정확한 이름 또는 "이름씨"/"이름쌤"/"이름아" 같은 자연스러운 호칭까지
     잡아서 지목된 페르소나를 찾는다. 아무도 안 걸리면 빈 리스트(전원 응답)."""
@@ -989,10 +1017,7 @@ def post_message(msg: NewMessage, request: Request):
         # 그 한 명만 응답 — "한명한테 말하는데 모든 인물이 다 답변해서 정신없다"
         # 는 요청.
         mentioned = _mentioned_personas(content, all_personas)
-        if msg.reply_to and msg.reply_to in all_personas:
-            targets = [msg.reply_to]
-        else:
-            targets = mentioned if mentioned else all_personas
+        targets = _default_targets(conn, room_id, all_personas, mentioned, msg.reply_to)
     elif room_id in all_personas:
         # 1:1 방은 방 이름 = 그 페르소나 이름이므로 항상 그 한 명만 응답한다.
         targets = [room_id]
@@ -1006,10 +1031,7 @@ def post_message(msg: NewMessage, request: Request):
         # 포함한다("프로젝트하다가 관련 인물 추가" 요청).
         group_members = _group_members(conn, room_id, persona_rows)
         mentioned = _mentioned_personas(content, group_members)
-        if msg.reply_to and msg.reply_to in group_members:
-            targets = [msg.reply_to]
-        else:
-            targets = mentioned if mentioned else group_members
+        targets = _default_targets(conn, room_id, group_members, mentioned, msg.reply_to)
     if not is_owner_request:
         # 1:1 방은 이미 위에서 막았지만, 단체/그룹 회의방에서는 다른 계정도
         # 메시지를 보낼 수 있다 — 그 경우에도 손동주는 응답 대상에서 뺀다.
