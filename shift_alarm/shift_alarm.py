@@ -901,6 +901,14 @@ HIGH_CPU_THRESHOLD_PERCENT = 70.0
 HIGH_CPU_STUCK_MINUTES = 30
 HIGH_CPU_CHECK_INTERVAL_SECONDS = 60
 
+# ★ 2026-08-25 추가: "요주의 프로세스로 선정하고 필요없다고 판단하면 자동으로
+# 킬해달라"는 요청 — 이번에 실제로 몇 시간씩 CPU를 붙잡고 있던 두 프로세스를
+# 대상으로만 자동 종료를 허용한다. 임의의 새로 붙잡힌 프로세스를 전부 자동
+# 종료하는 건 하지 않는다(중요한 작업 중인 프로세스를 잘못 죽일 위험) —
+# 이 화이트리스트는 사용자와 함께 "안전하게 죽여도 된다"고 확인한 macOS
+# 시스템 데몬만 담는다(둘 다 필요하면 macOS가 알아서 다시 띄움).
+AUTO_KILL_HIGH_CPU_NAMES = {"replayd", "StorageManagementService", "ApplicationsStorageExtension"}
+
 
 def _sample_high_cpu_processes(threshold=HIGH_CPU_THRESHOLD_PERCENT):
     """지금 이 순간 threshold% 이상 CPU를 쓰고 있는 프로세스를
@@ -955,6 +963,35 @@ def get_free_storage_gb(path="/"):
         return int(shutil.disk_usage(path).free // (1024 ** 3))
     except OSError:
         return None
+
+
+def get_thermal_status():
+    """이 Mac의 열 상태를 sudo 없이 얻는다 (★ 2026-08-25, "메뉴바 타이틀에
+    맥북 온도 띄워달라" 요청 대응).
+
+    Apple Silicon에서는 원시 온도(°C)를 sudo 없이 읽을 방법이 없다 —
+    `powermetrics --samplers thermal`은 "must be invoked as the superuser"로
+    거부되고, 서드파티 도구(osx-cpu-temp)도 실측 결과 0.0°C만 반환했다(그
+    도구는 Intel 전용 SMC 키를 쓰는데 Apple Silicon엔 그 키가 없음). 대신
+    `pmset -g therm`(sudo 불필요)이 보고하는 CPU_Speed_Limit(%)을 쓴다 —
+    macOS 자신이 "지금 열 때문에 CPU를 얼마나 줄였는지" 판단하는 데 쓰는
+    바로 그 지표라, 원시 온도보다 오히려 더 실질적인 신호다. 100%(제한
+    없음)면 정상, 그보다 낮으면 실제로 스로틀링 중이라는 뜻이다."""
+    try:
+        result = subprocess.run(
+            ["pmset", "-g", "therm"], capture_output=True, text=True, timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    limit = None
+    for line in result.stdout.splitlines():
+        match = re.search(r"CPU_Speed_Limit\s*=\s*(\d+)", line)
+        if match:
+            limit = int(match.group(1))
+            break
+    if limit is None:
+        return {"throttled": False, "percent": 100}
+    return {"throttled": limit < 100, "percent": limit}
 
 
 # ── 저장공간 부족 시 안전한 캐시 자동 정리 (★ 2026-08-18 추가) ──────────
@@ -4009,6 +4046,7 @@ class ShiftAlarmApp(rumps.App):
         self._high_cpu_tracking = {}
         self._high_cpu_alerted = set()
         self._high_cpu_stuck = {}
+        self._thermal_status = None
         sync_scriptable_widget_file()
         self.build_menu()
 
@@ -4282,12 +4320,25 @@ class ShiftAlarmApp(rumps.App):
             else NSColor.systemOrangeColor()
         )
 
+        # ★ 2026-08-25: "맥북 온도 같은거 메뉴바 타이틀에 항상 띄울 수 없나"
+        # 요청 — 원시 온도(°C)는 sudo 없이 못 구해서(get_thermal_status() 참고),
+        # 정상일 땐 온도계만, 실제로 스로틀링 중일 때만 남은 속도 %를 빨강으로
+        # 보여준다. 항상 표시되되 평소엔 눈에 안 띄게 작게 유지.
+        thermal = self._thermal_status
+        if thermal and thermal["throttled"]:
+            thermal_token = f"🌡️{thermal['percent']}%"
+            thermal_color = NSColor.systemRedColor()
+        else:
+            thermal_token = "🌡️"
+            thermal_color = None
+
         segments = [
             (shift_text, shift_inner),
             (storage, storage_inner),
             (reminder_icons, []),
             (codex_token, [(0, _utf16_len(codex_token), codex_color)] if codex_token else []),
             (claude_token, [(0, _utf16_len(claude_token), claude_color)] if claude_token else []),
+            (thermal_token, [(0, _utf16_len(thermal_token), thermal_color)] if thermal_color else []),
         ]
 
         self.title = " ".join(text for text, _ in segments if text)
@@ -4567,6 +4618,10 @@ class ShiftAlarmApp(rumps.App):
         threading.Thread(target=self._check_high_cpu_thread, daemon=True).start()
 
     def _check_high_cpu_thread(self):
+        # 같은 1분 주기를 타고 열 상태도 같이 갱신한다(멀쩡한 값이라도 매번
+        # 메뉴바 타이틀에 항상 보이길 원하는 요청 — get_thermal_status() 참고).
+        self._thermal_status = get_thermal_status()
+        AppHelper.callAfter(self._update_title)
         now = datetime.datetime.now()
         current = _sample_high_cpu_processes()
         current_keys = set()
@@ -4583,7 +4638,7 @@ class ShiftAlarmApp(rumps.App):
                 self._high_cpu_stuck[key] = (cpu, first_seen)
                 if key not in self._high_cpu_alerted:
                     self._high_cpu_alerted.add(key)
-                    newly_stuck.append((comm, cpu, elapsed))
+                    newly_stuck.append((pid, comm, cpu, elapsed))
         # 더 이상 threshold를 안 넘거나(내려갔거나) 프로세스 자체가 끝났으면
         # 추적을 해제한다 — "계속 이어져야" 붙잡힌 것으로 치므로, 잠깐이라도
         # 내려가면 그 다음부터 새로 30분을 센다.
@@ -4593,13 +4648,30 @@ class ShiftAlarmApp(rumps.App):
                 self._high_cpu_alerted.discard(key)
                 self._high_cpu_stuck.pop(key, None)
         if newly_stuck:
-            for comm, cpu, elapsed in newly_stuck:
+            for pid, comm, cpu, elapsed in newly_stuck:
                 minutes = int(elapsed.total_seconds() // 60)
                 name = os.path.basename(comm)
+                # ★ 2026-08-25: 화이트리스트에 있는 프로세스는 알리는 데서
+                # 그치지 않고 바로 강제 종료한다(AUTO_KILL_HIGH_CPU_NAMES 주석
+                # 참고 — 사용자와 함께 안전하다고 확인한 시스템 데몬만 대상).
+                if name in AUTO_KILL_HIGH_CPU_NAMES:
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                        outcome = "자동 종료함"
+                    except ProcessLookupError:
+                        outcome = "이미 종료됨"
+                    except OSError as exc:
+                        outcome = f"종료 실패({exc})"
+                    key = (pid, comm)
+                    self._high_cpu_tracking.pop(key, None)
+                    self._high_cpu_alerted.discard(key)
+                    self._high_cpu_stuck.pop(key, None)
+                else:
+                    outcome = "메뉴바에서 확인하세요"
                 notify_spoken(
                     "⚠️ CPU 과부하 감지",
                     f"{name} — {cpu:.0f}%, {minutes}분째 붙잡힘",
-                    "메뉴바에서 확인하세요.",
+                    outcome,
                 )
             AppHelper.callAfter(self.build_menu)
 

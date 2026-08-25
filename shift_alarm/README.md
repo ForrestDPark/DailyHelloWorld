@@ -681,3 +681,11 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - 알람은 `notify_spoken`(소리+음성, 예고 없는 알림 규칙에 맞음)으로 "⚠️ CPU 과부하 감지 · {프로세스명} — {cpu}%, {분}분째"를 알린다.
 - 메뉴 최상단(급여 항목 바로 아래)에 걸린 프로세스가 있을 때만 "⚠️ CPU 과부하 프로세스 N개" 하위 메뉴가 뜨고, 각 프로세스의 이름·퍼센트·경과 시간·PID를 보여준다. 하위 항목에 "Activity Monitor 열기"도 추가.
 - 검증: 실제 상태 전이 로직(추적 시작 → 29분(무음) → 31분(알람 1회) → 32분(재알림 없음) → 프로세스 소멸(추적 해제) → 재등장 시 처음부터 다시 30분)을 독립 시뮬레이션으로 확인. `_sample_high_cpu_processes()`도 실제 시스템에서 호출해 정상 파싱 확인(`fileproviderd`, `ApplicationsStorageExtension` 등 실제 고CPU 프로세스 정상 추출).
+
+## 43. 🌡️ 메뉴바 열 상태 표시 + 요주의 프로세스 자동 종료 (★ 2026-08-25 추가)
+
+**사용자 요청**: "맥북 온도 같은거 메뉴바 타이틀에 항상 띄울수없나?" / "니가 아까말한 두개 요주의 프로세스로 선정하고 필요없는 프로세스라고 판단하면 자동으로 킬하도록 파이프라인 구성해".
+
+- **열 상태 표시**: `get_thermal_status()` — Apple Silicon은 sudo 없이 원시 온도(°C)를 읽을 방법이 없다. `powermetrics --samplers thermal`은 root를 요구하고, `osx-cpu-temp`(Homebrew) 같은 서드파티 도구도 실측 결과 `0.0°C`만 반환했다(Intel 전용 SMC 키 기반이라 Apple Silicon엔 그 키가 없음). 대신 `pmset -g therm`(sudo 불필요)이 보고하는 `CPU_Speed_Limit`(%) — macOS 자신이 열 때문에 CPU를 얼마나 줄였는지 판단하는 지표 — 를 쓴다. 41번 항목에서 추가한 1분 주기 CPU 표본 스레드에 얹어서 같이 갱신하고(`self._thermal_status`), 메뉴바 타이틀에 항상 "🌡️"(정상) 또는 빨간 "🌡️NN%"(스로틀링 중)로 표시한다.
+- **요주의 프로세스 자동 종료**: `AUTO_KILL_HIGH_CPU_NAMES = {"replayd", "StorageManagementService", "ApplicationsStorageExtension"}` — 직전(42번 항목) CPU 과부하 조사 중 실제로 몇 시간씩 CPU를 붙잡고 있던 게 확인된 두 시스템 데몬만 화이트리스트로 담았다. **임의의 새로 붙잡힌 프로세스를 전부 자동 종료하지는 않는다** — 잘못하면 중요한 작업 중인 프로세스를 죽일 위험이 있어서, 사용자와 함께 "안전하게 죽여도 된다"고 확인한 것만 대상으로 범위를 좁혔다. 30분 이상 붙잡힌 게 확인되는 시점에 화이트리스트 소속이면 알림만 주는 대신 `os.kill(pid, SIGKILL)`로 바로 종료하고, 알림 문구도 "메뉴바에서 확인하세요" 대신 "자동 종료함"으로 바뀐다. 종료 후에는 추적 상태를 지워서, 그 데몬이 (macOS가 다시 띄워서) 나중에 또 붙잡히면 처음부터 새로 30분을 센다.
+- 검증: `pmset -g therm` 파싱 실제 시스템에서 확인(`{'throttled': False, 'percent': 100}`). `os.kill(pid, signal.SIGKILL)` 메커니즘은 더미 `sleep` 프로세스로 별도 검증(실제 시스템 데몬을 테스트 목적으로 건드리지 않음).
