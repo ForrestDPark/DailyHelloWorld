@@ -4005,6 +4005,10 @@ class ShiftAlarmApp(rumps.App):
         self._checklist_update_locks = {}
         self._daily_routine_update_locks = {}
         self._unchecked_index_sync_running = False
+        # build_menu()가 바로 이어서 참조하므로 그 전에 초기화해둔다(위와 같은 이유).
+        self._high_cpu_tracking = {}
+        self._high_cpu_alerted = set()
+        self._high_cpu_stuck = {}
         sync_scriptable_widget_file()
         self.build_menu()
 
@@ -4028,9 +4032,8 @@ class ShiftAlarmApp(rumps.App):
         self.electronics_off_timer.start()
 
         # CPU 과부하 감지 (1분마다 표본, 70% 이상이 30분 이상 이어지면 알람)
-        self._high_cpu_tracking = {}   # {(pid, comm): 처음 70% 넘긴 시각}
-        self._high_cpu_alerted = set()  # 이번 "붙잡힘" 동안 이미 알람 울린 (pid, comm)
-        self._high_cpu_stuck = {}       # {(pid, comm): (cpu퍼센트, 처음 넘긴 시각)} — 메뉴 표시용
+        # 상태 딕셔너리(_high_cpu_tracking 등)는 build_menu()가 더 일찍 참조하므로
+        # 위쪽(super().__init__ 직후)에서 이미 초기화했다 — 여기선 타이머만 켠다.
         self.high_cpu_timer = rumps.Timer(self._check_high_cpu, HIGH_CPU_CHECK_INTERVAL_SECONDS)
         self.high_cpu_timer.start()
 
