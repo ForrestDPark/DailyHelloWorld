@@ -36,12 +36,12 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, File, Header, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from server import auth
+from server import auth, oauth
 from server.db import get_conn, init_db
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -57,7 +57,14 @@ USERNAME_RE = re.compile(r"^[A-Za-z0-9_가-힣]{2,20}$")
 # ★ 인증 없이 접근 가능한 경로 — 로그인 자체를 하려면 "/"와 정적 파일, 그리고
 # 회원가입/로그인 API는 인증 이전에 열려 있어야 한다. /api/whoami는 로그인
 # 여부를 프론트가 확인하는 용도라 항상 응답한다(그 자체로 정보 노출 없음).
-PUBLIC_PATHS = {"/", "/api/whoami", "/api/auth/signup", "/api/auth/login", "/api/auth/logout"}
+PUBLIC_PATHS = {
+    "/", "/api/whoami", "/api/auth/signup", "/api/auth/login", "/api/auth/logout",
+    # ★ 2026-08-26: 구글/카카오 로그인 — 이 네 경로는 아직 세션이 없는 상태에서
+    # 오는 요청(로그인 시작·프로바이더가 돌려보내는 콜백)이라 공개로 열어둔다.
+    "/api/auth/google/login", "/api/auth/google/callback",
+    "/api/auth/kakao/login", "/api/auth/kakao/callback",
+}
+OAUTH_STATE_COOKIE = "tulpa_oauth_state"
 
 # ★ "링크로 공유해서 다른 사람이 채팅을 읽기만(쓰기는 못하게) 할 수 있게
 # 해달라" 요청(2026-08-25) — 계정 없이도 쿼리스트링(?share=...)의 토큰이
@@ -325,6 +332,89 @@ def logout(request: Request, response: Response):
     return {"ok": True}
 
 
+def _unique_username_from(conn, display_name):
+    """소셜 로그인 최초 가입 시 프로필 이름으로 로컬 계정명을 만든다.
+    이미 있는 이름이면 뒤에 숫자를 붙여 유일하게 만든다."""
+    base = re.sub(r"[^A-Za-z0-9_가-힣]", "", display_name)[:16] or "user"
+    candidate = base
+    n = 1
+    while conn.execute("SELECT 1 FROM users WHERE username = ?", (candidate,)).fetchone():
+        n += 1
+        candidate = f"{base}{n}"
+    return candidate
+
+
+def _finish_oauth_login(provider, external_id, display_name):
+    """구글/카카오 로그인 콜백의 공통 마무리 — 이미 연결된 계정이면 그대로
+    로그인, 처음이면 새 로컬 계정을 만들어 연결한다(비밀번호는 무작위로
+    채워두고 실제로 쓰이지 않음 — 이 계정은 소셜 로그인으로만 들어옴)."""
+    column = "google_sub" if provider == "google" else "kakao_id"
+    conn = get_conn()
+    try:
+        row = conn.execute(f"SELECT id, is_owner FROM users WHERE {column} = ?", (external_id,)).fetchone()
+        if row:
+            user_id = row["id"]
+        else:
+            username = _unique_username_from(conn, display_name)
+            salt, digest = auth.hash_password(secrets.token_urlsafe(24))
+            cur = conn.execute(
+                f"INSERT INTO users (username, password_hash, salt, is_owner, created_at, {column}) "
+                "VALUES (?, ?, ?, 0, ?, ?)",
+                (username, digest, salt, _now(), external_id),
+            )
+            conn.commit()
+            user_id = cur.lastrowid
+        token = auth.create_session(conn, user_id)
+    finally:
+        conn.close()
+    response = RedirectResponse("/")
+    response.set_cookie(SESSION_COOKIE_NAME, token, max_age=SESSION_COOKIE_MAX_AGE, httponly=True, samesite="lax")
+    response.delete_cookie(OAUTH_STATE_COOKIE)
+    return response
+
+
+@app.get("/api/auth/google/login")
+def google_login():
+    if not oauth.google_enabled():
+        raise HTTPException(status_code=503, detail="Google 로그인이 아직 설정되지 않았습니다")
+    state = secrets.token_urlsafe(16)
+    response = RedirectResponse(oauth.google_auth_url(state))
+    response.set_cookie(OAUTH_STATE_COOKIE, state, max_age=600, httponly=True, samesite="lax")
+    return response
+
+
+@app.get("/api/auth/google/callback")
+def google_callback(request: Request, code: str = "", state: str = ""):
+    if not code or not state or state != request.cookies.get(OAUTH_STATE_COOKIE):
+        raise HTTPException(status_code=400, detail="잘못된 요청입니다")
+    try:
+        profile = oauth.google_exchange(code)
+    except oauth.OAuthError:
+        raise HTTPException(status_code=502, detail="Google 인증에 실패했습니다")
+    return _finish_oauth_login("google", profile["external_id"], profile["name"])
+
+
+@app.get("/api/auth/kakao/login")
+def kakao_login():
+    if not oauth.kakao_enabled():
+        raise HTTPException(status_code=503, detail="카카오 로그인이 아직 설정되지 않았습니다")
+    state = secrets.token_urlsafe(16)
+    response = RedirectResponse(oauth.kakao_auth_url(state))
+    response.set_cookie(OAUTH_STATE_COOKIE, state, max_age=600, httponly=True, samesite="lax")
+    return response
+
+
+@app.get("/api/auth/kakao/callback")
+def kakao_callback(request: Request, code: str = "", state: str = ""):
+    if not code or not state or state != request.cookies.get(OAUTH_STATE_COOKIE):
+        raise HTTPException(status_code=400, detail="잘못된 요청입니다")
+    try:
+        profile = oauth.kakao_exchange(code)
+    except oauth.OAuthError:
+        raise HTTPException(status_code=502, detail="카카오 인증에 실패했습니다")
+    return _finish_oauth_login("kakao", profile["external_id"], profile["name"])
+
+
 class PersonaCreate(BaseModel):
     name: str
     description: str
@@ -459,6 +549,41 @@ def create_custom_room(body: CustomRoomCreate, request: Request):
     return {"ok": True, "room_id": room_id, "label": label}
 
 
+@app.post("/api/rooms/{room_id}/thumbnail")
+async def upload_room_thumbnail(room_id: str, request: Request, file: UploadFile = File(...)):
+    """토론방 대표사진(2026-08-26 요청) — 커스텀 방 주인 또는 소유자만 바꿀 수
+    있다. 저장·검증 로직은 /api/upload와 동일(같은 UPLOADS_DIR·확장자·용량
+    제한 재사용)."""
+    if not getattr(request.state, "can_write", True):
+        raise HTTPException(status_code=403, detail="읽기 전용 계정입니다")
+    user = getattr(request.state, "user", None)
+    username = user["username"] if user else None
+    is_owner_request = user["is_owner"] if user else True
+    conn = get_conn()
+    row = conn.execute("SELECT owner_username FROM custom_rooms WHERE room_id = ?", (room_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="내가 만든 채팅방이 아닙니다")
+    if not (is_owner_request or row["owner_username"] == username):
+        conn.close()
+        raise HTTPException(status_code=403, detail="이 채팅방의 대표사진은 방 주인만 바꿀 수 있습니다")
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        conn.close()
+        raise HTTPException(status_code=400, detail=f"지원하지 않는 이미지 형식입니다: {ext or '(확장자 없음)'}")
+    data = await file.read()
+    if len(data) > MAX_UPLOAD_BYTES:
+        conn.close()
+        raise HTTPException(status_code=413, detail="이미지가 너무 큽니다(10MB 제한)")
+    filename = f"{uuid.uuid4().hex}{ext}"
+    (UPLOADS_DIR / filename).write_bytes(data)
+    url = f"/uploads/{filename}"
+    conn.execute("UPDATE custom_rooms SET thumbnail_url = ? WHERE room_id = ?", (url, room_id))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "thumbnail_url": url}
+
+
 GROUP_ROOM_ID = "group"
 # ★ 2026-08-24: 그룹방은 아무도 안 부르면 페르소나 전원이 매번 동시에 반응하는
 # 구조라 거의 똑같은 답이 몇 개씩 쏟아지고, 서로 일면식 없어야 할 인물들이
@@ -517,6 +642,11 @@ def whoami(request: Request):
         "username": user["username"] if user else None,
         "is_owner": bool(user["is_owner"]) if user else False,
         "share_guest": getattr(request.state, "share_guest", False),
+        # ★ 2026-08-26: 구글/카카오 로그인 버튼은 실제로 설정(도메인+클라이언트
+        # ID/시크릿)이 끝났을 때만 보여준다 — 로그인 화면이 아직 안 될 버튼을
+        # 미리 보여주지 않게.
+        "google_login_enabled": oauth.google_enabled(),
+        "kakao_login_enabled": oauth.kakao_enabled(),
     }
 
 
@@ -526,6 +656,26 @@ def list_personas():
     rows = conn.execute("SELECT name FROM personas ORDER BY name").fetchall()
     conn.close()
     return [r["name"] for r in rows]
+
+
+def _given_name(persona_name):
+    """"한경호 선생님" → "경호", "박정민" → "정민"처럼 성(1글자)과 뒤에 붙는
+    호칭(선생님 등)을 뗀 "부르는 이름"만 뽑는다. 2026-08-26: "정민씨", "경호쌤"
+    처럼 자연스럽게 이름만 불렀는데 전원이 다 대답하는 문제 — @정확한 전체
+    이름만 인식하던 걸 이걸로 보강한다."""
+    first_word = persona_name.split()[0]
+    return first_word[1:] if len(first_word) >= 3 else first_word
+
+
+def _mentioned_personas(content, candidates):
+    """@정확한 이름 또는 "이름씨"/"이름쌤"/"이름아" 같은 자연스러운 호칭까지
+    잡아서 지목된 페르소나를 찾는다. 아무도 안 걸리면 빈 리스트(전원 응답)."""
+    mentioned = []
+    for name in candidates:
+        given = _given_name(name)
+        if f"@{name}" in content or (len(given) >= 2 and given in content):
+            mentioned.append(name)
+    return mentioned
 
 
 def _group_members(conn, room_id, persona_rows):
@@ -675,13 +825,14 @@ def list_rooms(request: Request):
         })
 
     custom_rows = conn.execute(
-        "SELECT room_id, label, owner_username FROM custom_rooms ORDER BY created_at"
+        "SELECT room_id, label, owner_username, thumbnail_url FROM custom_rooms ORDER BY created_at"
     ).fetchall()
     for cr in custom_rows:
         if is_owner_request or cr["owner_username"] == username:
             rooms.append({
                 "room_id": cr["room_id"], "label": f"👥 {cr['label']}",
                 "group_name": None, "is_group_room": True, "is_mine": cr["owner_username"] == username,
+                "thumbnail_url": cr["thumbnail_url"],
             })
 
     rooms += [
@@ -837,7 +988,7 @@ def post_message(msg: NewMessage, request: Request):
         # ★ 2026-08-25: reply_to(메시지 탭해서 답장)가 있으면 @멘션보다 우선해서
         # 그 한 명만 응답 — "한명한테 말하는데 모든 인물이 다 답변해서 정신없다"
         # 는 요청.
-        mentioned = [p for p in all_personas if f"@{p}" in content]
+        mentioned = _mentioned_personas(content, all_personas)
         if msg.reply_to and msg.reply_to in all_personas:
             targets = [msg.reply_to]
         else:
@@ -854,7 +1005,7 @@ def post_message(msg: NewMessage, request: Request):
         # ★ 2026-08-25: 기본 그룹 멤버 외에 room_invites로 초대된 페르소나도
         # 포함한다("프로젝트하다가 관련 인물 추가" 요청).
         group_members = _group_members(conn, room_id, persona_rows)
-        mentioned = [p for p in group_members if f"@{p}" in content]
+        mentioned = _mentioned_personas(content, group_members)
         if msg.reply_to and msg.reply_to in group_members:
             targets = [msg.reply_to]
         else:

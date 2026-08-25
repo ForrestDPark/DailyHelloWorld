@@ -100,5 +100,16 @@ def init_db():
     # 실제 AI에 넘기는 system_prompt는 이걸 감싸서 별도로 만든다.
     _ensure_column(conn, "personas", "owner_username", "TEXT")
     _ensure_column(conn, "personas", "description", "TEXT")
+    # ★ 2026-08-26: "구글/카카오 로그인 연동" 요청 — 소셜 로그인으로 처음
+    # 들어온 계정은 비밀번호 없이 이 외부 ID로만 로그인한다(로그인 시
+    # google_sub/kakao_id로 기존 계정을 찾고, 없으면 새로 만듦). UNIQUE
+    # 제약은 SQLite ALTER TABLE로 못 걸어서(테이블 재생성 필요) 애플리케이션
+    # 코드(server/app.py)에서 중복 여부를 직접 확인한다.
+    _ensure_column(conn, "users", "google_sub", "TEXT")
+    _ensure_column(conn, "users", "kakao_id", "TEXT")
+    # ★ 2026-08-26: "토론방 대표사진을 썸네일로 보이게 해달라" 요청 —
+    # 커스텀 방(custom_rooms)에만 해당. 업로드 안 하면 NULL(방 목록에서
+    # 기존처럼 글자 아바타로 표시).
+    _ensure_column(conn, "custom_rooms", "thumbnail_url", "TEXT")
     conn.commit()
     conn.close()

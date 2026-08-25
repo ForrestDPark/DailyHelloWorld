@@ -346,6 +346,17 @@ document.getElementById("new-room-btn").addEventListener("click", async () => {
 // 아예 입력창/사진첨부/답장 UI를 숨긴다(서버도 403으로 막지만, UI에서부터
 // 안 보이게 해서 혼란을 줄임). 2026-08-26: 로그인 자체가 안 된 방문자(공유
 // 링크도 아닌 경우)는 아예 채팅 화면 대신 로그인 화면을 보여준다.
+// ★ 2026-08-26: "구글이랑 카카오 로그인 가능하게 해달라" 요청 — 아직 도메인
+// 설정이 안 끝나 서버가 비활성 상태(google_login_enabled=false 등)면 버튼을
+// 아예 숨긴다. showAuthView()가 나중에(세션 만료 등으로) 다시 불려도 값이
+// 유지되게 모듈 전역에 캐시해둔다.
+let oauthFlags = { google: false, kakao: false };
+
+function applyOauthButtons() {
+  document.getElementById("google-login-btn").classList.toggle("hidden", !oauthFlags.google);
+  document.getElementById("kakao-login-btn").classList.toggle("hidden", !oauthFlags.kakao);
+}
+
 async function initAuth() {
   let data;
   try {
@@ -358,6 +369,8 @@ async function initAuth() {
   canWrite = !!data.can_write;
   myUsername = data.username || null;
   amOwner = !!data.is_owner;
+  oauthFlags = { google: !!data.google_login_enabled, kakao: !!data.kakao_login_enabled };
+  applyOauthButtons();
   if (!data.logged_in && !data.share_guest && !canWrite) {
     showAuthView();
     return false;
@@ -403,8 +416,13 @@ function renderRoomItem(r) {
   const avatarChar = r.room_id === "group" ? "☺" : r.label[0];
   const roomLabel = isMeta ? r.label : displayName(r.label);
   const unread = r.last_message_id && r.last_message_id > getLastRead(r.room_id);
+  // ★ "토론방 대표사진 썸네일" 요청(2026-08-26) — 커스텀 방에 thumbnail_url이
+  // 있으면 글자 아바타 대신 그 이미지를 보여준다.
+  const avatarInner = r.thumbnail_url
+    ? `<img src="${escapeHtml(r.thumbnail_url)}" alt="">`
+    : escapeHtml(avatarChar);
   item.innerHTML = `
-    <div class="avatar">${avatarChar}</div>
+    <div class="avatar${r.thumbnail_url ? " avatar-image" : ""}">${avatarInner}</div>
     <div class="room-info">
       <div class="room-name">${escapeHtml(roomLabel)}${unread ? '<span class="unread-dot"></span>' : ""}</div>
       <div class="room-preview">${r.last_message ? escapeHtml(r.last_message) : "대화를 시작해보세요"}</div>
@@ -502,6 +520,10 @@ function showChatView(roomId) {
   const isGroupMeetingRoom = cached && cached.is_group_room && roomId !== "group";
   inviteBtn.classList.toggle("hidden", !isGroupMeetingRoom);
   document.getElementById("invite-panel").classList.add("hidden");
+  // ★ "토론방 대표사진" 요청(2026-08-26) — 내가 만든 커스텀 방(custom_)에서만
+  // 썸네일 변경 버튼을 보여준다.
+  const isMyCustomRoom = roomId.startsWith("custom_") && canWrite && (amOwner || (cached && cached.is_mine));
+  document.getElementById("thumbnail-btn").classList.toggle("hidden", !isMyCustomRoom);
   if (cached && cached.last_message_id) markRoomRead(roomId, cached.last_message_id);
   poll();
 }
@@ -572,6 +594,38 @@ async function inviteToRoom(personaName) {
 }
 
 document.getElementById("invite-btn").addEventListener("click", toggleInvitePanel);
+
+// ★ "토론방 대표사진을 썸네일로 보이게 해달라" 요청(2026-08-26) — 🖼️ 버튼은
+// 내가 만든 커스텀 방에서만 보인다(showChatView에서 토글). 업로드 즉시
+// 방 목록 캐시도 갱신해서 방 목록으로 돌아갔을 때 바로 반영되게 한다.
+const thumbnailInput = document.getElementById("thumbnail-input");
+document.getElementById("thumbnail-btn").addEventListener("click", () => thumbnailInput.click());
+thumbnailInput.addEventListener("change", async () => {
+  const file = thumbnailInput.files[0];
+  thumbnailInput.value = "";
+  if (!file || !currentRoom) return;
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const res = await apiFetch(`/api/rooms/${encodeURIComponent(currentRoom)}/thumbnail`, {
+      method: "POST",
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(err.detail || "대표사진 업로드 실패");
+      return;
+    }
+    const { thumbnail_url } = await res.json();
+    const cached = roomsCache.get(currentRoom);
+    if (cached) cached.thumbnail_url = thumbnail_url;
+  } catch (e) {
+    if (e.message !== "unauthorized" && e.message !== "forbidden") {
+      console.error(e);
+      alert("대표사진 업로드 실패");
+    }
+  }
+});
 
 // ★ "채팅 친 시각이 메시지 옆에 작게 나오면 좋겠다" 요청(2026-08-25).
 // created_at은 서버가 UTC ISO8601로 내려주므로 new Date()가 알아서 로컬

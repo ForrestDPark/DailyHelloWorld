@@ -121,6 +121,23 @@ button { font-family: inherit; }
 }
 #auth-submit:active { opacity: 0.85; }
 
+/* ★ 구글/카카오 로그인 버튼(2026-08-26) — 도메인·클라이언트 설정이 끝나기
+   전엔 whoami의 google_login_enabled/kakao_login_enabled가 false라 항상
+   hidden 상태로 남는다(static/chat.js applyOauthButtons 참고). */
+#oauth-buttons { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.oauth-btn {
+  display: block;
+  text-align: center;
+  padding: 12px;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.oauth-google { background: #ffffff; color: #1a1a1a; border: 1px solid var(--border); }
+.oauth-kakao { background: #FEE500; color: #191919; }
+
 #room-list-view, #chat-view {
   height: 100%;
   display: flex;
@@ -278,7 +295,7 @@ header h1 { font-size: 18px; margin: 0; flex: 1; }
   padding: 0 4px;
   cursor: pointer;
 }
-.chat-header #invite-btn {
+.chat-header #invite-btn, .chat-header #thumbnail-btn {
   border: none;
   background: none;
   color: var(--fg);
@@ -348,7 +365,10 @@ header h1 { font-size: 18px; margin: 0; flex: 1; }
   justify-content: center;
   font-size: 18px;
   font-weight: 600;
+  overflow: hidden;
 }
+/* ★ 토론방 대표사진 썸네일(2026-08-26) */
+.avatar-image img { width: 100%; height: 100%; object-fit: cover; }
 .room-info { flex: 1; min-width: 0; }
 .room-name { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
 /* ★ 안읽음 표시(2026-08-25) */

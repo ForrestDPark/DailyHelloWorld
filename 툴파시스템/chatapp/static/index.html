@@ -22,6 +22,10 @@
         <div id="auth-error" class="hidden"></div>
         <button type="submit" id="auth-submit">로그인</button>
       </form>
+      <div id="oauth-buttons">
+        <a id="google-login-btn" class="oauth-btn oauth-google hidden" href="/api/auth/google/login">Google로 계속하기</a>
+        <a id="kakao-login-btn" class="oauth-btn oauth-kakao hidden" href="/api/auth/kakao/login">카카오로 계속하기</a>
+      </div>
     </div>
   </div>
 
@@ -62,6 +66,8 @@
     <header class="chat-header">
       <button id="back-btn" type="button" aria-label="뒤로">‹</button>
       <h1 id="room-title"></h1>
+      <button id="thumbnail-btn" type="button" aria-label="대표사진 변경" class="hidden">🖼️</button>
+      <input id="thumbnail-input" type="file" accept="image/*" class="hidden">
       <button id="invite-btn" type="button" aria-label="참여자 보기" class="hidden">👥</button>
     </header>
     <div id="invite-panel" class="hidden">
