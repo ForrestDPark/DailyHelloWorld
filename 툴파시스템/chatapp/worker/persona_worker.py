@@ -22,8 +22,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ai_exec import run_ai_exec  # noqa: E402
 from notion_personas import (  # noqa: E402
-    append_story_summary, build_system_prompt, extract_group, fetch_page_text,
-    list_personas, notion_token,
+    append_story_summary, build_system_prompt, extract_group, extract_projects,
+    fetch_page_text, list_personas, notion_token,
 )
 
 SERVER_URL = os.environ.get("CHATAPP_SERVER_URL", "http://localhost:8000")
@@ -32,6 +32,9 @@ POLL_INTERVAL_SECONDS = 3
 PERSONA_SYNC_INTERVAL_SECONDS = 300
 AI_TIMEOUT_SECONDS = 120
 WORK_DIR = Path(__file__).resolve().parent
+# worker/ -> chatapp/ -> 툴파시스템/ -> 저장소 루트
+REPO_ROOT = Path(__file__).resolve().parents[3]
+PROJECT_README_MAX_CHARS = 3000  # 프로젝트당 README 발췌 상한 — 프롬프트 폭주 방지
 
 # ★ "채팅 → Notion도 자동으로 동기화되면 좋겠다"는 요청(2026-08-24) — 대화가
 # 쌓이면 주기적으로 훑어서 각 페르소나의 "함께 만든 이야기" 섹션에 요약해
@@ -54,6 +57,28 @@ def _api(path, method="GET", body=None):
         return json.loads(raw) if raw else None
 
 
+def load_project_context(project_names):
+    """담당 프로젝트 목록의 README.md를 이 저장소(REPO_ROOT)에서 찾아 발췌해
+    이어붙인다 (★ 2026-08-25). 프로젝트 폴더명은 Notion "담당 프로젝트" 줄에
+    적힌 그대로 CLAUDE.md의 프로젝트 목록과 일치해야 한다(예: "이직시스템",
+    "shift_alarm", "MuseTrace"). README가 없거나 읽기 실패해도 그 사실만
+    적어두고 나머지 프로젝트는 계속 처리한다 — 한 프로젝트 문제로 전체
+    컨텍스트가 비지 않게."""
+    sections = []
+    for name in project_names:
+        readme_path = REPO_ROOT / name / "README.md"
+        if not readme_path.exists():
+            sections.append(f"### {name}\n(README.md를 찾지 못함: {readme_path})")
+            continue
+        try:
+            text = readme_path.read_text(encoding="utf-8", errors="replace")
+        except OSError as exc:
+            sections.append(f"### {name}\n(읽기 실패: {exc})")
+            continue
+        sections.append(f"### {name}\n{text[:PROJECT_README_MAX_CHARS]}")
+    return "\n\n".join(sections)
+
+
 def sync_personas():
     """Notion에서 페르소나 목록·본문을 읽어 이름→{system_prompt, page_id} 캐시를
     만들고, 서버에도 참고용으로 올려둔다(서버가 /api/personas로 목록을 보여줄
@@ -74,7 +99,9 @@ def sync_personas():
         except (urllib.error.URLError, urllib.error.HTTPError) as exc:
             print(f"⚠️ '{persona['title']}' 페이지 조회 실패: {exc}", flush=True)
             continue
-        system_prompt = build_system_prompt(persona["title"], page_text)
+        project_names = extract_projects(page_text)
+        project_context = load_project_context(project_names) if project_names else ""
+        system_prompt = build_system_prompt(persona["title"], page_text, project_context)
         group_name = extract_group(page_text)
         cache[persona["title"]] = {"system_prompt": system_prompt, "page_id": persona["id"]}
         try:

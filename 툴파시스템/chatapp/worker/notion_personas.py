@@ -116,8 +116,23 @@ def extract_group(page_text):
     return match.group(1) if match else None
 
 
-def build_system_prompt(persona_title, page_text):
-    return (
+_PROJECTS_LINE_RE = re.compile(r"^-\s*담당\s*프로젝트\s*:\s*(.+?)\s*$", re.MULTILINE)
+
+
+def extract_projects(page_text):
+    """페르소나 페이지의 프로필 섹션에서 "- 담당 프로젝트: A, B" 줄을 찾아
+    프로젝트(레포 폴더) 이름 목록을 반환한다 (★ 2026-08-25, "동찬이형이 실제
+    프로젝트 현재 상태를 알고 개발 얘기를 할 수 있지 않을까"라는 아이디어를
+    일반화 — 페르소나 페이지에 관련 프로젝트를 걸어두면 워커가 그 프로젝트
+    상태를 자동으로 끌어와 대화 컨텍스트에 포함시킨다). 없으면 빈 리스트."""
+    match = _PROJECTS_LINE_RE.search(page_text)
+    if not match:
+        return []
+    return [name.strip() for name in match.group(1).split(",") if name.strip()]
+
+
+def build_system_prompt(persona_title, page_text, project_context=""):
+    prompt = (
         f'당신은 지금부터 "{persona_title}"이라는 인물이 되어 대화합니다.\n'
         "아래는 이 인물에 대해 누적된 프로필·기록·지금까지 함께 만든 이야기입니다.\n"
         "이 내용에 기반해서, 이 인물의 성격과 말투를 유지한 채 1인칭으로 대화하세요.\n"
@@ -126,6 +141,15 @@ def build_system_prompt(persona_title, page_text):
         "자연스럽게 하세요(장황한 설명 금지).\n\n"
         f"--- {persona_title} 기록 ---\n{page_text}\n--- 기록 끝 ---"
     )
+    if project_context:
+        prompt += (
+            "\n\n--- 담당 프로젝트 현재 상태(README 발췌, 최신이 아닐 수 있음) ---\n"
+            f"{project_context}\n--- 프로젝트 정보 끝 ---\n"
+            "이 정보를 근거로, 대화 흐름에 자연스럽게 프로젝트의 개선점·기술적 "
+            "다음 단계·이어서 해볼 만한 과제(숙제)를 언급하거나 물어보세요. "
+            "README에 없는 내용을 지어내지 말고, 모르면 모른다고 하세요."
+        )
+    return prompt
 
 
 def append_story_summary(page_id, token, date_label, summary_text):
