@@ -105,6 +105,7 @@ function initAccountChip() {
     document.getElementById("admin-btn").classList.add("hidden");
     document.getElementById("new-room-btn").classList.add("hidden");
     document.getElementById("persona-manager-btn").classList.add("hidden");
+    document.getElementById("profiles-btn").classList.add("hidden");
     return;
   }
   document.getElementById("account-name").textContent = myUsername;
@@ -117,6 +118,7 @@ function initAccountChip() {
   // 요청(2026-08-26) — 로그인한 계정이면 누구나 쓸 수 있다(소유자 전용 아님).
   document.getElementById("new-room-btn").classList.remove("hidden");
   document.getElementById("persona-manager-btn").classList.remove("hidden");
+  document.getElementById("profiles-btn").classList.remove("hidden");
 }
 
 document.getElementById("logout-btn").addEventListener("click", async () => {
@@ -307,6 +309,47 @@ document.getElementById("my-persona-form").addEventListener("submit", async (e) 
       errorEl.textContent = "네트워크 오류입니다";
       errorEl.classList.remove("hidden");
       console.error(err);
+    }
+  }
+});
+
+// ★ "툴파들의 성격을 간단하게 확인할 수 있는 프로필 페이지" 요청(2026-08-26) —
+// Notion "## 프로필" 섹션(유형·정체성/관계·성격·말투·배경)만 추린 짧은 요약을
+// 카드로 나열해서 보여준다. 공개 페르소나 전부 + 내가 만든 페르소나만 온다
+// (서버가 그 기준으로 이미 걸러줌).
+document.getElementById("profiles-btn").addEventListener("click", async () => {
+  const panel = document.getElementById("profiles-panel");
+  if (!panel.classList.contains("hidden")) {
+    panel.classList.add("hidden");
+    return;
+  }
+  panel.classList.remove("hidden");
+  const list = document.getElementById("profiles-list");
+  list.innerHTML = '<div class="empty-hint">불러오는 중...</div>';
+  try {
+    const res = await apiFetch("/api/persona_profiles");
+    const profiles = await res.json();
+    list.innerHTML = "";
+    if (!profiles.length) {
+      list.innerHTML = '<div class="empty-hint">아직 페르소나가 없습니다</div>';
+    }
+    for (const p of profiles) {
+      const card = document.createElement("div");
+      card.className = "profile-card";
+      const title = document.createElement("div");
+      title.className = "profile-card-title";
+      title.textContent = displayName(p.name) + (p.is_mine ? " · 내가 만듦" : "");
+      const body = document.createElement("div");
+      body.className = "profile-card-body";
+      body.textContent = p.summary;
+      card.appendChild(title);
+      card.appendChild(body);
+      list.appendChild(card);
+    }
+  } catch (e) {
+    if (e.message !== "unauthorized" && e.message !== "forbidden") {
+      list.innerHTML = '<div class="empty-hint">불러오지 못했습니다</div>';
+      console.error(e);
     }
   }
 });

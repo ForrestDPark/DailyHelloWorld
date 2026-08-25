@@ -111,5 +111,10 @@ def init_db():
     # 커스텀 방(custom_rooms)에만 해당. 업로드 안 하면 NULL(방 목록에서
     # 기존처럼 글자 아바타로 표시).
     _ensure_column(conn, "custom_rooms", "thumbnail_url", "TEXT")
+    # ★ 2026-08-26: "페르소나 프로필을 간단히 확인할 수 있는 페이지" 요청 —
+    # Notion 페르소나는 워커가 "## 프로필" 섹션(유형·정체성/관계·성격·말투·
+    # 배경)만 추려서 채워준다(worker/notion_personas.py extract_profile_summary).
+    # 사용자 개인 페르소나는 이미 있는 description을 그대로 프로필로 쓴다.
+    _ensure_column(conn, "personas", "profile_summary", "TEXT")
     conn.commit()
     conn.close()

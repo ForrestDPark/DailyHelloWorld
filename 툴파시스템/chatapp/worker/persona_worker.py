@@ -24,8 +24,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ai_exec import run_ai_exec  # noqa: E402
 from notion_personas import (  # noqa: E402
-    append_story_summary, build_system_prompt, extract_group, extract_projects,
-    fetch_page_text, list_personas, notion_token,
+    append_story_summary, build_system_prompt, extract_group, extract_profile_summary,
+    extract_projects, fetch_page_text, list_personas, notion_token,
 )
 
 # ★ 2026-08-25: "업로드된 이미지 보고 서로 분석하면 좋겠다" 요청 — server/app.py의
@@ -388,6 +388,7 @@ def sync_personas():
         elif persona["title"] == UI_DEV_PERSONA_NAME:
             system_prompt += _build_ui_dev_addendum()
         group_name = extract_group(page_text)
+        profile_summary = extract_profile_summary(page_text)
         cache[persona["title"]] = {"system_prompt": system_prompt, "page_id": persona["id"]}
         try:
             _api("/api/worker/sync_persona", "POST", {
@@ -395,6 +396,7 @@ def sync_personas():
                 "notion_page_id": persona["id"],
                 "system_prompt": system_prompt,
                 "group_name": group_name,
+                "profile_summary": profile_summary,
             })
         except (urllib.error.URLError, urllib.error.HTTPError) as exc:
             print(f"⚠️ '{persona['title']}' 서버 동기화 실패: {exc}", flush=True)

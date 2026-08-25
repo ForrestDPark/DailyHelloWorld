@@ -131,6 +131,27 @@ def extract_projects(page_text):
     return [name.strip() for name in match.group(1).split(",") if name.strip()]
 
 
+_PROFILE_SECTION_RE = re.compile(r"^## 프로필\n(.*?)(?=\n## |\Z)", re.DOTALL | re.MULTILINE)
+_PROFILE_FIELD_RE = re.compile(r"^-\s*(유형|정체성/관계|성격|말투|배경)\s*:\s*(.+?)\s*$", re.MULTILINE)
+
+
+def extract_profile_summary(page_text):
+    """"## 프로필" 섹션에서 성격 파악에 필요한 필드(유형·정체성/관계·성격·
+    말투·배경)만 뽑아 사람이 읽기 좋은 짧은 요약으로 만든다. 그룹·담당
+    프로젝트 같은 내부 운영용 필드는 뺀다(2026-08-26 "채팅앱에서 페르소나
+    프로필을 간단히 볼 수 있는 페이지" 요청). "(아직 기록 없음)" 값은
+    빈 프로필이나 마찬가지라 제외."""
+    section_match = _PROFILE_SECTION_RE.search(page_text)
+    if not section_match:
+        return ""
+    lines = []
+    for label, value in _PROFILE_FIELD_RE.findall(section_match.group(1)):
+        if "아직 기록 없음" in value:
+            continue
+        lines.append(f"{label}: {value}")
+    return "\n".join(lines)
+
+
 def build_system_prompt(persona_title, page_text, project_context=""):
     prompt = (
         f'당신은 지금부터 "{persona_title}"이라는 인물이 되어 대화합니다.\n'

@@ -222,7 +222,7 @@ header h1 { font-size: 18px; margin: 0; flex: 1; }
 
 /* ★ 내 페르소나 만들기 + 단체톡방 만들기(2026-08-26) — 로그인한 계정이면
    누구나 쓰는 버튼이라 admin-btn과 달리 소유자 전용 스타일을 안 씀 */
-#new-room-btn, #persona-manager-btn {
+#new-room-btn, #persona-manager-btn, #profiles-btn {
   border: none;
   background: none;
   font-size: 16px;
@@ -230,6 +230,23 @@ header h1 { font-size: 18px; margin: 0; flex: 1; }
   padding: 4px 6px;
   cursor: pointer;
 }
+/* ★ 페르소나 프로필 페이지(2026-08-26) */
+#profiles-panel {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bubble-persona);
+  max-height: 60vh;
+  overflow-y: auto;
+}
+#profiles-list { display: flex; flex-direction: column; gap: 10px; }
+.profile-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.profile-card-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.profile-card-body { font-size: 13px; color: var(--fg); white-space: pre-wrap; line-height: 1.5; }
 #persona-manager-panel {
   padding: 10px 16px;
   border-bottom: 1px solid var(--border);

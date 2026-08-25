@@ -664,6 +664,31 @@ def list_personas():
     return [r["name"] for r in rows]
 
 
+@app.get("/api/persona_profiles")
+def list_persona_profiles(request: Request):
+    """"툴파들의 성격을 간단히 확인할 수 있는 페이지" 요청(2026-08-26) —
+    공개 페르소나(Notion 동기화분) 전부 + 내가 만든 개인 페르소나만 보여준다
+    (다른 사람의 개인 페르소나는 그 사람 1:1 방처럼 비공개 유지)."""
+    user = getattr(request.state, "user", None)
+    username = user["username"] if user else None
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT name, owner_username, description, profile_summary FROM personas ORDER BY name"
+    ).fetchall()
+    conn.close()
+    result = []
+    for r in rows:
+        if r["owner_username"] is not None and r["owner_username"] != username:
+            continue
+        summary = r["profile_summary"] or r["description"] or "(아직 프로필 정보가 없습니다)"
+        result.append({
+            "name": r["name"],
+            "is_mine": bool(username) and r["owner_username"] == username,
+            "summary": summary,
+        })
+    return result
+
+
 def _given_name(persona_name):
     """"한경호 선생님" → "경호", "박정민" → "정민"처럼 성(1글자)과 뒤에 붙는
     호칭(선생님 등)을 뗀 "부르는 이름"만 뽑는다. 2026-08-26: "정민씨", "경호쌤"
@@ -1165,6 +1190,7 @@ class PersonaSync(BaseModel):
     notion_page_id: str
     system_prompt: str
     group_name: Optional[str] = None
+    profile_summary: Optional[str] = None
 
 
 @app.post("/api/worker/sync_persona")
@@ -1173,15 +1199,17 @@ def sync_persona(persona: PersonaSync, authorization: Optional[str] = Header(Non
     conn = get_conn()
     conn.execute(
         """
-        INSERT INTO personas (name, notion_page_id, system_prompt, group_name, synced_at)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO personas (name, notion_page_id, system_prompt, group_name, profile_summary, synced_at)
+        VALUES (?, ?, ?, ?, ?, ?)
         ON CONFLICT(name) DO UPDATE SET
             notion_page_id = excluded.notion_page_id,
             system_prompt = excluded.system_prompt,
             group_name = excluded.group_name,
+            profile_summary = excluded.profile_summary,
             synced_at = excluded.synced_at
         """,
-        (persona.name, persona.notion_page_id, persona.system_prompt, persona.group_name, _now()),
+        (persona.name, persona.notion_page_id, persona.system_prompt, persona.group_name,
+         persona.profile_summary, _now()),
     )
     conn.commit()
     conn.close()
