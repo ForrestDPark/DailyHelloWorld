@@ -609,6 +609,12 @@ OWNER_ONLY_PERSONAS = {"손동주"}
 # worker/persona_worker.py의 UI_DEV_PERSONA_NAME과 이름이 같아야 한다.
 UI_DEV_PERSONAS = {"유이"}
 
+# ★ 2026-08-26: "다른 사람들의 요구·요청사항·개선사항을 모아서 나한테
+# 보고하는 에이전틱 툴파" 요청 — worker/persona_worker.py의 ADMIN_PERSONA_NAME과
+# 이름이 같아야 한다. 아직은 "수집·보고"만 하고 실제 코드 수정 권한은 없다
+# (유이처럼 파일 수정 권한을 줄지는 소유자와 상의 후 결정 예정).
+ADMIN_PERSONA_NAME = "툴파관리자"
+
 
 def _require_owner(request):
     user = getattr(request.state, "user", None)
@@ -1194,6 +1200,29 @@ def worker_user_personas(authorization: Optional[str] = Header(None)):
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+class AdminReportPost(BaseModel):
+    content: str
+
+
+@app.post("/api/worker/post_admin_report")
+def worker_post_admin_report(body: AdminReportPost, authorization: Optional[str] = Header(None)):
+    """워커가 다른 사용자들의 피드백을 훑어 정리한 보고를 툴파관리자 명의로
+    소유자에게 보낸다(2026-08-26). 사용자 메시지에 대한 응답이 아니라 워커가
+    스스로 먼저 말을 거는 경우라 pending_turns를 안 거치고 바로 메시지만
+    쌓는다 — 툴파관리자 1:1 방은 다른 Notion 페르소나와 동일하게 소유자만
+    볼 수 있어(owner_username이 NULL이라 _can_access_persona_room이 그렇게
+    처리) 자동으로 소유자 전용 알림함이 된다."""
+    _check_worker_auth(authorization)
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO messages (room_id, sender, content, created_at) VALUES (?, ?, ?, ?)",
+        (ADMIN_PERSONA_NAME, ADMIN_PERSONA_NAME, body.content, _now()),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 @app.get("/api/worker/all_messages")

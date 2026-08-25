@@ -217,6 +217,15 @@ PROJECT_README_MAX_CHARS = 3000  # 프로젝트당 README 발췌 상한 — 프�
 STORY_SYNC_INTERVAL_SECONDS = 600
 STORY_SYNC_MIN_NEW_MESSAGES = 4
 
+# ★ 2026-08-26: "다른 사람들의 요구·요청사항·개선사항을 모아서 나한테 보고
+# 하는 에이전틱 툴파" 요청 — server/app.py의 ADMIN_PERSONA_NAME과 이름이
+# 같아야 한다. 지금은 "수집·보고"만 하고 실제 코드 수정 권한은 없다(유이처럼
+# 파일 수정 권한을 줄지는 소유자와 상의 후 결정 예정 — 손동주/유이의
+# propose→승인→실행 3단계 안전 패턴을 그대로 재사용할 계획).
+ADMIN_PERSONA_NAME = "툴파관리자"
+ADMIN_REPORT_INTERVAL_SECONDS = 1800  # 30분
+ADMIN_REPORT_MIN_NEW_MESSAGES = 5  # 이 이상 쌓여야 실제로 보고(자잘한 알림 폭탄 방지)
+
 
 def _api(path, method="GET", body=None):
     url = f"{SERVER_URL}{path}"
@@ -560,6 +569,75 @@ def sync_stories(persona_cache):
             print(f"⚠️ {persona_name} 동기화 상태 저장 실패: {exc}", flush=True)
 
 
+# story_sync 테이블은 persona_name을 키로 쓰는데, "툴파관리자"라는 실명은
+# sync_stories()가 이 페르소나의 "함께 만든 이야기" Notion 기록에도 이미
+# 쓰고 있다 — 같은 키를 공유하면 두 동기화가 워터마크를 서로 덮어써서
+# 누락/중복이 생긴다. 그래서 관리자 보고 전용 워터마크는 실제 페르소나
+# 이름과 절대 겹치지 않는 별도 키를 쓴다.
+ADMIN_REPORT_WATERMARK_KEY = "__admin_report__"
+
+
+def sync_admin_reports(persona_cache):
+    """다른 사용자들이 채팅에서 남긴 불만·요청·개선 아이디어를 훑어서
+    소유자에게 보고한다(2026-08-26 "툴파관리자" 요청). Notion이 아니라
+    소유자와 툴파관리자의 1:1 채팅방에 메시지로 바로 남긴다 — 카톡 알림처럼
+    보이게. 소유자 본인이나 다른 페르소나가 보낸 메시지는 "다른 사용자
+    피드백"이 아니므로 제외한다."""
+    if ADMIN_PERSONA_NAME not in persona_cache:
+        return
+    try:
+        watermarks = _api("/api/worker/story_sync") or {}
+    except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+        print(f"⚠️ 툴파관리자 보고 상태 조회 실패: {exc}", flush=True)
+        return
+    last_id = watermarks.get(ADMIN_REPORT_WATERMARK_KEY, 0)
+    try:
+        all_messages = _api(f"/api/worker/all_messages?since_id={last_id}")
+    except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+        print(f"⚠️ 툴파관리자 메시지 조회 실패: {exc}", flush=True)
+        return
+    if not all_messages:
+        return
+    max_id = all_messages[-1]["id"]
+    persona_names = set(persona_cache.keys())
+    others_msgs = [
+        m for m in all_messages
+        if m["sender"] != OWNER_USERNAME and m["sender"] not in persona_names
+    ]
+    if len(others_msgs) < ADMIN_REPORT_MIN_NEW_MESSAGES:
+        try:
+            _api("/api/worker/story_sync", "POST", {"persona_name": ADMIN_REPORT_WATERMARK_KEY, "last_message_id": max_id})
+        except (urllib.error.URLError, urllib.error.HTTPError):
+            pass
+        return
+    transcript = "\n".join(f"{m['sender']}: {m['content']}" for m in others_msgs)
+    prompt = (
+        "다음은 툴파시스템 채팅앱에서 소유자 외 다른 사용자들이 최근 남긴 메시지들입니다.\n\n"
+        f"{transcript}\n\n"
+        "이 중 툴파시스템(이 채팅앱)에 대한 불만·버그 신고·기능 요청·개선 아이디어로 보이는 "
+        '내용만 골라서 소유자에게 보고하는 짧은 메시지를 "툴파관리자"로서 작성하세요. 그런 '
+        '내용이 하나도 없으면 정확히 "특이사항 없음"이라고만 답하세요. 있으면 누가 무엇을 '
+        "말했는지 항목별로 짧게 정리하세요(관련 없는 잡담은 빼고)."
+    )
+    try:
+        report, engine = run_ai_exec(prompt, WORK_DIR, timeout=AI_TIMEOUT_SECONDS)
+        report = report.strip()
+    except Exception as exc:  # noqa: BLE001 — 이번 주기만 건너뛰고 워커는 계속 돈다
+        print(f"⚠️ 툴파관리자 보고 생성 실패: {exc}", flush=True)
+        return
+    if not report.startswith("특이사항 없음"):
+        try:
+            _api("/api/worker/post_admin_report", "POST", {"content": report})
+            print(f"📋 툴파관리자 보고 전송 ({engine}): {report[:60]}", flush=True)
+        except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+            print(f"⚠️ 툴파관리자 보고 전송 실패: {exc}", flush=True)
+            return  # 워터마크 저장 안 함 — 다음 주기에 같은 구간 다시 시도
+    try:
+        _api("/api/worker/story_sync", "POST", {"persona_name": ADMIN_REPORT_WATERMARK_KEY, "last_message_id": max_id})
+    except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+        print(f"⚠️ 툴파관리자 보고 상태 저장 실패: {exc}", flush=True)
+
+
 def main():
     print(f"툴파시스템 워커 시작 — 서버: {SERVER_URL}", flush=True)
     persona_cache = sync_personas() or {}
@@ -567,6 +645,7 @@ def main():
     last_sync = time.time()
     last_user_persona_sync = time.time()
     last_story_sync = time.time()
+    last_admin_report_sync = time.time()
     while True:
         now = time.time()
         if now - last_sync > PERSONA_SYNC_INTERVAL_SECONDS:
@@ -581,6 +660,9 @@ def main():
         if now - last_story_sync > STORY_SYNC_INTERVAL_SECONDS:
             sync_stories(persona_cache)
             last_story_sync = time.time()
+        if now - last_admin_report_sync > ADMIN_REPORT_INTERVAL_SECONDS:
+            sync_admin_reports(persona_cache)
+            last_admin_report_sync = time.time()
         try:
             turn = _api("/api/worker/pending")
         except (urllib.error.URLError, urllib.error.HTTPError) as exc:
