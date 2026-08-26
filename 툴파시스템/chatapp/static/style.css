@@ -186,7 +186,10 @@ button { font-family: inherit; }
 .oauth-google { background: #ffffff; color: #1a1a1a; border: 1px solid var(--border); }
 .oauth-kakao { background: #FEE500; color: #191919; }
 .help-link {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   width: 100%;
   margin-top: 14px;
   padding: 8px;
@@ -197,6 +200,7 @@ button { font-family: inherit; }
   text-decoration: underline;
   cursor: pointer;
 }
+.help-link svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ★ 도움말 오버레이(2026-08-26) */
 #help-overlay {
@@ -529,6 +533,7 @@ header h1 { font-size: 18px; margin: 0; flex: 1; }
 }
 /* ★ 토론방 대표사진 썸네일(2026-08-26) */
 .avatar-image img { width: 100%; height: 100%; object-fit: cover; }
+.room-type-icon { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .room-info { flex: 1; min-width: 0; }
 .room-name { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
 /* ★ 안읽음 표시(2026-08-25) */

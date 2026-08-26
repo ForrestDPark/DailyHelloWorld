@@ -456,14 +456,16 @@ function renderRoomItem(r) {
   item.href = "#room=" + encodeURIComponent(r.room_id);
   item.className = "room-item";
   const isMeta = r.room_id === "group" || r.is_group_room;
-  const avatarChar = r.room_id === "group" ? "☺" : r.label[0];
-  const roomLabel = isMeta ? r.label : displayName(r.label);
+  const avatarChar = r.label.replace(/^👥\s*/, "")[0] || "T";
+  const roomLabel = isMeta ? r.label.replace(/^👥\s*/, "") : displayName(r.label);
   const unread = r.last_message_id && r.last_message_id > getLastRead(r.room_id);
   // ★ "토론방 대표사진 썸네일" 요청(2026-08-26) — 커스텀 방에 thumbnail_url이
   // 있으면 글자 아바타 대신 그 이미지를 보여준다.
   const avatarInner = r.thumbnail_url
     ? `<img src="${escapeHtml(r.thumbnail_url)}" alt="">`
-    : escapeHtml(avatarChar);
+    : isMeta
+      ? '<svg class="room-type-icon" aria-hidden="true"><use href="#icon-users"></use></svg>'
+      : escapeHtml(avatarChar);
   item.innerHTML = `
     <div class="avatar${r.thumbnail_url ? " avatar-image" : ""}">${avatarInner}</div>
     <div class="room-info">
