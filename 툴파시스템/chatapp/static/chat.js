@@ -1038,6 +1038,24 @@ function appendMessage(m) {
   const isMine = !isPersona && m.sender === myUsername;
   const el = document.createElement("div");
   el.className = "msg " + (isPersona ? "msg-persona" : isMine ? "msg-user" : "msg-other");
+  if (!isMine) {
+    const avatar = document.createElement(m.avatar_url ? "img" : "div");
+    avatar.className = "message-avatar";
+    avatar.title = `${isPersona ? displayName(m.sender) : m.sender} 프로필`;
+    if (m.avatar_url) {
+      avatar.src = m.avatar_url;
+      avatar.alt = "";
+      avatar.loading = "lazy";
+    } else {
+      avatar.textContent = (isPersona ? displayName(m.sender) : m.sender).trim().charAt(0) || "?";
+    }
+    if (isPersona && canWrite) {
+      avatar.classList.add("message-avatar-clickable");
+      avatar.title += " · 탭해서 답장";
+      avatar.addEventListener("click", () => setReplyTarget(m.sender));
+    }
+    el.appendChild(avatar);
+  }
   const sender = document.createElement("div");
   sender.className = "sender";
   sender.textContent = isPersona ? displayName(m.sender) : isMine ? "나" : m.sender;

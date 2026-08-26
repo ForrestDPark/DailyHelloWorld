@@ -272,8 +272,17 @@ def _build_user_persona_prompt(name, owner_username, description):
     )
 
 
-def _with_sender_type(rows, persona_names):
-    return [{**dict(r), "is_persona": r["sender"] in persona_names} for r in rows]
+def _with_sender_type(rows, persona_names, persona_avatars=None):
+    """메시지 발신자 종류와 페르소나 프로필 이미지를 함께 내려준다."""
+    persona_avatars = persona_avatars or {}
+    return [
+        {
+            **dict(r),
+            "is_persona": r["sender"] in persona_names,
+            "avatar_url": persona_avatars.get(r["sender"]),
+        }
+        for r in rows
+    ]
 
 
 @app.get("/")
@@ -1083,8 +1092,11 @@ def get_messages(request: Request, room_id: str = GROUP_ROOM_ID, since_id: int =
     # ★ 2026-08-26: list_rooms()와 같은 기준 — 소유자/본인이 아니면 페르소나
     # 1:1 방은 목록뿐 아니라 직접 조회도 막는다(해시를 직접 편집해서 들어오는
     # 우회 방지). 내가 만든 페르소나는 본인에게 허용.
-    persona_owner_rows = conn.execute("SELECT name, owner_username FROM personas").fetchall()
+    persona_owner_rows = conn.execute(
+        "SELECT name, owner_username, avatar_url FROM personas"
+    ).fetchall()
     persona_owner = {r["name"]: r["owner_username"] for r in persona_owner_rows}
+    persona_avatars = {r["name"]: r["avatar_url"] for r in persona_owner_rows}
     persona_names = set(persona_owner)
     if room_id in persona_names:
         if not _can_access_persona_room(persona_owner[room_id], username, is_owner_request):
@@ -1100,7 +1112,7 @@ def get_messages(request: Request, room_id: str = GROUP_ROOM_ID, since_id: int =
         (room_id, since_id),
     ).fetchall()
     conn.close()
-    return _with_sender_type(rows, persona_names)
+    return _with_sender_type(rows, persona_names, persona_avatars)
 
 
 @app.get("/api/all_messages")
@@ -1114,12 +1126,16 @@ def all_messages(since_id: int = 0):
     것 자체는 새로운 노출이 아니다."""
     conn = get_conn()
     persona_names = _persona_name_set(conn)
+    persona_avatars = {
+        r["name"]: r["avatar_url"]
+        for r in conn.execute("SELECT name, avatar_url FROM personas").fetchall()
+    }
     rows = conn.execute(
         "SELECT id, room_id, sender, content, created_at FROM messages WHERE id > ? ORDER BY id",
         (since_id,),
     ).fetchall()
     conn.close()
-    return _with_sender_type(rows, persona_names)
+    return _with_sender_type(rows, persona_names, persona_avatars)
 
 
 @app.post("/api/upload")
