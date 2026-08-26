@@ -592,6 +592,12 @@ async function showChatView(roomId) {
 // 배너로 보여준다. 1:1 방·전체 채팅방은 대상이 아니라 조용히 숨긴다.
 async function loadRoomNotice(roomId, isGroupMeetingRoom) {
   const notice = document.getElementById("room-notice");
+  const noticeText = document.getElementById("room-notice-text");
+  const noticeToggle = document.getElementById("room-notice-toggle");
+  notice.classList.remove("expanded");
+  noticeToggle.classList.add("hidden");
+  noticeToggle.textContent = "더보기";
+  noticeToggle.setAttribute("aria-expanded", "false");
   if (!isGroupMeetingRoom) {
     notice.classList.add("hidden");
     return;
@@ -600,8 +606,12 @@ async function loadRoomNotice(roomId, isGroupMeetingRoom) {
     const res = await apiFetch(`/api/rooms/${encodeURIComponent(roomId)}/notice`);
     const data = await res.json();
     if (data && data.content) {
-      document.getElementById("room-notice-text").textContent = data.content;
+      noticeText.textContent = data.content;
       notice.classList.remove("hidden");
+      requestAnimationFrame(() => {
+        const isOverflowing = noticeText.scrollHeight > noticeText.clientHeight + 1;
+        noticeToggle.classList.toggle("hidden", !isOverflowing);
+      });
     } else {
       notice.classList.add("hidden");
     }
@@ -610,6 +620,14 @@ async function loadRoomNotice(roomId, isGroupMeetingRoom) {
     if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
   }
 }
+
+document.getElementById("room-notice-toggle").addEventListener("click", () => {
+  const notice = document.getElementById("room-notice");
+  const toggle = document.getElementById("room-notice-toggle");
+  const expanded = notice.classList.toggle("expanded");
+  toggle.textContent = expanded ? "접기" : "더보기";
+  toggle.setAttribute("aria-expanded", String(expanded));
+});
 
 async function toggleInvitePanel() {
   const panel = document.getElementById("invite-panel");

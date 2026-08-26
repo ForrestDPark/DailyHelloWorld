@@ -389,7 +389,33 @@ header h1 { font-size: 18px; margin: 0; flex: 1; }
   font-size: 13px;
 }
 #room-notice-icon { flex-shrink: 0; }
-#room-notice-text { color: var(--fg); line-height: 1.5; white-space: pre-wrap; }
+#room-notice-text {
+  color: var(--fg);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  min-width: 0;
+  overflow-wrap: break-word;
+  flex: 1;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+#room-notice.expanded #room-notice-text { display: block; overflow: visible; }
+#room-notice-toggle {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  min-height: 30px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
 
 /* ★ 그룹 회의방 초대 패널(2026-08-25) */
 #invite-panel {
