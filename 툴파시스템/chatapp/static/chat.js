@@ -179,6 +179,61 @@ async function renderAdminUsers() {
   }
 }
 
+async function renderAdminPersonas() {
+  const list = document.getElementById("admin-persona-list");
+  list.innerHTML = '<div class="empty-hint">불러오는 중...</div>';
+  try {
+    const personas = await (await apiFetch("/api/admin/personas")).json();
+    list.innerHTML = "";
+    for (const p of personas) {
+      const card = document.createElement("div");
+      card.className = "admin-persona-card";
+      const image = p.avatar_url
+        ? `<img src="${escapeHtml(p.avatar_url)}" alt="">`
+        : `<span>${escapeHtml(p.name[0] || "T")}</span>`;
+      card.innerHTML = `<div class="admin-persona-head"><div class="admin-persona-avatar">${image}</div><div><strong>${escapeHtml(displayName(p.name))}</strong><small>${p.owner_username ? ` · ${escapeHtml(p.owner_username)} 소유` : " · 공용"}</small></div></div>`;
+      const textarea = document.createElement("textarea");
+      textarea.rows = 4;
+      textarea.maxLength = 2000;
+      textarea.value = p.admin_description || p.description || p.profile_summary || "";
+      const actions = document.createElement("div");
+      actions.className = "admin-persona-actions";
+      const save = document.createElement("button");
+      save.type = "button"; save.textContent = "설정 저장";
+      save.addEventListener("click", async () => {
+        const res = await apiFetch(`/api/admin/personas/${encodeURIComponent(p.name)}`, {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({description:textarea.value})});
+        if (!res.ok) alert((await res.json()).detail || "저장 실패"); else save.textContent = "저장됨";
+      });
+      const upload = document.createElement("button");
+      upload.type = "button"; upload.textContent = "이미지 변경";
+      const input = document.createElement("input");
+      input.type = "file"; input.accept = "image/*"; input.className = "hidden";
+      upload.addEventListener("click", () => input.click());
+      input.addEventListener("change", async () => {
+        if (!input.files[0]) return;
+        const data = new FormData(); data.append("file", input.files[0]);
+        const res = await apiFetch(`/api/admin/personas/${encodeURIComponent(p.name)}/avatar`, {method:"POST", body:data});
+        if (!res.ok) alert((await res.json()).detail || "업로드 실패"); else renderAdminPersonas();
+      });
+      const remove = document.createElement("button");
+      remove.type = "button"; remove.textContent = "이미지 삭제"; remove.className = "danger-subtle";
+      remove.addEventListener("click", async () => { await apiFetch(`/api/admin/personas/${encodeURIComponent(p.name)}/avatar`, {method:"DELETE"}); renderAdminPersonas(); });
+      const generate = document.createElement("button");
+      generate.type = "button"; generate.textContent = "유이에게 이미지 생성 요청";
+      generate.addEventListener("click", () => {
+        document.getElementById("admin-panel").classList.add("hidden");
+        location.hash = "#room=" + encodeURIComponent("유이");
+        setTimeout(() => {
+          const messageInput = document.getElementById("input");
+          messageInput.value = `${p.name}의 프로필 이미지를 GPT로 만들어줘. 현재 설정: ${textarea.value}`;
+          messageInput.focus();
+        }, 100);
+      });
+      actions.append(save, upload, generate, remove, input); card.append(textarea, actions); list.appendChild(card);
+    }
+  } catch (e) { list.innerHTML = '<div class="empty-hint">불러오지 못했습니다</div>'; console.error(e); }
+}
+
 document.getElementById("admin-btn").addEventListener("click", () => {
   const panel = document.getElementById("admin-panel");
   if (!panel.classList.contains("hidden")) {
@@ -187,6 +242,7 @@ document.getElementById("admin-btn").addEventListener("click", () => {
   }
   panel.classList.remove("hidden");
   renderAdminUsers();
+  renderAdminPersonas();
 });
 
 // ★ 2026-08-26: "사용자가 자신만의 페르소나를 생성하고 수정하거나 대화가

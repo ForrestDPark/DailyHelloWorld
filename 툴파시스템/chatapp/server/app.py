@@ -180,8 +180,24 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class NoCacheStaticMiddleware(BaseHTTPMiddleware):
+    """★ 2026-08-26 실측 문제: FastAPI StaticFiles가 Cache-Control 헤더를 아예
+    안 보내서, 브라우저가 자체 판단(Last-Modified 기준 휴리스틱)으로 정적
+    파일(특히 chat.js)을 몇 분씩 재검증 없이 그대로 재사용했다 — Cloudflare
+    캐시를 퍼지하고 우회 규칙까지 만들어도 브라우저 로컬 캐시는 그걸로 전혀
+    안 고쳐졌다(서로 다른 계층). /static/·/uploads/ 요청에는 "no-cache"를
+    강제해 매번 서버에 재검증(ETag)하게 한다 — 완전히 캐시를 끄는 게
+    아니라 "쓰기 전에 항상 물어보라"는 지시라 대역폭 낭비는 크지 않다."""
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/static/") or request.url.path.startswith("/uploads/"):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 app = FastAPI(title="툴파시스템 채팅앱")
 app.add_middleware(SessionAuthMiddleware)
+app.add_middleware(NoCacheStaticMiddleware)
 init_db()
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
@@ -422,6 +438,82 @@ class PersonaCreate(BaseModel):
 
 class PersonaUpdate(BaseModel):
     description: str
+
+
+class AdminPersonaUpdate(BaseModel):
+    description: str
+
+
+ADMIN_OVERRIDE_MARKER = "\n\n--- 관리자 설정 덮어쓰기 ---\n"
+
+
+def _with_admin_override(prompt, description):
+    base = prompt.split(ADMIN_OVERRIDE_MARKER, 1)[0]
+    return base + (ADMIN_OVERRIDE_MARKER + description if description else "")
+
+
+@app.get("/api/admin/personas")
+def admin_list_personas(request: Request):
+    _require_owner(request)
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT name, owner_username, description, profile_summary, admin_description, avatar_url, group_name "
+        "FROM personas ORDER BY name"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+@app.put("/api/admin/personas/{name}")
+def admin_update_persona(name: str, body: AdminPersonaUpdate, request: Request):
+    _require_owner(request)
+    description = body.description.strip()
+    if not description or len(description) > USER_PERSONA_DESC_MAX_CHARS:
+        raise HTTPException(status_code=400, detail=f"설정은 1~{USER_PERSONA_DESC_MAX_CHARS}자로 입력하세요")
+    conn = get_conn()
+    row = conn.execute("SELECT system_prompt FROM personas WHERE name = ?", (name,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="존재하지 않는 페르소나입니다")
+    conn.execute(
+        "UPDATE personas SET admin_description = ?, profile_summary = ?, system_prompt = ?, synced_at = ? WHERE name = ?",
+        (description, description, _with_admin_override(row["system_prompt"], description), _now(), name),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.post("/api/admin/personas/{name}/avatar")
+async def admin_upload_persona_avatar(name: str, request: Request, file: UploadFile = File(...)):
+    _require_owner(request)
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        raise HTTPException(status_code=400, detail="지원하지 않는 이미지 형식입니다")
+    data = await file.read()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="이미지가 너무 큽니다(10MB 제한)")
+    conn = get_conn()
+    if not conn.execute("SELECT 1 FROM personas WHERE name = ?", (name,)).fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="존재하지 않는 페르소나입니다")
+    filename = f"persona_{uuid.uuid4().hex}{ext}"
+    (UPLOADS_DIR / filename).write_bytes(data)
+    url = f"/uploads/{filename}"
+    conn.execute("UPDATE personas SET avatar_url = ? WHERE name = ?", (url, name))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "avatar_url": url}
+
+
+@app.delete("/api/admin/personas/{name}/avatar")
+def admin_delete_persona_avatar(name: str, request: Request):
+    _require_owner(request)
+    conn = get_conn()
+    conn.execute("UPDATE personas SET avatar_url = NULL WHERE name = ?", (name,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 @app.get("/api/my_personas")
@@ -763,6 +855,27 @@ def _custom_room_access(conn, room_id, username, is_owner_request):
     return True, allowed, row["owner_username"]
 
 
+@app.get("/api/rooms/{room_id}/notice")
+def get_room_notice(room_id: str, request: Request):
+    """"카카오톡처럼 채팅방에 공지사항이 보였으면 좋겠다, 그 방 대화를 토대로
+    업데이트 내용을 하루하루 요약해서 공지해달라"는 요청(2026-08-26). 워커가
+    `sync_room_notices()`로 채워둔 최신 공지를 그대로 돌려준다 — 커스텀
+    방이면 그 방 접근 권한과 동일하게 제한한다."""
+    user = getattr(request.state, "user", None)
+    username = user["username"] if user else None
+    is_owner_request = user["is_owner"] if user else True
+    conn = get_conn()
+    is_custom, allowed, _room_owner = _custom_room_access(conn, room_id, username, is_owner_request)
+    if is_custom and not allowed:
+        conn.close()
+        raise HTTPException(status_code=403, detail="이 채팅방 공지를 볼 수 없습니다")
+    row = conn.execute("SELECT content, updated_at FROM room_notices WHERE room_id = ?", (room_id,)).fetchone()
+    conn.close()
+    if not row or not row["content"]:
+        return None
+    return {"content": row["content"], "updated_at": row["updated_at"]}
+
+
 @app.get("/api/rooms/{room_id}/members")
 def get_room_members(room_id: str, request: Request):
     """이 그룹 회의방의 현재 참여자 목록과, 아직 초대 안 된 나머지 페르소나
@@ -866,7 +979,7 @@ def list_rooms(request: Request):
     본인/소유자에게만 노출한다."""
     conn = get_conn()
     persona_rows = conn.execute(
-        "SELECT name, group_name, owner_username FROM personas ORDER BY name"
+        "SELECT name, group_name, owner_username, avatar_url FROM personas ORDER BY name"
     ).fetchall()
     user = getattr(request.state, "user", None)
     is_owner_request = user["is_owner"] if user else True
@@ -898,6 +1011,7 @@ def list_rooms(request: Request):
         {
             "room_id": r["name"], "label": r["name"], "group_name": r["group_name"], "is_group_room": False,
             "is_mine": r["owner_username"] == username if username else False,
+            "thumbnail_url": r["avatar_url"],
         }
         for r in persona_rows
         if _can_access_persona_room(r["owner_username"], username, is_owner_request)
@@ -1155,6 +1269,30 @@ class WorkerResult(BaseModel):
     error: Optional[str] = None
 
 
+class WorkerMediaApply(BaseModel):
+    target_type: str
+    target_id: str
+    url: str
+
+
+@app.post("/api/worker/apply_media")
+def worker_apply_media(body: WorkerMediaApply, authorization: Optional[str] = Header(None)):
+    _check_worker_auth(authorization)
+    if not re.fullmatch(r"/uploads/[A-Za-z0-9_.-]+", body.url):
+        raise HTTPException(status_code=400, detail="허용되지 않은 이미지 URL입니다")
+    conn = get_conn()
+    if body.target_type == "persona":
+        conn.execute("UPDATE personas SET avatar_url = ? WHERE name = ?", (body.url, body.target_id))
+    elif body.target_type == "room":
+        conn.execute("UPDATE custom_rooms SET thumbnail_url = ? WHERE room_id = ?", (body.url, body.target_id))
+    else:
+        conn.close()
+        raise HTTPException(status_code=400, detail="허용되지 않은 적용 대상입니다")
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
 @app.post("/api/worker/complete")
 def worker_complete(result: WorkerResult, authorization: Optional[str] = Header(None)):
     _check_worker_auth(authorization)
@@ -1197,6 +1335,10 @@ class PersonaSync(BaseModel):
 def sync_persona(persona: PersonaSync, authorization: Optional[str] = Header(None)):
     _check_worker_auth(authorization)
     conn = get_conn()
+    existing = conn.execute("SELECT admin_description FROM personas WHERE name = ?", (persona.name,)).fetchone()
+    admin_description = existing["admin_description"] if existing else None
+    effective_prompt = _with_admin_override(persona.system_prompt, admin_description)
+    effective_summary = admin_description or persona.profile_summary
     conn.execute(
         """
         INSERT INTO personas (name, notion_page_id, system_prompt, group_name, profile_summary, synced_at)
@@ -1208,8 +1350,8 @@ def sync_persona(persona: PersonaSync, authorization: Optional[str] = Header(Non
             profile_summary = excluded.profile_summary,
             synced_at = excluded.synced_at
         """,
-        (persona.name, persona.notion_page_id, persona.system_prompt, persona.group_name,
-         persona.profile_summary, _now()),
+        (persona.name, persona.notion_page_id, effective_prompt, persona.group_name,
+         effective_summary, _now()),
     )
     conn.commit()
     conn.close()
@@ -1248,6 +1390,84 @@ def worker_post_admin_report(body: AdminReportPost, authorization: Optional[str]
         "INSERT INTO messages (room_id, sender, content, created_at) VALUES (?, ?, ?, ?)",
         (ADMIN_PERSONA_NAME, ADMIN_PERSONA_NAME, body.content, _now()),
     )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.get("/api/worker/group_rooms")
+def worker_group_rooms(authorization: Optional[str] = Header(None)):
+    """공지사항 동기화(`sync_room_notices`)가 훑어야 할 "여러 사람이 보는 방"
+    전체 목록 — Notion 그룹 회의방 + 모든 커스텀 방(2026-08-26)."""
+    _check_worker_auth(authorization)
+    conn = get_conn()
+    group_rows = conn.execute(
+        "SELECT DISTINCT group_name FROM personas WHERE group_name IS NOT NULL"
+    ).fetchall()
+    custom_rows = conn.execute("SELECT room_id, label FROM custom_rooms").fetchall()
+    conn.close()
+    rooms = [{"room_id": r["group_name"], "label": r["group_name"]} for r in group_rows]
+    rooms += [{"room_id": r["room_id"], "label": r["label"]} for r in custom_rows]
+    return rooms
+
+
+@app.get("/api/worker/room_messages")
+def worker_room_messages(room_id: str, since_id: int = 0, authorization: Optional[str] = Header(None)):
+    _check_worker_auth(authorization)
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT id, sender, content, created_at FROM messages WHERE room_id = ? AND id > ? ORDER BY id",
+        (room_id, since_id),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+@app.get("/api/worker/room_notice")
+def worker_get_room_notice_watermark(room_id: str, authorization: Optional[str] = Header(None)):
+    """공지 워터마크 조회 — "이 방은 어느 메시지까지 이미 공지 요약에
+    반영했는지" 알아야 다음 동기화에서 그 이후 메시지만 본다."""
+    _check_worker_auth(authorization)
+    conn = get_conn()
+    row = conn.execute("SELECT last_message_id FROM room_notices WHERE room_id = ?", (room_id,)).fetchone()
+    conn.close()
+    return {"last_message_id": row["last_message_id"] if row else 0}
+
+
+class RoomNoticePost(BaseModel):
+    room_id: str
+    content: Optional[str] = None
+    last_message_id: int
+
+
+@app.post("/api/worker/room_notice")
+def worker_post_room_notice(body: RoomNoticePost, authorization: Optional[str] = Header(None)):
+    """워커가 요약한 공지를 저장한다. content가 없으면(그 구간이 잡담뿐이라
+    "업데이트 없음"으로 판단된 경우) 기존 공지는 그대로 두고 워터마크만
+    전진시킨다 — 카톡 공지가 조용한 날이라고 사라지지 않는 것과 같다."""
+    _check_worker_auth(authorization)
+    conn = get_conn()
+    if body.content:
+        conn.execute(
+            """
+            INSERT INTO room_notices (room_id, content, last_message_id, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(room_id) DO UPDATE SET
+                content = excluded.content,
+                last_message_id = excluded.last_message_id,
+                updated_at = excluded.updated_at
+            """,
+            (body.room_id, body.content, body.last_message_id, _now()),
+        )
+    else:
+        conn.execute(
+            """
+            INSERT INTO room_notices (room_id, content, last_message_id, updated_at)
+            VALUES (?, NULL, ?, ?)
+            ON CONFLICT(room_id) DO UPDATE SET last_message_id = excluded.last_message_id
+            """,
+            (body.room_id, body.last_message_id, _now()),
+        )
     conn.commit()
     conn.close()
     return {"ok": True}

@@ -12,12 +12,14 @@
 Services 앱에 위임하는 것과 같은 이유로, "민감한 작업은 신뢰된 로컬 프로세스가
 전담"하는 이 저장소의 기존 패턴을 그대로 따른다."""
 import json
+import base64
 import os
 import re
 import shutil
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -230,10 +232,9 @@ def _maybe_execute_pending_plan(room_id, context):
     plan = _pending_organize_plans.pop(room_id, None)
     if not plan:
         return None
-    owner_msgs = [m for m in context if m["sender"] == OWNER_USERNAME]
-    if not owner_msgs:
+    if not context or context[-1]["sender"] != OWNER_USERNAME:
         return None
-    if not any(k in owner_msgs[-1]["content"] for k in ORGANIZE_APPROVE_KEYWORDS):
+    if not any(k in context[-1]["content"] for k in ORGANIZE_APPROVE_KEYWORDS):
         return None
     results = _execute_organize_plan(plan)
     return "정리를 실행했습니다.\n" + "\n".join(results)
@@ -320,6 +321,13 @@ UI_ALLOWED_FILES = {"index.html", "chat.js", "style.css"}
 UI_BACKUP_DIR = Path(os.path.expanduser("~/.tulpachat/ui_backups"))
 UI_PLAN_RE = re.compile(r"```uiplan\s*\n(.*?)\n```", re.DOTALL)
 UI_DEV_TIMEOUT_SECONDS = 180
+IMAGE_MODEL = os.environ.get("CHATAPP_IMAGE_MODEL", "gpt-image-2")
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+IMAGE_PLAN_RE = re.compile(r"```imageplan\s*\n(.*?)\n```", re.DOTALL)
+IMAGE_APPROVE_KEYWORDS = ("승인", "진행", "생성")
+IMAGE_APPLY_KEYWORDS = ("적용", "채택")
+_pending_image_plans = {}
+_pending_image_results = {}
 
 _pending_ui_plans = {}  # room_id -> [{"file":..., "content":...}, ...] — 워커 재시작하면 초기화(의도적)
 
@@ -345,8 +353,94 @@ def _build_ui_dev_addendum():
         "무시된다). 그 외의 답이면 계획은 자동으로 취소된다.\n"
         "4) index.html/chat.js/style.css 세 파일 외에는(서버·워커·인증 코드 포함) 절대 언급도 "
         "제안도 하지 않는다 — 이 역할은 화면(UI)만 다룬다.\n\n"
+        "\n5) 이미지 작업(분석·프로필 초상화·그룹방 대표 이미지·썸네일/편집·표정 "
+        "스티커 세트·대화 장면 일러스트)은 먼저 첨부 이미지를 읽고 설명한 뒤 "
+        "```imageplan 코드 블록에 JSON 배열로 제안한다. 각 항목은 "
+        '{"kind":"profile|room|edit|sticker|scene","prompt":"생성 프롬프트",'
+        '"target_type":"persona|room|none","target_id":"이름 또는 room_id",'
+        '"source":"선택: /uploads/파일명"} 형식이다. AI가 직접 생성하거나 파일을 쓰지 '
+        "말고 소유자의 승인 뒤 결정론적 워커가 GPT Image API를 호출하게 한다. 생성 결과는 "
+        "먼저 채팅에 미리보기로 올리고, 프로필/방 적용은 소유자가 다음 메시지에서 적용/채택해야 한다.\n\n"
         f"--- 참고: chatapp/README.md 발췌 ---\n{readme_text}\n--- 발췌 끝 ---"
     )
+
+
+def _capture_pending_image_plan(room_id, reply_text):
+    m = IMAGE_PLAN_RE.search(reply_text)
+    if not m:
+        return
+    try:
+        actions = json.loads(m.group(1))
+    except json.JSONDecodeError:
+        return
+    if isinstance(actions, list) and 0 < len(actions) <= 4:
+        _pending_image_plans[room_id] = actions
+
+
+def _multipart(fields, file_path):
+    boundary = f"----tulpachat{int(time.time() * 1000)}"
+    chunks = []
+    for key, value in fields.items():
+        chunks += [f"--{boundary}\r\nContent-Disposition: form-data; name=\"{key}\"\r\n\r\n{value}\r\n".encode()]
+    data = file_path.read_bytes()
+    chunks += [f"--{boundary}\r\nContent-Disposition: form-data; name=\"image\"; filename=\"{file_path.name}\"\r\nContent-Type: image/png\r\n\r\n".encode(), data, f"\r\n--{boundary}--\r\n".encode()]
+    return boundary, b"".join(chunks)
+
+
+def _generate_image(prompt, source=None):
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY가 워커에 설정되지 않았습니다")
+    headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
+    if source:
+        source_path = UPLOADS_DIR / Path(source).name
+        if not source_path.exists():
+            raise RuntimeError("편집할 원본 이미지를 찾지 못했습니다")
+        boundary, data = _multipart({"model": IMAGE_MODEL, "prompt": prompt, "size": "1024x1024", "quality": "medium"}, source_path)
+        headers["Content-Type"] = f"multipart/form-data; boundary={boundary}"
+        url = "https://api.openai.com/v1/images/edits"
+    else:
+        headers["Content-Type"] = "application/json"
+        data = json.dumps({"model": IMAGE_MODEL, "prompt": prompt, "size": "1024x1024", "quality": "medium"}).encode()
+        url = "https://api.openai.com/v1/images/generations"
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=180) as response:
+        result = json.loads(response.read())
+    raw = base64.b64decode(result["data"][0]["b64_json"])
+    filename = f"generated_{int(time.time())}_{os.urandom(4).hex()}.png"
+    (UPLOADS_DIR / filename).write_bytes(raw)
+    return f"/uploads/{filename}"
+
+
+def _maybe_execute_image_plan(room_id, context):
+    plan = _pending_image_plans.pop(room_id, None)
+    if not plan:
+        return None
+    if not context or context[-1]["sender"] != OWNER_USERNAME or not any(k in context[-1]["content"] for k in IMAGE_APPROVE_KEYWORDS):
+        return None
+    previews, pending = [], []
+    for action in plan:
+        if not isinstance(action, dict) or action.get("kind") not in {"profile", "room", "edit", "sticker", "scene"}:
+            continue
+        url = _generate_image(str(action.get("prompt", ""))[:4000], action.get("source"))
+        previews.append(f"![]({url})")
+        if action.get("target_type") in {"persona", "room"} and action.get("target_id"):
+            pending.append({"target_type": action["target_type"], "target_id": action["target_id"], "url": url})
+    if pending:
+        _pending_image_results[room_id] = pending
+    suffix = "\n프로필이나 방에 반영하려면 다음 메시지로 ‘적용’이라고 말해주세요." if pending else ""
+    return "이미지 작업 결과입니다.\n" + "\n".join(previews) + suffix
+
+
+def _maybe_apply_image_results(room_id, context):
+    pending = _pending_image_results.get(room_id)
+    if not pending:
+        return None
+    if not context or context[-1]["sender"] != OWNER_USERNAME or not any(k in context[-1]["content"] for k in IMAGE_APPLY_KEYWORDS):
+        return None
+    _pending_image_results.pop(room_id, None)
+    for item in pending:
+        _api("/api/worker/apply_media", "POST", item)
+    return "소유자 승인을 확인해 생성 이미지를 프로필/방에 적용했습니다."
 
 
 def _execute_ui_plan(actions):
@@ -391,10 +485,9 @@ def _maybe_execute_pending_ui_plan(room_id, context):
     plan = _pending_ui_plans.pop(room_id, None)
     if not plan:
         return None
-    owner_msgs = [m for m in context if m["sender"] == OWNER_USERNAME]
-    if not owner_msgs:
+    if not context or context[-1]["sender"] != OWNER_USERNAME:
         return None
-    if not any(k in owner_msgs[-1]["content"] for k in ORGANIZE_APPROVE_KEYWORDS):
+    if not any(k in context[-1]["content"] for k in ORGANIZE_APPROVE_KEYWORDS):
         return None
     results = _execute_ui_plan(plan)
     return "UI 변경을 적용했습니다(새로고침하면 바로 보입니다).\n" + "\n".join(results)
@@ -524,6 +617,14 @@ def process_turn(turn, persona_cache):
             print(f"🗂️ {persona_name} 정리 실행: {executed[:80]}", flush=True)
             return
     if is_ui_dev:
+        applied = _maybe_apply_image_results(room_id, turn["context"])
+        if applied is not None:
+            _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": applied})
+            return
+        generated = _maybe_execute_image_plan(room_id, turn["context"])
+        if generated is not None:
+            _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": generated})
+            return
         executed = _maybe_execute_pending_ui_plan(room_id, turn["context"])
         if executed is not None:
             _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": executed})
@@ -551,6 +652,7 @@ def process_turn(turn, persona_cache):
             _capture_pending_plan(room_id, reply)
         elif is_ui_dev:
             _capture_pending_ui_plan(room_id, reply)
+            _capture_pending_image_plan(room_id, reply)
         _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": reply})
         print(f"💬 {persona_name} ({engine}): {reply[:60]}", flush=True)
     except Exception as exc:  # noqa: BLE001 — 이 턴만 실패 처리하고 워커는 계속 돈다
@@ -689,6 +791,64 @@ def sync_admin_reports(persona_cache):
         print(f"⚠️ 툴파관리자 보고 상태 저장 실패: {exc}", flush=True)
 
 
+# ★ 2026-08-26: "채팅창에 카카오톡처럼 공지사항이 보였으면 좋겠다, 그 방
+# 대화 내용을 토대로 업데이트되는 내용을 하루하루 요약해서 공지해달라"는
+# 요청. 그룹 회의방·커스텀 방마다 새 메시지가 쌓이면 그 방 대화만 근거로
+# 짧은 공지문을 만들어 room_notices에 저장한다(서버가 GET /api/rooms/{id}/notice로
+# 프론트에 내려줌). "업데이트 없음"인 구간이면 기존 공지를 지우지 않고
+# 워터마크만 전진시킨다 — 카톡 공지가 조용한 날이라고 사라지지 않는 것과 같다.
+ROOM_NOTICE_INTERVAL_SECONDS = 3600  # 1시간마다 확인(실제 갱신은 새 메시지 쌓였을 때만)
+ROOM_NOTICE_MIN_NEW_MESSAGES = 6
+
+
+def sync_room_notices():
+    try:
+        rooms = _api("/api/worker/group_rooms") or []
+    except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+        print(f"⚠️ 공지 대상 방 목록 조회 실패: {exc}", flush=True)
+        return
+    for room in rooms:
+        room_id, label = room["room_id"], room["label"]
+        encoded_room_id = urllib.parse.quote(room_id, safe="")
+        try:
+            watermark = _api(f"/api/worker/room_notice?room_id={encoded_room_id}") or {}
+        except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+            print(f"⚠️ '{label}' 공지 워터마크 조회 실패: {exc}", flush=True)
+            continue
+        last_id = watermark.get("last_message_id", 0)
+        try:
+            msgs = _api(f"/api/worker/room_messages?room_id={encoded_room_id}&since_id={last_id}")
+        except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+            print(f"⚠️ '{label}' 새 메시지 조회 실패: {exc}", flush=True)
+            continue
+        if not msgs or len(msgs) < ROOM_NOTICE_MIN_NEW_MESSAGES:
+            continue
+        max_id = msgs[-1]["id"]
+        transcript = "\n".join(f"{m['sender']}: {m['content']}" for m in msgs)
+        prompt = (
+            f'다음은 "{label}" 채팅방에서 새로 오간 대화입니다.\n\n{transcript}\n\n'
+            "카카오톡 공지사항처럼, 이 방에 있었던 일 중 다른 사람이 놓치면 안 될 "
+            "업데이트·결정·진행 상황·완료된 작업만 골라 2~4줄로 짧게 요약하세요. "
+            '잡담이나 인사만 있었다면 정확히 "업데이트 없음"이라고만 답하세요.'
+        )
+        try:
+            notice, engine = run_ai_exec(prompt, WORK_DIR, timeout=AI_TIMEOUT_SECONDS)
+            notice = notice.strip()
+        except Exception as exc:  # noqa: BLE001 — 이 방만 건너뛰고 워커는 계속 돈다
+            print(f"⚠️ '{label}' 공지 생성 실패: {exc}", flush=True)
+            continue
+        body = {"room_id": room_id, "last_message_id": max_id}
+        if not notice.startswith("업데이트 없음"):
+            date_label = time.strftime("%Y-%m-%d")
+            body["content"] = f"[{date_label}] {notice}"
+        try:
+            _api("/api/worker/room_notice", "POST", body)
+            if "content" in body:
+                print(f"📌 '{label}' 공지 갱신 ({engine}): {notice[:50]}", flush=True)
+        except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+            print(f"⚠️ '{label}' 공지 저장 실패: {exc}", flush=True)
+
+
 def main():
     print(f"툴파시스템 워커 시작 — 서버: {SERVER_URL}", flush=True)
     persona_cache = sync_personas() or {}
@@ -697,6 +857,7 @@ def main():
     last_user_persona_sync = time.time()
     last_story_sync = time.time()
     last_admin_report_sync = time.time()
+    last_room_notice_sync = time.time()
     while True:
         now = time.time()
         if now - last_sync > PERSONA_SYNC_INTERVAL_SECONDS:
@@ -714,6 +875,9 @@ def main():
         if now - last_admin_report_sync > ADMIN_REPORT_INTERVAL_SECONDS:
             sync_admin_reports(persona_cache)
             last_admin_report_sync = time.time()
+        if now - last_room_notice_sync > ROOM_NOTICE_INTERVAL_SECONDS:
+            sync_room_notices()
+            last_room_notice_sync = time.time()
         try:
             turn = _api("/api/worker/pending")
         except (urllib.error.URLError, urllib.error.HTTPError) as exc:

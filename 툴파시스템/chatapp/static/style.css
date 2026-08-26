@@ -305,6 +305,17 @@ header h1 { font-size: 18px; margin: 0; flex: 1; }
   background: var(--bubble-persona);
 }
 #admin-user-list { display: flex; flex-direction: column; gap: 6px; }
+.admin-persona-title { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); }
+#admin-persona-list { display: grid; gap: 10px; max-height: 52vh; overflow-y: auto; }
+.admin-persona-card { padding: 12px; border: 1px solid var(--border); border-radius: 15px; background: var(--bg); }
+.admin-persona-head { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; }
+.admin-persona-head small { color: var(--muted); }
+.admin-persona-avatar { width: 38px; height: 38px; border-radius: 12px; overflow: hidden; display: grid; place-items: center; background: var(--avatar-bg); color: var(--accent); font-weight: 700; }
+.admin-persona-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.admin-persona-card textarea { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 11px; background: var(--bg-elevated); color: var(--fg); font: inherit; font-size: 14px; resize: vertical; }
+.admin-persona-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.admin-persona-actions button { min-height: 34px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-weight: 650; cursor: pointer; }
+.admin-persona-actions .danger-subtle { color: var(--danger); background: transparent; }
 .admin-user-row {
   display: flex;
   align-items: center;

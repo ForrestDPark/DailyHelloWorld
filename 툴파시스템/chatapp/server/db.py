@@ -88,6 +88,12 @@ def init_db():
             owner_username TEXT NOT NULL,
             created_at TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS room_notices (
+            room_id TEXT PRIMARY KEY,
+            content TEXT,
+            last_message_id INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT
+        );
         """
     )
     _ensure_column(conn, "messages", "room_id", "TEXT NOT NULL DEFAULT 'group'")
@@ -116,5 +122,14 @@ def init_db():
     # 배경)만 추려서 채워준다(worker/notion_personas.py extract_profile_summary).
     # 사용자 개인 페르소나는 이미 있는 description을 그대로 프로필로 쓴다.
     _ensure_column(conn, "personas", "profile_summary", "TEXT")
+    _ensure_column(conn, "personas", "avatar_url", "TEXT")
+    _ensure_column(conn, "personas", "admin_description", "TEXT")
     conn.commit()
     conn.close()
+
+
+# ★ 2026-08-26: "채팅창에 카카오톡처럼 공지사항이 보였으면 좋겠다, 그 방
+# 대화 내용을 토대로 업데이트되는 내용을 하루하루 요약해서 공지해달라"는
+# 요청. room_notices — 그룹 회의방/커스텀 방마다 최신 공지 하나씩만 들고
+# 있는다(마치 카톡 공지처럼 이전 공지를 덮어씀). last_message_id는 워커가
+# "여기까지는 이미 요약에 반영했다"를 아는 워터마크.
