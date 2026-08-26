@@ -614,6 +614,52 @@ function groupRooms(rooms) {
 }
 
 let roomsCache = new Map(); // room_id -> room object, showChatView()에서 제목/메타 표시용
+let listMode = localStorage.getItem("tulpa_list_mode") === "chats" ? "chats" : "friends";
+
+function renderCurrentList() {
+  const rooms = [...roomsCache.values()];
+  const friendsTab = document.getElementById("friends-tab");
+  const chatsTab = document.getElementById("chats-tab");
+  friendsTab.classList.toggle("active", listMode === "friends");
+  chatsTab.classList.toggle("active", listMode === "chats");
+  friendsTab.setAttribute("aria-selected", String(listMode === "friends"));
+  chatsTab.setAttribute("aria-selected", String(listMode === "chats"));
+  document.getElementById("main-view-title").textContent = listMode === "friends" ? "친구" : "채팅";
+  roomListEl.innerHTML = "";
+  if (listMode === "chats") {
+    const chats = rooms
+      .filter((r) => r.room_id === "group" || r.is_group_room || r.last_message_id)
+      .sort((a, b) => String(b.last_message_at || "").localeCompare(String(a.last_message_at || "")));
+    if (!chats.length) {
+      roomListEl.innerHTML = '<div class="empty-hint"><strong>아직 대화가 없습니다</strong><br>친구 탭에서 페르소나를 골라 대화를 시작해보세요.</div>';
+      return;
+    }
+    for (const r of chats) roomListEl.appendChild(renderRoomItem(r));
+    return;
+  }
+  const friends = rooms.filter((r) => r.room_id !== "group" && !r.is_group_room);
+  if (!friends.length) {
+    roomListEl.innerHTML = '<div class="empty-hint">아직 친구가 없습니다</div>';
+    return;
+  }
+  const { groups, orderedKeys } = groupRooms(friends);
+  for (const key of orderedKeys) {
+    const header = document.createElement("div");
+    header.className = "group-header";
+    header.textContent = key;
+    roomListEl.appendChild(header);
+    for (const r of groups.get(key)) roomListEl.appendChild(renderRoomItem(r));
+  }
+}
+
+function setListMode(mode) {
+  listMode = mode;
+  localStorage.setItem("tulpa_list_mode", mode);
+  renderCurrentList();
+}
+
+document.getElementById("friends-tab").addEventListener("click", () => setListMode("friends"));
+document.getElementById("chats-tab").addEventListener("click", () => setListMode("chats"));
 
 async function showRoomList() {
   currentRoom = null;
@@ -625,24 +671,11 @@ async function showRoomList() {
     const res = await apiFetch("/api/rooms");
     const rooms = await res.json();
     roomsCache = new Map(rooms.map((r) => [r.room_id, r]));
-    roomListEl.innerHTML = "";
     if (!rooms.length) {
       roomListEl.innerHTML = '<div class="empty-hint">아직 페르소나가 없습니다</div>';
       return;
     }
-    const { solo, groups, orderedKeys } = groupRooms(rooms);
-    for (const r of solo) {
-      roomListEl.appendChild(renderRoomItem(r));
-    }
-    for (const key of orderedKeys) {
-      const header = document.createElement("div");
-      header.className = "group-header";
-      header.textContent = key;
-      roomListEl.appendChild(header);
-      for (const r of groups.get(key)) {
-        roomListEl.appendChild(renderRoomItem(r));
-      }
-    }
+    renderCurrentList();
   } catch (e) {
     roomListEl.innerHTML = '<div class="empty-hint">방 목록을 불러오지 못했습니다</div>';
     console.error(e);

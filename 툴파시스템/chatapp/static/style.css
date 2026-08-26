@@ -522,6 +522,10 @@ header h1 { font-size: 18px; margin: 0; flex: 1; }
 
 /* 방 목록 */
 #room-list { flex: 1; overflow-y: auto; }
+#main-list-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin: 10px 12px 2px; padding: 4px; border: 1px solid var(--border); border-radius: 15px; background: color-mix(in srgb, var(--bubble-persona) 70%, transparent); }
+#main-list-tabs button { min-height: 42px; display: flex; align-items: center; justify-content: center; gap: 7px; border: none; border-radius: 11px; background: transparent; color: var(--muted); font-weight: 700; cursor: pointer; }
+#main-list-tabs button.active { background: var(--bg-elevated); color: var(--accent); box-shadow: var(--shadow-soft); }
+#main-list-tabs svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .group-header {
   padding: 14px 16px 4px;
   font-size: 12px;
