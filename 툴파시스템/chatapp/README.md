@@ -821,3 +821,26 @@ GPT Images API의 이미지당 요금 없이 Apple Silicon Mac에서 직접 이�
   턴이 두 번 재배정되며 왕복하지 않게 막는다.
 - 1:1 방(room_id=페르소나 이름)은 후보가 자기 하나뿐이라 이 단계 자체를
   건너뛴다 — 가장 흔한 트래픽에 지연을 더하지 않는다.
+
+## 워커 launchd 잡에 PATH 누락 — codex가 사실상 항상 실패하던 버그 (2026-08-26)
+
+위 담당자 재검토 기능을 라이브로 검증하다가, 로그의 `↪️ codex 실패로
+claude(으)로 전환해서 처리함`이 예외적인 상황이 아니라 **사실상 매 턴마다**
+찍히고 있다는 걸 발견했다. `com.tulpachat.worker.plist`에 `PATH`가 전혀
+설정돼 있지 않아 launchd 기본 PATH(`/usr/bin:/bin:/usr/sbin:/sbin`)로
+돌았는데, `codex exec`가 내부적으로 `node`를 PATH에서 찾다가
+(`codex: env: node: No such file or directory`) 항상 실패하고
+`ai_exec.py`가 조용히 claude로 전환해온 것 — `ai_exec.py`의 "codex
+1순위" 설계가 이 프로젝트가 시작된 이래 사실상 한 번도 실제로 동작한 적이
+없었다는 뜻이다. claude도 어쩌다 시간 초과(180초)로 같이 실패하면 그
+턴은 완전히 실패로 남는다(실제로 이렇게 한 번 재현됨).
+
+`~/Library/LaunchAgents/com.tulpachat.worker.plist`의
+`EnvironmentVariables`에 `PATH =
+/opt/homebrew/bin:/opt/homebrew/opt/node@22/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`를
+추가하고 `launchctl bootout` + `bootstrap`으로 완전히 재로드해서(★
+`kickstart -k`는 실행 중인 잡만 재시작할 뿐 수정된 plist 파일을 다시
+읽지 않는다 — 반드시 bootout/bootstrap 또는 unload/load로 재로드해야
+plist 변경이 반영된다) 고쳤다. 재로드 후 실제로 `💬 박정민 (codex): ...`처럼
+codex가 직접 성공하는 것을 로그로 확인했다. 서버(`server/app.py`)는
+subprocess를 전혀 안 써서 이 문제와 무관 — 워커만 해당.
