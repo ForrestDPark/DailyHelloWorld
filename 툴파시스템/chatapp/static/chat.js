@@ -412,6 +412,50 @@ document.getElementById("profiles-btn").addEventListener("click", async () => {
       body.textContent = p.summary;
       content.appendChild(title);
       content.appendChild(body);
+      if (amOwner) {
+        const edit = document.createElement("button");
+        edit.type = "button";
+        edit.className = "profile-edit-btn";
+        edit.textContent = "수정";
+        edit.addEventListener("click", () => {
+          if (content.querySelector(".profile-edit-form")) return;
+          body.classList.add("hidden");
+          edit.classList.add("hidden");
+          const form = document.createElement("div");
+          form.className = "profile-edit-form";
+          const textarea = document.createElement("textarea");
+          textarea.rows = 6;
+          textarea.maxLength = 2000;
+          textarea.value = p.summary === "(아직 프로필 정보가 없습니다)" ? "" : p.summary;
+          const actions = document.createElement("div");
+          actions.className = "profile-edit-actions";
+          const save = document.createElement("button");
+          save.type = "button";
+          save.textContent = "저장";
+          const cancel = document.createElement("button");
+          cancel.type = "button";
+          cancel.textContent = "취소";
+          cancel.addEventListener("click", () => { form.remove(); body.classList.remove("hidden"); edit.classList.remove("hidden"); });
+          save.addEventListener("click", async () => {
+            const description = textarea.value.trim();
+            if (!description) { alert("프로필 설정을 입력해주세요"); return; }
+            save.disabled = true;
+            const res = await apiFetch(`/api/admin/personas/${encodeURIComponent(p.name)}`, {
+              method: "PUT", headers: {"Content-Type": "application/json"}, body: JSON.stringify({description}),
+            });
+            if (!res.ok) { alert((await res.json()).detail || "저장하지 못했습니다"); save.disabled = false; return; }
+            p.summary = description;
+            body.textContent = description;
+            form.remove();
+            body.classList.remove("hidden");
+            edit.classList.remove("hidden");
+          });
+          actions.append(save, cancel);
+          form.append(textarea, actions);
+          content.appendChild(form);
+        });
+        content.appendChild(edit);
+      }
       card.appendChild(avatar);
       card.appendChild(content);
       list.appendChild(card);
