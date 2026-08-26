@@ -444,6 +444,10 @@ class AdminPersonaUpdate(BaseModel):
     description: str
 
 
+class AdminPersonaGroupUpdate(BaseModel):
+    group_name: Optional[str] = None
+
+
 ADMIN_OVERRIDE_MARKER = "\n\n--- 관리자 설정 덮어쓰기 ---\n"
 
 
@@ -482,6 +486,23 @@ def admin_update_persona(name: str, body: AdminPersonaUpdate, request: Request):
     conn.commit()
     conn.close()
     return {"ok": True}
+
+
+@app.put("/api/admin/personas/{name}/group")
+def admin_update_persona_group(name: str, body: AdminPersonaGroupUpdate, request: Request):
+    _require_owner(request)
+    raw_group_name = (body.group_name or "").strip()
+    group_name = raw_group_name or None
+    if group_name and len(group_name) > 40:
+        raise HTTPException(status_code=400, detail="그룹 이름은 40자 이내로 입력하세요")
+    conn = get_conn()
+    if not conn.execute("SELECT 1 FROM personas WHERE name = ?", (name,)).fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="존재하지 않는 페르소나입니다")
+    conn.execute("UPDATE personas SET admin_group_name = ?, group_name = ? WHERE name = ?", (raw_group_name, group_name, name))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "group_name": group_name}
 
 
 @app.post("/api/admin/personas/{name}/avatar")
@@ -1337,10 +1358,12 @@ class PersonaSync(BaseModel):
 def sync_persona(persona: PersonaSync, authorization: Optional[str] = Header(None)):
     _check_worker_auth(authorization)
     conn = get_conn()
-    existing = conn.execute("SELECT admin_description FROM personas WHERE name = ?", (persona.name,)).fetchone()
+    existing = conn.execute("SELECT admin_description, admin_group_name FROM personas WHERE name = ?", (persona.name,)).fetchone()
     admin_description = existing["admin_description"] if existing else None
+    admin_group_name = existing["admin_group_name"] if existing else None
     effective_prompt = _with_admin_override(persona.system_prompt, admin_description)
     effective_summary = admin_description or persona.profile_summary
+    effective_group = (admin_group_name or None) if admin_group_name is not None else persona.group_name
     conn.execute(
         """
         INSERT INTO personas (name, notion_page_id, system_prompt, group_name, profile_summary, synced_at)
@@ -1352,7 +1375,7 @@ def sync_persona(persona: PersonaSync, authorization: Optional[str] = Header(Non
             profile_summary = excluded.profile_summary,
             synced_at = excluded.synced_at
         """,
-        (persona.name, persona.notion_page_id, effective_prompt, persona.group_name,
+        (persona.name, persona.notion_page_id, effective_prompt, effective_group,
          effective_summary, _now()),
     )
     conn.commit()

@@ -566,9 +566,10 @@ function markRoomRead(roomId, messageId) {
 }
 
 function renderRoomItem(r) {
-  const item = document.createElement("a");
-  item.href = "#room=" + encodeURIComponent(r.room_id);
+  const item = document.createElement("div");
   item.className = "room-item";
+  item.tabIndex = 0;
+  item.setAttribute("role", "button");
   const isMeta = r.room_id === "group" || r.is_group_room;
   const avatarChar = r.label.replace(/^👥\s*/, "")[0] || "T";
   const roomLabel = isMeta ? r.label.replace(/^👥\s*/, "") : displayName(r.label);
@@ -587,6 +588,50 @@ function renderRoomItem(r) {
       <div class="room-preview">${r.last_message ? escapeHtml(r.last_message) : "대화를 시작해보세요"}</div>
     </div>
   `;
+  const openChat = () => { location.hash = "#room=" + encodeURIComponent(r.room_id); };
+  if (listMode === "friends" && !isMeta) {
+    item.title = "한 번 클릭해 선택, 더블클릭해 대화하기";
+    item.addEventListener("click", () => {
+      document.querySelectorAll(".room-item.selected").forEach((el) => el.classList.remove("selected"));
+      item.classList.add("selected");
+    });
+    item.addEventListener("dblclick", openChat);
+    const menuBtn = document.createElement("button");
+    menuBtn.type = "button";
+    menuBtn.className = "friend-more-btn";
+    menuBtn.setAttribute("aria-label", `${r.label} 메뉴`);
+    menuBtn.textContent = "⋯";
+    menuBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      document.querySelectorAll(".friend-action-menu").forEach((el) => el.remove());
+      const menu = document.createElement("div");
+      menu.className = "friend-action-menu";
+      const addAction = (label, action) => {
+        const button = document.createElement("button");
+        button.type = "button"; button.textContent = label;
+        button.addEventListener("click", (e) => { e.stopPropagation(); menu.remove(); action(); });
+        menu.appendChild(button);
+      };
+      addAction("대화하기", openChat);
+      addAction("프로필 보기", () => {
+        const panel = document.getElementById("profiles-panel");
+        if (panel.classList.contains("hidden")) document.getElementById("profiles-btn").click();
+      });
+      if (amOwner) addAction("그룹 설정", async () => {
+        const value = prompt(`${r.label}의 그룹 이름을 입력하세요. 비우면 그룹 없음으로 설정됩니다.`, r.group_name || "");
+        if (value === null) return;
+        const res = await apiFetch(`/api/admin/personas/${encodeURIComponent(r.room_id)}/group`, {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({group_name:value})});
+        if (!res.ok) { alert((await res.json()).detail || "그룹을 바꾸지 못했습니다"); return; }
+        await showRoomList();
+      });
+      item.appendChild(menu);
+    });
+    item.appendChild(menuBtn);
+    item.addEventListener("keydown", (event) => { if (event.key === "Enter") openChat(); });
+  } else {
+    item.addEventListener("click", openChat);
+    item.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") openChat(); });
+  }
   return item;
 }
 
@@ -660,6 +705,11 @@ function setListMode(mode) {
 
 document.getElementById("friends-tab").addEventListener("click", () => setListMode("friends"));
 document.getElementById("chats-tab").addEventListener("click", () => setListMode("chats"));
+document.addEventListener("click", (event) => {
+  if (!event.target.closest(".friend-more-btn") && !event.target.closest(".friend-action-menu")) {
+    document.querySelectorAll(".friend-action-menu").forEach((el) => el.remove());
+  }
+});
 
 async function showRoomList() {
   currentRoom = null;

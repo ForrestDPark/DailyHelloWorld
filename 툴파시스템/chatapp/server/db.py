@@ -124,6 +124,7 @@ def init_db():
     _ensure_column(conn, "personas", "profile_summary", "TEXT")
     _ensure_column(conn, "personas", "avatar_url", "TEXT")
     _ensure_column(conn, "personas", "admin_description", "TEXT")
+    _ensure_column(conn, "personas", "admin_group_name", "TEXT")
     conn.commit()
     conn.close()
 
