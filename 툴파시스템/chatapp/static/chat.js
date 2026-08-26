@@ -603,13 +603,14 @@ function renderRoomItem(r) {
     menuBtn.textContent = "⋯";
     menuBtn.addEventListener("click", (event) => {
       event.stopPropagation();
-      document.querySelectorAll(".friend-action-menu").forEach((el) => el.remove());
+      closeFriendMenus();
       const menu = document.createElement("div");
       menu.className = "friend-action-menu";
+      item.classList.add("menu-open");
       const addAction = (label, action) => {
         const button = document.createElement("button");
         button.type = "button"; button.textContent = label;
-        button.addEventListener("click", (e) => { e.stopPropagation(); menu.remove(); action(); });
+        button.addEventListener("click", (e) => { e.stopPropagation(); closeFriendMenus(); action(); });
         menu.appendChild(button);
       };
       addAction("대화하기", openChat);
@@ -705,9 +706,15 @@ function setListMode(mode) {
 
 document.getElementById("friends-tab").addEventListener("click", () => setListMode("friends"));
 document.getElementById("chats-tab").addEventListener("click", () => setListMode("chats"));
+
+function closeFriendMenus() {
+  document.querySelectorAll(".friend-action-menu").forEach((el) => el.remove());
+  document.querySelectorAll(".room-item.menu-open").forEach((el) => el.classList.remove("menu-open"));
+}
+
 document.addEventListener("click", (event) => {
   if (!event.target.closest(".friend-more-btn") && !event.target.closest(".friend-action-menu")) {
-    document.querySelectorAll(".friend-action-menu").forEach((el) => el.remove());
+    closeFriendMenus();
   }
 });
 
