@@ -763,20 +763,22 @@ def list_persona_profiles(request: Request):
     (다른 사람의 개인 페르소나는 그 사람 1:1 방처럼 비공개 유지)."""
     user = getattr(request.state, "user", None)
     username = user["username"] if user else None
+    is_owner_request = bool(user and user["is_owner"])
     conn = get_conn()
     rows = conn.execute(
-        "SELECT name, owner_username, description, profile_summary FROM personas ORDER BY name"
+        "SELECT name, owner_username, description, profile_summary, avatar_url FROM personas ORDER BY name"
     ).fetchall()
     conn.close()
     result = []
     for r in rows:
-        if r["owner_username"] is not None and r["owner_username"] != username:
+        if r["owner_username"] is not None and r["owner_username"] != username and not is_owner_request:
             continue
         summary = r["profile_summary"] or r["description"] or "(아직 프로필 정보가 없습니다)"
         result.append({
             "name": r["name"],
             "is_mine": bool(username) and r["owner_username"] == username,
             "summary": summary,
+            "avatar_url": r["avatar_url"],
         })
     return result
 

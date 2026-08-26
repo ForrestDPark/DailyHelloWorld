@@ -392,14 +392,28 @@ document.getElementById("profiles-btn").addEventListener("click", async () => {
     for (const p of profiles) {
       const card = document.createElement("div");
       card.className = "profile-card";
+      const avatar = document.createElement("div");
+      avatar.className = "profile-card-avatar" + (p.avatar_url ? " has-image" : "");
+      if (p.avatar_url) {
+        const img = document.createElement("img");
+        img.src = p.avatar_url;
+        img.alt = `${p.name} 프로필 이미지`;
+        avatar.appendChild(img);
+      } else {
+        avatar.textContent = p.name[0] || "T";
+      }
+      const content = document.createElement("div");
+      content.className = "profile-card-content";
       const title = document.createElement("div");
       title.className = "profile-card-title";
       title.textContent = displayName(p.name) + (p.is_mine ? " · 내가 만듦" : "");
       const body = document.createElement("div");
       body.className = "profile-card-body";
       body.textContent = p.summary;
-      card.appendChild(title);
-      card.appendChild(body);
+      content.appendChild(title);
+      content.appendChild(body);
+      card.appendChild(avatar);
+      card.appendChild(content);
       list.appendChild(card);
     }
   } catch (e) {

@@ -359,11 +359,17 @@ header h1 { font-size: 18px; margin: 0; flex: 1; }
 }
 #profiles-list { display: flex; flex-direction: column; gap: 10px; }
 .profile-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 10px 12px;
 }
+.profile-card-avatar { width: 58px; height: 58px; min-width: 58px; border-radius: 18px; display: grid; place-items: center; overflow: hidden; background: var(--avatar-bg); color: var(--accent); font-size: 20px; font-weight: 750; }
+.profile-card-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.profile-card-content { flex: 1; min-width: 0; }
 .profile-card-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
 .profile-card-body { font-size: 13px; color: var(--fg); white-space: pre-wrap; line-height: 1.5; }
 #persona-manager-panel {
