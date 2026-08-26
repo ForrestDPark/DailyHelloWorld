@@ -824,7 +824,19 @@ def _last_persona_speaker(conn, room_id, candidates):
     return row["sender"] if row else None
 
 
-def _default_targets(conn, room_id, candidates, mentioned, reply_to):
+_BROADCAST_INVITE_RE = re.compile(r"다른\s*(분|사람|병법가)|다들|여러분")
+
+
+def _is_broadcast_invite(content):
+    """"다른분들은 할말 없으십니까", "매요신님 같은 다른 병법가들도 말씀해
+    보시지요"처럼, 특정 한 명이 아니라 방에 있는 여러/전원에게 발언을
+    요청하는 문구인지 본다. ★ 2026-08-26: 이런 문구를 쓴 뒤에도 직전
+    발화자나 문장 속에 걸린 이름 한 명만 계속 대답해서 "다른 사람들은
+    말을 안 한다"는 버그 신고 — 이 경우엔 전원에게 보낸다."""
+    return bool(_BROADCAST_INVITE_RE.search(content))
+
+
+def _default_targets(conn, room_id, candidates, mentioned, reply_to, content=""):
     """이름/호칭으로 아무도 안 지목했을 때 누구에게 보낼지 정한다.
 
     ★ 2026-08-26: "너 솔직히 말해봐"처럼 대명사로만 말하면 방에 있는 페르소나
@@ -832,9 +844,16 @@ def _default_targets(conn, room_id, candidates, mentioned, reply_to):
     전원 응답"이었는데, 그 방에서 누군가 이미 말을 섞고 있었다면(직전 발화자가
     있다면) 자연스러운 대화 흐름상 그 사람에게 이어서 말하는 것으로 보고
     그 한 명에게만 보낸다. 아직 아무도 말을 안 한 방(막 만들었거나 막
-    초대한 직후)에서는 기존처럼 전원이 한 번씩 반응해 "인사 라운드"를 연다."""
+    초대한 직후)에서는 기존처럼 전원이 한 번씩 반응해 "인사 라운드"를 연다.
+
+    ★ 2026-08-26: "다른 분들은 할 말 없으십니까", "매요신님 같은 다른
+    병법가들도"처럼 여러/전원에게 말을 거는 문구는 위 "직전 발화자 1인에게만
+    이어짐"/"멘션된 1명만" 규칙보다 우선한다 — 명시적으로 여러 명을 부른
+    것이므로 전원에게 보낸다."""
     if reply_to and reply_to in candidates:
         return [reply_to]
+    if _is_broadcast_invite(content):
+        return candidates
     if mentioned:
         return mentioned
     last_speaker = _last_persona_speaker(conn, room_id, candidates)
@@ -1185,7 +1204,7 @@ def post_message(msg: NewMessage, request: Request):
         # 그 한 명만 응답 — "한명한테 말하는데 모든 인물이 다 답변해서 정신없다"
         # 는 요청.
         mentioned = _mentioned_personas(content, all_personas)
-        targets = _default_targets(conn, room_id, all_personas, mentioned, msg.reply_to)
+        targets = _default_targets(conn, room_id, all_personas, mentioned, msg.reply_to, content)
     elif room_id in all_personas:
         # 1:1 방은 방 이름 = 그 페르소나 이름이므로 항상 그 한 명만 응답한다.
         targets = [room_id]
@@ -1199,7 +1218,7 @@ def post_message(msg: NewMessage, request: Request):
         # 포함한다("프로젝트하다가 관련 인물 추가" 요청).
         group_members = _group_members(conn, room_id, persona_rows)
         mentioned = _mentioned_personas(content, group_members)
-        targets = _default_targets(conn, room_id, group_members, mentioned, msg.reply_to)
+        targets = _default_targets(conn, room_id, group_members, mentioned, msg.reply_to, content)
     if not is_owner_request:
         # 1:1 방은 이미 위에서 막았지만, 단체/그룹 회의방에서는 다른 계정도
         # 메시지를 보낼 수 있다 — 그 경우에도 손동주는 응답 대상에서 뺀다.
