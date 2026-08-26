@@ -665,6 +665,19 @@ function groupRooms(rooms) {
 let roomsCache = new Map(); // room_id -> room object, showChatView()에서 제목/메타 표시용
 let listMode = localStorage.getItem("tulpa_list_mode") === "chats" ? "chats" : "friends";
 
+// ★ "친구 목록이 그룹화돼 있으니 그룹별로 토글해서 목록을 축약하는 기능이
+// 있으면 좋겠다" 요청(2026-08-26) — 접은 그룹은 기기별 localStorage에
+// 저장해서 새로고침·재방문해도 유지된다.
+const COLLAPSED_GROUPS_KEY = "tulpa_collapsed_groups";
+let collapsedGroups = new Set(JSON.parse(localStorage.getItem(COLLAPSED_GROUPS_KEY) || "[]"));
+
+function toggleGroupCollapse(key) {
+  if (collapsedGroups.has(key)) collapsedGroups.delete(key);
+  else collapsedGroups.add(key);
+  localStorage.setItem(COLLAPSED_GROUPS_KEY, JSON.stringify([...collapsedGroups]));
+  renderCurrentList();
+}
+
 function renderCurrentList() {
   const rooms = [...roomsCache.values()];
   const friendsTab = document.getElementById("friends-tab");
@@ -693,11 +706,22 @@ function renderCurrentList() {
   }
   const { groups, orderedKeys } = groupRooms(friends);
   for (const key of orderedKeys) {
-    const header = document.createElement("div");
+    const members = groups.get(key);
+    const isCollapsed = collapsedGroups.has(key);
+    const header = document.createElement("button");
+    header.type = "button";
     header.className = "group-header";
-    header.textContent = key;
+    header.setAttribute("aria-expanded", String(!isCollapsed));
+    header.innerHTML = `
+      <span class="group-toggle-arrow">${isCollapsed ? "▸" : "▾"}</span>
+      <span class="group-header-label">${escapeHtml(key)}</span>
+      <span class="group-count">${members.length}</span>
+    `;
+    header.addEventListener("click", () => toggleGroupCollapse(key));
     roomListEl.appendChild(header);
-    for (const r of groups.get(key)) roomListEl.appendChild(renderRoomItem(r));
+    if (!isCollapsed) {
+      for (const r of members) roomListEl.appendChild(renderRoomItem(r));
+    }
   }
 }
 
