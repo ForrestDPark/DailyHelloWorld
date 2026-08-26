@@ -152,7 +152,16 @@ async function renderAdminUsers() {
       const row = document.createElement("div");
       row.className = "admin-user-row";
       const label = document.createElement("span");
-      label.textContent = u.username;
+      label.className = "admin-user-label";
+      const name = document.createElement("span");
+      name.className = "admin-user-name";
+      name.textContent = u.username;
+      const meta = document.createElement("span");
+      meta.className = "admin-user-meta";
+      const joined = u.created_at ? u.created_at.slice(0, 10) : "?";
+      meta.textContent = `${joined} 가입 · ${u.login_method} · 메시지 ${u.message_count}개`;
+      label.appendChild(name);
+      label.appendChild(meta);
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "admin-grant-btn" + (u.ui_dev_granted ? " granted" : "");

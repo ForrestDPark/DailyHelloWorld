@@ -1224,17 +1224,32 @@ def post_message(msg: NewMessage, request: Request):
 
 @app.get("/api/admin/users")
 def admin_list_users(request: Request):
-    """소유자 전용 — 계정 목록과 각자의 유이(UI 개발자) 권한 부여 여부를
-    같이 내려준다. 프론트의 권한 관리 패널(owner에게만 보임)이 쓴다."""
+    """소유자 전용 — 계정 목록과 각자의 유이(UI 개발자) 권한 부여 여부, 가입
+    정보(가입일·로그인 방식·메시지 수)를 같이 내려준다. 프론트의 권한 관리
+    패널(owner에게만 보임)이 쓴다.
+    ★ "관리자가 사용자권한관리 버튼 누르면 가입한 사람들 정보를 볼 수 있게
+    해달라" 요청(2026-08-26)."""
     _require_owner(request)
     conn = get_conn()
-    users = conn.execute("SELECT username, is_owner FROM users ORDER BY username").fetchall()
+    users = conn.execute(
+        "SELECT username, is_owner, created_at, google_sub, kakao_id FROM users ORDER BY username"
+    ).fetchall()
     granted = {r["username"] for r in conn.execute("SELECT username FROM ui_dev_grants").fetchall()}
+    message_counts = {
+        r["sender"]: r["cnt"]
+        for r in conn.execute("SELECT sender, COUNT(*) AS cnt FROM messages GROUP BY sender").fetchall()
+    }
     conn.close()
-    return [
-        {"username": r["username"], "is_owner": bool(r["is_owner"]), "ui_dev_granted": r["username"] in granted}
-        for r in users
-    ]
+    result = []
+    for r in users:
+        login_method = "구글" if r["google_sub"] else "카카오" if r["kakao_id"] else "아이디/비밀번호"
+        result.append({
+            "username": r["username"], "is_owner": bool(r["is_owner"]),
+            "ui_dev_granted": r["username"] in granted,
+            "created_at": r["created_at"], "login_method": login_method,
+            "message_count": message_counts.get(r["username"], 0),
+        })
+    return result
 
 
 @app.post("/api/admin/ui_dev_grants/{username}")
