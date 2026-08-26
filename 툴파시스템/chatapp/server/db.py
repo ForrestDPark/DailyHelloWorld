@@ -125,6 +125,11 @@ def init_db():
     _ensure_column(conn, "personas", "avatar_url", "TEXT")
     _ensure_column(conn, "personas", "admin_description", "TEXT")
     _ensure_column(conn, "personas", "admin_group_name", "TEXT")
+    # ★ "담당이 아닌 페르소나가 엉뚱하게 대답하는 버그" 요청(2026-08-26) —
+    # 이름이 안 불렸을 때 "직전 발화자"로 고른 턴을 워커가 한 번 재검토해서
+    # 더 알맞은 담당자로 돌려보낼 수 있다(rerouted=1이면 재검토 끝, 무한
+    # 왕복 방지).
+    _ensure_column(conn, "pending_turns", "rerouted", "INTEGER NOT NULL DEFAULT 0")
     conn.commit()
     conn.close()
 

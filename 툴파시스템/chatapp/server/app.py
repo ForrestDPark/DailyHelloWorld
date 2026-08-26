@@ -1302,7 +1302,7 @@ def worker_pending(authorization: Optional[str] = Header(None)):
     _check_worker_auth(authorization)
     conn = get_conn()
     row = conn.execute(
-        "SELECT id, persona_name, room_id FROM pending_turns WHERE status = 'pending' ORDER BY id LIMIT 1"
+        "SELECT id, persona_name, room_id, rerouted FROM pending_turns WHERE status = 'pending' ORDER BY id LIMIT 1"
     ).fetchone()
     if not row:
         conn.close()
@@ -1316,8 +1316,54 @@ def worker_pending(authorization: Optional[str] = Header(None)):
         "turn_id": row["id"],
         "persona_name": row["persona_name"],
         "room_id": row["room_id"],
+        "rerouted": bool(row["rerouted"]),
         "context": [dict(r) for r in reversed(context_rows)],
     }
+
+
+@app.get("/api/worker/room_candidates")
+def worker_room_candidates(room_id: str, authorization: Optional[str] = Header(None)):
+    """이 room_id에서 응답 가능한 페르소나 후보 전원을 준다 — post_message()가
+    targets를 정할 때 쓰는 것과 같은 세 갈래(전체 채팅방/1:1 방/그룹·커스텀
+    방)를 그대로 따른다. ★ "담당 아닌 페르소나가 답하는 버그" 요청(2026-08-26)
+    — 워커가 "이 방에 누가 더 있는지" 알아야 담당자 재검토를 할 수 있다."""
+    _check_worker_auth(authorization)
+    conn = get_conn()
+    persona_rows = conn.execute("SELECT name, group_name, owner_username FROM personas ORDER BY name").fetchall()
+    persona_names = {r["name"] for r in persona_rows}
+    if room_id == GROUP_ROOM_ID:
+        candidates = sorted(persona_names)
+    elif room_id in persona_names:
+        candidates = [room_id]
+    else:
+        candidates = _group_members(conn, room_id, persona_rows)
+    conn.close()
+    return {"candidates": candidates}
+
+
+class RedirectTurn(BaseModel):
+    turn_id: int
+    persona_name: str
+
+
+@app.post("/api/worker/redirect_turn")
+def worker_redirect_turn(body: RedirectTurn, authorization: Optional[str] = Header(None)):
+    """대기 중인 턴의 담당자를 바꾼다 — 워커가 "이름이 안 불렸을 때 직전
+    화자로 이어감" 판단이 이번엔 틀렸다고 재검토한 경우에만 부른다.
+    rerouted=1로 표시해 같은 턴이 다시 왕복하지 않게 한다."""
+    _check_worker_auth(authorization)
+    conn = get_conn()
+    row = conn.execute("SELECT status FROM pending_turns WHERE id = ?", (body.turn_id,)).fetchone()
+    if not row or row["status"] != "pending":
+        conn.close()
+        raise HTTPException(status_code=404, detail="이미 처리됐거나 없는 턴입니다")
+    conn.execute(
+        "UPDATE pending_turns SET persona_name = ?, rerouted = 1 WHERE id = ?",
+        (body.persona_name, body.turn_id),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 class WorkerResult(BaseModel):

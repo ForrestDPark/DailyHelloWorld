@@ -619,7 +619,9 @@ def sync_personas():
             system_prompt += _build_ui_dev_addendum()
         group_name = extract_group(page_text)
         profile_summary = extract_profile_summary(page_text)
-        cache[persona["title"]] = {"system_prompt": system_prompt, "page_id": persona["id"]}
+        cache[persona["title"]] = {
+            "system_prompt": system_prompt, "page_id": persona["id"], "profile_summary": profile_summary,
+        }
         try:
             _api("/api/worker/sync_persona", "POST", {
                 "name": persona["title"],
@@ -698,6 +700,74 @@ def build_prompt(persona_name, system_prompt, context, persona_names, has_images
     return "\n".join(lines)
 
 
+# ★ "담당이 아닌 페르소나가 엉뚱하게 대답하는 버그" 요청(2026-08-26) —
+# "채팅앱 UI 얘기인데 이직시스템 담당인 박정민이 대답한다"처럼, 이름이 안
+# 불려서 서버가 "직전 발화자"로 잠정 배정한 턴이 실제로는 다른 담당자 몫일
+# 수 있다. app.py의 _given_name/_is_broadcast_invite와 같은 규칙으로 "이번
+# 메시지가 이미 누군가를 명시적으로 불렀는지"부터 확인하고(불렀으면 서버
+# 판단을 그대로 따름), 안 불렀을 때만 후보들의 담당(프로필 요약)을 놓고
+# 짧은 분류 호출로 한 번 재검토한다. rerouted 플래그로 같은 턴이 두 번
+# 재검토되지 않게 막아 왕복을 방지한다.
+ROUTING_TIMEOUT_SECONDS = 20
+
+
+def _given_name(persona_name):
+    first_word = persona_name.split()[0]
+    return first_word[1:] if len(first_word) >= 3 else first_word
+
+
+_BROADCAST_INVITE_RE = re.compile(r"다른\s*(분|사람|병법가)|다들|여러분")
+
+
+def _has_explicit_target(content, candidates):
+    if _BROADCAST_INVITE_RE.search(content):
+        return True
+    for name in candidates:
+        given = _given_name(name)
+        if f"@{name}" in content or (len(given) >= 2 and given in content):
+            return True
+    return False
+
+
+def _latest_human_message(context, persona_names):
+    for msg in reversed(context):
+        if msg["sender"] not in persona_names:
+            return msg["content"]
+    return None
+
+
+def _maybe_reroute_turn(turn, persona_cache, candidates):
+    """더 알맞은 담당자가 있으면 그 이름을, 없거나 판단 못 하면 None을 준다."""
+    if turn.get("rerouted") or len(candidates) < 2:
+        return None
+    latest = _latest_human_message(turn["context"], set(persona_cache.keys()))
+    if not latest or _has_explicit_target(latest, candidates):
+        return None
+    lines = []
+    for name in candidates:
+        entry = persona_cache.get(name, {})
+        desc = entry.get("profile_summary") or entry.get("system_prompt", "")[:150]
+        desc = " ".join(desc.split())
+        lines.append(f"- {name}: {desc or '(설명 없음)'}")
+    prompt = (
+        f'단체 채팅방에서 방금 이런 메시지가 왔다: "{latest}"\n\n'
+        "이 방에는 담당이 서로 다른 사람들이 있다:\n" + "\n".join(lines) + "\n\n"
+        f'지금은 "{turn["persona_name"]}"이 답할 차례로 잠정 배정되어 있다. '
+        "이 메시지에 답하기에 명백히 다른 사람이 훨씬 더 알맞을 때만 그 사람 이름으로 "
+        f'바꾸고, 애매하거나 지금 배정도 괜찮으면 그대로 "{turn["persona_name"]}"이라고만 '
+        "답하라. 위 목록의 이름 중 정확히 하나만, 다른 말 없이 출력하라."
+    )
+    try:
+        result, _engine = run_ai_exec(prompt, WORK_DIR, timeout=ROUTING_TIMEOUT_SECONDS)
+    except Exception as exc:  # noqa: BLE001 — 분류 실패는 원래 배정대로 진행
+        print(f"⚠️ 담당자 재검토 실패, 원래 배정 유지: {exc}", flush=True)
+        return None
+    result = result.strip().strip('"').strip("'")
+    if result in candidates and result != turn["persona_name"]:
+        return result
+    return None
+
+
 def process_turn(turn, persona_cache):
     persona_name = turn["persona_name"]
     room_id = turn["room_id"]
@@ -727,6 +797,21 @@ def process_turn(turn, persona_cache):
             _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": executed})
             print(f"🎨 {persona_name} UI 적용: {executed[:80]}", flush=True)
             return
+    if room_id not in persona_cache:  # 1:1 방(room_id=페르소나 이름)은 후보가 자기 하나뿐이라 재검토 불필요
+        try:
+            candidates_resp = _api(f"/api/worker/room_candidates?room_id={urllib.parse.quote(room_id, safe='')}")
+            candidates = (candidates_resp or {}).get("candidates", [])
+        except (urllib.error.URLError, urllib.error.HTTPError):
+            candidates = []
+        better_fit = _maybe_reroute_turn(turn, persona_cache, candidates)
+        if better_fit:
+            try:
+                _api("/api/worker/redirect_turn", "POST", {"turn_id": turn["turn_id"], "persona_name": better_fit})
+                print(f"↪️ {persona_name} → {better_fit}로 담당자 재배정", flush=True)
+            except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+                print(f"⚠️ 담당자 재배정 실패, 원래 배정대로 진행: {exc}", flush=True)
+            else:
+                return
     image_paths = extract_image_paths(turn["context"])
     notion_page_ids = extract_notion_page_ids(turn["context"])
     notion_reference = load_notion_references(notion_page_ids)
