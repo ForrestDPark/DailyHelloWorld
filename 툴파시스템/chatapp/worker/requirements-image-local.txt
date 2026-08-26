@@ -1,0 +1,6 @@
+# Apple Silicon 로컬 이미지 생성용. PyTorch는 워커 Python 환경에 별도 설치한다.
+diffusers>=0.30,<0.36
+safetensors>=0.4,<0.6
+transformers>=4.41,<5
+accelerate>=0.31,<1
+Pillow>=10,<12

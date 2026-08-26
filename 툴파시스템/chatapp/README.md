@@ -700,7 +700,8 @@ GPT Images API의 이미지당 요금 없이 Apple Silicon Mac에서 직접 이�
 - 기본 제공자는 `CHATAPP_IMAGE_PROVIDER=local`이며, 모델은
   `CHATAPP_LOCAL_IMAGE_MODEL`(기본
   `stable-diffusion-v1-5/stable-diffusion-v1-5`)로 지정한다. 16GB M2에서 메모리
-  부담을 줄이기 위해 512×512, FP16, attention slicing, 한 장씩 순차 생성한다.
+  부담을 줄이기 위해 512×512, attention slicing, 한 장씩 순차 생성한다. 이 M2의
+  FP16 추론에서 NaN으로 검은 이미지가 되는 현상을 실측해 안정적인 FP32를 쓴다.
 - 최초 생성 때만 모델을 다운로드해 Hugging Face 캐시에 보관하고 이후 재사용한다.
   생성 횟수에 따른 API 요금은 없지만 최초 다운로드 용량·시간과 로컬 연산 시간은
   필요하다. 단계 수는 `CHATAPP_LOCAL_IMAGE_STEPS`(기본 24, 코드에서 10~40 제한)로

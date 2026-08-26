@@ -13,6 +13,8 @@ Services 앱에 위임하는 것과 같은 이유로, "민감한 작업은 신�
 전담"하는 이 저장소의 기존 패턴을 그대로 따른다."""
 import json
 import base64
+import hashlib
+import gc
 import os
 import re
 import shutil
@@ -321,13 +323,21 @@ UI_ALLOWED_FILES = {"index.html", "chat.js", "style.css"}
 UI_BACKUP_DIR = Path(os.path.expanduser("~/.tulpachat/ui_backups"))
 UI_PLAN_RE = re.compile(r"```uiplan\s*\n(.*?)\n```", re.DOTALL)
 UI_DEV_TIMEOUT_SECONDS = 180
+IMAGE_PROVIDER = os.environ.get("CHATAPP_IMAGE_PROVIDER", "local").strip().lower()
 IMAGE_MODEL = os.environ.get("CHATAPP_IMAGE_MODEL", "gpt-image-2")
+LOCAL_IMAGE_MODEL = os.environ.get(
+    "CHATAPP_LOCAL_IMAGE_MODEL", "stable-diffusion-v1-5/stable-diffusion-v1-5"
+)
+LOCAL_IMAGE_SIZE = 512
+LOCAL_IMAGE_STEPS = int(os.environ.get("CHATAPP_LOCAL_IMAGE_STEPS", "24"))
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 IMAGE_PLAN_RE = re.compile(r"```imageplan\s*\n(.*?)\n```", re.DOTALL)
 IMAGE_APPROVE_KEYWORDS = ("승인", "진행", "생성")
 IMAGE_APPLY_KEYWORDS = ("적용", "채택")
 _pending_image_plans = {}
 _pending_image_results = {}
+_local_pipeline = None
+_local_pipeline_is_edit = None
 
 _pending_ui_plans = {}  # room_id -> [{"file":..., "content":...}, ...] — 워커 재시작하면 초기화(의도적)
 
@@ -359,7 +369,7 @@ def _build_ui_dev_addendum():
         '{"kind":"profile|room|edit|sticker|scene","prompt":"생성 프롬프트",'
         '"target_type":"persona|room|none","target_id":"이름 또는 room_id",'
         '"source":"선택: /uploads/파일명"} 형식이다. AI가 직접 생성하거나 파일을 쓰지 '
-        "말고 소유자의 승인 뒤 결정론적 워커가 GPT Image API를 호출하게 한다. 생성 결과는 "
+        "말고 소유자의 승인 뒤 결정론적 워커가 설정된 이미지 생성기를 호출하게 한다. 생성 결과는 "
         "먼저 채팅에 미리보기로 올리고, 프로필/방 적용은 소유자가 다음 메시지에서 적용/채택해야 한다.\n\n"
         f"--- 참고: chatapp/README.md 발췌 ---\n{readme_text}\n--- 발췌 끝 ---"
     )
@@ -387,7 +397,84 @@ def _multipart(fields, file_path):
     return boundary, b"".join(chunks)
 
 
-def _generate_image(prompt, source=None):
+def _local_seed(prompt, source=None):
+    """같은 계획은 같은 시드로 재현되게 하고 Python hash 난수화는 피한다."""
+    material = f"{prompt}\n{Path(source).name if source else ''}".encode("utf-8")
+    return int.from_bytes(hashlib.sha256(material).digest()[:4], "big")
+
+
+def _load_local_pipeline(edit=False):
+    """무거운 모델은 승인된 첫 생성 시점에만 로드한다."""
+    global _local_pipeline, _local_pipeline_is_edit
+    try:
+        import torch
+        from diffusers import StableDiffusionImg2ImgPipeline, StableDiffusionPipeline
+    except ImportError as exc:
+        raise RuntimeError(
+            "로컬 이미지 생성 패키지가 없습니다. worker/requirements-image-local.txt를 설치해주세요"
+        ) from exc
+    if not torch.backends.mps.is_available():
+        raise RuntimeError("이 Mac에서 PyTorch MPS 가속을 사용할 수 없습니다")
+    if _local_pipeline is not None and _local_pipeline_is_edit == edit:
+        return _local_pipeline
+    # 16GB 메모리에서 txt2img와 img2img 모델을 동시에 들고 있지 않는다.
+    if _local_pipeline is not None:
+        del _local_pipeline
+        _local_pipeline = None
+        gc.collect()
+        torch.mps.empty_cache()
+    pipeline_class = StableDiffusionImg2ImgPipeline if edit else StableDiffusionPipeline
+    try:
+        pipeline = pipeline_class.from_pretrained(
+            LOCAL_IMAGE_MODEL,
+            # 이 M2에서 FP16은 NaN→검은 이미지가 되는 경우가 실측돼 FP32 사용.
+            torch_dtype=torch.float32,
+            use_safetensors=True,
+        )
+    except Exception as exc:  # 모델 다운로드/캐시 오류를 채팅에 이해하기 쉽게 전달
+        raise RuntimeError(f"로컬 이미지 모델을 불러오지 못했습니다: {exc}") from exc
+    pipeline.enable_attention_slicing()
+    pipeline = pipeline.to("mps")
+    _local_pipeline = pipeline
+    _local_pipeline_is_edit = edit
+    return pipeline
+
+
+def _generate_local_image(prompt, source=None):
+    try:
+        import torch
+        from PIL import Image, ImageOps
+    except ImportError as exc:
+        raise RuntimeError("로컬 이미지 생성 패키지가 올바르게 설치되지 않았습니다") from exc
+    source_path = None
+    if source:
+        source_path = UPLOADS_DIR / Path(source).name
+        if not source_path.exists():
+            raise RuntimeError("편집할 원본 이미지를 찾지 못했습니다")
+    pipeline = _load_local_pipeline(edit=bool(source_path))
+    generator = torch.Generator(device="cpu").manual_seed(_local_seed(prompt, source))
+    kwargs = {
+        "prompt": prompt,
+        "negative_prompt": "low quality, blurry, distorted, deformed, text, watermark",
+        "num_inference_steps": max(10, min(40, LOCAL_IMAGE_STEPS)),
+        "guidance_scale": 7.0,
+        "generator": generator,
+    }
+    if source_path:
+        with Image.open(source_path) as original:
+            kwargs["image"] = ImageOps.fit(
+                original.convert("RGB"), (LOCAL_IMAGE_SIZE, LOCAL_IMAGE_SIZE), Image.Resampling.LANCZOS
+            )
+        kwargs["strength"] = 0.7
+    result = pipeline(**kwargs)
+    if not result.images:
+        raise RuntimeError("안전 검사로 인해 생성할 수 있는 이미지가 없었습니다")
+    filename = f"generated_{int(time.time())}_{os.urandom(4).hex()}.png"
+    result.images[0].save(UPLOADS_DIR / filename, format="PNG", optimize=True)
+    return f"/uploads/{filename}"
+
+
+def _generate_openai_image(prompt, source=None):
     if not OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY가 워커에 설정되지 않았습니다")
     headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
@@ -409,6 +496,16 @@ def _generate_image(prompt, source=None):
     filename = f"generated_{int(time.time())}_{os.urandom(4).hex()}.png"
     (UPLOADS_DIR / filename).write_bytes(raw)
     return f"/uploads/{filename}"
+
+
+def _generate_image(prompt, source=None):
+    if not prompt.strip():
+        raise RuntimeError("이미지 생성 프롬프트가 비어 있습니다")
+    if IMAGE_PROVIDER == "local":
+        return _generate_local_image(prompt, source)
+    if IMAGE_PROVIDER == "openai":
+        return _generate_openai_image(prompt, source)
+    raise RuntimeError(f"지원하지 않는 이미지 생성 방식입니다: {IMAGE_PROVIDER}")
 
 
 def _maybe_execute_image_plan(room_id, context):
