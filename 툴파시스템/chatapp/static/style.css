@@ -52,6 +52,54 @@ body {
 }
 
 button { font-family: inherit; }
+.icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.icon-button { position: relative; }
+.icon-button > svg, #room-notice-icon svg {
+  width: 21px;
+  height: 21px;
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .icon-button[aria-label]::after {
+    content: attr(aria-label);
+    position: absolute;
+    z-index: 50;
+    left: 50%;
+    top: calc(100% + 9px);
+    transform: translate(-50%, -3px);
+    width: max-content;
+    max-width: 190px;
+    padding: 7px 9px;
+    border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+    border-radius: 9px;
+    background: color-mix(in srgb, var(--fg) 92%, transparent);
+    color: var(--bg);
+    box-shadow: var(--shadow-soft);
+    font-size: 11px;
+    font-weight: 650;
+    line-height: 1.2;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .14s ease, transform .14s ease, visibility .14s ease;
+  }
+  .icon-button[aria-label]:hover::after,
+  .icon-button[aria-label]:focus-visible::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, 0);
+  }
+  .chat-header .icon-button[aria-label]::after { left: auto; right: 0; transform: translateY(-3px); }
+  .chat-header .icon-button[aria-label]:hover::after,
+  .chat-header .icon-button[aria-label]:focus-visible::after { transform: translateY(0); }
+}
 
 /* 로그인/가입 화면 */
 #auth-view {
@@ -388,7 +436,7 @@ header h1 { font-size: 18px; margin: 0; flex: 1; }
   border-bottom: 1px solid var(--border);
   font-size: 13px;
 }
-#room-notice-icon { flex-shrink: 0; }
+#room-notice-icon { flex-shrink: 0; color: var(--accent); padding-top: 1px; }
 #room-notice-text {
   color: var(--fg);
   line-height: 1.5;
@@ -773,7 +821,7 @@ form#composer {
   background: var(--bg-elevated);
   box-shadow: 0 10px 30px rgba(52, 39, 75, .12);
 }
-#upload-btn { width: 40px; height: 40px; border-radius: 14px; background: var(--accent-soft); font-size: 19px; }
+#upload-btn { width: 40px; height: 40px; border-radius: 14px; background: var(--accent-soft); color: var(--accent); }
 #input { min-width: 0; min-height: 42px; padding: 9px 8px; border: none; background: transparent; }
 #input:focus { outline: none; }
 form#composer button[type="submit"] { min-height: 42px; padding: 9px 16px; background: linear-gradient(145deg, var(--accent), var(--accent-strong)); font-weight: 700; }

@@ -7,6 +7,18 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+  <svg class="icon-sprite" aria-hidden="true">
+    <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="icon-persona" viewBox="0 0 24 24"><path d="M8.2 10.2a4.2 4.2 0 1 0 0-8.4 4.2 4.2 0 0 0 0 8.4ZM1.8 21c.4-4.7 2.4-7.1 6.4-7.1s6 2.4 6.4 7.1M17 7.2l.8 1.7 1.8.3-1.3 1.3.3 1.8-1.6-.8-1.6.8.3-1.8-1.3-1.3 1.8-.3.8-1.7Z"/></symbol>
+    <symbol id="icon-profile" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2.3"/><path d="M5.8 17c.4-2.5 1.4-3.8 3.2-3.8s2.8 1.3 3.2 3.8M15 9h3M15 13h3"/></symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></symbol>
+    <symbol id="icon-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9a2.6 2.6 0 1 1 3.6 2.4c-.8.4-1.2 1-1.2 2M12 17.6h.01"/></symbol>
+    <symbol id="icon-back" viewBox="0 0 24 24"><path d="m14.5 5-7 7 7 7"/></symbol>
+    <symbol id="icon-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="9" r="1.5"/><path d="m5.5 17 4.2-4.2 3.1 3.1 2.3-2.3 3.4 3.4"/></symbol>
+    <symbol id="icon-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M2.8 20c.4-4.2 2.4-6.3 6.2-6.3s5.8 2.1 6.2 6.3M16 5.2a3 3 0 0 1 0 5.8M16.7 14c2.7.5 4.2 2.5 4.5 6"/></symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="icon-pin" viewBox="0 0 24 24"><path d="m8 3 8 8M14.8 4.2l5 5-3 2.2-3.6 3.6-1.4 4-6.8-6.8 4-1.4 3.6-3.6 2.2-3ZM4 20l4.6-4.6"/></symbol>
+  </svg>
   <!-- 로그인/가입 화면 -->
   <div id="auth-view" class="hidden">
     <div class="auth-card">
@@ -35,11 +47,11 @@
   <div id="room-list-view" class="hidden">
     <header>
       <h1><span class="header-brand-mark" aria-hidden="true">T</span><span>툴파시스템</span></h1>
-      <button id="new-room-btn" type="button" aria-label="새 채팅방 만들기" class="hidden">➕</button>
-      <button id="persona-manager-btn" type="button" aria-label="내 페르소나 관리" class="hidden">🎭</button>
-      <button id="profiles-btn" type="button" aria-label="페르소나 프로필" class="hidden">📇</button>
-      <button id="admin-btn" type="button" aria-label="권한 관리" class="hidden">⚙️</button>
-      <button id="help-btn" type="button" aria-label="도움말">❓</button>
+      <button id="new-room-btn" type="button" aria-label="새 채팅방 만들기" class="icon-button hidden"><svg><use href="#icon-plus"/></svg></button>
+      <button id="persona-manager-btn" type="button" aria-label="내 페르소나 관리" class="icon-button hidden"><svg><use href="#icon-persona"/></svg></button>
+      <button id="profiles-btn" type="button" aria-label="페르소나 프로필 보기" class="icon-button hidden"><svg><use href="#icon-profile"/></svg></button>
+      <button id="admin-btn" type="button" aria-label="사용자 권한 관리" class="icon-button hidden"><svg><use href="#icon-settings"/></svg></button>
+      <button id="help-btn" type="button" aria-label="도움말 보기" class="icon-button"><svg><use href="#icon-help"/></svg></button>
       <div id="account-chip" class="hidden">
         <span id="account-name"></span>
         <button id="logout-btn" type="button" aria-label="로그아웃">로그아웃</button>
@@ -72,14 +84,14 @@
   <!-- 채팅방 -->
   <div id="chat-view" class="hidden">
     <header class="chat-header">
-      <button id="back-btn" type="button" aria-label="뒤로">‹</button>
+      <button id="back-btn" type="button" aria-label="채팅방 목록으로" class="icon-button"><svg><use href="#icon-back"/></svg></button>
       <h1 id="room-title"></h1>
-      <button id="thumbnail-btn" type="button" aria-label="대표사진 변경" class="hidden">🖼️</button>
+      <button id="thumbnail-btn" type="button" aria-label="대표사진 변경" class="icon-button hidden"><svg><use href="#icon-image"/></svg></button>
       <input id="thumbnail-input" type="file" accept="image/*" class="hidden">
-      <button id="invite-btn" type="button" aria-label="참여자 보기" class="hidden">👥</button>
+      <button id="invite-btn" type="button" aria-label="참여자 보기 및 초대" class="icon-button hidden"><svg><use href="#icon-users"/></svg></button>
     </header>
     <div id="room-notice" class="hidden">
-      <span id="room-notice-icon">📌</span>
+      <span id="room-notice-icon" aria-hidden="true"><svg><use href="#icon-pin"/></svg></span>
       <span id="room-notice-text"></span>
       <button id="room-notice-toggle" type="button" class="hidden" aria-expanded="false">더보기</button>
     </div>
@@ -94,10 +106,10 @@
     <main id="messages"></main>
     <div id="reply-banner" class="hidden">
       <span id="reply-banner-text"></span>
-      <button id="reply-cancel-btn" type="button" aria-label="답장 취소">✕</button>
+      <button id="reply-cancel-btn" type="button" aria-label="답장 취소" class="icon-button"><svg><use href="#icon-close"/></svg></button>
     </div>
     <form id="composer">
-      <button id="upload-btn" type="button" aria-label="사진 첨부">📷</button>
+      <button id="upload-btn" type="button" aria-label="사진 첨부" class="icon-button"><svg><use href="#icon-image"/></svg></button>
       <input id="image-input" type="file" accept="image/*" class="hidden">
       <input id="input" type="text" placeholder="메시지 입력" autocomplete="off">
       <button type="submit">보내기</button>
@@ -109,7 +121,7 @@
     <div class="help-card">
       <div class="help-card-header">
         <h1>도움말</h1>
-        <button id="help-close-btn" type="button" aria-label="닫기">✕</button>
+        <button id="help-close-btn" type="button" aria-label="도움말 닫기" class="icon-button"><svg><use href="#icon-close"/></svg></button>
       </div>
       <div class="help-body">
         <section>
