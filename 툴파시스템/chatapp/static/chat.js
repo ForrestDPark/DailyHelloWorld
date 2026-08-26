@@ -539,17 +539,31 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-function showChatView(roomId) {
+async function showChatView(roomId) {
   currentRoom = roomId;
   lastId = 0;
   setReplyTarget(null);
   messagesEl.innerHTML = "";
   roomListView.classList.add("hidden");
   chatView.classList.remove("hidden");
+  // ★ 새로고침·직접 URL 접속처럼 showRoomList()를 거치지 않고 바로 이
+  // 방으로 들어온 경우 roomsCache가 비어 있어 그룹 회의방 여부(공지 배너,
+  // 참여자 버튼, "(가상)" 라벨)를 전부 잘못 판단하는 버그가 있었다
+  // (2026-08-26 "개발 단체방 공지사항 안 뜨는" 문제의 원인) — 캐시에
+  // 없으면 방 목록을 먼저 받아와 채운다.
+  if (!roomsCache.has(roomId)) {
+    try {
+      const res = await apiFetch("/api/rooms");
+      const rooms = await res.json();
+      roomsCache = new Map(rooms.map((r) => [r.room_id, r]));
+    } catch (e) {
+      if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
+    }
+  }
   // ★ 그룹 회의방(예: "예술가부흥프로젝트")은 페르소나 이름이 아니라 방
   // 제목이므로 (가상) 라벨을 안 붙인다 — roomsCache로 room_id가 그룹
-  // 회의방인지 확인한다(캐시에 없으면 URL을 직접 편집해 들어온 경우일
-  // 수 있으니 안전하게 페르소나 이름으로 간주).
+  // 회의방인지 확인한다(캐시에도 없으면 존재하지 않는 방일 수 있으니
+  // 안전하게 페르소나 이름으로 간주).
   const cached = roomsCache.get(roomId);
   const isMeta = roomId === "group" || (cached && cached.is_group_room);
   const title = cached ? cached.label : roomId;
@@ -568,7 +582,33 @@ function showChatView(roomId) {
   const isMyCustomRoom = roomId.startsWith("custom_") && canWrite && (amOwner || (cached && cached.is_mine));
   document.getElementById("thumbnail-btn").classList.toggle("hidden", !isMyCustomRoom);
   if (cached && cached.last_message_id) markRoomRead(roomId, cached.last_message_id);
+  loadRoomNotice(roomId, isGroupMeetingRoom);
   poll();
+}
+
+// ★ "채팅창에 카카오톡처럼 공지사항이 보였으면 좋겠다, 그 방 대화를 토대로
+// 업데이트 내용을 하루하루 요약해서 공지해달라" 요청(2026-08-26) — 워커가
+// sync_room_notices()로 채워둔 최신 공지를 그룹/커스텀 방 상단에 고정
+// 배너로 보여준다. 1:1 방·전체 채팅방은 대상이 아니라 조용히 숨긴다.
+async function loadRoomNotice(roomId, isGroupMeetingRoom) {
+  const notice = document.getElementById("room-notice");
+  if (!isGroupMeetingRoom) {
+    notice.classList.add("hidden");
+    return;
+  }
+  try {
+    const res = await apiFetch(`/api/rooms/${encodeURIComponent(roomId)}/notice`);
+    const data = await res.json();
+    if (data && data.content) {
+      document.getElementById("room-notice-text").textContent = data.content;
+      notice.classList.remove("hidden");
+    } else {
+      notice.classList.add("hidden");
+    }
+  } catch (e) {
+    notice.classList.add("hidden");
+    if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
+  }
 }
 
 async function toggleInvitePanel() {
@@ -820,12 +860,22 @@ document.getElementById("back-btn").addEventListener("click", () => {
   location.hash = "";
 });
 
-function route() {
+// ★ "처음 사용하는 사람들도 기능을 알 수 있게 도움말이 있으면 좋겠다"
+// 요청(2026-08-26) — 로그인 화면·방 목록 어디서나 열 수 있는 전체 화면
+// 오버레이. 순수 정적 안내문이라 서버 호출 없음.
+function toggleHelp(show) {
+  document.getElementById("help-overlay").classList.toggle("hidden", !show);
+}
+document.getElementById("help-btn").addEventListener("click", () => toggleHelp(true));
+document.getElementById("help-btn-auth").addEventListener("click", () => toggleHelp(true));
+document.getElementById("help-close-btn").addEventListener("click", () => toggleHelp(false));
+
+async function route() {
   const room = parseRoomFromHash();
   if (room) {
-    showChatView(room);
+    await showChatView(room);
   } else {
-    showRoomList();
+    await showRoomList();
   }
 }
 

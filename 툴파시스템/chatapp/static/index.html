@@ -10,8 +10,9 @@
   <!-- 로그인/가입 화면 -->
   <div id="auth-view" class="hidden">
     <div class="auth-card">
+      <div class="auth-brand-mark" aria-hidden="true">T</div>
       <h1 class="auth-title">툴파시스템</h1>
-      <p class="auth-subtitle">페르소나들과 나누는 대화방</p>
+      <p class="auth-subtitle">나만의 페르소나들과 이어가는 이야기</p>
       <div id="auth-tabs">
         <button type="button" class="auth-tab active" data-mode="login">로그인</button>
         <button type="button" class="auth-tab" data-mode="signup">가입하기</button>
@@ -26,17 +27,19 @@
         <a id="google-login-btn" class="oauth-btn oauth-google hidden" href="/api/auth/google/login">Google로 계속하기</a>
         <a id="kakao-login-btn" class="oauth-btn oauth-kakao hidden" href="/api/auth/kakao/login">카카오로 계속하기</a>
       </div>
+      <button id="help-btn-auth" type="button" class="help-link">❓ 이 앱은 뭔가요? (도움말)</button>
     </div>
   </div>
 
   <!-- 방 목록 (카카오톡 채팅 목록처럼) -->
   <div id="room-list-view" class="hidden">
     <header>
-      <h1>툴파시스템</h1>
+      <h1><span class="header-brand-mark" aria-hidden="true">T</span><span>툴파시스템</span></h1>
       <button id="new-room-btn" type="button" aria-label="새 채팅방 만들기" class="hidden">➕</button>
       <button id="persona-manager-btn" type="button" aria-label="내 페르소나 관리" class="hidden">🎭</button>
       <button id="profiles-btn" type="button" aria-label="페르소나 프로필" class="hidden">📇</button>
       <button id="admin-btn" type="button" aria-label="권한 관리" class="hidden">⚙️</button>
+      <button id="help-btn" type="button" aria-label="도움말">❓</button>
       <div id="account-chip" class="hidden">
         <span id="account-name"></span>
         <button id="logout-btn" type="button" aria-label="로그아웃">로그아웃</button>
@@ -75,6 +78,10 @@
       <input id="thumbnail-input" type="file" accept="image/*" class="hidden">
       <button id="invite-btn" type="button" aria-label="참여자 보기" class="hidden">👥</button>
     </header>
+    <div id="room-notice" class="hidden">
+      <span id="room-notice-icon">📌</span>
+      <span id="room-notice-text"></span>
+    </div>
     <div id="invite-panel" class="hidden">
       <div class="invite-panel-title">현재 참여자</div>
       <div id="member-list"></div>
@@ -94,6 +101,58 @@
       <input id="input" type="text" placeholder="메시지 입력" autocomplete="off">
       <button type="submit">보내기</button>
     </form>
+  </div>
+
+  <!-- 도움말 (2026-08-26 요청) — 어느 화면에서든 열 수 있는 전체 화면 오버레이 -->
+  <div id="help-overlay" class="hidden">
+    <div class="help-card">
+      <div class="help-card-header">
+        <h1>도움말</h1>
+        <button id="help-close-btn" type="button" aria-label="닫기">✕</button>
+      </div>
+      <div class="help-body">
+        <section>
+          <h2>이 앱은 뭔가요?</h2>
+          <p>페르소나(가상 캐릭터 또는 실제 지인을 본뜬 캐릭터)들과 카카오톡처럼 대화하는 채팅앱입니다. 방 목록에서 방을 골라 들어가서 메시지를 보내면 페르소나가 답장합니다.</p>
+        </section>
+        <section>
+          <h2>채팅방 종류</h2>
+          <ul>
+            <li><strong>1:1 방</strong> — 페르소나 한 명과 나만 있는 방. 다른 계정에게는 안 보입니다.</li>
+            <li><strong>👥 그룹 회의방</strong> — 여러 페르소나가 함께 있는 방. 소유자가 관리합니다.</li>
+            <li><strong>내가 만든 단체톡방</strong> — 헤더의 ➕ 버튼으로 이름을 정해 직접 만들고, 원하는 페르소나를 초대해서 모아둘 수 있습니다. 이 방도 나만 보입니다.</li>
+          </ul>
+        </section>
+        <section>
+          <h2>페르소나</h2>
+          <ul>
+            <li><strong>🎭 내 페르소나</strong> — 나만의 캐릭터를 이름 + 설명(성격·말투·배경)만 적어 직접 만들고, 언제든 수정·삭제할 수 있습니다. 이 캐릭터와의 대화는 나만 볼 수 있습니다.</li>
+            <li><strong>📇 프로필</strong> — 지금 볼 수 있는 모든 페르소나의 성격 요약을 한 번에 확인합니다.</li>
+          </ul>
+        </section>
+        <section>
+          <h2>메시지 팁</h2>
+          <ul>
+            <li>그룹/단체 방에서 페르소나 <strong>이름을 탭</strong>하면 그 사람에게만 답장할 수 있습니다.</li>
+            <li><strong>@이름</strong>이나 그냥 이름(예: "정민씨", "경호쌤")만 불러도 그 사람만 응답합니다.</li>
+            <li>아무도 안 부르면, 직전에 말한 사람이 있으면 그 사람이 이어서 답하고, 방금 만든 방처럼 아무도 말한 적 없으면 전원이 한 번씩 인사합니다.</li>
+            <li><strong>📷 사진</strong>을 올리면 페르소나가 실제로 보고 답에 반영합니다.</li>
+            <li>대화 중 <strong>Notion 페이지 링크</strong>를 붙여넣으면 페르소나가 실제로 그 내용을 읽어옵니다.</li>
+          </ul>
+        </section>
+        <section>
+          <h2>내가 만든 방 관리</h2>
+          <ul>
+            <li><strong>👥 참여자 보기/초대</strong> — 그 방에 누가 있는지 보고, 새 페르소나를 부를 수 있습니다.</li>
+            <li><strong>🖼️ 대표사진</strong> — 방 목록에 썸네일로 보일 사진을 올립니다.</li>
+          </ul>
+        </section>
+        <section>
+          <h2>계정</h2>
+          <p>아이디/비밀번호로 가입하거나, Google·카카오 계정으로 바로 로그인할 수 있습니다(둘 다 준비돼 있으면). 다른 사람의 개인 페르소나나 1:1 방, 단체톡방은 서로에게 보이지 않습니다 — 내가 만든 것과 다 함께 보는 방(그룹 회의방)만 공유됩니다.</p>
+        </section>
+      </div>
+    </div>
   </div>
 
   <script src="/static/chat.js"></script>
