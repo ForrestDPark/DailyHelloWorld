@@ -490,13 +490,37 @@ def _with_admin_override(prompt, description):
     return base + (ADMIN_OVERRIDE_MARKER + description if description else "")
 
 
+def _persona_avatar_prompt(name, description):
+    """사용자 설정만 끼워 넣는 결정론적 프로필 이미지 프롬프트."""
+    clean = " ".join((description or "").split())[:USER_PERSONA_DESC_MAX_CHARS]
+    return (
+        "Create a square 1:1 premium editorial semi-realistic avatar portrait for a fictional persona. "
+        f"Persona name: {name}. Personality and role: {clean}. "
+        "Interpret the personality through expression, clothing, lighting, and a subtle abstract background. "
+        "Centered close-up face and shoulders, distinctive silhouette, polished high detail, suitable for a chat profile. "
+        "Do not imitate a real person's exact likeness. No text, no letters, no logos, no watermark."
+    )
+
+
+def _queue_persona_image(conn, name, description, requested_by, status, reason):
+    conn.execute(
+        """INSERT INTO persona_image_jobs
+           (persona_name, prompt, requested_by, reason, status, created_at)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (name, _persona_avatar_prompt(name, description), requested_by, reason, status, _now()),
+    )
+
+
 @app.get("/api/admin/personas")
 def admin_list_personas(request: Request):
     _require_owner(request)
     conn = get_conn()
     rows = conn.execute(
-        "SELECT name, owner_username, description, profile_summary, admin_description, avatar_url, group_name "
-        "FROM personas ORDER BY name"
+        """SELECT p.name, p.owner_username, p.description, p.profile_summary,
+                  p.admin_description, p.avatar_url, p.group_name,
+                  (SELECT j.status FROM persona_image_jobs j WHERE j.persona_name=p.name ORDER BY j.id DESC LIMIT 1) AS image_job_status,
+                  (SELECT j.error FROM persona_image_jobs j WHERE j.persona_name=p.name ORDER BY j.id DESC LIMIT 1) AS image_job_error
+             FROM personas p ORDER BY p.name"""
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
@@ -571,6 +595,40 @@ def admin_delete_persona_avatar(name: str, request: Request):
     return {"ok": True}
 
 
+class PersonaImageGenerateRequest(BaseModel):
+    description: Optional[str] = None
+
+
+@app.post("/api/admin/personas/{name}/avatar/generate")
+def admin_generate_persona_avatar(name: str, body: PersonaImageGenerateRequest, request: Request):
+    """관리자 버튼 클릭을 명시 승인으로 삼아 유료 Images API 작업을 큐에 넣는다."""
+    _require_owner(request)
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT description, profile_summary, admin_description FROM personas WHERE name = ?", (name,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="존재하지 않는 페르소나입니다")
+    description = (body.description or row["admin_description"] or row["description"] or row["profile_summary"] or "").strip()
+    if not description or len(description) > USER_PERSONA_DESC_MAX_CHARS:
+        conn.close()
+        raise HTTPException(status_code=400, detail="이미지 생성을 위한 프로필 설정이 필요합니다")
+    active = conn.execute(
+        "SELECT 1 FROM persona_image_jobs WHERE persona_name = ? AND status IN ('pending','processing')",
+        (name,),
+    ).fetchone()
+    if active:
+        conn.close()
+        raise HTTPException(status_code=409, detail="이미 생성 중인 작업이 있습니다")
+    user = request.state.user
+    _queue_persona_image(conn, name, description, user["username"], "pending", "admin_regenerate")
+    job_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.commit()
+    conn.close()
+    return {"ok": True, "job_id": job_id, "status": "pending"}
+
+
 @app.get("/api/my_personas")
 def list_my_personas(request: Request):
     """내가 만든 페르소나 목록 — 방 목록이 아니라 "관리" 화면(생성·수정·삭제)에서
@@ -610,10 +668,14 @@ def create_my_persona(body: PersonaCreate, request: Request):
             "VALUES (?, '', ?, NULL, ?, ?, ?)",
             (name, prompt, user["username"], description, _now()),
         )
+        # 소유자의 생성 클릭은 곧 유료 생성 승인이다. 일반 계정은 비용·시스템
+        # 영향을 직접 일으키지 못하고 관리자가 재생성 버튼을 눌러야 진행된다.
+        image_status = "pending" if user["is_owner"] else "awaiting_approval"
+        _queue_persona_image(conn, name, description, user["username"], image_status, "persona_created")
         conn.commit()
     finally:
         conn.close()
-    return {"ok": True, "name": name}
+    return {"ok": True, "name": name, "image_status": image_status}
 
 
 @app.put("/api/my_personas/{name}")
@@ -1539,6 +1601,71 @@ class WorkerMediaApply(BaseModel):
     target_type: str
     target_id: str
     url: str
+
+
+class WorkerImageJobResult(BaseModel):
+    job_id: int
+    url: Optional[str] = None
+    error: Optional[str] = None
+
+
+@app.get("/api/worker/image_jobs/pending")
+def worker_pending_image_job(authorization: Optional[str] = Header(None)):
+    _check_worker_auth(authorization)
+    conn = get_conn()
+    # 워커가 API 호출 도중 종료되면 processing에 영구 고정되지 않도록 15분 지난
+    # 작업은 재시도한다. 같은 프롬프트라 결과 품질은 유지되고 기존 avatar는
+    # 완료 전까지 덮어쓰지 않는다.
+    stale_before = (
+        datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=15)
+    ).isoformat(timespec="seconds")
+    conn.execute(
+        "UPDATE persona_image_jobs SET status='pending', started_at=NULL WHERE status='processing' AND started_at < ?",
+        (stale_before,),
+    )
+    row = conn.execute(
+        "SELECT id, persona_name, prompt FROM persona_image_jobs WHERE status = 'pending' ORDER BY id LIMIT 1"
+    ).fetchone()
+    if not row:
+        conn.close()
+        return None
+    changed = conn.execute(
+        "UPDATE persona_image_jobs SET status='processing', started_at=? WHERE id=? AND status='pending'",
+        (_now(), row["id"]),
+    ).rowcount
+    conn.commit()
+    conn.close()
+    return dict(row) if changed else None
+
+
+@app.post("/api/worker/image_jobs/complete")
+def worker_complete_image_job(body: WorkerImageJobResult, authorization: Optional[str] = Header(None)):
+    _check_worker_auth(authorization)
+    if body.url and not re.fullmatch(r"/uploads/[A-Za-z0-9_.-]+", body.url):
+        raise HTTPException(status_code=400, detail="허용되지 않은 이미지 URL입니다")
+    if body.url and not (UPLOADS_DIR / Path(body.url).name).is_file():
+        raise HTTPException(status_code=400, detail="생성 이미지 파일을 찾을 수 없습니다")
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT persona_name, status FROM persona_image_jobs WHERE id = ?", (body.job_id,)
+    ).fetchone()
+    if not row or row["status"] != "processing":
+        conn.close()
+        raise HTTPException(status_code=404, detail="처리 중인 이미지 작업이 아닙니다")
+    if body.url:
+        conn.execute("UPDATE personas SET avatar_url = ? WHERE name = ?", (body.url, row["persona_name"]))
+        conn.execute(
+            "UPDATE persona_image_jobs SET status='done', result_url=?, completed_at=? WHERE id=?",
+            (body.url, _now(), body.job_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE persona_image_jobs SET status='failed', error=?, completed_at=? WHERE id=?",
+            ((body.error or "이미지 생성 실패")[:1000], _now(), body.job_id),
+        )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 @app.post("/api/worker/apply_media")

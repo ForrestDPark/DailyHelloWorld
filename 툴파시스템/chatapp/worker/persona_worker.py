@@ -498,6 +498,23 @@ def _generate_openai_image(prompt, source=None):
     return f"/uploads/{filename}"
 
 
+def process_automatic_image_job(job):
+    """서버가 승인 상태로 내준 프로필 작업만 Images API로 생성한다."""
+    try:
+        url = _generate_openai_image(str(job["prompt"])[:4000])
+        _api("/api/worker/image_jobs/complete", "POST", {"job_id": job["id"], "url": url})
+        print(f"🖼️ {job['persona_name']} 프로필 이미지 자동 생성·적용 완료", flush=True)
+    except Exception as exc:  # noqa: BLE001 — 실패를 영속화하고 워커는 계속 돈다
+        try:
+            _api(
+                "/api/worker/image_jobs/complete", "POST",
+                {"job_id": job["id"], "error": str(exc)[:1000]},
+            )
+        except Exception as report_exc:  # noqa: BLE001
+            print(f"⚠️ 이미지 작업 실패 상태 저장도 실패: {report_exc}", flush=True)
+        print(f"⚠️ {job.get('persona_name')} 프로필 이미지 생성 실패: {exc}", flush=True)
+
+
 def _generate_image(prompt, source=None):
     if not prompt.strip():
         raise RuntimeError("이미지 생성 프롬프트가 비어 있습니다")
@@ -1060,6 +1077,14 @@ def main():
         if now - last_room_notice_sync > ROOM_NOTICE_INTERVAL_SECONDS:
             sync_room_notices()
             last_room_notice_sync = time.time()
+        try:
+            image_job = _api("/api/worker/image_jobs/pending")
+        except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+            print(f"⚠️ 이미지 작업 조회 실패: {exc}", flush=True)
+            image_job = None
+        if image_job:
+            process_automatic_image_job(image_job)
+            continue
         try:
             turn = _api("/api/worker/pending")
         except (urllib.error.URLError, urllib.error.HTTPError) as exc:

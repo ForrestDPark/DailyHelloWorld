@@ -188,6 +188,27 @@ async function renderAdminUsers() {
   }
 }
 
+async function requestPersonaImage(name, description, button) {
+  if (!confirm(`${displayName(name)}의 프로필 이미지를 OpenAI Images API로 생성할까요?\n별도 API 요금이 발생할 수 있습니다.`)) return;
+  const oldText = button.textContent;
+  button.disabled = true;
+  button.textContent = "생성 요청 중...";
+  try {
+    const res = await apiFetch(`/api/admin/personas/${encodeURIComponent(name)}/avatar/generate`, {
+      method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({description}),
+    });
+    const data = await res.json();
+    if (!res.ok) { alert(data.detail || "이미지 생성 요청 실패"); button.textContent = oldText; return; }
+    button.textContent = "생성 대기 중";
+    setTimeout(() => { if (amOwner) renderAdminPersonas(); }, 4000);
+  } catch (error) {
+    if (error.message !== "unauthorized" && error.message !== "forbidden") alert("이미지 생성 요청 실패");
+    button.textContent = oldText;
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function renderAdminPersonas() {
   const list = document.getElementById("admin-persona-list");
   list.innerHTML = '<div class="empty-hint">불러오는 중...</div>';
@@ -228,16 +249,12 @@ async function renderAdminPersonas() {
       remove.type = "button"; remove.textContent = "이미지 삭제"; remove.className = "danger-subtle";
       remove.addEventListener("click", async () => { await apiFetch(`/api/admin/personas/${encodeURIComponent(p.name)}/avatar`, {method:"DELETE"}); renderAdminPersonas(); });
       const generate = document.createElement("button");
-      generate.type = "button"; generate.textContent = "유이에게 이미지 생성 요청";
-      generate.addEventListener("click", () => {
-        document.getElementById("admin-panel").classList.add("hidden");
-        location.hash = "#room=" + encodeURIComponent("유이");
-        setTimeout(() => {
-          const messageInput = document.getElementById("input");
-          messageInput.value = `${p.name}의 프로필 이미지를 GPT로 만들어줘. 현재 설정: ${textarea.value}`;
-          messageInput.focus();
-        }, 100);
-      });
+      generate.type = "button";
+      const imageStatusLabels = {pending:"생성 대기 중", processing:"이미지 생성 중", awaiting_approval:"생성 승인", failed:"재생성하기", done:"이미지 재생성하기"};
+      generate.textContent = imageStatusLabels[p.image_job_status] || "이미지 생성하기";
+      generate.disabled = p.image_job_status === "pending" || p.image_job_status === "processing";
+      generate.title = p.image_job_error || "OpenAI Images API로 새 프로필 이미지를 생성합니다";
+      generate.addEventListener("click", () => requestPersonaImage(p.name, textarea.value.trim(), generate));
       actions.append(save, upload, generate, remove, input); card.append(textarea, actions); list.appendChild(card);
     }
   } catch (e) { list.innerHTML = '<div class="empty-hint">불러오지 못했습니다</div>'; console.error(e); }
@@ -366,6 +383,9 @@ document.getElementById("my-persona-form").addEventListener("submit", async (e) 
       errorEl.classList.remove("hidden");
       return;
     }
+    if (!editingPersonaName && data.image_status === "awaiting_approval") {
+      alert("페르소나가 만들어졌습니다. 프로필 이미지는 관리자 승인 후 생성됩니다.");
+    }
     resetMyPersonaForm();
     await renderMyPersonas();
     await showRoomList(); // 새/수정된 페르소나의 1:1 방이 목록에 바로 보이게
@@ -464,6 +484,13 @@ document.getElementById("profiles-btn").addEventListener("click", async () => {
           content.appendChild(form);
         });
         content.appendChild(edit);
+        const regenerate = document.createElement("button");
+        regenerate.type = "button";
+        regenerate.className = "profile-edit-btn";
+        regenerate.textContent = "이미지 재생성하기";
+        regenerate.title = "OpenAI Images API로 프로필 이미지를 다시 생성합니다";
+        regenerate.addEventListener("click", () => requestPersonaImage(p.name, p.summary, regenerate));
+        content.appendChild(regenerate);
       }
       card.appendChild(avatar);
       card.appendChild(content);
