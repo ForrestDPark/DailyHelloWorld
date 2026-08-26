@@ -94,9 +94,18 @@ def init_db():
             last_message_id INTEGER NOT NULL DEFAULT 0,
             updated_at TEXT
         );
+        CREATE TABLE IF NOT EXISTS message_reactions (
+            message_id INTEGER NOT NULL,
+            username TEXT NOT NULL,
+            emoji TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (message_id, username, emoji),
+            FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+        );
         """
     )
     _ensure_column(conn, "messages", "room_id", "TEXT NOT NULL DEFAULT 'group'")
+    _ensure_column(conn, "messages", "reply_message_id", "INTEGER")
     _ensure_column(conn, "pending_turns", "room_id", "TEXT NOT NULL DEFAULT 'group'")
     _ensure_column(conn, "personas", "group_name", "TEXT")
     # ★ 2026-08-26: "사용자가 자기만의 페르소나를 만들고 수정·대화할 수 있게

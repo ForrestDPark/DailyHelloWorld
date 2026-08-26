@@ -285,6 +285,31 @@ def _with_sender_type(rows, persona_names, persona_avatars=None):
     ]
 
 
+REACTION_EMOJIS = {"❤️", "👍", "✅", "😄", "😮", "😢"}
+
+
+def _message_reactions(conn, message_ids, username):
+    """메시지별 반응 수와 현재 사용자의 선택 여부를 한 번의 쿼리로 묶는다."""
+    if not message_ids:
+        return {}
+    marks = ",".join("?" for _ in message_ids)
+    rows = conn.execute(
+        f"""SELECT message_id, emoji, COUNT(*) AS reaction_count,
+                   MAX(CASE WHEN username = ? THEN 1 ELSE 0 END) AS mine
+              FROM message_reactions
+             WHERE message_id IN ({marks})
+             GROUP BY message_id, emoji
+             ORDER BY MIN(created_at)""",
+        (username, *message_ids),
+    ).fetchall()
+    result = {}
+    for row in rows:
+        result.setdefault(row["message_id"], []).append(
+            {"emoji": row["emoji"], "count": row["reaction_count"], "mine": bool(row["mine"])}
+        )
+    return result
+
+
 @app.get("/")
 def index():
     return FileResponse(str(BASE_DIR / "static" / "index.html"))
@@ -1108,11 +1133,19 @@ def get_messages(request: Request, room_id: str = GROUP_ROOM_ID, since_id: int =
             conn.close()
             raise HTTPException(status_code=403, detail="이 채팅방을 볼 수 없습니다")
     rows = conn.execute(
-        "SELECT id, sender, content, created_at FROM messages WHERE room_id = ? AND id > ? ORDER BY id",
+        """SELECT m.id, m.sender, m.content, m.created_at, m.reply_message_id,
+                  parent.sender AS reply_sender, parent.content AS reply_content
+             FROM messages m
+             LEFT JOIN messages parent ON parent.id = m.reply_message_id
+            WHERE m.room_id = ? AND m.id > ? ORDER BY m.id""",
         (room_id, since_id),
     ).fetchall()
+    reactions = _message_reactions(conn, [r["id"] for r in rows], username)
     conn.close()
-    return _with_sender_type(rows, persona_names, persona_avatars)
+    messages = _with_sender_type(rows, persona_names, persona_avatars)
+    for message in messages:
+        message["reactions"] = reactions.get(message["id"], [])
+    return messages
 
 
 @app.get("/api/all_messages")
@@ -1165,6 +1198,58 @@ class NewMessage(BaseModel):
     # 페르소나 메시지를 탭해서 답장하면 그 사람만 응답하게 한다. @멘션을
     # 직접 타이핑하지 않아도 되는 UI 단축 경로(static/chat.js가 채워서 보냄).
     reply_to: Optional[str] = None
+    reply_message_id: Optional[int] = None
+
+
+class MessageReactionRequest(BaseModel):
+    emoji: str
+
+
+@app.post("/api/messages/{message_id}/reactions")
+def toggle_message_reaction(message_id: int, body: MessageReactionRequest, request: Request):
+    """허용된 반응 하나를 토글한다. AI나 워커에는 어떤 실행 권한도 주지 않는다."""
+    if not getattr(request.state, "can_write", True):
+        raise HTTPException(status_code=403, detail="읽기 전용 계정입니다")
+    if body.emoji not in REACTION_EMOJIS:
+        raise HTTPException(status_code=400, detail="지원하지 않는 반응입니다")
+    user = getattr(request.state, "user", None)
+    username = user["username"] if user else "user"
+    is_owner_request = user["is_owner"] if user else True
+    conn = get_conn()
+    message = conn.execute("SELECT room_id FROM messages WHERE id = ?", (message_id,)).fetchone()
+    if not message:
+        conn.close()
+        raise HTTPException(status_code=404, detail="메시지를 찾을 수 없습니다")
+    room_id = message["room_id"]
+    persona = conn.execute(
+        "SELECT owner_username FROM personas WHERE name = ?", (room_id,)
+    ).fetchone()
+    if persona and not _can_access_persona_room(persona["owner_username"], username, is_owner_request):
+        conn.close()
+        raise HTTPException(status_code=403, detail="이 대화에 반응할 수 없습니다")
+    if not persona and room_id != GROUP_ROOM_ID:
+        is_custom, allowed, _owner = _custom_room_access(conn, room_id, username, is_owner_request)
+        if is_custom and not allowed:
+            conn.close()
+            raise HTTPException(status_code=403, detail="이 대화에 반응할 수 없습니다")
+    existing = conn.execute(
+        "SELECT 1 FROM message_reactions WHERE message_id = ? AND username = ? AND emoji = ?",
+        (message_id, username, body.emoji),
+    ).fetchone()
+    if existing:
+        conn.execute(
+            "DELETE FROM message_reactions WHERE message_id = ? AND username = ? AND emoji = ?",
+            (message_id, username, body.emoji),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO message_reactions (message_id, username, emoji, created_at) VALUES (?, ?, ?, ?)",
+            (message_id, username, body.emoji, _now()),
+        )
+    conn.commit()
+    reactions = _message_reactions(conn, [message_id], username).get(message_id, [])
+    conn.close()
+    return {"ok": True, "reactions": reactions}
 
 
 @app.post("/api/messages")
@@ -1208,9 +1293,19 @@ def post_message(msg: NewMessage, request: Request):
         if is_custom and not allowed:
             conn.close()
             raise HTTPException(status_code=403, detail="이 채팅방에 메시지를 보낼 수 없습니다")
+    reply_message_id = None
+    if msg.reply_message_id is not None:
+        replied = conn.execute(
+            "SELECT id FROM messages WHERE id = ? AND room_id = ?",
+            (msg.reply_message_id, room_id),
+        ).fetchone()
+        if not replied:
+            conn.close()
+            raise HTTPException(status_code=400, detail="답장할 메시지를 찾을 수 없습니다")
+        reply_message_id = replied["id"]
     conn.execute(
-        "INSERT INTO messages (room_id, sender, content, created_at) VALUES (?, ?, ?, ?)",
-        (room_id, sender, content, now),
+        "INSERT INTO messages (room_id, sender, content, created_at, reply_message_id) VALUES (?, ?, ?, ?, ?)",
+        (room_id, sender, content, now, reply_message_id),
     )
     if room_id == GROUP_ROOM_ID:
         # ★ "@이름"으로 특정 인물을 지목하면 그 인물만 응답, 아무도 안 부르면

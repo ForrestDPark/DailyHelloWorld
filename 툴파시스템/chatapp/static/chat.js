@@ -1014,13 +1014,17 @@ const IMAGE_MARKER_RE = /!\[\]\((\/uploads\/[^)]+)\)/;
 // 메시지의 이름을 탭하면 그 사람에게만 답장하는 모드로 들어간다. @멘션을
 // 직접 타이핑할 필요 없이 서버에 reply_to로 실어 보낸다.
 let replyTarget = null;
+let replyMessage = null;
 const replyBanner = document.getElementById("reply-banner");
 const replyBannerText = document.getElementById("reply-banner-text");
 
-function setReplyTarget(name) {
+function setReplyTarget(name, message = null) {
   replyTarget = name;
-  if (name) {
-    replyBannerText.textContent = `${displayName(name)}에게 답장`;
+  replyMessage = message;
+  if (name || message) {
+    const who = displayName(message?.sender || name || "메시지");
+    const preview = message?.content ? ` · ${message.content.replace(IMAGE_MARKER_RE, "[사진]").slice(0, 45)}` : "";
+    replyBannerText.textContent = `${who}에게 답장${preview}`;
     replyBanner.classList.remove("hidden");
   } else {
     replyBanner.classList.add("hidden");
@@ -1028,6 +1032,84 @@ function setReplyTarget(name) {
 }
 
 document.getElementById("reply-cancel-btn").addEventListener("click", () => setReplyTarget(null));
+
+const QUICK_REACTIONS = ["❤️", "👍", "✅", "😄", "😮", "😢"];
+let messageMenu = null;
+let personaProfilesCache = null;
+
+function closeMessageMenu() {
+  if (messageMenu) messageMenu.remove();
+  messageMenu = null;
+}
+
+async function toggleReaction(message, emoji, hostEl) {
+  const res = await apiFetch(`/api/messages/${message.id}/reactions`, {
+    method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({emoji}),
+  });
+  if (!res.ok) return;
+  message.reactions = (await res.json()).reactions;
+  renderReactions(hostEl, message);
+}
+
+function renderReactions(hostEl, message) {
+  let bar = hostEl.querySelector(".message-reactions");
+  if (!message.reactions?.length) { if (bar) bar.remove(); return; }
+  if (!bar) { bar = document.createElement("div"); bar.className = "message-reactions"; hostEl.appendChild(bar); }
+  bar.innerHTML = "";
+  for (const reaction of message.reactions) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "reaction-chip" + (reaction.mine ? " mine" : "");
+    button.textContent = `${reaction.emoji} ${reaction.count}`;
+    button.addEventListener("click", (event) => { event.stopPropagation(); toggleReaction(message, reaction.emoji, hostEl); });
+    bar.appendChild(button);
+  }
+}
+
+async function showProfilePopup(message) {
+  closeMessageMenu();
+  let profile = null;
+  if (message.is_persona) {
+    if (!personaProfilesCache) {
+      const res = await apiFetch("/api/persona_profiles");
+      personaProfilesCache = res.ok ? await res.json() : [];
+    }
+    profile = personaProfilesCache.find((p) => p.name === message.sender);
+  }
+  const overlay = document.createElement("div");
+  overlay.className = "profile-popup-overlay";
+  const popup = document.createElement("div");
+  popup.className = "profile-popup";
+  const close = document.createElement("button"); close.type = "button"; close.className = "profile-popup-close"; close.textContent = "×"; close.setAttribute("aria-label", "닫기");
+  const avatar = document.createElement(message.avatar_url ? "img" : "div"); avatar.className = "profile-popup-avatar";
+  if (message.avatar_url) { avatar.src = message.avatar_url; avatar.alt = `${displayName(message.sender)} 프로필 이미지`; }
+  else avatar.textContent = displayName(message.sender).charAt(0) || "?";
+  const name = document.createElement("h2"); name.textContent = displayName(message.sender);
+  const summary = document.createElement("p"); summary.textContent = profile?.summary || (message.is_persona ? "프로필 정보가 없습니다." : "채팅방 참여자");
+  close.addEventListener("click", () => overlay.remove()); overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+  popup.append(close, avatar, name, summary); overlay.appendChild(popup); document.body.appendChild(overlay);
+}
+
+function openMessageMenu(message, hostEl, x, y) {
+  closeMessageMenu();
+  const menu = document.createElement("div"); menu.className = "message-action-menu";
+  const reactions = document.createElement("div"); reactions.className = "message-action-reactions";
+  for (const emoji of QUICK_REACTIONS) {
+    const button = document.createElement("button"); button.type = "button"; button.textContent = emoji; button.setAttribute("aria-label", `${emoji} 반응`);
+    button.addEventListener("click", () => { toggleReaction(message, emoji, hostEl); closeMessageMenu(); }); reactions.appendChild(button);
+  }
+  menu.appendChild(reactions);
+  const addAction = (label, action) => { const button = document.createElement("button"); button.type = "button"; button.className = "message-action-item"; button.textContent = label; button.addEventListener("click", () => { closeMessageMenu(); action(); }); menu.appendChild(button); };
+  if (canWrite) addAction("답장하기", () => setReplyTarget(message.is_persona ? message.sender : null, message));
+  addAction("복사", () => navigator.clipboard.writeText(message.content).catch(() => {}));
+  addAction("프로필 보기", () => showProfilePopup(message));
+  document.body.appendChild(menu); messageMenu = menu;
+  const rect = menu.getBoundingClientRect();
+  menu.style.left = `${Math.max(8, Math.min(x, innerWidth - rect.width - 8))}px`;
+  menu.style.top = `${Math.max(8, Math.min(y, innerHeight - rect.height - 8))}px`;
+}
+
+document.addEventListener("pointerdown", (event) => { if (messageMenu && !messageMenu.contains(event.target)) closeMessageMenu(); });
 
 function appendMessage(m) {
   // ★ 2026-08-26: 다중 계정 로그인 전에는 sender==='user' 하나로 "내 메시지"를
@@ -1049,11 +1131,9 @@ function appendMessage(m) {
     } else {
       avatar.textContent = (isPersona ? displayName(m.sender) : m.sender).trim().charAt(0) || "?";
     }
-    if (isPersona && canWrite) {
-      avatar.classList.add("message-avatar-clickable");
-      avatar.title += " · 탭해서 답장";
-      avatar.addEventListener("click", () => setReplyTarget(m.sender));
-    }
+    avatar.classList.add("message-avatar-clickable");
+    avatar.title += " · 탭해서 프로필 보기";
+    avatar.addEventListener("click", (event) => { event.stopPropagation(); showProfilePopup(m); });
     el.appendChild(avatar);
   }
   const sender = document.createElement("div");
@@ -1071,6 +1151,16 @@ function appendMessage(m) {
   }
   const body = document.createElement("div");
   body.className = "body";
+  if (m.reply_message_id && m.reply_sender) {
+    const quote = document.createElement("div");
+    quote.className = "message-reply-quote";
+    const quoteName = document.createElement("strong");
+    quoteName.textContent = displayName(m.reply_sender);
+    const quoteText = document.createElement("span");
+    quoteText.textContent = (m.reply_content || "").replace(IMAGE_MARKER_RE, "[사진]").slice(0, 90);
+    quote.append(quoteName, quoteText);
+    body.appendChild(quote);
+  }
   const imageMatch = IMAGE_MARKER_RE.exec(m.content);
   if (imageMatch) {
     const img = document.createElement("img");
@@ -1092,6 +1182,22 @@ function appendMessage(m) {
   el.appendChild(sender);
   el.appendChild(body);
   el.appendChild(time);
+  renderReactions(el, m);
+  let longPressTimer = null;
+  let longPressStart = null;
+  const cancelLongPress = () => { if (longPressTimer) clearTimeout(longPressTimer); longPressTimer = null; };
+  body.addEventListener("pointerdown", (event) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    const x = event.clientX, y = event.clientY;
+    longPressStart = {x, y};
+    longPressTimer = setTimeout(() => openMessageMenu(m, el, x, y), 520);
+  });
+  body.addEventListener("pointerup", cancelLongPress);
+  body.addEventListener("pointercancel", cancelLongPress);
+  body.addEventListener("pointermove", (event) => {
+    if (longPressStart && Math.hypot(event.clientX - longPressStart.x, event.clientY - longPressStart.y) > 10) cancelLongPress();
+  });
+  body.addEventListener("contextmenu", (event) => { event.preventDefault(); cancelLongPress(); openMessageMenu(m, el, event.clientX, event.clientY); });
   messagesEl.appendChild(el);
   el.scrollIntoView({ behavior: "smooth", block: "end" });
 }
@@ -1119,7 +1225,7 @@ async function sendMessage(content) {
     await apiFetch("/api/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content, room_id: currentRoom, reply_to: replyTarget }),
+      body: JSON.stringify({ content, room_id: currentRoom, reply_to: replyTarget, reply_message_id: replyMessage?.id || null }),
     });
   } catch (e) {
     if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
