@@ -618,13 +618,7 @@ function renderRoomItem(r) {
         const panel = document.getElementById("profiles-panel");
         if (panel.classList.contains("hidden")) document.getElementById("profiles-btn").click();
       });
-      if (amOwner) addAction("그룹 설정", async () => {
-        const value = prompt(`${r.label}의 그룹 이름을 입력하세요. 비우면 그룹 없음으로 설정됩니다.`, r.group_name || "");
-        if (value === null) return;
-        const res = await apiFetch(`/api/admin/personas/${encodeURIComponent(r.room_id)}/group`, {method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify({group_name:value})});
-        if (!res.ok) { alert((await res.json()).detail || "그룹을 바꾸지 못했습니다"); return; }
-        await showRoomList();
-      });
+      if (amOwner) addAction("그룹 설정", () => openGroupPicker(item, r));
       item.appendChild(menu);
     });
     item.appendChild(menuBtn);
@@ -706,6 +700,44 @@ function setListMode(mode) {
 
 document.getElementById("friends-tab").addEventListener("click", () => setListMode("friends"));
 document.getElementById("chats-tab").addEventListener("click", () => setListMode("chats"));
+
+// ★ "그룹 이름을 매번 직접 타이핑하지 말고, 이미 있는 그룹 목록에서 고르고
+// 없으면 새로 만들게 해달라" 요청(2026-08-26) — "그룹 설정" 클릭 시 바로
+// prompt()를 띄우던 걸, 기존 그룹 목록 + "그룹 없음" + "새 그룹 만들기"를
+// 고르는 작은 메뉴로 바꾼다.
+async function setPersonaGroup(r, value) {
+  const res = await apiFetch(`/api/admin/personas/${encodeURIComponent(r.room_id)}/group`, {
+    method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ group_name: value }),
+  });
+  if (!res.ok) { alert((await res.json()).detail || "그룹을 바꾸지 못했습니다"); return; }
+  await showRoomList();
+}
+
+function openGroupPicker(item, r) {
+  const menu = document.createElement("div");
+  menu.className = "friend-action-menu";
+  item.classList.add("menu-open");
+  const existingGroups = [...new Set(
+    [...roomsCache.values()].map((x) => x.group_name).filter((g) => g)
+  )].sort((a, b) => a.localeCompare(b, "ko"));
+  const addPickerAction = (label, action) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.addEventListener("click", (e) => { e.stopPropagation(); closeFriendMenus(); action(); });
+    menu.appendChild(button);
+  };
+  for (const g of existingGroups) {
+    addPickerAction(g === r.group_name ? `✓ ${g}` : g, () => setPersonaGroup(r, g));
+  }
+  addPickerAction("그룹 없음으로 설정", () => setPersonaGroup(r, ""));
+  addPickerAction("+ 새 그룹 만들기", () => {
+    const value = prompt(`${r.label}의 새 그룹 이름을 입력하세요.`, "");
+    if (value === null || !value.trim()) return;
+    setPersonaGroup(r, value.trim());
+  });
+  item.appendChild(menu);
+}
 
 function closeFriendMenus() {
   document.querySelectorAll(".friend-action-menu").forEach((el) => el.remove());
