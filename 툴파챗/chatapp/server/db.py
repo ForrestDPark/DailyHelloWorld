@@ -166,6 +166,11 @@ def init_db():
     # 전송하는 문제가 실제로 있었다 — 워커 메모리가 아니라 서버 DB에
     # 플래그를 둬야 재시작 횟수와 무관하게 딱 한 번만 보낸다.
     _ensure_column(conn, "pending_turns", "restart_notice_sent", "INTEGER NOT NULL DEFAULT 0")
+    # ★ "초대가 되면 그 톡방에 '누가 초대되었습니다'라고 구분선 같은 걸
+    # 만들어달라" 요청(2026-08-28) — 페르소나/사용자 발화가 아니라 서버가
+    # 직접 남기는 시스템 알림. 프론트가 이 플래그로 말풍선이 아니라 가운데
+    # 구분선 스타일로 다르게 그린다(static/chat.js의 renderSystemMessage).
+    _ensure_column(conn, "messages", "is_system", "INTEGER NOT NULL DEFAULT 0")
     # ★ "채팅방에 새 메시지 있으면 사용자들한테도 알람이 가게 해달라"
     # 요청(2026-08-27) — 브라우저 Web Push 구독 정보(방마다가 아니라
     # 계정마다 — 여러 기기에서 구독하면 여러 행이 쌓인다). endpoint가

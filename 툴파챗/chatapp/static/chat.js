@@ -1459,7 +1459,20 @@ function scrollToMessage(messageId) {
   setTimeout(() => target.classList.remove("highlight-flash"), 1200);
 }
 
+// ★ "초대가 되면 그 톡방에 '누가 초대되었습니다'라고 구분선 같은 걸
+// 만들어달라" 요청(2026-08-28) — 말풍선이 아니라 가운데 정렬된 얇은 구분선
+// 스타일로 그린다(양옆에 선, 가운데 문구 — CSS ::before/::after).
+function renderSystemMessage(m) {
+  const el = document.createElement("div");
+  el.className = "msg-system";
+  el.dataset.messageId = String(m.id);
+  el.textContent = m.content;
+  messagesEl.appendChild(el);
+  el.scrollIntoView({ behavior: "smooth", block: "end" });
+}
+
 function appendMessage(m) {
+  if (m.is_system) { renderSystemMessage(m); return; }
   // ★ 2026-08-26: 다중 계정 로그인 전에는 sender==='user' 하나로 "내 메시지"를
   // 판별했다. 이제 여러 사람이 같은 방에 쓸 수 있어 서버가 내려주는
   // is_persona로 페르소나 여부를 판별하고, 사람 메시지 중에서도 "나"(현재

@@ -304,9 +304,24 @@ def _with_sender_type(rows, persona_names, persona_avatars=None):
             **dict(r),
             "is_persona": r["sender"] in persona_names,
             "avatar_url": persona_avatars.get(r["sender"]),
+            # ★ 2026-08-28: row에 is_system 컬럼이 없는 옛 쿼리에서도 안전하게
+            # 기본값 False로 떨어지게 dict.get 사용(SELECT에 안 넣은 곳도 있음).
+            "is_system": bool(dict(r).get("is_system", 0)),
         }
         for r in rows
     ]
+
+
+def _insert_system_notice(conn, room_id, content):
+    """★ "초대가 되면 그 톡방에 '누가 초대되었습니다'라고 구분선 같은 걸
+    만들어달라" 요청(2026-08-28) — 사람/페르소나 발화가 아닌 서버 알림
+    메시지를 남긴다. sender는 화면에 안 쓰이지만(프론트가 is_system이면
+    content만 가운데 구분선으로 그림) 그래도 사람이 알아볼 수 있는 값을
+    넣어둔다."""
+    conn.execute(
+        "INSERT INTO messages (room_id, sender, content, created_at, is_system) VALUES (?, 'system', ?, ?, 1)",
+        (room_id, content, _now()),
+    )
 
 
 REACTION_EMOJIS = {"❤️", "👍", "✅", "😄", "😮", "😢"}
@@ -1148,10 +1163,12 @@ def invite_to_room(room_id: str, body: InviteRequest, request: Request):
     if persona_owner is not None and persona_owner != room_owner:
         conn.close()
         raise HTTPException(status_code=403, detail="이 페르소나는 초대할 수 없습니다")
-    conn.execute(
+    cur = conn.execute(
         "INSERT OR IGNORE INTO room_invites (room_id, persona_name, invited_at) VALUES (?, ?, ?)",
         (room_id, body.persona_name, _now()),
     )
+    if cur.rowcount:  # 이미 있던 초대면(중복 클릭 등) 알림을 또 남기지 않는다
+        _insert_system_notice(conn, room_id, f"{body.persona_name}님이 초대되었습니다")
     conn.commit()
     members = _group_members(conn, room_id, persona_rows)
     conn.close()
@@ -1213,10 +1230,12 @@ def invite_user_to_room(room_id: str, body: InviteUserRequest, request: Request)
     if not target:
         conn.close()
         raise HTTPException(status_code=404, detail="존재하지 않는 계정입니다")
-    conn.execute(
+    cur = conn.execute(
         "INSERT OR IGNORE INTO room_user_invites (room_id, username, invited_at) VALUES (?, ?, ?)",
         (room_id, body.username, _now()),
     )
+    if cur.rowcount:  # 이미 초대돼 있었으면(중복 클릭 등) 알림을 또 남기지 않는다
+        _insert_system_notice(conn, room_id, f"{body.username}님이 초대되었습니다")
     conn.commit()
     conn.close()
     return {"ok": True}
@@ -1483,7 +1502,7 @@ def get_messages(request: Request, room_id: str = GROUP_ROOM_ID, since_id: int =
             conn.close()
             raise HTTPException(status_code=403, detail="이 채팅방을 볼 수 없습니다")
     rows = conn.execute(
-        """SELECT m.id, m.sender, m.content, m.created_at, m.reply_message_id,
+        """SELECT m.id, m.sender, m.content, m.created_at, m.reply_message_id, m.is_system,
                   parent.sender AS reply_sender, parent.content AS reply_content
              FROM messages m
              LEFT JOIN messages parent ON parent.id = m.reply_message_id
@@ -1570,7 +1589,7 @@ def all_messages(since_id: int = 0):
         for r in conn.execute("SELECT name, avatar_url FROM personas").fetchall()
     }
     rows = conn.execute(
-        "SELECT id, room_id, sender, content, created_at FROM messages WHERE id > ? ORDER BY id",
+        "SELECT id, room_id, sender, content, created_at, is_system FROM messages WHERE id > ? ORDER BY id",
         (since_id,),
     ).fetchall()
     conn.close()

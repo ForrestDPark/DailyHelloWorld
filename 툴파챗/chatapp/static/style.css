@@ -656,6 +656,28 @@ main#messages {
 .msg-user { align-self: flex-end; align-items: flex-end; }
 .msg-persona, .msg-other { align-self: flex-start; align-items: flex-start; margin-left: 44px; }
 
+/* ★ "초대되면 구분선 같은 걸 만들어달라" 요청(2026-08-28) — 말풍선이
+   아니라 채팅방 가운데 가로지르는 얇은 구분선 스타일(절취선 느낌)로
+   "OOO님이 초대되었습니다" 같은 시스템 알림을 보여준다. */
+.msg-system {
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+.msg-system::before, .msg-system::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
 .message-avatar {
   position: absolute;
   left: -44px;
