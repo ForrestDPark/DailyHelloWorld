@@ -18,7 +18,7 @@
 - 매일 **새벽 2시(Asia/Seoul)**에 `launchd`의 `com.forrest.codex-sunzi-nightly`가 실행된다.
 - 진입점은 `손자병법/run_nightly_codex.sh`, 영구 작업 지시는 `손자병법/nightly_codex_prompt.md`, 등록 원본은 `손자병법/com.forrest.codex-sunzi-nightly.plist`다.
 - 사용자의 다른 미완료 변경과 섞이지 않도록 `/Users/forrestdpark/.codex-worktrees/sunzi-nightly` 전용 부분 클론에서 작업한다.
-- 한 번에 다음 미완료 구절 하나만 처리한다. 시작 전에 README와 Notion을 다시 읽고, 핵심 이미지 10장(선택 보조 포함 시 12장)·로컬 검증·GitHub main·Notion 재조회·손자병법 사이트 생성/빌드/배포/실페이지 재확인·Tulpa Chat 병법가 방 보고와 토론 시작까지 성공해야 완료로 기록한다.
+- 한 번에 다음 미완료 구절 하나만 처리한다. 시작 전에 README와 Notion을 다시 읽고, 핵심 이미지 10장(선택 보조 포함 시 12장)·로컬 검증·GitHub main·Notion 재조회·손자병법 사이트 생성/빌드/배포/실페이지 재확인·Tulpa Chat `손자병법 토론방`(`custom_16ea779e1f`) 보고와 토론 시작까지 성공해야 완료로 기록한다.
 - 백그라운드 실행은 승인을 기다릴 수 없으므로 `approval_policy=never`, `workspace-write`로 실행한다. 인증 만료·원격 충돌·잔여 변경이 있으면 강제 해결하지 않고 안전하게 중단한다.
 - 로그는 `~/Library/Logs/CodexSunzi/latest.log`, 최종 메시지는 `~/Library/Logs/CodexSunzi/latest-message.txt`에서 확인한다.
 - 맥이 꺼져 있으면 정시에 시작할 수 없다. 자동 작업 시간에는 맥이 켜져 있고 네트워크에 연결되어 있어야 한다.

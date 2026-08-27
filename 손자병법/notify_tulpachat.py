@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""완료된 손자병법 구절을 Tulpa Chat 병법가 방에 알리고 토론을 시작한다."""
+"""완료된 손자병법 구절을 Tulpa Chat 손자병법 토론방에 알리고 토론을 시작한다."""
 
 import argparse
 import html
@@ -9,7 +9,7 @@ import subprocess
 import urllib.request
 from pathlib import Path
 
-ROOM_ID = "병법가"
+ROOM_ID = "custom_16ea779e1f"
 API_URL = "http://127.0.0.1:8000/api/worker/announcements"
 KEYCHAIN_SERVICE = "com.forrest.tulpachat.worker"
 
@@ -62,7 +62,11 @@ def main() -> None:
         "현대에 옮길 때의 오용 위험 가운데 가장 중요하다고 보는 한 가지를 논합니다."
     )
     payload = json.dumps(
-        {"room_id": ROOM_ID, "content": content, "dedupe_key": f"sunzi-jiudi-{number}"},
+        {
+            "room_id": ROOM_ID,
+            "content": content,
+            "dedupe_key": f"{ROOM_ID}:sunzi-jiudi-{number}",
+        },
         ensure_ascii=False,
     ).encode("utf-8")
     request = urllib.request.Request(

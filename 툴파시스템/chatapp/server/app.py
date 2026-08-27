@@ -1688,7 +1688,10 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
                created_at TEXT NOT NULL
            )"""
     )
-    commentators = [name for name in targets if name != "손무"]
+    traditional_commentators = {
+        "조조", "이전", "두목", "매요신", "장예", "왕석", "가림", "두우", "진호"
+    }
+    commentators = [name for name in targets if name in traditional_commentators]
     if not commentators:
         conn.close()
         raise HTTPException(status_code=409, detail="분석을 소개할 전통 주석가가 없습니다")
