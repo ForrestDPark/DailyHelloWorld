@@ -862,43 +862,71 @@ function renderPersonItem(u) {
   const open = (event) => {
     event.stopPropagation();
     closeFriendMenus();
-    openInviteRoomPicker(item, u.username);
+    showUserProfilePopup(u);
   };
   item.addEventListener("click", open);
   item.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") open(event); });
   return item;
 }
 
-// ★ 2026-08-28: 사람 카드를 누르면 내가 만든 단체톡방(is_mine) 중 하나를
-// 골라 그 자리에서 바로 초대한다 — 방에 직접 들어가서 초대 패널을 여는
-// 번거로움을 줄인 단축 경로(사용자가 직접 고른 정책).
-function openInviteRoomPicker(item, username) {
-  const menu = document.createElement("div");
-  menu.className = "friend-action-menu";
-  item.classList.add("menu-open");
+// ★ "프로필보기창이 열리고 거기에 내 톡방으로 초대하기 기능을 넣고 톡방
+// 선택할 수 있게 하자" 요청(2026-08-28) — 처음엔 사람 카드를 누르면 바로
+// 작은 메뉴가 떴는데, 그 대신 페르소나 프로필과 같은 팝업 안에 초대 UI를
+// 심는 형태로 바꿨다. showProfilePopup(메시지 기반, 페르소나 전용)과는
+// 별개 함수 — 사람은 message 객체가 아니라 /api/users의 {username,
+// is_owner, created_at}이라 데이터 모양이 다르다.
+function showUserProfilePopup(user) {
+  closeFriendMenus();
+  const overlay = document.createElement("div");
+  overlay.className = "profile-popup-overlay";
+  const popup = document.createElement("div");
+  popup.className = "profile-popup";
+  const close = document.createElement("button");
+  close.type = "button"; close.className = "profile-popup-close"; close.textContent = "×"; close.setAttribute("aria-label", "닫기");
+  const avatar = document.createElement("div");
+  avatar.className = "profile-popup-avatar";
+  avatar.textContent = user.username.trim().charAt(0) || "?";
+  const name = document.createElement("h2");
+  name.textContent = user.username + (user.is_owner ? " 👑" : "");
+  const joined = user.created_at ? user.created_at.slice(0, 10) : "";
+  const summary = document.createElement("p");
+  summary.textContent = joined ? `${joined} 가입` : "가입자";
+
+  const inviteSection = document.createElement("div");
+  inviteSection.className = "profile-popup-invite";
+  const inviteTitle = document.createElement("div");
+  inviteTitle.className = "invite-panel-title";
+  inviteTitle.textContent = "내 톡방으로 초대하기";
+  const roomList = document.createElement("div");
+  roomList.className = "profile-popup-invite-list";
   // ★ is_mine은 내가 만든 커스텀 방뿐 아니라 내가 만든 페르소나 1:1 방에도
   // 붙는다(서버 list_rooms, "한자선생님" 같은 개인 페르소나 케이스) — 사람을
   // 초대할 수 있는 건 단체방(is_group_room)뿐이라 같이 확인해야 한다.
   const myRooms = [...roomsCache.values()].filter((r) => r.is_mine && r.is_group_room);
   if (!myRooms.length) {
-    const hint = document.createElement("div");
-    hint.className = "empty-hint";
-    hint.textContent = "초대할 수 있는 내 방이 없습니다";
-    menu.appendChild(hint);
+    roomList.innerHTML = '<div class="empty-hint">초대할 수 있는 내 방이 없습니다</div>';
   } else {
     for (const r of myRooms) {
       const button = document.createElement("button");
       button.type = "button";
-      button.textContent = `${r.label}에 초대`;
-      button.addEventListener("click", async (e) => {
-        e.stopPropagation();
-        closeFriendMenus();
-        await inviteUserToRoom(username, r.room_id);
+      button.className = "invite-candidate";
+      button.textContent = r.label;
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        await inviteUserToRoom(user.username, r.room_id);
+        button.textContent = `✓ ${r.label}`;
+        button.classList.add("invited");
       });
-      menu.appendChild(button);
+      roomList.appendChild(button);
     }
   }
-  item.appendChild(menu);
+  inviteSection.append(inviteTitle, roomList);
+
+  close.addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+  popup.append(close, avatar, name, summary, inviteSection);
+  overlay.appendChild(popup);
+  document.body.appendChild(overlay);
 }
 
 function setListMode(mode) {

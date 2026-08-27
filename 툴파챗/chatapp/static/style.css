@@ -748,6 +748,13 @@ main#messages {
 .profile-popup h2 { margin: 0 0 10px; font-size: 22px; }
 .profile-popup p { margin: 0; color: var(--muted); line-height: 1.65; white-space: pre-wrap; text-align: left; }
 
+/* ★ "프로필보기창에 내 톡방으로 초대하기 기능" 요청(2026-08-28) — 사람
+   프로필 팝업 안에 방 선택 UI를 넣는다. 팝업 본문은 가운데 정렬이라
+   이 영역만 왼쪽 정렬로 되돌린다. */
+.profile-popup-invite { margin-top: 18px; text-align: left; }
+.profile-popup-invite-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.profile-popup-invite .invite-candidate.invited { opacity: .55; cursor: default; }
+
 .msg .sender { font-size: 12px; opacity: 0.6; padding: 0 4px; }
 .msg .sender-clickable { cursor: pointer; text-decoration: underline dotted; }
 .msg .body {
