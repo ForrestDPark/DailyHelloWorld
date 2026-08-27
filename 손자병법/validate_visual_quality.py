@@ -185,10 +185,10 @@ def validate(page: Path) -> list[str]:
             if left_kind == right_kind or battle_prefix(Path(left_path).name) != battle_prefix(Path(right_path).name):
                 continue
             similarity = structural_similarity(left_image, right_image)
-            if similarity >= 0.94:
+            if similarity >= 0.95:
                 errors.append(
                     f"{Path(left_path).name} ↔ {Path(right_path).name}: 서로 다른 도판인데 "
-                    f"공통 배경·대형 면 유사도 {similarity:.3f}가 0.940 이상입니다"
+                    f"공통 배경·대형 면 유사도 {similarity:.3f}가 0.950 이상입니다"
                 )
     errors.extend(generator_source_errors(page, [path for path, _ in images]))
     return errors

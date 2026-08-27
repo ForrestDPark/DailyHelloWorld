@@ -72,6 +72,7 @@
 ## 4. 역사적 실증 사례 {toggle="true"}
 	### 서양 — 🏛️ 그리스 폴리스 연합함대 vs 페르시아 제국 함대 │ 살라미스 해전(BCE 480)
 	![살라미스 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/salamis_commanders.png)
+	![살라미스 병사·무기·생활·정찰 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/salamis_soldiers_weapons_life.png)
 	![살라미스 장군 조직도와 함대 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/salamis_command_structure.png)
 	![살라미스 그리스·페르시아 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/salamis_country_map.png)
 	![살라미스 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/salamis_strategy_map.png)
@@ -176,6 +177,7 @@
 
 	### 동양 — 🏛️ 손권·유비 연합군 vs 조조군 │ 적벽대전(208)
 	![적벽 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/redcliffs_commanders.png)
+	![적벽 병사·무기·생활·정찰 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/redcliffs_soldiers_weapons_life.png)
 	![적벽 장군 조직도와 작전 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/redcliffs_command_structure.png)
 	![적벽 삼국 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/redcliffs_country_map.png)
 	![적벽 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/redcliffs_strategy_map.png)
