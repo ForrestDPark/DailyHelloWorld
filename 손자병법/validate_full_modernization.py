@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 
 from validate_notion_markup import validate as validate_markup
+from validate_visual_quality import validate as validate_visual_quality
 
 
 LAW_TITLE_TEXT = "法을 압축하지 않고 보기 — 곡제·관도·주용"
@@ -154,6 +155,7 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
     )
     warnings: list[str] = []
     errors.extend(validate_law_comparisons(text))
+    errors.extend(validate_visual_quality(path))
 
     for label in COUNTRY_EMOJI_MANIFESTS.get(path.name, ()):
         if label not in text:
@@ -536,8 +538,8 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         warnings.append("장수 이름 전수 진영색 검사는 인물 별칭 목록과 사람이 함께 확인해야 합니다")
     warnings.append("자연지형 전수 이모지·배경색 검사는 지명 목록과 사람이 함께 확인해야 합니다")
     warnings.append(
-        "이미지의 내용·배치·가독성과 카우펜스·채주 기준본 대비 품질은 "
-        "실제 이미지를 나란히 열어 확인해야 합니다"
+        "자동 이미지 정보량 하한을 통과한 뒤에도 원본·390px 축소본을 "
+        "카우펜스·채주 기준본과 실제로 나란히 열어 확인해야 합니다"
     )
     return errors, warnings
 
