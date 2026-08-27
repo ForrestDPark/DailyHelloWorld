@@ -3946,7 +3946,7 @@ def _speak_text(text):
     _SPEECH_QUEUE.put((text, volume))
 
 
-def notify_spoken(title, subtitle, message, speak_text=None):
+def notify_spoken(title, subtitle, message, speak_text=None, url=None):
     """예고 없이 뜨는 알림(추천 공고·경진대회, 리마인더, 근무 알람, 메일 요약,
     동기화 실패 등)에만 쓴다 — 사람이 직접 클릭해서 생기는 즉각 반응성 알림
     (Elmedia 재생, Hue 등)은 rumps.notification을 그대로 쓴다(2026-08-14).
@@ -3955,8 +3955,13 @@ def notify_spoken(title, subtitle, message, speak_text=None):
     message)는 그대로 둔다. ★ 2026-08-22: 새 메일 알림은 subtitle에 원문 메일
     제목이 그대로 들어가는데, 음성으로 그 제목까지 읽으면 정작 중요한 AI 요약
     앞에 장황한 원문 제목이 붙어 나온다는 피드백 — 화면엔 원문 제목을 남기되
-    음성은 정리된 요약만 읽게 분리."""
-    rumps.notification(title, subtitle, message)
+    음성은 정리된 요약만 읽게 분리.
+
+    url: 지정하면 알림을 클릭(macOS의 "보기/Show")했을 때 이 주소를 바로
+    연다 — "메일 알림이면 메일로, 툴파챗 알림이면 툴파챗으로 바로가기가
+    되면 좋겠다" 요청(2026-08-27). rumps의 data 페이로드로 실어보내고,
+    ShiftAlarmApp의 @rumps.notifications 핸들러가 열어준다."""
+    rumps.notification(title, subtitle, message, data={"url": url} if url else None)
     _speak_text(
         speak_text if speak_text is not None
         else " ".join(part for part in (title, subtitle, message) if part)
@@ -4672,13 +4677,14 @@ class ShiftAlarmApp(rumps.App):
         from_personas = [m for m in messages if m.get("is_persona", m.get("sender") != "user")]
         if not from_personas:
             return
+        tulpachat_url = get_tulpachat_url()
         if len(from_personas) == 1:
             m = from_personas[0]
             preview = m["content"][:60] + ("…" if len(m["content"]) > 60 else "")
-            notify_spoken("🧑‍🤝‍🧑 툴파시스템 새 메시지", m["sender"], preview)
+            notify_spoken("🧑‍🤝‍🧑 툴파시스템 새 메시지", m["sender"], preview, url=tulpachat_url)
         else:
             names = ", ".join(sorted({m["sender"] for m in from_personas}))
-            notify_spoken("🧑‍🤝‍🧑 툴파시스템 새 메시지", f"{len(from_personas)}건", names)
+            notify_spoken("🧑‍🤝‍🧑 툴파시스템 새 메시지", f"{len(from_personas)}건", names, url=tulpachat_url)
 
     def _check_high_cpu(self, _):
         """1분마다 CPU 과부하 프로세스를 표본 조사한다. `ps` 호출이 느려질
@@ -5318,17 +5324,30 @@ class ShiftAlarmApp(rumps.App):
                 notify_spoken, "일일 루틴 동기화 실패", label, error
             )
 
+    def _open_url(self, url):
+        # https URL을 그냥 `open`에 넘기면 macOS 기본 브라우저가 받는다.
+        # Notion 링크는 설치된 데스크톱 앱을 명시해 일일 체크리스트와 AI 분석
+        # 페이지가 Chrome이 아니라 Notion에서 열리게 한다(★ 2026-08-09).
+        if not url:
+            return
+        host = (urlparse(url).hostname or "").lower()
+        if host == "notion.so" or host.endswith(".notion.so") or host == "notion.com" or host.endswith(".notion.com"):
+            subprocess.Popen(["open", "-a", "Notion", url])
+        else:
+            subprocess.Popen(["open", url])
+
     def make_open_url_callback(self, url):
         def callback(_):
-            # https URL을 그냥 `open`에 넘기면 macOS 기본 브라우저가 받는다.
-            # Notion 링크는 설치된 데스크톱 앱을 명시해 일일 체크리스트와 AI 분석
-            # 페이지가 Chrome이 아니라 Notion에서 열리게 한다(★ 2026-08-09).
-            host = (urlparse(url).hostname or "").lower()
-            if host == "notion.so" or host.endswith(".notion.so") or host == "notion.com" or host.endswith(".notion.com"):
-                subprocess.Popen(["open", "-a", "Notion", url])
-            else:
-                subprocess.Popen(["open", url])
+            self._open_url(url)
         return callback
+
+    @rumps.notifications
+    def _handle_notification_click(self, notification):
+        """"메일 알림이면 메일 링크로, 툴파챗 알림이면 툴파챗 링크로 바로가기가
+        되면 좋겠다"는 요청(2026-08-27) — notify_spoken(url=...)로 실어보낸
+        딥링크를, 알림을 클릭("보기"/Show)했을 때 바로 연다. url 없이 보낸
+        알림(근무 알람 등)은 조용히 무시한다."""
+        self._open_url((notification.data or {}).get("url"))
 
     def _muse_trace_upgrade_status(self):
         """현재 로드맵 단계, 점검 기한, 기한 도래 여부를 안전하게 계산한다."""
@@ -5997,6 +6016,7 @@ class ShiftAlarmApp(rumps.App):
                     f"{top_item['sender']} — {truncate_title(top_item['subject'], 55)}",
                     top_item["summary"],
                     speak_text=f"새 메일. {top_item['category']}. {top_item['summary']}",
+                    url=_gmail_message_url(top_item.get("id")),
                 )
             for item in new_items[:10]:
                 # ★ 2026-08-14: 채용 관련 메일이면 본문에서 공고를 추출해 이직시스템

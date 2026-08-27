@@ -689,3 +689,11 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - **열 상태 표시**: `get_thermal_status()` — Apple Silicon은 sudo 없이 원시 온도(°C)를 읽을 방법이 없다. `powermetrics --samplers thermal`은 root를 요구하고, `osx-cpu-temp`(Homebrew) 같은 서드파티 도구도 실측 결과 `0.0°C`만 반환했다(Intel 전용 SMC 키 기반이라 Apple Silicon엔 그 키가 없음). 대신 `pmset -g therm`(sudo 불필요)이 보고하는 `CPU_Speed_Limit`(%) — macOS 자신이 열 때문에 CPU를 얼마나 줄였는지 판단하는 지표 — 를 쓴다. 41번 항목에서 추가한 1분 주기 CPU 표본 스레드에 얹어서 같이 갱신하고(`self._thermal_status`), 메뉴바 타이틀에 항상 "🌡️"(정상) 또는 빨간 "🌡️NN%"(스로틀링 중)로 표시한다.
 - **요주의 프로세스 자동 종료**: `AUTO_KILL_HIGH_CPU_NAMES = {"replayd", "StorageManagementService", "ApplicationsStorageExtension"}` — 직전(42번 항목) CPU 과부하 조사 중 실제로 몇 시간씩 CPU를 붙잡고 있던 게 확인된 두 시스템 데몬만 화이트리스트로 담았다. **임의의 새로 붙잡힌 프로세스를 전부 자동 종료하지는 않는다** — 잘못하면 중요한 작업 중인 프로세스를 죽일 위험이 있어서, 사용자와 함께 "안전하게 죽여도 된다"고 확인한 것만 대상으로 범위를 좁혔다. 30분 이상 붙잡힌 게 확인되는 시점에 화이트리스트 소속이면 알림만 주는 대신 `os.kill(pid, SIGKILL)`로 바로 종료하고, 알림 문구도 "메뉴바에서 확인하세요" 대신 "자동 종료함"으로 바뀐다. 종료 후에는 추적 상태를 지워서, 그 데몬이 (macOS가 다시 띄워서) 나중에 또 붙잡히면 처음부터 새로 30분을 센다.
 - 검증: `pmset -g therm` 파싱 실제 시스템에서 확인(`{'throttled': False, 'percent': 100}`). `os.kill(pid, signal.SIGKILL)` 메커니즘은 더미 `sleep` 프로세스로 별도 검증(실제 시스템 데몬을 테스트 목적으로 건드리지 않음).
+
+## 44. 🔗 알림 클릭 시 관련 링크로 바로가기 (★ 2026-08-27 추가)
+
+**사용자 요청**: "알람 뜰 때 Show 클릭하면 그거에 해당하는 내용을 볼 수 있으면 좋겠어 — 메일 알람이면 메일 링크로, 툴파챗 알람이면 툴파챗 링크로 바로가기가 되면 좋겠어".
+
+- `notify_spoken()`에 `url=` 인자를 추가했다. 지정하면 `rumps.notification(..., data={"url": url})`로 실어보내고, 지정 안 하면(근무 알람·리마인더 등 원래부터 딱히 열 링크가 없는 알림) `data=None`으로 기존과 동일하게 동작한다.
+- `ShiftAlarmApp`에 `@rumps.notifications` 핸들러(`_handle_notification_click`)를 새로 등록했다 — 사용자가 알림을 클릭("보기"/Show)하면 macOS가 이 핸들러를 부르고, 실려온 `data["url"]`을 기존 메뉴 링크 열기와 같은 방식(`_open_url` — Notion 링크는 Notion 앱으로, 그 외는 기본 브라우저로)으로 바로 연다. 이전엔 이 App 앱 인스턴스에 알림 클릭 핸들러 자체가 없어서 클릭해도 아무 반응이 없었다.
+- 적용한 곳: 📧 새 메일 알림(`_gmail_message_url(top_item["id"])`로 해당 메일 본문 딥링크), 🧑‍🤝‍🧑 툴파시스템 새 메시지 알림(`get_tulpachat_url()`). 다른 `notify_spoken()` 호출(근무 알람, 리마인더, 저장공간 부족, CPU 과부하 등)은 `url`을 안 넘기므로 클릭해도 그냥 닫히는 기존 동작 그대로다 — 필요해지면 같은 패턴으로 확장하면 된다.
