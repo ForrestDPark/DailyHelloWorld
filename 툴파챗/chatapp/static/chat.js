@@ -4,6 +4,12 @@ let pollTimer = null;
 let canWrite = true; // /api/whoami로 초기화 — 공유 링크로 들어온 읽기 전용 방문자는 false
 let myUsername = null; // 로그인 계정의 실제 아이디(2026-08-26 다중 계정) — 내 메시지 판별용
 let amOwner = false; // 소유자 계정으로 로그인했는지 — 권한 관리(⚙️) 패널 노출 여부에 씀
+// ★ "카톡·구글 로그인은 아이디가 자동 생성돼서 보기 안 좋으니 자기 이름·
+// 프로필사진 바꿀 수 있게 해달라" 요청(2026-08-28) — 로그인 아이디(myUsername,
+// 메시지 sender·소유권에 쓰이는 안정적 식별자)는 안 바뀌고, 화면에 보여줄
+// 이름/사진만 별도로 둔다. 둘 다 없으면(신규 계정) 아이디로 대체 표시.
+let myDisplayName = null;
+let myAvatarUrl = null;
 
 const authView = document.getElementById("auth-view");
 const roomListView = document.getElementById("room-list-view");
@@ -28,6 +34,18 @@ messagesEl.addEventListener("scroll", updateScrollBottomVisibility);
 scrollBottomBtn.addEventListener("click", () => {
   messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: "smooth" });
 });
+
+// ★ "위에 버튼들 누르면 버튼 다시 눌러야 창이 사라지는데, 스크롤로 내리면
+// 자연스럽게 사라지게 해달라" 요청(2026-08-28) — 헤더 아이콘 버튼(⚙️·내
+// 페르소나·프로필 보기)으로 여는 패널들을 방 목록을 스크롤하면 자동으로
+// 닫는다. 매번 새 패널이 추가돼도 여기 한 줄만 추가하면 되게 배열로 관리.
+const MAIN_LIST_PANEL_IDS = ["admin-panel", "persona-manager-panel", "profiles-panel"];
+function closeMainListPanels() {
+  for (const id of MAIN_LIST_PANEL_IDS) {
+    document.getElementById(id).classList.add("hidden");
+  }
+}
+roomListEl.addEventListener("scroll", closeMainListPanels);
 
 // ★ 2026-08-26: 세션 쿠키가 만료됐거나(180일 지남) 로그인 자체가 안 된
 // 상태에서 API를 호출하면 서버가 401을 준다. fetch를 감싸서 401을 만나면
@@ -105,6 +123,8 @@ document.getElementById("auth-form").addEventListener("submit", async (e) => {
     }
     myUsername = data.username;
     amOwner = !!data.is_owner;
+    myDisplayName = data.display_name || null;
+    myAvatarUrl = data.avatar_url || null;
     canWrite = true;
     authView.classList.add("hidden");
     initAccountChip();
@@ -127,7 +147,11 @@ function initAccountChip() {
     document.getElementById("notify-btn").classList.add("hidden");
     return;
   }
-  document.getElementById("account-name").textContent = myUsername;
+  document.getElementById("account-name").textContent = myDisplayName || myUsername;
+  const accountAvatar = document.getElementById("account-avatar");
+  accountAvatar.innerHTML = myAvatarUrl
+    ? `<img src="${escapeHtml(myAvatarUrl)}" alt="">`
+    : escapeHtml((myDisplayName || myUsername).trim().charAt(0) || "?");
   chip.classList.remove("hidden");
   // ★ "모든 사람한테 유이 꾸밀 권한을 주지 말고 내 허락하에 그 사람에게
   // 권한을 줄 수 있게 해달라" 요청(2026-08-26) — 권한 관리 버튼은 소유자
@@ -146,6 +170,84 @@ function initAccountChip() {
     document.getElementById("notify-btn").classList.remove("hidden");
     refreshNotifyButtonState();
   }
+}
+
+// ★ "카톡이나 구글로 로그인한 사람은 자기 이름 수정할 수 있게, 다른 일반
+// 사용자도 마찬가지고, 프로필사진 바꾸는 것도 가능하게 해달라" 요청
+// (2026-08-28) — 헤더의 내 계정 이름을 누르면 이름·사진을 바로 고칠 수 있는
+// 팝업이 뜬다. showUserProfilePopup(다른 사람 보기 전용, 초대 UI 포함)과는
+// 별개 — 이건 "나 자신"을 수정하는 폼이다.
+document.getElementById("account-name-btn").addEventListener("click", showMyProfileEditor);
+
+function showMyProfileEditor() {
+  const overlay = document.createElement("div");
+  overlay.className = "profile-popup-overlay";
+  const popup = document.createElement("div");
+  popup.className = "profile-popup";
+  const close = document.createElement("button");
+  close.type = "button"; close.className = "profile-popup-close"; close.textContent = "×"; close.setAttribute("aria-label", "닫기");
+
+  const avatar = document.createElement(myAvatarUrl ? "img" : "div");
+  avatar.className = "profile-popup-avatar profile-popup-avatar-editable";
+  if (myAvatarUrl) { avatar.src = myAvatarUrl; avatar.alt = ""; }
+  else avatar.textContent = (myDisplayName || myUsername || "?").trim().charAt(0) || "?";
+  avatar.title = "탭해서 프로필 사진 변경";
+  const avatarInput = document.createElement("input");
+  avatarInput.type = "file"; avatarInput.accept = "image/*"; avatarInput.className = "hidden";
+  avatar.addEventListener("click", () => avatarInput.click());
+  avatarInput.addEventListener("change", async () => {
+    if (!avatarInput.files[0]) return;
+    const data = new FormData(); data.append("file", avatarInput.files[0]);
+    try {
+      const res = await apiFetch("/api/me/avatar", { method: "POST", body: data });
+      const body = await res.json();
+      if (!res.ok) { alert(body.detail || "업로드 실패"); return; }
+      myAvatarUrl = body.avatar_url;
+      overlay.remove();
+      initAccountChip();
+      showMyProfileEditor();
+    } catch (e) {
+      if (e.message !== "unauthorized" && e.message !== "forbidden") alert("업로드 실패");
+    }
+  });
+
+  const nameForm = document.createElement("form");
+  nameForm.className = "my-profile-name-form";
+  const nameInput = document.createElement("input");
+  nameInput.type = "text"; nameInput.maxLength = 30;
+  nameInput.value = myDisplayName || myUsername || "";
+  nameInput.placeholder = "표시 이름";
+  const saveBtn = document.createElement("button");
+  saveBtn.type = "submit"; saveBtn.textContent = "저장";
+  nameForm.append(nameInput, saveBtn);
+  nameForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const value = nameInput.value.trim();
+    if (!value) return;
+    try {
+      const res = await apiFetch("/api/me", {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ display_name: value }),
+      });
+      const body = await res.json();
+      if (!res.ok) { alert(body.detail || "저장 실패"); return; }
+      myDisplayName = body.display_name;
+      initAccountChip();
+      saveBtn.textContent = "저장됨";
+      setTimeout(() => { saveBtn.textContent = "저장"; }, 1200);
+    } catch (err) {
+      if (err.message !== "unauthorized" && err.message !== "forbidden") alert("저장 실패");
+    }
+  });
+
+  const idNote = document.createElement("p");
+  idNote.className = "my-profile-id-note";
+  idNote.textContent = `로그인 아이디: ${myUsername}`;
+
+  close.addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
+  popup.append(close, avatar, avatarInput, nameForm, idNote);
+  overlay.appendChild(popup);
+  document.body.appendChild(overlay);
 }
 
 // ★ 위와 같은 요청(2026-08-27) — 웹 푸시 구독 흐름. 버튼 상태(꺼짐/켜짐)는
@@ -212,6 +314,8 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
   }
   myUsername = null;
   amOwner = false;
+  myDisplayName = null;
+  myAvatarUrl = null;
   location.hash = "";
   showAuthView();
 });
@@ -645,6 +749,8 @@ async function initAuth() {
   canWrite = !!data.can_write;
   myUsername = data.username || null;
   amOwner = !!data.is_owner;
+  myDisplayName = data.display_name || null;
+  myAvatarUrl = data.avatar_url || null;
   oauthFlags = { google: !!data.google_login_enabled, kakao: !!data.kakao_login_enabled };
   applyOauthButtons();
   if (!data.logged_in && !data.share_guest && !canWrite) {
@@ -852,10 +958,16 @@ function renderPersonItem(u) {
   item.tabIndex = 0;
   item.setAttribute("role", "button");
   const joined = u.created_at ? u.created_at.slice(0, 10) : "";
+  // ★ "자기 이름·프로필사진 바꿀 수 있게 해달라" 요청(2026-08-28) — 친구
+  // 탭 사람 카드도 display_name/avatar_url이 있으면 그걸 우선 보여준다.
+  const label = u.display_name || u.username;
+  const avatarInner = u.avatar_url
+    ? `<img src="${escapeHtml(u.avatar_url)}" alt="">`
+    : escapeHtml(label.trim().charAt(0) || "?");
   item.innerHTML = `
-    <div class="avatar">${escapeHtml(u.username.trim().charAt(0) || "?")}</div>
+    <div class="avatar${u.avatar_url ? " avatar-image" : ""}">${avatarInner}</div>
     <div class="room-info">
-      <div class="room-name">${escapeHtml(u.username)}${u.is_owner ? " 👑" : ""}</div>
+      <div class="room-name">${escapeHtml(label)}${u.is_owner ? " 👑" : ""}</div>
       <div class="room-preview">${joined ? `${joined} 가입` : "가입자"}</div>
     </div>
   `;
@@ -883,11 +995,14 @@ function showUserProfilePopup(user) {
   popup.className = "profile-popup";
   const close = document.createElement("button");
   close.type = "button"; close.className = "profile-popup-close"; close.textContent = "×"; close.setAttribute("aria-label", "닫기");
-  const avatar = document.createElement("div");
+  // ★ "자기 이름·프로필사진 바꿀 수 있게 해달라" 요청(2026-08-28)
+  const label = user.display_name || user.username;
+  const avatar = document.createElement(user.avatar_url ? "img" : "div");
   avatar.className = "profile-popup-avatar";
-  avatar.textContent = user.username.trim().charAt(0) || "?";
+  if (user.avatar_url) { avatar.src = user.avatar_url; avatar.alt = ""; }
+  else avatar.textContent = label.trim().charAt(0) || "?";
   const name = document.createElement("h2");
-  name.textContent = user.username + (user.is_owner ? " 👑" : "");
+  name.textContent = label + (user.is_owner ? " 👑" : "");
   const joined = user.created_at ? user.created_at.slice(0, 10) : "";
   const summary = document.createElement("p");
   summary.textContent = joined ? `${joined} 가입` : "가입자";
@@ -1375,15 +1490,19 @@ async function showProfilePopup(message) {
     }
     profile = personaProfilesCache.find((p) => p.name === message.sender);
   }
+  // ★ "자기 이름·프로필사진 바꿀 수 있게 해달라" 요청(2026-08-28) — 사람은
+  // displayName()(페르소나 전용, "(가상)" 접미사) 대신 서버가 내려주는
+  // display_name(없으면 아이디)을 쓴다.
+  const label = message.is_persona ? displayName(message.sender) : (message.display_name || message.sender);
   const overlay = document.createElement("div");
   overlay.className = "profile-popup-overlay";
   const popup = document.createElement("div");
   popup.className = "profile-popup";
   const close = document.createElement("button"); close.type = "button"; close.className = "profile-popup-close"; close.textContent = "×"; close.setAttribute("aria-label", "닫기");
   const avatar = document.createElement(message.avatar_url ? "img" : "div"); avatar.className = "profile-popup-avatar";
-  if (message.avatar_url) { avatar.src = message.avatar_url; avatar.alt = `${displayName(message.sender)} 프로필 이미지`; }
-  else avatar.textContent = displayName(message.sender).charAt(0) || "?";
-  const name = document.createElement("h2"); name.textContent = displayName(message.sender);
+  if (message.avatar_url) { avatar.src = message.avatar_url; avatar.alt = `${label} 프로필 이미지`; }
+  else avatar.textContent = label.charAt(0) || "?";
+  const name = document.createElement("h2"); name.textContent = label;
   const summary = document.createElement("p"); summary.textContent = profile?.summary || (message.is_persona ? "프로필 정보가 없습니다." : "채팅방 참여자");
   close.addEventListener("click", () => overlay.remove()); overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
   popup.append(close, avatar, name, summary); overlay.appendChild(popup); document.body.appendChild(overlay);
@@ -1482,16 +1601,20 @@ function appendMessage(m) {
   const el = document.createElement("div");
   el.className = "msg " + (isPersona ? "msg-persona" : isMine ? "msg-user" : "msg-other");
   el.dataset.messageId = String(m.id); // ★ 답장 인용 클릭 시 원본으로 스크롤하는 데 씀(2026-08-27)
+  // ★ "자기 이름·프로필사진 바꿀 수 있게 해달라" 요청(2026-08-28) — 사람
+  // 메시지는 이제 서버가 display_name(없으면 null)을 같이 내려준다. 페르소나는
+  // 그대로 displayName()이 "(가상)"을 붙여 처리.
+  const humanLabel = m.display_name || m.sender;
   if (!isMine) {
     const avatar = document.createElement(m.avatar_url ? "img" : "div");
     avatar.className = "message-avatar";
-    avatar.title = `${isPersona ? displayName(m.sender) : m.sender} 프로필`;
+    avatar.title = `${isPersona ? displayName(m.sender) : humanLabel} 프로필`;
     if (m.avatar_url) {
       avatar.src = m.avatar_url;
       avatar.alt = "";
       avatar.loading = "lazy";
     } else {
-      avatar.textContent = (isPersona ? displayName(m.sender) : m.sender).trim().charAt(0) || "?";
+      avatar.textContent = (isPersona ? displayName(m.sender) : humanLabel).trim().charAt(0) || "?";
     }
     avatar.classList.add("message-avatar-clickable");
     avatar.title += " · 탭해서 프로필 보기";
@@ -1500,7 +1623,7 @@ function appendMessage(m) {
   }
   const sender = document.createElement("div");
   sender.className = "sender";
-  sender.textContent = isPersona ? displayName(m.sender) : isMine ? "나" : m.sender;
+  sender.textContent = isPersona ? displayName(m.sender) : isMine ? "나" : humanLabel;
   const cached = roomsCache.get(currentRoom);
   const isMetaRoom = currentRoom === "group" || (cached && cached.is_group_room);
   if (isPersona && isMetaRoom && canWrite) {

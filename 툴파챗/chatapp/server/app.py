@@ -296,20 +296,36 @@ def _build_user_persona_prompt(name, owner_username, description):
     )
 
 
-def _with_sender_type(rows, persona_names, persona_avatars=None):
-    """메시지 발신자 종류와 페르소나 프로필 이미지를 함께 내려준다."""
+def _with_sender_type(rows, persona_names, persona_avatars=None, human_profiles=None):
+    """메시지 발신자 종류와 프로필 이미지·표시 이름을 함께 내려준다.
+    페르소나는 avatar_url만(이름은 프론트 displayName()이 "(가상)"을 붙여
+    표시), 사람은 avatar_url·display_name 둘 다(2026-08-28 — "자기 이름·
+    프로필사진 바꿀 수 있게 해달라" 요청. display_name이 없으면 프론트가
+    sender(아이디)로 대체 표시)."""
     persona_avatars = persona_avatars or {}
-    return [
-        {
+    human_profiles = human_profiles or {}
+    result = []
+    for r in rows:
+        sender = r["sender"]
+        is_persona = sender in persona_names
+        human = human_profiles.get(sender, {}) if not is_persona else {}
+        result.append({
             **dict(r),
-            "is_persona": r["sender"] in persona_names,
-            "avatar_url": persona_avatars.get(r["sender"]),
+            "is_persona": is_persona,
+            "avatar_url": persona_avatars.get(sender) if is_persona else human.get("avatar_url"),
+            "display_name": human.get("display_name"),
             # ★ 2026-08-28: row에 is_system 컬럼이 없는 옛 쿼리에서도 안전하게
             # 기본값 False로 떨어지게 dict.get 사용(SELECT에 안 넣은 곳도 있음).
             "is_system": bool(dict(r).get("is_system", 0)),
-        }
-        for r in rows
-    ]
+        })
+    return result
+
+
+def _human_profiles(conn):
+    return {
+        r["username"]: {"display_name": r["display_name"], "avatar_url": r["avatar_url"]}
+        for r in conn.execute("SELECT username, display_name, avatar_url FROM users").fetchall()
+    }
 
 
 def _insert_system_notice(conn, room_id, content):
@@ -398,7 +414,7 @@ def login(body: LoginRequest, response: Response):
     conn = get_conn()
     try:
         row = conn.execute(
-            "SELECT id, username, password_hash, salt, is_owner FROM users WHERE username = ?",
+            "SELECT id, username, password_hash, salt, is_owner, display_name, avatar_url FROM users WHERE username = ?",
             (body.username.strip(),),
         ).fetchone()
         if not row or not auth.verify_password(body.password, row["salt"], row["password_hash"]):
@@ -407,7 +423,10 @@ def login(body: LoginRequest, response: Response):
     finally:
         conn.close()
     response.set_cookie(SESSION_COOKIE_NAME, token, max_age=SESSION_COOKIE_MAX_AGE, httponly=True, samesite="lax")
-    return {"ok": True, "username": row["username"], "is_owner": bool(row["is_owner"])}
+    return {
+        "ok": True, "username": row["username"], "is_owner": bool(row["is_owner"]),
+        "display_name": row["display_name"], "avatar_url": row["avatar_url"],
+    }
 
 
 @app.post("/api/auth/logout")
@@ -907,12 +926,27 @@ def whoami(request: Request):
     필요한" 상태다(공유 링크 방문자는 share_guest=True라 로그인 없이도
     채팅 화면을 그대로 봄)."""
     user = getattr(request.state, "user", None)
+    display_name = None
+    avatar_url = None
+    if user:
+        conn = get_conn()
+        row = conn.execute(
+            "SELECT display_name, avatar_url FROM users WHERE username = ?", (user["username"],)
+        ).fetchone()
+        conn.close()
+        if row:
+            display_name, avatar_url = row["display_name"], row["avatar_url"]
     return {
         "can_write": getattr(request.state, "can_write", True),
         "logged_in": user is not None,
         "username": user["username"] if user else None,
         "is_owner": bool(user["is_owner"]) if user else False,
         "share_guest": getattr(request.state, "share_guest", False),
+        # ★ "자기 이름·프로필사진 바꿀 수 있게 해달라" 요청(2026-08-28) —
+        # 로그인 직후 프론트가 내 표시 이름/아바타를 바로 알아야 헤더에 반영할
+        # 수 있다.
+        "display_name": display_name,
+        "avatar_url": avatar_url,
         # ★ 2026-08-26: 구글/카카오 로그인 버튼은 실제로 설정(도메인+클라이언트
         # ID/시크릿)이 끝났을 때만 보여준다 — 로그인 화면이 아직 안 될 버튼을
         # 미리 보여주지 않게.
@@ -942,10 +976,69 @@ def list_users_public(request: Request):
     exclude = user["username"] if user else None
     conn = get_conn()
     rows = conn.execute(
-        "SELECT username, is_owner, created_at FROM users ORDER BY created_at"
+        "SELECT username, is_owner, created_at, display_name, avatar_url FROM users ORDER BY created_at"
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows if r["username"] != exclude]
+
+
+class MyProfileUpdate(BaseModel):
+    display_name: str
+
+
+@app.put("/api/me")
+def update_my_profile(body: MyProfileUpdate, request: Request):
+    """★ "카톡이나 구글로 로그인한 사람은 자기 이름 수정할 수 있게, 다른
+    일반 사용자도 마찬가지로" 요청(2026-08-28) — 로그인한 계정이면 누구나
+    (소유자 여부·가입 방식과 무관하게) 자기 표시 이름을 바꿀 수 있다.
+    username(로그인 아이디)은 안 바뀐다 — 화면에 보이는 이름만."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    name = body.display_name.strip()
+    if not (1 <= len(name) <= 30):
+        raise HTTPException(status_code=400, detail="이름은 1~30자로 입력하세요")
+    conn = get_conn()
+    conn.execute("UPDATE users SET display_name = ? WHERE username = ?", (name, user["username"]))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "display_name": name}
+
+
+@app.post("/api/me/avatar")
+async def upload_my_avatar(request: Request, file: UploadFile = File(...)):
+    """내 프로필 사진 변경 — 저장·검증 로직은 /api/upload와 동일(같은
+    UPLOADS_DIR·확장자·용량 제한 재사용, /api/admin/personas/{name}/avatar와
+    같은 패턴)."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"지원하지 않는 이미지 형식입니다: {ext or '(확장자 없음)'}")
+    data = await file.read()
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="이미지가 너무 큽니다(10MB 제한)")
+    filename = f"user_{uuid.uuid4().hex}{ext}"
+    (UPLOADS_DIR / filename).write_bytes(data)
+    url = f"/uploads/{filename}"
+    conn = get_conn()
+    conn.execute("UPDATE users SET avatar_url = ? WHERE username = ?", (url, user["username"]))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "avatar_url": url}
+
+
+@app.delete("/api/me/avatar")
+def delete_my_avatar(request: Request):
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    conn = get_conn()
+    conn.execute("UPDATE users SET avatar_url = NULL WHERE username = ?", (user["username"],))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 @app.get("/api/persona_profiles")
@@ -1510,8 +1603,9 @@ def get_messages(request: Request, room_id: str = GROUP_ROOM_ID, since_id: int =
         (room_id, since_id),
     ).fetchall()
     reactions = _message_reactions(conn, [r["id"] for r in rows], username)
+    human_profiles = _human_profiles(conn)
     conn.close()
-    messages = _with_sender_type(rows, persona_names, persona_avatars)
+    messages = _with_sender_type(rows, persona_names, persona_avatars, human_profiles)
     for message in messages:
         message["reactions"] = reactions.get(message["id"], [])
     return messages
@@ -1592,8 +1686,9 @@ def all_messages(since_id: int = 0):
         "SELECT id, room_id, sender, content, created_at, is_system FROM messages WHERE id > ? ORDER BY id",
         (since_id,),
     ).fetchall()
+    human_profiles = _human_profiles(conn)
     conn.close()
-    return _with_sender_type(rows, persona_names, persona_avatars)
+    return _with_sender_type(rows, persona_names, persona_avatars, human_profiles)
 
 
 @app.post("/api/upload")

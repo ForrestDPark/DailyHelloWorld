@@ -297,13 +297,38 @@ header h1 { font-size: 18px; margin: 0; flex: 1; }
   font-size: 12px;
   color: var(--muted);
 }
-#account-name {
-  padding: 4px 10px;
-  border-radius: 12px;
+/* ★ "내 프로필 수정" 요청(2026-08-28) — 예전엔 그냥 <span>이던 걸 눌러서
+   이름·사진을 고칠 수 있는 버튼으로 바꿨다. */
+#account-name-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 4px;
+  border: none;
+  border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent);
+  font: inherit;
   font-weight: 600;
-  max-width: 120px;
+  cursor: pointer;
+  max-width: 160px;
+}
+.account-avatar {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  border-radius: 50%;
+  background: var(--avatar-bg);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  overflow: hidden;
+}
+.account-avatar img { width: 100%; height: 100%; object-fit: cover; }
+#account-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -777,6 +802,43 @@ main#messages {
 .profile-popup-invite-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .profile-popup-invite .invite-candidate.invited { opacity: .55; cursor: default; }
 
+/* ★ "자기 이름·프로필사진 바꿀 수 있게 해달라" 요청(2026-08-28) — 내
+   프로필 수정 팝업(showMyProfileEditor)의 아바타·이름 입력 폼. */
+.profile-popup-avatar-editable { cursor: pointer; position: relative; }
+.profile-popup-avatar-editable::after {
+  content: "변경";
+  position: absolute;
+  inset: auto 0 6px 0;
+  margin: 0 auto;
+  width: fit-content;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .55);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+}
+.my-profile-name-form { display: flex; gap: 8px; margin-top: 6px; }
+.my-profile-name-form input {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 15px;
+}
+.my-profile-name-form button {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+  cursor: pointer;
+}
+.profile-popup p.my-profile-id-note { margin-top: 12px; font-size: 12px; text-align: center; opacity: .7; }
+
 .msg .sender { font-size: 12px; opacity: 0.6; padding: 0 4px; }
 .msg .sender-clickable { cursor: pointer; text-decoration: underline dotted; }
 .msg .body {
@@ -971,7 +1033,7 @@ header h1 { font-size: 19px; letter-spacing: -0.035em; display: flex; align-item
 #new-room-btn:active, #persona-manager-btn:active, #profiles-btn:active, #admin-btn:active, #help-btn:active,
 .chat-header button:active { transform: scale(.92); }
 #account-chip { margin-left: 2px; }
-#account-name { padding: 6px 10px; }
+#account-name-btn { padding: 4px 12px 4px 4px; }
 #logout-btn { min-height: 36px; text-decoration: none; }
 
 /* 펼침 패널 */

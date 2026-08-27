@@ -192,6 +192,14 @@ def init_db():
     _ensure_column(conn, "users", "kakao_access_token", "TEXT")
     _ensure_column(conn, "users", "kakao_refresh_token", "TEXT")
     _ensure_column(conn, "users", "kakao_token_expires_at", "TEXT")
+    # ★ "카톡이나 구글로 로그인한 사람은 자기 이름 수정할 수 있게, 프로필
+    # 사진도 바꿀 수 있게 해달라" 요청(2026-08-28) — 소셜 로그인은 자동 생성된
+    # 아이디(예: kakao_5060403120)라 보기 좋은 이름으로 바꾸고 싶을 만하다.
+    # username(로그인·메시지 sender·소유권에 쓰이는 안정적 식별자)은 그대로
+    # 두고, 화면에 보여줄 이름/사진만 별도 컬럼으로 둔다 — 없으면(NULL)
+    # username으로 대체 표시.
+    _ensure_column(conn, "users", "display_name", "TEXT")
+    _ensure_column(conn, "users", "avatar_url", "TEXT")
     conn.commit()
     conn.close()
 
