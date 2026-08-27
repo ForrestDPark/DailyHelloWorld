@@ -1346,6 +1346,58 @@ class RedirectTurn(BaseModel):
     persona_name: str
 
 
+class WorkerAnnouncement(BaseModel):
+    room_id: str
+    content: str
+    dedupe_key: str
+
+
+@app.post("/api/worker/announcements")
+def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] = Header(None)):
+    """로컬 자동화가 그룹방에 공지를 남기고 구성원 전원의 토론을 시작한다."""
+    _check_worker_auth(authorization)
+    room_id = body.room_id.strip()
+    content = body.content.strip()
+    dedupe_key = body.dedupe_key.strip()
+    if not room_id or not content or not dedupe_key:
+        raise HTTPException(status_code=400, detail="방·내용·중복 방지 키가 필요합니다")
+
+    conn = get_conn()
+    persona_rows = conn.execute(
+        "SELECT name, group_name, owner_username FROM personas ORDER BY name"
+    ).fetchall()
+    targets = _group_members(conn, room_id, persona_rows)
+    if not targets:
+        conn.close()
+        raise HTTPException(status_code=404, detail="구성원이 있는 그룹방을 찾지 못했습니다")
+
+    marker = f"[automation:{dedupe_key}]"
+    existing = conn.execute(
+        "SELECT id FROM messages WHERE room_id = ? AND content LIKE ? ORDER BY id DESC LIMIT 1",
+        (room_id, f"%{marker}%"),
+    ).fetchone()
+    if existing:
+        conn.close()
+        return {"ok": True, "duplicate": True, "message_id": existing["id"], "notified": []}
+
+    now = _now()
+    sender = APP_USERNAME or "automation"
+    stored_content = f"{content}\n\n{marker}"
+    cursor = conn.execute(
+        "INSERT INTO messages (room_id, sender, content, created_at) VALUES (?, ?, ?, ?)",
+        (room_id, sender, stored_content, now),
+    )
+    for persona_name in targets:
+        conn.execute(
+            "INSERT INTO pending_turns (persona_name, room_id, status, created_at) VALUES (?, ?, 'pending', ?)",
+            (persona_name, room_id, now),
+        )
+    conn.commit()
+    message_id = cursor.lastrowid
+    conn.close()
+    return {"ok": True, "duplicate": False, "message_id": message_id, "notified": targets}
+
+
 @app.post("/api/worker/redirect_turn")
 def worker_redirect_turn(body: RedirectTurn, authorization: Optional[str] = Header(None)):
     """대기 중인 턴의 담당자를 바꾼다 — 워커가 "이름이 안 불렸을 때 직전

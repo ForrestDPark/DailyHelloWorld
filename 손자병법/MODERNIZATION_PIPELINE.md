@@ -129,4 +129,6 @@ python3 손자병법/validate_full_modernization.py --all
 - 핵심 이미지가 카우펜스·채주 기준본과 비교해 역사적 장면성·정보 위계·전역 이해도에서 뒤처지지 않는가
 - 전투 서사 제목과 본문이 실제 계책·오판·분기점을 인과관계로 설명하는가
 
-로컬 검사, 사람 검수, GitHub 배포, Notion 저장 후 재조회 검사에 이어 `손자병법/site`의 `npm run sync:analysis`와 Sites 배포를 모두 통과한 뒤에만 “전면 최신화 완료”라고 기록한다. 배포 후에는 [사이트 아카이브](https://sunzi-strategy-notes.pulpilisory.chatgpt.site/archive)와 `/verses/<새 번호>`를 다시 열어 새 구절의 원문·독음·역사 사례·Notion 정본 링크가 실제로 보이는지 확인한다. 사이트 생성기는 구절 원고와 README 완료 기록을 자동 탐색하므로 수동 구절 수 배열을 유지하지 않는다.
+로컬 검사, 사람 검수, GitHub 배포, Notion 저장 후 재조회 검사에 이어 `손자병법/site`의 `npm run sync:analysis`와 Sites 배포를 모두 통과해야 한다. 배포 후에는 [사이트 아카이브](https://sunzi-strategy-notes.pulpilisory.chatgpt.site/archive)와 `/verses/<새 번호>`를 다시 열어 새 구절의 원문·독음·역사 사례·Notion 정본 링크가 실제로 보이는지 확인한다. 사이트 생성기는 구절 원고와 README 완료 기록을 자동 탐색하므로 수동 구절 수 배열을 유지하지 않는다.
+
+마지막으로 `notify_tulpachat.py`를 실행해 [Tulpa Chat 병법가 방](https://chat.tulpa-chat.site/#room=%EB%B3%91%EB%B2%95%EA%B0%80)에 새 분석을 보고하고 손무와 전통 주석가 9명의 토론 차례가 생성됐는지 확인한다. 동일 구절은 중복 게시하지 않는다. 이 보고와 토론 시작까지 성공한 뒤에만 “전면 최신화 완료”라고 기록한다.
