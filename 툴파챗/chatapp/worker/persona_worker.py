@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""툴파시스템 채팅앱의 Mac쪽 워커.
+"""툴파챗의 Mac쪽 워커.
 
 클라우드에 배포된 chatapp 서버가 큐에 쌓아 둔 "페르소나가 응답할 차례"를
 폴링해서 가져오고, 이 Mac에 이미 로그인된 claude/codex CLI(ai_exec.py)로 응답을
@@ -13,6 +13,7 @@ Services 앱에 위임하는 것과 같은 이유로, "민감한 작업은 신�
 전담"하는 이 저장소의 기존 패턴을 그대로 따른다."""
 import json
 import base64
+import datetime
 import hashlib
 import gc
 import os
@@ -247,8 +248,15 @@ POLL_INTERVAL_SECONDS = 3
 PERSONA_SYNC_INTERVAL_SECONDS = 300
 AI_TIMEOUT_SECONDS = 120
 ORGANIZER_TIMEOUT_SECONDS = 300  # 손동주는 홈 폴더를 Glob/Read로 훑어봐야 해서 더 오래 걸릴 수 있음
+# ★ "서버 업데이트로 껐다 켜는 도중에 메시지 보내면 반응이 끊긴다" 요청
+# (2026-08-27) — 큐에 쌓인 지 이 시간(초)보다 오래된 턴을 처리하게 되면,
+# 재시작/배포 때문에 늦었다고 보고 실제 AI 응답 전에 짧은 복귀 안내를
+# 먼저 보낸다. 너무 짧게 잡으면 평범한 폴링 지연에도 매번 안내가 뜨니,
+# 통상적인 재시작 소요 시간(수 초)보다 넉넉히 크게 잡는다.
+RESTART_GAP_NOTICE_SECONDS = 20
+RESTART_GAP_NOTICE_TEXT = "(방금 업데이트하느라 잠깐 자리 비웠어요 — 밀린 메시지 답장 곧 보낼게요!)"
 WORK_DIR = Path(__file__).resolve().parent
-# worker/ -> chatapp/ -> 툴파시스템/ -> 저장소 루트
+# worker/ -> chatapp/ -> 툴파챗/ -> 저장소 루트
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PROJECT_README_MAX_CHARS = 3000  # 프로젝트당 README 발췌 상한 — 프롬프트 폭주 방지
 
@@ -343,14 +351,14 @@ _pending_ui_plans = {}  # room_id -> [{"file":..., "content":...}, ...] — 워�
 
 
 def _build_ui_dev_addendum():
-    readme_path = REPO_ROOT / "툴파시스템" / "chatapp" / "README.md"
+    readme_path = REPO_ROOT / "툴파챗" / "chatapp" / "README.md"
     try:
         readme_text = readme_path.read_text(encoding="utf-8", errors="replace")[:PROJECT_README_MAX_CHARS]
     except OSError as exc:
         readme_text = f"(chatapp/README.md 읽기 실패: {exc})"
     return (
         "\n\n---\n"
-        f'"{UI_DEV_PERSONA_NAME}"은(는) 이 채팅에서 특별히 툴파시스템 채팅앱의 프론트엔드 '
+        f'"{UI_DEV_PERSONA_NAME}"은(는) 이 채팅에서 특별히 툴파챗의 프론트엔드 '
         "파일(index.html/chat.js/style.css, Read 도구로 직접 읽을 수 있음)을 수정 제안할 수 "
         "있다. 제안할 때는 다음 형식을 반드시 지켜라:\n"
         "1) 먼저 사람이 읽을 자연스러운 설명(무엇을 왜 바꾸는지)을 쓴다.\n"
@@ -792,6 +800,40 @@ def _maybe_reroute_turn(turn, persona_cache, candidates):
     return None
 
 
+def _maybe_notify_restart_gap(turn, persona_name, room_id):
+    """이 턴이 큐에서 너무 오래 기다렸으면(재시작·배포로 워커가 잠깐 안
+    돌았을 가능성) 실제 AI 응답 전에 결정론적인 짧은 복귀 안내를 먼저 보낸다.
+    AI 호출이 없어 즉시 나가고, 실패해도(네트워크 문제 등) 본 응답 흐름은
+    그대로 진행한다 — 안내는 있으면 좋은 것이지 필수 경로가 아니다.
+
+    ★ 2026-08-27 실측 버그: 워커 프로세스가 짧은 시간에 여러 번 재시작되면
+    (배포 중 연속 kickstart 등) 같은 pending_turn을 매번 다시 집어 들어서
+    이 함수도 매번 다시 불렸다 — 워커 메모리에만 "이미 보냈다"를 기억하면
+    재시작할 때마다 초기화되어 중복 전송됐다(실제로 같은 방에 안내가 2번
+    찍히는 걸 확인함). 그래서 서버 DB의 restart_notice_sent 플래그를
+    확인·기록해 재시작 횟수와 무관하게 딱 한 번만 보내게 한다."""
+    if turn.get("restart_notice_sent"):
+        return
+    created_at = turn.get("created_at")
+    if not created_at:
+        return
+    try:
+        created = datetime.datetime.fromisoformat(created_at)
+        age = (datetime.datetime.now(datetime.timezone.utc) - created).total_seconds()
+    except ValueError:
+        return
+    if age < RESTART_GAP_NOTICE_SECONDS:
+        return
+    try:
+        _api("/api/worker/post_message", "POST", {
+            "persona_name": persona_name, "room_id": room_id, "content": RESTART_GAP_NOTICE_TEXT,
+        })
+        _api("/api/worker/mark_restart_notice_sent", "POST", {"turn_id": turn["turn_id"]})
+        print(f"↩️ {persona_name}: 재시작 공백({age:.0f}초) 복귀 안내 전송", flush=True)
+    except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+        print(f"⚠️ 복귀 안내 전송 실패(무시하고 계속): {exc}", flush=True)
+
+
 def process_turn(turn, persona_cache):
     persona_name = turn["persona_name"]
     room_id = turn["room_id"]
@@ -799,6 +841,7 @@ def process_turn(turn, persona_cache):
     if not entry:
         print(f"⚠️ 페르소나 '{persona_name}' 프로필 캐시 없음 — 다음 동기화 주기까지 대기", flush=True)
         return
+    _maybe_notify_restart_gap(turn, persona_name, room_id)
     is_organizer = persona_name == FILE_ORGANIZER_PERSONA_NAME
     is_ui_dev = persona_name == UI_DEV_PERSONA_NAME
     if is_organizer:
@@ -971,9 +1014,9 @@ def sync_admin_reports(persona_cache):
         return
     transcript = "\n".join(f"{m['sender']}: {m['content']}" for m in others_msgs)
     prompt = (
-        "다음은 툴파시스템 채팅앱에서 소유자 외 다른 사용자들이 최근 남긴 메시지들입니다.\n\n"
+        "다음은 툴파챗에서 소유자 외 다른 사용자들이 최근 남긴 메시지들입니다.\n\n"
         f"{transcript}\n\n"
-        "이 중 툴파시스템(이 채팅앱)에 대한 불만·버그 신고·기능 요청·개선 아이디어로 보이는 "
+        "이 중 툴파챗(이 채팅앱)에 대한 불만·버그 신고·기능 요청·개선 아이디어로 보이는 "
         '내용만 골라서 소유자에게 보고하는 짧은 메시지를 "툴파관리자"로서 작성하세요. 그런 '
         '내용이 하나도 없으면 정확히 "특이사항 없음"이라고만 답하세요. 있으면 누가 무엇을 '
         "말했는지 항목별로 짧게 정리하세요(관련 없는 잡담은 빼고)."
@@ -1056,7 +1099,7 @@ def sync_room_notices():
 
 
 def main():
-    print(f"툴파시스템 워커 시작 — 서버: {SERVER_URL}", flush=True)
+    print(f"툴파챗 워커 시작 — 서버: {SERVER_URL}", flush=True)
     persona_cache = sync_personas() or {}
     sync_user_personas(persona_cache)
     last_sync = time.time()

@@ -6,9 +6,9 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch (e) {
-    data = { title: "툴파시스템", body: event.data ? event.data.text() : "" };
+    data = { title: "툴파챗", body: event.data ? event.data.text() : "" };
   }
-  const title = data.title || "툴파시스템";
+  const title = data.title || "툴파챗";
   event.waitUntil(
     self.registration.showNotification(title, {
       body: data.body || "",

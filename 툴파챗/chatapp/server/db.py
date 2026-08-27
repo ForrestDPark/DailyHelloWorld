@@ -1,4 +1,4 @@
-"""툴파시스템 채팅앱의 SQLite 저장소.
+"""툴파챗의 SQLite 저장소.
 
 표준 라이브러리 sqlite3만 쓴다 — 클라우드에 배포되는 부분이라 의존성을 최소로
 유지한다. 스키마: personas(페르소나 캐시), messages(채팅 로그, room_id로
@@ -159,6 +159,13 @@ def init_db():
     # 더 알맞은 담당자로 돌려보낼 수 있다(rerouted=1이면 재검토 끝, 무한
     # 왕복 방지).
     _ensure_column(conn, "pending_turns", "rerouted", "INTEGER NOT NULL DEFAULT 0")
+    # ★ "서버 업데이트로 껐다 켜는 도중에 메시지 보내면 반응이 끊긴다" 요청
+    # (2026-08-27) — 워커가 재시작 공백 안내를 보냈는지 서버가 기억해둔다.
+    # 워커 프로세스 자체가 짧은 시간에 여러 번 재시작되면(배포 중 연속
+    # kickstart 등) 같은 pending_turn을 매번 다시 집어 들어 안내를 중복
+    # 전송하는 문제가 실제로 있었다 — 워커 메모리가 아니라 서버 DB에
+    # 플래그를 둬야 재시작 횟수와 무관하게 딱 한 번만 보낸다.
+    _ensure_column(conn, "pending_turns", "restart_notice_sent", "INTEGER NOT NULL DEFAULT 0")
     # ★ "채팅방에 새 메시지 있으면 사용자들한테도 알람이 가게 해달라"
     # 요청(2026-08-27) — 브라우저 Web Push 구독 정보(방마다가 아니라
     # 계정마다 — 여러 기기에서 구독하면 여러 행이 쌓인다). endpoint가

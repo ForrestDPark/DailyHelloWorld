@@ -1320,6 +1320,18 @@ function openMessageMenu(message, hostEl, x, y) {
 
 document.addEventListener("pointerdown", (event) => { if (messageMenu && !messageMenu.contains(event.target)) closeMessageMenu(); });
 
+// ★ "답장 메시지에서 원 메시지 클릭하면 화면이 원 메시지로 이동하게 해달라"
+// 요청(2026-08-27) — 지금 방에 이미 렌더링된 메시지 중에서만 찾는다(방을
+// 열면 전체 기록을 한 번에 불러오므로 대부분 있음). 못 찾으면(아주 오래돼
+// 다른 방식으로 정리됐거나 하는 예외 상황) 조용히 무시한다.
+function scrollToMessage(messageId) {
+  const target = messagesEl.querySelector(`[data-message-id="${messageId}"]`);
+  if (!target) return;
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  target.classList.add("highlight-flash");
+  setTimeout(() => target.classList.remove("highlight-flash"), 1200);
+}
+
 function appendMessage(m) {
   // ★ 2026-08-26: 다중 계정 로그인 전에는 sender==='user' 하나로 "내 메시지"를
   // 판별했다. 이제 여러 사람이 같은 방에 쓸 수 있어 서버가 내려주는
@@ -1329,6 +1341,7 @@ function appendMessage(m) {
   const isMine = !isPersona && m.sender === myUsername;
   const el = document.createElement("div");
   el.className = "msg " + (isPersona ? "msg-persona" : isMine ? "msg-user" : "msg-other");
+  el.dataset.messageId = String(m.id); // ★ 답장 인용 클릭 시 원본으로 스크롤하는 데 씀(2026-08-27)
   if (!isMine) {
     const avatar = document.createElement(m.avatar_url ? "img" : "div");
     avatar.className = "message-avatar";
@@ -1368,6 +1381,13 @@ function appendMessage(m) {
     const quoteText = document.createElement("span");
     quoteText.textContent = (m.reply_content || "").replace(IMAGE_MARKER_RE, "[사진]").slice(0, 90);
     quote.append(quoteName, quoteText);
+    // ★ "답장 메시지에서 원 메시지 클릭하면 화면이 원 메시지로 스크롤되게
+    // 해달라" 요청(2026-08-27) — 카톡처럼 인용문을 탭하면 원본으로 이동.
+    quote.title = "탭해서 원본 메시지로 이동";
+    quote.addEventListener("click", (event) => {
+      event.stopPropagation();
+      scrollToMessage(m.reply_message_id);
+    });
     body.appendChild(quote);
   }
   const imageMatch = IMAGE_MARKER_RE.exec(m.content);
@@ -1428,18 +1448,37 @@ async function poll() {
   pollTimer = setTimeout(poll, 2000);
 }
 
+// ★ "서버 업데이트로 껐다 켜는 도중에 메시지 보내면 반응이 끊긴다" 요청
+// (2026-08-27) — 서버 재시작(보통 1~3초)과 정확히 겹치면 fetch 자체가
+// 연결 실패로 던진다(401/403 같은 정상 응답이 아니라 네트워크 에러). 그
+// 경우에만 잠깐 기다렸다 재시도해서, 사용자가 다시 보낼 필요 없이 서버가
+// 돌아오면 그대로 전송되게 한다. 인증 문제(401/403)는 재시도해도 의미가
+// 없으니 그대로 둔다.
+const SEND_RETRY_ATTEMPTS = 5;
+const SEND_RETRY_DELAY_MS = 1200;
+
 async function sendMessage(content) {
   if (!currentRoom || !content) return;
-  try {
-    await apiFetch("/api/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content, room_id: currentRoom, reply_to: replyTarget, reply_message_id: replyMessage?.id || null }),
-    });
-  } catch (e) {
-    if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
-  }
+  const body = JSON.stringify({ content, room_id: currentRoom, reply_to: replyTarget, reply_message_id: replyMessage?.id || null });
   setReplyTarget(null);
+  for (let attempt = 1; attempt <= SEND_RETRY_ATTEMPTS; attempt++) {
+    try {
+      await apiFetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      return;
+    } catch (e) {
+      if (e.message === "unauthorized" || e.message === "forbidden") return;
+      if (attempt === SEND_RETRY_ATTEMPTS) {
+        console.error(e);
+        alert("메시지를 보내지 못했습니다. 잠시 후 다시 시도해주세요.");
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, SEND_RETRY_DELAY_MS));
+    }
+  }
 }
 
 document.getElementById("composer").addEventListener("submit", async (e) => {

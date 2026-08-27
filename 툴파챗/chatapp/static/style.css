@@ -662,8 +662,18 @@ main#messages {
   background: color-mix(in srgb, var(--bg) 72%, transparent);
   font-size: 12px;
   opacity: .82;
+  cursor: pointer;
+  transition: opacity .12s ease;
 }
+.message-reply-quote:hover, .message-reply-quote:active { opacity: 1; }
 .message-reply-quote span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px; }
+
+/* ★ 답장 인용 클릭 → 원본으로 스크롤 시 잠깐 강조(2026-08-27) */
+@keyframes messageHighlightFlash {
+  0%, 100% { background: transparent; }
+  25% { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+}
+.msg.highlight-flash .body { animation: messageHighlightFlash 1.2s ease; border-radius: 16px; }
 .message-reactions { display: flex; flex-wrap: wrap; gap: 4px; padding: 2px 3px 0; }
 .msg-user .message-reactions { justify-content: flex-end; }
 .reaction-chip {

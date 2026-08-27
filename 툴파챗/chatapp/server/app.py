@@ -1,4 +1,4 @@
-"""툴파시스템 채팅앱 서버 (이 Mac에서 실행, Cloudflare Tunnel로 노출).
+"""툴파챗 서버 (이 Mac에서 실행, Cloudflare Tunnel로 노출).
 
 이 서버는 채팅 UI를 제공하고 메시지·대기열을 SQLite에 저장할 뿐, 실제 AI 응답은
 절대 생성하지 않는다 — Claude/Codex CLI 인증 정보를 공개 인터넷에 노출된
@@ -219,7 +219,7 @@ class NoCacheStaticMiddleware(BaseHTTPMiddleware):
         return response
 
 
-app = FastAPI(title="툴파시스템 채팅앱")
+app = FastAPI(title="툴파챗")
 app.add_middleware(SessionAuthMiddleware)
 app.add_middleware(NoCacheStaticMiddleware)
 init_db()
@@ -1803,7 +1803,8 @@ def worker_pending(authorization: Optional[str] = Header(None)):
     _check_worker_auth(authorization)
     conn = get_conn()
     row = conn.execute(
-        "SELECT id, persona_name, room_id, rerouted FROM pending_turns WHERE status = 'pending' ORDER BY id LIMIT 1"
+        "SELECT id, persona_name, room_id, rerouted, created_at, restart_notice_sent "
+        "FROM pending_turns WHERE status = 'pending' ORDER BY id LIMIT 1"
     ).fetchone()
     if not row:
         conn.close()
@@ -1818,8 +1819,33 @@ def worker_pending(authorization: Optional[str] = Header(None)):
         "persona_name": row["persona_name"],
         "room_id": row["room_id"],
         "rerouted": bool(row["rerouted"]),
+        # ★ "서버 업데이트로 껐다 켜는 도중에 메시지 보내면 반응이 끊긴다"
+        # 요청(2026-08-27) — 워커가 이 턴이 얼마나 오래 대기했는지 알아야
+        # "재시작 때문에 늦었다"는 안내를 보낼지 판단할 수 있다.
+        "created_at": row["created_at"],
+        # restart_notice_sent가 이미 1이면 워커가 (자기 자신이 여러 번
+        # 재시작됐더라도) 이 턴에는 안내를 다시 보내지 않는다 — 아래
+        # mark_restart_notice_sent 참고.
+        "restart_notice_sent": bool(row["restart_notice_sent"]),
         "context": [dict(r) for r in reversed(context_rows)],
     }
+
+
+class RestartNoticeMark(BaseModel):
+    turn_id: int
+
+
+@app.post("/api/worker/mark_restart_notice_sent")
+def worker_mark_restart_notice_sent(body: RestartNoticeMark, authorization: Optional[str] = Header(None)):
+    """워커가 재시작 공백 안내를 보낸 직후 호출해 이 턴을 "안내 완료"로
+    표시한다. 워커 프로세스가 짧은 시간에 여러 번 재시작돼도(배포 중 연속
+    kickstart 등) 같은 턴에 안내가 중복 전송되지 않게 서버가 기억한다."""
+    _check_worker_auth(authorization)
+    conn = get_conn()
+    conn.execute("UPDATE pending_turns SET restart_notice_sent = 1 WHERE id = ?", (body.turn_id,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 @app.get("/api/worker/room_candidates")
@@ -2162,6 +2188,34 @@ def worker_post_admin_report(body: AdminReportPost, authorization: Optional[str]
     conn.execute(
         "INSERT INTO messages (room_id, sender, content, created_at) VALUES (?, ?, ?, ?)",
         (ADMIN_PERSONA_NAME, ADMIN_PERSONA_NAME, body.content, _now()),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+class WorkerPostMessage(BaseModel):
+    persona_name: str
+    room_id: str
+    content: str
+
+
+@app.post("/api/worker/post_message")
+def worker_post_message(body: WorkerPostMessage, authorization: Optional[str] = Header(None)):
+    """post_admin_report와 같은 패턴을 일반화한 것 — 워커가 pending_turns
+    큐를 거치지 않고 아무 방에나 페르소나 명의로 바로 메시지를 남긴다.
+    사용자 메시지에 대한 실시간 응답이 아니라 워커가 스스로 먼저 말을
+    거는 경우에 쓴다.
+
+    ★ 2026-08-27: "서버 업데이트로 껐다 켜는 도중에 메시지 보내면 반응이
+    끊긴다"는 요청으로 처음 추가 — 워커가 재시작 후 오래 대기한 pending_turn을
+    발견하면, 실제 AI 응답 전에 이 엔드포인트로 짧은 복귀 안내를 먼저
+    보낸다(worker/persona_worker.py의 RESTART_GAP_NOTICE_SECONDS 참고)."""
+    _check_worker_auth(authorization)
+    conn = get_conn()
+    conn.execute(
+        "INSERT INTO messages (room_id, sender, content, created_at) VALUES (?, ?, ?, ?)",
+        (body.room_id, body.persona_name, body.content, _now()),
     )
     conn.commit()
     conn.close()
