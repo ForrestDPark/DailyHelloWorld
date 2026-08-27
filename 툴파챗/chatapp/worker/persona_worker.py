@@ -255,6 +255,7 @@ ORGANIZER_TIMEOUT_SECONDS = 300  # 손동주는 홈 폴더를 Glob/Read로 훑�
 # 통상적인 재시작 소요 시간(수 초)보다 넉넉히 크게 잡는다.
 RESTART_GAP_NOTICE_SECONDS = 20
 RESTART_GAP_NOTICE_TEXT = "(방금 업데이트하느라 잠깐 자리 비웠어요 — 밀린 메시지 답장 곧 보낼게요!)"
+RESTART_GAP_DONE_TEXT = "(서버 업데이트 끝났어요 — 밀린 메시지 답장 다 보냈습니다!)"
 WORK_DIR = Path(__file__).resolve().parent
 # worker/ -> chatapp/ -> 툴파챗/ -> 저장소 루트
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -806,21 +807,33 @@ def _maybe_notify_restart_gap(turn, persona_name, room_id):
     AI 호출이 없어 즉시 나가고, 실패해도(네트워크 문제 등) 본 응답 흐름은
     그대로 진행한다 — 안내는 있으면 좋은 것이지 필수 경로가 아니다.
 
-    ★ 2026-08-27 실측 버그: 워커 프로세스가 짧은 시간에 여러 번 재시작되면
-    (배포 중 연속 kickstart 등) 같은 pending_turn을 매번 다시 집어 들어서
-    이 함수도 매번 다시 불렸다 — 워커 메모리에만 "이미 보냈다"를 기억하면
-    재시작할 때마다 초기화되어 중복 전송됐다(실제로 같은 방에 안내가 2번
-    찍히는 걸 확인함). 그래서 서버 DB의 restart_notice_sent 플래그를
-    확인·기록해 재시작 횟수와 무관하게 딱 한 번만 보내게 한다."""
-    if turn.get("restart_notice_sent"):
+    ★ 2026-08-28 요청: "메시지 인물마다 다 띄우니까 정신없다" — 예전엔 이
+    턴(pending_turn) 하나마다 안내를 보냈는데, 같은 방에 밀린 턴이 여러
+    페르소나 것이면 각자 따로 안내를 보내 방이 시끄러워졌다. 이제는 방
+    단위(room_restart_notice_active, 서버 /api/worker/pending이 알려줌)로
+    이미 그 방에 대표 안내가 나갔으면 이 턴의 페르소나는 조용히 넘어간다.
+
+    ★ 2026-08-27 실측 버그(여전히 유효): 워커 프로세스가 짧은 시간에 여러 번
+    재시작되면(배포 중 연속 kickstart 등) 같은 pending_turn을 매번 다시
+    집어 들어서 이 함수도 매번 다시 불렸다 — 워커 메모리에만 "이미
+    보냈다"를 기억하면 재시작할 때마다 초기화되어 중복 전송됐다. 그래서
+    서버 DB(이제는 room_restart_notice 테이블)에 기록해 재시작 횟수와
+    무관하게 방마다 딱 한 번만 보내게 한다."""
+    if turn.get("room_restart_notice_active"):
         return
     created_at = turn.get("created_at")
     if not created_at:
         return
     try:
         created = datetime.datetime.fromisoformat(created_at)
+        # ★ 2026-08-28 실측: created_at이 타임존 정보 없이(naive) 들어오면
+        # tz-aware인 지금 시각과 뺄 때 TypeError로 워커 전체가 죽는다(실제로
+        # 테스트 데이터 하나 때문에 워커 프로세스가 재시작 루프에 빠짐 —
+        # pending_turn 한 줄이 방과 무관하게 워커 전체를 멈추면 안 된다).
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=datetime.timezone.utc)
         age = (datetime.datetime.now(datetime.timezone.utc) - created).total_seconds()
-    except ValueError:
+    except (ValueError, TypeError):
         return
     if age < RESTART_GAP_NOTICE_SECONDS:
         return
@@ -828,13 +841,52 @@ def _maybe_notify_restart_gap(turn, persona_name, room_id):
         _api("/api/worker/post_message", "POST", {
             "persona_name": persona_name, "room_id": room_id, "content": RESTART_GAP_NOTICE_TEXT,
         })
-        _api("/api/worker/mark_restart_notice_sent", "POST", {"turn_id": turn["turn_id"]})
-        print(f"↩️ {persona_name}: 재시작 공백({age:.0f}초) 복귀 안내 전송", flush=True)
+        _api("/api/worker/mark_restart_notice_sent", "POST", {
+            "room_id": room_id, "persona_name": persona_name,
+        })
+        print(f"↩️ {persona_name}: 재시작 공백({age:.0f}초) 방 대표 복귀 안내 전송", flush=True)
     except (urllib.error.URLError, urllib.error.HTTPError) as exc:
         print(f"⚠️ 복귀 안내 전송 실패(무시하고 계속): {exc}", flush=True)
 
 
+def _maybe_clear_restart_gap(room_id):
+    """이 방에 재시작 공백 안내가 나가 있었다면(room_restart_notice), 밀린
+    턴이 방금 처리로 다 소진됐는지 서버에 확인시킨다. 서버가 "그렇다"고
+    (cleared=True) 응답하면 안내를 보냈던 대표 페르소나 이름으로 완료
+    안내를 이어서 보낸다 — 아직 그 방에 밀린 턴이 더 남아 있으면 서버가
+    아무것도 지우지 않고 null을 주므로 여기서는 아무 일도 하지 않는다.
+    process_turn이 끝날 때마다(성공/실패 무관) 호출되므로, 안내가 애초에
+    나간 적 없는 방이면 서버 쪽 SELECT가 그냥 빈 결과라 조용히 넘어간다."""
+    try:
+        result = _api("/api/worker/clear_restart_notice", "POST", {"room_id": room_id}) or {}
+    except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+        print(f"⚠️ 재시작 공백 완료 확인 실패(무시하고 계속): {exc}", flush=True)
+        return
+    persona_name = result.get("persona_name")
+    if not result.get("cleared") or not persona_name:
+        return
+    try:
+        _api("/api/worker/post_message", "POST", {
+            "persona_name": persona_name, "room_id": room_id, "content": RESTART_GAP_DONE_TEXT,
+        })
+        print(f"✅ {persona_name}: 재시작 공백 밀린 답장 처리 완료 안내 전송", flush=True)
+    except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+        print(f"⚠️ 완료 안내 전송 실패(무시하고 계속): {exc}", flush=True)
+
+
 def process_turn(turn, persona_cache):
+    """이 턴을 처리하고, 무슨 경로로 끝나든(정상 완료·재배정·캐시 미준비·
+    예외) 마지막에 항상 _maybe_clear_restart_gap을 확인한다 — 그래야 이
+    방의 밀린 턴들이 여러 번의 process_turn 호출에 걸쳐 하나씩 처리되다가
+    마지막 한 개가 끝나는 순간을 놓치지 않고 "완료" 안내를 보낼 수 있다."""
+    room_id = turn["room_id"]
+    try:
+        _process_turn_inner(turn, persona_cache)
+    finally:
+        _maybe_clear_restart_gap(room_id)
+
+
+def _process_turn_inner(turn, persona_cache):
     persona_name = turn["persona_name"]
     room_id = turn["room_id"]
     entry = persona_cache.get(persona_name)

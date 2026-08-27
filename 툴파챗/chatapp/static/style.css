@@ -1018,7 +1018,9 @@ header {
   z-index: 5;
 }
 header h1 { font-size: 19px; letter-spacing: -0.035em; display: flex; align-items: center; gap: 10px; }
-.header-brand-mark { width: 32px; height: 32px; border-radius: 11px; font-size: 15px; flex: 0 0 auto; }
+/* ★ "T 누르면 홈화면으로" 요청(2026-08-28) — span에서 button으로 바꾸면서
+   기본 버튼 테두리·패딩·폰트를 지운다. */
+.header-brand-mark { width: 32px; height: 32px; border-radius: 11px; font-size: 15px; flex: 0 0 auto; border: none; padding: 0; font-family: inherit; cursor: pointer; }
 #new-room-btn, #persona-manager-btn, #profiles-btn, #admin-btn, #help-btn,
 .chat-header #invite-btn, .chat-header #thumbnail-btn, .chat-header #back-btn {
   min-width: 40px;

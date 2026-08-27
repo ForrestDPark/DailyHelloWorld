@@ -1946,6 +1946,13 @@ def worker_pending(authorization: Optional[str] = Header(None)):
         "SELECT sender, content FROM messages WHERE room_id = ? ORDER BY id DESC LIMIT ?",
         (row["room_id"], MAX_CONTEXT_MESSAGES),
     ).fetchall()
+    # ★ "메시지 인물마다 다 띄우니까 정신없다, 방에 있는 툴파 중 대표로
+    # 한 사람만 알려주자" 요청(2026-08-28) — 페르소나별(pending_turns)이
+    # 아니라 방 단위로 이미 안내를 보냈는지를 본다.
+    notice_row = conn.execute(
+        "SELECT persona_name FROM room_restart_notice WHERE room_id = ?",
+        (row["room_id"],),
+    ).fetchone()
     conn.close()
     return {
         "turn_id": row["id"],
@@ -1956,29 +1963,68 @@ def worker_pending(authorization: Optional[str] = Header(None)):
         # 요청(2026-08-27) — 워커가 이 턴이 얼마나 오래 대기했는지 알아야
         # "재시작 때문에 늦었다"는 안내를 보낼지 판단할 수 있다.
         "created_at": row["created_at"],
-        # restart_notice_sent가 이미 1이면 워커가 (자기 자신이 여러 번
-        # 재시작됐더라도) 이 턴에는 안내를 다시 보내지 않는다 — 아래
-        # mark_restart_notice_sent 참고.
-        "restart_notice_sent": bool(row["restart_notice_sent"]),
+        # ★ 방 단위 대표 안내가 이미 나갔는지(room_restart_notice에 행이
+        # 있는지). true면 이 턴의 페르소나는 별도 안내를 또 보내지 않는다.
+        "room_restart_notice_active": notice_row is not None,
+        "room_restart_notice_persona": notice_row["persona_name"] if notice_row else None,
         "context": [dict(r) for r in reversed(context_rows)],
     }
 
 
 class RestartNoticeMark(BaseModel):
-    turn_id: int
+    room_id: str
+    persona_name: str
 
 
 @app.post("/api/worker/mark_restart_notice_sent")
 def worker_mark_restart_notice_sent(body: RestartNoticeMark, authorization: Optional[str] = Header(None)):
-    """워커가 재시작 공백 안내를 보낸 직후 호출해 이 턴을 "안내 완료"로
-    표시한다. 워커 프로세스가 짧은 시간에 여러 번 재시작돼도(배포 중 연속
-    kickstart 등) 같은 턴에 안내가 중복 전송되지 않게 서버가 기억한다."""
+    """워커가 어떤 방에 재시작 공백 안내(대표 1명분)를 보낸 직후 호출해
+    그 방을 "안내 완료"로 표시한다. 방 단위(room_restart_notice)라서 같은
+    방의 다른 페르소나 턴들은 이 안내를 또 보내지 않는다. INSERT OR IGNORE라
+    워커가 거의 동시에 두 번 호출해도(레이스) 먼저 잡은 대표만 남는다."""
     _check_worker_auth(authorization)
     conn = get_conn()
-    conn.execute("UPDATE pending_turns SET restart_notice_sent = 1 WHERE id = ?", (body.turn_id,))
+    conn.execute(
+        "INSERT OR IGNORE INTO room_restart_notice (room_id, persona_name, notified_at) "
+        "VALUES (?, ?, datetime('now'))",
+        (body.room_id, body.persona_name),
+    )
     conn.commit()
     conn.close()
     return {"ok": True}
+
+
+class RestartNoticeClear(BaseModel):
+    room_id: str
+
+
+@app.post("/api/worker/clear_restart_notice")
+def worker_clear_restart_notice(body: RestartNoticeClear, authorization: Optional[str] = Header(None)):
+    """이 방의 밀린 턴이 다 처리됐는지 확인하고, 다 처리됐으면 그 방의
+    room_restart_notice 행을 지운다(=다음에 또 공백이 생기면 새 대표 안내를
+    보낼 수 있게 초기화). "시작" 안내를 보냈던 대표 페르소나 이름을 같이
+    돌려줘서, 워커가 그 대표 이름으로 "완료" 안내까지 이어서 보낼 수 있게
+    한다 — 여전히 밀린 턴이 남아 있으면 아무것도 지우지 않고 null을 준다."""
+    _check_worker_auth(authorization)
+    conn = get_conn()
+    remaining = conn.execute(
+        "SELECT COUNT(*) AS n FROM pending_turns WHERE room_id = ? AND status = 'pending'",
+        (body.room_id,),
+    ).fetchone()["n"]
+    if remaining > 0:
+        conn.close()
+        return {"cleared": False, "persona_name": None}
+    notice_row = conn.execute(
+        "SELECT persona_name FROM room_restart_notice WHERE room_id = ?",
+        (body.room_id,),
+    ).fetchone()
+    conn.execute("DELETE FROM room_restart_notice WHERE room_id = ?", (body.room_id,))
+    conn.commit()
+    conn.close()
+    return {
+        "cleared": notice_row is not None,
+        "persona_name": notice_row["persona_name"] if notice_row else None,
+    }
 
 
 @app.get("/api/worker/room_candidates")

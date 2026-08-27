@@ -166,6 +166,20 @@ def init_db():
     # 전송하는 문제가 실제로 있었다 — 워커 메모리가 아니라 서버 DB에
     # 플래그를 둬야 재시작 횟수와 무관하게 딱 한 번만 보낸다.
     _ensure_column(conn, "pending_turns", "restart_notice_sent", "INTEGER NOT NULL DEFAULT 0")
+    # ★ "메시지 인물마다 다 띄우니까 정신없다, 방에 있는 툴파 중 대표로
+    # 한 사람이 서버 업데이트 중입니다 라고만 알려주자" 요청(2026-08-28) —
+    # 위 restart_notice_sent는 pending_turn(=페르소나 1명의 발화 1건)마다
+    # 붙어서 같은 방의 여러 페르소나가 각자 안내를 보내는 게 문제였다.
+    # 방 단위로 "이미 대표가 안내를 보냈는지"를 별도 테이블에 기억해서
+    # 방마다 딱 한 번만 보내고, 밀린 턴이 다 처리되면 이 행을 지우면서
+    # "완료" 안내도 한 번 보낸다.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS room_restart_notice (
+            room_id TEXT PRIMARY KEY,
+            persona_name TEXT NOT NULL,
+            notified_at TEXT NOT NULL
+        )
+    """)
     # ★ "초대가 되면 그 톡방에 '누가 초대되었습니다'라고 구분선 같은 걸
     # 만들어달라" 요청(2026-08-28) — 페르소나/사용자 발화가 아니라 서버가
     # 직접 남기는 시스템 알림. 프론트가 이 플래그로 말풍선이 아니라 가운데

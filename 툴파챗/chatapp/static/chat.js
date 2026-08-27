@@ -1053,6 +1053,17 @@ function setListMode(mode) {
 document.getElementById("friends-tab").addEventListener("click", () => setListMode("friends"));
 document.getElementById("chats-tab").addEventListener("click", () => setListMode("chats"));
 
+// ★ "앱 맨 위 왼쪽에 T 누르면 앱 홈화면으로 가게 해달라" 요청(2026-08-28) —
+// 이 로고는 방 목록 화면에만 있어서(채팅방 화면은 back-btn이 이미 그 역할),
+// "홈"은 기본 탭(친구)으로 리셋 + 목록 맨 위로 스크롤을 뜻한다. 열려있는
+// 패널도 같이 정리한다.
+document.getElementById("home-brand-btn").addEventListener("click", () => {
+  location.hash = "";
+  closeMainListPanels();
+  setListMode("friends");
+  roomListEl.scrollTo({ top: 0, behavior: "smooth" });
+});
+
 // ★ "그룹 이름을 매번 직접 타이핑하지 말고, 이미 있는 그룹 목록에서 고르고
 // 없으면 새로 만들게 해달라" 요청(2026-08-26) — "그룹 설정" 클릭 시 바로
 // prompt()를 띄우던 걸, 기존 그룹 목록 + "그룹 없음" + "새 그룹 만들기"를
