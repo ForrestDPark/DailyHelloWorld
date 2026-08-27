@@ -29,9 +29,11 @@ worker/persona_worker.py가 이 서버를 폴링해서 처리한다(자세한 �
 import base64
 import datetime
 import hashlib
+import json
 import os
 import re
 import secrets
+import urllib.parse
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -42,12 +44,33 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from pywebpush import WebPushException, webpush
+
 from server import auth, oauth
 from server.db import get_conn, init_db
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 WORKER_TOKEN = os.environ.get("WORKER_TOKEN", "")
 APP_USERNAME = os.environ.get("APP_USERNAME", "")
+# ★ "채팅방에 새 메시지 있으면 사용자들한테도 알람이 가게 해달라" 요청
+# (2026-08-27) — 브라우저 Web Push. 서버(server/.venv)에 pywebpush를 따로
+# 설치했다(공용 anaconda 환경에 설치했다가 cryptography 버전 충돌로
+# pyopenssl이 깨진 적이 있어, 이후 이 서버만 독립 venv로 분리함 — README
+# 참고). 개인키는 리포에 커밋하지 않고 파일 경로로만 읽는다.
+VAPID_PRIVATE_KEY_FILE = os.environ.get("VAPID_PRIVATE_KEY_FILE", "")
+VAPID_PUBLIC_KEY = os.environ.get("VAPID_PUBLIC_KEY", "")
+VAPID_CLAIM_EMAIL = os.environ.get("VAPID_CLAIM_EMAIL", "")
+
+
+def push_enabled():
+    # ★ pywebpush의 webpush(vapid_private_key=...)는 PEM 텍스트가 아니라
+    # "파일 경로 문자열"을 받아야 한다(os.path.isfile로 직접 판별해서 내부적
+    # 으로 Vapid.from_file을 호출함) — PEM을 미리 읽어서 넘기면
+    # Vapid.from_string이 그 텍스트를 DER로 오인해 파싱 에러가 난다.
+    return bool(
+        VAPID_PRIVATE_KEY_FILE and os.path.exists(VAPID_PRIVATE_KEY_FILE)
+        and VAPID_PUBLIC_KEY and VAPID_CLAIM_EMAIL
+    )
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
 MAX_CONTEXT_MESSAGES = 20
 
@@ -395,10 +418,15 @@ def _unique_username_from(conn, display_name):
     return candidate
 
 
-def _finish_oauth_login(provider, external_id, display_name):
+def _finish_oauth_login(provider, external_id, display_name, kakao_tokens=None):
     """구글/카카오 로그인 콜백의 공통 마무리 — 이미 연결된 계정이면 그대로
     로그인, 처음이면 새 로컬 계정을 만들어 연결한다(비밀번호는 무작위로
-    채워두고 실제로 쓰이지 않음 — 이 계정은 소셜 로그인으로만 들어옴)."""
+    채워두고 실제로 쓰이지 않음 — 이 계정은 소셜 로그인으로만 들어옴).
+
+    kakao_tokens: talk_message 동의를 받았을 때만 실제 값이 들어있는
+    {"access_token","refresh_token","expires_in"} — "카톡으로 로그인한
+    사람한테는 카톡 알람이 가게" 요청(2026-08-27). 매 로그인마다 최신
+    토큰으로 갱신 저장한다."""
     column = "google_sub" if provider == "google" else "kakao_id"
     conn = get_conn()
     try:
@@ -415,6 +443,18 @@ def _finish_oauth_login(provider, external_id, display_name):
             )
             conn.commit()
             user_id = cur.lastrowid
+        if kakao_tokens and kakao_tokens.get("access_token"):
+            expires_at = (
+                datetime.datetime.now(datetime.timezone.utc)
+                + datetime.timedelta(seconds=kakao_tokens.get("expires_in") or 0)
+            ).isoformat()
+            conn.execute(
+                "UPDATE users SET kakao_access_token = ?, "
+                "kakao_refresh_token = COALESCE(?, kakao_refresh_token), "
+                "kakao_token_expires_at = ? WHERE id = ?",
+                (kakao_tokens["access_token"], kakao_tokens.get("refresh_token"), expires_at, user_id),
+            )
+            conn.commit()
         token = auth.create_session(conn, user_id)
     finally:
         conn.close()
@@ -463,7 +503,7 @@ def kakao_callback(request: Request, code: str = "", state: str = ""):
         profile = oauth.kakao_exchange(code)
     except oauth.OAuthError:
         raise HTTPException(status_code=502, detail="카카오 인증에 실패했습니다")
-    return _finish_oauth_login("kakao", profile["external_id"], profile["name"])
+    return _finish_oauth_login("kakao", profile["external_id"], profile["name"], kakao_tokens=profile)
 
 
 class PersonaCreate(BaseModel):
@@ -1163,6 +1203,154 @@ def invite_user_to_room(room_id: str, body: InviteUserRequest, request: Request)
     return {"ok": True}
 
 
+# ══════════════════════════════════════════════════════════════
+# ★ "채팅방에 새 메시지 있으면 사용자들한테도 알람이 가게 해달라" +
+# "카카오로 로그인한 사람한테는 카톡 알람이 가게" 요청(2026-08-27).
+# 대상은 커스텀 방(방 주인 + room_user_invites로 초대된 계정) — Notion
+# 그룹 회의방은 로그인만 하면 전원 공유라 매 메시지마다 전체 알림을 보내면
+# 스팸이 되므로 대상에서 뺐다. 카카오 로그인 + talk_message 토큰이 있는
+# 계정은 카톡 "나에게 보내기"로, 그 외(또는 카톡 전송 실패)는 웹 푸시로.
+# ══════════════════════════════════════════════════════════════
+
+@app.get("/api/push/public_key")
+def push_public_key():
+    return {"enabled": push_enabled(), "public_key": VAPID_PUBLIC_KEY}
+
+
+class PushSubscribeRequest(BaseModel):
+    endpoint: str
+    keys: dict
+
+
+@app.post("/api/push/subscribe")
+def push_subscribe(body: PushSubscribeRequest, request: Request):
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    p256dh = body.keys.get("p256dh")
+    auth_key = body.keys.get("auth")
+    if not p256dh or not auth_key:
+        raise HTTPException(status_code=400, detail="구독 정보가 올바르지 않습니다")
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO push_subscriptions (username, endpoint, p256dh, auth, created_at)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(endpoint) DO UPDATE SET username = excluded.username,
+               p256dh = excluded.p256dh, auth = excluded.auth""",
+        (user["username"], body.endpoint, p256dh, auth_key, _now()),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+class PushUnsubscribeRequest(BaseModel):
+    endpoint: str
+
+
+@app.post("/api/push/unsubscribe")
+def push_unsubscribe(body: PushUnsubscribeRequest):
+    conn = get_conn()
+    conn.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (body.endpoint,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+def _send_web_push_to_user(conn, username, title, body_text, url):
+    if not push_enabled():
+        return
+    rows = conn.execute(
+        "SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE username = ?", (username,)
+    ).fetchall()
+    for row in rows:
+        try:
+            webpush(
+                subscription_info={
+                    "endpoint": row["endpoint"],
+                    "keys": {"p256dh": row["p256dh"], "auth": row["auth"]},
+                },
+                data=json.dumps({"title": title, "body": body_text, "url": url}),
+                vapid_private_key=VAPID_PRIVATE_KEY_FILE,
+                vapid_claims={"sub": VAPID_CLAIM_EMAIL},
+            )
+        except WebPushException as exc:
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if status in (404, 410):
+                conn.execute("DELETE FROM push_subscriptions WHERE id = ?", (row["id"],))
+            else:
+                print(f"⚠️ 웹 푸시 실패({username}): {exc}")
+
+
+def _send_kakao_alert_to_user(conn, username, title, body_text, url):
+    """카톡 "나에게 보내기"로 보낼 수 있으면 보내고 True, 아니면(토큰 없음·
+    갱신 실패·전송 실패) False — 호출부가 웹 푸시로 대체할 수 있게."""
+    row = conn.execute(
+        "SELECT kakao_access_token, kakao_refresh_token, kakao_token_expires_at FROM users WHERE username = ?",
+        (username,),
+    ).fetchone()
+    if not row or not row["kakao_access_token"]:
+        return False
+    access_token = row["kakao_access_token"]
+    needs_refresh = True
+    if row["kakao_token_expires_at"]:
+        try:
+            needs_refresh = (
+                datetime.datetime.fromisoformat(row["kakao_token_expires_at"])
+                <= datetime.datetime.now(datetime.timezone.utc)
+            )
+        except ValueError:
+            needs_refresh = True
+    if needs_refresh:
+        if not row["kakao_refresh_token"]:
+            return False
+        try:
+            refreshed = oauth.kakao_refresh_token(row["kakao_refresh_token"])
+            access_token = refreshed["access_token"]
+            new_expires_at = (
+                datetime.datetime.now(datetime.timezone.utc)
+                + datetime.timedelta(seconds=refreshed.get("expires_in") or 0)
+            ).isoformat()
+            conn.execute(
+                "UPDATE users SET kakao_access_token = ?, "
+                "kakao_refresh_token = COALESCE(?, kakao_refresh_token), "
+                "kakao_token_expires_at = ? WHERE username = ?",
+                (access_token, refreshed.get("refresh_token"), new_expires_at, username),
+            )
+            conn.commit()
+        except oauth.OAuthError as exc:
+            print(f"⚠️ 카카오 토큰 갱신 실패({username}): {exc}")
+            return False
+    try:
+        oauth.send_kakao_memo(access_token, f"{title}\n{body_text}", url)
+        return True
+    except oauth.OAuthError as exc:
+        print(f"⚠️ 카톡 알림 전송 실패({username}): {exc}")
+        return False
+
+
+def notify_room_members_new_message(conn, room_id, sender, title, body_text):
+    """커스텀 방(room_id)의 실제 사용자 멤버(발신자 제외)에게 새 메시지를
+    알린다. 방이 커스텀 방이 아니면(Notion 그룹 회의방 등) 조용히 넘어간다."""
+    row = conn.execute("SELECT owner_username FROM custom_rooms WHERE room_id = ?", (room_id,)).fetchone()
+    if not row:
+        return
+    members = {row["owner_username"]} if row["owner_username"] else set()
+    members |= {
+        r["username"] for r in conn.execute(
+            "SELECT username FROM room_user_invites WHERE room_id = ?", (room_id,)
+        ).fetchall()
+    }
+    members.discard(sender)
+    if not members:
+        return
+    base_url = oauth.PUBLIC_BASE_URL or ""
+    url = f"{base_url}/#room={urllib.parse.quote(room_id, safe='')}"
+    for username in members:
+        if not _send_kakao_alert_to_user(conn, username, title, body_text, url):
+            _send_web_push_to_user(conn, username, title, body_text, url)
+
+
 @app.get("/api/rooms")
 def list_rooms(request: Request):
     """방 목록 — 카카오톡 채팅 목록처럼 전체 채팅방 1개 + 그룹 회의방 +
@@ -1547,6 +1735,9 @@ def post_message(msg: NewMessage, request: Request):
             (persona_name, room_id, now),
         )
     conn.commit()
+    preview = content[:80] + ("…" if len(content) > 80 else "")
+    notify_room_members_new_message(conn, room_id, sender, f"{sender}", preview)
+    conn.commit()  # notify_room_members_new_message이 만료 구독 정리 등으로 DB에 쓸 수 있음
     conn.close()
     return {"ok": True, "notified": targets}
 
@@ -1889,12 +2080,16 @@ def worker_complete(result: WorkerResult, authorization: Optional[str] = Header(
             "UPDATE pending_turns SET status = 'done', reply = ?, completed_at = ? WHERE id = ?",
             (result.reply, now, result.turn_id),
         )
+        conn.commit()
+        preview = result.reply[:80] + ("…" if len(result.reply) > 80 else "")
+        notify_room_members_new_message(conn, row["room_id"], row["persona_name"], row["persona_name"], preview)
+        conn.commit()
     else:
         conn.execute(
             "UPDATE pending_turns SET status = 'failed', error = ?, completed_at = ? WHERE id = ?",
             (result.error or "unknown error", now, result.turn_id),
         )
-    conn.commit()
+        conn.commit()
     conn.close()
     return {"ok": True}
 

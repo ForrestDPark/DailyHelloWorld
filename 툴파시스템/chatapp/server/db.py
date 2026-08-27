@@ -159,6 +159,27 @@ def init_db():
     # 더 알맞은 담당자로 돌려보낼 수 있다(rerouted=1이면 재검토 끝, 무한
     # 왕복 방지).
     _ensure_column(conn, "pending_turns", "rerouted", "INTEGER NOT NULL DEFAULT 0")
+    # ★ "채팅방에 새 메시지 있으면 사용자들한테도 알람이 가게 해달라"
+    # 요청(2026-08-27) — 브라우저 Web Push 구독 정보(방마다가 아니라
+    # 계정마다 — 여러 기기에서 구독하면 여러 행이 쌓인다). endpoint가
+    # 곧 그 기기·브라우저의 유일 식별자라 UNIQUE로 중복 구독을 막는다.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS push_subscriptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            endpoint TEXT NOT NULL UNIQUE,
+            p256dh TEXT NOT NULL,
+            auth TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )
+    """)
+    # ★ 같은 요청, 카카오로 로그인한 사람에게는 카톡 "나에게 보내기"로 대신
+    # 보내달라는 후속 요청(2026-08-27) — 카카오 로그인 시 받은 access/refresh
+    # 토큰을 계정에 저장해둔다(talk_message 동의를 받은 경우에만 실제로
+    # 채워짐). 액세스 토큰은 몇 시간 뒤 만료되므로 refresh_token으로 갱신.
+    _ensure_column(conn, "users", "kakao_access_token", "TEXT")
+    _ensure_column(conn, "users", "kakao_refresh_token", "TEXT")
+    _ensure_column(conn, "users", "kakao_token_expires_at", "TEXT")
     conn.commit()
     conn.close()
 

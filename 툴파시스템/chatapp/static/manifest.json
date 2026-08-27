@@ -1,0 +1,11 @@
+{
+  "name": "툴파시스템",
+  "short_name": "툴파시스템",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#6d8fff",
+  "icons": [
+    { "src": "/static/og-image.png", "sizes": "1200x630", "type": "image/png" }
+  ]
+}

@@ -54,6 +54,8 @@ body {
 button { font-family: inherit; }
 .icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
 .icon-button { position: relative; }
+/* ★ 웹 푸시 알림 켜짐 상태(2026-08-27) — 종 아이콘을 강조색으로 채워 구독됨을 표시 */
+#notify-btn.notify-on { color: var(--accent); }
 .icon-button > svg, #room-notice-icon svg {
   width: 21px;
   height: 21px;

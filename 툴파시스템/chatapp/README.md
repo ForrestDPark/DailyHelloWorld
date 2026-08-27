@@ -968,3 +968,74 @@ OpenAI Images API(`CHATAPP_IMAGE_MODEL`, 현재 `gpt-image-2`)로 정사각형 �
 - 실제 계정 3개(방 주인·초대 대상·비초대 제3자)로 초대 전/후 읽기·쓰기
   권한, 방 목록 노출 여부, 방 주인만 초대 가능한지까지 curl과 브라우저
   양쪽에서 라이브 검증했다.
+
+## 새 메시지 웹 푸시 + 카카오 알림 (2026-08-27)
+
+"채팅방에 새 메시지 있으면 사용자들한테도 알람이 가게 해달라"는 요청,
+이어서 "카카오로 로그인한 사람한테는 카톡 알람이 가게 해달라"는 후속
+요청.
+
+### 서버를 독립 venv로 분리
+
+이 기능을 위해 `pywebpush`를 설치하다가, 공용 anaconda 환경(이 저장소의
+다른 프로젝트들도 같이 씀)의 `cryptography`가 강제로 업그레이드되면서
+`pyopenssl`이 즉시 깨지는 걸 발견했다(`GEN_EMAIL` AttributeError 실측
+확인). 공용 환경을 되돌린 뒤, `server/.venv`에 이 서버 전용 가상환경을
+새로 만들고 `com.tulpachat.server.plist`의 `ProgramArguments[0]`을 그
+venv의 python으로 바꿨다 — 이제 이 서버의 의존성 추가/변경이 저장소의
+다른 프로젝트(shift_alarm, 이직시스템 등)에 영향을 주지 않는다.
+`requirements.txt`에 `pywebpush`·`python-multipart`(독립 venv에서는
+FastAPI의 폼/파일 업로드에 필요한 걸 새로 발견함)를 추가했다.
+**plist의 `ProgramArguments`를 바꾼 뒤에는 `launchctl kickstart`가 아니라
+`bootout` + `bootstrap`으로 완전히 재로드해야 반영된다.**
+
+### 웹 푸시 (Web Push)
+
+- VAPID 키 쌍을 생성해 개인키는 `~/.tulpachat/vapid_private.pem`(git
+  추적 안 함, 파일 경로만 `VAPID_PRIVATE_KEY_FILE` 환경변수로 참조),
+  공개키는 `VAPID_PUBLIC_KEY` 환경변수로 관리한다.
+  ★ 실측 함정: `pywebpush.webpush()`의 `vapid_private_key`는 PEM
+  텍스트가 아니라 **파일 경로 문자열**을 받아야 한다(내부적으로
+  `os.path.isfile()`로 판별). PEM을 미리 읽어서 문자열로 넘기면
+  `Vapid.from_string`이 그걸 DER로 오인해 파싱 에러가 난다.
+- `GET /api/push/public_key`(공개키 조회) / `POST /api/push/subscribe`
+  (구독 등록) / `POST /api/push/unsubscribe` 추가. `push_subscriptions`
+  테이블에 계정별 구독(여러 기기 가능)을 저장한다.
+- `static/sw.js`(서비스 워커, push/notificationclick만 처리) +
+  `static/manifest.json` 추가 — iOS Safari는 PWA로 "홈 화면에 추가"된
+  상태에서만 웹 푸시를 지원하므로 manifest가 필요하다.
+- 방 목록 헤더의 🔔 버튼(로그인 + 브라우저가 웹 푸시를 지원할 때만 노출)을
+  누르면 알림 권한을 요청하고 구독을 등록한다.
+- 대상: **커스텀 방(내가 만든 단체톡방)의 실제 사용자 멤버**(방 주인 +
+  `room_user_invites`로 초대된 계정, 발신자 본인 제외)에게 새 메시지
+  (사람이 보냈든 페르소나가 답했든)마다 알린다. Notion 그룹 회의방은
+  로그인만 하면 전원 공유라 매 메시지마다 전체 알림을 보내면 스팸이
+  되므로 대상에서 뺐다.
+
+### 카카오 알림(카톡 "나에게 보내기")
+
+- 로그인한 계정이 카카오 로그인이고 `talk_message`(카카오톡 메시지 보내기)
+  동의를 받았으면, 웹 푸시 대신 카톡으로 알림을 보낸다.
+- `talk_message` 동의항목은 카카오 디벨로퍼스 콘솔에서 앱이 먼저 쓸 수
+  있게 승인돼 있어야 한다(보통 비즈 앱 전환 필요) — 승인 안 된 상태로
+  로그인 요청 scope에 넣으면 카카오 로그인 인가 자체가 막힐 위험이 있어,
+  기본은 꺼둔다(`KAKAO_TALK_MESSAGE_ENABLED` 환경변수가 "1"일 때만
+  `kakao_auth_url()`이 `scope=talk_message`를 요청). 콘솔에서 이 동의항목
+  승인을 마친 뒤에만 켤 것.
+- 카카오 로그인 시 받은 access/refresh 토큰을 계정에 저장하고
+  (`users.kakao_access_token` 등), 액세스 토큰이 만료됐으면
+  `oauth.kakao_refresh_token()`으로 자동 갱신한 뒤
+  `oauth.send_kakao_memo()`로 전송한다. 토큰이 없거나 전송이 실패하면
+  조용히 웹 푸시로 대체한다.
+
+### 검증
+
+- 실제 계정으로 커스텀 방 생성 → 초대 → 웹 푸시 형식에 맞는(진짜 EC
+  키 쌍으로 만든) 구독 등록 → 메시지 전송까지 curl로 라이브 검증. 실제
+  FCM 서버에 요청이 나가 410(만료)을 받는 것과 그 구독이 DB에서 정리되는
+  것까지 확인 — 이 과정에서 `notify_room_members_new_message()` 호출 뒤
+  `conn.commit()`을 빠뜨려 정리 결과가 저장 안 되던 버그를 발견해 고쳤다.
+- 브라우저의 알림 권한 요청은 Chrome 네이티브 팝업이라 브라우저 자동화로는
+  실제 "허용" 클릭까지 재현할 수 없었다 — 서비스 워커 등록, 버튼 노출
+  조건, 구독 API 호출까지는 라이브로 확인했지만 **실제 "🔔 알림 받기"
+  클릭 → 권한 허용 → 첫 알림 수신은 사용자가 직접 확인 필요**하다.

@@ -106,6 +106,7 @@ function initAccountChip() {
     document.getElementById("new-room-btn").classList.add("hidden");
     document.getElementById("persona-manager-btn").classList.add("hidden");
     document.getElementById("profiles-btn").classList.add("hidden");
+    document.getElementById("notify-btn").classList.add("hidden");
     return;
   }
   document.getElementById("account-name").textContent = myUsername;
@@ -119,7 +120,71 @@ function initAccountChip() {
   document.getElementById("new-room-btn").classList.remove("hidden");
   document.getElementById("persona-manager-btn").classList.remove("hidden");
   document.getElementById("profiles-btn").classList.remove("hidden");
+  // ★ "채팅방에 새 메시지 있으면 알람이 가게 해달라" 요청(2026-08-27) — 이
+  // 브라우저가 웹 푸시를 지원할 때만 종 버튼을 보여준다(iOS Safari는 홈
+  // 화면에 추가된 PWA 상태에서만 지원 — 지원 안 하면 버튼 자체를 숨겨서
+  // 눌러도 안 되는 혼란을 막는다).
+  if ("serviceWorker" in navigator && "PushManager" in window) {
+    document.getElementById("notify-btn").classList.remove("hidden");
+    refreshNotifyButtonState();
+  }
 }
+
+// ★ 위와 같은 요청(2026-08-27) — 웹 푸시 구독 흐름. 버튼 상태(꺼짐/켜짐)는
+// 매번 실제 구독 여부(PushManager.getSubscription())로 판단한다 — 로컬
+// 변수로 따로 안 들고 있어야 다른 기기에서 이미 구독한 경우에도 헷갈리지
+// 않는다(각 기기가 각자 구독 상태를 스스로 확인).
+async function refreshNotifyButtonState() {
+  const btn = document.getElementById("notify-btn");
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = reg ? await reg.pushManager.getSubscription() : null;
+    btn.classList.toggle("notify-on", !!sub);
+    btn.setAttribute("aria-label", sub ? "새 메시지 알림 켜짐" : "새 메시지 알림 받기");
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+function _urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map((c) => c.charCodeAt(0)));
+}
+
+async function subscribeToPush() {
+  if (Notification.permission === "denied") {
+    alert("브라우저 알림 권한이 차단돼 있습니다. 브라우저 설정에서 이 사이트 알림을 허용해주세요.");
+    return;
+  }
+  const permission = await Notification.requestPermission();
+  if (permission !== "granted") return;
+  const keyRes = await apiFetch("/api/push/public_key");
+  const { enabled, public_key } = await keyRes.json();
+  if (!enabled) {
+    alert("서버에 웹 푸시가 아직 설정되지 않았습니다.");
+    return;
+  }
+  const reg = await navigator.serviceWorker.register("/static/sw.js");
+  const sub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: _urlBase64ToUint8Array(public_key),
+  });
+  const json = sub.toJSON();
+  await apiFetch("/api/push/subscribe", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
+  });
+  await refreshNotifyButtonState();
+}
+
+document.getElementById("notify-btn").addEventListener("click", () => {
+  subscribeToPush().catch((e) => {
+    if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
+  });
+});
 
 document.getElementById("logout-btn").addEventListener("click", async () => {
   try {

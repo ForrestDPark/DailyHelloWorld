@@ -23,6 +23,13 @@ GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
 KAKAO_CLIENT_ID = os.environ.get("KAKAO_CLIENT_ID", "")
 KAKAO_CLIENT_SECRET = os.environ.get("KAKAO_CLIENT_SECRET", "")
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+# ★ "카카오로 로그인한 사람한테는 카톡 알람이 가게 해달라" 요청(2026-08-27) —
+# "카카오톡 메시지 보내기"(talk_message) 동의항목은 카카오 디벨로퍼스 콘솔에서
+# 앱이 그 항목을 쓸 수 있게(보통 비즈 앱 전환 필요) 미리 승인돼 있어야 한다.
+# 승인 안 된 상태로 scope에 넣으면 카카오 로그인 인가 요청 자체가 에러로
+# 막힐 위험이 있어, 기본은 끔(기존 로그인 동작 그대로) — 콘솔에서 설정을
+# 마친 뒤에만 이 환경변수를 "1"로 켠다.
+KAKAO_TALK_MESSAGE_ENABLED = os.environ.get("KAKAO_TALK_MESSAGE_ENABLED") == "1"
 
 GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -102,11 +109,16 @@ def kakao_auth_url(state):
         "response_type": "code",
         "state": state,
     }
+    if KAKAO_TALK_MESSAGE_ENABLED:
+        params["scope"] = "talk_message"
     return f"{KAKAO_AUTH_URL}?{urllib.parse.urlencode(params)}"
 
 
 def kakao_exchange(code):
-    """반환: {"external_id": 카카오 회원번호, "name": 표시 이름(닉네임)}"""
+    """반환: {"external_id": 카카오 회원번호, "name": 표시 이름(닉네임),
+    "access_token", "refresh_token", "expires_in"} — 뒤 세 개는 "카톡 알람"
+    기능(talk_message 동의를 받았을 때만 실제로 메시지 전송에 쓰인다)을 위해
+    항상 같이 반환한다. 호출부(app.py)가 계정에 저장할지는 선택."""
     data = {
         "grant_type": "authorization_code",
         "client_id": KAKAO_CLIENT_ID,
@@ -122,4 +134,48 @@ def kakao_exchange(code):
         raise OAuthError(str(exc)) from exc
     kakao_account = profile.get("kakao_account") or {}
     nickname = (kakao_account.get("profile") or {}).get("nickname")
-    return {"external_id": str(profile["id"]), "name": nickname or f"kakao_{profile['id']}"}
+    return {
+        "external_id": str(profile["id"]), "name": nickname or f"kakao_{profile['id']}",
+        "access_token": token.get("access_token"), "refresh_token": token.get("refresh_token"),
+        "expires_in": token.get("expires_in"),
+    }
+
+
+def kakao_refresh_token(refresh_token):
+    """만료된 액세스 토큰을 refresh_token으로 갱신한다.
+    반환: {"access_token", "refresh_token"(갱신됐으면), "expires_in"}"""
+    data = {
+        "grant_type": "refresh_token",
+        "client_id": KAKAO_CLIENT_ID,
+        "refresh_token": refresh_token,
+    }
+    if KAKAO_CLIENT_SECRET:
+        data["client_secret"] = KAKAO_CLIENT_SECRET
+    try:
+        return _post_form(KAKAO_TOKEN_URL, data)
+    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError) as exc:
+        raise OAuthError(str(exc)) from exc
+
+
+def send_kakao_memo(access_token, text, link_url):
+    """카카오톡 "나에게 보내기" API로 로그인 계정 본인에게 메시지를 보낸다
+    (talk_message 동의를 받은 계정만 성공한다). 실패하면 OAuthError."""
+    template = {
+        "object_type": "text",
+        "text": text,
+        "link": {"web_url": link_url, "mobile_web_url": link_url},
+        "button_title": "열기",
+    }
+    body = urllib.parse.urlencode({"template_object": json.dumps(template)}).encode("utf-8")
+    req = urllib.request.Request(
+        "https://kapi.kakao.com/v2/api/talk/memo/default/send",
+        data=body, headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return json.loads(resp.read())
+    except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+        raise OAuthError(str(exc)) from exc
