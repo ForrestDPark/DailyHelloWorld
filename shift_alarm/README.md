@@ -663,13 +663,13 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 
 `이직시스템/job_collector.py`의 `publish_email_job_summary_table()` 변경. 자세한 내용은 [이직시스템/README.md](../이직시스템/README.md)의 해당 절 참고 — 공고 제목 셀에 원문 채용공고 URL을, 준비할 점 셀에 그 문구로 구글 검색을 거는 URL을 건다.
 
-## 41. 🧑‍🤝‍🧑 툴파시스템 채팅 메뉴 항목 (★ 2026-08-24 추가)
+## 41. 🧑‍🤝‍🧑 툴파챗 메뉴 항목 (★ 2026-08-24 추가)
 
-**사용자 요청**: "이것도 shift alarm 에 항목만들어줘" (툴파시스템 채팅앱을 가리킴).
+**사용자 요청**: "이것도 shift alarm 에 항목만들어줘" (툴파챗을 가리킴).
 
-- 툴파시스템 채팅앱(`툴파시스템/chatapp/`)은 Fly.io 대신 이 Mac + Cloudflare Quick Tunnel로 자체 호스팅한다(해당 프로젝트 README 참고) — 계정·도메인 없이 쓰는 Quick Tunnel이라 `cloudflared`가 재시작될 때마다(Mac 재부팅 등) URL이 바뀐다.
+- 툴파챗(`툴파챗/chatapp/`)은 Fly.io 대신 이 Mac + Cloudflare Quick Tunnel로 자체 호스팅한다(해당 프로젝트 README 참고) — 계정·도메인 없이 쓰는 Quick Tunnel이라 `cloudflared`가 재시작될 때마다(Mac 재부팅 등) URL이 바뀐다.
 - 새 헬퍼 `get_tulpachat_url()`: 고정 URL을 저장하지 않고, `~/Library/Logs/tulpachat_tunnel.err.log`에서 가장 최근에 찍힌 `https://*.trycloudflare.com` 패턴을 정규식으로 찾아 매번 새로 반환한다 — 메뉴를 열 때마다 최신 URL을 보장한다.
-- `build_menu()`의 "🎲 추천 사이트 열기" 바로 아래에 URL이 있을 때만 "🧑‍🤝‍🧑 툴파시스템 채팅 열기" 항목을 추가한다(터널이 아직 안 떴으면 조용히 생략).
+- `build_menu()`의 "🎲 추천 사이트 열기" 바로 아래에 URL이 있을 때만 "🧑‍🤝‍🧑 툴파챗 열기" 항목을 추가한다(터널이 아직 안 떴으면 조용히 생략).
 
 ## 42. ⚠️ CPU 과부하 감지 알람 (★ 2026-08-25 추가)
 
@@ -696,4 +696,4 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 
 - `notify_spoken()`에 `url=` 인자를 추가했다. 지정하면 `rumps.notification(..., data={"url": url})`로 실어보내고, 지정 안 하면(근무 알람·리마인더 등 원래부터 딱히 열 링크가 없는 알림) `data=None`으로 기존과 동일하게 동작한다.
 - `ShiftAlarmApp`에 `@rumps.notifications` 핸들러(`_handle_notification_click`)를 새로 등록했다 — 사용자가 알림을 클릭("보기"/Show)하면 macOS가 이 핸들러를 부르고, 실려온 `data["url"]`을 기존 메뉴 링크 열기와 같은 방식(`_open_url` — Notion 링크는 Notion 앱으로, 그 외는 기본 브라우저로)으로 바로 연다. 이전엔 이 App 앱 인스턴스에 알림 클릭 핸들러 자체가 없어서 클릭해도 아무 반응이 없었다.
-- 적용한 곳: 📧 새 메일 알림(`_gmail_message_url(top_item["id"])`로 해당 메일 본문 딥링크), 🧑‍🤝‍🧑 툴파시스템 새 메시지 알림(`get_tulpachat_url()`). 다른 `notify_spoken()` 호출(근무 알람, 리마인더, 저장공간 부족, CPU 과부하 등)은 `url`을 안 넘기므로 클릭해도 그냥 닫히는 기존 동작 그대로다 — 필요해지면 같은 패턴으로 확장하면 된다.
+- 적용한 곳: 📧 새 메일 알림(`_gmail_message_url(top_item["id"])`로 해당 메일 본문 딥링크), 🧑‍🤝‍🧑 툴파챗 새 메시지 알림(`get_tulpachat_url()`). 다른 `notify_spoken()` 호출(근무 알람, 리마인더, 저장공간 부족, CPU 과부하 등)은 `url`을 안 넘기므로 클릭해도 그냥 닫히는 기존 동작 그대로다 — 필요해지면 같은 패턴으로 확장하면 된다.

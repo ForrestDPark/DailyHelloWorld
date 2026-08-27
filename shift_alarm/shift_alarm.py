@@ -2164,7 +2164,7 @@ TULPACHAT_FIXED_URL = "https://chat.tulpa-chat.site"
 
 
 def get_tulpachat_url():
-    """툴파시스템 채팅앱 접속 주소. Named Tunnel로 전환한 뒤로는 고정
+    """툴파챗 접속 주소. Named Tunnel로 전환한 뒤로는 고정
     주소(TULPACHAT_FIXED_URL)를 그대로 쓴다 — 예전엔 Quick Tunnel이 재시작마다
     새 URL을 발급해서 로그 파일에서 매번 최신 URL을 긁어와야 했지만, 이제는
     그럴 필요가 없다. 옛 로그에 아직 trycloudflare.com 주소가 남아있을 수도
@@ -4099,7 +4099,7 @@ class ShiftAlarmApp(rumps.App):
         self.high_cpu_timer = rumps.Timer(self._check_high_cpu, HIGH_CPU_CHECK_INTERVAL_SECONDS)
         self.high_cpu_timer.start()
 
-        # 툴파시스템 채팅 새 메시지 알림 (1분마다 확인)
+        # 툴파챗 새 메시지 알림 (1분마다 확인)
         self.tulpachat_timer = rumps.Timer(self._check_tulpachat_messages, 60)
         self.tulpachat_timer.start()
 
@@ -4643,7 +4643,7 @@ class ShiftAlarmApp(rumps.App):
         )
 
     def _check_tulpachat_messages(self, _):
-        """1분마다 툴파시스템 채팅에 새 메시지(페르소나 응답)가 있는지 확인한다.
+        """1분마다 툴파챗에 새 메시지(페르소나 응답)가 있는지 확인한다.
         HTTP 호출이라 백그라운드 스레드에서 돈다."""
         threading.Thread(target=self._check_tulpachat_messages_thread, daemon=True).start()
 
@@ -4681,10 +4681,10 @@ class ShiftAlarmApp(rumps.App):
         if len(from_personas) == 1:
             m = from_personas[0]
             preview = m["content"][:60] + ("…" if len(m["content"]) > 60 else "")
-            notify_spoken("🧑‍🤝‍🧑 툴파시스템 새 메시지", m["sender"], preview, url=tulpachat_url)
+            notify_spoken("🧑‍🤝‍🧑 툴파챗 새 메시지", m["sender"], preview, url=tulpachat_url)
         else:
             names = ", ".join(sorted({m["sender"] for m in from_personas}))
-            notify_spoken("🧑‍🤝‍🧑 툴파시스템 새 메시지", f"{len(from_personas)}건", names, url=tulpachat_url)
+            notify_spoken("🧑‍🤝‍🧑 툴파챗 새 메시지", f"{len(from_personas)}건", names, url=tulpachat_url)
 
     def _check_high_cpu(self, _):
         """1분마다 CPU 과부하 프로세스를 표본 조사한다. `ps` 호출이 느려질
@@ -5645,7 +5645,7 @@ class ShiftAlarmApp(rumps.App):
         tulpachat_url = get_tulpachat_url()
         if tulpachat_url:
             self.menu.add(rumps.MenuItem(
-                "🧑‍🤝‍🧑 툴파시스템 채팅 열기", callback=self.make_open_url_callback(tulpachat_url)
+                "🧑‍🤝‍🧑 툴파챗 열기", callback=self.make_open_url_callback(tulpachat_url)
             ))
         sunzi_entry = get_latest_sunzi_entry()
         if sunzi_entry:
