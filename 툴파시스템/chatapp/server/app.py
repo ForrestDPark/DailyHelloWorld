@@ -986,11 +986,20 @@ def _custom_room_access(conn, room_id, username, is_owner_request):
     """room_id가 사용자 커스텀 방이면 (그 방인지 여부, 접근 가능 여부, 방
     소유 계정)을 반환한다. Notion 그룹 회의방이면 (False, True, None) —
     그쪽은 기존처럼 로그인만 하면 누구나 볼 수 있다(단, 초대는 아래에서
-    소유자로 별도 제한)."""
+    소유자로 별도 제한).
+
+    ★ "가상 인물뿐만 아니라 실제 사용자도 초대할 수 있게 해달라" 요청
+    (2026-08-27) — 방 주인·소유자 외에도 room_user_invites에 초대된
+    계정이면 접근(읽기·쓰기)을 허용한다."""
     row = conn.execute("SELECT owner_username FROM custom_rooms WHERE room_id = ?", (room_id,)).fetchone()
     if not row:
         return False, True, None
     allowed = is_owner_request or row["owner_username"] == username
+    if not allowed and username:
+        invited = conn.execute(
+            "SELECT 1 FROM room_user_invites WHERE room_id = ? AND username = ?", (room_id, username)
+        ).fetchone()
+        allowed = bool(invited)
     return True, allowed, row["owner_username"]
 
 
@@ -1090,6 +1099,70 @@ def invite_to_room(room_id: str, body: InviteRequest, request: Request):
     return {"ok": True, "members": members}
 
 
+@app.get("/api/rooms/{room_id}/user_members")
+def get_room_user_members(room_id: str, request: Request):
+    """이 커스텀 방에 초대된 실제 사용자 목록과, 초대 가능한 나머지 계정
+    목록을 준다. ★ "가상 인물뿐만 아니라 실제 사용자도 초대할 수 있게
+    해달라" 요청(2026-08-27) — 방 주인(또는 소유자)만 조회할 수 있다."""
+    user = getattr(request.state, "user", None)
+    username = user["username"] if user else None
+    is_owner_request = bool(user and user["is_owner"])
+    conn = get_conn()
+    row = conn.execute("SELECT owner_username FROM custom_rooms WHERE room_id = ?", (room_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="내가 만든 채팅방이 아닙니다")
+    if not (is_owner_request or row["owner_username"] == username):
+        conn.close()
+        raise HTTPException(status_code=403, detail="이 방의 주인만 볼 수 있습니다")
+    members = [
+        r["username"] for r in conn.execute(
+            "SELECT username FROM room_user_invites WHERE room_id = ?", (room_id,)
+        ).fetchall()
+    ]
+    if row["owner_username"] and row["owner_username"] not in members:
+        members.insert(0, row["owner_username"])
+    all_users = [r["username"] for r in conn.execute("SELECT username FROM users ORDER BY username").fetchall()]
+    available = [u for u in all_users if u not in members]
+    conn.close()
+    return {"members": members, "available": available}
+
+
+class InviteUserRequest(BaseModel):
+    username: str
+
+
+@app.post("/api/rooms/{room_id}/invite_user")
+def invite_user_to_room(room_id: str, body: InviteUserRequest, request: Request):
+    """실제 사용자를 내가 만든 방에 초대한다. ★ 2026-08-27 요청. 방 주인
+    (또는 소유자)만 초대할 수 있다 — 초대된 계정은 이후 이 방을 보고,
+    메시지도 보낼 수 있다(_custom_room_access가 room_user_invites도 확인)."""
+    if not getattr(request.state, "can_write", True):
+        raise HTTPException(status_code=403, detail="읽기 전용 계정입니다")
+    user = getattr(request.state, "user", None)
+    username = user["username"] if user else None
+    is_owner_request = bool(user and user["is_owner"])
+    conn = get_conn()
+    row = conn.execute("SELECT owner_username FROM custom_rooms WHERE room_id = ?", (room_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="내가 만든 채팅방이 아닙니다")
+    if not (is_owner_request or row["owner_username"] == username):
+        conn.close()
+        raise HTTPException(status_code=403, detail="이 방의 주인만 초대할 수 있습니다")
+    target = conn.execute("SELECT username FROM users WHERE username = ?", (body.username,)).fetchone()
+    if not target:
+        conn.close()
+        raise HTTPException(status_code=404, detail="존재하지 않는 계정입니다")
+    conn.execute(
+        "INSERT OR IGNORE INTO room_user_invites (room_id, username, invited_at) VALUES (?, ?, ?)",
+        (room_id, body.username, _now()),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
 @app.get("/api/rooms")
 def list_rooms(request: Request):
     """방 목록 — 카카오톡 채팅 목록처럼 전체 채팅방 1개 + 그룹 회의방 +
@@ -1138,8 +1211,15 @@ def list_rooms(request: Request):
     custom_rows = conn.execute(
         "SELECT room_id, label, owner_username, thumbnail_url FROM custom_rooms ORDER BY created_at"
     ).fetchall()
+    # ★ "실제 사용자도 초대할 수 있게 해달라" 요청(2026-08-27) — 초대된
+    # 계정에게도 방 목록에 그 방이 보여야 들어갈 수 있다(직접 URL을 몰라도).
+    invited_room_ids = {
+        r["room_id"] for r in conn.execute(
+            "SELECT room_id FROM room_user_invites WHERE username = ?", (username,)
+        ).fetchall()
+    } if username else set()
     for cr in custom_rows:
-        if is_owner_request or cr["owner_username"] == username:
+        if is_owner_request or cr["owner_username"] == username or cr["room_id"] in invited_room_ids:
             rooms.append({
                 "room_id": cr["room_id"], "label": f"👥 {cr['label']}",
                 "group_name": None, "is_group_room": True, "is_mine": cr["owner_username"] == username,

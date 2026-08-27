@@ -994,9 +994,68 @@ async function toggleInvitePanel() {
         }
       }
     }
+    // ★ "가상 인물뿐만 아니라 실제 사용자도 초대할 수 있게 해달라"
+    // 요청(2026-08-27) — 내가 만든 방(custom_)에서만, 페르소나 초대와
+    // 같은 권한(canInviteHere)으로 실제 계정도 초대할 수 있게 한다.
+    const userMemberSection = document.getElementById("user-member-section");
+    const inviteUserSection = document.getElementById("invite-user-section");
+    if (currentRoom.startsWith("custom_") && canInviteHere) {
+      await loadRoomUserMembers();
+      userMemberSection.classList.remove("hidden");
+      inviteUserSection.classList.remove("hidden");
+    } else {
+      userMemberSection.classList.add("hidden");
+      inviteUserSection.classList.add("hidden");
+    }
   } catch (e) {
     memberList.innerHTML = '<div class="empty-hint">불러오지 못했습니다</div>';
     console.error(e);
+  }
+}
+
+async function loadRoomUserMembers() {
+  const userMemberList = document.getElementById("user-member-list");
+  const inviteUserList = document.getElementById("invite-user-list");
+  userMemberList.innerHTML = '<div class="empty-hint">불러오는 중...</div>';
+  try {
+    const res = await apiFetch(`/api/rooms/${encodeURIComponent(currentRoom)}/user_members`);
+    const { members, available } = await res.json();
+    userMemberList.innerHTML = "";
+    for (const username of members) {
+      const chip = document.createElement("span");
+      chip.className = "member-chip";
+      chip.textContent = username;
+      userMemberList.appendChild(chip);
+    }
+    inviteUserList.innerHTML = "";
+    if (!available.length) {
+      inviteUserList.innerHTML = '<div class="empty-hint">초대할 수 있는 계정이 없습니다</div>';
+    } else {
+      for (const username of available) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "invite-candidate";
+        btn.textContent = username;
+        btn.addEventListener("click", () => inviteUserToRoom(username));
+        inviteUserList.appendChild(btn);
+      }
+    }
+  } catch (e) {
+    userMemberList.innerHTML = '<div class="empty-hint">불러오지 못했습니다</div>';
+    if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
+  }
+}
+
+async function inviteUserToRoom(username) {
+  try {
+    await apiFetch(`/api/rooms/${encodeURIComponent(currentRoom)}/invite_user`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username }),
+    });
+    await loadRoomUserMembers();
+  } catch (e) {
+    if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
   }
 }
 
