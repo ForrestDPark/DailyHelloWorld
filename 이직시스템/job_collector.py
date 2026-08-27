@@ -1240,6 +1240,7 @@ def _generate_company_profile_url(token: str, company: str, cwd: Path) -> str | 
             build_company_prompt, ensure_company_overview_links, fetch_homepage_sources,
             _markdown_to_notion_blocks as company_blocks,
             _notion_publish as company_publish, COMPANY_PROFILE_STATE_DIR,
+            valid_company_analysis,
         )
         api_key = _dart_api_key()
         dart_info = None
@@ -1270,7 +1271,7 @@ def _generate_company_profile_url(token: str, company: str, cwd: Path) -> str | 
             homepage_text, news_related, homepage_url,
         )
         from ai_exec import run_ai_exec
-        stdout, _ = run_ai_exec(prompt, cwd, timeout=300)
+        stdout, _ = run_ai_exec(prompt, cwd, timeout=300, validator=valid_company_analysis)
         company_text = ensure_company_overview_links(stdout.strip(), company, homepage_url, corp_code)
         company_title = f"🏢 {company} 경영 분석"
         safe_name = re.sub(r"[^\w가-힣-]+", "_", company)
@@ -1718,11 +1719,27 @@ def run_job_analysis(row: sqlite3.Row) -> str | None:
     print("\nAI로 분석 중... (codex 실패 시 claude로 자동 전환)\n")
     from ai_exec import run_ai_exec
     try:
-        stdout, engine = run_ai_exec(prompt, BASE_DIR, timeout=300)
+        stdout, engine = run_ai_exec(prompt, BASE_DIR, timeout=300, validator=_valid_job_analysis)
     except RuntimeError as exc:
         print(f"⚠️  AI 분석 실패: {exc}")
         return None
     return stdout.strip()
+
+
+_AI_PUBLICATION_FORBIDDEN_MARKERS = (
+    "**Bash**:", "<tool_use>", "tool_uses", "functions.exec", "assistant to=",
+    "jobs-analyst", "에이전트에 위임", "README를 읽", "작업을 진행하겠습니다",
+)
+
+
+def _valid_job_analysis(text: str) -> bool:
+    """완성된 공고 분석만 통과시켜 도구 호출·에이전트 대화를 게시하지 않는다."""
+    required = ("이 회사가 지금 만들려는", "연습 프로젝트 추천", "요구사항/우대사항")
+    return (
+        len(text.strip()) >= 500
+        and all(marker in text for marker in required)
+        and not any(marker in text for marker in _AI_PUBLICATION_FORBIDDEN_MARKERS)
+    )
 
 
 def analyze_job(args: argparse.Namespace) -> None:
@@ -1990,6 +2007,26 @@ def _save_top_index_entries(entries: list[dict[str, str]]) -> None:
     TOP_INDEX_HISTORY_PATH.write_text(json.dumps(entries, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _recommendation_status(score: int) -> str:
+    if score >= 60:
+        return "지원 검토"
+    if score >= 40:
+        return "준비 후 지원"
+    if score > 0:
+        return "학습 후보"
+    return "분석 제외"
+
+
+def _entry_expired(entry: dict[str, Any], today: datetime | None = None) -> bool:
+    raw = str(entry.get("deadline") or "")[:10]
+    if not raw:
+        return False
+    try:
+        return datetime.fromisoformat(raw).date() < (today or datetime.now()).date()
+    except ValueError:
+        return False
+
+
 def _sync_top_index_page(token: str, entries: list[dict[str, str]]) -> None:
     while True:
         existing = _notion_request("GET", f"blocks/{TOP_INDEX_TOGGLE_ID}/children?page_size=100", token)
@@ -2018,8 +2055,11 @@ def _sync_top_index_page(token: str, entries: list[dict[str, str]]) -> None:
 
     # 예전 이력은 공고와 경진대회를 모두 kind=job으로 저장했다. 기존 JSON을
     # 지우지 않고 제목의 🏆 표시로 구분해 새 섹션으로 자연스럽게 이관한다.
-    contest_entries = [e for e in entries if e.get("kind") == "contest" or (e.get("kind") == "job" and "🏆" in e.get("line", ""))]
-    job_entries = [e for e in entries if e.get("kind") == "job" and "🏆" not in e.get("line", "")]
+    visible = [e for e in entries if e.get("kind") == "company" or int(e.get("score", 1) or 0) > 0]
+    active = [e for e in visible if not _entry_expired(e)]
+    archived = [e for e in visible if _entry_expired(e)]
+    contest_entries = [e for e in active if e.get("kind") == "contest" or (e.get("kind") == "job" and "🏆" in e.get("line", ""))]
+    job_entries = [e for e in active if e.get("kind") == "job" and "🏆" not in e.get("line", "")]
     company_entries = [e for e in entries if e["kind"] == "company"]
     blocks = (
         [paragraph("새 추천은 이 목록 맨 위에 한 줄씩 쌓인다(자동 갱신). 전체 분석 내용은 링크를 눌러 확인."),
@@ -2029,20 +2069,53 @@ def _sync_top_index_page(token: str, entries: list[dict[str, str]]) -> None:
         + [line_block(e) for e in contest_entries]
         + [heading(f"{TOP_INDEX_COMPANY_SECTION} (회사당 1건, 계속 누적)")]
         + [line_block(e) for e in company_entries]
+        + [heading("🗄 마감·종료 보관")]
+        + [line_block(e) for e in archived]
     )
     for start in range(0, len(blocks), 50):
         _notion_request("PATCH", f"blocks/{TOP_INDEX_TOGGLE_ID}/children", token, {"children": blocks[start:start + 50]})
 
 
-def record_top_index_entry(token: str, kind: str, line: str, url: str) -> None:
+def record_top_index_entry(
+    token: str, kind: str, line: str, url: str, *, key: str | None = None,
+    score: int | None = None, deadline: str = "", snapshot_title: str | None = None,
+    snapshot_blocks: list[dict[str, Any]] | None = None,
+) -> None:
     """job/contest/company 발행 직후 호출한다. 로컬 이력에 새 항목을 최신순으로
     추가하고 "📋 최근 추천 기록" 페이지를 다시 쓴다. 예전 `_append_history_toggle`은
     분석 전문을 그대로 복제해 토글로 쌓아 페이지가 급격히 커졌다("content 있을
     필요 없다"는 피드백으로 교체) — 전체 내용은 이미 링크로 연결된 실제
     페이지에 있으니 여기는 "언제 무엇을 추천했는지"만 보여주는 가벼운 인덱스
     역할만 한다."""
+    if kind in {"job", "contest"} and score is not None and score <= 0:
+        return
     entries = _load_top_index_entries()
-    entries.insert(0, {"kind": kind, "line": line, "url": url})
+    existing = next((entry for entry in entries if key and entry.get("key") == key), None)
+    today = datetime.now().date().isoformat()
+    if existing:
+        existing["last_seen"] = today
+        existing["times_seen"] = int(existing.get("times_seen", 1)) + 1
+        existing["score"] = max(int(existing.get("score", 0)), int(score or 0))
+        existing["status"] = _recommendation_status(int(existing["score"]))
+        existing["deadline"] = deadline or existing.get("deadline", "")
+        entries.remove(existing)
+        entries.insert(0, existing)
+    else:
+        immutable_url = url
+        if snapshot_title and snapshot_blocks:
+            created = _notion_request("POST", "pages", token, {
+                "parent": {"page_id": NOTION_JOBSYSTEM_PAGE_ID},
+                "properties": {"title": {"title": [{"text": {"content": snapshot_title}}]}},
+            })
+            page_id = created["id"]
+            for start in range(0, len(snapshot_blocks), 50):
+                _notion_request("PATCH", f"blocks/{page_id}/children", token, {"children": snapshot_blocks[start:start + 50]})
+            immutable_url = f"https://www.notion.so/{page_id.replace('-', '')}"
+        entries.insert(0, {
+            "kind": kind, "key": key or f"legacy:{kind}:{line}", "line": line,
+            "url": immutable_url, "score": score, "status": _recommendation_status(int(score or 0)),
+            "deadline": deadline, "first_seen": today, "last_seen": today, "times_seen": 1,
+        })
     entries = entries[:TOP_INDEX_MAX_ENTRIES]
     _save_top_index_entries(entries)
     _sync_top_index_page(token, entries)
@@ -2175,14 +2248,19 @@ def _rank_candidates_by_analyzability(
         key = f"{row['source']}:{row['source_id']}"
         info_map[key] = {**signals, "score_detail": detail, "total": detail["total"]}
 
-    ranked = sorted(candidates, key=lambda row: info_map[f"{row['source']}:{row['source_id']}"]["total"], reverse=True)
+    ranked_all = sorted(candidates, key=lambda row: info_map[f"{row['source']}:{row['source_id']}"]["total"], reverse=True)
     # ★ 2026-08-19: PARTTIME_RECOMMENDATION_MIN_SCORE(50점) 미만이면 전부 걸러내던
     # 예전 로직은 "적합한 후보가 없는 날은 아예 갱신을 건너뛴다"는 뜻이라, 며칠씩
     # 조건을 만족하는 알바가 없으면 훨씬 예전에 발행된 결과가 계속 그대로 남아
     # "매일 똑같은 것만 보인다"는 문제로 이어졌다("점수 낮아도 매일 다른 게 보이면
     # 좋겠다"는 요청). 주제 적합성(코딩·AI·온라인/통근권)은 위 eligible 필터가 이미
     # 걸렀으니, 점수 자체로 후보를 통째로 비우지는 않고 순위만 매긴다 — 최저 점수
-    # 후보라도 오늘의 순환 대상에는 남는다.
+    # 후보라도 오늘의 순환 대상에는 남는다. 단, 0점은 추천 근거 자체가 없다는
+    # 판정이므로 "오늘의 추천"으로 발행하지 않는다.
+    ranked = [row for row in ranked_all if info_map[f"{row['source']}:{row['source_id']}"]["total"] > 0]
+    excluded = len(ranked_all) - len(ranked)
+    if excluded:
+        print(f"  분석 제외: 추천 근거가 없는 0점 후보 {excluded}건")
     if ranked:
         top = ranked[0]
         total = info_map[f"{top['source']}:{top['source_id']}"]["total"]
@@ -2344,7 +2422,7 @@ def analyze_top_job(args: argparse.Namespace) -> None:
             homepage_text, news_related, homepage_url,
         )
         from ai_exec import run_ai_exec
-        stdout, _ = run_ai_exec(prompt, BASE_DIR, timeout=300)
+        stdout, _ = run_ai_exec(prompt, BASE_DIR, timeout=300, validator=valid_company_analysis)
         # 기업개황 첫 사실에 괄호형 출처를 보장한다. 별도 출처 지도는 만들지 않는다.
         company_text = ensure_company_overview_links(
             stdout.strip(), row["company"], homepage_url, corp_code,
@@ -2414,7 +2492,12 @@ def analyze_top_job(args: argparse.Namespace) -> None:
     try:
         today = datetime.now().date().isoformat()
         line = f"(점수 {recommendation_score}) [{today}][{category}] {title}"
-        record_top_index_entry(token, "job", line, url)
+        record_top_index_entry(
+            token, "job", line, url,
+            key=f"job:{row['source']}:{row['source_id']}", score=recommendation_score,
+            deadline=row["deadline"], snapshot_title=f"📌 [{today}] {title}",
+            snapshot_blocks=blocks,
+        )
     except Exception as exc:  # noqa: BLE001 — 인덱스 갱신 실패로 본 발행까지 죽이지 않는다(★ 2026-08-19: RuntimeError만 잡던 예전 코드는 TimeoutError 같은 순수 네트워크 예외를 못 잡아 스크립트가 죽었다)
         print(f"⚠️  최상위 페이지 목록 갱신 실패(본 발행은 정상 완료): {exc}")
 

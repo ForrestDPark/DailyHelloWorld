@@ -767,6 +767,21 @@ def _notion_publish(token: str, title: str, blocks: list[dict[str, Any]], state_
     return url
 
 
+_AI_PUBLICATION_FORBIDDEN_MARKERS = (
+    "**Bash**:", "<tool_use>", "tool_uses", "functions.exec", "assistant to=",
+    "jobs-analyst", "에이전트에 위임", "README를 읽", "작업을 진행하겠습니다",
+)
+
+
+def valid_company_analysis(text: str) -> bool:
+    required = ("기업 개황", "사업", "채용")
+    return (
+        len(text.strip()) >= 600
+        and all(marker in text for marker in required)
+        and not any(marker in text for marker in _AI_PUBLICATION_FORBIDDEN_MARKERS)
+    )
+
+
 def analyze_company(args: argparse.Namespace) -> None:
     company_name = args.company_name
     print(f"'{company_name}' 분석 시작")
@@ -811,7 +826,7 @@ def analyze_company(args: argparse.Namespace) -> None:
     print("\nAI로 분석 중... (codex 실패 시 claude로 자동 전환)\n")
     from ai_exec import run_ai_exec
     try:
-        stdout, engine = run_ai_exec(prompt, BASE_DIR, timeout=300)
+        stdout, engine = run_ai_exec(prompt, BASE_DIR, timeout=300, validator=valid_company_analysis)
     except RuntimeError as exc:
         raise SystemExit(f"AI 분석 실패: {exc}")
     # 첫 기업개황 문장에는 코드가 괄호형 출처를 보장한다. 별도 링크 목록은 만들지 않는다.

@@ -726,7 +726,8 @@ def build_contest_prompt(row: sqlite3.Row, detail_text: str) -> str:
 
 _AI_TOOL_TRACE_MARKERS = (
     "**Bash**:", "<tool_use>", "tool_uses", "Check memory index",
-    "cat \"/Users/", "functions.exec", "assistant to=",
+    "cat \"/Users/", "functions.exec", "assistant to=", "jobs-analyst",
+    "에이전트에 위임", "README를 읽", "작업을 진행하겠습니다",
 )
 
 
@@ -1021,7 +1022,12 @@ def analyze_top_contest(args: argparse.Namespace) -> None:
         from job_collector import record_top_index_entry
         today = datetime.now().date().isoformat()
         line = f"(점수 {row['score']}) [{today}][{category}] {title}"
-        record_top_index_entry(token, "contest", line, url)
+        record_top_index_entry(
+            token, "contest", line, url,
+            key=f"contest:{row['source']}:{row['source_id']}", score=int(row["score"]),
+            deadline=row["deadline"], snapshot_title=f"📌 [{today}] {title}",
+            snapshot_blocks=blocks,
+        )
     except Exception as exc:  # noqa: BLE001 — 인덱스 갱신 실패로 본 발행까지 죽이지 않는다(★ 2026-08-19: RuntimeError만 잡던 예전 코드는 TimeoutError 같은 순수 네트워크 예외를 못 잡아 스크립트가 죽었다)
         print(f"⚠️  최상위 페이지 목록 갱신 실패(본 발행은 정상 완료): {exc}")
 

@@ -99,7 +99,9 @@ class JobCollectorTest(unittest.TestCase):
              mock.patch("company_profile.fetch_company_news", return_value=[]), \
              mock.patch("company_profile.search_related_jobs", return_value=[]):
             ranked, info = jc._rank_candidates_by_analyzability([without_dart, with_dart], self.config, "career")
-        self.assertEqual(len(ranked), 2)
+        self.assertEqual(len(ranked), 1)
+        self.assertEqual(ranked[0]["company"], "공시기업")
+        self.assertEqual(info["사람인:no-dart"]["total"], 0)
         self.assertGreater(info["사람인:with-dart"]["total"], info["사람인:no-dart"]["total"])
 
     def test_parttime_prioritizes_location_and_pay_over_dart(self):
@@ -267,6 +269,25 @@ class JobCollectorTest(unittest.TestCase):
         leaked = """**Bash**: Check memory index for relevant prior guidance
 ```\ncat \"/Users/example/.claude/MEMORY.md\"\n```"""
         self.assertFalse(cc._valid_contest_analysis(leaked))
+
+    def test_job_analysis_rejects_internal_agent_chatter(self):
+        leaked = "jobs-analyst 에이전트에 위임하여 작업을 진행하겠습니다. " * 100
+        self.assertFalse(jc._valid_job_analysis(leaked))
+
+    def test_job_analysis_accepts_complete_answer(self):
+        sections = "\n".join((
+            "1. 이 회사가 지금 만들려는/겪고 있는 것 추론",
+            "2. 연습 프로젝트 추천 1~2개",
+            "3. 요구사항/우대사항 요약",
+        ))
+        self.assertTrue(jc._valid_job_analysis(sections + "\n" + "구체적 근거 " * 100))
+
+    def test_recommendation_status_and_expiry(self):
+        self.assertEqual(jc._recommendation_status(0), "분석 제외")
+        self.assertEqual(jc._recommendation_status(50), "준비 후 지원")
+        self.assertTrue(jc._entry_expired(
+            {"deadline": "2026-08-01"}, datetime(2026, 8, 27),
+        ))
 
     def test_contest_analysis_accepts_complete_answer(self):
         sections = "\n".join([
