@@ -1117,6 +1117,39 @@ async function showProfilePopup(message) {
   popup.append(close, avatar, name, summary); overlay.appendChild(popup); document.body.appendChild(overlay);
 }
 
+// ★ "관리자는 메시지 삭제 권한, 각 이용자는 자기 메시지 수정·삭제 권한"
+// 요청(2026-08-27) — 수정은 본인이 직접 쓴 텍스트 메시지에만 허용한다
+// (이미지 메시지는 prompt()로 마크다운을 직접 편집하게 하는 게 위험해
+// 제외). 삭제는 본인 메시지거나 소유자면 누구 메시지든 가능하다.
+async function editMessage(message, hostEl) {
+  const value = prompt("메시지 수정", message.content);
+  if (value === null) return;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === message.content) return;
+  try {
+    const res = await apiFetch(`/api/messages/${message.id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: trimmed }),
+    });
+    if (!res.ok) { alert((await res.json()).detail || "수정하지 못했습니다"); return; }
+    message.content = trimmed;
+    const body = hostEl.querySelector(".body");
+    if (body) body.textContent = trimmed;
+  } catch (e) {
+    if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
+  }
+}
+
+async function deleteMessage(message, hostEl) {
+  if (!confirm("이 메시지를 삭제할까요?")) return;
+  try {
+    const res = await apiFetch(`/api/messages/${message.id}`, { method: "DELETE" });
+    if (!res.ok) { alert((await res.json()).detail || "삭제하지 못했습니다"); return; }
+    hostEl.remove();
+  } catch (e) {
+    if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
+  }
+}
+
 function openMessageMenu(message, hostEl, x, y) {
   closeMessageMenu();
   const menu = document.createElement("div"); menu.className = "message-action-menu";
@@ -1130,6 +1163,10 @@ function openMessageMenu(message, hostEl, x, y) {
   if (canWrite) addAction("답장하기", () => setReplyTarget(message.is_persona ? message.sender : null, message));
   addAction("복사", () => navigator.clipboard.writeText(message.content).catch(() => {}));
   addAction("프로필 보기", () => showProfilePopup(message));
+  const isMine = !message.is_persona && message.sender === myUsername;
+  const hasImage = IMAGE_MARKER_RE.test(message.content);
+  if (canWrite && isMine && !hasImage) addAction("수정", () => editMessage(message, hostEl));
+  if (canWrite && (isMine || amOwner)) addAction("삭제", () => deleteMessage(message, hostEl));
   document.body.appendChild(menu); messageMenu = menu;
   const rect = menu.getBoundingClientRect();
   menu.style.left = `${Math.max(8, Math.min(x, innerWidth - rect.width - 8))}px`;

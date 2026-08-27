@@ -1210,6 +1210,62 @@ def get_messages(request: Request, room_id: str = GROUP_ROOM_ID, since_id: int =
     return messages
 
 
+class MessageEdit(BaseModel):
+    content: str
+
+
+@app.put("/api/messages/{message_id}")
+def edit_message(message_id: int, body: MessageEdit, request: Request):
+    """"각 이용자들도 자기 메시지는 수정·삭제할 수 있게 해달라" 요청(2026-08-27)
+    — 본인이 직접 보낸 메시지(페르소나 발화 제외)만 수정할 수 있다. 관리자도
+    다른 사람 말을 대신 고쳐 쓸 수는 없다(삭제와 달리 수정은 "그 사람이 실제로
+    한 말"을 바꾸는 것이라 본인 전용으로 좁힌다)."""
+    if not getattr(request.state, "can_write", True):
+        raise HTTPException(status_code=403, detail="읽기 전용 계정입니다")
+    user = getattr(request.state, "user", None)
+    username = user["username"] if user else None
+    content = body.content.strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="내용을 입력하세요")
+    conn = get_conn()
+    row = conn.execute("SELECT sender FROM messages WHERE id = ?", (message_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="메시지를 찾을 수 없습니다")
+    persona_names = _persona_name_set(conn)
+    if row["sender"] in persona_names or not username or row["sender"] != username:
+        conn.close()
+        raise HTTPException(status_code=403, detail="본인이 보낸 메시지만 수정할 수 있습니다")
+    conn.execute("UPDATE messages SET content = ? WHERE id = ?", (content, message_id))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.delete("/api/messages/{message_id}")
+def delete_message(message_id: int, request: Request):
+    """"관리자는 메시지 삭제 권한이 있게, 각 이용자도 자기 메시지는 삭제할 수
+    있게 해달라" 요청(2026-08-27) — 소유자는 아무 메시지나, 일반 사용자는
+    본인이 보낸 메시지만 지울 수 있다(페르소나 발화 포함 — 소유자 전용)."""
+    if not getattr(request.state, "can_write", True):
+        raise HTTPException(status_code=403, detail="읽기 전용 계정입니다")
+    user = getattr(request.state, "user", None)
+    username = user["username"] if user else None
+    is_owner_request = bool(user and user["is_owner"])
+    conn = get_conn()
+    row = conn.execute("SELECT sender FROM messages WHERE id = ?", (message_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="메시지를 찾을 수 없습니다")
+    if not (is_owner_request or (username and row["sender"] == username)):
+        conn.close()
+        raise HTTPException(status_code=403, detail="본인이 보낸 메시지이거나 관리자만 삭제할 수 있습니다")
+    conn.execute("DELETE FROM messages WHERE id = ?", (message_id,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
 @app.get("/api/all_messages")
 def all_messages(since_id: int = 0):
     """방 구분 없이 새 메시지를 전부 반환한다 — /api/worker/all_messages와 같은
