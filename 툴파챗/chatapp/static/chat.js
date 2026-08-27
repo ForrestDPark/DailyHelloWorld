@@ -11,6 +11,24 @@ const chatView = document.getElementById("chat-view");
 const roomListEl = document.getElementById("room-list");
 const messagesEl = document.getElementById("messages");
 
+// ★ "채팅 입력창 가운데 위에 아래화살표 버튼 누르면 최신 메시지로 이동"
+// 요청(2026-08-28) — 메시지 영역을 스크롤해서 맨 아래에서 멀어지면 버튼을
+// 보여주고, 누르면 맨 아래로 스크롤한다. 새 메시지가 오면 appendMessage가
+// 이미 항상 맨 아래로 자동 스크롤하므로, 이 버튼은 사용자가 위로 올려서
+// 지난 대화를 읽고 있을 때만 의미가 있다.
+const scrollBottomBtn = document.getElementById("scroll-bottom-btn");
+const SCROLL_BOTTOM_THRESHOLD_PX = 120;
+
+function updateScrollBottomVisibility() {
+  const distanceFromBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight;
+  scrollBottomBtn.classList.toggle("hidden", distanceFromBottom < SCROLL_BOTTOM_THRESHOLD_PX);
+}
+
+messagesEl.addEventListener("scroll", updateScrollBottomVisibility);
+scrollBottomBtn.addEventListener("click", () => {
+  messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: "smooth" });
+});
+
 // ★ 2026-08-26: 세션 쿠키가 만료됐거나(180일 지남) 로그인 자체가 안 된
 // 상태에서 API를 호출하면 서버가 401을 준다. fetch를 감싸서 401을 만나면
 // 바로 로그인 화면으로 돌려보낸다 — 사용 중간에 세션이 끊겨도 흰 화면/무한
@@ -928,6 +946,7 @@ async function showChatView(roomId) {
   lastId = 0;
   setReplyTarget(null);
   messagesEl.innerHTML = "";
+  scrollBottomBtn.classList.add("hidden");
   roomListView.classList.add("hidden");
   chatView.classList.remove("hidden");
   // ★ 새로고침·직접 URL 접속처럼 showRoomList()를 거치지 않고 바로 이
