@@ -710,6 +710,13 @@ def build_prompt(persona_name, system_prompt, context, persona_names, has_images
             "여기 없는 내용을 지어내지 마세요.)\n"
             f"{notion_reference}"
         )
+    if any("📜 손자병법 새 구절 분석이 완료되었습니다" in msg["content"] for msg in context):
+        lines.append(
+            "\n(손자병법 새 구절 토론에서는 찬반 투표처럼 답하지 마세요. "
+            "'핵심 판단에 동의합니다', '동의하지 않습니다' 같은 상투적인 판정으로 시작하지 말고, "
+            "자신의 주석 관점에서 구절의 뜻·역사 사례의 숨은 조건·현대 적용의 오용 위험 중 "
+            "가장 중요한 쟁점 하나를 골라 곧바로 논하세요. 앞선 병법가와 같은 내용을 반복하지 마세요.)"
+        )
     lines.append(
         f'위 대화 흐름에 이어서 "{persona_name}"으로서 다음 메시지 하나만 답하세요. '
         f'"{persona_name}:" 같은 이름표는 붙이지 말고 대사만 쓰세요.'

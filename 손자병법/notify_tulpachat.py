@@ -58,8 +58,8 @@ def main() -> None:
         f"핵심 해석: {subtitle}\n\n"
         f"Notion 정본: {args.notion_url}\n"
         f"사이트 분석: {args.site_url}\n\n"
-        "병법가 여러분께서는 이 해석의 핵심 판단과 역사 사례 연결에 동의하시는지, "
-        "각자의 주석 관점에서 반론·보완점·현대 적용의 한계를 토론해 주십시오."
+        "병법가들은 각자의 주석 관점에서 이 구절의 뜻, 역사 사례에서 놓치기 쉬운 조건, "
+        "현대에 옮길 때의 오용 위험 가운데 가장 중요하다고 보는 한 가지를 논합니다."
     )
     payload = json.dumps(
         {"room_id": ROOM_ID, "content": content, "dedupe_key": f"sunzi-jiudi-{number}"},

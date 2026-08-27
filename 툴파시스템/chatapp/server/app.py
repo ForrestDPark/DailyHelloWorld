@@ -1637,8 +1637,8 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
             existing = {"message_id": legacy["id"]}
     if existing:
         conn.execute(
-            "UPDATE messages SET sender = ? WHERE id = ? AND sender = ?",
-            (sender, existing["message_id"], APP_USERNAME),
+            "UPDATE messages SET sender = ?, content = ? WHERE id = ?",
+            (sender, content, existing["message_id"]),
         )
         conn.commit()
         conn.close()
