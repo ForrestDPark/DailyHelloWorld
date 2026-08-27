@@ -8,18 +8,29 @@
 기록과 실제 Git 상태를 자동으로 대조해서 알려준다.
 
 Notion 페이지: https://app.notion.com/p/3b532a1eae8080d6b6edda0d0afba7a1
-페이지 안의 기존 콜아웃(운영 규칙)과 날짜별 토글(예: "## 2026-08-10 {toggle=true}")
-구조를 그대로 따른다 — 새 포맷을 만들지 않는다.
+페이지 안의 날짜별 토글(예: "## 2026-08-10 {toggle=true}") 구조를 그대로
+따른다 — 새 포맷을 만들지 않는다.
 
-★ 중요한 제약(2026-08-09~12 세션에서 실측 확인): 이 워크스페이스의 Notion API
-버전은 블록 추가 요청의 `after` 파라미터를 지원하지 않는다(HTTP 400
-"body.after should be not present"). 그래서 "페이지 맨 위" 순서를 유지하려면
-전체 페이지 최상위 자식 블록을 통째로 지우고 다시 쓰는 방법밖에 없다 — 이때
-GET으로 받은 블록을 그대로 다시 PATCH에 넣으면 `icon: null` 같은 필드 때문에
-validation_error가 난다(실측 확인). 그래서 이 스크립트는 블록을 읽을 때 필요한
-필드만 화이트리스트로 뽑아 자체 구조로 변환하고(`_read_block_tree`), 쓸 때도
-그 구조에서 새로 유효한 블록만 만든다(`_block_to_payload`) — GET 응답을 절대
-그대로 재사용하지 않는다.
+★★ 2026-08-28 데이터 유실 사고: 예전엔 "페이지 맨 위 = 최신"을 유지하려고
+전체 최상위 블록을 지운 뒤 처음부터 다시 쓰는 방식(delete-then-rewrite)을
+썼다. 그런데 몇 달치 기록이 누적되면서 재작성 payload가 Notion의 요청 크기
+한도를 넘겨 `HTTP 413 Payload Too Large`가 났고 — 삭제는 이미 끝난 뒤였던
+탓에 페이지가 통째로 비어버렸다(복구는 Notion 자체 "페이지 기록"에 의존).
+그래서 **삭제를 아예 없앴다.** 이제 `cmd_add`는 항상 append만 한다 —
+오늘 날짜 토글이 있으면 그 토글의 **끝**에, 없으면 페이지의 **끝**에 새
+토글을 만들어 붙인다. 대신 "최신이 맨 위" 정렬은 포기했다(이제 페이지는
+위→아래로 오래된 순서, 날짜 토글 안도 오래된 항목이 위) — 안전이 정렬보다
+우선이라는 판단. 이 변경 이전에 쌓인 기록(있다면)은 예전의 최신-먼저
+순서로 남아있을 수 있어 그 경계에서 순서가 한 번 꼬일 수 있다.
+
+★ 중요한 제약(2026-08-09~12 세션에서 실측 확인, 지금도 유효): 이 워크스페이스의
+Notion API 버전은 블록 추가 요청의 `after` 파라미터를 지원하지 않는다(HTTP 400
+"body.after should be not present") — 그래서 애초에 "맨 위에 끼워넣기"가
+불가능했던 것도 위 설계 변경의 배경이다. GET으로 받은 블록을 그대로 다시
+PATCH에 넣으면 `icon: null` 같은 필드 때문에 validation_error가 나므로
+(실측 확인), 블록을 읽을 때는 필요한 필드만 화이트리스트로 뽑아 자체 구조로
+변환하고(`_read_block_tree`), 쓸 때도 그 구조에서 새로 유효한 블록만
+만든다(`_block_to_payload`) — 지금은 `cmd_check`의 읽기 전용 조회에서만 쓴다.
 """
 
 from __future__ import annotations
@@ -201,15 +212,6 @@ def _append_children(parent_id: str, payloads: list[dict[str, Any]], token: str)
         _notion_request("PATCH", f"blocks/{parent_id}/children", token, {"children": payloads[start:start + 50]})
 
 
-def _delete_all_children(parent_id: str, token: str) -> None:
-    while True:
-        existing = _list_children(parent_id, token)
-        if not existing:
-            break
-        for child in existing:
-            _notion_request("DELETE", f"blocks/{child['id']}", token)
-
-
 # ════════════════════════════════════════════════════════════
 # 날짜 토글 파싱 헬퍼
 # ════════════════════════════════════════════════════════════
@@ -304,59 +306,54 @@ def _build_entry_nodes(args: argparse.Namespace, git_info: dict[str, Any] | None
 # add — 새 항목을 페이지에 반영
 # ════════════════════════════════════════════════════════════
 
+def _find_today_toggle_id(token: str, today: str) -> str | None:
+    """맨 위 레벨만 얕게 훑어 오늘 날짜 토글의 block id를 찾는다(전체 트리를
+    읽을 필요 없음 — 삭제·재작성을 안 하니 페이지 전체를 몰라도 된다)."""
+    for child in _list_children(JOURNAL_PAGE_ID, token):
+        if child["type"] != "heading_2":
+            continue
+        text = _plain_text_of(child["heading_2"].get("rich_text", []))
+        m = _DATE_HEADING_RE.match(text.strip())
+        if m and m.group(1) == today:
+            return child["id"]
+    return None
+
+
 def cmd_add(args: argparse.Namespace) -> None:
+    """★ 2026-08-28 이후: append-only. 기존 콘텐츠를 절대 지우지 않는다 —
+    실패해도 최악의 경우 "이번 항목이 안 붙었다" 정도지, 과거 기록이
+    사라지는 일은 이제 구조적으로 불가능하다(모듈 docstring의 데이터 유실
+    사고 참고)."""
     repo_dir = Path(args.repo).resolve()
     token = _notion_token()
 
     git_info = None if args.no_git else _git_head_info(repo_dir)
     entry_nodes = _build_entry_nodes(args, git_info)
-
-    print("📖 기존 페이지 구조를 읽는 중...")
-    top_nodes = _read_block_tree(JOURNAL_PAGE_ID, token)
-
-    callout = None
-    date_groups: list[dict[str, Any]] = []
-    for node in top_nodes:
-        if node["type"] == "callout" and callout is None:
-            callout = node
-            continue
-        date_groups.append(node)
+    entry_payloads = [_block_to_payload(n) for n in entry_nodes]
 
     today = _kst_now().strftime("%Y-%m-%d")
-    target_group = None
-    for group in date_groups:
-        if _date_of(group) == today:
-            target_group = group
-            break
-
-    if target_group is not None:
-        target_group.setdefault("children", [])[0:0] = entry_nodes
-        print(f"➕ 기존 {today} 토글에 항목 추가")
-    else:
-        new_group = {
-            "type": "heading_2",
-            "rich_text": _rich_text(today),
-            "is_toggleable": True,
-            "children": entry_nodes,
-        }
-        date_groups.insert(0, new_group)
-        print(f"🆕 새 날짜 토글 {today} 생성")
+    print("📖 오늘 날짜 토글이 이미 있는지 확인 중...")
+    today_toggle_id = _find_today_toggle_id(token, today)
 
     if args.dry_run:
         print("\n--- DRY RUN: 실제로 쓰지 않음 ---")
-        preview = [callout] if callout else []
-        preview += date_groups
-        for node in preview:
+        for node in entry_nodes:
             _print_node(node)
+        target = f"기존 {today} 토글 끝" if today_toggle_id else f"페이지 끝에 새 {today} 토글"
+        print(f"(대상: {target})")
         return
 
-    ordered = ([callout] if callout else []) + date_groups
-    payloads = [_block_to_payload(n) for n in ordered]
-
-    print("🗑️  기존 최상위 블록 전체 삭제 중...")
-    _delete_all_children(JOURNAL_PAGE_ID, token)
-    print("✍️  새 구조로 재작성 중...")
-    _append_children(JOURNAL_PAGE_ID, payloads, token)
+    if today_toggle_id:
+        _append_children(today_toggle_id, entry_payloads, token)
+        print(f"➕ 기존 {today} 토글 끝에 항목 추가")
+    else:
+        new_toggle_payload = {
+            "object": "block",
+            "type": "heading_2",
+            "heading_2": {"rich_text": _rich_text(today), "is_toggleable": True, "children": entry_payloads},
+        }
+        _append_children(JOURNAL_PAGE_ID, [new_toggle_payload], token)
+        print(f"🆕 새 날짜 토글 {today} 생성(페이지 맨 끝에 추가됨)")
     print(f"✅ 완료 — https://www.notion.so/{JOURNAL_PAGE_ID.replace('-', '')}")
 
 
@@ -386,19 +383,26 @@ _PROCESS_PATTERNS = [
 def _find_latest_logged_commit(token: str) -> str | None:
     """★ 2026-08-12: 기존 페이지 실측 결과, heading_3(시간·에이전트·제목) 다음의
     불릿들은 heading_3의 자식이 아니라 날짜 토글 밑에 나란히(flat) 있다 — 중첩
-    구조를 가정하지 않고 날짜 토글의 모든 자식을 그대로 훑는다."""
+    구조를 가정하지 않고 날짜 토글의 모든 자식을 그대로 훑는다.
+
+    ★ 2026-08-28: cmd_add가 append-only로 바뀌면서 페이지 순서가 "오래된 게
+    위, 최신이 아래"로 뒤집혔다(날짜 토글 사이도, 한 토글 안 항목 사이도).
+    그래서 날짜 문자열을 실제로 비교해 가장 최근 날짜를 찾고, 그 안에서도
+    뒤에서부터(가장 최근에 추가된 항목부터) 훑는다 — 첫 항목이 최신이라고
+    가정하던 예전 로직 그대로 두면 이제 가장 오래된 커밋을 최신으로
+    잘못 짚는다."""
     top_nodes = _read_block_tree(JOURNAL_PAGE_ID, token)
-    for node in top_nodes:
-        if node["type"] != "heading_2" or not _date_of(node):
-            continue
-        for child in node.get("children", []):
+    date_nodes = [(d, n) for n in top_nodes if (d := _date_of(n))]
+    date_nodes.sort(key=lambda pair: pair[0])
+    for _, node in reversed(date_nodes):
+        for child in reversed(node.get("children", [])):
             if child["type"] != "bulleted_list_item":
                 continue
             text = _plain_text_of(child.get("rich_text", []))
             m = _COMMIT_HASH_RE.search(text)
             if m:
                 return m.group(1)
-        # 이 날짜 토글에 Git 기록이 하나도 없으면(전부 진행 중) 다음 날짜로 계속 찾음
+        # 이 날짜 토글에 Git 기록이 하나도 없으면(전부 진행 중) 이전 날짜로 계속 찾음
     return None
 
 

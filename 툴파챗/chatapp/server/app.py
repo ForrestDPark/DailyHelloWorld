@@ -914,6 +914,25 @@ def list_personas():
     return [r["name"] for r in rows]
 
 
+@app.get("/api/users")
+def list_users_public(request: Request):
+    """★ "친구 목록에 일반 가입자들도 뜨게 해달라" 요청(2026-08-28) — 페르소나
+    말고 실제 가입 계정도 친구 탭에 보여준다. /api/admin/users(소유자 전용,
+    유이 권한 부여 여부 등 관리 정보 포함)와 달리 이건 아이디·가입일만 내려주고
+    로그인한 계정이면 누구나 볼 수 있다. 공유 링크 읽기 전용 방문자는 실제
+    계정이 아니므로 제외한다."""
+    user = getattr(request.state, "user", None)
+    if user is None and not getattr(request.state, "can_write", False):
+        raise HTTPException(status_code=403, detail="로그인이 필요합니다")
+    exclude = user["username"] if user else None
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT username, is_owner, created_at FROM users ORDER BY created_at"
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows if r["username"] != exclude]
+
+
 @app.get("/api/persona_profiles")
 def list_persona_profiles(request: Request):
     """"툴파들의 성격을 간단히 확인할 수 있는 페이지" 요청(2026-08-26) —

@@ -810,29 +810,95 @@ function renderCurrentList() {
     return;
   }
   const friends = rooms.filter((r) => r.room_id !== "group" && !r.is_group_room);
-  if (!friends.length) {
+  if (!friends.length && !usersCache.length) {
     roomListEl.innerHTML = '<div class="empty-hint">아직 친구가 없습니다</div>';
     return;
   }
   const { groups, orderedKeys } = groupRooms(friends);
   for (const key of orderedKeys) {
-    const members = groups.get(key);
-    const isCollapsed = collapsedGroups.has(key);
-    const header = document.createElement("button");
-    header.type = "button";
-    header.className = "group-header";
-    header.setAttribute("aria-expanded", String(!isCollapsed));
-    header.innerHTML = `
-      <span class="group-toggle-arrow">${isCollapsed ? "▸" : "▾"}</span>
-      <span class="group-header-label">${escapeHtml(key)}</span>
-      <span class="group-count">${members.length}</span>
-    `;
-    header.addEventListener("click", () => toggleGroupCollapse(key));
-    roomListEl.appendChild(header);
-    if (!isCollapsed) {
-      for (const r of members) roomListEl.appendChild(renderRoomItem(r));
+    renderCollapsibleSection(key, groups.get(key), renderRoomItem);
+  }
+  // ★ "친구 목록에 일반 가입자들도 뜨게 해달라" 요청(2026-08-28) — 페르소나
+  // 그룹들 아래에 "사람" 섹션을 똑같은 접기/펼치기 UI로 붙인다.
+  if (usersCache.length) {
+    renderCollapsibleSection("사람", usersCache, renderPersonItem);
+  }
+}
+
+function renderCollapsibleSection(key, items, renderItemFn) {
+  const isCollapsed = collapsedGroups.has(key);
+  const header = document.createElement("button");
+  header.type = "button";
+  header.className = "group-header";
+  header.setAttribute("aria-expanded", String(!isCollapsed));
+  header.innerHTML = `
+    <span class="group-toggle-arrow">${isCollapsed ? "▸" : "▾"}</span>
+    <span class="group-header-label">${escapeHtml(key)}</span>
+    <span class="group-count">${items.length}</span>
+  `;
+  header.addEventListener("click", () => toggleGroupCollapse(key));
+  roomListEl.appendChild(header);
+  if (!isCollapsed) {
+    for (const item of items) roomListEl.appendChild(renderItemFn(item));
+  }
+}
+
+// ★ 2026-08-28: 친구 탭의 "사람" 카드. 사람끼리 1:1 채팅은 없어서(페르소나만
+// 대화 상대) 눌러도 방으로 이동하지 않고, "내가 만든 방에 초대"하는 단축
+// 메뉴만 띄운다 — 사용자가 직접 고른 동작(다른 옵션: 정보만 보여주기).
+function renderPersonItem(u) {
+  const item = document.createElement("div");
+  item.className = "room-item";
+  item.tabIndex = 0;
+  item.setAttribute("role", "button");
+  const joined = u.created_at ? u.created_at.slice(0, 10) : "";
+  item.innerHTML = `
+    <div class="avatar">${escapeHtml(u.username.trim().charAt(0) || "?")}</div>
+    <div class="room-info">
+      <div class="room-name">${escapeHtml(u.username)}${u.is_owner ? " 👑" : ""}</div>
+      <div class="room-preview">${joined ? `${joined} 가입` : "가입자"}</div>
+    </div>
+  `;
+  const open = (event) => {
+    event.stopPropagation();
+    closeFriendMenus();
+    openInviteRoomPicker(item, u.username);
+  };
+  item.addEventListener("click", open);
+  item.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") open(event); });
+  return item;
+}
+
+// ★ 2026-08-28: 사람 카드를 누르면 내가 만든 단체톡방(is_mine) 중 하나를
+// 골라 그 자리에서 바로 초대한다 — 방에 직접 들어가서 초대 패널을 여는
+// 번거로움을 줄인 단축 경로(사용자가 직접 고른 정책).
+function openInviteRoomPicker(item, username) {
+  const menu = document.createElement("div");
+  menu.className = "friend-action-menu";
+  item.classList.add("menu-open");
+  // ★ is_mine은 내가 만든 커스텀 방뿐 아니라 내가 만든 페르소나 1:1 방에도
+  // 붙는다(서버 list_rooms, "한자선생님" 같은 개인 페르소나 케이스) — 사람을
+  // 초대할 수 있는 건 단체방(is_group_room)뿐이라 같이 확인해야 한다.
+  const myRooms = [...roomsCache.values()].filter((r) => r.is_mine && r.is_group_room);
+  if (!myRooms.length) {
+    const hint = document.createElement("div");
+    hint.className = "empty-hint";
+    hint.textContent = "초대할 수 있는 내 방이 없습니다";
+    menu.appendChild(hint);
+  } else {
+    for (const r of myRooms) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = `${r.label}에 초대`;
+      button.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        closeFriendMenus();
+        await inviteUserToRoom(username, r.room_id);
+      });
+      menu.appendChild(button);
     }
   }
+  item.appendChild(menu);
 }
 
 function setListMode(mode) {
@@ -893,6 +959,12 @@ document.addEventListener("click", (event) => {
   }
 });
 
+// ★ "친구 목록에 일반 가입자들도 뜨게 해달라" 요청(2026-08-28) — 친구 탭에
+// 페르소나 그룹과 나란히 "사람" 섹션을 보여준다. 방 목록 실패와 별개 요청이라
+// 사람 목록은 실패해도(권한 없음 등) 조용히 빈 배열로 두고 방 목록은 그대로
+// 보여준다.
+let usersCache = [];
+
 async function showRoomList() {
   currentRoom = null;
   if (pollTimer) clearTimeout(pollTimer);
@@ -903,7 +975,13 @@ async function showRoomList() {
     const res = await apiFetch("/api/rooms");
     const rooms = await res.json();
     roomsCache = new Map(rooms.map((r) => [r.room_id, r]));
-    if (!rooms.length) {
+    try {
+      usersCache = await (await apiFetch("/api/users")).json();
+    } catch (e) {
+      usersCache = [];
+      if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
+    }
+    if (!rooms.length && !usersCache.length) {
       roomListEl.innerHTML = '<div class="empty-hint">아직 페르소나가 없습니다</div>';
       return;
     }
@@ -1130,14 +1208,16 @@ async function loadRoomUserMembers() {
   }
 }
 
-async function inviteUserToRoom(username) {
+// ★ roomId를 인자로 받게 일반화(2026-08-28) — 원래 방 안 초대 패널에서만
+// 쓰던 걸, 친구 탭의 "사람" 카드에서 "내 방에 초대" 단축 메뉴로도 재사용.
+async function inviteUserToRoom(username, roomId = currentRoom) {
   try {
-    await apiFetch(`/api/rooms/${encodeURIComponent(currentRoom)}/invite_user`, {
+    await apiFetch(`/api/rooms/${encodeURIComponent(roomId)}/invite_user`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username }),
     });
-    await loadRoomUserMembers();
+    if (roomId === currentRoom) await loadRoomUserMembers();
   } catch (e) {
     if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
   }
