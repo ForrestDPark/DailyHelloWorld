@@ -28,6 +28,7 @@ worker/persona_worker.py가 이 서버를 폴링해서 처리한다(자세한 �
 백그라운드 프로세스라 쿠키를 못 씀) 소유자 전용 대체 인증 경로로 남겨뒀다."""
 import base64
 import datetime
+import hashlib
 import os
 import re
 import secrets
@@ -1583,7 +1584,7 @@ class WorkerAnnouncement(BaseModel):
 
 @app.post("/api/worker/announcements")
 def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] = Header(None)):
-    """로컬 자동화가 그룹방에 공지를 남기고 구성원 전원의 토론을 시작한다."""
+    """주석가 한 명이 분석을 소개하고 나머지 그룹원의 토론을 시작한다."""
     _check_worker_auth(authorization)
     room_id = body.room_id.strip()
     content = body.content.strip()
@@ -1600,31 +1601,74 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
         conn.close()
         raise HTTPException(status_code=404, detail="구성원이 있는 그룹방을 찾지 못했습니다")
 
-    marker = f"[automation:{dedupe_key}]"
-    existing = conn.execute(
-        "SELECT id FROM messages WHERE room_id = ? AND content LIKE ? ORDER BY id DESC LIMIT 1",
-        (room_id, f"%{marker}%"),
-    ).fetchone()
-    if existing:
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS automation_announcements (
+               dedupe_key TEXT PRIMARY KEY,
+               message_id INTEGER NOT NULL,
+               created_at TEXT NOT NULL
+           )"""
+    )
+    commentators = [name for name in targets if name != "손무"]
+    if not commentators:
         conn.close()
-        return {"ok": True, "duplicate": True, "message_id": existing["id"], "notified": []}
+        raise HTTPException(status_code=409, detail="분석을 소개할 전통 주석가가 없습니다")
+    digest = hashlib.sha256(dedupe_key.encode("utf-8")).digest()
+    sender = commentators[int.from_bytes(digest[:4], "big") % len(commentators)]
+    existing = conn.execute(
+        "SELECT message_id FROM automation_announcements WHERE dedupe_key = ?", (dedupe_key,)
+    ).fetchone()
+    marker = f"[automation:{dedupe_key}]"
+    if not existing:
+        legacy = conn.execute(
+            "SELECT id, content FROM messages WHERE room_id = ? AND content LIKE ? ORDER BY id DESC LIMIT 1",
+            (room_id, f"%{marker}%"),
+        ).fetchone()
+        if legacy:
+            cleaned = legacy["content"].replace(f"\n\n{marker}", "").replace(marker, "").strip()
+            conn.execute(
+                "UPDATE messages SET content = ?, sender = ? WHERE id = ?",
+                (cleaned, sender, legacy["id"]),
+            )
+            conn.execute(
+                "INSERT OR IGNORE INTO automation_announcements (dedupe_key, message_id, created_at) VALUES (?, ?, ?)",
+                (dedupe_key, legacy["id"], _now()),
+            )
+            conn.commit()
+            existing = {"message_id": legacy["id"]}
+    if existing:
+        conn.execute(
+            "UPDATE messages SET sender = ? WHERE id = ? AND sender = ?",
+            (sender, existing["message_id"], APP_USERNAME),
+        )
+        conn.commit()
+        conn.close()
+        return {
+            "ok": True, "duplicate": True, "message_id": existing["message_id"],
+            "announcer": sender, "notified": [],
+        }
 
     now = _now()
-    sender = APP_USERNAME or "automation"
-    stored_content = f"{content}\n\n{marker}"
     cursor = conn.execute(
         "INSERT INTO messages (room_id, sender, content, created_at) VALUES (?, ?, ?, ?)",
-        (room_id, sender, stored_content, now),
+        (room_id, sender, content, now),
     )
-    for persona_name in targets:
+    message_id = cursor.lastrowid
+    conn.execute(
+        "INSERT INTO automation_announcements (dedupe_key, message_id, created_at) VALUES (?, ?, ?)",
+        (dedupe_key, message_id, now),
+    )
+    notified = [persona_name for persona_name in targets if persona_name != sender]
+    for persona_name in notified:
         conn.execute(
             "INSERT INTO pending_turns (persona_name, room_id, status, created_at) VALUES (?, ?, 'pending', ?)",
             (persona_name, room_id, now),
         )
     conn.commit()
-    message_id = cursor.lastrowid
     conn.close()
-    return {"ok": True, "duplicate": False, "message_id": message_id, "notified": targets}
+    return {
+        "ok": True, "duplicate": False, "message_id": message_id,
+        "announcer": sender, "notified": notified,
+    }
 
 
 @app.post("/api/worker/redirect_turn")

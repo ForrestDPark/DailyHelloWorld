@@ -837,6 +837,27 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function appendLinkifiedText(container, text) {
+  const urlPattern = /https?:\/\/[^\s<]+/g;
+  let cursor = 0;
+  for (const match of text.matchAll(urlPattern)) {
+    if (match.index > cursor) container.appendChild(document.createTextNode(text.slice(cursor, match.index)));
+    let url = match[0];
+    let suffix = "";
+    while (/[),.!?\]}]$/.test(url)) { suffix = url.slice(-1) + suffix; url = url.slice(0, -1); }
+    const link = document.createElement("a");
+    link.href = url;
+    link.textContent = url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.className = "message-link";
+    container.appendChild(link);
+    if (suffix) container.appendChild(document.createTextNode(suffix));
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < text.length) container.appendChild(document.createTextNode(text.slice(cursor)));
+}
+
 async function showChatView(roomId) {
   currentRoom = roomId;
   lastId = 0;
@@ -1133,7 +1154,7 @@ async function editMessage(message, hostEl) {
     if (!res.ok) { alert((await res.json()).detail || "수정하지 못했습니다"); return; }
     message.content = trimmed;
     const body = hostEl.querySelector(".body");
-    if (body) body.textContent = trimmed;
+    if (body) { body.replaceChildren(); appendLinkifiedText(body, trimmed); }
   } catch (e) {
     if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
   }
@@ -1234,11 +1255,11 @@ function appendMessage(m) {
     const rest = m.content.replace(IMAGE_MARKER_RE, "").trim();
     if (rest) {
       const caption = document.createElement("div");
-      caption.textContent = rest;
+      appendLinkifiedText(caption, rest);
       body.appendChild(caption);
     }
   } else {
-    body.textContent = m.content;
+    appendLinkifiedText(body, m.content);
   }
   const time = document.createElement("div");
   time.className = "msg-time";

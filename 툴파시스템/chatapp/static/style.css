@@ -725,6 +725,8 @@ main#messages {
    아니라 다른 사람이 쓴 말"이라는 게 한눈에 보여야 하므로. */
 .msg-other .body { background: var(--bubble-other); color: var(--bubble-other-fg); }
 .msg .body .chat-image { max-width: 100%; border-radius: 12px; display: block; }
+.msg .body .message-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
+.msg-user .body .message-link { color: inherit; font-weight: 600; }
 /* ★ 채팅 친 시각(2026-08-25 요청) — 말풍선 옆에 작게 */
 .msg .msg-time { font-size: 11px; opacity: 0.45; padding: 0 4px; }
 
