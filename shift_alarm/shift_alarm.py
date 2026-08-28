@@ -4678,13 +4678,14 @@ class ShiftAlarmApp(rumps.App):
         if not from_personas:
             return
         tulpachat_url = get_tulpachat_url()
-        if len(from_personas) == 1:
-            m = from_personas[0]
-            preview = m["content"][:60] + ("…" if len(m["content"]) > 60 else "")
-            notify_spoken("🧑‍🤝‍🧑 툴파챗 새 메시지", m["sender"], preview, url=tulpachat_url)
-        else:
-            names = ", ".join(sorted({m["sender"] for m in from_personas}))
-            notify_spoken("🧑‍🤝‍🧑 툴파챗 새 메시지", f"{len(from_personas)}건", names, url=tulpachat_url)
+        # ★ "알람이 너무 과한 거 같아, 누구에게 메시지 왔다 이런 식으로만
+        # 간단하게 알람 오게 해달라" 요청(2026-08-28) — 예전엔 메시지 내용
+        # 미리보기까지 화면에 띄우고 그대로 음성으로 읽어서, 대화가 많이
+        # 오가는 방에서는 알림이 계속 시끄러웠다. 이제는 누가 보냈는지만
+        # 짧게 알린다(내용은 앱에서 직접 확인).
+        senders = sorted({m["sender"] for m in from_personas})
+        label = senders[0] if len(senders) == 1 else f"{senders[0]} 외 {len(senders) - 1}명"
+        notify_spoken("🧑‍🤝‍🧑 툴파챗 새 메시지", "", f"{label}에게 메시지 왔어요", url=tulpachat_url)
 
     def _check_high_cpu(self, _):
         """1분마다 CPU 과부하 프로세스를 표본 조사한다. `ps` 호출이 느려질
