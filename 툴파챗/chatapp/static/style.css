@@ -935,7 +935,7 @@ main#messages {
 
 form#composer {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 8px;
   padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
@@ -956,12 +956,23 @@ body.read-only #reply-banner {
 }
 #input {
   flex: 1;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  max-height: 132px;
   padding: 10px 14px;
   border-radius: 20px;
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--fg);
+  font-family: inherit;
   font-size: 16px; /* iOS 확대 방지용 16px 이상 */
+  line-height: 22px;
+  resize: none;
+  overflow-y: hidden;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 #input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 button[type="submit"] {

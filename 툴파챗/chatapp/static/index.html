@@ -161,7 +161,8 @@
     <form id="composer">
       <button id="upload-btn" type="button" aria-label="사진 첨부" class="icon-button"><svg><use href="#icon-image"/></svg></button>
       <input id="image-input" type="file" accept="image/*" class="hidden">
-      <input id="input" type="text" placeholder="메시지 입력" autocomplete="off">
+      <textarea id="input" rows="1" placeholder="메시지 입력" autocomplete="off"
+                aria-label="메시지 입력"></textarea>
       <button type="submit">보내기</button>
     </form>
   </div>

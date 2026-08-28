@@ -1959,12 +1959,37 @@ async function sendMessage(content) {
   }
 }
 
+// ★ 모바일에서 긴 메시지가 한 줄 입력창 밖으로 숨어 작성 내용을
+// 확인하기 어렵던 문제(2026-08-28) — textarea의 scrollHeight에 맞춰
+// 1~6줄까지 자동으로 늘리고, 그 이상은 입력창 안에서 스크롤한다.
+// 터치 기기의 줄바꿈 키는 실제 줄바꿈으로 유지하고, 데스크톱에서만
+// Enter=전송, Shift+Enter=줄바꿈으로 기존 키보드 흐름을 유지한다.
+const messageInput = document.getElementById("input");
+const MESSAGE_INPUT_MAX_HEIGHT = 132;
+
+function resizeMessageInput() {
+  messageInput.style.height = "auto";
+  const nextHeight = Math.min(messageInput.scrollHeight, MESSAGE_INPUT_MAX_HEIGHT);
+  messageInput.style.height = `${nextHeight}px`;
+  messageInput.style.overflowY = messageInput.scrollHeight > MESSAGE_INPUT_MAX_HEIGHT ? "auto" : "hidden";
+}
+
+messageInput.addEventListener("input", resizeMessageInput);
+messageInput.addEventListener("keydown", (e) => {
+  const desktopKeyboard = window.matchMedia("(pointer: fine)").matches;
+  if (desktopKeyboard && e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    document.getElementById("composer").requestSubmit();
+  }
+});
+resizeMessageInput();
+
 document.getElementById("composer").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const input = document.getElementById("input");
-  const content = input.value.trim();
+  const content = messageInput.value.trim();
   if (!content) return;
-  input.value = "";
+  messageInput.value = "";
+  resizeMessageInput();
   await sendMessage(content);
 });
 
