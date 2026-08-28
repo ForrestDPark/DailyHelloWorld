@@ -4597,10 +4597,29 @@ class ShiftAlarmApp(rumps.App):
     # ── 근무 전후 절전 방지 (SSH 접속용) ───────────────────────
 
     def _check_stay_awake(self, _):
-        # Shift Alarm 프로세스가 살아 있는 동안에는 시간표나 수동 토글과
-        # 무관하게 원격 UI 접속 가능 상태를 항상 유지한다.
-        start_caffeinate()
-        self.stay_awake_item.title = "🌙 원격 작업 대기 중 (자동 잠금 방지)"
+        # ★ 2026-08-23: "Shift Alarm 실행 중 원격 접속 항상 유지"로 바꿨다가,
+        # 2026-08-28 replayd(macOS 화면 시간 데몬) CPU 폭주 원인으로
+        # 의심돼(맥이 8월 23일 이후 한 번도 절전에 안 들어감 — caffeinate가
+        # 끊김 없이 16시간 넘게 돎) 근무 전후 1시간만 절전 방지하던 원래
+        # 방식으로 되돌렸다. "완전 원복" 선택 — 이 시간 밖에서는 맥이 잠들
+        # 수 있으므로 원격 SSH 접속이 안 될 수 있다(그때는 아래 "절전 방지
+        # 항상 켜기" 수동 토글을 켜면 됨).
+        if self.config.get("stay_awake_always", False):
+            start_caffeinate()
+            self.stay_awake_item.title = "🌙 절전 방지 켜짐 (수동, 항상)"
+            return
+
+        now = datetime.datetime.now()
+        window = get_stay_awake_window(self.schedule, now, today_override=self._today_override())
+        if window:
+            start_caffeinate()
+            shift, s, e = window
+            self.stay_awake_item.title = (
+                f"🌙 절전 방지 켜짐 ({s.strftime('%H:%M')}~{e.strftime('%H:%M')}, {shift})"
+            )
+        else:
+            stop_caffeinate()
+            self.stay_awake_item.title = "🌙 절전 방지 꺼짐 (근무 전후 1시간 아님)"
 
     def toggle_stay_awake_always(self, _):
         self.config["stay_awake_always"] = not self.config.get("stay_awake_always", False)
@@ -5767,6 +5786,9 @@ class ShiftAlarmApp(rumps.App):
         )
         more_menu.add(rumps.MenuItem(storage_text))
         more_menu.add(rumps.MenuItem(self.stay_awake_item.title))
+        always_awake_on = self.config.get("stay_awake_always", False)
+        always_awake_label = f"{'✓ ' if always_awake_on else ''}🌙 절전 방지 항상 켜기 (원격 접속용)"
+        more_menu.add(rumps.MenuItem(always_awake_label, callback=self.toggle_stay_awake_always))
 
         more_menu.add(None)
         reading_menu = rumps.MenuItem("📚 독서 도구")
