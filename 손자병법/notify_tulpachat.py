@@ -4,6 +4,7 @@
 import argparse
 import html
 import json
+import os
 import re
 import subprocess
 import urllib.request
@@ -35,6 +36,9 @@ def read_page(path: Path) -> tuple[int, str, str]:
 
 
 def keychain_token() -> str:
+    env_token = os.environ.get("CHATAPP_WORKER_TOKEN", "").strip()
+    if env_token:
+        return env_token
     result = subprocess.run(
         ["security", "find-generic-password", "-s", KEYCHAIN_SERVICE, "-w"],
         check=True,
