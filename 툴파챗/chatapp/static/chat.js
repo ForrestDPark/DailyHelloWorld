@@ -901,23 +901,50 @@ function displayName(name) {
 function lastReadKey(roomId) {
   return `tulpa_last_read_${myUsername || "guest"}_${roomId}`;
 }
+function legacyLastReadKey(roomId) {
+  return `tulpa_last_read_${roomId}`;
+}
 function getLastRead(roomId) {
   const serverValue = roomsCache.get(roomId)?.last_read_id || 0;
-  return Math.max(serverValue, parseInt(localStorage.getItem(lastReadKey(roomId)) || "0", 10));
+  const accountValue = parseInt(localStorage.getItem(lastReadKey(roomId)) || "0", 10);
+  // 계정별 키를 도입하기 전 이 브라우저에서 읽었던 위치도 한 번 이어받는다.
+  const legacyValue = amOwner
+    ? parseInt(localStorage.getItem(legacyLastReadKey(roomId)) || "0", 10)
+    : 0;
+  return Math.max(serverValue, accountValue, legacyValue);
 }
 function markRoomRead(roomId, messageId) {
   if (!messageId) return;
-  const current = getLastRead(roomId);
-  if (messageId > current) {
-    localStorage.setItem(lastReadKey(roomId), String(messageId));
-    const room = roomsCache.get(roomId);
-    if (room) room.last_read_id = messageId;
+  const accountKey = lastReadKey(roomId);
+  const accountValue = parseInt(localStorage.getItem(accountKey) || "0", 10);
+  if (messageId > accountValue) {
+    localStorage.setItem(accountKey, String(messageId));
+  }
+  const room = roomsCache.get(roomId);
+  const serverValue = room?.last_read_id || 0;
+  // 로컬 값이 이미 앞서 있어도 서버가 뒤처졌다면 반드시 업로드한다. 예전에는
+  // getLastRead()의 최댓값만 비교해 이 경우 서버 동기화를 영원히 건너뛰었다.
+  if (messageId > serverValue) {
     apiFetch("/api/read-state", {
       method: "PUT", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({room_id: roomId, last_message_id: messageId}),
+      keepalive: true,
+    }).then((res) => {
+      if (res.ok && room) room.last_read_id = Math.max(room.last_read_id || 0, messageId);
     }).catch(() => {});
   }
 }
+
+window.addEventListener("pagehide", () => {
+  if (!currentRoom || !lastId || !myUsername) return;
+  // 탭 닫기·Safari 페이지 전환 직전에도 쿠키 인증을 포함한 작은 요청은
+  // keepalive로 완료될 수 있게 한다.
+  fetch("/api/read-state", {
+    method: "PUT", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({room_id: currentRoom, last_message_id: lastId}),
+    credentials: "same-origin", keepalive: true,
+  }).catch(() => {});
+});
 
 // ★ "왼쪽으로 밀면 삭제나 수정 나오는 기능이 있으면 좋겠어" 요청
 // (2026-08-28) — 내가 만든 커스텀 방(room_id가 "custom_"로 시작)에만
@@ -1433,6 +1460,12 @@ async function showRoomList() {
     const res = await apiFetch("/api/rooms");
     const rooms = await res.json();
     roomsCache = new Map(rooms.map((r) => [r.room_id, r]));
+    // 예전 비계정 localStorage 또는 현재 계정 localStorage가 서버보다 앞선
+    // 방은 목록 진입 시 즉시 서버로 마이그레이션한다.
+    for (const room of rooms) {
+      const knownRead = getLastRead(room.room_id);
+      if (knownRead) markRoomRead(room.room_id, knownRead);
+    }
     try {
       usersCache = await (await apiFetch("/api/users")).json();
     } catch (e) {
