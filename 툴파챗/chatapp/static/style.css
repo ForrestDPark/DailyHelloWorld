@@ -1005,9 +1005,11 @@ main#messages.has-custom-background {
   border-radius: 16px;
   white-space: pre-wrap;
   word-break: break-word;
-  user-select: text;
-  -webkit-user-select: text;
-  -webkit-touch-callout: default;
+  /* iOS Safari 기본 선택 팝업과 앱의 길게 누르기 메뉴가 겹치지 않게 한다.
+     부분 선택은 .select-copy-text 안에서만 명시적으로 허용한다. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 .msg-user .body { background: var(--bubble-user); color: var(--bubble-user-fg); }
 .msg-persona .body { background: var(--bubble-persona); color: var(--bubble-persona-fg); }
