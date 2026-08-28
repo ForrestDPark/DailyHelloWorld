@@ -435,6 +435,11 @@ async function renderAdminPersonas() {
   list.innerHTML = '<div class="empty-hint">불러오는 중...</div>';
   try {
     const personas = await (await apiFetch("/api/admin/personas")).json();
+    // ★ "권민석 프로필설정이 너무 적나라한데 일반 사용자도 다 보이는 거야?
+    // 실친이 오해할 소지가 있다" 요청(2026-08-28) — 공용 페르소나(관리자
+    // 소유)는 기본적으로 관리자만 프로필을 볼 수 있고, 여기서 사용자별로
+    // 예외를 켜고 끈다. 후보 목록이 필요해서 사용자 목록도 같이 받는다.
+    const otherUsers = (await (await apiFetch("/api/admin/users")).json()).filter((u) => !u.is_owner);
     list.innerHTML = "";
     for (const p of personas) {
       const card = document.createElement("div");
@@ -500,6 +505,39 @@ async function renderAdminPersonas() {
         errNote.className = "admin-persona-image-error";
         errNote.textContent = `⚠️ 이미지 생성 실패: ${p.image_job_error}`;
         card.append(errNote);
+      }
+      // ★ 공용 페르소나만 해당 — 사용자 소유 페르소나는 이미 그 사람 1:1
+      // 방처럼 만든 본인+관리자에게만 보여서 별도 권한 관리가 필요 없다.
+      if (!p.owner_username && otherUsers.length) {
+        const grantWrap = document.createElement("div");
+        grantWrap.className = "admin-persona-view-grants";
+        const grantTitle = document.createElement("div");
+        grantTitle.className = "admin-persona-view-grants-title";
+        grantTitle.textContent = "프로필 보기 허용 (기본: 관리자만)";
+        grantWrap.appendChild(grantTitle);
+        const grantList = document.createElement("div");
+        grantList.className = "admin-persona-view-grants-list";
+        const granted = new Set(p.view_grants || []);
+        for (const u of otherUsers) {
+          const chip = document.createElement("button");
+          chip.type = "button";
+          const isGranted = granted.has(u.username);
+          chip.className = "admin-grant-btn" + (isGranted ? " granted" : "");
+          chip.textContent = u.username;
+          chip.addEventListener("click", async () => {
+            try {
+              await apiFetch(`/api/admin/personas/${encodeURIComponent(p.name)}/view_grants/${encodeURIComponent(u.username)}`, {
+                method: isGranted ? "DELETE" : "POST",
+              });
+              renderAdminPersonas();
+            } catch (e) {
+              if (e.message !== "unauthorized" && e.message !== "forbidden") alert("권한 변경 실패");
+            }
+          });
+          grantList.appendChild(chip);
+        }
+        grantWrap.appendChild(grantList);
+        card.append(grantWrap);
       }
       list.appendChild(card);
     }

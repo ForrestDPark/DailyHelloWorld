@@ -636,8 +636,16 @@ def admin_list_personas(request: Request):
                   (SELECT j.error FROM persona_image_jobs j WHERE j.persona_name=p.name ORDER BY j.id DESC LIMIT 1) AS image_job_error
              FROM personas p ORDER BY p.name"""
     ).fetchall()
+    # ★ "페르소나 프로필 보기 권한" 요청(2026-08-28) — 관리 패널이 페르소나별로
+    # 누가 프로필을 볼 수 있는지 렌더할 수 있게 같이 내려준다.
+    grants_by_persona = {}
+    for r in conn.execute("SELECT persona_name, username FROM persona_view_grants").fetchall():
+        grants_by_persona.setdefault(r["persona_name"], []).append(r["username"])
     conn.close()
-    return [dict(r) for r in rows]
+    result = [dict(r) for r in rows]
+    for r in result:
+        r["view_grants"] = grants_by_persona.get(r["name"], [])
+    return result
 
 
 @app.delete("/api/admin/personas/{name}")
@@ -658,6 +666,41 @@ def admin_delete_persona(name: str, request: Request):
     conn.execute("DELETE FROM pending_turns WHERE room_id = ?", (name,))
     conn.execute("DELETE FROM room_invites WHERE persona_name = ?", (name,))
     conn.execute("DELETE FROM persona_image_jobs WHERE persona_name = ?", (name,))
+    conn.execute("DELETE FROM persona_view_grants WHERE persona_name = ?", (name,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.post("/api/admin/personas/{name}/view_grants/{username}")
+def admin_grant_persona_view(name: str, username: str, request: Request):
+    """"권민석 프로필설정이 너무 적나라한데 일반 사용자도 다 보이는 거야"
+    요청(2026-08-28) — 관리자가 특정 사용자에게 특정(관리자 소유) 페르소나
+    프로필 열람을 예외적으로 허용한다(ui_dev_grants와 같은 패턴)."""
+    _require_owner(request)
+    conn = get_conn()
+    if not conn.execute("SELECT 1 FROM personas WHERE name = ?", (name,)).fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="존재하지 않는 페르소나입니다")
+    if not conn.execute("SELECT 1 FROM users WHERE username = ?", (username,)).fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="존재하지 않는 계정입니다")
+    conn.execute(
+        "INSERT OR IGNORE INTO persona_view_grants (persona_name, username, granted_at) VALUES (?, ?, ?)",
+        (name, username, _now()),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.delete("/api/admin/personas/{name}/view_grants/{username}")
+def admin_revoke_persona_view(name: str, username: str, request: Request):
+    _require_owner(request)
+    conn = get_conn()
+    conn.execute(
+        "DELETE FROM persona_view_grants WHERE persona_name = ? AND username = ?", (name, username)
+    )
     conn.commit()
     conn.close()
     return {"ok": True}
@@ -1121,7 +1164,13 @@ def delete_my_avatar(request: Request):
 def list_persona_profiles(request: Request):
     """"툴파들의 성격을 간단히 확인할 수 있는 페이지" 요청(2026-08-26) —
     공개 페르소나(Notion 동기화분) 전부 + 내가 만든 개인 페르소나만 보여준다
-    (다른 사람의 개인 페르소나는 그 사람 1:1 방처럼 비공개 유지)."""
+    (다른 사람의 개인 페르소나는 그 사람 1:1 방처럼 비공개 유지).
+
+    ★ "권민석 프로필설정이 너무 적나라한데 일반 사용자도 다 보이는 거야?
+    실제 친군데 실친이 들어와서 봤을 때 오해의 소지가 있을 것 같다" 요청
+    (2026-08-28) — 관리자가 만든 페르소나(owner_username=NULL)는 실제
+    지인을 본뜬 경우가 많아 기본적으로 관리자만 프로필을 본다.
+    persona_view_grants에 명시적으로 등록된 사용자만 예외."""
     user = getattr(request.state, "user", None)
     username = user["username"] if user else None
     is_owner_request = bool(user and user["is_owner"])
@@ -1129,10 +1178,18 @@ def list_persona_profiles(request: Request):
     rows = conn.execute(
         "SELECT name, owner_username, description, profile_summary, avatar_url FROM personas ORDER BY name"
     ).fetchall()
+    granted = {
+        r["persona_name"] for r in conn.execute(
+            "SELECT persona_name FROM persona_view_grants WHERE username = ?", (username,)
+        ).fetchall()
+    } if username else set()
     conn.close()
     result = []
     for r in rows:
-        if r["owner_username"] is not None and r["owner_username"] != username and not is_owner_request:
+        if r["owner_username"] is not None:
+            if r["owner_username"] != username and not is_owner_request:
+                continue
+        elif not is_owner_request and r["name"] not in granted:
             continue
         summary = r["profile_summary"] or r["description"] or "(아직 프로필 정보가 없습니다)"
         result.append({
