@@ -2045,7 +2045,7 @@ document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   closeMessageMenu();
   chatBgPanel.classList.add("hidden");
-  document.querySelector(".profile-popup-overlay, .image-lightbox")?.remove();
+  document.querySelector(".profile-popup-overlay, .image-lightbox, .select-copy-overlay")?.remove();
 });
 
 // ★ "관리자는 메시지 삭제 권한, 각 이용자는 자기 메시지 수정·삭제 권한"
@@ -2107,6 +2107,7 @@ function openMessageMenu(message, hostEl, x, y) {
   menu.appendChild(reactions);
   const addAction = (label, action) => { const button = document.createElement("button"); button.type = "button"; button.className = "message-action-item"; button.textContent = label; button.addEventListener("click", () => { closeMessageMenu(); action(); }); menu.appendChild(button); };
   if (canWrite) addAction("답장하기", () => setReplyTarget(message.is_persona ? message.sender : null, message));
+  addAction("선택 복사", () => openSelectiveCopy(message.content));
   addAction("복사", () => navigator.clipboard.writeText(message.content).catch(() => {}));
   addAction("프로필 보기", () => showProfilePopup(message));
   const relayedQaSource = message.sender === "QA요정"
@@ -2129,6 +2130,40 @@ function openMessageMenu(message, hostEl, x, y) {
 }
 
 document.addEventListener("pointerdown", (event) => { if (messageMenu && !messageMenu.contains(event.target)) closeMessageMenu(); });
+
+function openSelectiveCopy(content) {
+  const overlay = document.createElement("div");
+  overlay.className = "select-copy-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-label", "메시지 선택 복사");
+  const panel = document.createElement("div");
+  panel.className = "select-copy-panel";
+  const title = document.createElement("strong");
+  title.textContent = "복사할 부분을 선택하세요";
+  const text = document.createElement("textarea");
+  text.className = "select-copy-text";
+  text.readOnly = true;
+  text.value = content;
+  text.setAttribute("aria-label", "메시지 원문");
+  const actions = document.createElement("div");
+  actions.className = "select-copy-actions";
+  const close = document.createElement("button");
+  close.type = "button"; close.textContent = "닫기";
+  const copyAll = document.createElement("button");
+  copyAll.type = "button"; copyAll.textContent = "전체 복사";
+  close.addEventListener("click", () => overlay.remove());
+  copyAll.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(content).catch(() => {});
+    copyAll.textContent = "복사됨";
+  });
+  overlay.addEventListener("click", (event) => { if (event.target === overlay) overlay.remove(); });
+  actions.append(close, copyAll);
+  panel.append(title, text, actions);
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+  text.focus({preventScroll: true});
+}
 
 // ★ "답장 메시지에서 원 메시지 클릭하면 화면이 원 메시지로 이동하게 해달라"
 // 요청(2026-08-27) — 지금 방에 이미 렌더링된 메시지 중에서만 찾는다(방을

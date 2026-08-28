@@ -1005,6 +1005,9 @@ main#messages.has-custom-background {
   border-radius: 16px;
   white-space: pre-wrap;
   word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
 }
 .msg-user .body { background: var(--bubble-user); color: var(--bubble-user-fg); }
 .msg-persona .body { background: var(--bubble-persona); color: var(--bubble-persona-fg); }
@@ -1017,6 +1020,23 @@ main#messages.has-custom-background {
 .msg-user .body .message-link { color: inherit; font-weight: 600; }
 /* ★ 채팅 친 시각(2026-08-25 요청) — 말풍선 옆에 작게 */
 .msg .msg-time { font-size: 11px; opacity: 0.45; padding: 0 4px; }
+.select-copy-overlay {
+  position: fixed; inset: 0; z-index: 1300; display: grid; place-items: center;
+  padding: 18px; background: rgba(18, 14, 25, .58);
+}
+.select-copy-panel {
+  width: min(520px, 100%); padding: 18px; border: 1px solid var(--border);
+  border-radius: 18px; background: var(--bg-elevated); box-shadow: 0 24px 70px rgba(0,0,0,.34);
+}
+.select-copy-text {
+  display: block; width: 100%; min-height: 180px; max-height: 52vh; margin: 12px 0;
+  padding: 13px; border: 1px solid var(--border); border-radius: 13px;
+  resize: vertical; background: var(--bg); color: var(--fg); font: inherit; line-height: 1.6;
+  user-select: text; -webkit-user-select: text; -webkit-touch-callout: default;
+}
+.select-copy-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.select-copy-actions button { min-height: 40px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 11px; background: var(--bg); color: var(--fg); font-weight: 700; }
+.select-copy-actions button:last-child { border-color: var(--accent); background: var(--accent); color: var(--accent-fg); }
 
 #reply-banner {
   display: flex;
