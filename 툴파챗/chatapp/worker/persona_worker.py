@@ -256,6 +256,40 @@ ORGANIZER_TIMEOUT_SECONDS = 300  # 손동주는 홈 폴더를 Glob/Read로 훑�
 RESTART_GAP_NOTICE_SECONDS = 20
 RESTART_GAP_NOTICE_TEXT = "(방금 업데이트하느라 잠깐 자리 비웠어요 — 밀린 메시지 답장 곧 보낼게요!)"
 RESTART_GAP_DONE_TEXT = "(서버 업데이트 끝났어요 — 밀린 메시지 답장 다 보냈습니다!)"
+
+# ★ "토큰 부족해서 답변이 안 되는 경우 일반 사용자나 관리자의 말에 대답할
+# 방편 마련해줘" 요청(2026-08-28) — codex/claude 둘 다 실패하면(ai_exec.py는
+# 사용량 한도든 다른 이유든 원인을 구분하지 않고 "codex 실패 → claude로
+# 전환"만 한다) 예전엔 그 턴이 그냥 조용히 'failed'로 남고 채팅방엔 아무
+# 메시지도 안 남았다 — 사용자 입장에선 보낸 메시지가 씹힌 것처럼 보였다.
+# 최소한 "지금은 답이 안 된다"는 결정론적 안내는 남긴다.
+AI_FALLBACK_TEXT = "(지금은 답변을 만들 수 없는 상태예요 — AI 사용량 한도이거나 일시적인 오류일 수 있어요. 잠시 후 다시 말을 걸어주시면 다시 답해볼게요!)"
+# 같은 방에서 여러 턴이 연달아 실패해도(예: 계정 전체가 한도 초과) 매번
+# 같은 안내를 반복해서 스팸이 되지 않게, 방마다 최근에 이미 안내했으면
+# 쿨다운 동안은 조용히 턴만 실패 처리한다. 워커 프로세스 메모리에만
+# 두고(재시작 초기화 허용) — 재시작 공백 안내와 달리 이 시나리오는 짧은
+# 시간에 워커가 반복 재시작되는 경우와 상관이 없어서 서버 DB까지 갈
+# 필요가 없다.
+AI_FALLBACK_COOLDOWN_SECONDS = 180
+_last_ai_fallback_at = {}
+
+
+def _maybe_send_ai_fallback(room_id, turn_id):
+    now = time.monotonic()
+    last = _last_ai_fallback_at.get(room_id)
+    if last is not None and now - last < AI_FALLBACK_COOLDOWN_SECONDS:
+        try:
+            _api("/api/worker/complete", "POST", {"turn_id": turn_id, "error": "AI 응답 실패(안내 쿨다운 중)"})
+        except (urllib.error.URLError, urllib.error.HTTPError):
+            pass
+        return
+    _last_ai_fallback_at[room_id] = now
+    try:
+        _api("/api/worker/complete", "POST", {"turn_id": turn_id, "reply": AI_FALLBACK_TEXT})
+    except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+        print(f"⚠️ 대체 응답 전송 실패(무시하고 계속): {exc}", flush=True)
+
+
 WORK_DIR = Path(__file__).resolve().parent
 # worker/ -> chatapp/ -> 툴파챗/ -> 저장소 루트
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -987,11 +1021,8 @@ def _process_turn_inner(turn, persona_cache):
         _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": reply})
         print(f"💬 {persona_name} ({engine}): {reply[:60]}", flush=True)
     except Exception as exc:  # noqa: BLE001 — 이 턴만 실패 처리하고 워커는 계속 돈다
-        try:
-            _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "error": str(exc)})
-        except (urllib.error.URLError, urllib.error.HTTPError):
-            pass
         print(f"⚠️ {persona_name} 응답 생성 실패: {exc}", flush=True)
+        _maybe_send_ai_fallback(room_id, turn["turn_id"])
 
 
 def sync_stories(persona_cache):

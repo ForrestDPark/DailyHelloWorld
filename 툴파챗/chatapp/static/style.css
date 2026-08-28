@@ -597,12 +597,25 @@ header h1 { font-size: 18px; margin: 0; flex: 1; }
 }
 #member-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .member-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--fg);
   border-radius: 14px;
   padding: 6px 12px;
   font-size: 13px;
+}
+/* ★ "관리자에게 채팅방에서 내보내는 기능" 요청(2026-08-28) */
+.member-chip-kick {
+  border: none;
+  background: transparent;
+  color: var(--danger);
+  font-size: 15px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
 }
 #invite-section { margin-top: 4px; }
 
