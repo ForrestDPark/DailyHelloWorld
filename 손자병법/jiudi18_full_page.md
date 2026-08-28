@@ -71,12 +71,12 @@
 
 ## 4. 역사적 실증 사례 {toggle="true"}
 	### 서양 — 🏛️ 그리스 폴리스 연합함대 vs 페르시아 제국 함대 │ 살라미스 해전(BCE 480)
-	![살라미스 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/salamis_commanders.png)
-	![살라미스 병사·무기·생활·정찰 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/salamis_soldiers_weapons_life.png)
-	![살라미스 장군 조직도와 함대 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/salamis_command_structure.png)
-	![살라미스 그리스·페르시아 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/salamis_country_map.png)
-	![살라미스 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/salamis_strategy_map.png)
-	![살라미스 단계별 전투 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/salamis_sequence.png)
+	![살라미스 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/salamis_commanders.png?v=bc4c06e)
+	![살라미스 병사·무기·생활·정찰 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/salamis_soldiers_weapons_life.png?v=bc4c06e)
+	![살라미스 장군 조직도와 함대 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/salamis_command_structure.png?v=bc4c06e)
+	![살라미스 그리스·페르시아 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/salamis_country_map.png?v=bc4c06e)
+	![살라미스 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/salamis_strategy_map.png?v=bc4c06e)
+	![살라미스 단계별 전투 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/salamis_sequence.png?v=bc4c06e)
 
 	**뒤에서 반복될 지형을 먼저 잡아두기**
 	- 🌊 <span color="blue_bg">**살라미스 해협**</span>은 대함대의 수적 우위를 압축해 배끼리 얽히게 한 좁은 수역이다.
@@ -176,12 +176,12 @@
 	</table>
 
 	### 동양 — 🏛️ 손권·유비 연합군 vs 조조군 │ 적벽대전(208)
-	![적벽 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/redcliffs_commanders.png)
-	![적벽 병사·무기·생활·정찰 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/redcliffs_soldiers_weapons_life.png)
-	![적벽 장군 조직도와 작전 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/redcliffs_command_structure.png)
-	![적벽 삼국 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/redcliffs_country_map.png)
-	![적벽 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/redcliffs_strategy_map.png)
-	![적벽 단계별 전투 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/redcliffs_sequence.png)
+	![적벽 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/redcliffs_commanders.png?v=bc4c06e)
+	![적벽 병사·무기·생활·정찰 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/redcliffs_soldiers_weapons_life.png?v=bc4c06e)
+	![적벽 장군 조직도와 작전 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/redcliffs_command_structure.png?v=bc4c06e)
+	![적벽 삼국 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/redcliffs_country_map.png?v=bc4c06e)
+	![적벽 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/redcliffs_strategy_map.png?v=bc4c06e)
+	![적벽 단계별 전투 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi18/redcliffs_sequence.png?v=bc4c06e)
 
 	**뒤에서 반복될 지형을 먼저 잡아두기**
 	- 🌊 <span color="blue_bg">**장강**</span>은 북방군의 기병 우위를 지우고 수군 숙련도를 승부로 바꿨다.
