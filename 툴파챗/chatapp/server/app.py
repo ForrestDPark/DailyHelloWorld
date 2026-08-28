@@ -1079,6 +1079,19 @@ OWNER_ONLY_PERSONAS = {"손동주"}
 # worker/persona_worker.py의 UI_DEV_PERSONA_NAME과 이름이 같아야 한다.
 UI_DEV_PERSONAS = {"유이"}
 
+# 소유자가 채팅에서 이 문구를 직접 보낸 경우에만 기존 손자병법 자동 해석
+# 파이프라인을 시작한다. 일반 사용자의 같은 문장은 평범한 대화로만 취급하고
+# 실제 작업 큐를 만들지 않는다. 실행 자체는 로컬 워커의 고정 스크립트가 맡고,
+# AI가 채팅 내용으로 임의 명령이나 경로를 구성하지 않는다.
+SUNZI_PIPELINE_PERSONA_NAME = "손무"
+SUNZI_PIPELINE_COMMAND_RE = re.compile(
+    r"손자병법.{0,20}다음\s*구절.{0,20}(?:해석|분석|최신화)(?:해|해줘|해주세요|하라|진행)?"
+)
+
+
+def _is_sunzi_pipeline_command(content: str) -> bool:
+    return bool(SUNZI_PIPELINE_COMMAND_RE.search(content.replace("_", " ")))
+
 # ★ 2026-08-26: "다른 사람들의 요구·요청사항·개선사항을 모아서 나한테
 # 보고하는 에이전틱 툴파" 요청 — worker/persona_worker.py의 ADMIN_PERSONA_NAME과
 # 이름이 같아야 한다. 아직은 "수집·보고"만 하고 실제 코드 수정 권한은 없다
@@ -2396,6 +2409,18 @@ def post_message(msg: NewMessage, request: Request):
         group_members = _group_members(conn, room_id, persona_rows)
         mentioned = _mentioned_personas(content, group_members)
         targets = _default_targets(conn, room_id, group_members, mentioned, msg.reply_to, content)
+    # "손자병법 다음 구절 해석해"는 소유자가 직접 입력한 문장 자체를 이번
+    # 한 건의 명시 승인으로 본다. 여러 페르소나가 같은 작업을 중복 시작하지
+    # 않도록 손무 한 명에게만 결정론적 실행 턴을 배정한다.
+    if is_owner_request and _is_sunzi_pipeline_command(content):
+        if SUNZI_PIPELINE_PERSONA_NAME in all_personas:
+            targets = [SUNZI_PIPELINE_PERSONA_NAME]
+        else:
+            targets = []
+            conn.execute(
+                "INSERT INTO messages (room_id, sender, content, created_at) VALUES (?, ?, ?, ?)",
+                (room_id, "system", "손무 페르소나를 찾지 못해 손자병법 파이프라인을 시작하지 못했습니다.", now),
+            )
     if not is_owner_request:
         # 1:1 방은 이미 위에서 막았지만, 단체/그룹 회의방에서는 다른 계정도
         # 메시지를 보낼 수 있다 — 그 경우에도 손동주는 응답 대상에서 뺀다.

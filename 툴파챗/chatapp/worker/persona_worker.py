@@ -14,11 +14,13 @@ Services 앱에 위임하는 것과 같은 이유로, "민감한 작업은 신�
 import json
 import base64
 import datetime
+import html
 import hashlib
 import gc
 import os
 import re
 import shutil
+import subprocess
 import sys
 import time
 import urllib.error
@@ -26,7 +28,7 @@ import urllib.parse
 import urllib.request
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
-from threading import Lock
+from threading import Lock, Thread
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ai_exec import run_ai_exec  # noqa: E402
@@ -295,6 +297,143 @@ WORK_DIR = Path(__file__).resolve().parent
 # worker/ -> chatapp/ -> 툴파챗/ -> 저장소 루트
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PROJECT_README_MAX_CHARS = 3000  # 프로젝트당 README 발췌 상한 — 프롬프트 폭주 방지
+
+# ★ 2026-08-29: 소유자가 채팅에서 "손자병법 다음 구절 해석해"라고 직접
+# 명령하면 기존 야간 파이프라인을 그 자리에서 한 번 실행한다. 채팅 AI에는
+# Bash 권한을 주지 않는다. 아래 코드는 입력으로 받은 경로나 명령을 실행하지
+# 않고 저장소에 고정된 run_nightly_codex.sh 하나만 호출한다. 서버도 같은
+# 문구를 소유자가 보낸 경우에만 손무 턴을 만들며, 여기서 sender를 다시
+# OWNER_USERNAME과 비교해 이중으로 막는다.
+SUNZI_PIPELINE_PERSONA_NAME = "손무"
+SUNZI_PIPELINE_COMMAND_RE = re.compile(
+    r"손자병법.{0,20}다음\s*구절.{0,20}(?:해석|분석|최신화)(?:해|해줘|해주세요|하라|진행)?"
+)
+SUNZI_DIR = REPO_ROOT / "손자병법"
+SUNZI_PIPELINE_SCRIPT = SUNZI_DIR / "run_nightly_codex.sh"
+SUNZI_README_PATH = SUNZI_DIR / "README.md"
+SUNZI_CHAPTER_SOURCE_PATH = SUNZI_DIR / "site/app/content/notion-chapters.ts"
+SUNZI_PIPELINE_LOCK_DIR = Path("/private/tmp/com.forrest.codex-sunzi-nightly.lock")
+SUNZI_LAST_MESSAGE_PATH = Path.home() / "Library/Logs/CodexSunzi/latest-message.txt"
+_sunzi_pipeline_start_lock = Lock()
+_sunzi_pipeline_process = None
+
+
+def _is_sunzi_pipeline_command(content):
+    return bool(SUNZI_PIPELINE_COMMAND_RE.search(content.replace("_", " ")))
+
+
+def _plain_sunzi_text(value):
+    return html.unescape(re.sub(r"<[^>]+>", "", value)).replace("\\\"", '"').strip()
+
+
+def _next_sunzi_verse():
+    """README의 마지막 순차 완료 번호와 구지편 정본 원문을 대조해 다음
+    번호·원문·독음을 반환한다. AI 추측이나 파일명 유무로 순서를 정하지 않는다."""
+    readme = SUNZI_README_PATH.read_text(encoding="utf-8")
+    completed = re.search(r"마지막으로 순차 최신화한 구절.*?九地篇\s*(\d+)구절", readme)
+    if not completed:
+        raise ValueError("README에서 마지막 순차 완료 구절을 찾지 못했습니다")
+    current_number = int(completed.group(1))
+
+    source = SUNZI_CHAPTER_SOURCE_PATH.read_text(encoding="utf-8")
+    chapter_match = re.search(
+        r'^\s*"11":\s*("(?:\\.|[^"\\])*")\s*,\s*^\s*"12":',
+        source, re.MULTILINE | re.DOTALL,
+    )
+    if not chapter_match:
+        raise ValueError("사이트 정본에서 구지편 원문을 찾지 못했습니다")
+    chapter = json.loads(chapter_match.group(1))
+    verses = re.findall(r"<details>\s*<summary>(.*?)<br>(.*?)</summary>", chapter, re.DOTALL)
+    if current_number >= len(verses):
+        raise ValueError("구지편의 다음 구절이 없습니다")
+    original, reading = verses[current_number]
+    return current_number + 1, _plain_sunzi_text(original), _plain_sunzi_text(reading)
+
+
+def _report_sunzi_pipeline_result(process, room_id, verse_number, started_at):
+    global _sunzi_pipeline_process
+    return_code = process.wait()
+    detail = ""
+    try:
+        if SUNZI_LAST_MESSAGE_PATH.stat().st_mtime >= started_at:
+            detail = SUNZI_LAST_MESSAGE_PATH.read_text(encoding="utf-8", errors="replace").strip()
+    except OSError:
+        pass
+    if return_code == 0:
+        content = f"九地篇 {verse_number}구절 해석 파이프라인 실행을 마쳤습니다. 아래 최종 보고에서 Notion·병법 사이트 반영과 검증 결과를 확인해주세요."
+    else:
+        content = f"九地篇 {verse_number}구절 해석 파이프라인이 중단되었습니다(종료 코드 {return_code}). 기존 파일을 강제로 덮지 않았습니다."
+    if detail:
+        content += "\n\n" + detail[-2500:]
+    try:
+        _api("/api/worker/post_message", "POST", {
+            "persona_name": SUNZI_PIPELINE_PERSONA_NAME,
+            "room_id": room_id,
+            "content": content,
+        })
+    except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+        print(f"⚠️ 손자병법 파이프라인 결과 보고 실패: {exc}", flush=True)
+    finally:
+        with _sunzi_pipeline_start_lock:
+            if _sunzi_pipeline_process is process:
+                _sunzi_pipeline_process = None
+
+
+def _maybe_start_sunzi_pipeline(turn):
+    global _sunzi_pipeline_process
+    context = turn.get("context") or []
+    if turn.get("persona_name") != SUNZI_PIPELINE_PERSONA_NAME or not context:
+        return False
+    latest = context[-1]
+    if latest.get("sender") != OWNER_USERNAME or not _is_sunzi_pipeline_command(latest.get("content", "")):
+        return False
+    try:
+        with _sunzi_pipeline_start_lock:
+            if (
+                (_sunzi_pipeline_process is not None and _sunzi_pipeline_process.poll() is None)
+                or SUNZI_PIPELINE_LOCK_DIR.exists()
+            ):
+                _api("/api/worker/complete", "POST", {
+                    "turn_id": turn["turn_id"],
+                    "reply": "손자병법 구절 해석 파이프라인이 이미 실행 중입니다. 현재 작업이 끝난 뒤 결과를 보고하겠습니다.",
+                })
+                return True
+            verse_number, original, reading = _next_sunzi_verse()
+            if not SUNZI_PIPELINE_SCRIPT.is_file():
+                raise FileNotFoundError(f"파이프라인 스크립트 없음: {SUNZI_PIPELINE_SCRIPT}")
+            env = os.environ.copy()
+            env["SUNZI_TARGET_VERSE"] = str(verse_number)
+            started_at = time.time()
+            process = subprocess.Popen(
+                ["/bin/zsh", str(SUNZI_PIPELINE_SCRIPT)],
+                cwd=str(REPO_ROOT), env=env,
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            _sunzi_pipeline_process = process
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        _api("/api/worker/complete", "POST", {
+            "turn_id": turn["turn_id"],
+            "reply": f"다음 구절을 확인하거나 파이프라인을 시작하지 못했습니다: {exc}",
+        })
+        return True
+    _api("/api/worker/complete", "POST", {
+        "turn_id": turn["turn_id"],
+        "reply": (
+            f"다음은 九地篇 {verse_number}구절 「{original}」\n"
+            f"독음: {reading}\n\n"
+            "소유자 명령을 승인으로 확인했습니다. 정본 검수부터 이미지 제작, Notion 재조회, "
+            "병법 사이트 배포와 토론방 보고까지 기존 전체 파이프라인을 시작합니다."
+        ),
+    })
+    Thread(
+        target=_report_sunzi_pipeline_result,
+        args=(process, turn["room_id"], verse_number, started_at),
+        daemon=True,
+        name=f"sunzi-verse-{verse_number}",
+    ).start()
+    print(f"📜 九地篇 {verse_number}구절 파이프라인 시작", flush=True)
+    return True
 
 # ★ "채팅 → Notion도 자동으로 동기화되면 좋겠다"는 요청(2026-08-24) — 대화가
 # 쌓이면 주기적으로 훑어서 각 페르소나의 "함께 만든 이야기" 섹션에 요약해
@@ -989,6 +1128,8 @@ def process_turn(turn, persona_cache):
 def _process_turn_inner(turn, persona_cache):
     persona_name = turn["persona_name"]
     room_id = turn["room_id"]
+    if _maybe_start_sunzi_pipeline(turn):
+        return
     entry = persona_cache.get(persona_name)
     if not entry:
         print(f"⚠️ 페르소나 '{persona_name}' 프로필 캐시 없음 — 다음 동기화 주기까지 대기", flush=True)
