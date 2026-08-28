@@ -1746,12 +1746,25 @@ def _send_kakao_alert_to_user(conn, username, title, body_text, url):
 
 
 def notify_room_members_new_message(conn, room_id, sender, title, body_text):
-    """커스텀 방(room_id)의 실제 사용자 멤버(발신자 제외)에게 새 메시지를
-    알린다. 방이 커스텀 방이 아니면(Notion 그룹 회의방 등) 조용히 넘어간다."""
+    """방(room_id)의 실제 사용자 멤버(발신자 제외)에게 새 메시지를 알린다.
+
+    ★ 실측(2026-08-28): "일반 사용자들한테는 메시지 알람이 불가능한가?"
+    문의로 확인한 버그 — 원래는 커스텀 방만 대상이었는데, 같은 날 앞서
+    그룹 회의방에도 실제 사람을 초대할 수 있게 확장(room_user_invites
+    재사용)하면서 이 함수를 안 고쳐서, 그룹 회의방에 초대된 사람은
+    room_user_invites에 엄연히 들어 있는데도 알림을 하나도 못 받고
+    있었다. 커스텀 방이 아니면 그룹 회의방인지 확인해서 초대된 사람만
+    챙긴다(관리자는 굳이 알림 대상에 안 넣는다 — 그룹 회의방은 페르소나
+    발화가 잦아 관리자에게 매번 알리면 스팸이 된다는 기존 결정 유지,
+    room_user_invites에 아무도 없으면 전체 채팅방 등은 여전히 대상이
+    아니다)."""
     row = conn.execute("SELECT owner_username FROM custom_rooms WHERE room_id = ?", (room_id,)).fetchone()
-    if not row:
+    if row:
+        members = {row["owner_username"]} if row["owner_username"] else set()
+    elif _is_notion_group_room(conn, room_id):
+        members = set()
+    else:
         return
-    members = {row["owner_username"]} if row["owner_username"] else set()
     members |= {
         r["username"] for r in conn.execute(
             "SELECT username FROM room_user_invites WHERE room_id = ?", (room_id,)
