@@ -1649,6 +1649,18 @@ async function toggleInvitePanel() {
   }
 }
 
+document.querySelectorAll("#invite-panel .invite-collapse-toggle").forEach((button) => {
+  button.addEventListener("click", () => {
+    const body = document.getElementById(button.dataset.target);
+    if (!body) return;
+    const expanded = button.getAttribute("aria-expanded") === "true";
+    button.setAttribute("aria-expanded", String(!expanded));
+    body.classList.toggle("hidden", expanded);
+    const arrow = button.querySelector(".invite-collapse-arrow");
+    if (arrow) arrow.textContent = expanded ? "▸" : "▾";
+  });
+});
+
 async function loadRoomUserMembers() {
   const userMemberList = document.getElementById("user-member-list");
   const inviteUserList = document.getElementById("invite-user-list");

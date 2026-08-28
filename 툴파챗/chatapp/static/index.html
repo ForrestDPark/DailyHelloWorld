@@ -136,19 +136,27 @@
     </div>
     <div id="invite-panel" class="hidden">
       <div class="panel-drag-handle" aria-hidden="true"></div>
-      <div class="invite-panel-title">현재 참여자</div>
+      <button type="button" class="invite-panel-title invite-collapse-toggle" data-target="member-list" aria-expanded="true">
+        <span>현재 참여자</span><span class="invite-collapse-arrow" aria-hidden="true">▾</span>
+      </button>
       <div id="member-list"></div>
       <div id="invite-section" class="hidden">
-        <div class="invite-panel-title">초대하기</div>
-        <div id="invite-list"></div>
+        <button type="button" class="invite-panel-title invite-collapse-toggle" data-target="invite-list" aria-expanded="false">
+          <span>툴파 초대하기</span><span class="invite-collapse-arrow" aria-hidden="true">▸</span>
+        </button>
+        <div id="invite-list" class="hidden"></div>
       </div>
       <div id="user-member-section" class="hidden">
-        <div class="invite-panel-title">참여 중인 사람</div>
+        <button type="button" class="invite-panel-title invite-collapse-toggle" data-target="user-member-list" aria-expanded="true">
+          <span>참여 중인 사람</span><span class="invite-collapse-arrow" aria-hidden="true">▾</span>
+        </button>
         <div id="user-member-list"></div>
       </div>
       <div id="invite-user-section" class="hidden">
-        <div class="invite-panel-title">사람 초대하기</div>
-        <div id="invite-user-list"></div>
+        <button type="button" class="invite-panel-title invite-collapse-toggle" data-target="invite-user-list" aria-expanded="false">
+          <span>사람 초대하기</span><span class="invite-collapse-arrow" aria-hidden="true">▸</span>
+        </button>
+        <div id="invite-user-list" class="hidden"></div>
       </div>
     </div>
     <main id="messages"></main>
