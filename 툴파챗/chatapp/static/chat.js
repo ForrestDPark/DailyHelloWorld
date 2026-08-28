@@ -1488,11 +1488,16 @@ async function toggleInvitePanel() {
       }
     }
     // ★ "가상 인물뿐만 아니라 실제 사용자도 초대할 수 있게 해달라"
-    // 요청(2026-08-27) — 내가 만든 방(custom_)에서만, 페르소나 초대와
-    // 같은 권한(canInviteHere)으로 실제 계정도 초대할 수 있게 한다.
+    // 요청(2026-08-27) — 내가 만든 방(custom_)에서는 방 주인/관리자가,
+    // ★ 후속 요청(2026-08-28) "그룹 회의방에서 사람 초대하려는데 왜
+    // 목록에 없지" — Notion group_name 그룹 회의방(is_group_room이지만
+    // custom_ 접두가 아닌 방, "전체 채팅방"은 is_group_room이 애초에
+    // false라 자연히 제외됨)에서는 관리자만 실제 계정을 초대할 수 있다
+    // (방 주인 개념이 없는 콘텐츠라 서버도 관리자만 허용, _room_manage_context).
+    const isGroupMeetingRoom = !currentRoom.startsWith("custom_") && cachedRoom && cachedRoom.is_group_room;
     const userMemberSection = document.getElementById("user-member-section");
     const inviteUserSection = document.getElementById("invite-user-section");
-    if (currentRoom.startsWith("custom_") && canInviteHere) {
+    if ((currentRoom.startsWith("custom_") && canInviteHere) || (isGroupMeetingRoom && amOwner)) {
       await loadRoomUserMembers();
       userMemberSection.classList.remove("hidden");
       inviteUserSection.classList.remove("hidden");

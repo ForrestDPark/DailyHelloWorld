@@ -296,13 +296,28 @@ def _can_access_persona_room(owner_username, requesting_username, is_owner_reque
 # ★ "처음 일반 사용자 입장에서 프로그램개발그룹이랑 병법가그룹이 보이는데,
 # 처음 사용자한테는 아무 채팅방도 안 보이는 게 맞는 것 같다" 요청
 # (2026-08-28). Notion 페르소나의 group_name으로 자동 생성되는 "그룹
-# 회의방"은 관리자가 큐레이션한 콘텐츠라 개별 초대 개념이 없다 — 커스텀
-# 방(room_user_invites)이나 개인 페르소나 1:1 방(owner_username)처럼 "누가
-# 들어와도 되는지"를 판단할 근거가 없으므로, 1:1 방과 같은 기준으로
-# 소유자(전체 관리자)만 접근하게 막는다.
+# 회의방"은 기본적으로 관리자가 큐레이션한 콘텐츠라 기본 접근은 전체
+# 관리자로 제한한다.
 def _is_notion_group_room(conn, room_id):
     return bool(conn.execute(
         "SELECT 1 FROM personas WHERE group_name = ? LIMIT 1", (room_id,)
+    ).fetchone())
+
+
+# ★ 같은 날 후속 요청: "그룹 회의방에서 사람 초대하려는데 왜 일반 사용자는
+# 목록에 없지" — 관리자만 보이게 막고 나니, 관리자가 그 방에 특정 사람을
+# 데려오고 싶어도 방법이 없었다. 커스텀 방과 똑같이 room_user_invites를
+# 재사용해서(스키마에 room_id에 대한 FK 제약이 없어 커스텀 방이 아닌
+# room_id로도 그냥 저장된다) 관리자가 초대한 사람은 그 그룹 회의방에도
+# 들어올 수 있게 한다 — 방 "주인"이 없는 콘텐츠라 초대는 관리자만 할 수
+# 있다(커스텀 방처럼 "방 주인"이 따로 초대하는 경우가 없음).
+def _group_room_allowed(conn, room_id, username, is_owner_request):
+    if is_owner_request:
+        return True
+    if not username:
+        return False
+    return bool(conn.execute(
+        "SELECT 1 FROM room_user_invites WHERE room_id = ? AND username = ?", (room_id, username)
     ).fetchone())
 
 
@@ -1329,36 +1344,50 @@ def invite_to_room(room_id: str, body: InviteRequest, request: Request):
     return {"ok": True, "members": members}
 
 
+def _room_manage_context(conn, room_id, requester, is_owner_request):
+    """방 멤버 관리(초대·조회·내보내기)에 필요한 공통 판단 — 커스텀 방과
+    그룹 회의방 둘 다 지원한다("그룹 회의방에서 사람 초대하려는데 왜 목록에
+    없지" 요청, 2026-08-28). 반환: (관리 가능한 방인가(존재+권한),
+    owner_username — 그룹 회의방은 주인이 없어 None)."""
+    row = conn.execute("SELECT owner_username FROM custom_rooms WHERE room_id = ?", (room_id,)).fetchone()
+    if row:
+        owner_username = row["owner_username"]
+        return (is_owner_request or owner_username == requester), owner_username
+    if _is_notion_group_room(conn, room_id):
+        return is_owner_request, None
+    return False, None
+
+
 @app.get("/api/rooms/{room_id}/user_members")
 def get_room_user_members(room_id: str, request: Request):
-    """이 커스텀 방에 초대된 실제 사용자 목록과, 초대 가능한 나머지 계정
-    목록을 준다. ★ "가상 인물뿐만 아니라 실제 사용자도 초대할 수 있게
-    해달라" 요청(2026-08-27) — 방 주인(또는 소유자)만 조회할 수 있다."""
+    """이 방에 초대된 실제 사용자 목록과, 초대 가능한 나머지 계정 목록을
+    준다. ★ "가상 인물뿐만 아니라 실제 사용자도 초대할 수 있게 해달라"
+    요청(2026-08-27) — 커스텀 방은 방 주인(또는 소유자)만 조회할 수 있다.
+    그룹 회의방은 "방 주인"이 없는 콘텐츠라 관리자만 관리(조회·초대)할
+    수 있다(_room_manage_context)."""
     user = getattr(request.state, "user", None)
     username = user["username"] if user else None
     is_owner_request = bool(user and user["is_owner"])
     conn = get_conn()
-    row = conn.execute("SELECT owner_username FROM custom_rooms WHERE room_id = ?", (room_id,)).fetchone()
-    if not row:
+    allowed, owner_username = _room_manage_context(conn, room_id, username, is_owner_request)
+    if not allowed:
         conn.close()
-        raise HTTPException(status_code=404, detail="내가 만든 채팅방이 아닙니다")
-    if not (is_owner_request or row["owner_username"] == username):
-        conn.close()
-        raise HTTPException(status_code=403, detail="이 방의 주인만 볼 수 있습니다")
+        raise HTTPException(status_code=403, detail="이 방을 관리할 권한이 없습니다")
     members = [
         r["username"] for r in conn.execute(
             "SELECT username FROM room_user_invites WHERE room_id = ?", (room_id,)
         ).fetchall()
     ]
-    if row["owner_username"] and row["owner_username"] not in members:
-        members.insert(0, row["owner_username"])
+    if owner_username and owner_username not in members:
+        members.insert(0, owner_username)
     all_users = [r["username"] for r in conn.execute("SELECT username FROM users ORDER BY username").fetchall()]
     available = [u for u in all_users if u not in members]
     conn.close()
     # ★ "관리자가 채팅방에서 내보내는 기능" 요청(2026-08-28) — 프론트가 방
     # 주인 칩에는 내보내기 버튼을 안 그리도록(방 주인은 내보낼 수 없음,
-    # kick_room_member 참고) owner_username을 같이 내려준다.
-    return {"members": members, "available": available, "owner_username": row["owner_username"]}
+    # kick_room_member 참고) owner_username을 같이 내려준다. 그룹 회의방은
+    # owner_username이 null이라 모든 칩에 내보내기 버튼이 붙는다.
+    return {"members": members, "available": available, "owner_username": owner_username}
 
 
 class InviteUserRequest(BaseModel):
@@ -1367,22 +1396,21 @@ class InviteUserRequest(BaseModel):
 
 @app.post("/api/rooms/{room_id}/invite_user")
 def invite_user_to_room(room_id: str, body: InviteUserRequest, request: Request):
-    """실제 사용자를 내가 만든 방에 초대한다. ★ 2026-08-27 요청. 방 주인
-    (또는 소유자)만 초대할 수 있다 — 초대된 계정은 이후 이 방을 보고,
-    메시지도 보낼 수 있다(_custom_room_access가 room_user_invites도 확인)."""
+    """실제 사용자를 방에 초대한다. ★ 2026-08-27 요청. 커스텀 방은 방 주인
+    (또는 소유자)만, 그룹 회의방은 관리자만 초대할 수 있다
+    (_room_manage_context) — 초대된 계정은 이후 이 방을 보고, 메시지도
+    보낼 수 있다(_custom_room_access/_group_room_allowed가 room_user_invites도
+    확인)."""
     if not getattr(request.state, "can_write", True):
         raise HTTPException(status_code=403, detail="읽기 전용 계정입니다")
     user = getattr(request.state, "user", None)
     username = user["username"] if user else None
     is_owner_request = bool(user and user["is_owner"])
     conn = get_conn()
-    row = conn.execute("SELECT owner_username FROM custom_rooms WHERE room_id = ?", (room_id,)).fetchone()
-    if not row:
+    allowed, _owner_username = _room_manage_context(conn, room_id, username, is_owner_request)
+    if not allowed:
         conn.close()
-        raise HTTPException(status_code=404, detail="내가 만든 채팅방이 아닙니다")
-    if not (is_owner_request or row["owner_username"] == username):
-        conn.close()
-        raise HTTPException(status_code=403, detail="이 방의 주인만 초대할 수 있습니다")
+        raise HTTPException(status_code=403, detail="이 방에 초대할 권한이 없습니다")
     target = conn.execute("SELECT username FROM users WHERE username = ?", (body.username,)).fetchone()
     if not target:
         conn.close()
@@ -1402,7 +1430,8 @@ def invite_user_to_room(room_id: str, body: InviteUserRequest, request: Request)
 def kick_room_member(room_id: str, username: str, request: Request):
     """"관리자에게 채팅방에서 내보내는 기능이 있으면 좋겠다" 요청
     (2026-08-28). 본인이 스스로 나가는 leave_room과 달리, 대상이 원치
-    않아도 관리자(전체) 또는 그 방 주인이 강제로 뺄 수 있다. 방 주인은
+    않아도 관리자(전체) 또는 그 방 주인이 강제로 뺄 수 있다(커스텀 방).
+    그룹 회의방은 주인이 없어 관리자만(_room_manage_context). 방 주인은
     room_user_invites에 아예 없으므로(get_room_user_members가 목록엔
     끼워 넣어 보여줄 뿐) 대상이 될 수 없다 — 방을 통째로 없애고 싶으면
     delete_room을 쓰라고 안내한다."""
@@ -1412,14 +1441,11 @@ def kick_room_member(room_id: str, username: str, request: Request):
     requester = user["username"] if user else None
     is_owner_request = bool(user and user["is_owner"])
     conn = get_conn()
-    row = conn.execute("SELECT owner_username FROM custom_rooms WHERE room_id = ?", (room_id,)).fetchone()
-    if not row:
-        conn.close()
-        raise HTTPException(status_code=404, detail="존재하지 않는 채팅방입니다")
-    if not (is_owner_request or row["owner_username"] == requester):
+    allowed, owner_username = _room_manage_context(conn, room_id, requester, is_owner_request)
+    if not allowed:
         conn.close()
         raise HTTPException(status_code=403, detail="이 방의 주인이나 관리자만 내보낼 수 있습니다")
-    if username == row["owner_username"]:
+    if owner_username and username == owner_username:
         conn.close()
         raise HTTPException(status_code=400, detail="방 주인은 내보낼 수 없습니다 — 방 삭제를 사용하세요")
     cur = conn.execute(
@@ -1723,12 +1749,22 @@ def list_rooms(request: Request):
     for r in persona_rows:
         if r["group_name"] and r["group_name"] not in seen_groups:
             seen_groups.append(r["group_name"])
+    # ★ "실제 사용자도 초대할 수 있게 해달라" 요청(2026-08-27) — 초대된
+    # 계정에게도 방 목록에 그 방이 보여야 들어갈 수 있다(직접 URL을 몰라도).
+    # room_user_invites는 커스텀 방·그룹 회의방 구분 없이 room_id로만
+    # 저장되므로 둘 다 이 집합 하나로 판단한다.
+    invited_room_ids = {
+        r["room_id"] for r in conn.execute(
+            "SELECT room_id FROM room_user_invites WHERE username = ?", (username,)
+        ).fetchall()
+    } if username else set()
     # ★ "처음 사용자한테는 아무 채팅방도 안 보이는 게 맞다" 요청(2026-08-28)
-    # — 그룹 회의방은 관리자만 목록에서 본다(_is_notion_group_room 정의부
-    # 설명 참고). 일반 사용자는 자기 페르소나를 만들거나 초대받은 커스텀
-    # 방에 들어가기 전까지는 정말 빈 목록을 보게 된다.
-    if is_owner_request:
-        for group_name in seen_groups:
+    # — 그룹 회의방은 기본적으로 관리자만 목록에서 본다(_is_notion_group_room
+    # 정의부 설명 참고). ★ 같은 날 후속 요청: "그룹 회의방에서 사람 초대하려는데
+    # 왜 목록에 없지" — 관리자가 특정 사람을 그 방에 초대(room_user_invites)
+    # 했으면 그 사람에게도 보인다.
+    for group_name in seen_groups:
+        if is_owner_request or group_name in invited_room_ids:
             rooms.append({
                 "room_id": group_name, "label": f"👥 {group_name}",
                 "group_name": None, "is_group_room": True, "is_mine": False,
@@ -1737,13 +1773,6 @@ def list_rooms(request: Request):
     custom_rows = conn.execute(
         "SELECT room_id, label, owner_username, thumbnail_url FROM custom_rooms ORDER BY created_at"
     ).fetchall()
-    # ★ "실제 사용자도 초대할 수 있게 해달라" 요청(2026-08-27) — 초대된
-    # 계정에게도 방 목록에 그 방이 보여야 들어갈 수 있다(직접 URL을 몰라도).
-    invited_room_ids = {
-        r["room_id"] for r in conn.execute(
-            "SELECT room_id FROM room_user_invites WHERE username = ?", (username,)
-        ).fetchall()
-    } if username else set()
     for cr in custom_rows:
         if is_owner_request or cr["owner_username"] == username or cr["room_id"] in invited_room_ids:
             rooms.append({
@@ -1802,9 +1831,14 @@ def get_messages(request: Request, room_id: str = GROUP_ROOM_ID, since_id: int =
             conn.close()
             raise HTTPException(status_code=403, detail="이 채팅방을 볼 수 없습니다")
         # ★ "처음 사용자한테는 아무 채팅방도 안 보이는 게 맞다" 요청
-        # (2026-08-28) — 그룹 회의방은 목록뿐 아니라 직접 조회도 관리자만
-        # 되게 막는다(해시 직접 편집 우회 방지, list_rooms와 같은 기준).
-        if not is_custom and not is_owner_request and room_id != GROUP_ROOM_ID and _is_notion_group_room(conn, room_id):
+        # (2026-08-28) — 그룹 회의방은 목록뿐 아니라 직접 조회도 관리자·
+        # 초대받은 사람만 되게 막는다(해시 직접 편집 우회 방지, list_rooms와
+        # 같은 기준. _group_room_allowed가 관리자 여부까지 판단하므로 이미
+        # 위에서 걸러진 is_owner_request와 별개로 초대 여부를 확인).
+        if (
+            not is_custom and room_id != GROUP_ROOM_ID and _is_notion_group_room(conn, room_id)
+            and not _group_room_allowed(conn, room_id, username, is_owner_request)
+        ):
             conn.close()
             raise HTTPException(status_code=403, detail="이 채팅방을 볼 수 없습니다")
     rows = conn.execute(
@@ -2027,8 +2061,12 @@ def post_message(msg: NewMessage, request: Request):
             conn.close()
             raise HTTPException(status_code=403, detail="이 채팅방에 메시지를 보낼 수 없습니다")
         # ★ "처음 사용자한테는 아무 채팅방도 안 보이는 게 맞다" 요청
-        # (2026-08-28) — 그룹 회의방은 읽기뿐 아니라 쓰기도 관리자만.
-        if not is_custom and not is_owner_request and _is_notion_group_room(conn, room_id):
+        # (2026-08-28) — 그룹 회의방은 읽기뿐 아니라 쓰기도 관리자·초대받은
+        # 사람만.
+        if (
+            not is_custom and _is_notion_group_room(conn, room_id)
+            and not _group_room_allowed(conn, room_id, sender, is_owner_request)
+        ):
             conn.close()
             raise HTTPException(status_code=403, detail="이 채팅방에 메시지를 보낼 수 없습니다")
     reply_message_id = None
