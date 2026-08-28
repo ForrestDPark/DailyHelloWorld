@@ -115,6 +115,11 @@ def init_db():
             updated_at TEXT NOT NULL,
             PRIMARY KEY (username, room_id)
         );
+        CREATE TABLE IF NOT EXISTS qa_feedback_reports (
+            source_message_id INTEGER PRIMARY KEY,
+            report_message_id INTEGER,
+            reported_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS persona_image_jobs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             persona_name TEXT NOT NULL,

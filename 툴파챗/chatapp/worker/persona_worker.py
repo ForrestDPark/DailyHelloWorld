@@ -1154,6 +1154,9 @@ def sync_admin_reports(persona_cache):
     others_msgs = [
         m for m in all_messages
         if m["sender"] != OWNER_USERNAME and m["sender"] not in persona_names
+        # qqq의 QA요정 방 메시지는 서버가 저장 즉시 관리자 방으로 원문
+        # 전달하므로 여기서 다시 AI 요약하면 같은 제보가 중복 보고된다.
+        and not (m["sender"] == "qqq" and m["room_id"] == "QA요정")
     ]
     if len(others_msgs) < ADMIN_REPORT_MIN_NEW_MESSAGES:
         try:

@@ -1084,6 +1084,8 @@ UI_DEV_PERSONAS = {"유이"}
 # 이름이 같아야 한다. 아직은 "수집·보고"만 하고 실제 코드 수정 권한은 없다
 # (유이처럼 파일 수정 권한을 줄지는 소유자와 상의 후 결정 예정).
 ADMIN_PERSONA_NAME = "툴파관리자"
+QA_PERSONA_NAME = "QA요정"
+QA_REPORTER_USERNAME = "qqq"
 
 
 def _require_owner(request):
@@ -2343,6 +2345,27 @@ def post_message(msg: NewMessage, request: Request):
         (room_id, sender, content, now, reply_message_id),
     )
     source_message_id = message_cursor.lastrowid
+    # qqq가 QA요정과 점검하며 남긴 내용은 AI 분류·30분 배치를 거치지 않고
+    # 즉시 관리자 전용 툴파관리자 방으로 원문 전달한다. 요약 누락을 막고,
+    # source_message_id UNIQUE 테이블로 같은 원문을 재처리해도 한 번만 보고한다.
+    if sender == QA_REPORTER_USERNAME and room_id == QA_PERSONA_NAME:
+        relay_claim = conn.execute(
+            "INSERT OR IGNORE INTO qa_feedback_reports(source_message_id,reported_at) VALUES (?,?)",
+            (source_message_id, now),
+        )
+        if relay_claim.rowcount:
+            relay_content = (
+                f"📋 QA요정 전달\n{sender}님이 QA 점검 중 의견을 남겼습니다.\n\n"
+                f"{content}\n\n원문: QA요정 방 메시지 #{source_message_id}"
+            )
+            relay_cursor = conn.execute(
+                "INSERT INTO messages(room_id,sender,content,created_at) VALUES (?,?,?,?)",
+                (ADMIN_PERSONA_NAME, QA_PERSONA_NAME, relay_content, now),
+            )
+            conn.execute(
+                "UPDATE qa_feedback_reports SET report_message_id=? WHERE source_message_id=?",
+                (relay_cursor.lastrowid, source_message_id),
+            )
     if room_id == GROUP_ROOM_ID:
         # ★ "@이름"으로 특정 인물을 지목하면 그 인물만 응답, 아무도 안 부르면
         # 방에 있는 페르소나 전원이 한 번씩 응답한다(서로 이어서 계속 대화하는

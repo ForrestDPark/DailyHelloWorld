@@ -1905,13 +1905,13 @@ async function deleteMessage(message, hostEl) {
   }
 }
 
-async function notifyQaResolution(message) {
+async function notifyQaResolution(message, sourceMessageId = message.id) {
   const summary = prompt("QA 제보자에게 알릴 해결 내용을 입력하세요");
   if (!summary?.trim()) return;
   try {
     const res = await apiFetch("/api/admin/qa-resolution", {
       method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({source_message_id: message.id, summary: summary.trim()}),
+      body: JSON.stringify({source_message_id: sourceMessageId, summary: summary.trim()}),
     });
     if (!res.ok) { alert((await res.json()).detail || "해결 알림을 보내지 못했습니다"); return; }
     alert("QA요정이 제보자에게 해결 내용을 전달했습니다.");
@@ -1933,7 +1933,15 @@ function openMessageMenu(message, hostEl, x, y) {
   if (canWrite) addAction("답장하기", () => setReplyTarget(message.is_persona ? message.sender : null, message));
   addAction("복사", () => navigator.clipboard.writeText(message.content).catch(() => {}));
   addAction("프로필 보기", () => showProfilePopup(message));
-  if (amOwner && !message.is_persona) addAction("QA 해결 알림", () => notifyQaResolution(message));
+  const relayedQaSource = message.sender === "QA요정"
+    ? Number(message.content.match(/원문: QA요정 방 메시지 #(\d+)/)?.[1] || 0)
+    : 0;
+  if (amOwner && (!message.is_persona || relayedQaSource)) {
+    addAction("QA 해결 알림", () => notifyQaResolution(message, relayedQaSource || message.id));
+  }
+  if (amOwner && relayedQaSource) {
+    addAction("QA 원문 방 열기", () => { location.hash = "#room=" + encodeURIComponent("QA요정"); });
+  }
   const isMine = !message.is_persona && message.sender === myUsername;
   const hasImage = IMAGE_MARKER_RE.test(message.content);
   if (canWrite && isMine && !hasImage) addAction("수정", () => editMessage(message, hostEl));
