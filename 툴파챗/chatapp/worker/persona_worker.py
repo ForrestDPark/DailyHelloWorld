@@ -483,7 +483,19 @@ def _generate_local_image(prompt, source=None):
     return f"/uploads/{filename}"
 
 
+IMAGE_RATE_LIMIT_RETRY_DELAYS = (5, 15, 45)  # 초 — 429 재시도 간격(지수적으로 늘림)
+
+
 def _generate_openai_image(prompt, source=None):
+    """★ 2026-08-28 실측: 한신·한니발 아바타를 몇 초 간격으로 연달아
+    생성했더니 둘 다 OpenAI가 HTTP 429로 거부해서 아무 이미지도 안 남았다.
+    처음엔 순간적인 레이트리밋(초당 요청 수 초과)이라고 생각해 재시도를
+    추가했는데, 실제로 응답 본문을 까 보니 `insufficient_quota`(계정
+    크레딧 소진)였다 — 이건 몇 초 쉰다고 풀리는 문제가 아니라서 재시도해도
+    똑같이 429만 3번 더 받고 65초를 낭비한다. 그래서 429 응답 본문의
+    `type`을 읽어서 진짜 일시적 레이트리밋(`rate_limit_exceeded` 등)일 때만
+    재시도하고, 크레딧 소진처럼 재시도해도 소용없는 경우는 바로 실패시켜
+    이유를 그대로 admin UI에 보여준다."""
     if not OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY가 워커에 설정되지 않았습니다")
     headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
@@ -498,9 +510,27 @@ def _generate_openai_image(prompt, source=None):
         headers["Content-Type"] = "application/json"
         data = json.dumps({"model": IMAGE_MODEL, "prompt": prompt, "size": "1024x1024", "quality": "medium"}).encode()
         url = "https://api.openai.com/v1/images/generations"
-    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=180) as response:
-        result = json.loads(response.read())
+    attempts = len(IMAGE_RATE_LIMIT_RETRY_DELAYS) + 1
+    for attempt in range(attempts):
+        req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(req, timeout=180) as response:
+                result = json.loads(response.read())
+            break
+        except urllib.error.HTTPError as exc:
+            body_text = exc.read().decode("utf-8", errors="replace")
+            try:
+                error_body = json.loads(body_text).get("error", {})
+            except (json.JSONDecodeError, AttributeError):
+                error_body = {}
+            error_type = error_body.get("type", "")
+            error_message = error_body.get("message", "")
+            retryable = exc.code == 429 and error_type not in ("insufficient_quota", "billing_hard_limit_reached")
+            if not retryable or attempt == attempts - 1:
+                raise RuntimeError(error_message or f"HTTP {exc.code}: {body_text[:300]}") from exc
+            delay = IMAGE_RATE_LIMIT_RETRY_DELAYS[attempt]
+            print(f"⏳ OpenAI 이미지 API 레이트리밋(429) — {delay}초 뒤 재시도 ({attempt + 1}/{attempts - 1})", flush=True)
+            time.sleep(delay)
     raw = base64.b64decode(result["data"][0]["b64_json"])
     filename = f"generated_{int(time.time())}_{os.urandom(4).hex()}.png"
     (UPLOADS_DIR / filename).write_bytes(raw)

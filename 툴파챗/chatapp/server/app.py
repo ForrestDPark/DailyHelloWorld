@@ -50,6 +50,17 @@ from server import auth, oauth
 from server.db import get_conn, init_db
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+# ★ "업데이트할 때마다 페이지를 재시작(새로고침)해야 하는 게 맞냐" 요청
+# (2026-08-28) — 서버 프로세스(app.py 등 백엔드 코드)가 바뀌면 재시작 시
+# 이 값이 새로 생성돼서 바뀐다. static/*(프론트 HTML·JS·CSS)는 서버를
+# 재시작하지 않아도 디스크에서 매 요청 새로 읽히므로(StaticFiles가 자체
+# 캐시를 안 함, Cache-Control: no-cache까지 강제) 파일을 고치기만 해도
+# 즉시 반영된다 — 다만 이미 열려 있는 브라우저 탭은 그 사실을 스스로 알
+# 방법이 없어서 새로고침 전까진 예전 JS를 계속 쓴다. GET /api/version이
+# "서버 부팅 id + 정적 파일 중 가장 최근 수정 시각"을 합쳐서 내려주면,
+# 프론트가 주기적으로 이 값을 확인해 바뀌었을 때만 "새 버전이 있어요"
+# 배너를 띄워 사용자가 놓치지 않고 새로고침할 수 있다.
+SERVER_BOOT_ID = os.urandom(4).hex()
 WORKER_TOKEN = os.environ.get("WORKER_TOKEN", "")
 APP_USERNAME = os.environ.get("APP_USERNAME", "")
 # ★ "채팅방에 새 메시지 있으면 사용자들한테도 알람이 가게 해달라" 요청
@@ -82,7 +93,7 @@ USERNAME_RE = re.compile(r"^[A-Za-z0-9_가-힣]{2,20}$")
 # 회원가입/로그인 API는 인증 이전에 열려 있어야 한다. /api/whoami는 로그인
 # 여부를 프론트가 확인하는 용도라 항상 응답한다(그 자체로 정보 노출 없음).
 PUBLIC_PATHS = {
-    "/", "/api/whoami", "/api/auth/signup", "/api/auth/login", "/api/auth/logout",
+    "/", "/api/whoami", "/api/auth/signup", "/api/auth/login", "/api/auth/logout", "/api/version",
     # ★ 2026-08-26: 구글/카카오 로그인 — 이 네 경로는 아직 세션이 없는 상태에서
     # 오는 요청(로그인 시작·프로바이더가 돌려보내는 콜백)이라 공개로 열어둔다.
     "/api/auth/google/login", "/api/auth/google/callback",
@@ -601,6 +612,29 @@ def admin_list_personas(request: Request):
     return [dict(r) for r in rows]
 
 
+@app.delete("/api/admin/personas/{name}")
+def admin_delete_persona(name: str, request: Request):
+    """"관리자가 툴파 삭제도 가능하게 해달라" 요청(2026-08-28). 사용자가
+    직접 만든 페르소나는 이미 본인이 지울 수 있었지만(delete_my_persona),
+    공용 Notion 페르소나를 포함해 아무 페르소나나 지우는 건 관리자만 할 수
+    있다. delete_my_persona와 같은 cascade 목록에 persona_image_jobs만
+    더한다(그쪽은 이미지 생성 이력이라 지금까진 안 지웠는데, 관리자
+    삭제에서는 실수 요청도 아니므로 깔끔하게 정리한다)."""
+    _require_owner(request)
+    conn = get_conn()
+    if not conn.execute("SELECT 1 FROM personas WHERE name = ?", (name,)).fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="존재하지 않는 페르소나입니다")
+    conn.execute("DELETE FROM personas WHERE name = ?", (name,))
+    conn.execute("DELETE FROM messages WHERE room_id = ?", (name,))
+    conn.execute("DELETE FROM pending_turns WHERE room_id = ?", (name,))
+    conn.execute("DELETE FROM room_invites WHERE persona_name = ?", (name,))
+    conn.execute("DELETE FROM persona_image_jobs WHERE persona_name = ?", (name,))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
 @app.put("/api/admin/personas/{name}")
 def admin_update_persona(name: str, body: AdminPersonaUpdate, request: Request):
     _require_owner(request)
@@ -915,6 +949,20 @@ def _require_owner(request):
         )
     if not is_owner_request:
         raise HTTPException(status_code=403, detail="소유자만 할 수 있습니다")
+
+
+@app.get("/api/version")
+def get_version():
+    """프론트가 폴링해서 배포 이후 값이 바뀌었으면 새로고침을 유도한다
+    (SERVER_BOOT_ID 정의부의 설명 참고). 로그인 여부와 무관하게 누구나
+    확인할 수 있어도 되는 값이라 인증을 요구하지 않는다."""
+    static_dir = BASE_DIR / "static"
+    mtimes = [
+        f.stat().st_mtime for f in (static_dir / "index.html", static_dir / "chat.js", static_dir / "style.css")
+        if f.exists()
+    ]
+    static_stamp = int(max(mtimes)) if mtimes else 0
+    return {"version": f"{SERVER_BOOT_ID}-{static_stamp}"}
 
 
 @app.get("/api/whoami")
@@ -1332,6 +1380,108 @@ def invite_user_to_room(room_id: str, body: InviteUserRequest, request: Request)
     conn.commit()
     conn.close()
     return {"ok": True}
+
+
+def _delete_custom_room(conn, room_id):
+    """커스텀 방과 거기 딸린 데이터를 전부 지운다 — 나가기(방 주인이 자기
+    방을 나가는 경우)와 관리자 강제 삭제가 이 함수를 공유한다. SQLite는
+    이 프로젝트에서 PRAGMA foreign_keys를 켜지 않아서(server/db.py) 스키마의
+    ON DELETE CASCADE가 실제로는 동작하지 않는다 — 관련 테이블을 전부
+    손으로 나열해서 지워야 한다."""
+    conn.execute("DELETE FROM custom_rooms WHERE room_id = ?", (room_id,))
+    conn.execute("DELETE FROM messages WHERE room_id = ?", (room_id,))
+    conn.execute("DELETE FROM pending_turns WHERE room_id = ?", (room_id,))
+    conn.execute("DELETE FROM room_invites WHERE room_id = ?", (room_id,))
+    conn.execute("DELETE FROM room_user_invites WHERE room_id = ?", (room_id,))
+    conn.execute("DELETE FROM room_notices WHERE room_id = ?", (room_id,))
+    conn.execute("DELETE FROM room_restart_notice WHERE room_id = ?", (room_id,))
+
+
+@app.post("/api/rooms/{room_id}/leave")
+def leave_room(room_id: str, request: Request):
+    """"채팅방 나가기 기능 있게 해달라" 요청(2026-08-28). 내가 만든 방이
+    아니라 초대받아 들어간 방만 "나간다"(room_user_invites에서 내 행만
+    지움 — 방은 다른 멤버에게 그대로 남는다). 내가 만든 방은 넘겨줄 다음
+    주인이 없어서 "나가기"가 곧 "방 폐쇄"와 같다 — 그 경우엔 DELETE
+    /api/rooms/{room_id}(관리자 강제 삭제와 같은 함수)를 쓰라고 안내한다."""
+    if not getattr(request.state, "can_write", True):
+        raise HTTPException(status_code=403, detail="읽기 전용 계정입니다")
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    username = user["username"]
+    conn = get_conn()
+    row = conn.execute("SELECT owner_username FROM custom_rooms WHERE room_id = ?", (room_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="존재하지 않는 채팅방입니다")
+    if row["owner_username"] == username:
+        conn.close()
+        raise HTTPException(status_code=400, detail="내가 만든 방은 나가기 대신 삭제를 사용하세요")
+    cur = conn.execute(
+        "DELETE FROM room_user_invites WHERE room_id = ? AND username = ?", (room_id, username)
+    )
+    if not cur.rowcount:
+        conn.close()
+        raise HTTPException(status_code=403, detail="이 채팅방의 멤버가 아닙니다")
+    _insert_system_notice(conn, room_id, f"{username}님이 나갔습니다")
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.delete("/api/rooms/{room_id}")
+def delete_room(room_id: str, request: Request):
+    """"관리자는 채팅방 삭제할 수 있게 해달라" 요청(2026-08-28). 방 주인
+    본인(자기 방을 완전히 없애고 싶을 때) 또는 전체 관리자만 지울 수
+    있다 — 초대받은 일반 멤버는 나가기(leave_room)만 가능."""
+    if not getattr(request.state, "can_write", True):
+        raise HTTPException(status_code=403, detail="읽기 전용 계정입니다")
+    user = getattr(request.state, "user", None)
+    username = user["username"] if user else None
+    is_owner_request = bool(user and user["is_owner"])
+    conn = get_conn()
+    row = conn.execute("SELECT owner_username FROM custom_rooms WHERE room_id = ?", (room_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="존재하지 않는 채팅방입니다")
+    if not (is_owner_request or row["owner_username"] == username):
+        conn.close()
+        raise HTTPException(status_code=403, detail="이 방의 주인이나 관리자만 삭제할 수 있습니다")
+    _delete_custom_room(conn, room_id)
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+class RoomRename(BaseModel):
+    label: str
+
+
+@app.put("/api/rooms/{room_id}")
+def rename_room(room_id: str, body: RoomRename, request: Request):
+    """방 이름 수정 — "왼쪽으로 밀면 삭제나 수정 나오는 기능" 요청
+    (2026-08-28)의 "수정"에 해당. 방 주인 또는 관리자만 가능."""
+    if not getattr(request.state, "can_write", True):
+        raise HTTPException(status_code=403, detail="읽기 전용 계정입니다")
+    label = body.label.strip()
+    if not label or len(label) > 30:
+        raise HTTPException(status_code=400, detail="방 이름은 1~30자로 입력하세요")
+    user = getattr(request.state, "user", None)
+    username = user["username"] if user else None
+    is_owner_request = bool(user and user["is_owner"])
+    conn = get_conn()
+    row = conn.execute("SELECT owner_username FROM custom_rooms WHERE room_id = ?", (room_id,)).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="존재하지 않는 채팅방입니다")
+    if not (is_owner_request or row["owner_username"] == username):
+        conn.close()
+        raise HTTPException(status_code=403, detail="이 방의 주인이나 관리자만 수정할 수 있습니다")
+    conn.execute("UPDATE custom_rooms SET label = ? WHERE room_id = ?", (label, room_id))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "label": label}
 
 
 # ══════════════════════════════════════════════════════════════

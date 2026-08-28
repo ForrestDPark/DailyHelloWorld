@@ -162,6 +162,14 @@
     </form>
   </div>
 
+  <!-- "업데이트할 때마다 페이지 재시작해야 하는게 맞냐" 요청(2026-08-28) —
+       새 배포가 감지되면(GET /api/version 폴링) 여기 배너로 알려서 사용자가
+       스스로 새로고침할 수 있게 한다. 타이핑 중일 수 있어 강제 새로고침은 안 함. -->
+  <div id="version-banner" class="hidden">
+    새 업데이트가 있어요
+    <button id="version-refresh-btn" type="button">새로고침</button>
+  </div>
+
   <!-- 도움말 (2026-08-26 요청) — 어느 화면에서든 열 수 있는 전체 화면 오버레이 -->
   <div id="help-overlay" class="hidden">
     <div class="help-card">

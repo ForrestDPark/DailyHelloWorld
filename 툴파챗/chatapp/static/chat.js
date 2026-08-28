@@ -46,6 +46,7 @@ function closeMainListPanels() {
   }
 }
 roomListEl.addEventListener("scroll", closeMainListPanels);
+roomListEl.addEventListener("scroll", () => closeAllSwipes());
 
 // ★ 2026-08-26: 세션 쿠키가 만료됐거나(180일 지남) 로그인 자체가 안 된
 // 상태에서 API를 호출하면 서버가 401을 준다. fetch를 감싸서 401을 만나면
@@ -442,17 +443,41 @@ async function renderAdminPersonas() {
       generate.disabled = p.image_job_status === "pending" || p.image_job_status === "processing";
       generate.title = p.image_job_error || "OpenAI Images API로 새 프로필 이미지를 생성합니다";
       generate.addEventListener("click", () => requestPersonaImage(p.name, textarea.value.trim(), generate));
-      actions.append(save, upload, generate, remove, input); card.append(textarea, actions); list.appendChild(card);
+      // ★ "관리자가 툴파 삭제도 가능하게 해줘" 요청(2026-08-28) — 사용자
+      // 본인 페르소나 삭제(deleteMyPersona)와 달리 관리자는 공용 페르소나
+      // 포함 아무거나 지울 수 있다. 되돌릴 수 없어서 confirm 두 번(이름을
+      // 직접 확인)까지는 과하니, 이름을 메시지에 넣은 confirm 한 번으로.
+      const deletePersona = document.createElement("button");
+      deletePersona.type = "button"; deletePersona.textContent = "페르소나 삭제"; deletePersona.className = "danger-subtle";
+      deletePersona.addEventListener("click", async () => {
+        if (!confirm(`"${p.name}"을(를) 완전히 삭제할까요? 대화 기록도 함께 사라지며 되돌릴 수 없습니다.`)) return;
+        try {
+          await apiFetch(`/api/admin/personas/${encodeURIComponent(p.name)}`, {method:"DELETE"});
+          renderAdminPersonas();
+        } catch (e) {
+          if (e.message !== "unauthorized" && e.message !== "forbidden") alert("삭제 실패");
+        }
+      });
+      actions.append(save, upload, generate, remove, deletePersona, input); card.append(textarea, actions);
+      // ★ 2026-08-28 실측: 생성이 실패해도(예: OpenAI 429) 버튼 위 title
+      // 툴팁에만 이유가 숨어 있어서 사용자가 "눌렀는데 왜 안 바뀌지"라고
+      // 못 알아챘다 — 실패 시엔 카드에 빨간 안내 문구를 바로 보이게 한다.
+      if (p.image_job_status === "failed" && p.image_job_error) {
+        const errNote = document.createElement("div");
+        errNote.className = "admin-persona-image-error";
+        errNote.textContent = `⚠️ 이미지 생성 실패: ${p.image_job_error}`;
+        card.append(errNote);
+      }
+      list.appendChild(card);
     }
   } catch (e) { list.innerHTML = '<div class="empty-hint">불러오지 못했습니다</div>'; console.error(e); }
 }
 
 document.getElementById("admin-btn").addEventListener("click", () => {
   const panel = document.getElementById("admin-panel");
-  if (!panel.classList.contains("hidden")) {
-    panel.classList.add("hidden");
-    return;
-  }
+  const wasOpen = !panel.classList.contains("hidden");
+  closeMainListPanels();
+  if (wasOpen) return;
   panel.classList.remove("hidden");
   renderAdminUsers();
   renderAdminPersonas();
@@ -537,10 +562,9 @@ async function renderMyPersonas() {
 
 document.getElementById("persona-manager-btn").addEventListener("click", () => {
   const panel = document.getElementById("persona-manager-panel");
-  if (!panel.classList.contains("hidden")) {
-    panel.classList.add("hidden");
-    return;
-  }
+  const wasOpen = !panel.classList.contains("hidden");
+  closeMainListPanels();
+  if (wasOpen) return;
   panel.classList.remove("hidden");
   resetMyPersonaForm();
   renderMyPersonas();
@@ -591,10 +615,9 @@ document.getElementById("my-persona-form").addEventListener("submit", async (e) 
 // (서버가 그 기준으로 이미 걸러줌).
 document.getElementById("profiles-btn").addEventListener("click", async () => {
   const panel = document.getElementById("profiles-panel");
-  if (!panel.classList.contains("hidden")) {
-    panel.classList.add("hidden");
-    return;
-  }
+  const wasOpen = !panel.classList.contains("hidden");
+  closeMainListPanels();
+  if (wasOpen) return;
   panel.classList.remove("hidden");
   const list = document.getElementById("profiles-list");
   list.innerHTML = '<div class="empty-hint">불러오는 중...</div>';
@@ -790,11 +813,95 @@ function markRoomRead(roomId, messageId) {
   if (messageId > current) localStorage.setItem(lastReadKey(roomId), String(messageId));
 }
 
+// ★ "왼쪽으로 밀면 삭제나 수정 나오는 기능이 있으면 좋겠어" 요청
+// (2026-08-28) — 내가 만든 커스텀 방(room_id가 "custom_"로 시작)에만
+// 적용한다. 전체 채팅방·Notion 그룹 회의방·페르소나 1:1 방은 멤버십
+// 개념이 없어서 나가기/삭제가 의미가 없다. 스와이프로 연 항목은 하나만
+// 열려 있게(openSwipeItems), 드래그 직후의 클릭은 실수로 채팅방을 여는 걸
+// 막기 위해 wasRecentSwipeDrag()로 짧게 억제한다.
+const SWIPE_ACTION_WIDTH = 64; // px, .swipe-action-btn의 CSS width와 맞춰야 함
+const openSwipeItems = new Set();
+let lastSwipeDragAt = 0;
+function wasRecentSwipeDrag() {
+  return Date.now() - lastSwipeDragAt < 300;
+}
+function closeAllSwipes() {
+  for (const item of openSwipeItems) { if (item._closeSwipe) item._closeSwipe(); }
+  openSwipeItems.clear();
+}
+document.addEventListener("pointerdown", (e) => {
+  if (!openSwipeItems.size) return;
+  const stillInside = [...openSwipeItems].some((item) => item.contains(e.target));
+  if (!stillInside) closeAllSwipes();
+});
+
+function makeSwipeable(item, content, actionsConfig) {
+  if (!actionsConfig || !actionsConfig.length) return;
+  const actionsEl = document.createElement("div");
+  actionsEl.className = "swipe-actions";
+  for (const a of actionsConfig) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `swipe-action-btn ${a.className || ""}`;
+    btn.textContent = a.label;
+    btn.addEventListener("click", (e) => { e.stopPropagation(); closeAllSwipes(); a.onClick(); });
+    actionsEl.appendChild(btn);
+  }
+  item.appendChild(actionsEl);
+  const actionsWidth = actionsConfig.length * SWIPE_ACTION_WIDTH;
+  content.style.touchAction = "pan-y";
+  let baseX = 0, startX = 0, startY = 0, dragging = false, horizontal = null;
+  const setX = (x, animate) => {
+    content.style.transition = animate ? "transform .2s ease" : "none";
+    content.style.transform = `translateX(${x}px)`;
+  };
+  const closeSwipe = () => {
+    baseX = 0; setX(0, true);
+    item.classList.remove("swiped-open");
+    openSwipeItems.delete(item);
+  };
+  const openSwipe = () => {
+    closeAllSwipes();
+    baseX = -actionsWidth; setX(baseX, true);
+    item.classList.add("swiped-open");
+    openSwipeItems.add(item);
+  };
+  item._closeSwipe = closeSwipe;
+  content.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    startX = e.clientX; startY = e.clientY; dragging = true; horizontal = null;
+  });
+  content.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if (horizontal === null) {
+      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return;
+      horizontal = Math.abs(dx) > Math.abs(dy);
+      if (!horizontal) { dragging = false; return; } // 세로 스크롤에 양보
+    }
+    if (!horizontal) return;
+    setX(Math.min(0, Math.max(-actionsWidth, baseX + dx)), false);
+  });
+  const endDrag = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    if (!horizontal) return;
+    const dx = (e.clientX || 0) - startX;
+    if (Math.abs(dx) > 8) lastSwipeDragAt = Date.now();
+    (baseX + dx < -actionsWidth / 2) ? openSwipe() : closeSwipe();
+  };
+  content.addEventListener("pointerup", endDrag);
+  content.addEventListener("pointercancel", endDrag);
+}
+
 function renderRoomItem(r) {
   const item = document.createElement("div");
   item.className = "room-item";
-  item.tabIndex = 0;
-  item.setAttribute("role", "button");
+  const content = document.createElement("div");
+  content.className = "swipe-content";
+  content.tabIndex = 0;
+  content.setAttribute("role", "button");
+  item.appendChild(content);
   const isMeta = r.room_id === "group" || r.is_group_room;
   const avatarChar = r.label.replace(/^👥\s*/, "")[0] || "T";
   const roomLabel = isMeta ? r.label.replace(/^👥\s*/, "") : displayName(r.label);
@@ -806,21 +913,26 @@ function renderRoomItem(r) {
     : isMeta
       ? '<svg class="room-type-icon" aria-hidden="true"><use href="#icon-users"></use></svg>'
       : escapeHtml(avatarChar);
-  item.innerHTML = `
+  content.innerHTML = `
     <div class="avatar${r.thumbnail_url ? " avatar-image" : ""}">${avatarInner}</div>
     <div class="room-info">
       <div class="room-name">${escapeHtml(roomLabel)}${unread ? '<span class="unread-dot"></span>' : ""}</div>
       <div class="room-preview">${r.last_message ? escapeHtml(r.last_message) : "대화를 시작해보세요"}</div>
     </div>
   `;
-  const openChat = () => { location.hash = "#room=" + encodeURIComponent(r.room_id); };
+  const openChat = () => {
+    if (wasRecentSwipeDrag()) return;
+    if (item.classList.contains("swiped-open")) { item._closeSwipe(); return; }
+    location.hash = "#room=" + encodeURIComponent(r.room_id);
+  };
   if (listMode === "friends" && !isMeta) {
-    item.title = "한 번 클릭해 선택, 더블클릭해 대화하기";
-    item.addEventListener("click", () => {
+    content.title = "한 번 클릭해 선택, 더블클릭해 대화하기";
+    content.addEventListener("click", () => {
+      if (wasRecentSwipeDrag()) return;
       document.querySelectorAll(".room-item.selected").forEach((el) => el.classList.remove("selected"));
       item.classList.add("selected");
     });
-    item.addEventListener("dblclick", openChat);
+    content.addEventListener("dblclick", openChat);
     const menuBtn = document.createElement("button");
     menuBtn.type = "button";
     menuBtn.className = "friend-more-btn";
@@ -846,11 +958,43 @@ function renderRoomItem(r) {
       if (amOwner) addAction("그룹 설정", () => openGroupPicker(item, r));
       item.appendChild(menu);
     });
-    item.appendChild(menuBtn);
-    item.addEventListener("keydown", (event) => { if (event.key === "Enter") openChat(); });
+    content.appendChild(menuBtn);
+    content.addEventListener("keydown", (event) => { if (event.key === "Enter") openChat(); });
   } else {
-    item.addEventListener("click", openChat);
-    item.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") openChat(); });
+    content.addEventListener("click", openChat);
+    content.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") openChat(); });
+  }
+  if (r.room_id.startsWith("custom_")) {
+    const roomTitle = roomLabel;
+    const doRename = () => {
+      const next = prompt("새 방 이름을 입력하세요", roomTitle);
+      if (next === null) return;
+      const label = next.trim();
+      if (!label) return;
+      apiFetch(`/api/rooms/${encodeURIComponent(r.room_id)}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label }),
+      }).then(() => showRoomList()).catch((e) => {
+        if (e.message !== "unauthorized" && e.message !== "forbidden") alert("수정 실패");
+      });
+    };
+    const doDelete = async () => {
+      if (!confirm(`"${roomTitle}" 방을 삭제할까요? 대화 기록도 함께 사라지며 되돌릴 수 없습니다.`)) return;
+      try {
+        await apiFetch(`/api/rooms/${encodeURIComponent(r.room_id)}`, { method: "DELETE" });
+        await showRoomList();
+      } catch (e) { if (e.message !== "unauthorized" && e.message !== "forbidden") alert("삭제 실패"); }
+    };
+    const doLeave = async () => {
+      if (!confirm(`"${roomTitle}" 방에서 나갈까요?`)) return;
+      try {
+        await apiFetch(`/api/rooms/${encodeURIComponent(r.room_id)}/leave`, { method: "POST" });
+        await showRoomList();
+      } catch (e) { if (e.message !== "unauthorized" && e.message !== "forbidden") alert("나가기 실패"); }
+    };
+    const actionsConfig = (amOwner || r.is_mine)
+      ? [{ label: "수정", className: "edit", onClick: doRename }, { label: "삭제", className: "danger", onClick: doDelete }]
+      : [{ label: "나가기", className: "danger", onClick: doLeave }];
+    makeSwipeable(item, content, actionsConfig);
   }
   return item;
 }
@@ -1818,3 +1962,26 @@ window.addEventListener("hashchange", route);
 initAuth().then((ok) => {
   if (ok) route();
 });
+
+// ★ "업데이트할 때마다 페이지 재시작해야 하는 게 맞냐, 자연스럽게 바뀔 수
+// 없냐" 요청(2026-08-28) — 서버 코드(app.py 등)는 재시작해야 새 버전이
+// 돌지만(파이썬 프로세스 특성상 불가피), 프론트(HTML·JS·CSS)는 파일만
+// 고쳐도 서버가 즉시 최신을 내려준다. 문제는 "이미 열려 있는 브라우저
+// 탭"은 그걸 스스로 알 방법이 없다는 것 — 그래서 주기적으로 버전을 확인해
+// 바뀌었으면 배너로 알린다. 타이핑 중일 수도 있어 강제로 새로고침하지
+// 않고, 사용자가 직접 누르게 한다.
+let currentVersion = null;
+const VERSION_CHECK_INTERVAL_MS = 90 * 1000;
+async function checkForNewVersion() {
+  try {
+    const res = await fetch("/api/version");
+    const data = await res.json();
+    if (currentVersion === null) { currentVersion = data.version; return; }
+    if (data.version !== currentVersion) {
+      document.getElementById("version-banner").classList.remove("hidden");
+    }
+  } catch (e) { /* 네트워크 문제는 다음 주기에 다시 시도 */ }
+}
+document.getElementById("version-refresh-btn").addEventListener("click", () => location.reload());
+checkForNewVersion();
+setInterval(checkForNewVersion, VERSION_CHECK_INTERVAL_MS);
