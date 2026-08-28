@@ -108,6 +108,13 @@ def init_db():
             PRIMARY KEY (message_id, username, emoji),
             FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS room_read_state (
+            username TEXT NOT NULL,
+            room_id TEXT NOT NULL,
+            last_message_id INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (username, room_id)
+        );
         CREATE TABLE IF NOT EXISTS persona_image_jobs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             persona_name TEXT NOT NULL,

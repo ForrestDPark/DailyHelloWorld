@@ -1859,6 +1859,11 @@ def list_rooms(request: Request):
         room["last_message_id"] = last["id"] if last else None
         room["last_message"] = _preview_text(last["content"]) if last else None
         room["last_message_at"] = last["created_at"] if last else None
+        read = conn.execute(
+            "SELECT last_message_id FROM room_read_state WHERE username=? AND room_id=?",
+            (username or "user", room["room_id"]),
+        ).fetchone()
+        room["last_read_id"] = read["last_message_id"] if read else 0
     conn.close()
     return rooms
 
@@ -1914,9 +1919,10 @@ def get_messages(request: Request, room_id: str = GROUP_ROOM_ID, since_id: int =
     rows = conn.execute(
         """SELECT m.id, m.sender, m.content, m.created_at, m.reply_message_id, m.is_system,
                   parent.sender AS reply_sender, parent.content AS reply_content
-             FROM messages m
+             FROM (SELECT * FROM messages
+                    WHERE room_id = ? AND id > ? ORDER BY id DESC LIMIT 500) m
              LEFT JOIN messages parent ON parent.id = m.reply_message_id
-            WHERE m.room_id = ? AND m.id > ? ORDER BY m.id""",
+            ORDER BY m.id""",
         (room_id, since_id),
     ).fetchall()
     reactions = _message_reactions(conn, [r["id"] for r in rows], username)
@@ -1925,7 +1931,38 @@ def get_messages(request: Request, room_id: str = GROUP_ROOM_ID, since_id: int =
     messages = _with_sender_type(rows, persona_names, persona_avatars, human_profiles)
     for message in messages:
         message["reactions"] = reactions.get(message["id"], [])
+        if message.get("reply_sender"):
+            message["reply_is_persona"] = message["reply_sender"] in persona_names
+            reply_profile = human_profiles.get(message["reply_sender"], {})
+            message["reply_display_name"] = reply_profile.get("display_name") or message["reply_sender"]
     return messages
+
+
+class ReadStateUpdate(BaseModel):
+    room_id: str
+    last_message_id: int
+
+
+@app.put("/api/read-state")
+def update_read_state(body: ReadStateUpdate, request: Request):
+    """계정별 읽음 위치를 서버에 저장해 브라우저와 기기가 달라도 동기화한다."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    if body.last_message_id < 0:
+        raise HTTPException(status_code=400, detail="잘못된 메시지 ID입니다")
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO room_read_state(username, room_id, last_message_id, updated_at)
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(username, room_id) DO UPDATE SET
+             last_message_id=MAX(room_read_state.last_message_id, excluded.last_message_id),
+             updated_at=excluded.updated_at""",
+        (user["username"], body.room_id, body.last_message_id, _now()),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 class MessageEdit(BaseModel):
@@ -2040,6 +2077,40 @@ class NewMessage(BaseModel):
 
 class MessageReactionRequest(BaseModel):
     emoji: str
+
+
+class QaResolutionRequest(BaseModel):
+    source_message_id: int
+    summary: str
+
+
+@app.post("/api/admin/qa-resolution")
+def post_qa_resolution(body: QaResolutionRequest, request: Request):
+    """관리자가 QA 제보를 해결한 뒤, 제보가 올라온 방에서 QA요정 명의로
+    원 제보자에게 결과를 알린다. AI 실행이나 파일 권한 없이 DB에 정해진
+    형식의 메시지만 추가하는 소유자 전용 경로다."""
+    user = getattr(request.state, "user", None)
+    if not user or not user["is_owner"]:
+        raise HTTPException(status_code=403, detail="관리자만 해결 알림을 보낼 수 있습니다")
+    summary = body.summary.strip()
+    if not summary or len(summary) > 500:
+        raise HTTPException(status_code=400, detail="해결 내용을 1~500자로 입력해주세요")
+    conn = get_conn()
+    source = conn.execute(
+        "SELECT id, sender, room_id FROM messages WHERE id=?", (body.source_message_id,)
+    ).fetchone()
+    if not source:
+        conn.close()
+        raise HTTPException(status_code=404, detail="원본 QA 메시지를 찾을 수 없습니다")
+    content = f"@{source['sender']} 제보해주신 문제를 관리자가 해결했습니다. {summary}"
+    cursor = conn.execute(
+        "INSERT INTO messages(sender, content, created_at, room_id, reply_message_id) VALUES (?, ?, ?, ?, ?)",
+        ("QA요정", content, _now(), source["room_id"], source["id"]),
+    )
+    conn.commit()
+    message_id = cursor.lastrowid
+    conn.close()
+    return {"ok": True, "message_id": message_id, "room_id": source["room_id"]}
 
 
 @app.post("/api/messages/{message_id}/reactions")

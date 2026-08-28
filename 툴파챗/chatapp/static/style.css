@@ -753,6 +753,18 @@ main#messages {
   flex-direction: column;
   gap: 8px;
 }
+#message-search {
+  width: min(28vw, 180px);
+  min-height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 11px;
+  background: var(--bg);
+  color: var(--fg);
+}
+@media (max-width: 560px) {
+  #message-search { width: 92px; }
+}
 
 .msg { max-width: 80%; display: flex; flex-direction: column; gap: 2px; position: relative; }
 .msg-user { align-self: flex-end; align-items: flex-end; }
@@ -779,6 +791,20 @@ main#messages {
   height: 1px;
   background: var(--border);
 }
+.date-separator {
+  align-self: center;
+  margin: 10px 0 4px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg) 82%, var(--accent) 18%);
+  color: var(--muted);
+  font-size: 11px;
+}
+.image-lightbox {
+  position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center;
+  padding: 20px; background: rgba(0,0,0,.86); cursor: zoom-out;
+}
+.image-lightbox img { max-width: 96vw; max-height: 92vh; object-fit: contain; border-radius: 12px; }
 
 .message-avatar {
   position: absolute;
@@ -961,6 +987,12 @@ form#composer {
   padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
 }
+#ai-response-status {
+  padding: 7px 16px;
+  color: var(--muted);
+  font-size: 12px;
+}
+#ai-status-retry { margin-left: 6px; border: 0; background: none; color: var(--accent); font-weight: 700; }
 #upload-btn {
   border: none;
   background: none;
@@ -969,6 +1001,19 @@ form#composer {
   padding: 4px;
   cursor: pointer;
 }
+#upload-preview {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 12px;
+  color: var(--muted);
+}
+#upload-preview-images { display: flex; gap: 5px; overflow-x: auto; flex: 1; }
+#upload-preview-images img { width: 44px; height: 44px; border-radius: 9px; object-fit: cover; }
+#upload-cancel-btn { border: 0; border-radius: 10px; padding: 7px 10px; background: var(--accent-soft); color: var(--accent); }
 
 /* ★ 읽기 전용 공유 링크 방문자(2026-08-25) — 입력 관련 UI를 통째로 숨김 */
 body.read-only form#composer,

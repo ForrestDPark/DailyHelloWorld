@@ -124,6 +124,7 @@
     <header class="chat-header">
       <button id="back-btn" type="button" aria-label="채팅방 목록으로" class="icon-button"><svg><use href="#icon-back"/></svg></button>
       <h1 id="room-title"></h1>
+      <input id="message-search" type="search" placeholder="메시지 검색" aria-label="현재 채팅방 메시지 검색">
       <button id="thumbnail-btn" type="button" aria-label="대표사진 변경" class="icon-button hidden"><svg><use href="#icon-image"/></svg></button>
       <input id="thumbnail-input" type="file" accept="image/*" class="hidden">
       <button id="invite-btn" type="button" aria-label="참여자 보기 및 초대" class="icon-button hidden"><svg><use href="#icon-users"/></svg></button>
@@ -158,13 +159,22 @@
       <span id="reply-banner-text"></span>
       <button id="reply-cancel-btn" type="button" aria-label="답장 취소" class="icon-button"><svg><use href="#icon-close"/></svg></button>
     </div>
+    <div id="ai-response-status" class="hidden" aria-live="polite">
+      <span id="ai-response-status-text">답변 생성 중…</span>
+      <button id="ai-status-retry" type="button" class="hidden">상태 다시 확인</button>
+    </div>
     <form id="composer">
       <button id="upload-btn" type="button" aria-label="사진 첨부" class="icon-button"><svg><use href="#icon-image"/></svg></button>
-      <input id="image-input" type="file" accept="image/*" class="hidden">
+      <input id="image-input" type="file" accept="image/*" multiple class="hidden">
       <textarea id="input" rows="1" placeholder="메시지 입력" autocomplete="off"
                 aria-label="메시지 입력"></textarea>
       <button type="submit">보내기</button>
     </form>
+    <div id="upload-preview" class="hidden" aria-live="polite">
+      <div id="upload-preview-images"></div>
+      <span id="upload-progress-text">업로드 준비 중</span>
+      <button id="upload-cancel-btn" type="button">취소</button>
+    </div>
   </div>
 
   <!-- "업데이트할 때마다 페이지 재시작해야 하는게 맞냐" 요청(2026-08-28) —

@@ -1,6 +1,10 @@
 let currentRoom = null;
 let lastId = 0;
 let pollTimer = null;
+let pollGeneration = 0;
+let activePollController = null;
+let renderedDateKey = null;
+let aiStatusTimer = null;
 let canWrite = true; // /api/whoami로 초기화 — 공유 링크로 들어온 읽기 전용 방문자는 false
 let myUsername = null; // 로그인 계정의 실제 아이디(2026-08-26 다중 계정) — 내 메시지 판별용
 let amOwner = false; // 소유자 계정으로 로그인했는지 — 권한 관리(⚙️) 패널 노출 여부에 씀
@@ -16,6 +20,28 @@ const roomListView = document.getElementById("room-list-view");
 const chatView = document.getElementById("chat-view");
 const roomListEl = document.getElementById("room-list");
 const messagesEl = document.getElementById("messages");
+const aiResponseStatus = document.getElementById("ai-response-status");
+const aiResponseStatusText = document.getElementById("ai-response-status-text");
+const aiStatusRetry = document.getElementById("ai-status-retry");
+
+function setAiResponseStatus(waiting) {
+  clearTimeout(aiStatusTimer);
+  aiResponseStatus.classList.toggle("hidden", !waiting);
+  aiStatusRetry.classList.add("hidden");
+  aiResponseStatusText.textContent = "답변 생성 중…";
+  if (waiting) aiStatusTimer = setTimeout(() => {
+    aiResponseStatusText.textContent = "답변이 평소보다 늦어지고 있습니다.";
+    aiStatusRetry.classList.remove("hidden");
+  }, 45000);
+}
+aiStatusRetry.addEventListener("click", () => { pollGeneration += 1; poll(); });
+const messageSearch = document.getElementById("message-search");
+messageSearch.addEventListener("input", () => {
+  const query = messageSearch.value.trim().toLocaleLowerCase("ko-KR");
+  for (const message of messagesEl.querySelectorAll(".msg, .msg-system")) {
+    message.classList.toggle("hidden", !!query && !message.textContent.toLocaleLowerCase("ko-KR").includes(query));
+  }
+});
 
 // ★ "채팅 입력창 가운데 위에 아래화살표 버튼 누르면 최신 메시지로 이동"
 // 요청(2026-08-28) — 메시지 영역을 스크롤해서 맨 아래에서 멀어지면 버튼을
@@ -873,15 +899,24 @@ function displayName(name) {
 // 상태를 안 들고 있으므로(단일 사용자 개인 앱), "이 방에서 마지막으로 읽은
 // 메시지 id"를 브라우저 localStorage에 기기별로 저장한다.
 function lastReadKey(roomId) {
-  return `tulpa_last_read_${roomId}`;
+  return `tulpa_last_read_${myUsername || "guest"}_${roomId}`;
 }
 function getLastRead(roomId) {
-  return parseInt(localStorage.getItem(lastReadKey(roomId)) || "0", 10);
+  const serverValue = roomsCache.get(roomId)?.last_read_id || 0;
+  return Math.max(serverValue, parseInt(localStorage.getItem(lastReadKey(roomId)) || "0", 10));
 }
 function markRoomRead(roomId, messageId) {
   if (!messageId) return;
   const current = getLastRead(roomId);
-  if (messageId > current) localStorage.setItem(lastReadKey(roomId), String(messageId));
+  if (messageId > current) {
+    localStorage.setItem(lastReadKey(roomId), String(messageId));
+    const room = roomsCache.get(roomId);
+    if (room) room.last_read_id = messageId;
+    apiFetch("/api/read-state", {
+      method: "PUT", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({room_id: roomId, last_message_id: messageId}),
+    }).catch(() => {});
+  }
 }
 
 // ★ "왼쪽으로 밀면 삭제나 수정 나오는 기능이 있으면 좋겠어" 요청
@@ -1351,6 +1386,8 @@ let usersCache = [];
 
 async function showRoomList() {
   currentRoom = null;
+  pollGeneration += 1;
+  if (activePollController) activePollController.abort();
   if (pollTimer) clearTimeout(pollTimer);
   authView.classList.add("hidden");
   chatView.classList.add("hidden");
@@ -1404,10 +1441,18 @@ function appendLinkifiedText(container, text) {
 }
 
 async function showChatView(roomId) {
+  pollGeneration += 1;
+  if (activePollController) activePollController.abort();
   currentRoom = roomId;
+  setAiResponseStatus(false);
+  const draft = localStorage.getItem(`tulpa_draft_${myUsername || "guest"}_${roomId}`) || "";
+  document.getElementById("input").value = draft;
+  resizeMessageInput();
   lastId = 0;
+  renderedDateKey = null;
   setReplyTarget(null);
   messagesEl.innerHTML = "";
+  messageSearch.value = "";
   scrollBottomBtn.classList.add("hidden");
   roomListView.classList.add("hidden");
   chatView.classList.remove("hidden");
@@ -1778,8 +1823,14 @@ async function showProfilePopup(message) {
   const name = document.createElement("h2"); name.textContent = label;
   const summary = document.createElement("p"); summary.textContent = profile?.summary || (message.is_persona ? "프로필 정보가 없습니다." : "채팅방 참여자");
   close.addEventListener("click", () => overlay.remove()); overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
-  popup.append(close, avatar, name, summary); overlay.appendChild(popup); document.body.appendChild(overlay);
+  popup.append(close, avatar, name, summary); overlay.appendChild(popup); document.body.appendChild(overlay); close.focus();
 }
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  closeMessageMenu();
+  document.querySelector(".profile-popup-overlay, .image-lightbox")?.remove();
+});
 
 // ★ "관리자는 메시지 삭제 권한, 각 이용자는 자기 메시지 수정·삭제 권한"
 // 요청(2026-08-27) — 수정은 본인이 직접 쓴 텍스트 메시지에만 허용한다
@@ -1814,6 +1865,21 @@ async function deleteMessage(message, hostEl) {
   }
 }
 
+async function notifyQaResolution(message) {
+  const summary = prompt("QA 제보자에게 알릴 해결 내용을 입력하세요");
+  if (!summary?.trim()) return;
+  try {
+    const res = await apiFetch("/api/admin/qa-resolution", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({source_message_id: message.id, summary: summary.trim()}),
+    });
+    if (!res.ok) { alert((await res.json()).detail || "해결 알림을 보내지 못했습니다"); return; }
+    alert("QA요정이 제보자에게 해결 내용을 전달했습니다.");
+  } catch (e) {
+    if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
+  }
+}
+
 function openMessageMenu(message, hostEl, x, y) {
   closeMessageMenu();
   const menu = document.createElement("div"); menu.className = "message-action-menu";
@@ -1827,6 +1893,7 @@ function openMessageMenu(message, hostEl, x, y) {
   if (canWrite) addAction("답장하기", () => setReplyTarget(message.is_persona ? message.sender : null, message));
   addAction("복사", () => navigator.clipboard.writeText(message.content).catch(() => {}));
   addAction("프로필 보기", () => showProfilePopup(message));
+  if (amOwner && !message.is_persona) addAction("QA 해결 알림", () => notifyQaResolution(message));
   const isMine = !message.is_persona && message.sender === myUsername;
   const hasImage = IMAGE_MARKER_RE.test(message.content);
   if (canWrite && isMine && !hasImage) addAction("수정", () => editMessage(message, hostEl));
@@ -1854,22 +1921,39 @@ function scrollToMessage(messageId) {
 // ★ "초대가 되면 그 톡방에 '누가 초대되었습니다'라고 구분선 같은 걸
 // 만들어달라" 요청(2026-08-28) — 말풍선이 아니라 가운데 정렬된 얇은 구분선
 // 스타일로 그린다(양옆에 선, 가운데 문구 — CSS ::before/::after).
-function renderSystemMessage(m) {
+function renderSystemMessage(m, shouldScroll = false) {
   const el = document.createElement("div");
   el.className = "msg-system";
   el.dataset.messageId = String(m.id);
   el.textContent = m.content;
   messagesEl.appendChild(el);
-  el.scrollIntoView({ behavior: "smooth", block: "end" });
+  while (messagesEl.children.length > 500) messagesEl.firstElementChild.remove();
+  if (shouldScroll) el.scrollIntoView({behavior: "smooth", block: "end"});
 }
 
-function appendMessage(m) {
-  if (m.is_system) { renderSystemMessage(m); return; }
+function ensureDateSeparator(m) {
+  if (!m.created_at) return;
+  const date = new Date(m.created_at);
+  if (Number.isNaN(date.getTime())) return;
+  const key = date.toLocaleDateString("ko-KR");
+  if (key === renderedDateKey) return;
+  renderedDateKey = key;
+  const separator = document.createElement("div");
+  separator.className = "date-separator";
+  separator.textContent = date.toLocaleDateString("ko-KR", {year:"numeric", month:"long", day:"numeric", weekday:"short"});
+  messagesEl.appendChild(separator);
+}
+
+function appendMessage(m, forceScroll = false) {
+  const wasNearBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < SCROLL_BOTTOM_THRESHOLD_PX;
+  ensureDateSeparator(m);
+  if (m.is_system) { renderSystemMessage(m, forceScroll || wasNearBottom); return; }
   // ★ 2026-08-26: 다중 계정 로그인 전에는 sender==='user' 하나로 "내 메시지"를
   // 판별했다. 이제 여러 사람이 같은 방에 쓸 수 있어 서버가 내려주는
   // is_persona로 페르소나 여부를 판별하고, 사람 메시지 중에서도 "나"(현재
   // 로그인 계정)와 "다른 사람"을 구분해서 보여준다.
   const isPersona = !!m.is_persona;
+  if (isPersona) setAiResponseStatus(false);
   const isMine = !isPersona && m.sender === myUsername;
   const el = document.createElement("div");
   el.className = "msg " + (isPersona ? "msg-persona" : isMine ? "msg-user" : "msg-other");
@@ -1913,7 +1997,9 @@ function appendMessage(m) {
     const quote = document.createElement("div");
     quote.className = "message-reply-quote";
     const quoteName = document.createElement("strong");
-    quoteName.textContent = displayName(m.reply_sender);
+    quoteName.textContent = m.reply_is_persona
+      ? displayName(m.reply_sender)
+      : (m.reply_display_name || m.reply_sender);
     const quoteText = document.createElement("span");
     quoteText.textContent = (m.reply_content || "").replace(IMAGE_MARKER_RE, "[사진]").slice(0, 90);
     quote.append(quoteName, quoteText);
@@ -1931,6 +2017,20 @@ function appendMessage(m) {
     const img = document.createElement("img");
     img.src = imageMatch[1];
     img.className = "chat-image";
+    img.tabIndex = 0;
+    img.setAttribute("role", "button");
+    img.setAttribute("aria-label", "사진 크게 보기");
+    const enlarge = () => {
+      const overlay = document.createElement("div");
+      overlay.className = "image-lightbox";
+      const full = document.createElement("img");
+      full.src = img.src; full.alt = "확대된 채팅 사진";
+      overlay.appendChild(full);
+      overlay.addEventListener("click", () => overlay.remove());
+      document.body.appendChild(overlay);
+    };
+    img.addEventListener("click", enlarge);
+    img.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") enlarge(); });
     body.appendChild(img);
     const rest = m.content.replace(IMAGE_MARKER_RE, "").trim();
     if (rest) {
@@ -1964,25 +2064,50 @@ function appendMessage(m) {
   });
   body.addEventListener("contextmenu", (event) => { event.preventDefault(); cancelLongPress(); openMessageMenu(m, el, event.clientX, event.clientY); });
   messagesEl.appendChild(el);
-  el.scrollIntoView({ behavior: "smooth", block: "end" });
+  if (messageSearch.value.trim() && !el.textContent.toLocaleLowerCase("ko-KR").includes(messageSearch.value.trim().toLocaleLowerCase("ko-KR"))) {
+    el.classList.add("hidden");
+  }
+  while (messagesEl.children.length > 500) messagesEl.firstElementChild.remove();
+  if (forceScroll || wasNearBottom) {
+    el.scrollIntoView({ behavior: forceScroll ? "auto" : "smooth", block: "end" });
+  }
 }
 
 async function poll() {
-  if (!currentRoom) return;
+  if (!currentRoom || document.hidden) return;
+  const roomAtRequest = currentRoom;
+  const generation = pollGeneration;
+  const sinceId = lastId;
+  activePollController = new AbortController();
   try {
-    const res = await apiFetch(`/api/messages?room_id=${encodeURIComponent(currentRoom)}&since_id=${lastId}`);
+    const res = await apiFetch(`/api/messages?room_id=${encodeURIComponent(roomAtRequest)}&since_id=${sinceId}`, {signal: activePollController.signal});
     const messages = await res.json();
+    if (generation !== pollGeneration || roomAtRequest !== currentRoom) return;
+    const initialLoad = sinceId === 0;
     for (const m of messages) {
-      appendMessage(m);
+      appendMessage(m, initialLoad);
       lastId = m.id;
     }
-    if (messages.length) markRoomRead(currentRoom, lastId);
+    if (messages.length) markRoomRead(roomAtRequest, lastId);
   } catch (e) {
+    if (e.name === "AbortError") return;
     if (e.message === "unauthorized" || e.message === "forbidden") return; // apiFetch가 이미 처리하고 돌려보냄 — 폴링 중단
     console.error(e);
   }
-  pollTimer = setTimeout(poll, 2000);
+  if (generation === pollGeneration && roomAtRequest === currentRoom && !document.hidden) {
+    pollTimer = setTimeout(poll, 2000);
+  }
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    if (pollTimer) clearTimeout(pollTimer);
+    if (activePollController) activePollController.abort();
+  } else if (currentRoom) {
+    pollGeneration += 1;
+    poll();
+  }
+});
 
 // ★ "서버 업데이트로 껐다 켜는 도중에 메시지 보내면 반응이 끊긴다" 요청
 // (2026-08-27) — 서버 재시작(보통 1~3초)과 정확히 겹치면 fetch 자체가
@@ -1993,28 +2118,38 @@ async function poll() {
 const SEND_RETRY_ATTEMPTS = 5;
 const SEND_RETRY_DELAY_MS = 1200;
 
-async function sendMessage(content) {
-  if (!currentRoom || !content) return;
-  const body = JSON.stringify({ content, room_id: currentRoom, reply_to: replyTarget, reply_message_id: replyMessage?.id || null });
-  setReplyTarget(null);
+async function sendMessage(content, roomId = currentRoom) {
+  if (!roomId || !content) return false;
+  const capturedReplyTarget = roomId === currentRoom ? replyTarget : null;
+  const capturedReplyMessageId = roomId === currentRoom ? (replyMessage?.id || null) : null;
+  const body = JSON.stringify({ content, room_id: roomId, reply_to: capturedReplyTarget, reply_message_id: capturedReplyMessageId });
   for (let attempt = 1; attempt <= SEND_RETRY_ATTEMPTS; attempt++) {
     try {
-      await apiFetch("/api/messages", {
+      const res = await apiFetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body,
       });
-      return;
+      if (!res.ok) {
+        const errorBody = await res.json().catch(() => ({}));
+        const error = new Error(errorBody.detail || `HTTP ${res.status}`);
+        error.retryable = res.status >= 500;
+        throw error;
+      }
+      if (roomId === currentRoom) setReplyTarget(null);
+      if (roomId === currentRoom && !content.startsWith("![](")) setAiResponseStatus(true);
+      return true;
     } catch (e) {
-      if (e.message === "unauthorized" || e.message === "forbidden") return;
-      if (attempt === SEND_RETRY_ATTEMPTS) {
+      if (e.message === "unauthorized" || e.message === "forbidden") return false;
+      if (attempt === SEND_RETRY_ATTEMPTS || e.retryable === false) {
         console.error(e);
         alert("메시지를 보내지 못했습니다. 잠시 후 다시 시도해주세요.");
-        return;
+        return false;
       }
       await new Promise((resolve) => setTimeout(resolve, SEND_RETRY_DELAY_MS));
     }
   }
+  return false;
 }
 
 // ★ 모바일에서 긴 메시지가 한 줄 입력창 밖으로 숨어 작성 내용을
@@ -2032,7 +2167,10 @@ function resizeMessageInput() {
   messageInput.style.overflowY = messageInput.scrollHeight > MESSAGE_INPUT_MAX_HEIGHT ? "auto" : "hidden";
 }
 
-messageInput.addEventListener("input", resizeMessageInput);
+messageInput.addEventListener("input", () => {
+  resizeMessageInput();
+  if (currentRoom) localStorage.setItem(`tulpa_draft_${myUsername || "guest"}_${currentRoom}`, messageInput.value);
+});
 messageInput.addEventListener("keydown", (e) => {
   const desktopKeyboard = window.matchMedia("(pointer: fine)").matches;
   if (desktopKeyboard && e.key === "Enter" && !e.shiftKey && !e.isComposing) {
@@ -2048,7 +2186,13 @@ document.getElementById("composer").addEventListener("submit", async (e) => {
   if (!content) return;
   messageInput.value = "";
   resizeMessageInput();
-  await sendMessage(content);
+  const sent = await sendMessage(content);
+  if (sent && currentRoom) localStorage.removeItem(`tulpa_draft_${myUsername || "guest"}_${currentRoom}`);
+  if (!sent && !messageInput.value) {
+    messageInput.value = content;
+    resizeMessageInput();
+    messageInput.focus();
+  }
 });
 
 // ★ "채팅창에 이미지 업로드해서 서로 분석하면 좋겠다" 요청(2026-08-25) —
@@ -2056,26 +2200,68 @@ document.getElementById("composer").addEventListener("submit", async (e) => {
 // 메시지에 실어 보낸다. 워커(persona_worker.py)가 같은 마커를 찾아 로컬
 // 파일로 읽어 AI에게 실제로 보여준다.
 const imageInput = document.getElementById("image-input");
+const uploadPreview = document.getElementById("upload-preview");
+const uploadPreviewImages = document.getElementById("upload-preview-images");
+const uploadProgressText = document.getElementById("upload-progress-text");
+let activeUpload = null;
+
+function uploadImageFile(file, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    activeUpload.xhr = xhr;
+    xhr.open("POST", "/api/upload");
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress(Math.round(event.loaded / event.total * 100));
+    };
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve(JSON.parse(xhr.responseText));
+      else reject(new Error(JSON.parse(xhr.responseText || "{}").detail || `HTTP ${xhr.status}`));
+    };
+    xhr.onerror = () => reject(new Error("네트워크 오류"));
+    xhr.onabort = () => reject(new DOMException("업로드 취소", "AbortError"));
+    const formData = new FormData();
+    formData.append("file", file);
+    xhr.send(formData);
+  });
+}
+
 document.getElementById("upload-btn").addEventListener("click", () => imageInput.click());
 imageInput.addEventListener("change", async () => {
-  const file = imageInput.files[0];
+  const files = [...imageInput.files];
   imageInput.value = "";
-  if (!file || !currentRoom) return;
-  const formData = new FormData();
-  formData.append("file", file);
-  try {
-    const res = await apiFetch("/api/upload", { method: "POST", body: formData });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      alert(err.detail || "이미지 업로드 실패");
-      return;
-    }
-    const { url } = await res.json();
-    await sendMessage(`![](${url})`);
-  } catch (e) {
-    console.error(e);
-    alert("이미지 업로드 실패");
+  if (!files.length || !currentRoom) return;
+  const roomAtSelection = currentRoom;
+  activeUpload = {cancelled: false, xhr: null};
+  uploadPreviewImages.replaceChildren();
+  for (const file of files) {
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(file);
+    img.onload = () => URL.revokeObjectURL(img.src);
+    img.alt = file.name;
+    uploadPreviewImages.appendChild(img);
   }
+  uploadPreview.classList.remove("hidden");
+  try {
+    for (let index = 0; index < files.length; index++) {
+      if (activeUpload.cancelled) break;
+      const data = await uploadImageFile(files[index], (percent) => {
+        uploadProgressText.textContent = `${index + 1}/${files.length} 업로드 ${percent}%`;
+      });
+      if (!activeUpload.cancelled) await sendMessage(`![](${data.url})`, roomAtSelection);
+    }
+  } catch (e) {
+    if (e.name !== "AbortError") { console.error(e); alert(`이미지 업로드 실패: ${e.message}`); }
+  } finally {
+    activeUpload = null;
+    uploadPreview.classList.add("hidden");
+    uploadPreviewImages.replaceChildren();
+  }
+});
+document.getElementById("upload-cancel-btn").addEventListener("click", () => {
+  if (!activeUpload) return;
+  activeUpload.cancelled = true;
+  if (activeUpload.xhr) activeUpload.xhr.abort();
+  uploadProgressText.textContent = "업로드 취소 중";
 });
 
 document.getElementById("back-btn").addEventListener("click", () => {
