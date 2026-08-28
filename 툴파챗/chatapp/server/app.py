@@ -119,6 +119,7 @@ UPLOADS_DIR = Path(os.path.expanduser("~/.tulpachat/uploads"))
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10MB
 ALLOWED_UPLOAD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic"}
+BACKGROUND_UPLOAD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 IMAGE_MARKER_RE = re.compile(r"!\[\]\(/uploads/[^)]+\)")
 
 
@@ -1052,6 +1053,97 @@ async def upload_room_thumbnail(room_id: str, request: Request, file: UploadFile
     conn.commit()
     conn.close()
     return {"ok": True, "thumbnail_url": url}
+
+
+def _require_personal_background_room_access(conn, room_id, username, is_owner_request):
+    """개인 배경을 설정하려는 방이 실제로 이 계정에 보이는 방인지 확인한다.
+    메시지 조회와 같은 접근 규칙을 적용해 임의 room_id에 파일 설정을 쌓거나
+    초대받지 않은 방의 존재를 확인하지 못하게 한다."""
+    if room_id == GROUP_ROOM_ID:
+        return
+    persona = conn.execute(
+        "SELECT owner_username FROM personas WHERE name=?", (room_id,)
+    ).fetchone()
+    if persona:
+        if not _can_access_persona_room(persona["owner_username"], username, is_owner_request):
+            raise HTTPException(status_code=403, detail="이 채팅방을 볼 수 없습니다")
+        return
+    is_custom, allowed, _room_owner = _custom_room_access(conn, room_id, username, is_owner_request)
+    if is_custom:
+        if not allowed:
+            raise HTTPException(status_code=403, detail="이 채팅방을 볼 수 없습니다")
+        return
+    if _is_notion_group_room(conn, room_id):
+        if not _group_room_allowed(conn, room_id, username, is_owner_request):
+            raise HTTPException(status_code=403, detail="이 채팅방을 볼 수 없습니다")
+        return
+    raise HTTPException(status_code=404, detail="채팅방을 찾을 수 없습니다")
+
+
+@app.get("/api/rooms/{room_id}/my-background")
+def get_my_room_background(room_id: str, request: Request):
+    """현재 로그인 계정의 이 방 배경만 반환한다. 방 공용 정보에는 섞지 않는다."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        return {"image_url": None}
+    conn = get_conn()
+    _require_personal_background_room_access(conn, room_id, user["username"], user["is_owner"])
+    row = conn.execute(
+        "SELECT image_url FROM user_room_backgrounds WHERE username=? AND room_id=?",
+        (user["username"], room_id),
+    ).fetchone()
+    conn.close()
+    return {"image_url": row["image_url"] if row else None}
+
+
+@app.post("/api/rooms/{room_id}/my-background")
+async def upload_my_room_background(room_id: str, request: Request, file: UploadFile = File(...)):
+    if not getattr(request.state, "can_write", True):
+        raise HTTPException(status_code=403, detail="읽기 전용 계정입니다")
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    conn = get_conn()
+    _require_personal_background_room_access(conn, room_id, user["username"], user["is_owner"])
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in BACKGROUND_UPLOAD_EXTENSIONS:
+        conn.close()
+        raise HTTPException(status_code=400, detail="배경은 JPG, PNG, GIF, WebP만 지원합니다")
+    data = await file.read()
+    if len(data) > MAX_UPLOAD_BYTES:
+        conn.close()
+        raise HTTPException(status_code=413, detail="이미지가 너무 큽니다(10MB 제한)")
+    filename = f"room-bg-{uuid.uuid4().hex}{ext}"
+    (UPLOADS_DIR / filename).write_bytes(data)
+    url = f"/uploads/{filename}"
+    conn.execute(
+        """INSERT INTO user_room_backgrounds(username,room_id,image_url,updated_at)
+           VALUES(?,?,?,?)
+           ON CONFLICT(username,room_id) DO UPDATE SET
+             image_url=excluded.image_url, updated_at=excluded.updated_at""",
+        (user["username"], room_id, url, _now()),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True, "image_url": url}
+
+
+@app.delete("/api/rooms/{room_id}/my-background")
+def reset_my_room_background(room_id: str, request: Request):
+    if not getattr(request.state, "can_write", True):
+        raise HTTPException(status_code=403, detail="읽기 전용 계정입니다")
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    conn = get_conn()
+    _require_personal_background_room_access(conn, room_id, user["username"], user["is_owner"])
+    conn.execute(
+        "DELETE FROM user_room_backgrounds WHERE username=? AND room_id=?",
+        (user["username"], room_id),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True, "image_url": None}
 
 
 GROUP_ROOM_ID = "group"

@@ -115,6 +115,13 @@ def init_db():
             updated_at TEXT NOT NULL,
             PRIMARY KEY (username, room_id)
         );
+        CREATE TABLE IF NOT EXISTS user_room_backgrounds (
+            username TEXT NOT NULL,
+            room_id TEXT NOT NULL,
+            image_url TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (username, room_id)
+        );
         CREATE TABLE IF NOT EXISTS qa_feedback_reports (
             source_message_id INTEGER PRIMARY KEY,
             report_message_id INTEGER,

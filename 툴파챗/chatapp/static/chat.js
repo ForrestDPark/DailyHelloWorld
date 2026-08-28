@@ -17,6 +17,7 @@ let amOwner = false; // 소유자 계정으로 로그인했는지 — 권한 관
 // 이름/사진만 별도로 둔다. 둘 다 없으면(신규 계정) 아이디로 대체 표시.
 let myDisplayName = null;
 let myAvatarUrl = null;
+let currentChatBackgroundUrl = null;
 
 const authView = document.getElementById("auth-view");
 const roomListView = document.getElementById("room-list-view");
@@ -1550,6 +1551,7 @@ async function showChatView(roomId) {
   renderedDateKey = null;
   setReplyTarget(null);
   messagesEl.innerHTML = "";
+  applyChatBackground(null);
   messageSearch.value = "";
   scrollBottomBtn.classList.add("hidden");
   roomListView.classList.add("hidden");
@@ -1590,10 +1592,13 @@ async function showChatView(roomId) {
   const isGroupMeetingRoom = cached && cached.is_group_room && roomId !== "group";
   inviteBtn.classList.toggle("hidden", !isGroupMeetingRoom);
   document.getElementById("invite-panel").classList.add("hidden");
+  document.getElementById("chat-bg-panel").classList.add("hidden");
   // ★ "토론방 대표사진" 요청(2026-08-26) — 내가 만든 커스텀 방(custom_)에서만
   // 썸네일 변경 버튼을 보여준다.
   const isMyCustomRoom = roomId.startsWith("custom_") && canWrite && (amOwner || (cached && cached.is_mine));
   document.getElementById("thumbnail-btn").classList.toggle("hidden", !isMyCustomRoom);
+  document.getElementById("chat-bg-btn").classList.toggle("hidden", !canWrite || !myUsername);
+  loadChatBackground(roomId);
   loadRoomNotice(roomId, isGroupMeetingRoom);
   poll();
 }
@@ -1846,6 +1851,76 @@ thumbnailInput.addEventListener("change", async () => {
   }
 });
 
+// ★ 2026-08-29: 방 대표사진과 별개인 계정별 채팅 배경. 서버가
+// username+room_id로 저장하므로 같은 방의 다른 사용자에게는 기본 배경이
+// 유지된다. 업로드 도중 방을 바꿔도 시작 시점 room_id에만 저장한다.
+const chatBgPanel = document.getElementById("chat-bg-panel");
+const chatBgInput = document.getElementById("chat-bg-input");
+const chatBgPreview = document.getElementById("chat-bg-preview");
+const chatBgStatus = document.getElementById("chat-bg-status");
+
+function applyChatBackground(url) {
+  currentChatBackgroundUrl = url || null;
+  messagesEl.classList.toggle("has-custom-background", !!url);
+  if (url) messagesEl.style.setProperty("--chat-bg-image", `url("${url}")`);
+  else messagesEl.style.removeProperty("--chat-bg-image");
+  chatBgPreview.style.backgroundImage = url ? `url("${url}")` : "none";
+  chatBgPreview.innerHTML = url ? "" : "<span>기본 배경</span>";
+  document.getElementById("chat-bg-reset").disabled = !url;
+}
+
+async function loadChatBackground(roomId) {
+  try {
+    const res = await apiFetch(`/api/rooms/${encodeURIComponent(roomId)}/my-background`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (currentRoom === roomId) applyChatBackground(data.image_url || null);
+  } catch (e) {
+    if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
+  }
+}
+
+document.getElementById("chat-bg-btn").addEventListener("click", () => {
+  chatBgStatus.textContent = "";
+  chatBgPanel.classList.toggle("hidden");
+});
+document.getElementById("chat-bg-close").addEventListener("click", () => chatBgPanel.classList.add("hidden"));
+document.getElementById("chat-bg-choose").addEventListener("click", () => chatBgInput.click());
+chatBgInput.addEventListener("change", async () => {
+  const file = chatBgInput.files[0];
+  chatBgInput.value = "";
+  if (!file || !currentRoom) return;
+  const roomAtUpload = currentRoom;
+  const formData = new FormData();
+  formData.append("file", file);
+  chatBgStatus.textContent = "배경 업로드 중…";
+  try {
+    const res = await apiFetch(`/api/rooms/${encodeURIComponent(roomAtUpload)}/my-background`, {method: "POST", body: formData});
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { chatBgStatus.textContent = data.detail || "배경 업로드 실패"; return; }
+    if (currentRoom === roomAtUpload) applyChatBackground(data.image_url);
+    chatBgStatus.textContent = "내 배경으로 저장했습니다.";
+  } catch (e) {
+    if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
+    chatBgStatus.textContent = "배경 업로드 실패";
+  }
+});
+document.getElementById("chat-bg-reset").addEventListener("click", async () => {
+  if (!currentRoom) return;
+  const roomAtReset = currentRoom;
+  chatBgStatus.textContent = "기본 배경으로 복원 중…";
+  try {
+    const res = await apiFetch(`/api/rooms/${encodeURIComponent(roomAtReset)}/my-background`, {method: "DELETE"});
+    if (!res.ok) { chatBgStatus.textContent = "복원하지 못했습니다."; return; }
+    if (currentRoom === roomAtReset) applyChatBackground(null);
+    chatBgStatus.textContent = "기본 배경으로 복원했습니다.";
+  } catch (e) {
+    if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
+    chatBgStatus.textContent = "복원하지 못했습니다.";
+  }
+});
+makeSwipeUpDismissible(document.querySelector("#chat-bg-panel .panel-drag-handle"), () => chatBgPanel.classList.add("hidden"));
+
 // ★ "채팅 친 시각이 메시지 옆에 작게 나오면 좋겠다" 요청(2026-08-25).
 // created_at은 서버가 UTC ISO8601로 내려주므로 new Date()가 알아서 로컬
 // 시간대로 바꿔준다.
@@ -1944,6 +2019,7 @@ async function showProfilePopup(message) {
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
   closeMessageMenu();
+  chatBgPanel.classList.add("hidden");
   document.querySelector(".profile-popup-overlay, .image-lightbox")?.remove();
 });
 
