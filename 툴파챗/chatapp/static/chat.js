@@ -5,6 +5,9 @@ let pollGeneration = 0;
 let activePollController = null;
 let renderedDateKey = null;
 let aiStatusTimer = null;
+let roomOpenLastReadId = 0;
+let lastVisibleReadId = 0;
+let readVisibilityFrame = null;
 let canWrite = true; // /api/whoami로 초기화 — 공유 링크로 들어온 읽기 전용 방문자는 false
 let myUsername = null; // 로그인 계정의 실제 아이디(2026-08-26 다중 계정) — 내 메시지 판별용
 let amOwner = false; // 소유자 계정으로 로그인했는지 — 권한 관리(⚙️) 패널 노출 여부에 씀
@@ -56,7 +59,28 @@ function updateScrollBottomVisibility() {
   scrollBottomBtn.classList.toggle("hidden", distanceFromBottom < SCROLL_BOTTOM_THRESHOLD_PX);
 }
 
-messagesEl.addEventListener("scroll", updateScrollBottomVisibility);
+function markVisibleMessagesRead() {
+  if (!currentRoom) return;
+  const viewport = messagesEl.getBoundingClientRect();
+  let highestVisibleId = lastVisibleReadId;
+  for (const message of messagesEl.querySelectorAll(".msg[data-message-id], .msg-system[data-message-id]")) {
+    if (message.classList.contains("hidden")) continue;
+    const rect = message.getBoundingClientRect();
+    if (rect.bottom > viewport.top && rect.top < viewport.bottom) {
+      highestVisibleId = Math.max(highestVisibleId, Number(message.dataset.messageId) || 0);
+    }
+  }
+  if (highestVisibleId > lastVisibleReadId) {
+    lastVisibleReadId = highestVisibleId;
+    markRoomRead(currentRoom, lastVisibleReadId);
+  }
+}
+
+messagesEl.addEventListener("scroll", () => {
+  updateScrollBottomVisibility();
+  if (readVisibilityFrame) cancelAnimationFrame(readVisibilityFrame);
+  readVisibilityFrame = requestAnimationFrame(markVisibleMessagesRead);
+});
 scrollBottomBtn.addEventListener("click", () => {
   messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: "smooth" });
 });
@@ -936,12 +960,12 @@ function markRoomRead(roomId, messageId) {
 }
 
 window.addEventListener("pagehide", () => {
-  if (!currentRoom || !lastId || !myUsername) return;
+  if (!currentRoom || !lastVisibleReadId || !myUsername) return;
   // 탭 닫기·Safari 페이지 전환 직전에도 쿠키 인증을 포함한 작은 요청은
   // keepalive로 완료될 수 있게 한다.
   fetch("/api/read-state", {
     method: "PUT", headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({room_id: currentRoom, last_message_id: lastId}),
+    body: JSON.stringify({room_id: currentRoom, last_message_id: lastVisibleReadId}),
     credentials: "same-origin", keepalive: true,
   }).catch(() => {});
 });
@@ -1513,12 +1537,16 @@ function appendLinkifiedText(container, text) {
 async function showChatView(roomId) {
   pollGeneration += 1;
   if (activePollController) activePollController.abort();
+  if (readVisibilityFrame) cancelAnimationFrame(readVisibilityFrame);
+  readVisibilityFrame = null;
   currentRoom = roomId;
   setAiResponseStatus(false);
   const draft = localStorage.getItem(`tulpa_draft_${myUsername || "guest"}_${roomId}`) || "";
   document.getElementById("input").value = draft;
   resizeMessageInput();
   lastId = 0;
+  roomOpenLastReadId = 0;
+  lastVisibleReadId = 0;
   renderedDateKey = null;
   setReplyTarget(null);
   messagesEl.innerHTML = "";
@@ -1545,6 +1573,8 @@ async function showChatView(roomId) {
   // 회의방인지 확인한다(캐시에도 없으면 존재하지 않는 방일 수 있으니
   // 안전하게 페르소나 이름으로 간주).
   const cached = roomsCache.get(roomId);
+  roomOpenLastReadId = getLastRead(roomId);
+  lastVisibleReadId = roomOpenLastReadId;
   const isMeta = roomId === "group" || (cached && cached.is_group_room);
   const title = cached ? cached.label : roomId;
   const cleanTitle = title.replace(/^👥\s*/, "");
@@ -1564,7 +1594,6 @@ async function showChatView(roomId) {
   // 썸네일 변경 버튼을 보여준다.
   const isMyCustomRoom = roomId.startsWith("custom_") && canWrite && (amOwner || (cached && cached.is_mine));
   document.getElementById("thumbnail-btn").classList.toggle("hidden", !isMyCustomRoom);
-  if (cached && cached.last_message_id) markRoomRead(roomId, cached.last_message_id);
   loadRoomNotice(roomId, isGroupMeetingRoom);
   poll();
 }
@@ -2038,10 +2067,10 @@ function ensureDateSeparator(m) {
   messagesEl.appendChild(separator);
 }
 
-function appendMessage(m, forceScroll = false) {
+function appendMessage(m, forceScroll = false, suppressScroll = false) {
   const wasNearBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < SCROLL_BOTTOM_THRESHOLD_PX;
   ensureDateSeparator(m);
-  if (m.is_system) { renderSystemMessage(m, forceScroll || wasNearBottom); return; }
+  if (m.is_system) { renderSystemMessage(m, !suppressScroll && (forceScroll || wasNearBottom)); return; }
   // ★ 2026-08-26: 다중 계정 로그인 전에는 sender==='user' 하나로 "내 메시지"를
   // 판별했다. 이제 여러 사람이 같은 방에 쓸 수 있어 서버가 내려주는
   // is_persona로 페르소나 여부를 판별하고, 사람 메시지 중에서도 "나"(현재
@@ -2162,9 +2191,26 @@ function appendMessage(m, forceScroll = false) {
     el.classList.add("hidden");
   }
   while (messagesEl.children.length > 500) messagesEl.firstElementChild.remove();
-  if (forceScroll || wasNearBottom) {
+  if (!suppressScroll && (forceScroll || wasNearBottom)) {
     el.scrollIntoView({ behavior: forceScroll ? "auto" : "smooth", block: "end" });
   }
+}
+
+function positionAtLastRead() {
+  document.querySelector(".unread-start-divider")?.remove();
+  const rendered = [...messagesEl.querySelectorAll(".msg[data-message-id], .msg-system[data-message-id]")];
+  if (!rendered.length) return;
+  const lastReadMessage = rendered.find((el) => Number(el.dataset.messageId) === roomOpenLastReadId);
+  const firstUnread = rendered.find((el) => Number(el.dataset.messageId) > roomOpenLastReadId);
+  if (firstUnread) {
+    const divider = document.createElement("div");
+    divider.className = "unread-start-divider";
+    divider.textContent = "여기부터 안 읽은 메시지";
+    firstUnread.before(divider);
+  }
+  const target = lastReadMessage || firstUnread || rendered[rendered.length - 1];
+  target.scrollIntoView({behavior: "auto", block: lastReadMessage ? "start" : "center"});
+  requestAnimationFrame(markVisibleMessagesRead);
 }
 
 async function poll() {
@@ -2179,10 +2225,11 @@ async function poll() {
     if (generation !== pollGeneration || roomAtRequest !== currentRoom) return;
     const initialLoad = sinceId === 0;
     for (const m of messages) {
-      appendMessage(m, initialLoad);
+      appendMessage(m, false, initialLoad);
       lastId = m.id;
     }
-    if (messages.length) markRoomRead(roomAtRequest, lastId);
+    if (initialLoad) positionAtLastRead();
+    else if (messages.length) requestAnimationFrame(markVisibleMessagesRead);
   } catch (e) {
     if (e.name === "AbortError") return;
     if (e.message === "unauthorized" || e.message === "forbidden") return; // apiFetch가 이미 처리하고 돌려보냄 — 폴링 중단

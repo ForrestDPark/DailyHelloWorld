@@ -806,6 +806,13 @@ main#messages {
   color: var(--muted);
   font-size: 11px;
 }
+.unread-start-divider {
+  align-self: stretch; display: flex; align-items: center; gap: 10px;
+  margin: 10px 0; color: var(--accent); font-size: 11px; font-weight: 750;
+}
+.unread-start-divider::before, .unread-start-divider::after {
+  content: ""; flex: 1; height: 1px; background: color-mix(in srgb, var(--accent) 55%, transparent);
+}
 .image-lightbox {
   position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center;
   padding: 20px; background: rgba(0,0,0,.86); cursor: zoom-out;
