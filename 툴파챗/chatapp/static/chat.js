@@ -1010,12 +1010,17 @@ function renderRoomItem(r) {
   item.appendChild(content);
   const isMeta = r.room_id === "group" || r.is_group_room;
   const avatarChar = r.label.replace(/^👥\s*/, "")[0] || "T";
-  const roomLabel = isMeta ? r.label.replace(/^👥\s*/, "") : displayName(r.label);
+  const baseRoomLabel = r.label.replace(/^👥\s*/, "");
+  const roomLabel = r.is_direct && r.direct_type === "persona"
+    ? displayName(baseRoomLabel)
+    : isMeta ? baseRoomLabel : displayName(r.label);
   const unread = r.last_message_id && r.last_message_id > getLastRead(r.room_id);
   // ★ "토론방 대표사진 썸네일" 요청(2026-08-26) — 커스텀 방에 thumbnail_url이
   // 있으면 글자 아바타 대신 그 이미지를 보여준다.
   const avatarInner = r.thumbnail_url
     ? `<img src="${escapeHtml(r.thumbnail_url)}" alt="">`
+    : r.is_direct
+      ? '<svg class="room-type-icon" aria-hidden="true"><use href="#icon-chat"></use></svg>'
     : isMeta
       ? '<svg class="room-type-icon" aria-hidden="true"><use href="#icon-users"></use></svg>'
       : escapeHtml(avatarChar);
@@ -1071,7 +1076,7 @@ function renderRoomItem(r) {
         button.addEventListener("click", (e) => { e.stopPropagation(); closeFriendMenus(); action(); });
         menu.appendChild(button);
       };
-      addAction("대화하기", openChat);
+      addAction("1:1 대화하기", () => startDirectChat("persona", r.room_id));
       addAction("프로필 보기", () => {
         const panel = document.getElementById("profiles-panel");
         if (panel.classList.contains("hidden")) document.getElementById("profiles-btn").click();
@@ -1141,6 +1146,28 @@ function groupRooms(rooms) {
     return a.localeCompare(b, "ko");
   });
   return { solo, groups, orderedKeys };
+}
+
+async function startDirectChat(targetType, targetId) {
+  try {
+    const res = await apiFetch("/api/direct-rooms", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({target_type: targetType, target_id: targetId}),
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      alert(error.detail || "1:1 대화방을 만들지 못했습니다");
+      return;
+    }
+    const room = await res.json();
+    location.hash = "#room=" + encodeURIComponent(room.room_id);
+  } catch (e) {
+    if (e.message !== "unauthorized" && e.message !== "forbidden") {
+      console.error(e);
+      alert("1:1 대화방을 만들지 못했습니다");
+    }
+  }
 }
 
 let roomsCache = new Map(); // room_id -> room object, showChatView()에서 제목/메타 표시용
@@ -1214,9 +1241,8 @@ function renderCollapsibleSection(key, items, renderItemFn) {
   }
 }
 
-// ★ 2026-08-28: 친구 탭의 "사람" 카드. 사람끼리 1:1 채팅은 없어서(페르소나만
-// 대화 상대) 눌러도 방으로 이동하지 않고, "내가 만든 방에 초대"하는 단축
-// 메뉴만 띄운다 — 사용자가 직접 고른 동작(다른 옵션: 정보만 보여주기).
+// ★ 친구 탭의 "사람" 카드. 누르면 프로필에서 1:1 대화를 시작하거나 기존
+// 방에 초대할 수 있다. 1:1 방도 custom_room이라 나중에 멤버를 더 부를 수 있다.
 function renderPersonItem(u) {
   const item = document.createElement("div");
   item.className = "room-item";
@@ -1272,6 +1298,17 @@ function showUserProfilePopup(user) {
   const summary = document.createElement("p");
   summary.textContent = joined ? `${joined} 가입` : "가입자";
 
+  const directButton = document.createElement("button");
+  directButton.type = "button";
+  directButton.className = "profile-direct-chat-btn";
+  directButton.textContent = "1:1 대화하기";
+  directButton.disabled = user.username === myUsername;
+  if (directButton.disabled) directButton.textContent = "내 프로필";
+  directButton.addEventListener("click", async () => {
+    overlay.remove();
+    await startDirectChat("user", user.username);
+  });
+
   const inviteSection = document.createElement("div");
   inviteSection.className = "profile-popup-invite";
   const inviteTitle = document.createElement("div");
@@ -1304,7 +1341,7 @@ function showUserProfilePopup(user) {
 
   close.addEventListener("click", () => overlay.remove());
   overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
-  popup.append(close, avatar, name, summary, inviteSection);
+  popup.append(close, avatar, name, summary, directButton, inviteSection);
   overlay.appendChild(popup);
   document.body.appendChild(overlay);
 }
@@ -1477,7 +1514,10 @@ async function showChatView(roomId) {
   const cached = roomsCache.get(roomId);
   const isMeta = roomId === "group" || (cached && cached.is_group_room);
   const title = cached ? cached.label : roomId;
-  document.getElementById("room-title").textContent = isMeta ? title : displayName(title);
+  const cleanTitle = title.replace(/^👥\s*/, "");
+  document.getElementById("room-title").textContent = cached?.is_direct
+    ? (cached.direct_type === "persona" ? displayName(cleanTitle) : cleanTitle)
+    : isMeta ? title : displayName(title);
   // ★ "그룹채팅방 초대 기능" + "누가 방에 있는지 보고 싶다" 요청(2026-08-25) —
   // 진짜 그룹 회의방(Notion "그룹" 필드에서 나온 방, is_group_room)에서만
   // 참여자 보기 버튼을 보여준다. 전체 채팅방(room_id="group")은 원래 전원

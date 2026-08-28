@@ -33,6 +33,7 @@ import json
 import os
 import re
 import secrets
+import sqlite3
 import urllib.parse
 import uuid
 from pathlib import Path
@@ -919,6 +920,11 @@ class CustomRoomCreate(BaseModel):
     label: str
 
 
+class DirectRoomCreate(BaseModel):
+    target_type: str
+    target_id: str
+
+
 @app.post("/api/rooms")
 def create_custom_room(body: CustomRoomCreate, request: Request):
     user = getattr(request.state, "user", None)
@@ -936,6 +942,81 @@ def create_custom_room(body: CustomRoomCreate, request: Request):
     conn.commit()
     conn.close()
     return {"ok": True, "room_id": room_id, "label": label}
+
+
+@app.post("/api/direct-rooms")
+def create_or_get_direct_room(body: DirectRoomCreate, request: Request):
+    """친구 목록에서 사람 또는 페르소나와 시작하는 확장 가능한 1:1 방.
+    처음에는 둘만 참여하지만 custom_rooms를 사용하므로 방 주인이 다른 사람이나
+    페르소나를 초대하면 같은 대화 기록을 유지한 채 그룹방으로 발전한다."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    requester = user["username"]
+    target_type = body.target_type.strip().lower()
+    target_id = body.target_id.strip()
+    if target_type not in {"user", "persona"} or not target_id:
+        raise HTTPException(status_code=400, detail="대화 상대가 올바르지 않습니다")
+    conn = get_conn()
+    if target_type == "user":
+        if target_id == requester:
+            conn.close()
+            raise HTTPException(status_code=400, detail="자기 자신과는 1:1 방을 만들 수 없습니다")
+        target = conn.execute(
+            "SELECT username, display_name FROM users WHERE username=?", (target_id,)
+        ).fetchone()
+        if not target:
+            conn.close()
+            raise HTTPException(status_code=404, detail="존재하지 않는 사용자입니다")
+        pair = sorted((requester, target_id))
+        direct_key = f"user:{pair[0]}:{pair[1]}"
+        label = target["display_name"] or target_id
+    else:
+        target = conn.execute(
+            "SELECT name, owner_username FROM personas WHERE name=?", (target_id,)
+        ).fetchone()
+        if not target:
+            conn.close()
+            raise HTTPException(status_code=404, detail="존재하지 않는 페르소나입니다")
+        if target["owner_username"] not in (None, requester) and not user["is_owner"]:
+            conn.close()
+            raise HTTPException(status_code=403, detail="이 페르소나와 대화할 수 없습니다")
+        direct_key = f"persona:{requester}:{target_id}"
+        label = target_id
+    existing = conn.execute(
+        "SELECT room_id, label FROM custom_rooms WHERE direct_key=?", (direct_key,)
+    ).fetchone()
+    if existing:
+        conn.close()
+        return {"ok": True, "room_id": existing["room_id"], "label": existing["label"], "created": False}
+    room_id = f"{CUSTOM_ROOM_ID_PREFIX}{uuid.uuid4().hex[:10]}"
+    try:
+        conn.execute(
+            "INSERT INTO custom_rooms(room_id,label,owner_username,created_at,direct_key) VALUES (?,?,?,?,?)",
+            (room_id, label, requester, _now(), direct_key),
+        )
+        if target_type == "user":
+            conn.execute(
+                "INSERT INTO room_user_invites(room_id,username,invited_at) VALUES (?,?,?)",
+                (room_id, target_id, _now()),
+            )
+        else:
+            conn.execute(
+                "INSERT INTO room_invites(room_id,persona_name,invited_at) VALUES (?,?,?)",
+                (room_id, target_id, _now()),
+            )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.rollback()
+        existing = conn.execute(
+            "SELECT room_id, label FROM custom_rooms WHERE direct_key=?", (direct_key,)
+        ).fetchone()
+        conn.close()
+        if existing:
+            return {"ok": True, "room_id": existing["room_id"], "label": existing["label"], "created": False}
+        raise
+    conn.close()
+    return {"ok": True, "room_id": room_id, "label": label, "created": True}
 
 
 @app.post("/api/rooms/{room_id}/thumbnail")
@@ -1303,6 +1384,18 @@ def _custom_room_access(conn, room_id, username, is_owner_request):
     return True, allowed, row["owner_username"]
 
 
+def _promote_direct_room(conn, room_id):
+    """1:1 방에 세 번째 구성원이 추가되면 중복 방 키를 해제하고 그룹 표시로 바꾼다."""
+    row = conn.execute(
+        "SELECT label, direct_key FROM custom_rooms WHERE room_id=?", (room_id,)
+    ).fetchone()
+    if row and row["direct_key"]:
+        conn.execute(
+            "UPDATE custom_rooms SET direct_key=NULL, label=? WHERE room_id=?",
+            (f"{row['label']} 외 그룹", room_id),
+        )
+
+
 @app.get("/api/rooms/{room_id}/notice")
 def get_room_notice(room_id: str, request: Request):
     """"카카오톡처럼 채팅방에 공지사항이 보였으면 좋겠다, 그 방 대화를 토대로
@@ -1394,6 +1487,7 @@ def invite_to_room(room_id: str, body: InviteRequest, request: Request):
         (room_id, body.persona_name, _now()),
     )
     if cur.rowcount:  # 이미 있던 초대면(중복 클릭 등) 알림을 또 남기지 않는다
+        _promote_direct_room(conn, room_id)
         _insert_system_notice(conn, room_id, f"{body.persona_name}님이 초대되었습니다")
     conn.commit()
     members = _group_members(conn, room_id, persona_rows)
@@ -1477,6 +1571,7 @@ def invite_user_to_room(room_id: str, body: InviteUserRequest, request: Request)
         (room_id, body.username, _now()),
     )
     if cur.rowcount:  # 이미 초대돼 있었으면(중복 클릭 등) 알림을 또 남기지 않는다
+        _promote_direct_room(conn, room_id)
         _insert_system_notice(conn, room_id, f"{body.username}님이 초대되었습니다")
     conn.commit()
     conn.close()
@@ -1841,14 +1936,24 @@ def list_rooms(request: Request):
             })
 
     custom_rows = conn.execute(
-        "SELECT room_id, label, owner_username, thumbnail_url FROM custom_rooms ORDER BY created_at"
+        "SELECT room_id, label, owner_username, thumbnail_url, direct_key FROM custom_rooms ORDER BY created_at"
     ).fetchall()
     for cr in custom_rows:
         if is_owner_request or cr["owner_username"] == username or cr["room_id"] in invited_room_ids:
+            custom_label = cr["label"]
+            if cr["direct_key"] and cr["direct_key"].startswith("user:") and username:
+                participants = cr["direct_key"].split(":", 2)[1:]
+                if username in participants:
+                    other_username = participants[1] if participants[0] == username else participants[0]
+                    other = conn.execute(
+                        "SELECT display_name FROM users WHERE username=?", (other_username,)
+                    ).fetchone()
+                    custom_label = (other["display_name"] if other else None) or other_username
             rooms.append({
-                "room_id": cr["room_id"], "label": f"👥 {cr['label']}",
+                "room_id": cr["room_id"], "label": f"👥 {custom_label}",
                 "group_name": None, "is_group_room": True, "is_mine": cr["owner_username"] == username,
-                "thumbnail_url": cr["thumbnail_url"],
+                "thumbnail_url": cr["thumbnail_url"], "is_direct": bool(cr["direct_key"]),
+                "direct_type": cr["direct_key"].split(":", 1)[0] if cr["direct_key"] else None,
             })
 
     rooms += [

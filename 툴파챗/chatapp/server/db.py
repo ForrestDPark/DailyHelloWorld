@@ -153,6 +153,13 @@ def init_db():
     # 커스텀 방(custom_rooms)에만 해당. 업로드 안 하면 NULL(방 목록에서
     # 기존처럼 글자 아바타로 표시).
     _ensure_column(conn, "custom_rooms", "thumbnail_url", "TEXT")
+    # 친구 목록에서 만든 사람/페르소나 1:1 방을 중복 생성하지 않기 위한 키.
+    # 누군가를 더 초대해 그룹방이 되면 서버가 이 값을 NULL로 바꾼다.
+    _ensure_column(conn, "custom_rooms", "direct_key", "TEXT")
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_rooms_direct_key "
+        "ON custom_rooms(direct_key) WHERE direct_key IS NOT NULL"
+    )
     # ★ 2026-08-26: "페르소나 프로필을 간단히 확인할 수 있는 페이지" 요청 —
     # Notion 페르소나는 워커가 "## 프로필" 섹션(유형·정체성/관계·성격·말투·
     # 배경)만 추려서 채워준다(worker/notion_personas.py extract_profile_summary).
