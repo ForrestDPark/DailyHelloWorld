@@ -48,6 +48,39 @@ function closeMainListPanels() {
 roomListEl.addEventListener("scroll", closeMainListPanels);
 roomListEl.addEventListener("scroll", () => closeAllSwipes());
 
+// ★ "참여중 아이콘 누르면 창 뜰 때 위로 손으로 밀어서 창이 다시 올라가게
+// 해달라, 다른 버튼도 마찬가지로 스와이프 되게 해달라" 요청(2026-08-28) —
+// 패널 맨 위 손잡이(.panel-drag-handle)에서 위로 스와이프하면 닫힌다.
+// 패널 본문은 스크롤·클릭이 많아서 손잡이만 드래그 대상으로 삼는다.
+function makeSwipeUpDismissible(handle, closeFn) {
+  const panel = handle.parentElement;
+  let startY = 0, dragging = false;
+  handle.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    startY = e.clientY; dragging = true;
+    panel.style.transition = "none";
+  });
+  handle.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const dy = e.clientY - startY;
+    if (dy < 0) panel.style.transform = `translateY(${Math.max(dy, -80)}px)`;
+  });
+  const endDrag = (e) => {
+    if (!dragging) return;
+    dragging = false;
+    const dy = (typeof e.clientY === "number" ? e.clientY : startY) - startY;
+    panel.style.transition = "transform .18s ease";
+    panel.style.transform = "";
+    if (dy < -32) closeFn();
+  };
+  handle.addEventListener("pointerup", endDrag);
+  handle.addEventListener("pointercancel", endDrag);
+}
+for (const id of MAIN_LIST_PANEL_IDS) {
+  const handle = document.querySelector(`#${id} .panel-drag-handle`);
+  if (handle) makeSwipeUpDismissible(handle, closeMainListPanels);
+}
+
 // ★ 2026-08-26: 세션 쿠키가 만료됐거나(180일 지남) 로그인 자체가 안 된
 // 상태에서 API를 호출하면 서버가 401을 준다. fetch를 감싸서 401을 만나면
 // 바로 로그인 화면으로 돌려보낸다 — 사용 중간에 세션이 끊겨도 흰 화면/무한
@@ -1535,6 +1568,12 @@ async function inviteToRoom(personaName) {
 }
 
 document.getElementById("invite-btn").addEventListener("click", toggleInvitePanel);
+{
+  const inviteHandle = document.querySelector("#invite-panel .panel-drag-handle");
+  if (inviteHandle) {
+    makeSwipeUpDismissible(inviteHandle, () => document.getElementById("invite-panel").classList.add("hidden"));
+  }
+}
 
 // ★ "토론방 대표사진을 썸네일로 보이게 해달라" 요청(2026-08-26) — 🖼️ 버튼은
 // 내가 만든 커스텀 방에서만 보인다(showChatView에서 토글). 업로드 즉시

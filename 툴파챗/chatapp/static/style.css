@@ -1090,6 +1090,21 @@ header h1 { font-size: 19px; letter-spacing: -0.035em; display: flex; align-item
   background: var(--bg-elevated);
   box-shadow: var(--shadow-soft);
 }
+/* ★ "참여중 아이콘 누르면 창 뜰 때 위로 밀어서 닫히게 해달라, 다른
+   버튼도 마찬가지로" 요청(2026-08-28) — 펼침 패널 맨 위의 작은 손잡이
+   막대. 패널 안에 스크롤되는 목록·버튼이 많아서 패널 전체를 드래그
+   대상으로 삼으면 스크롤·클릭과 계속 부딪힌다 — 이 손잡이 영역에서만
+   위로 스와이프하면 닫히게 한다(makeSwipeUpDismissible, static/chat.js). */
+.panel-drag-handle {
+  width: 40px;
+  height: 5px;
+  margin: -6px auto 10px;
+  border-radius: 3px;
+  background: var(--border);
+  touch-action: none;
+  cursor: grab;
+}
+.panel-drag-handle:active { cursor: grabbing; }
 .invite-panel-title { font-weight: 700; color: var(--fg); margin-bottom: 10px; }
 .profile-card { border-radius: 16px; padding: 14px; box-shadow: var(--shadow-soft); }
 .admin-user-row, .my-persona-row { min-height: 42px; }
