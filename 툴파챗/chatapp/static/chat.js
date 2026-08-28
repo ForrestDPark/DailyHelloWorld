@@ -1655,12 +1655,13 @@ async function loadRoomUserMembers() {
   userMemberList.innerHTML = '<div class="empty-hint">불러오는 중...</div>';
   try {
     const res = await apiFetch(`/api/rooms/${encodeURIComponent(currentRoom)}/user_members`);
-    const { members, available, owner_username } = await res.json();
+    const { members, available, owner_username, user_labels = {} } = await res.json();
     userMemberList.innerHTML = "";
     for (const username of members) {
       const chip = document.createElement("span");
       chip.className = "member-chip";
-      chip.textContent = username;
+      const visibleName = user_labels[username] || username;
+      chip.textContent = visibleName;
       // ★ "관리자에게 채팅방에서 내보내는 기능이 있으면 좋겠다" 요청
       // (2026-08-28) — 이 목록은 이미 방 주인/관리자만 볼 수 있는
       // 상태에서만 렌더되므로(canInviteHere) 별도 권한 체크 없이 버튼을
@@ -1670,9 +1671,9 @@ async function loadRoomUserMembers() {
         kickBtn.type = "button";
         kickBtn.className = "member-chip-kick";
         kickBtn.textContent = "×";
-        kickBtn.setAttribute("aria-label", `${username}님 내보내기`);
+        kickBtn.setAttribute("aria-label", `${visibleName}님 내보내기`);
         kickBtn.addEventListener("click", async () => {
-          if (!confirm(`"${username}"님을 이 방에서 내보낼까요?`)) return;
+          if (!confirm(`"${visibleName}"님을 이 방에서 내보낼까요?`)) return;
           try {
             await apiFetch(`/api/rooms/${encodeURIComponent(currentRoom)}/members/${encodeURIComponent(username)}`, { method: "DELETE" });
             await loadRoomUserMembers();
@@ -1692,7 +1693,7 @@ async function loadRoomUserMembers() {
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "invite-candidate";
-        btn.textContent = username;
+        btn.textContent = user_labels[username] || username;
         btn.addEventListener("click", () => inviteUserToRoom(username));
         inviteUserList.appendChild(btn);
       }

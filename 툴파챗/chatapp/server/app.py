@@ -1533,14 +1533,21 @@ def get_room_user_members(room_id: str, request: Request):
     ]
     if owner_username and owner_username not in members:
         members.insert(0, owner_username)
-    all_users = [r["username"] for r in conn.execute("SELECT username FROM users ORDER BY username").fetchall()]
+    user_rows = conn.execute(
+        "SELECT username, display_name FROM users ORDER BY username"
+    ).fetchall()
+    all_users = [r["username"] for r in user_rows]
+    user_labels = {r["username"]: (r["display_name"] or r["username"]) for r in user_rows}
     available = [u for u in all_users if u not in members]
     conn.close()
     # ★ "관리자가 채팅방에서 내보내는 기능" 요청(2026-08-28) — 프론트가 방
     # 주인 칩에는 내보내기 버튼을 안 그리도록(방 주인은 내보낼 수 없음,
     # kick_room_member 참고) owner_username을 같이 내려준다. 그룹 회의방은
     # owner_username이 null이라 모든 칩에 내보내기 버튼이 붙는다.
-    return {"members": members, "available": available, "owner_username": owner_username}
+    return {
+        "members": members, "available": available, "owner_username": owner_username,
+        "user_labels": user_labels,
+    }
 
 
 class InviteUserRequest(BaseModel):
