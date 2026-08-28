@@ -24,7 +24,9 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
+from threading import Lock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ai_exec import run_ai_exec  # noqa: E402
@@ -254,7 +256,6 @@ ORGANIZER_TIMEOUT_SECONDS = 300  # 손동주는 홈 폴더를 Glob/Read로 훑�
 # 먼저 보낸다. 너무 짧게 잡으면 평범한 폴링 지연에도 매번 안내가 뜨니,
 # 통상적인 재시작 소요 시간(수 초)보다 넉넉히 크게 잡는다.
 RESTART_GAP_NOTICE_SECONDS = 20
-RESTART_GAP_NOTICE_TEXT = "(방금 업데이트하느라 잠깐 자리 비웠어요 — 밀린 메시지 답장 곧 보낼게요!)"
 RESTART_GAP_DONE_TEXT = "(서버 업데이트 끝났어요 — 밀린 메시지 답장 다 보냈습니다!)"
 
 # ★ "토큰 부족해서 답변이 안 되는 경우 일반 사용자나 관리자의 말에 대답할
@@ -805,7 +806,11 @@ def build_prompt(persona_name, system_prompt, context, persona_names, has_images
 # 판단을 그대로 따름), 안 불렀을 때만 후보들의 담당(프로필 요약)을 놓고
 # 짧은 분류 호출로 한 번 재검토한다. rerouted 플래그로 같은 턴이 두 번
 # 재검토되지 않게 막아 왕복을 방지한다.
-ROUTING_TIMEOUT_SECONDS = 20
+ROUTING_TIMEOUT_SECONDS = 10
+MAX_PARALLEL_TURNS = 3
+_routing_cache = {}
+_routing_cache_lock = Lock()
+_side_effect_persona_lock = Lock()
 
 
 def _given_name(persona_name):
@@ -835,8 +840,16 @@ def _latest_human_message(context, persona_names):
 
 def _maybe_reroute_turn(turn, persona_cache, candidates):
     """더 알맞은 담당자가 있으면 그 이름을, 없거나 판단 못 하면 None을 준다."""
-    if turn.get("rerouted") or len(candidates) < 2:
+    # 같은 사용자 메시지에서 이미 여러 명에게 답변을 배정했다면 그 자체가
+    # 의도된 다중 응답이다. 각 사람마다 담당자를 다시 고르는 호출은 중복이며
+    # 모두 한 사람으로 몰릴 위험도 있으므로 완전히 생략한다.
+    if turn.get("rerouted") or len(candidates) < 2 or turn.get("batch_size", 1) > 1:
         return None
+    source_message_id = turn.get("source_message_id")
+    cache_key = source_message_id if source_message_id is not None else f"turn:{turn['turn_id']}"
+    with _routing_cache_lock:
+        if cache_key in _routing_cache:
+            return _routing_cache[cache_key]
     latest = _latest_human_message(turn["context"], set(persona_cache.keys()))
     if not latest or _has_explicit_target(latest, candidates):
         return None
@@ -854,15 +867,25 @@ def _maybe_reroute_turn(turn, persona_cache, candidates):
         f'바꾸고, 애매하거나 지금 배정도 괜찮으면 그대로 "{turn["persona_name"]}"이라고만 '
         "답하라. 위 목록의 이름 중 정확히 하나만, 다른 말 없이 출력하라."
     )
-    try:
-        result, _engine = run_ai_exec(prompt, WORK_DIR, timeout=ROUTING_TIMEOUT_SECONDS)
-    except Exception as exc:  # noqa: BLE001 — 분류 실패는 원래 배정대로 진행
-        print(f"⚠️ 담당자 재검토 실패, 원래 배정 유지: {exc}", flush=True)
-        return None
-    result = result.strip().strip('"').strip("'")
-    if result in candidates and result != turn["persona_name"]:
-        return result
-    return None
+    # 짧은 분류는 Claude 한 번만 호출한다. 10초 안에 끝나지 않으면 Codex로
+    # 다시 10초를 쓰지 않고 서버의 원래 배정을 그대로 유지한다.
+    with _routing_cache_lock:
+        if cache_key in _routing_cache:
+            return _routing_cache[cache_key]
+        try:
+            result, _engine = run_ai_exec(
+                prompt, WORK_DIR, timeout=ROUTING_TIMEOUT_SECONDS,
+                primary="claude", fallback=False,
+            )
+            result = result.strip().strip('"').strip("'")
+            selected = result if result in candidates and result != turn["persona_name"] else None
+        except Exception as exc:  # noqa: BLE001 — 분류 실패는 원래 배정대로 진행
+            print(f"⚠️ 담당자 재검토 실패, 원래 배정 유지: {exc}", flush=True)
+            selected = None
+        _routing_cache[cache_key] = selected
+        if len(_routing_cache) > 200:
+            _routing_cache.pop(next(iter(_routing_cache)))
+        return selected
 
 
 def _maybe_notify_restart_gap(turn, persona_name, room_id):
@@ -902,11 +925,18 @@ def _maybe_notify_restart_gap(turn, persona_name, room_id):
     if age < RESTART_GAP_NOTICE_SECONDS:
         return
     try:
-        _api("/api/worker/post_message", "POST", {
-            "persona_name": persona_name, "room_id": room_id, "content": RESTART_GAP_NOTICE_TEXT,
-        })
-        _api("/api/worker/mark_restart_notice_sent", "POST", {
+        claimed = _api("/api/worker/mark_restart_notice_sent", "POST", {
             "room_id": room_id, "persona_name": persona_name,
+        }) or {}
+        if not claimed.get("claimed"):
+            return
+        active_count = max(1, int(turn.get("room_active_count") or 1))
+        notice = (
+            f"(서버·워커 재시작으로 답변이 약 {int(age)}초 늦어졌어요. "
+            f"현재 이 방의 밀린 응답 {active_count}개를 최대 {MAX_PARALLEL_TURNS}개씩 처리하고 있습니다.)"
+        )
+        _api("/api/worker/post_message", "POST", {
+            "persona_name": persona_name, "room_id": room_id, "content": notice,
         })
         print(f"↩️ {persona_name}: 재시작 공백({age:.0f}초) 방 대표 복귀 안내 전송", flush=True)
     except (urllib.error.URLError, urllib.error.HTTPError) as exc:
@@ -945,7 +975,13 @@ def process_turn(turn, persona_cache):
     마지막 한 개가 끝나는 순간을 놓치지 않고 "완료" 안내를 보낼 수 있다."""
     room_id = turn["room_id"]
     try:
-        _process_turn_inner(turn, persona_cache)
+        if turn["persona_name"] in {FILE_ORGANIZER_PERSONA_NAME, UI_DEV_PERSONA_NAME}:
+            # 승인 계획을 메모리에 보관하는 두 특수 페르소나는 서로 겹쳐
+            # 실행하지 않는다. 일반 대화만 최대 3개 병렬 처리한다.
+            with _side_effect_persona_lock:
+                _process_turn_inner(turn, persona_cache)
+        else:
+            _process_turn_inner(turn, persona_cache)
     finally:
         _maybe_clear_restart_gap(room_id)
 
@@ -1220,42 +1256,64 @@ def main():
     last_story_sync = time.time()
     last_admin_report_sync = time.time()
     last_room_notice_sync = time.time()
+    executor = ThreadPoolExecutor(max_workers=MAX_PARALLEL_TURNS, thread_name_prefix="tulpa-turn")
+    active_turns = set()
     while True:
         now = time.time()
-        if now - last_sync > PERSONA_SYNC_INTERVAL_SECONDS:
+        finished = {future for future in active_turns if future.done()}
+        for future in finished:
+            active_turns.remove(future)
+            try:
+                future.result()
+            except Exception as exc:  # process_turn 바깥의 예상 못한 오류도 워커 전체를 죽이지 않음
+                print(f"⚠️ 병렬 턴 처리 오류: {exc}", flush=True)
+
+        # Notion 동기화·공지 생성도 AI 호출을 쓸 수 있으므로 대화 응답과 겹쳐
+        # 동시 실행 한도를 무너뜨리지 않게 활성 턴이 없을 때만 수행한다.
+        if not active_turns and now - last_sync > PERSONA_SYNC_INTERVAL_SECONDS:
             new_cache = sync_personas()
             if new_cache is not None:
                 persona_cache = new_cache
             sync_user_personas(persona_cache)
             last_sync = time.time()
-        if now - last_user_persona_sync > USER_PERSONA_SYNC_INTERVAL_SECONDS:
+        if not active_turns and now - last_user_persona_sync > USER_PERSONA_SYNC_INTERVAL_SECONDS:
             sync_user_personas(persona_cache)
             last_user_persona_sync = time.time()
-        if now - last_story_sync > STORY_SYNC_INTERVAL_SECONDS:
+        if not active_turns and now - last_story_sync > STORY_SYNC_INTERVAL_SECONDS:
             sync_stories(persona_cache)
             last_story_sync = time.time()
-        if now - last_admin_report_sync > ADMIN_REPORT_INTERVAL_SECONDS:
+        if not active_turns and now - last_admin_report_sync > ADMIN_REPORT_INTERVAL_SECONDS:
             sync_admin_reports(persona_cache)
             last_admin_report_sync = time.time()
-        if now - last_room_notice_sync > ROOM_NOTICE_INTERVAL_SECONDS:
+        if not active_turns and now - last_room_notice_sync > ROOM_NOTICE_INTERVAL_SECONDS:
             sync_room_notices()
             last_room_notice_sync = time.time()
-        try:
-            image_job = _api("/api/worker/image_jobs/pending")
-        except (urllib.error.URLError, urllib.error.HTTPError) as exc:
-            print(f"⚠️ 이미지 작업 조회 실패: {exc}", flush=True)
-            image_job = None
-        if image_job:
-            process_automatic_image_job(image_job)
-            continue
-        try:
-            turn = _api("/api/worker/pending")
-        except (urllib.error.URLError, urllib.error.HTTPError) as exc:
-            print(f"⚠️ 서버 연결 실패: {exc}", flush=True)
+        if not active_turns:
+            try:
+                image_job = _api("/api/worker/image_jobs/pending")
+            except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+                print(f"⚠️ 이미지 작업 조회 실패: {exc}", flush=True)
+                image_job = None
+            if image_job:
+                process_automatic_image_job(image_job)
+                continue
+
+        server_failed = False
+        while len(active_turns) < MAX_PARALLEL_TURNS:
+            try:
+                turn = _api("/api/worker/pending")
+            except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+                print(f"⚠️ 서버 연결 실패: {exc}", flush=True)
+                server_failed = True
+                break
+            if not turn:
+                break
+            active_turns.add(executor.submit(process_turn, turn, persona_cache))
+
+        if active_turns:
+            wait(active_turns, timeout=0.5, return_when=FIRST_COMPLETED)
+        elif server_failed:
             time.sleep(POLL_INTERVAL_SECONDS)
-            continue
-        if turn:
-            process_turn(turn, persona_cache)
         else:
             time.sleep(POLL_INTERVAL_SECONDS)
 

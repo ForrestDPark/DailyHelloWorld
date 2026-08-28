@@ -159,6 +159,10 @@ def init_db():
     # 더 알맞은 담당자로 돌려보낼 수 있다(rerouted=1이면 재검토 끝, 무한
     # 왕복 방지).
     _ensure_column(conn, "pending_turns", "rerouted", "INTEGER NOT NULL DEFAULT 0")
+    # 같은 사용자 메시지에서 생긴 여러 응답을 한 묶음으로 식별하고, 병렬
+    # 워커가 한 턴을 중복 점유하지 않게 한다(2026-08-28).
+    _ensure_column(conn, "pending_turns", "source_message_id", "INTEGER")
+    _ensure_column(conn, "pending_turns", "started_at", "TEXT")
     # ★ "서버 업데이트로 껐다 켜는 도중에 메시지 보내면 반응이 끊긴다" 요청
     # (2026-08-27) — 워커가 재시작 공백 안내를 보냈는지 서버가 기억해둔다.
     # 워커 프로세스 자체가 짧은 시간에 여러 번 재시작되면(배포 중 연속

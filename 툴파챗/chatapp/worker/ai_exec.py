@@ -7,11 +7,10 @@ import를 하지 않고 파일을 복사해서 각자 둔다. codex/claude 폴�
 ★ 2026-08-25: image_paths 지원(아래)은 이 챗앱 전용 기능이라 의도적으로 다른
 두 복사본에는 반영하지 않았다 — 버그 수정이 아니라 이 소비자만 필요한 확장.
 
-기본 우선순위는 codex 1순위, claude 2순위. codex가 토큰/쿼터 소진(usage limit)
-등으로 실패해도 파이프라인이 멈추지 않도록, 같은 프롬프트를 claude로 그대로
-재시도한다. 실패 사유를 특정 문자열로 구분하지 않고 "codex가 어떤 이유로든
-실패하면 claude로" 방식을 쓴다 — usage limit 에러 메시지가 버전에 따라 바뀔 수
-있어서 문자열 매칭보다 안전하다.
+기본 우선순위는 claude 1순위, codex 2순위(2026-08-28 변경). claude가
+토큰/쿼터 소진 등으로 실패해도 파이프라인이 멈추지 않도록 같은 프롬프트를
+codex로 재시도한다. 담당자 분류처럼 지연에 민감한 호출은 fallback=False로
+한 엔진만 짧게 호출할 수도 있다.
 
 codex exec 호출마다 `~/.codex/config.toml`의 전역 `notify` 훅(Codex Computer
 Use용 turn-ended 알림)이 그대로 발동해 헤드리스 호출에서도 "Codex 완료" macOS
@@ -58,6 +57,10 @@ def _run_one(engine, prompt, cwd, timeout, image_paths=None, allow_tools=None, a
                 cmd += ["--add-dir", directory]
         else:
             cmd += ["--tools", ""]
+        # Claude Code 2.1.x는 가변 인자 옵션(--tools/--add-dir) 뒤의 stdin을
+        # 프롬프트로 인식하지 못할 수 있다. 옵션 종료 구분자를 명시해 대화
+        # 내용은 argv가 아니라 기존처럼 stdin으로 안전하게 전달한다.
+        cmd += ["--"]
     return subprocess.run(
         cmd, input=prompt, capture_output=True, text=True,
         timeout=timeout, cwd=str(cwd),
@@ -65,8 +68,8 @@ def _run_one(engine, prompt, cwd, timeout, image_paths=None, allow_tools=None, a
 
 
 def run_ai_exec(
-    prompt, cwd, timeout=600, primary="codex", validator=None,
-    image_paths=None, allow_tools=None, add_dirs=None,
+    prompt, cwd, timeout=600, primary="claude", validator=None,
+    image_paths=None, allow_tools=None, add_dirs=None, fallback=True,
 ):
     """primary 엔진으로 먼저 시도하고, 실패하면(종료 코드 비정상 또는 빈 응답)
     나머지 하나로 자동 전환한다. 성공한 stdout 텍스트와 실제 사용된 엔진 이름을
@@ -79,6 +82,8 @@ def run_ai_exec(
     이름 목록과 그 도구가 접근할 디렉터리 목록(예: 손동주의 Read/Glob 홈
     폴더 접근)."""
     order = ["codex", "claude"] if primary == "codex" else ["claude", "codex"]
+    if not fallback:
+        order = order[:1]
     errors = []
     for i, engine in enumerate(order):
         try:
