@@ -1264,15 +1264,16 @@ function renderCurrentList() {
     roomListEl.innerHTML = '<div class="empty-hint">아직 친구가 없습니다</div>';
     return;
   }
+  const favoriteUsers = usersCache.filter((u) => u.is_favorite);
+  const otherUsers = usersCache.filter((u) => !u.is_favorite);
+  if (favoriteUsers.length) renderCollapsibleSection("즐겨찾는 친구", favoriteUsers, renderPersonItem);
   const { groups, orderedKeys } = groupRooms(friends);
   for (const key of orderedKeys) {
     renderCollapsibleSection(key, groups.get(key), renderRoomItem);
   }
-  // ★ "친구 목록에 일반 가입자들도 뜨게 해달라" 요청(2026-08-28) — 페르소나
-  // 그룹들 아래에 "사람" 섹션을 똑같은 접기/펼치기 UI로 붙인다.
-  if (usersCache.length) {
-    renderCollapsibleSection("사람", usersCache, renderPersonItem);
-  }
+  // 즐겨찾기는 계정별 서버 설정이다. 즐겨찾는 사람은 맨 위에 한 번만 보여
+  // 목록이 길어져도 바로 찾을 수 있게 한다.
+  if (otherUsers.length) renderCollapsibleSection("사람", otherUsers, renderPersonItem);
 }
 
 function renderCollapsibleSection(key, items, renderItemFn) {
@@ -1361,6 +1362,30 @@ function showUserProfilePopup(user) {
     await startDirectChat("user", user.username);
   });
 
+  const favoriteButton = document.createElement("button");
+  favoriteButton.type = "button";
+  favoriteButton.className = "profile-favorite-btn";
+  const renderFavoriteButton = () => {
+    favoriteButton.textContent = user.is_favorite ? "★ 즐겨찾기 해제" : "☆ 즐겨찾기 추가";
+    favoriteButton.setAttribute("aria-pressed", String(!!user.is_favorite));
+  };
+  renderFavoriteButton();
+  favoriteButton.addEventListener("click", async () => {
+    favoriteButton.disabled = true;
+    try {
+      const method = user.is_favorite ? "DELETE" : "PUT";
+      const res = await apiFetch(`/api/friends/${encodeURIComponent(user.username)}/favorite`, { method });
+      if (!res.ok) throw new Error("favorite_failed");
+      user.is_favorite = (await res.json()).is_favorite;
+      renderFavoriteButton();
+      renderCurrentList();
+    } catch (e) {
+      if (e.message !== "unauthorized" && e.message !== "forbidden") alert("즐겨찾기 설정을 바꾸지 못했습니다");
+    } finally {
+      favoriteButton.disabled = false;
+    }
+  });
+
   const inviteSection = document.createElement("div");
   inviteSection.className = "profile-popup-invite";
   const inviteTitle = document.createElement("div");
@@ -1393,7 +1418,7 @@ function showUserProfilePopup(user) {
 
   close.addEventListener("click", () => overlay.remove());
   overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
-  popup.append(close, avatar, name, summary, directButton, inviteSection);
+  popup.append(close, avatar, name, summary, favoriteButton, directButton, inviteSection);
   overlay.appendChild(popup);
   document.body.appendChild(overlay);
 }

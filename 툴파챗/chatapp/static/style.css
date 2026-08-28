@@ -945,6 +945,14 @@ main#messages.has-custom-background {
   color: #fff; font-weight: 750; cursor: pointer;
 }
 .profile-direct-chat-btn:disabled { opacity: .45; cursor: default; }
+.profile-favorite-btn {
+  width: 100%; min-height: 42px; margin-top: 18px; padding: 9px 14px;
+  border: 1px solid color-mix(in srgb, #f2b84b 65%, var(--border)); border-radius: 13px;
+  background: color-mix(in srgb, #f2b84b 14%, var(--bg)); color: var(--fg);
+  font: inherit; font-weight: 700; cursor: pointer;
+}
+.profile-favorite-btn[aria-pressed="true"] { background: color-mix(in srgb, #f2b84b 25%, var(--bg)); }
+.profile-favorite-btn:disabled { opacity: .55; cursor: wait; }
 
 /* ★ "프로필보기창에 내 톡방으로 초대하기 기능" 요청(2026-08-28) — 사람
    프로필 팝업 안에 방 선택 UI를 넣는다. 팝업 본문은 가운데 정렬이라

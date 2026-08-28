@@ -122,6 +122,14 @@ def init_db():
             updated_at TEXT NOT NULL,
             PRIMARY KEY (username, room_id)
         );
+        CREATE TABLE IF NOT EXISTS friend_favorites (
+            username TEXT NOT NULL,
+            friend_username TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (username, friend_username),
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE,
+            FOREIGN KEY (friend_username) REFERENCES users(username) ON DELETE CASCADE
+        );
         CREATE TABLE IF NOT EXISTS qa_feedback_reports (
             source_message_id INTEGER PRIMARY KEY,
             report_message_id INTEGER,

@@ -1285,8 +1285,50 @@ def list_users_public(request: Request):
     rows = conn.execute(
         "SELECT username, is_owner, created_at, display_name, avatar_url FROM users ORDER BY created_at"
     ).fetchall()
+    favorites = {
+        row["friend_username"] for row in conn.execute(
+            "SELECT friend_username FROM friend_favorites WHERE username = ?", (exclude,)
+        ).fetchall()
+    } if exclude else set()
     conn.close()
-    return [dict(r) for r in rows if r["username"] != exclude]
+    return [dict(r) | {"is_favorite": r["username"] in favorites} for r in rows if r["username"] != exclude]
+
+
+@app.put("/api/friends/{friend_username}/favorite")
+def add_friend_favorite(friend_username: str, request: Request):
+    """로그인한 사용자 본인에게만 보이는 친구 즐겨찾기를 저장한다."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    if friend_username == user["username"]:
+        raise HTTPException(status_code=400, detail="자기 자신은 즐겨찾기할 수 없습니다")
+    conn = get_conn()
+    exists = conn.execute("SELECT 1 FROM users WHERE username = ?", (friend_username,)).fetchone()
+    if not exists:
+        conn.close()
+        raise HTTPException(status_code=404, detail="친구를 찾을 수 없습니다")
+    conn.execute(
+        "INSERT OR IGNORE INTO friend_favorites (username, friend_username, created_at) VALUES (?, ?, ?)",
+        (user["username"], friend_username, datetime.datetime.now(datetime.timezone.utc).isoformat()),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True, "is_favorite": True}
+
+
+@app.delete("/api/friends/{friend_username}/favorite")
+def remove_friend_favorite(friend_username: str, request: Request):
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    conn = get_conn()
+    conn.execute(
+        "DELETE FROM friend_favorites WHERE username = ? AND friend_username = ?",
+        (user["username"], friend_username),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True, "is_favorite": False}
 
 
 class MyProfileUpdate(BaseModel):
