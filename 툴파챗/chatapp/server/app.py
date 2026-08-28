@@ -1864,7 +1864,7 @@ def list_rooms(request: Request):
 
 
 @app.get("/api/messages")
-def get_messages(request: Request, room_id: str = GROUP_ROOM_ID, since_id: int = 0):
+def get_messages(request: Request, room_id: str = GROUP_ROOM_ID, since_id: int = 0, count_only: bool = False):
     conn = get_conn()
     user = getattr(request.state, "user", None)
     username = user["username"] if user else None
@@ -1898,6 +1898,19 @@ def get_messages(request: Request, room_id: str = GROUP_ROOM_ID, since_id: int =
         ):
             conn.close()
             raise HTTPException(status_code=403, detail="이 채팅방을 볼 수 없습니다")
+    # ★ "채팅방에서 안 읽은 메시지 개수를 방 목록에서도 확인되게 해달라"
+    # 요청(2026-08-28) — 안읽음 자체는 기존처럼 클라이언트 localStorage가
+    # 기준(last_read_id)이지만, "이 방에 그 id 이후 메시지가 몇 개인지"는
+    # 서버만 셀 수 있다. 방 목록을 그릴 때마다 방마다 이 엔드포인트를
+    # count_only=true로 불러 가벼운 COUNT만 받는다(전체 메시지 본문을
+    # 내려받지 않아 오래된 방도 가볍다) — 별도의 "읽음 상태" 테이블을
+    # 서버에 새로 두지 않고 기존 접근 제어를 그대로 재사용한다.
+    if count_only:
+        count = conn.execute(
+            "SELECT COUNT(*) AS n FROM messages WHERE room_id = ? AND id > ?", (room_id, since_id)
+        ).fetchone()["n"]
+        conn.close()
+        return {"count": count}
     rows = conn.execute(
         """SELECT m.id, m.sender, m.content, m.created_at, m.reply_message_id, m.is_system,
                   parent.sender AS reply_sender, parent.content AS reply_content
@@ -2136,10 +2149,11 @@ def post_message(msg: NewMessage, request: Request):
             conn.close()
             raise HTTPException(status_code=400, detail="답장할 메시지를 찾을 수 없습니다")
         reply_message_id = replied["id"]
-    conn.execute(
+    message_cursor = conn.execute(
         "INSERT INTO messages (room_id, sender, content, created_at, reply_message_id) VALUES (?, ?, ?, ?, ?)",
         (room_id, sender, content, now, reply_message_id),
     )
+    source_message_id = message_cursor.lastrowid
     if room_id == GROUP_ROOM_ID:
         # ★ "@이름"으로 특정 인물을 지목하면 그 인물만 응답, 아무도 안 부르면
         # 방에 있는 페르소나 전원이 한 번씩 응답한다(서로 이어서 계속 대화하는
@@ -2177,8 +2191,8 @@ def post_message(msg: NewMessage, request: Request):
                 targets = [t for t in targets if t not in UI_DEV_PERSONAS]
     for persona_name in targets:
         conn.execute(
-            "INSERT INTO pending_turns (persona_name, room_id, status, created_at) VALUES (?, ?, 'pending', ?)",
-            (persona_name, room_id, now),
+            "INSERT INTO pending_turns (persona_name, room_id, status, created_at, source_message_id) VALUES (?, ?, 'pending', ?, ?)",
+            (persona_name, room_id, now, source_message_id),
         )
     conn.commit()
     preview = content[:80] + ("…" if len(content) > 80 else "")
@@ -2248,11 +2262,27 @@ def admin_revoke_ui_dev(username: str, request: Request):
 def worker_pending(authorization: Optional[str] = Header(None)):
     _check_worker_auth(authorization)
     conn = get_conn()
+    stale_before = (
+        datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=10)
+    ).isoformat(timespec="seconds")
+    conn.execute(
+        "UPDATE pending_turns SET status='pending', started_at=NULL "
+        "WHERE status='processing' AND started_at < ?",
+        (stale_before,),
+    )
     row = conn.execute(
-        "SELECT id, persona_name, room_id, rerouted, created_at, restart_notice_sent "
+        "SELECT id, persona_name, room_id, rerouted, created_at, restart_notice_sent, source_message_id "
         "FROM pending_turns WHERE status = 'pending' ORDER BY id LIMIT 1"
     ).fetchone()
     if not row:
+        conn.close()
+        return None
+    claimed = conn.execute(
+        "UPDATE pending_turns SET status='processing', started_at=? WHERE id=? AND status='pending'",
+        (_now(), row["id"]),
+    ).rowcount
+    if not claimed:
+        conn.commit()
         conn.close()
         return None
     context_rows = conn.execute(
@@ -2266,12 +2296,27 @@ def worker_pending(authorization: Optional[str] = Header(None)):
         "SELECT persona_name FROM room_restart_notice WHERE room_id = ?",
         (row["room_id"],),
     ).fetchone()
+    if row["source_message_id"] is not None:
+        batch_size = conn.execute(
+            "SELECT COUNT(*) AS n FROM pending_turns WHERE source_message_id = ?",
+            (row["source_message_id"],),
+        ).fetchone()["n"]
+    else:
+        batch_size = 1
+    room_active_count = conn.execute(
+        "SELECT COUNT(*) AS n FROM pending_turns WHERE room_id=? AND status IN ('pending','processing')",
+        (row["room_id"],),
+    ).fetchone()["n"]
+    conn.commit()
     conn.close()
     return {
         "turn_id": row["id"],
         "persona_name": row["persona_name"],
         "room_id": row["room_id"],
         "rerouted": bool(row["rerouted"]),
+        "source_message_id": row["source_message_id"],
+        "batch_size": batch_size,
+        "room_active_count": room_active_count,
         # ★ "서버 업데이트로 껐다 켜는 도중에 메시지 보내면 반응이 끊긴다"
         # 요청(2026-08-27) — 워커가 이 턴이 얼마나 오래 대기했는지 알아야
         # "재시작 때문에 늦었다"는 안내를 보낼지 판단할 수 있다.
@@ -2297,14 +2342,14 @@ def worker_mark_restart_notice_sent(body: RestartNoticeMark, authorization: Opti
     워커가 거의 동시에 두 번 호출해도(레이스) 먼저 잡은 대표만 남는다."""
     _check_worker_auth(authorization)
     conn = get_conn()
-    conn.execute(
+    cursor = conn.execute(
         "INSERT OR IGNORE INTO room_restart_notice (room_id, persona_name, notified_at) "
         "VALUES (?, ?, datetime('now'))",
         (body.room_id, body.persona_name),
     )
     conn.commit()
     conn.close()
-    return {"ok": True}
+    return {"ok": True, "claimed": cursor.rowcount == 1}
 
 
 class RestartNoticeClear(BaseModel):
@@ -2321,7 +2366,7 @@ def worker_clear_restart_notice(body: RestartNoticeClear, authorization: Optiona
     _check_worker_auth(authorization)
     conn = get_conn()
     remaining = conn.execute(
-        "SELECT COUNT(*) AS n FROM pending_turns WHERE room_id = ? AND status = 'pending'",
+        "SELECT COUNT(*) AS n FROM pending_turns WHERE room_id = ? AND status IN ('pending','processing')",
         (body.room_id,),
     ).fetchone()["n"]
     if remaining > 0:
@@ -2452,8 +2497,8 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
     notified = [persona_name for persona_name in targets if persona_name != sender]
     for persona_name in notified:
         conn.execute(
-            "INSERT INTO pending_turns (persona_name, room_id, status, created_at) VALUES (?, ?, 'pending', ?)",
-            (persona_name, room_id, now),
+            "INSERT INTO pending_turns (persona_name, room_id, status, created_at, source_message_id) VALUES (?, ?, 'pending', ?, ?)",
+            (persona_name, room_id, now, message_id),
         )
     conn.commit()
     conn.close()
@@ -2471,11 +2516,11 @@ def worker_redirect_turn(body: RedirectTurn, authorization: Optional[str] = Head
     _check_worker_auth(authorization)
     conn = get_conn()
     row = conn.execute("SELECT status FROM pending_turns WHERE id = ?", (body.turn_id,)).fetchone()
-    if not row or row["status"] != "pending":
+    if not row or row["status"] not in {"pending", "processing"}:
         conn.close()
         raise HTTPException(status_code=404, detail="이미 처리됐거나 없는 턴입니다")
     conn.execute(
-        "UPDATE pending_turns SET persona_name = ?, rerouted = 1 WHERE id = ?",
+        "UPDATE pending_turns SET persona_name = ?, rerouted = 1, status='pending', started_at=NULL WHERE id = ?",
         (body.persona_name, body.turn_id),
     )
     conn.commit()

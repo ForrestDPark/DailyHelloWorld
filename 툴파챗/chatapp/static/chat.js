@@ -987,10 +987,25 @@ function renderRoomItem(r) {
   content.innerHTML = `
     <div class="avatar${r.thumbnail_url ? " avatar-image" : ""}">${avatarInner}</div>
     <div class="room-info">
-      <div class="room-name">${escapeHtml(roomLabel)}${unread ? '<span class="unread-dot"></span>' : ""}</div>
+      <div class="room-name">${escapeHtml(roomLabel)}${unread ? '<span class="unread-badge"></span>' : ""}</div>
       <div class="room-preview">${r.last_message ? escapeHtml(r.last_message) : "대화를 시작해보세요"}</div>
     </div>
   `;
+  // ★ "안 읽은 메시지가 있으면 개수를 띄워달라, 방 목록에서도 확인되게"
+  // 요청(2026-08-28) — 몇 개인지는 서버만 셀 수 있어서(count_only 모드)
+  // 각 방마다 가벼운 후속 요청을 보낸다. 배지는 우선 점만 보여주다가
+  // 응답이 오면 숫자로 바뀐다. 방 목록을 벗어나면(다른 렌더로 교체되면)
+  // badge.isConnected가 false가 돼 조용히 무시한다.
+  if (unread) {
+    const badge = content.querySelector(".unread-badge");
+    apiFetch(`/api/messages?room_id=${encodeURIComponent(r.room_id)}&since_id=${getLastRead(r.room_id)}&count_only=true`)
+      .then((res) => res.json())
+      .then(({ count }) => {
+        if (!badge.isConnected || !count) return;
+        badge.textContent = count > 99 ? "99+" : String(count);
+      })
+      .catch(() => {});
+  }
   const openChat = () => {
     if (wasRecentSwipeDrag()) return;
     if (item.classList.contains("swiped-open")) { item._closeSwipe(); return; }
