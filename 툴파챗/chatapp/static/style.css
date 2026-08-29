@@ -697,7 +697,12 @@ header h1 { font-size: 18px; margin: 0; flex: 1; }
   transition: background 0.1s ease;
 }
 .room-item.selected .swipe-content { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent); }
-.room-item.menu-open { z-index: 40; }
+/* ★ "친구선택 1:1채팅하기 항목 등이 가려서 팝업이 안 보여" 버그(2026-08-29) —
+   .room-item의 overflow:hidden(스와이프 뒤 액션 버튼을 가리는 용도, 위 주석
+   참고)이 position:absolute인 .friend-action-menu까지 같이 잘라내고 있었다.
+   메뉴가 열린 동안만 overflow를 풀어준다(닫히면 menu-open이 빠지며 다시
+   hidden으로 돌아가 스와이프 효과에는 영향 없음). */
+.room-item.menu-open { z-index: 40; overflow: visible; }
 .friend-more-btn { width: 38px; height: 38px; flex: 0 0 auto; border: none; border-radius: 12px; background: transparent; color: var(--muted); font-size: 24px; line-height: 1; cursor: pointer; }
 .friend-more-btn:hover { background: var(--accent-soft); color: var(--accent); }
 .friend-action-menu { position: absolute; z-index: 50; top: 52px; right: 8px; min-width: 155px; padding: 5px; border: 1px solid var(--border); border-radius: 13px; background: var(--bg-elevated); box-shadow: 0 14px 36px rgba(32, 22, 50, .24); isolation: isolate; }

@@ -780,20 +780,40 @@ def _generate_openai_image(prompt, source=None):
 
 
 def process_automatic_image_job(job):
-    """서버가 승인 상태로 내준 프로필 작업만 Images API로 생성한다."""
+    """서버가 승인 상태로 내준 프로필 작업을 이미지로 만든다.
+
+    ★ 2026-08-29: "GPT 토큰이 없는 경우에는 디퓨저 사용해서 이미지 생성해서
+    저장하도록 해줘" 요청 — 예전엔 무조건 OpenAI Images API(_generate_openai_image)만
+    썼고, OPENAI_API_KEY가 없거나 크레딧이 소진(insufficient_quota)되면 그대로
+    실패해서 아바타 없는 프로필이 계속 남았다. OpenAI를 먼저 시도하고, 어떤
+    이유로든 실패하면 채팅의 imageplan 흐름에서 이미 쓰던 로컬 Stable
+    Diffusion(_generate_local_image, 이 Mac의 MPS로 돈다)으로 자동 전환한다."""
+    prompt = str(job["prompt"])[:4000]
+    engine = "openai"
+    openai_error = None
     try:
-        url = _generate_openai_image(str(job["prompt"])[:4000])
-        _api("/api/worker/image_jobs/complete", "POST", {"job_id": job["id"], "url": url})
-        print(f"🖼️ {job['persona_name']} 프로필 이미지 자동 생성·적용 완료", flush=True)
-    except Exception as exc:  # noqa: BLE001 — 실패를 영속화하고 워커는 계속 돈다
+        url = _generate_openai_image(prompt)
+    except Exception as exc:  # noqa: BLE001 — 로컬 디퓨저로 넘어가기 위한 의도적 전체 캐치
+        openai_error = exc
+        engine = "local"
+        print(f"⚠️ {job.get('persona_name')} OpenAI 이미지 생성 실패, 로컬 디퓨저로 전환: {exc}", flush=True)
         try:
-            _api(
-                "/api/worker/image_jobs/complete", "POST",
-                {"job_id": job["id"], "error": str(exc)[:1000]},
-            )
-        except Exception as report_exc:  # noqa: BLE001
-            print(f"⚠️ 이미지 작업 실패 상태 저장도 실패: {report_exc}", flush=True)
-        print(f"⚠️ {job.get('persona_name')} 프로필 이미지 생성 실패: {exc}", flush=True)
+            url = _generate_local_image(prompt)
+        except Exception as local_exc:  # noqa: BLE001 — 실패를 영속화하고 워커는 계속 돈다
+            try:
+                _api(
+                    "/api/worker/image_jobs/complete", "POST",
+                    {"job_id": job["id"], "error": f"OpenAI 실패({openai_error}) / 로컬 디퓨저도 실패({local_exc})"[:1000]},
+                )
+            except Exception as report_exc:  # noqa: BLE001
+                print(f"⚠️ 이미지 작업 실패 상태 저장도 실패: {report_exc}", flush=True)
+            print(f"⚠️ {job.get('persona_name')} 프로필 이미지 생성 실패(OpenAI+로컬 디퓨저 모두): {local_exc}", flush=True)
+            return
+    try:
+        _api("/api/worker/image_jobs/complete", "POST", {"job_id": job["id"], "url": url})
+        print(f"🖼️ {job['persona_name']} 프로필 이미지 자동 생성·적용 완료({engine})", flush=True)
+    except Exception as exc:  # noqa: BLE001
+        print(f"⚠️ 이미지 작업 완료 보고 실패: {exc}", flush=True)
 
 
 def _generate_image(prompt, source=None):

@@ -1997,11 +1997,37 @@ def leave_room(room_id: str, request: Request):
     return {"ok": True}
 
 
+def _delete_notion_group_room(conn, room_id):
+    """Notion 그룹 회의방(커스텀 방과 달리 rooms 테이블에 행이 없고, 같은
+    group_name을 쓰는 페르소나들로부터 파생되는 방)을 삭제한다. "방을 없앤다"는
+    게 곧 소속 페르소나들의 그룹 지정을 전부 해제하는 것과 같다 — 그래야
+    그 group_name으로 다시 방이 파생되지 않는다. _delete_custom_room과 같은
+    수준으로 대화 기록·초대·공지·재시작 안내를 같이 지운다(room_invites·
+    room_persona_exclusions·custom_rooms은 애초에 이 방 종류엔 없음)."""
+    conn.execute(
+        "UPDATE personas SET group_name = NULL, admin_group_name = NULL WHERE group_name = ?",
+        (room_id,),
+    )
+    conn.execute("DELETE FROM messages WHERE room_id = ?", (room_id,))
+    conn.execute("DELETE FROM pending_turns WHERE room_id = ?", (room_id,))
+    conn.execute("DELETE FROM room_user_invites WHERE room_id = ?", (room_id,))
+    conn.execute("DELETE FROM room_notices WHERE room_id = ?", (room_id,))
+    conn.execute("DELETE FROM room_restart_notice WHERE room_id = ?", (room_id,))
+
+
 @app.delete("/api/rooms/{room_id}")
 def delete_room(room_id: str, request: Request):
     """"관리자는 채팅방 삭제할 수 있게 해달라" 요청(2026-08-28). 방 주인
     본인(자기 방을 완전히 없애고 싶을 때) 또는 전체 관리자만 지울 수
-    있다 — 초대받은 일반 멤버는 나가기(leave_room)만 가능."""
+    있다 — 초대받은 일반 멤버는 나가기(leave_room)만 가능.
+
+    ★ 2026-08-29: "그룹채팅방도 관리자가 삭제 가능하게 해줘" 요청 — 위 로직은
+    custom_rooms 테이블에 있는 방(1:1 승격 방·커스텀 방)만 다뤘고, Notion
+    group_name으로 파생되는 그룹 회의방은 애초에 그 테이블에 없어서 404만
+    떨어졌다. custom_rooms에 없으면 Notion 그룹 회의방인지 확인해서
+    _delete_notion_group_room으로 넘긴다. 이 방들은 "주인"이 없는 관리자
+    큐레이션 콘텐츠라 전체 관리자만 삭제할 수 있다(일반 멤버는 여전히
+    leave_room으로 자기만 나가는 것만 가능 — 방 자체는 유지)."""
     if not getattr(request.state, "can_write", True):
         raise HTTPException(status_code=403, detail="읽기 전용 계정입니다")
     user = getattr(request.state, "user", None)
@@ -2010,6 +2036,14 @@ def delete_room(room_id: str, request: Request):
     conn = get_conn()
     row = conn.execute("SELECT owner_username FROM custom_rooms WHERE room_id = ?", (room_id,)).fetchone()
     if not row:
+        if room_id != GROUP_ROOM_ID and _is_notion_group_room(conn, room_id):
+            if not is_owner_request:
+                conn.close()
+                raise HTTPException(status_code=403, detail="이 방은 전체 관리자만 삭제할 수 있습니다")
+            _delete_notion_group_room(conn, room_id)
+            conn.commit()
+            conn.close()
+            return {"ok": True}
         conn.close()
         raise HTTPException(status_code=404, detail="존재하지 않는 채팅방입니다")
     if not (is_owner_request or row["owner_username"] == username):

@@ -1299,6 +1299,22 @@ function renderRoomItem(r) {
       ? [{ label: "수정", className: "edit", onClick: doRename }, { label: "삭제", className: "danger", onClick: doDelete }]
       : [{ label: "나가기", className: "danger", onClick: doLeave }];
     makeSwipeable(item, content, actionsConfig);
+  } else if (amOwner && r.is_group_room && r.room_id !== "group") {
+    // ★ "그룹채팅방도 관리자가 채팅방 삭제 가능하게 해줘" 요청(2026-08-29) —
+    // 위 블록은 room_id가 "custom_"로 시작하는 방(1:1 승격 방·커스텀 방)만
+    // 다뤄서, Notion group_name으로 파생되는 그룹 회의방은 스와이프해도
+    // 삭제/나가기 액션 자체가 안 떴다. 이 방들은 주인이 없는 관리자
+    // 큐레이션 콘텐츠라 관리자에게만, 삭제 액션만 보여준다("group" 전체
+    // 채팅방은 앱의 기본 방이라 제외).
+    const roomTitle = roomLabel;
+    const doDeleteGroupRoom = async () => {
+      if (!confirm(`"${roomTitle}" 그룹 채팅방을 삭제할까요? 대화 기록이 사라지고, 소속 페르소나들의 그룹 지정도 함께 해제됩니다. 되돌릴 수 없습니다.`)) return;
+      try {
+        await apiFetch(`/api/rooms/${encodeURIComponent(r.room_id)}`, { method: "DELETE" });
+        await showRoomList();
+      } catch (e) { if (e.message !== "unauthorized" && e.message !== "forbidden") alert("삭제 실패"); }
+    };
+    makeSwipeable(item, content, [{ label: "삭제", className: "danger", onClick: doDeleteGroupRoom }]);
   }
   return item;
 }

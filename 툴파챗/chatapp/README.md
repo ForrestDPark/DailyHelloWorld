@@ -1770,3 +1770,29 @@ Gmail 요약·구직 후보 같은 무관한 정보가 섞여 들어갈 위험�
 - 실제 검증: 알람지기에게 "오늘 시프트가 뭐야? 기상 알람은 몇시야?" 질문 →
   "오늘 휴무 1일차라 기상 알람은 없어. 대신 오늘 안에 할 거 8개 쌓여있는데..."
   로 실제 status.json 내용과 정확히 일치하는 답변을 라이브로 확인.
+
+## 그룹 회의방 관리자 삭제 + 1:1 팝업 가림 + 프로필 이미지 로컬 폴백 + 아이콘 구분 (2026-08-29)
+
+네 가지 독립 피드백을 한 번에 처리.
+
+- **그룹 회의방 관리자 삭제**: 기존 `DELETE /api/rooms/{room_id}`는 `custom_rooms` 테이블에
+  있는 방(1:1 승격 방·커스텀 방)만 다뤄서, Notion `group_name`으로 파생되는 그룹 회의방은
+  스와이프해도 삭제 액션 자체가 안 떴다("그룹채팅방도 관리자가 삭제 가능하게 해줘"). 새
+  `_delete_notion_group_room()`이 소속 페르소나들의 `group_name`을 비우고(그룹 해제) 관련
+  메시지·초대·공지를 지운다 — 전체 관리자만 가능(방 "주인"이 없는 콘텐츠라서). `chat.js`의
+  방 목록 렌더에도 `is_group_room && room_id !== "group"`이면 관리자에게 삭제 스와이프
+  액션을 새로 보여준다.
+- **1:1 채팅 팝업 가림**: 친구 목록에서 "⋯" 눌러 여는 액션 메뉴(1:1 대화하기 등)가 거의
+  안 보였다 — `.room-item`의 `overflow: hidden`(스와이프 액션 버튼을 뒤에 숨기는 용도)이
+  `position: absolute`인 `.friend-action-menu`까지 같이 잘라내고 있었다. 메뉴가 열리면
+  붙는 `.menu-open` 클래스에 `overflow: visible`을 추가해 해결 — 닫히면 다시 `hidden`으로
+  돌아가 스와이프 효과는 그대로.
+- **프로필 이미지 로컬 디퓨저 폴백**: 자동 프로필 이미지 생성(`process_automatic_image_job`)이
+  무조건 OpenAI Images API만 썼다 — `OPENAI_API_KEY` 미설정/크레딧 소진 시 그대로 실패해
+  아바타 없는 프로필이 남았다. OpenAI를 먼저 시도하고 실패하면 채팅 imageplan 흐름에서 이미
+  쓰던 로컬 Stable Diffusion(`_generate_local_image`, 이 Mac MPS)으로 자동 전환한다.
+- **아이콘 구분**: `icon-image`(프로필/대표사진)와 `icon-wallpaper`(채팅 배경)가 거의 같은
+  도상(사각형+원+산)이라 구분이 안 갔다 — 배경 쪽을 페인트 롤러 도상으로 교체. 호버 시
+  설명 표시는 `.icon-button[aria-label]::after`(전체 아이콘 버튼에 이미 적용된 CSS 툴팁,
+  `@media (hover: hover)`)가 이미 처리하고 있어 별도 추가 작업은 필요 없었다 — 모든
+  `.icon-button`에 `aria-label`이 이미 붙어 있음을 확인.
