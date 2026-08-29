@@ -735,12 +735,26 @@ document.getElementById("my-persona-form").addEventListener("submit", async (e) 
 // Notion "## 프로필" 섹션(유형·정체성/관계·성격·말투·배경)만 추린 짧은 요약을
 // 카드로 나열해서 보여준다. 공개 페르소나 전부 + 내가 만든 페르소나만 온다
 // (서버가 그 기준으로 이미 걸러줌).
+// ★ "페르소나가 너무 많아서 스크롤을 너무 많이 내려야 한다, 검색기능
+// 있으면 좋겠다" 요청(2026-08-29, 프로필 보기 화면 대상) — 이름 기준으로
+// 실시간 필터링. 카드를 다시 그리지 않고 숨김/표시만 토글해 검색 중
+// "수정" 폼이 열려 있어도 날아가지 않게 한다.
+document.getElementById("profiles-search").addEventListener("input", (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  for (const card of document.querySelectorAll("#profiles-list .profile-card")) {
+    const name = (card.dataset.searchName || "").toLowerCase();
+    card.classList.toggle("hidden", !!q && !name.includes(q));
+  }
+});
+
 document.getElementById("profiles-btn").addEventListener("click", async () => {
   const panel = document.getElementById("profiles-panel");
   const wasOpen = !panel.classList.contains("hidden");
   closeMainListPanels();
   if (wasOpen) return;
   panel.classList.remove("hidden");
+  const searchInput = document.getElementById("profiles-search");
+  searchInput.value = "";
   const list = document.getElementById("profiles-list");
   list.innerHTML = '<div class="empty-hint">불러오는 중...</div>';
   try {
@@ -753,6 +767,7 @@ document.getElementById("profiles-btn").addEventListener("click", async () => {
     for (const p of profiles) {
       const card = document.createElement("div");
       card.className = "profile-card";
+      card.dataset.searchName = displayName(p.name);
       const avatar = document.createElement("div");
       avatar.className = "profile-card-avatar" + (p.avatar_url ? " has-image" : "");
       if (p.avatar_url) {
@@ -814,6 +829,20 @@ document.getElementById("profiles-btn").addEventListener("click", async () => {
           actions.append(save, cancel);
           form.append(textarea, actions);
           content.appendChild(form);
+          // ★ "수정 누르면 창이 반쯤 가려서 안 보인다" 요청(2026-08-29) —
+          // 페르소나가 많아 프로필 목록이 길어지면 펼쳐진 수정 폼이 패널
+          // 스크롤 영역(#profiles-panel, max-height:60vh) 아래로 잘리거나,
+          // 모바일에서는 텍스트 입력 포커스로 뜨는 가상 키보드가 폼을
+          // 가린다. 폼을 화면 안으로 스크롤하고, 키보드가 나중에 열려
+          // 레이아웃이 바뀌는 경우까지 한 번 더 스크롤해 보정한다.
+          const scrollFormIntoView = () => form.scrollIntoView({ behavior: "smooth", block: "center" });
+          requestAnimationFrame(() => {
+            scrollFormIntoView();
+            textarea.focus();
+          });
+          if (window.visualViewport) {
+            window.visualViewport.addEventListener("resize", scrollFormIntoView, { once: true });
+          }
         });
         content.appendChild(edit);
         const regenerate = document.createElement("button");

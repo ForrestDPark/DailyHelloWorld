@@ -447,6 +447,17 @@ header h1 { font-size: 18px; margin: 0; flex: 1; }
   max-height: 60vh;
   overflow-y: auto;
 }
+#profiles-search {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 16px;
+}
 #profiles-list { display: flex; flex-direction: column; gap: 10px; }
 .profile-card {
   display: flex;
