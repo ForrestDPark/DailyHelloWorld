@@ -885,6 +885,12 @@ SHIFT_TIMES = {
 # 생활 리듬이 낮으로 넘어가도록 알람을 해제하지 않고 아침 8시로 맞춘다.
 DAY_TO_GY_OFF_ALARM_TIME = {"hour": 8, "minute": 0}
 
+# ── GY → Swing 전환 사이 휴무일 기상 알람 ─────────────────────────
+# ★ 2026-08-29: "GY에서 Swing으로 넘어가는 휴일 첫날은 마치 근무하는
+# 것처럼 오후 6시로 알람을 맞춰달라"는 요청 — Day→GY 전환 때와 같은
+# 패턴으로, 앞으로 이 전환이 있을 때마다 자동 적용된다.
+GY_TO_SWING_OFF_ALARM_TIME = {"hour": 18, "minute": 0}
+
 # ── 근무별 "전자제품 전원 끄기" 알람 시간 ─────────────────────────
 # 근무 끝나고 쉬는(자는) 시간대에 맞춰 전자제품을 끄라고 하루 한 번 알려준다.
 # Day:   17:00~02:00 / GY: 08:00~16:00 / Swing: 23:50~08:00
@@ -1579,6 +1585,23 @@ def _is_day_to_gy_off_day(schedule, d):
         cursor += datetime.timedelta(days=1)
     next_shift = get_shift_for_date(schedule, cursor)
     return prev_shift == "Day" and next_shift == "GY"
+
+
+def _is_gy_to_swing_off_day(schedule, d):
+    """d가 GY→Swing 전환 사이 휴무 블록의 "첫날"인지 반환. ★ 2026-08-29:
+    "GY에서 Swing으로 넘어가는 휴일 첫날은 근무하는 것처럼 알람을 맞춰
+    달라"는 요청 — Day→GY 때와 달리 휴무 블록 전체가 아니라 첫날 하루만
+    해당한다(둘째 날부터는 평소처럼 알람 없는 휴무)."""
+    if get_shift_for_date(schedule, d) != "휴무":
+        return False
+    if get_shift_for_date(schedule, d - datetime.timedelta(days=1)) == "휴무":
+        return False  # d가 블록의 둘째 날 이후면 대상 아님
+    prev_shift = get_shift_for_date(schedule, d - datetime.timedelta(days=1))
+    cursor = d + datetime.timedelta(days=1)
+    while get_shift_for_date(schedule, cursor) == "휴무":
+        cursor += datetime.timedelta(days=1)
+    next_shift = get_shift_for_date(schedule, cursor)
+    return prev_shift == "GY" and next_shift == "Swing"
 
 
 # ── 헬스장 운영 시간 ─────────────────────────────────────────
@@ -5428,6 +5451,12 @@ class ShiftAlarmApp(rumps.App):
             if notify:
                 notify_spoken("교대근무 알람 설정", "휴무(Day→GY 전환)",
                                    f"알람이 {time['hour']:02d}:{time['minute']:02d}으로 설정되었습니다.")
+        elif _is_gy_to_swing_off_day(self.schedule, date):
+            time = GY_TO_SWING_OFF_ALARM_TIME
+            register_alarm(time["hour"], time["minute"])
+            if notify:
+                notify_spoken("교대근무 알람 설정", "휴무 첫날(GY→Swing 전환)",
+                                   f"알람이 {time['hour']:02d}:{time['minute']:02d}으로 설정되었습니다.")
         else:
             unregister_alarm()
             if notify:
@@ -6635,6 +6664,9 @@ class ShiftAlarmApp(rumps.App):
             if _is_day_to_gy_off_day(self.schedule, datetime.date.today()):
                 t = DAY_TO_GY_OFF_ALARM_TIME
                 alarm_text = f"알람 {t['hour']:02d}:{t['minute']:02d}(Day→GY 전환)"
+            elif _is_gy_to_swing_off_day(self.schedule, datetime.date.today()):
+                t = GY_TO_SWING_OFF_ALARM_TIME
+                alarm_text = f"알람 {t['hour']:02d}:{t['minute']:02d}(GY→Swing 전환 첫날)"
             else:
                 alarm_text = "알람 없음"
             msg = (f"현재: 휴무 ({auto_text}, {alarm_text})\n{earnings_text}\n"
