@@ -916,7 +916,40 @@ HIGH_CPU_CHECK_INTERVAL_SECONDS = 60
 # 종료하는 건 하지 않는다(중요한 작업 중인 프로세스를 잘못 죽일 위험) —
 # 이 화이트리스트는 사용자와 함께 "안전하게 죽여도 된다"고 확인한 macOS
 # 시스템 데몬만 담는다(둘 다 필요하면 macOS가 알아서 다시 띄움).
-AUTO_KILL_HIGH_CPU_NAMES = {"replayd", "StorageManagementService", "ApplicationsStorageExtension"}
+# replayd는 2026-08-30부터 아래 REPLAYD_SILENT_KILL_INTERVAL_SECONDS 쪽
+# 전용 경로로 옮겨서 여기서는 뺐다(중복 처리 방지).
+AUTO_KILL_HIGH_CPU_NAMES = {"StorageManagementService", "ApplicationsStorageExtension"}
+
+# ── replayd 조용히 자동 종료 (★ 2026-08-30 추가) ──────────────────
+# "replayd 는 아무 쓸데가 없으니 5분마다 돌아가고 있으면 그냥 바로 조용히
+# 죽여달라(알람 없이)"는 요청. launchctl disable + bootout을 시도했지만
+# SIP 때문에 완전히 못 없애고(System Integrity Protection이 걸려 있어
+# /System/Library/LaunchAgents의 시스템 데몬은 bootout이 막힘) XPC 트리거로
+# 바로 재기동되는 걸 확인 — 그래서 70%/30분 스턱 판정 없이 그냥 주기적으로
+# 죽이는 방식으로 우회한다.
+REPLAYD_SILENT_KILL_INTERVAL_SECONDS = 5 * 60
+
+
+def _kill_all_processes_named(name):
+    """`name`과 comm이 일치하는 모든 프로세스를 조용히 SIGKILL한다."""
+    try:
+        result = subprocess.run(
+            ["ps", "-Ao", "pid,comm"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return
+    for line in result.stdout.splitlines()[1:]:
+        parts = line.strip().split(None, 1)
+        if len(parts) < 2:
+            continue
+        pid_str, comm = parts
+        if os.path.basename(comm) != name:
+            continue
+        try:
+            os.kill(int(pid_str), signal.SIGKILL)
+        except (ValueError, ProcessLookupError, OSError):
+            continue
 
 
 def _sample_high_cpu_processes(threshold=HIGH_CPU_THRESHOLD_PERCENT):
@@ -4289,6 +4322,10 @@ class ShiftAlarmApp(rumps.App):
         self.high_cpu_timer = rumps.Timer(self._check_high_cpu, HIGH_CPU_CHECK_INTERVAL_SECONDS)
         self.high_cpu_timer.start()
 
+        # replayd 조용히 자동 종료 (5분마다, 알람 없음 — REPLAYD_SILENT_KILL_INTERVAL_SECONDS 주석 참고)
+        self.replayd_kill_timer = rumps.Timer(self._kill_replayd_silently, REPLAYD_SILENT_KILL_INTERVAL_SECONDS)
+        self.replayd_kill_timer.start()
+
         # 툴파챗 새 메시지 알림 (1분마다 확인)
         self.tulpachat_timer = rumps.Timer(self._check_tulpachat_messages, 60)
         self.tulpachat_timer.start()
@@ -4983,6 +5020,11 @@ class ShiftAlarmApp(rumps.App):
         subprocess/딕셔너리 작업만 하므로 안전 — build_menu만 메인 스레드로
         넘긴다)."""
         threading.Thread(target=self._check_high_cpu_thread, daemon=True).start()
+
+    def _kill_replayd_silently(self, _):
+        """5분마다 replayd가 떠 있으면 CPU%·스턱 시간 상관없이 그냥 조용히
+        죽인다(알람 없음) — REPLAYD_SILENT_KILL_INTERVAL_SECONDS 주석 참고."""
+        threading.Thread(target=_kill_all_processes_named, args=("replayd",), daemon=True).start()
 
     def _check_high_cpu_thread(self):
         # 같은 1분 주기를 타고 열 상태도 같이 갱신한다(멀쩡한 값이라도 매번

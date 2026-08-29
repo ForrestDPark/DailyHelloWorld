@@ -796,3 +796,11 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 
 - 예전엔 "🌅 일일 루틴 체크리스트" 하위 메뉴(화살표로 들어가야 하는 서브메뉴) 맨 위에 "✅ 전부 체크"가 있어서, 한 번 더 눌러 들어가야만 보였다.
 - 이제 그 하위 메뉴 항목 바로 아래, 최상위 메뉴 레벨에 "✅ 일일 루틴 전부 체크"로 뺐다 — 하위 메뉴를 열지 않고 바로 클릭 가능. 미체크 항목이 하나도 없으면(전부 체크된 상태) 표시 안 함(기존 동작 그대로 유지).
+
+## 56. 🔇 replayd 조용히 자동 종료 (5분마다, 알람 없음) (★ 2026-08-30 추가)
+
+**사용자 요청**: "replayd 이거 돌아가면 5분에 한번씩 자동 종료하게 하고 shift alarm 에서 알람으로 알리지 않고 조용히 끄게 해 아니면이게 아에 돌아가지 않도록 하면 좋겠어 아무 쓸데가 없잖아."
+
+- 먼저 완전히 안 뜨게 시도: `launchctl disable gui/<uid>/com.apple.replayd` + `launchctl bootout` — disable은 성공했지만 bootout은 SIP(System Integrity Protection)에 막혀 실패(`/System/Library/LaunchAgents`의 시스템 데몬이라 시스템 볼륨 보호 대상). 실제로 강제 종료해봐도 XPC 트리거로 즉시 재기동되는 걸 확인 — 완전 차단은 SIP를 끄지 않는 한 불가능.
+- 그래서 차선책(사용자가 함께 제시한 대안)으로 처리: 기존 `AUTO_KILL_HIGH_CPU_NAMES`(70% CPU · 30분 스턱 조건 + 발견 시 알람)에서 `replayd`를 빼고, 별도의 조용한 5분 주기 타이머(`REPLAYD_SILENT_KILL_INTERVAL_SECONDS`)로 옮겼다 — CPU%나 스턱 시간 조건 없이 `replayd`가 떠 있으면 그냥 `SIGKILL`, `notify_spoken` 알람 없음.
+- `StorageManagementService`/`ApplicationsStorageExtension`은 기존 70%/30분+알람 경로 그대로 유지(이번 요청은 replayd 한정).
