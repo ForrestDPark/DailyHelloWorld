@@ -249,7 +249,13 @@ def _maybe_execute_pending_plan(room_id, context):
 SERVER_URL = os.environ.get("CHATAPP_SERVER_URL", "http://localhost:8000")
 WORKER_TOKEN = os.environ.get("CHATAPP_WORKER_TOKEN", "")
 POLL_INTERVAL_SECONDS = 3
-PERSONA_SYNC_INTERVAL_SECONDS = 300
+# ★ "노션 동기화도 자동으로/빠르게 되게 해달라" 요청(2026-08-29) — 원래
+# 300초(5분)였다. 페르소나 수가 많지 않아(수십 개 미만) Notion API 부하
+# 걱정 없이 60초로 줄여도 안전하다(레이트리밋 평균 초당 3회 기준 여유 큼).
+# 실제 대사 반영은 이 값 + 매 턴 persona_prompt 즉시 조회(아래
+# _process_turn_inner 참고)가 함께 작동해 "노션 수정 → DB 반영까지 최대
+# 60초, DB 반영 후 답장은 즉시 최신 값 사용" 구조가 된다.
+PERSONA_SYNC_INTERVAL_SECONDS = 60
 AI_TIMEOUT_SECONDS = 120
 ORGANIZER_TIMEOUT_SECONDS = 300  # 손동주는 홈 폴더를 Glob/Read로 훑어봐야 해서 더 오래 걸릴 수 있음
 # ★ "서버 업데이트로 껐다 켜는 도중에 메시지 보내면 반응이 끊긴다" 요청
@@ -1146,6 +1152,18 @@ def _process_turn_inner(turn, persona_cache):
     if not entry:
         print(f"⚠️ 페르소나 '{persona_name}' 프로필 캐시 없음 — 다음 동기화 주기까지 대기", flush=True)
         return
+    # ★ "관리자가 사이트에서 직접 수정해도 자동으로 동기화되게 해달라, 노션
+    # 동기화도 마찬가지고" 요청(2026-08-29) — persona_cache는 최대 5분(Notion
+    # 동기화 주기)마다만 갱신되므로, 그 사이 admin_update_persona()로 DB가
+    # 바로 바뀌어도 캐시된 예전 system_prompt로 답할 수 있었다. 매 턴 답변
+    # 직전 최신 값을 확인해 이번 턴에만 즉시 반영한다(캐시 자체를 덮어쓰지는
+    # 않음 — 다음 정기 동기화가 정상적으로 다시 채워 넣는다).
+    try:
+        fresh = _api(f"/api/worker/persona_prompt?name={urllib.parse.quote(persona_name, safe='')}")
+        if fresh and fresh.get("system_prompt"):
+            entry = dict(entry, system_prompt=fresh["system_prompt"])
+    except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+        print(f"⚠️ {persona_name} 최신 설정 조회 실패, 캐시된 값 사용: {exc}", flush=True)
     _maybe_notify_restart_gap(turn, persona_name, room_id)
     is_organizer = persona_name == FILE_ORGANIZER_PERSONA_NAME
     is_ui_dev = persona_name == UI_DEV_PERSONA_NAME

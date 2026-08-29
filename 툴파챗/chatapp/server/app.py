@@ -3086,6 +3086,25 @@ def worker_user_personas(authorization: Optional[str] = Header(None)):
     return [dict(r) for r in rows]
 
 
+@app.get("/api/worker/persona_prompt")
+def worker_persona_prompt(name: str, authorization: Optional[str] = Header(None)):
+    """관리자가 사이트에서 페르소나 설정을 수정(/api/admin/personas/{name})하면
+    DB의 system_prompt는 즉시 바뀌지만, 워커는 그 값을 최대 5분(Notion 동기화
+    주기)마다 한 번씩만 persona_cache에 다시 읽어와 그 사이엔 예전 설정으로
+    답할 수 있었다(2026-08-29 "관리자가 직접 수정해도 자동으로 동기화되게
+    해달라" 요청). 워커가 매 턴 답변 직전 이 엔드포인트로 최신 system_prompt를
+    확인해 그 턴에만 즉시 반영한다 — Notion 동기화 결과도 DB에 쓰이는 즉시
+    이 경로로 같이 반영되므로 노션 쪽 지연도 함께 줄어든다(PERSONA_SYNC_
+    INTERVAL_SECONDS 단축과 별개로, DB에 이미 반영된 값은 턴마다 최신으로 씀)."""
+    _check_worker_auth(authorization)
+    conn = get_conn()
+    row = conn.execute("SELECT system_prompt FROM personas WHERE name = ?", (name,)).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="존재하지 않는 페르소나입니다")
+    return {"system_prompt": row["system_prompt"]}
+
+
 class AdminReportPost(BaseModel):
     content: str
 
