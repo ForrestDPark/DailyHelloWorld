@@ -56,7 +56,7 @@ from AppKit import (
     NSApp, NSPanel, NSTextField, NSButton, NSMakeRect, NSFont,
     NSBackingStoreBuffered, NSWindowStyleMaskTitled, NSWindowStyleMaskClosable,
     NSModalPanelWindowLevel, NSTextAlignmentCenter, NSRoundedBezelStyle,
-    NSColor, NSForegroundColorAttributeName,
+    NSColor, NSForegroundColorAttributeName, NSAlert,
 )
 from Foundation import NSMutableAttributedString, NSRange
 
@@ -6689,9 +6689,22 @@ class ShiftAlarmApp(rumps.App):
         message = "\n".join(lines) if lines else "스캔 결과를 가져오지 못했습니다."
         free_gb = get_free_storage_gb()
         subtitle = f"남은 공간: {free_gb}GB" if free_gb is not None else ""
-        AppHelper.callAfter(
-            rumps.alert, f"홈 폴더 용량 순위 (~) — {subtitle}", message
-        )
+        # ★ 2026-08-29 실측 버그: rumps.alert()만 쓰면 스캔이 1~2분 걸리는 동안
+        # 사용자가 다른 앱으로 넘어가 있다가 결과 창이 그 뒤에 조용히 떠서
+        # "아무것도 안 보인다"는 신고를 받았다. (1) 배너 알림을 먼저 띄워
+        # 놓치지 않게 하고 (2) NSAlert 창을 직접 만들어 activateIgnoringOtherApps_
+        # + 모달 패널 레벨로 다른 앱 창 뒤에 숨지 않게 강제한다 — 이 파일의
+        # 다른 NSPanel(예: _prompt_* 계열)에서 이미 검증된 것과 같은 패턴.
+        rumps.notification("📊 저장공간 스캔 완료", "", "결과 창을 확인하세요.")
+        AppHelper.callAfter(self._present_system_data_alert, subtitle, message)
+
+    def _present_system_data_alert(self, subtitle, message):
+        alert = NSAlert.alloc().init()
+        alert.setMessageText_(f"홈 폴더 용량 순위 (~) — {subtitle}")
+        alert.setInformativeText_(message)
+        alert.window().setLevel_(NSModalPanelWindowLevel)
+        NSApp().activateIgnoringOtherApps_(True)
+        alert.runModal()
 
     # ── CPU 과부하 ──────────────────────────────────────────
 

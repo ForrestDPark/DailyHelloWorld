@@ -728,3 +728,5 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - `du`를 subprocess로 부르지 않고 순수 파이썬 `os.walk`로 직접 합산한다(`scan_top_level_sizes`/`_dir_size_bytes`) — 7번 항목(휴지통 용량)에서 이미 겪은 것과 같은 이유로, launchd가 띄운 실제 메뉴바 프로세스에서는 `subprocess(capture_output=True)`가 조용히 실패할 수 있기 때문이다.
 - 파일이 많으면 스캔에 수십 초~2분 정도 걸릴 수 있어 백그라운드 스레드에서 돌리고, 시작할 때 "스캔 중" 음성 알림을 먼저 주고 끝나면 `rumps.alert` 결과 창을 띄운다(AppKit 메인 스레드 규칙에 맞춰 `AppHelper.callAfter`로 마샬링).
 - 실측: 독립 실행으로 106초 걸려 Library(49.6GB)·Desktop(27.1GB)·.codex(5.2GB) 등을 정확히 큰 순서로 반환하는 것 확인.
+
+★ 후속 버그 수정(같은 날): 스캔이 1~2분 걸리는 동안 사용자가 다른 앱으로 넘어가 있으면 `rumps.alert()` 결과 창이 그 뒤에 조용히 떠서 "아무것도 안 보인다"는 신고를 받았다. `rumps.notification()` 배너를 먼저 띄워 완료를 놓치지 않게 하고, `rumps.alert()` 대신 `NSAlert`를 직접 만들어 `activateIgnoringOtherApps_` + `NSModalPanelWindowLevel`로 다른 앱 창 뒤에 숨지 않게 강제했다 — 이 파일의 다른 NSPanel 프롬프트에서 이미 검증된 것과 같은 패턴.
