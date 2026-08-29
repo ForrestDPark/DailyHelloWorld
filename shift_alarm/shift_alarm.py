@@ -2641,6 +2641,48 @@ def get_trash_size_bytes():
         return None
 
 
+# ★ "System Data 어디에 쓰이는지 용량 큰 순서로 보고 싶다" 요청(2026-08-29) —
+# `du`를 subprocess로 부르면 위 get_trash_size_str()에서 이미 겪은 것과 같은
+# 이유(launchd GUI 에이전트에서 capture_output이 조용히 실패)로 launchd가
+# 띄운 실제 앱에서는 못 믿을 수 있어, 순수 파이썬 os.walk로 직접 합산한다.
+def _dir_size_bytes(path):
+    """path 이하 모든 파일 크기 합계(심볼릭 링크는 따라가지 않음). 읽기 실패한
+    개별 파일/폴더는 조용히 건너뛴다."""
+    total = 0
+    for root, dirs, files in os.walk(path, onerror=lambda e: None):
+        for name in files:
+            try:
+                fp = os.path.join(root, name)
+                if not os.path.islink(fp):
+                    total += os.path.getsize(fp)
+            except OSError:
+                continue
+    return total
+
+
+def scan_top_level_sizes(root, top_n=12):
+    """root 바로 아래 항목들의 용량을 큰 순서로 top_n개 반환한다
+    ([(이름, 바이트), ...]). 시간이 좀 걸릴 수 있어(수십~수백만 파일이면
+    수 분) 반드시 백그라운드 스레드에서 호출할 것."""
+    entries = []
+    try:
+        with os.scandir(root) as it:
+            names = [e.name for e in it]
+    except OSError:
+        return []
+    for name in names:
+        full = os.path.join(root, name)
+        if os.path.islink(full):
+            continue
+        try:
+            size = _dir_size_bytes(full) if os.path.isdir(full) else os.path.getsize(full)
+        except OSError:
+            continue
+        entries.append((name, size))
+    entries.sort(key=lambda x: x[1], reverse=True)
+    return entries[:top_n]
+
+
 def format_file_size(total):
     """바이트 수를 알림에 적합한 B/KB/MB/GB/TB 문자열로 바꾼다."""
     value = float(max(0, total))
@@ -5779,6 +5821,7 @@ class ShiftAlarmApp(rumps.App):
         trash_label = f"🗑️ 저장공간 관리 (휴지통 {trash_size})" if trash_size else "🗑️ 저장공간 관리"
         self.menu.add(rumps.MenuItem(trash_label, callback=self.open_storage_settings))
         self.menu.add(rumps.MenuItem("🧹 지금 캐시 정리", callback=self.clean_caches_now))
+        self.menu.add(rumps.MenuItem("📊 저장공간 상세 보기 (용량 순)", callback=self.show_system_data_breakdown))
 
         self.menu.add(None)
         more_menu = rumps.MenuItem("기타")
@@ -6630,6 +6673,25 @@ class ShiftAlarmApp(rumps.App):
         대신, 사용자가 직접 정리할 수 있게 시스템 설정의 저장 공간 화면을
         열어주는 것으로 단순화했다."""
         subprocess.Popen(["open", "x-apple.systempreferences:com.apple.settings.Storage"])
+
+    def show_system_data_breakdown(self, _):
+        """★ "System Data 어디에 쓰이는지 용량 순으로 보고 싶다" 요청
+        (2026-08-29) — 홈 폴더 바로 아래 항목들을 큰 순서로 스캔해서 보여준다.
+        파일 수가 많으면 수십 초~몇 분 걸릴 수 있어 백그라운드 스레드에서
+        돌리고, 끝나면 알림으로 "준비됨"을 알린 뒤 결과 창을 띄운다."""
+        notify_spoken("저장공간 스캔 시작", "", "홈 폴더를 훑어보고 있습니다. 완료되면 알려드릴게요.")
+        threading.Thread(target=self._scan_and_show_system_data, daemon=True).start()
+
+    def _scan_and_show_system_data(self):
+        home = os.path.expanduser("~")
+        entries = scan_top_level_sizes(home, top_n=12)
+        lines = [f"{format_file_size(size):>8}  {name}" for name, size in entries]
+        message = "\n".join(lines) if lines else "스캔 결과를 가져오지 못했습니다."
+        free_gb = get_free_storage_gb()
+        subtitle = f"남은 공간: {free_gb}GB" if free_gb is not None else ""
+        AppHelper.callAfter(
+            rumps.alert, f"홈 폴더 용량 순위 (~) — {subtitle}", message
+        )
 
     # ── CPU 과부하 ──────────────────────────────────────────
 
