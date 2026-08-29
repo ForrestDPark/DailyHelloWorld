@@ -788,6 +788,24 @@ def mix_background_audio(video_path, bgm_track_path, out_path, bgm_volume=DEFAUL
     return os.path.exists(out_path)
 
 
+def _delete_plain_highlight_if_bgm_exists(plain_path, bgm_path):
+    """★ "BGM 씌우기 전 영상 추출본은 BGM 파일 생기면 바로 삭제해달라" 요청
+    (2026-08-29) — 예전엔 파이프라인 맨 끝(EPUB·avMusic 확인까지 끝난 뒤)에야
+    기타/ 폴더째로 지워졌다. BGM판이 원본과 똑같은 화면에 배경음만 얹은
+    것이라 만들어지는 즉시 pre-BGM판은 대용량 중복일 뿐이므로, 뒷단계를
+    기다리지 않고 여기서 바로 지운다."""
+    if not plain_path or not bgm_path or plain_path == bgm_path:
+        return
+    if not os.path.isfile(plain_path):
+        return
+    try:
+        size_mb = os.path.getsize(plain_path) / (1024 * 1024)
+        os.remove(plain_path)
+        print(f"🗑️  BGM판 확인 완료 — 배경음 입히기 전 영상 삭제: {plain_path} ({size_mb:.1f}MB)")
+    except OSError as exc:
+        print(f"⚠️ 배경음 입히기 전 영상 삭제 실패: {exc}")
+
+
 def _process_video(video_path, args):
     base = os.path.splitext(os.path.basename(video_path))[0]
     work_dir = os.path.dirname(os.path.abspath(video_path)) or "."
@@ -964,6 +982,7 @@ def _process_video(video_path, args):
         if exported:
             history["avmusic_export"] = exported
             save_extraction_history(history_path, history)
+        _delete_plain_highlight_if_bgm_exists(out_path, cached_bgm)
         return
 
     print(f"🎵 배경음 입히는 중 (볼륨 {args.bgm_volume:.0%})...")
@@ -984,6 +1003,7 @@ def _process_video(video_path, args):
             history["avmusic_export"] = exported
             save_extraction_history(history_path, history)
         print(f"⏱️ BGM 생성·합성·복사: {format_elapsed(time.perf_counter() - stage_start)}")
+        _delete_plain_highlight_if_bgm_exists(out_path, bgm_out)
     else:
         print("❌ 배경음 입히기 실패")
         print(f"⏱️ BGM 생성·합성 시도: {format_elapsed(time.perf_counter() - stage_start)}")
