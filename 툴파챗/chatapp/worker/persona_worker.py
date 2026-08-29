@@ -936,9 +936,11 @@ def build_prompt(persona_name, system_prompt, context, persona_names, has_images
     # 한다(WebSearch 도구를 실제로 열어줬다 — persona_worker.py process_turn
     # 참고).
     lines.append(
-        "(실제 웹 검색 도구를 쓸 수 있습니다 — 최신 정보나 확인 안 된 사실·뉴스 "
-        "주장이 나오면 검색 없이 추측하거나 무작정 의심만 하지 말고, 필요할 때 "
-        "실제로 검색해서 근거를 확인한 뒤 답하세요.)"
+        "(실제 웹 검색·URL 열기 도구를 쓸 수 있습니다 — 최신 정보나 확인 안 된 "
+        "사실·뉴스 주장이 나오면 검색 없이 추측하거나 무작정 의심만 하지 말고, "
+        "필요할 때 실제로 검색해서 근거를 확인하세요. 대화 중 누가 URL을 직접 "
+        "보내면(Notion 링크 제외 — 그건 이미 따로 읽어옴) 그 링크도 실제로 열어서 "
+        "내용을 확인한 뒤 답하세요.)"
     )
     lines.append(
         f'위 대화 흐름에 이어서 "{persona_name}"으로서 다음 메시지 하나만 답하세요. '
@@ -1190,18 +1192,19 @@ def _process_turn_inner(turn, persona_cache):
         has_images=bool(image_paths), notion_reference=notion_reference,
     )
     # ★ "그냥 검색해서 링크 보내주면 될 텐데, 권한이 없어서 그런가?" 질문
-    # 끝에 "웹 검색 열어줘" 요청(2026-08-29) — 그동안 페르소나는 도구를
-    # 전혀 못 썼다(claude 엔진은 --tools ""로 완전히 꺼둠). 확인 안 된 주장에
-    # 무작정 휘둘리거나 무작정 의심만 하는 대신, 필요하면 실제로 검색해서
-    # 근거를 확인하게 WebSearch만 열어준다(Bash·파일쓰기 등은 여전히 없음
-    # — claude 엔진에만 적용되고, codex는 ai_exec.py 설계상 도구 자체를
-    # 지원 안 해서 이 값의 영향을 안 받는다).
-    exec_kwargs = {"image_paths": image_paths or None, "allow_tools": ["WebSearch"]}
+    # 끝에 "웹 검색 열어줘"(2026-08-29), 이어서 "WebFetch도 열어줘"
+    # 요청(같은 날) — 그동안 페르소나는 도구를 전혀 못 썼다(claude 엔진은
+    # --tools ""로 완전히 꺼둠). 확인 안 된 주장에 무작정 휘둘리거나 무작정
+    # 의심만 하는 대신, 필요하면 실제로 검색하거나(WebSearch) 상대가 보낸
+    # 링크를 직접 열어서(WebFetch) 근거를 확인하게 한다(Bash·파일쓰기 등은
+    # 여전히 없음 — claude 엔진에만 적용되고, codex는 ai_exec.py 설계상
+    # 도구 자체를 지원 안 해서 이 값의 영향을 안 받는다).
+    exec_kwargs = {"image_paths": image_paths or None, "allow_tools": ["WebSearch", "WebFetch"]}
     if is_organizer:
-        exec_kwargs["allow_tools"] = ["Read", "Glob", "WebSearch"]
+        exec_kwargs["allow_tools"] = ["Read", "Glob", "WebSearch", "WebFetch"]
         exec_kwargs["add_dirs"] = [str(HOME_DIR)]
     elif is_ui_dev:
-        exec_kwargs["allow_tools"] = ["Read", "Glob", "WebSearch"]
+        exec_kwargs["allow_tools"] = ["Read", "Glob", "WebSearch", "WebFetch"]
         exec_kwargs["add_dirs"] = [str(STATIC_DIR)]
     timeout = ORGANIZER_TIMEOUT_SECONDS if is_organizer else UI_DEV_TIMEOUT_SECONDS if is_ui_dev else AI_TIMEOUT_SECONDS
     try:
