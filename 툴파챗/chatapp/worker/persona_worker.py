@@ -930,6 +930,16 @@ def build_prompt(persona_name, system_prompt, context, persona_names, has_images
             "자신의 주석 관점에서 구절의 뜻·역사 사례의 숨은 조건·현대 적용의 오용 위험 중 "
             "가장 중요한 쟁점 하나를 골라 곧바로 논하세요. 앞선 병법가와 같은 내용을 반복하지 마세요.)"
         )
+    # ★ "그냥 검색해서 링크 보내주면 될 텐데" 요청(2026-08-29) — 확인 안 된
+    # 뉴스·사실 주장을 상대가 우길 때 페르소나가 검색도 안 해보고 그냥
+    # 믿거나 무작정 의심만 하지 말고, 실제로 웹 검색해서 확인하고 답하게
+    # 한다(WebSearch 도구를 실제로 열어줬다 — persona_worker.py process_turn
+    # 참고).
+    lines.append(
+        "(실제 웹 검색 도구를 쓸 수 있습니다 — 최신 정보나 확인 안 된 사실·뉴스 "
+        "주장이 나오면 검색 없이 추측하거나 무작정 의심만 하지 말고, 필요할 때 "
+        "실제로 검색해서 근거를 확인한 뒤 답하세요.)"
+    )
     lines.append(
         f'위 대화 흐름에 이어서 "{persona_name}"으로서 다음 메시지 하나만 답하세요. '
         f'"{persona_name}:" 같은 이름표는 붙이지 말고 대사만 쓰세요.'
@@ -1179,12 +1189,19 @@ def _process_turn_inner(turn, persona_cache):
         persona_name, entry["system_prompt"], turn["context"], persona_cache.keys(),
         has_images=bool(image_paths), notion_reference=notion_reference,
     )
-    exec_kwargs = {"image_paths": image_paths or None}
+    # ★ "그냥 검색해서 링크 보내주면 될 텐데, 권한이 없어서 그런가?" 질문
+    # 끝에 "웹 검색 열어줘" 요청(2026-08-29) — 그동안 페르소나는 도구를
+    # 전혀 못 썼다(claude 엔진은 --tools ""로 완전히 꺼둠). 확인 안 된 주장에
+    # 무작정 휘둘리거나 무작정 의심만 하는 대신, 필요하면 실제로 검색해서
+    # 근거를 확인하게 WebSearch만 열어준다(Bash·파일쓰기 등은 여전히 없음
+    # — claude 엔진에만 적용되고, codex는 ai_exec.py 설계상 도구 자체를
+    # 지원 안 해서 이 값의 영향을 안 받는다).
+    exec_kwargs = {"image_paths": image_paths or None, "allow_tools": ["WebSearch"]}
     if is_organizer:
-        exec_kwargs["allow_tools"] = ["Read", "Glob"]
+        exec_kwargs["allow_tools"] = ["Read", "Glob", "WebSearch"]
         exec_kwargs["add_dirs"] = [str(HOME_DIR)]
     elif is_ui_dev:
-        exec_kwargs["allow_tools"] = ["Read", "Glob"]
+        exec_kwargs["allow_tools"] = ["Read", "Glob", "WebSearch"]
         exec_kwargs["add_dirs"] = [str(STATIC_DIR)]
     timeout = ORGANIZER_TIMEOUT_SECONDS if is_organizer else UI_DEV_TIMEOUT_SECONDS if is_ui_dev else AI_TIMEOUT_SECONDS
     try:
