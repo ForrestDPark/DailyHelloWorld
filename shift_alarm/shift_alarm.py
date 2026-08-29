@@ -5827,13 +5827,13 @@ class ShiftAlarmApp(rumps.App):
             checklist_state=self._checklist_state,
         ):
             self.menu.add(reminder_item)
+        # ★ 2026-08-30: "전부체크하기는 화살표 들어가는게 아니라 항목 밑에서
+        # 바로 클릭할수있게 해줘" 요청 — 예전엔 "🌅 일일 루틴 체크리스트" 하위
+        # 메뉴(화살표) 안에 들어가야만 "전부 체크"를 누를 수 있었다. 이제
+        # 하위 메뉴 바로 아래, 최상위 메뉴에 한 번 더 눌러 들어갈 필요 없이
+        # 바로 클릭 가능한 항목으로 뺐다.
         routine_menu = rumps.MenuItem("🌅 일일 루틴 체크리스트")
         if self._daily_routine_state:
-            if any(not checked for checked in self._daily_routine_state.values()):
-                routine_menu.add(rumps.MenuItem(
-                    "✅ 전부 체크", callback=self.check_all_daily_routine_now,
-                ))
-                routine_menu.add(None)
             for label, checked in self._daily_routine_state.items():
                 routine_menu.add(rumps.MenuItem(
                     f"{'✅' if checked else '⬜'} {label}",
@@ -5842,6 +5842,10 @@ class ShiftAlarmApp(rumps.App):
         else:
             routine_menu.add(rumps.MenuItem("불러오는 중..."))
         self.menu.add(routine_menu)
+        if self._daily_routine_state and any(not checked for checked in self._daily_routine_state.values()):
+            self.menu.add(rumps.MenuItem(
+                "✅ 일일 루틴 전부 체크", callback=self.check_all_daily_routine_now,
+            ))
         self.menu.add(rumps.MenuItem(
             "    ↗ Notion에서 열기", callback=reminder_callback
         ))
