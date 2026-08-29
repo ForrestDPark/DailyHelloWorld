@@ -47,7 +47,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from pywebpush import WebPushException, webpush
 
-from server import auth, oauth
+from server import ai_keys, auth, oauth
 from server.db import get_conn, init_db
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -1335,6 +1335,125 @@ def remove_friend_favorite(friend_username: str, request: Request):
 
 class MyProfileUpdate(BaseModel):
     display_name: str
+
+
+class AiProviderKeyUpdate(BaseModel):
+    provider: str
+    api_key: str
+
+
+class AiProviderSelect(BaseModel):
+    provider: Optional[str] = None
+
+
+def _current_user(request):
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    return user
+
+
+@app.get("/api/me/ai-providers")
+def get_my_ai_providers(request: Request):
+    user = _current_user(request)
+    conn = get_conn()
+    selected = conn.execute(
+        "SELECT ai_provider FROM users WHERE username = ?", (user["username"],)
+    ).fetchone()
+    rows = conn.execute(
+        "SELECT provider, key_hint, updated_at FROM user_ai_credentials WHERE username = ?",
+        (user["username"],),
+    ).fetchall()
+    conn.close()
+    configured = {r["provider"]: {"hint": r["key_hint"], "updated_at": r["updated_at"]} for r in rows}
+    return {
+        "selected_provider": selected["ai_provider"] if selected else None,
+        "providers": [
+            {"id": provider, "configured": provider in configured, **configured.get(provider, {})}
+            for provider in ai_keys.PROVIDERS
+        ],
+    }
+
+
+@app.put("/api/me/ai-providers/key")
+def save_my_ai_provider_key(body: AiProviderKeyUpdate, request: Request):
+    user = _current_user(request)
+    provider = body.provider.strip().lower()
+    key = body.api_key.strip()
+    if provider not in ai_keys.PROVIDERS:
+        raise HTTPException(status_code=400, detail="지원하지 않는 AI 공급자입니다")
+    if not (10 <= len(key) <= 500) or any(ch.isspace() for ch in key):
+        raise HTTPException(status_code=400, detail="API 키 형식을 확인하세요")
+    encrypted = ai_keys.encrypt_key(key)
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO user_ai_credentials(username,provider,encrypted_key,key_hint,updated_at)
+           VALUES (?,?,?,?,?) ON CONFLICT(username,provider) DO UPDATE SET
+           encrypted_key=excluded.encrypted_key,key_hint=excluded.key_hint,updated_at=excluded.updated_at""",
+        (user["username"], provider, encrypted, ai_keys.key_hint(key), _now()),
+    )
+    current = conn.execute("SELECT ai_provider FROM users WHERE username=?", (user["username"],)).fetchone()
+    if not current or not current["ai_provider"]:
+        conn.execute("UPDATE users SET ai_provider=? WHERE username=?", (provider, user["username"]))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "provider": provider, "hint": ai_keys.key_hint(key)}
+
+
+@app.delete("/api/me/ai-providers/{provider}")
+def delete_my_ai_provider_key(provider: str, request: Request):
+    user = _current_user(request)
+    if provider not in ai_keys.PROVIDERS:
+        raise HTTPException(status_code=400, detail="지원하지 않는 AI 공급자입니다")
+    conn = get_conn()
+    conn.execute("DELETE FROM user_ai_credentials WHERE username=? AND provider=?", (user["username"], provider))
+    conn.execute(
+        "UPDATE users SET ai_provider=NULL WHERE username=? AND ai_provider=?", (user["username"], provider)
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.put("/api/me/ai-providers/selected")
+def select_my_ai_provider(body: AiProviderSelect, request: Request):
+    user = _current_user(request)
+    provider = body.provider.strip().lower() if body.provider else None
+    conn = get_conn()
+    if provider:
+        if provider not in ai_keys.PROVIDERS:
+            conn.close()
+            raise HTTPException(status_code=400, detail="지원하지 않는 AI 공급자입니다")
+        exists = conn.execute(
+            "SELECT 1 FROM user_ai_credentials WHERE username=? AND provider=?", (user["username"], provider)
+        ).fetchone()
+        if not exists:
+            conn.close()
+            raise HTTPException(status_code=400, detail="먼저 이 공급자의 API 키를 등록하세요")
+    conn.execute("UPDATE users SET ai_provider=? WHERE username=?", (provider, user["username"]))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "selected_provider": provider}
+
+
+@app.post("/api/me/ai-providers/{provider}/test")
+def test_my_ai_provider(provider: str, request: Request):
+    user = _current_user(request)
+    if provider not in ai_keys.PROVIDERS:
+        raise HTTPException(status_code=400, detail="지원하지 않는 AI 공급자입니다")
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT encrypted_key FROM user_ai_credentials WHERE username=? AND provider=?",
+        (user["username"], provider),
+    ).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="등록된 API 키가 없습니다")
+    try:
+        ai_keys.test_provider(provider, ai_keys.decrypt_key(row["encrypted_key"]))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "provider": provider}
 
 
 @app.put("/api/me")
@@ -2726,6 +2845,18 @@ def worker_pending(authorization: Optional[str] = Header(None)):
         "SELECT sender, content FROM messages WHERE room_id = ? ORDER BY id DESC LIMIT ?",
         (row["room_id"], MAX_CONTEXT_MESSAGES),
     ).fetchall()
+    source_username = None
+    source_is_owner = False
+    if row["source_message_id"] is not None:
+        source = conn.execute(
+            """SELECT messages.sender, COALESCE(users.is_owner, 0) AS is_owner
+               FROM messages LEFT JOIN users ON users.username=messages.sender
+               WHERE messages.id=?""",
+            (row["source_message_id"],),
+        ).fetchone()
+        if source:
+            source_username = source["sender"]
+            source_is_owner = bool(source["is_owner"])
     # ★ "메시지 인물마다 다 띄우니까 정신없다, 방에 있는 툴파 중 대표로
     # 한 사람만 알려주자" 요청(2026-08-28) — 페르소나별(pending_turns)이
     # 아니라 방 단위로 이미 안내를 보냈는지를 본다.
@@ -2752,6 +2883,8 @@ def worker_pending(authorization: Optional[str] = Header(None)):
         "room_id": row["room_id"],
         "rerouted": bool(row["rerouted"]),
         "source_message_id": row["source_message_id"],
+        "source_username": source_username,
+        "source_is_owner": source_is_owner,
         "batch_size": batch_size,
         "room_active_count": room_active_count,
         # ★ "서버 업데이트로 껐다 켜는 도중에 메시지 보내면 반응이 끊긴다"
@@ -2763,6 +2896,38 @@ def worker_pending(authorization: Optional[str] = Header(None)):
         "room_restart_notice_active": notice_row is not None,
         "room_restart_notice_persona": notice_row["persona_name"] if notice_row else None,
         "context": [dict(r) for r in reversed(context_rows)],
+    }
+
+
+@app.get("/api/worker/ai_credentials")
+def worker_ai_credentials(username: str, authorization: Optional[str] = Header(None)):
+    """로컬 워커가 해당 발신자의 선택된 BYOK 키를 응답 생성 직전에 조회한다.
+
+    브라우저용 API는 힌트만 반환하고 이 엔드포인트만 복호화된 값을 반환한다.
+    WORKER_TOKEN 인증이 필수이며 로그에는 키를 출력하지 않는다.
+    """
+    _check_worker_auth(authorization)
+    conn = get_conn()
+    user = conn.execute(
+        "SELECT ai_provider, is_owner FROM users WHERE username=?", (username,)
+    ).fetchone()
+    if not user or not user["ai_provider"]:
+        conn.close()
+        return {"configured": False, "is_owner": bool(user and user["is_owner"])}
+    row = conn.execute(
+        "SELECT encrypted_key FROM user_ai_credentials WHERE username=? AND provider=?",
+        (username, user["ai_provider"]),
+    ).fetchone()
+    conn.close()
+    if not row:
+        return {"configured": False, "is_owner": bool(user["is_owner"])}
+    try:
+        api_key = ai_keys.decrypt_key(row["encrypted_key"])
+    except ValueError:
+        return {"configured": False, "is_owner": bool(user["is_owner"]), "error": "decrypt_failed"}
+    return {
+        "configured": True, "is_owner": bool(user["is_owner"]),
+        "provider": user["ai_provider"], "api_key": api_key,
     }
 
 

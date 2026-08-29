@@ -136,6 +136,14 @@ def init_db():
             FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE,
             FOREIGN KEY (friend_username) REFERENCES users(username) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS user_ai_credentials (
+            username TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            encrypted_key TEXT NOT NULL,
+            key_hint TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (username, provider)
+        );
         CREATE TABLE IF NOT EXISTS qa_feedback_reports (
             source_message_id INTEGER PRIMARY KEY,
             report_message_id INTEGER,
@@ -258,6 +266,7 @@ def init_db():
     # username으로 대체 표시.
     _ensure_column(conn, "users", "display_name", "TEXT")
     _ensure_column(conn, "users", "avatar_url", "TEXT")
+    _ensure_column(conn, "users", "ai_provider", "TEXT")
     # ★ "권민석 프로필설정이 너무 적나라한데 일반 사용자도 다 보이는 거야?
     # 실제 친군데 실친이 들어와서 봤을 때 오해의 소지가 있을 것 같다" 요청
     # (2026-08-28) — 관리자가 만든 페르소나(owner_username=NULL)는 실제

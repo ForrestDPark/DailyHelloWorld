@@ -328,9 +328,106 @@ function showMyProfileEditor() {
   idNote.className = "my-profile-id-note";
   idNote.textContent = `로그인 아이디: ${myUsername}`;
 
+  const aiSection = document.createElement("section");
+  aiSection.className = "my-ai-connections";
+  const aiTitle = document.createElement("h3");
+  aiTitle.textContent = "내 AI 연결";
+  const aiNote = document.createElement("p");
+  aiNote.textContent = "내 API 키로 페르소나 답변을 생성합니다. 사용료와 한도는 해당 공급자 계정에 적용됩니다.";
+  const aiList = document.createElement("div");
+  aiList.className = "my-ai-provider-list";
+  aiSection.append(aiTitle, aiNote, aiList);
+  const providerLabels = {openai: "OpenAI", anthropic: "Anthropic", gemini: "Google Gemini"};
+
+  const loadAiConnections = async () => {
+    aiList.innerHTML = '<div class="empty-hint">AI 연결을 불러오는 중…</div>';
+    try {
+      const response = await apiFetch("/api/me/ai-providers");
+      const data = await response.json();
+      aiList.innerHTML = "";
+      for (const provider of data.providers) {
+        const row = document.createElement("div");
+        row.className = "my-ai-provider";
+        const head = document.createElement("div");
+        head.className = "my-ai-provider-head";
+        const radio = document.createElement("input");
+        radio.type = "radio"; radio.name = "selected-ai-provider"; radio.value = provider.id;
+        radio.checked = data.selected_provider === provider.id;
+        radio.disabled = !provider.configured;
+        radio.setAttribute("aria-label", `${providerLabels[provider.id]} 사용`);
+        radio.addEventListener("change", async () => {
+          await apiFetch("/api/me/ai-providers/selected", {
+            method: "PUT", headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({provider: provider.id}),
+          });
+          await loadAiConnections();
+        });
+        const label = document.createElement("strong");
+        label.textContent = providerLabels[provider.id];
+        const status = document.createElement("span");
+        status.textContent = provider.configured ? provider.hint : "미연결";
+        head.append(radio, label, status);
+        const keyRow = document.createElement("div");
+        keyRow.className = "my-ai-key-row";
+        const input = document.createElement("input");
+        input.type = "password"; input.autocomplete = "off";
+        input.autocapitalize = "none"; input.spellcheck = false;
+        input.placeholder = provider.configured ? "새 키로 교체" : "API 키 입력";
+        input.setAttribute("aria-label", `${providerLabels[provider.id]} API 키`);
+        const save = document.createElement("button");
+        save.type = "button"; save.textContent = "저장";
+        save.addEventListener("click", async () => {
+          if (!input.value.trim()) return;
+          save.disabled = true; save.textContent = "저장 중…";
+          try {
+            const res = await apiFetch("/api/me/ai-providers/key", {
+              method: "PUT", headers: {"Content-Type": "application/json"},
+              body: JSON.stringify({provider: provider.id, api_key: input.value.trim()}),
+            });
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.detail || "저장 실패");
+            input.value = "";
+            await loadAiConnections();
+          } catch (error) { alert(error.message || "API 키를 저장하지 못했습니다"); }
+          finally { save.disabled = false; save.textContent = "저장"; }
+        });
+        keyRow.append(input, save);
+        row.append(head, keyRow);
+        if (provider.configured) {
+          const actions = document.createElement("div");
+          actions.className = "my-ai-provider-actions";
+          const test = document.createElement("button");
+          test.type = "button"; test.textContent = "연결 테스트";
+          test.addEventListener("click", async () => {
+            test.disabled = true; test.textContent = "확인 중…";
+            try {
+              const res = await apiFetch(`/api/me/ai-providers/${provider.id}/test`, {method: "POST"});
+              const result = await res.json();
+              if (!res.ok) throw new Error(result.detail || "연결 실패");
+              alert(`${providerLabels[provider.id]} 연결이 정상입니다.`);
+            } catch (error) { alert(error.message || "연결하지 못했습니다"); }
+            finally { test.disabled = false; test.textContent = "연결 테스트"; }
+          });
+          const remove = document.createElement("button");
+          remove.type = "button"; remove.textContent = "키 삭제"; remove.className = "danger-text";
+          remove.addEventListener("click", async () => {
+            if (!confirm(`${providerLabels[provider.id]} API 키를 삭제할까요?`)) return;
+            await apiFetch(`/api/me/ai-providers/${provider.id}`, {method: "DELETE"});
+            await loadAiConnections();
+          });
+          actions.append(test, remove); row.appendChild(actions);
+        }
+        aiList.appendChild(row);
+      }
+    } catch (error) {
+      aiList.innerHTML = '<div class="empty-hint">AI 연결 설정을 불러오지 못했습니다</div>';
+    }
+  };
+  loadAiConnections();
+
   close.addEventListener("click", () => overlay.remove());
   overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
-  popup.append(close, avatar, avatarInput, nameForm, idNote);
+  popup.append(close, avatar, avatarInput, nameForm, idNote, aiSection);
   overlay.appendChild(popup);
   document.body.appendChild(overlay);
 }

@@ -1678,6 +1678,32 @@ Codex 20초 → Claude 20초로 반복한 뒤 실제 답변을 직렬 생성하�
 - 내보낸 페르소나는 초대 후보에 다시 나타나며, 재초대하면 제외 상태를 지우고
   참여자로 복귀한다. 내보내기와 재초대는 시스템 메시지로 방에 기록된다.
 
+## 사용자별 AI API 연결 — OpenAI·Anthropic·Gemini (2026-08-29)
+
+일반 사용자가 관리자의 Claude/Codex CLI 사용량을 대신 소비하지 않고 자신의
+API 계정으로 페르소나 답변을 생성할 수 있는 BYOK(Bring Your Own Key)를
+추가했다. 내 프로필의 `내 AI 연결`에서 OpenAI, Anthropic, Google Gemini 키를
+각각 저장하고 하나를 선택한다.
+
+- 브라우저에는 저장 후 키 원문을 다시 보내지 않고 끝 네 자리만 표시한다.
+  SQLite의 `user_ai_credentials`에도 Fernet 암호문만 저장하며 마스터 키는
+  저장소 밖 `~/.tulpachat/byok_master.key`에 권한 0600으로 둔다.
+- `연결 테스트`는 과금되는 생성 호출 대신 공급자의 모델 목록 API로 인증만
+  확인한다. 키 교체·삭제와 공급자 전환도 프로필에서 처리한다.
+- 워커 대기열은 원본 사용자 메시지의 발신자를 함께 전달한다. 로컬 워커는
+  WORKER_TOKEN 전용 엔드포인트로 그 사용자에게 선택된 키만 받아 OpenAI
+  Responses API, Anthropic Messages API, Gemini `generateContent` 중 하나를
+  호출한다. 이미지가 첨부된 대화도 각 API의 base64 이미지 입력으로 전달한다.
+- 일반 사용자에게 개인 키가 없거나 API 호출이 실패하면 관리자 Claude/Codex
+  CLI로 자동 전환하지 않는다. 설정·잔액·한도 확인 안내를 채팅에 남긴다.
+  관리자는 개인 공급자를 선택하지 않은 경우 기존 Claude→Codex CLI를 그대로
+  사용한다.
+- 개인 API 호출에는 Bash·파일 접근·코드 실행·웹 도구를 주지 않는다. 손동주,
+  유이, 손자병법처럼 실제 시스템에 영향을 주는 기능은 기존 소유자 승인과
+  결정론적 실행 게이트를 그대로 거치므로 BYOK 등록이 실행 권한을 넓히지 않는다.
+- 기본 모델은 환경 변수로 교체할 수 있다: `CHATAPP_OPENAI_MODEL`,
+  `CHATAPP_ANTHROPIC_MODEL`, `CHATAPP_GEMINI_MODEL`.
+
 ## 페르소나 웹 검색·링크 열기 허용 (2026-08-29)
 
 한 대화방에서 실제 사람(카카오 로그인 계정)이 가짜 뉴스("화학공장 폭발")를

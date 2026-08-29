@@ -17,11 +17,95 @@ Use용 turn-ended 알림)이 그대로 발동해 헤드리스 호출에서도 "C
 알림이 뜨는 문제가 있어(이미 겪음, 2026-08-22), `-c notify=[]`로 이 호출에서만
 훅을 끈다."""
 
+import base64
+import json
+import mimetypes
 import os
 import subprocess
+import urllib.error
+import urllib.request
 
 CODEX_BIN = "/opt/homebrew/bin/codex"
 CLAUDE_BIN = "/opt/homebrew/bin/claude"
+
+
+def _data_url(path):
+    mime = mimetypes.guess_type(str(path))[0] or "image/jpeg"
+    with open(path, "rb") as image_file:
+        encoded = base64.b64encode(image_file.read()).decode("ascii")
+    return mime, f"data:{mime};base64,{encoded}", encoded
+
+
+def _post_json(url, headers, payload, timeout):
+    request = urllib.request.Request(
+        url, data=json.dumps(payload).encode("utf-8"), method="POST",
+        headers={"Content-Type": "application/json", **headers},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        try:
+            detail = json.loads(exc.read().decode("utf-8"))
+            message = detail.get("error", {}).get("message") or str(detail)
+        except Exception:  # noqa: BLE001
+            message = f"HTTP {exc.code}"
+        raise RuntimeError(message) from exc
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"AI API 연결 실패: {exc}") from exc
+
+
+def run_provider_api(provider, api_key, prompt, timeout=120, image_paths=None):
+    """사용자 자신의 API 키로 텍스트·이미지 대화를 생성한다.
+
+    CLI와 달리 Bash·파일 도구는 전혀 제공하지 않는다. 이미지가 있을 때만
+    워커가 이미 허용한 업로드 파일을 base64 입력으로 첨부한다.
+    """
+    image_paths = image_paths or []
+    if provider == "openai":
+        content = [{"type": "input_text", "text": prompt}]
+        for path in image_paths:
+            _mime, data_url, _encoded = _data_url(path)
+            content.append({"type": "input_image", "image_url": data_url})
+        data = _post_json(
+            "https://api.openai.com/v1/responses",
+            {"Authorization": f"Bearer {api_key}"},
+            {"model": os.environ.get("CHATAPP_OPENAI_MODEL", "gpt-5-mini"),
+             "input": [{"role": "user", "content": content}]}, timeout,
+        )
+        texts = [part.get("text", "") for item in data.get("output", [])
+                 for part in item.get("content", []) if part.get("type") == "output_text"]
+    elif provider == "anthropic":
+        content = []
+        for path in image_paths:
+            mime, _data_url_value, encoded = _data_url(path)
+            content.append({"type": "image", "source": {"type": "base64", "media_type": mime, "data": encoded}})
+        content.append({"type": "text", "text": prompt})
+        data = _post_json(
+            "https://api.anthropic.com/v1/messages",
+            {"x-api-key": api_key, "anthropic-version": "2023-06-01"},
+            {"model": os.environ.get("CHATAPP_ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"),
+             "max_tokens": 1600, "messages": [{"role": "user", "content": content}]}, timeout,
+        )
+        texts = [part.get("text", "") for part in data.get("content", []) if part.get("type") == "text"]
+    elif provider == "gemini":
+        parts = [{"text": prompt}]
+        for path in image_paths:
+            mime, _data_url_value, encoded = _data_url(path)
+            parts.append({"inline_data": {"mime_type": mime, "data": encoded}})
+        model = os.environ.get("CHATAPP_GEMINI_MODEL", "gemini-2.5-flash")
+        data = _post_json(
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+            {"x-goog-api-key": api_key}, {"contents": [{"role": "user", "parts": parts}]}, timeout,
+        )
+        texts = [part.get("text", "") for candidate in data.get("candidates", [])
+                 for part in candidate.get("content", {}).get("parts", []) if part.get("text")]
+    else:
+        raise RuntimeError("지원하지 않는 AI 공급자입니다")
+    output = "\n".join(texts).strip()
+    if not output:
+        raise RuntimeError("AI 공급자가 빈 응답을 반환했습니다")
+    return output, provider
 
 
 def _run_one(engine, prompt, cwd, timeout, image_paths=None, allow_tools=None, add_dirs=None):

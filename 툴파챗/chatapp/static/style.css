@@ -1008,6 +1008,19 @@ main#messages.has-custom-background {
   cursor: pointer;
 }
 .profile-popup p.my-profile-id-note { margin-top: 12px; font-size: 12px; text-align: center; opacity: .7; }
+.my-ai-connections { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--border); text-align: left; }
+.my-ai-connections h3 { margin: 0 0 5px; font-size: 16px; }
+.my-ai-connections > p { margin: 0 0 12px; font-size: 12px; color: var(--muted); text-align: left; }
+.my-ai-provider-list { display: grid; gap: 9px; }
+.my-ai-provider { padding: 11px; border: 1px solid var(--border); border-radius: 13px; background: var(--bg); }
+.my-ai-provider-head { display: flex; align-items: center; gap: 8px; }
+.my-ai-provider-head strong { flex: 1; font-size: 13px; }
+.my-ai-provider-head span { color: var(--muted); font-size: 11px; }
+.my-ai-key-row { display: grid; grid-template-columns: 1fr auto; gap: 7px; margin-top: 9px; }
+.my-ai-key-row input { min-width: 0; padding: 9px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-elevated); color: var(--fg); font: inherit; }
+.my-ai-key-row button, .my-ai-provider-actions button { min-height: 36px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.my-ai-provider-actions { display: flex; gap: 7px; margin-top: 7px; }
+.my-ai-provider-actions .danger-text { margin-left: auto; background: transparent; color: var(--danger); }
 
 .msg .sender { font-size: 12px; opacity: 0.6; padding: 0 4px; }
 .msg .sender-clickable { cursor: pointer; text-decoration: underline dotted; }

@@ -31,7 +31,7 @@ from pathlib import Path
 from threading import Lock, Thread
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ai_exec import run_ai_exec  # noqa: E402
+from ai_exec import run_ai_exec, run_provider_api  # noqa: E402
 from notion_personas import (  # noqa: E402
     append_story_summary, build_system_prompt, extract_group, extract_profile_summary,
     extract_projects, fetch_page_text, list_personas, notion_token,
@@ -963,7 +963,7 @@ def _speaker_label(sender, persona_names):
     return "나" if sender == OWNER_USERNAME else sender
 
 
-def build_prompt(persona_name, system_prompt, context, persona_names, has_images=False, notion_reference="", live_state=""):
+def build_prompt(persona_name, system_prompt, context, persona_names, has_images=False, notion_reference="", live_state="", api_mode=False):
     lines = [system_prompt, "", "--- 최근 대화 ---"]
     other_humans = False
     for msg in context:
@@ -1008,13 +1008,19 @@ def build_prompt(persona_name, system_prompt, context, persona_names, has_images
     # 믿거나 무작정 의심만 하지 말고, 실제로 웹 검색해서 확인하고 답하게
     # 한다(WebSearch 도구를 실제로 열어줬다 — persona_worker.py process_turn
     # 참고).
-    lines.append(
-        "(실제 웹 검색·URL 열기 도구를 쓸 수 있습니다 — 최신 정보나 확인 안 된 "
-        "사실·뉴스 주장이 나오면 검색 없이 추측하거나 무작정 의심만 하지 말고, "
-        "필요할 때 실제로 검색해서 근거를 확인하세요. 대화 중 누가 URL을 직접 "
-        "보내면(Notion 링크 제외 — 그건 이미 따로 읽어옴) 그 링크도 실제로 열어서 "
-        "내용을 확인한 뒤 답하세요.)"
-    )
+    if api_mode:
+        lines.append(
+            "(이 응답은 대화 전용 외부 API로 생성됩니다. 웹 검색이나 파일·시스템 도구는 "
+            "없으므로 최신 사실을 확인했다고 꾸미지 말고, 확인이 필요하면 솔직히 알려주세요.)"
+        )
+    else:
+        lines.append(
+            "(실제 웹 검색·URL 열기 도구를 쓸 수 있습니다 — 최신 정보나 확인 안 된 "
+            "사실·뉴스 주장이 나오면 검색 없이 추측하거나 무작정 의심만 하지 말고, "
+            "필요할 때 실제로 검색해서 근거를 확인하세요. 대화 중 누가 URL을 직접 "
+            "보내면(Notion 링크 제외 — 그건 이미 따로 읽어옴) 그 링크도 실제로 열어서 "
+            "내용을 확인한 뒤 답하세요.)"
+        )
     lines.append(
         f'위 대화 흐름에 이어서 "{persona_name}"으로서 다음 메시지 하나만 답하세요. '
         f'"{persona_name}:" 같은 이름표는 붙이지 말고 대사만 쓰세요.'
@@ -1067,7 +1073,8 @@ def _maybe_reroute_turn(turn, persona_cache, candidates):
     # 같은 사용자 메시지에서 이미 여러 명에게 답변을 배정했다면 그 자체가
     # 의도된 다중 응답이다. 각 사람마다 담당자를 다시 고르는 호출은 중복이며
     # 모두 한 사람으로 몰릴 위험도 있으므로 완전히 생략한다.
-    if turn.get("rerouted") or len(candidates) < 2 or turn.get("batch_size", 1) > 1:
+    if (turn.get("rerouted") or len(candidates) < 2 or turn.get("batch_size", 1) > 1
+            or not turn.get("source_is_owner", False)):
         return None
     source_message_id = turn.get("source_message_id")
     cache_key = source_message_id if source_message_id is not None else f"turn:{turn['turn_id']}"
@@ -1276,9 +1283,21 @@ def _process_turn_inner(turn, persona_cache):
     shift_alarm_state_key = SHIFT_ALARM_PERSONA_STATE_KEY.get(persona_name)
     if shift_alarm_state_key:
         live_state = load_shift_alarm_state(shift_alarm_state_key)
+    credentials = None
+    source_username = turn.get("source_username")
+    if source_username:
+        try:
+            credentials = _api(
+                f"/api/worker/ai_credentials?username={urllib.parse.quote(source_username, safe='')}"
+            ) or {}
+        except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+            print(f"⚠️ {source_username} AI 연결 설정 조회 실패: {exc}", flush=True)
+            credentials = {}
+    use_byok = bool(credentials and credentials.get("configured"))
     prompt = build_prompt(
         persona_name, entry["system_prompt"], turn["context"], persona_cache.keys(),
         has_images=bool(image_paths), notion_reference=notion_reference, live_state=live_state,
+        api_mode=use_byok,
     )
     # ★ "그냥 검색해서 링크 보내주면 될 텐데, 권한이 없어서 그런가?" 질문
     # 끝에 "웹 검색 열어줘"(2026-08-29), 이어서 "WebFetch도 열어줘"
@@ -1297,7 +1316,20 @@ def _process_turn_inner(turn, persona_cache):
         exec_kwargs["add_dirs"] = [str(STATIC_DIR)]
     timeout = ORGANIZER_TIMEOUT_SECONDS if is_organizer else UI_DEV_TIMEOUT_SECONDS if is_ui_dev else AI_TIMEOUT_SECONDS
     try:
-        reply, engine = run_ai_exec(prompt, WORK_DIR, timeout=timeout, **exec_kwargs)
+        if use_byok:
+            reply, engine = run_provider_api(
+                credentials["provider"], credentials["api_key"], prompt,
+                timeout=timeout, image_paths=image_paths or None,
+            )
+        elif source_username and not turn.get("source_is_owner", False):
+            _api("/api/worker/complete", "POST", {
+                "turn_id": turn["turn_id"],
+                "reply": "AI 연결이 필요합니다. 상단의 내 프로필에서 OpenAI·Anthropic·Gemini API 키 중 하나를 등록하고 사용할 공급자를 선택해주세요.",
+            })
+            print(f"🔑 {source_username}: 개인 AI 키 미등록 — 관리자 CLI 미사용", flush=True)
+            return
+        else:
+            reply, engine = run_ai_exec(prompt, WORK_DIR, timeout=timeout, **exec_kwargs)
         reply = reply.strip()
         if is_organizer:
             _capture_pending_plan(room_id, reply)
@@ -1308,7 +1340,13 @@ def _process_turn_inner(turn, persona_cache):
         print(f"💬 {persona_name} ({engine}): {reply[:60]}", flush=True)
     except Exception as exc:  # noqa: BLE001 — 이 턴만 실패 처리하고 워커는 계속 돈다
         print(f"⚠️ {persona_name} 응답 생성 실패: {exc}", flush=True)
-        _maybe_send_ai_fallback(room_id, turn["turn_id"])
+        if use_byok:
+            _api("/api/worker/complete", "POST", {
+                "turn_id": turn["turn_id"],
+                "reply": f"{credentials.get('provider', 'AI')} 연결로 답변을 만들지 못했습니다. 내 프로필의 AI 연결에서 키·잔액·사용 한도를 확인하거나 연결 테스트를 실행해주세요.",
+            })
+        else:
+            _maybe_send_ai_fallback(room_id, turn["turn_id"])
 
 
 def sync_stories(persona_cache):
