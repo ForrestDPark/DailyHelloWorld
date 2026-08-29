@@ -1714,6 +1714,8 @@ async function toggleInvitePanel() {
   try {
     const res = await apiFetch(`/api/rooms/${encodeURIComponent(currentRoom)}/members`);
     const { members, available } = await res.json();
+    const cachedRoom = roomsCache.get(currentRoom);
+    const canInviteHere = canWrite && (amOwner || (cachedRoom && cachedRoom.is_mine));
     memberList.innerHTML = "";
     if (!members.length) {
       memberList.innerHTML = '<div class="empty-hint">아직 참여자가 없습니다</div>';
@@ -1722,14 +1724,31 @@ async function toggleInvitePanel() {
       const chip = document.createElement("span");
       chip.className = "member-chip";
       chip.textContent = displayName(name);
+      if (canInviteHere) {
+        const kickBtn = document.createElement("button");
+        kickBtn.type = "button";
+        kickBtn.className = "member-chip-kick";
+        kickBtn.textContent = "×";
+        kickBtn.setAttribute("aria-label", `${displayName(name)} 내보내기`);
+        kickBtn.addEventListener("click", async () => {
+          if (!confirm(`"${displayName(name)}"을 이 방에서 내보낼까요?`)) return;
+          try {
+            const response = await apiFetch(`/api/rooms/${encodeURIComponent(currentRoom)}/personas/${encodeURIComponent(name)}`, {method: "DELETE"});
+            if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || "내보내기 실패");
+            await toggleInvitePanel();
+            await toggleInvitePanel();
+          } catch (e) {
+            if (e.message !== "unauthorized" && e.message !== "forbidden") alert(e.message || "내보내기 실패");
+          }
+        });
+        chip.appendChild(kickBtn);
+      }
       memberList.appendChild(chip);
     }
     // ★ 초대 후보 목록은 쓰기 권한이 있고, "소유자이거나 내가 만든 방"일
     // 때만 보여준다(2026-08-26) — 공유 Notion 그룹 회의방은 소유자만
     // 초대할 수 있게 서버에서 막아뒀으므로, 어차피 실패할 초대 버튼을
     // non-owner에게 보여주지 않는다(눌렀다가 방 밖으로 튕겨나가는 걸 방지).
-    const cachedRoom = roomsCache.get(currentRoom);
-    const canInviteHere = canWrite && (amOwner || (cachedRoom && cachedRoom.is_mine));
     inviteSection.classList.toggle("hidden", !canInviteHere);
     if (canInviteHere) {
       inviteList.innerHTML = "";

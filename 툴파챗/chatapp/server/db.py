@@ -64,6 +64,12 @@ def init_db():
             invited_at TEXT NOT NULL,
             PRIMARY KEY (room_id, persona_name)
         );
+        CREATE TABLE IF NOT EXISTS room_persona_exclusions (
+            room_id TEXT NOT NULL,
+            persona_name TEXT NOT NULL,
+            excluded_at TEXT NOT NULL,
+            PRIMARY KEY (room_id, persona_name)
+        );
         CREATE TABLE IF NOT EXISTS room_user_invites (
             room_id TEXT NOT NULL,
             username TEXT NOT NULL,

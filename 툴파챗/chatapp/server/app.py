@@ -667,6 +667,7 @@ def admin_delete_persona(name: str, request: Request):
     conn.execute("DELETE FROM messages WHERE room_id = ?", (name,))
     conn.execute("DELETE FROM pending_turns WHERE room_id = ?", (name,))
     conn.execute("DELETE FROM room_invites WHERE persona_name = ?", (name,))
+    conn.execute("DELETE FROM room_persona_exclusions WHERE persona_name = ?", (name,))
     conn.execute("DELETE FROM persona_image_jobs WHERE persona_name = ?", (name,))
     conn.execute("DELETE FROM persona_view_grants WHERE persona_name = ?", (name,))
     conn.commit()
@@ -904,6 +905,7 @@ def delete_my_persona(name: str, request: Request):
         conn.execute("DELETE FROM messages WHERE room_id = ?", (name,))
         conn.execute("DELETE FROM pending_turns WHERE room_id = ?", (name,))
         conn.execute("DELETE FROM room_invites WHERE persona_name = ?", (name,))
+        conn.execute("DELETE FROM room_persona_exclusions WHERE persona_name = ?", (name,))
         conn.commit()
     finally:
         conn.close()
@@ -1503,7 +1505,12 @@ def _group_members(conn, room_id, persona_rows):
     페르소나(기본 멤버) + 이 방에 초대된 페르소나(room_invites, 2026-08-25
     "프로젝트하다가 관련 인물 추가하는 식으로 초대하고 싶다" 요청). 순서는
     기본 멤버 먼저, dict.fromkeys로 중복 제거."""
-    base = [r["name"] for r in persona_rows if r["group_name"] == room_id]
+    excluded = {
+        row["persona_name"] for row in conn.execute(
+            "SELECT persona_name FROM room_persona_exclusions WHERE room_id = ?", (room_id,)
+        ).fetchall()
+    }
+    base = [r["name"] for r in persona_rows if r["group_name"] == room_id and r["name"] not in excluded]
     invited = [
         row["persona_name"] for row in conn.execute(
             "SELECT persona_name FROM room_invites WHERE room_id = ?", (room_id,)
@@ -1631,17 +1638,68 @@ def invite_to_room(room_id: str, body: InviteRequest, request: Request):
     if persona_owner is not None and persona_owner != room_owner:
         conn.close()
         raise HTTPException(status_code=403, detail="이 페르소나는 초대할 수 없습니다")
+    # 기본 그룹 멤버를 내보낸 뒤 다시 초대하는 경우 방별 제외 표시를 먼저
+    # 해제해야 _group_members()에 즉시 복귀한다.
+    restored = conn.execute(
+        "DELETE FROM room_persona_exclusions WHERE room_id = ? AND persona_name = ?",
+        (room_id, body.persona_name),
+    ).rowcount
     cur = conn.execute(
         "INSERT OR IGNORE INTO room_invites (room_id, persona_name, invited_at) VALUES (?, ?, ?)",
         (room_id, body.persona_name, _now()),
     )
-    if cur.rowcount:  # 이미 있던 초대면(중복 클릭 등) 알림을 또 남기지 않는다
+    if cur.rowcount or restored:  # 이미 있던 초대면(중복 클릭 등) 알림을 또 남기지 않는다
         _promote_direct_room(conn, room_id)
         _insert_system_notice(conn, room_id, f"{body.persona_name}님이 초대되었습니다")
     conn.commit()
     members = _group_members(conn, room_id, persona_rows)
     conn.close()
     return {"ok": True, "members": members}
+
+
+@app.delete("/api/rooms/{room_id}/personas/{persona_name}")
+def kick_room_persona(room_id: str, persona_name: str, request: Request):
+    """방 주인 또는 관리자가 페르소나를 방에서 내보낸다.
+
+    초대로 들어온 페르소나는 room_invites에서 제거하고, Notion 그룹 설정으로
+    자동 포함되는 기본 멤버는 방별 제외 표에 기록해 다시 나타나지 않게 한다.
+    페르소나 자체나 다른 방의 소속 설정은 변경하지 않는다.
+    """
+    if not getattr(request.state, "can_write", True):
+        raise HTTPException(status_code=403, detail="읽기 전용 계정입니다")
+    user = getattr(request.state, "user", None)
+    requester = user["username"] if user else None
+    is_owner_request = bool(user and user["is_owner"])
+    conn = get_conn()
+    allowed, _owner_username = _room_manage_context(conn, room_id, requester, is_owner_request)
+    if not allowed:
+        conn.close()
+        raise HTTPException(status_code=403, detail="이 방의 주인이나 관리자만 내보낼 수 있습니다")
+    persona = conn.execute(
+        "SELECT name, group_name FROM personas WHERE name = ?", (persona_name,)
+    ).fetchone()
+    if not persona:
+        conn.close()
+        raise HTTPException(status_code=404, detail="존재하지 않는 페르소나입니다")
+    invited = conn.execute(
+        "SELECT 1 FROM room_invites WHERE room_id = ? AND persona_name = ?", (room_id, persona_name)
+    ).fetchone()
+    is_base_member = persona["group_name"] == room_id
+    if not invited and not is_base_member:
+        conn.close()
+        raise HTTPException(status_code=404, detail="이 방의 페르소나가 아닙니다")
+    conn.execute(
+        "DELETE FROM room_invites WHERE room_id = ? AND persona_name = ?", (room_id, persona_name)
+    )
+    if is_base_member:
+        conn.execute(
+            "INSERT OR REPLACE INTO room_persona_exclusions(room_id, persona_name, excluded_at) VALUES (?, ?, ?)",
+            (room_id, persona_name, _now()),
+        )
+    _insert_system_notice(conn, room_id, f"{persona_name}님이 방에서 내보내졌습니다")
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 def _room_manage_context(conn, room_id, requester, is_owner_request):
@@ -1778,6 +1836,7 @@ def _delete_custom_room(conn, room_id):
     conn.execute("DELETE FROM messages WHERE room_id = ?", (room_id,))
     conn.execute("DELETE FROM pending_turns WHERE room_id = ?", (room_id,))
     conn.execute("DELETE FROM room_invites WHERE room_id = ?", (room_id,))
+    conn.execute("DELETE FROM room_persona_exclusions WHERE room_id = ?", (room_id,))
     conn.execute("DELETE FROM room_user_invites WHERE room_id = ?", (room_id,))
     conn.execute("DELETE FROM room_notices WHERE room_id = ?", (room_id,))
     conn.execute("DELETE FROM room_restart_notice WHERE room_id = ?", (room_id,))
