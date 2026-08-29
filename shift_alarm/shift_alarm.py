@@ -57,9 +57,10 @@ from AppKit import (
     NSApp, NSPanel, NSTextField, NSButton, NSMakeRect, NSFont,
     NSBackingStoreBuffered, NSWindowStyleMaskTitled, NSWindowStyleMaskClosable,
     NSModalPanelWindowLevel, NSTextAlignmentCenter, NSRoundedBezelStyle,
-    NSColor, NSForegroundColorAttributeName, NSAlert,
+    NSColor, NSForegroundColorAttributeName, NSAlert, NSEvent,
 )
 from Foundation import NSMutableAttributedString, NSRange
+import Quartz
 
 # ── 설정 파일 경로 ──────────────────────────────────────────
 CONFIG_FILE = os.path.expanduser("~/.shift_alarm_config.json")
@@ -1211,6 +1212,58 @@ def set_hue_room_power(room_name, on):
     if result.get("errors"):
         raise RuntimeError("Hue 전원 변경에 실패했습니다.")
     return bool(on)
+
+
+# ★ 2026-08-29: "거실 불끄기 눌렀을 때 재생 중인 음악이 있으면 일시정지하게
+# 해줘" 요청. Elmedia는 Mac App Store 샌드박스 빌드라 표준 AppleScript
+# `pause` 동사가 없다(write_alarm_script의 자가검증도 같은 이유로 UI
+# 텍스트를 읽는 우회 방식을 쓴다) — 그래서 앱별 제어 대신 시스템 전체
+# 재생/일시정지 미디어 키(NX_KEYTYPE_PLAY)를 눌러 어떤 플레이어든 멈춘다.
+# 이 키는 토글이라, 재생 중이 아닐 때 누르면 오히려 재생을 "시작"시켜버릴
+# 수 있다 — 그래서 반드시 실제로 재생 중인지 먼저 확인한 뒤에만 누른다.
+NX_KEYTYPE_PLAY = 16
+
+
+def _is_elmedia_playing():
+    """Elmedia가 실행 중이고 재생 중인 것으로 보이면 True. write_alarm_script()의
+    자가검증과 같은 휴리스틱(정적 텍스트에 "Elapsed Time"이 있으면 재생 중)을
+    재사용한다 — 샌드박스 앱이라 이보다 더 정확한 재생 상태 조회 방법이 없다."""
+    try:
+        running = subprocess.run(
+            ["/usr/bin/pgrep", "-x", "Elmedia Video Player"],
+            capture_output=True, timeout=3,
+        ).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    if not running:
+        return False
+    try:
+        result = subprocess.run(
+            ["/usr/bin/osascript", "-e",
+             'tell application "System Events" to tell process "Elmedia Video Player" '
+             'to get value of every static text of every window'],
+            capture_output=True, timeout=5, text=True,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return "elapsed time" in result.stdout.lower()
+
+
+def _send_media_play_pause_key():
+    """시스템 미디어 재생/일시정지 키 이벤트를 posts한다 — 키를 누르고 떼는
+    두 이벤트(NX_KEYDOWN/NX_KEYUP)를 순서대로 보내야 실제 키 입력처럼 인식된다."""
+    for key_down in (True, False):
+        event = NSEvent.otherEventWithType_location_modifierFlags_timestamp_windowNumber_context_subtype_data1_data2_(
+            Quartz.NSSystemDefined, (0, 0), 0xa00 if key_down else 0xb00, 0, 0, 0, 8,
+            (NX_KEYTYPE_PLAY << 16) | ((0xa if key_down else 0xb) << 8), -1,
+        )
+        Quartz.CGEventPost(Quartz.kCGHIDEventTap, event.CGEvent())
+
+
+def pause_music_if_playing():
+    if _is_elmedia_playing():
+        _send_media_play_pause_key()
+
 
 # ── 아산시 좌표 ──────────────────────────────────────────────
 LATITUDE  = 36.78
@@ -4557,13 +4610,29 @@ class ShiftAlarmApp(rumps.App):
         ]
 
         self.title = " ".join(text for text, _ in segments if text)
-        pet_usage = " · ".join(token for token in (
-            f"Codex {codex_token}" if codex_token else "Codex -",
-            f"Claude {claude_token}" if claude_token else "Claude -",
-            thermal_token,
-        ) if token)
         if hasattr(self, "shift_pet"):
-            self.shift_pet.update(shift_text, pet_usage)
+            # ★ 2026-08-29: "말풍선에 저장용량·리마인더도 안 보인다, 30초 단위로
+            # 바꿔가며 표기해달라" 요청 — 말풍선 한 칸엔 두 줄만 들어가서 근무·
+            # 저장공간·리마인더·AI 사용량을 한 번에 다 못 보여준다. (제목, 내용)
+            # 카드 여러 장을 만들어 넘기면 Pet이 알아서 30초마다 다음 카드로 넘긴다.
+            usage_summary = " · ".join(token for token in (
+                f"Codex {codex_token}" if codex_token else "Codex -",
+                f"Claude {claude_token}" if claude_token else "Claude -",
+            ) if token)
+            storage_summary = (
+                f"🚨 {storage_num}GB (부족)" if storage_num is not None and storage_num <= LOW_STORAGE_WARNING_GB
+                else f"{storage_num}GB 여유" if storage_num is not None
+                else "확인 중"
+            )
+            cards = [
+                ("근무", shift_text),
+                ("저장공간", storage_summary),
+                ("오늘 리마인더", reminder_icons or "체크할 항목 없음"),
+                ("AI 사용량", usage_summary),
+            ]
+            if thermal_token:
+                cards.append(("열 상태", thermal_token))
+            self.shift_pet.update(cards)
 
         # rumps의 title setter가 setTitle_()을 호출해 attributedTitle을 초기화시키므로,
         # 반드시 plain title을 먼저 설정한 뒤 setAttributedTitle_()로 덮어써야 한다.
@@ -5693,6 +5762,10 @@ class ShiftAlarmApp(rumps.App):
             is_on = toggle_hue_room()
             title = "켜짐" if is_on else "꺼짐"
             message = f"{HUE_WAKE_ROOM_NAME} 조명을 {title} 상태로 바꿨습니다."
+            # ★ 2026-08-29: "불끄기 누르면 재생 중인 음악 일시정지" 요청 —
+            # 조명이 꺼진 경우에만(켜진 경우엔 그대로 둠) 확인한다.
+            if not is_on:
+                pause_music_if_playing()
         except (OSError, KeyError, IndexError, ValueError, RuntimeError,
                 json.JSONDecodeError, urllib.error.HTTPError, urllib.error.URLError) as exc:
             title = "제어 실패"

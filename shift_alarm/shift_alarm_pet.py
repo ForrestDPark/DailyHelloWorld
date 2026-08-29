@@ -8,10 +8,33 @@ from AppKit import (
     NSWindowCollectionBehaviorCanJoinAllSpaces,
     NSWindowStyleMaskBorderless, NSWindowStyleMaskNonactivatingPanel,
 )
-from Foundation import NSMakePoint
+from Foundation import NSMakePoint, NSTimer
 
-PET_WIDTH = 326
-PET_HEIGHT = 76
+PET_WIDTH = 210
+PET_HEIGHT = 120
+
+# ★ 2026-08-29: "펫그림을 누를때만 클릭이 되면 좋겠어, 글자들은 말풍선으로"
+# 요청 — 기존엔 이미지+텍스트를 감싸는 반투명 사각형 하나가 클릭 영역 전체
+# 였는데, 이제 이미지 자체와 말풍선을 분리해서 그린다. 이미지는 아래쪽에
+# 배경 없이 그대로, 상태 텍스트는 그 위 말풍선(꼬리 달린 둥근 사각형) 안에
+# 표시한다. IMAGE_RECT는 렌더링과 클릭 판정(mouseUp_) 양쪽이 공유하는
+# 좌표라 여기 하나로 고정해둔다.
+IMAGE_RECT = NSMakeRect(6, 4, 60, 60)
+BUBBLE_RECT = NSMakeRect(2, 68, 206, 48)
+BUBBLE_TAIL_POINTS = (NSMakePoint(26, 68), NSMakePoint(50, 68), NSMakePoint(36, 54))
+DEFAULT_CARDS = (("Shift Alarm", ""),)
+# ★ 2026-08-29: "저장용량이나 리마인더는 말풍선에 안 보인다, 30초 단위로
+# 바꿔가며 표기해줘" 요청 — 말풍선 한 칸엔 두 줄만 들어가서 근무·저장공간·
+# 리마인더·AI 사용량을 동시에 못 보여준다. shift_alarm이 (제목, 내용)
+# 카드 여러 장을 넘겨주면 이 간격으로 자동으로 다음 카드로 넘어간다.
+CARD_ROTATE_SECONDS = 30.0
+
+
+def _point_in_rect(point, rect):
+    return (
+        rect.origin.x <= point.x <= rect.origin.x + rect.size.width
+        and rect.origin.y <= point.y <= rect.origin.y + rect.size.height
+    )
 
 
 def clamp_pet_position(x, y, visible_frames, width=PET_WIDTH, height=PET_HEIGHT):
@@ -37,8 +60,8 @@ def clamp_pet_position(x, y, visible_frames, width=PET_WIDTH, height=PET_HEIGHT)
 
 class ShiftAlarmPetView(NSView):
     owner = objc.ivar()
-    headline = objc.ivar()
-    usage = objc.ivar()
+    cards = objc.ivar()
+    card_index = objc.ivar()
     image = objc.ivar()
     dragged = objc.ivar()
 
@@ -47,37 +70,57 @@ class ShiftAlarmPetView(NSView):
         if self is None:
             return None
         self.owner, self.image = owner, image
-        self.headline, self.usage, self.dragged = "Shift Alarm", "Codex - · Claude -", False
+        self.cards, self.card_index, self.dragged = list(DEFAULT_CARDS), 0, False
         return self
 
     def isOpaque(self):
         return False
 
     def drawRect_(self, _dirty_rect):
-        # ★ 2026-08-29: "사각형이 좀 반투명했으면 좋겠어" 요청 — 기존 0.92는 거의
-        # 불투명해서 뒤 배경이 안 비쳤다. 텍스트 가독성은 유지하되 뒤가 은은하게
-        # 비치도록 0.55로 낮췄다.
+        # ★ 2026-08-29: "배경 자체가 없어도 될거같아, 말은 말풍선에서" 요청 —
+        # 이미지+텍스트를 통째로 감싸던 반투명 사각형을 없애고, 이미지는
+        # 배경 없이 그대로, 상태 텍스트만 꼬리 달린 말풍선 안에 그린다.
+        bubble = NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(BUBBLE_RECT, 14, 14)
+        tail = NSBezierPath.bezierPath()
+        tail.moveToPoint_(BUBBLE_TAIL_POINTS[0])
+        tail.lineToPoint_(BUBBLE_TAIL_POINTS[1])
+        tail.lineToPoint_(BUBBLE_TAIL_POINTS[2])
+        tail.closePath()
         NSColor.colorWithCalibratedWhite_alpha_(0.10, 0.55).setFill()
-        NSBezierPath.bezierPathWithRoundedRect_xRadius_yRadius_(self.bounds(), 18, 18).fill()
+        bubble.fill()
+        tail.fill()
         if self.image is not None:
-            self.image.drawInRect_(NSMakeRect(10, 10, 56, 56))
+            self.image.drawInRect_(IMAGE_RECT)
         else:
             NSString.stringWithString_("🤖").drawInRect_withAttributes_(
-                NSMakeRect(13, 13, 52, 50), {"NSFont": NSFont.systemFontOfSize_(34)}
+                NSMakeRect(
+                    IMAGE_RECT.origin.x + 3, IMAGE_RECT.origin.y + 5,
+                    IMAGE_RECT.size.width - 6, IMAGE_RECT.size.height - 6,
+                ),
+                {"NSFont": NSFont.systemFontOfSize_(38)},
             )
-        NSString.stringWithString_(self.headline).drawInRect_withAttributes_(
-            NSMakeRect(76, 39, 238, 23),
-            {"NSFont": NSFont.boldSystemFontOfSize_(15), "NSColor": NSColor.whiteColor()},
+        cards = self.cards or list(DEFAULT_CARDS)
+        headline, usage = cards[self.card_index % len(cards)]
+        NSString.stringWithString_(headline).drawInRect_withAttributes_(
+            NSMakeRect(BUBBLE_RECT.origin.x + 12, BUBBLE_RECT.origin.y + 26, BUBBLE_RECT.size.width - 24, 20),
+            {"NSFont": NSFont.boldSystemFontOfSize_(14), "NSColor": NSColor.whiteColor()},
         )
-        NSString.stringWithString_(self.usage).drawInRect_withAttributes_(
-            NSMakeRect(76, 14, 238, 22),
-            {"NSFont": NSFont.monospacedDigitSystemFontOfSize_weight_(13, 0.25),
+        NSString.stringWithString_(usage).drawInRect_withAttributes_(
+            NSMakeRect(BUBBLE_RECT.origin.x + 12, BUBBLE_RECT.origin.y + 6, BUBBLE_RECT.size.width - 24, 18),
+            {"NSFont": NSFont.monospacedDigitSystemFontOfSize_weight_(12, 0.25),
              "NSColor": NSColor.colorWithCalibratedRed_green_blue_alpha_(0.73, 0.82, 1.0, 1.0)},
         )
 
-    def updateHeadline_usage_(self, headline, usage):
-        self.headline, self.usage = headline, usage
+    def updateCards_(self, cards):
+        self.cards = list(cards) if cards else list(DEFAULT_CARDS)
+        if self.card_index >= len(self.cards):
+            self.card_index = 0
         self.setNeedsDisplay_(True)
+
+    def rotateCard_(self, _timer):
+        if len(self.cards) > 1:
+            self.card_index = (self.card_index + 1) % len(self.cards)
+            self.setNeedsDisplay_(True)
 
     def mouseDown_(self, _event):
         self.dragged = False
@@ -89,8 +132,15 @@ class ShiftAlarmPetView(NSView):
             frame.origin.x + event.deltaX(), frame.origin.y - event.deltaY()
         ))
 
-    def mouseUp_(self, _event):
-        self.owner.petDidMove() if self.dragged else self.owner.petWasClicked()
+    def mouseUp_(self, event):
+        if self.dragged:
+            self.owner.petDidMove()
+            return
+        # ★ 2026-08-29: "펫그림을 누를때만 클릭이 되면 좋겠어" 요청 — 말풍선이나
+        # 빈 공간을 눌러도 메뉴가 안 뜨고, 이미지 위를 눌렀을 때만 반응한다.
+        point = self.convertPoint_fromView_(event.locationInWindow(), None)
+        if _point_in_rect(point, IMAGE_RECT):
+            self.owner.petWasClicked()
 
     def rightMouseDown_(self, _event):
         self.owner.petWasRightClicked()
@@ -120,6 +170,13 @@ class ShiftAlarmPet:
         # 숨김은 실행 세션에만 유효하다. 메뉴바까지 가려진 상황에서도 앱을
         # 재시작하면 반드시 Pet이 복구되어야 하므로 영구 visible 상태는 쓰지 않는다.
         self.panel.orderFrontRegardless()
+        # ★ 2026-08-29: "30초 단위로 말풍선을 바꿔가며 표기" 요청 — 근무·저장공간·
+        # 리마인더·AI 사용량을 카드 여러 장으로 받아 이 타이머가 자동으로 넘긴다.
+        # __init__이 메인 스레드에서 도니 스케줄된 타이머는 기본(Default) 런루프
+        # 모드에 자동으로 걸려 rumps의 이벤트 루프 안에서 그대로 돈다.
+        self.rotate_timer = NSTimer.scheduledTimerWithTimeInterval_target_selector_userInfo_repeats_(
+            CARD_ROTATE_SECONDS, self.view, "rotateCard:", None, True
+        )
 
     def _initial_position(self):
         screen = NSScreen.mainScreen()
@@ -141,8 +198,10 @@ class ShiftAlarmPet:
         self.panel.setFrameOrigin_(NSMakePoint(x, y))
         self.config["pet_x"], self.config["pet_y"] = round(x, 1), round(y, 1)
 
-    def update(self, headline, usage):
-        self.view.updateHeadline_usage_(headline, usage)
+    def update(self, cards):
+        """cards: [(headline, usage), ...] — 여러 장이면 30초 간격으로 자동으로
+        다음 장으로 넘어간다(rotateCard_). 한 장뿐이면 그 카드만 계속 보여준다."""
+        self.view.updateCards_(cards)
 
     def show(self):
         self._clamp_to_visible_screen()
