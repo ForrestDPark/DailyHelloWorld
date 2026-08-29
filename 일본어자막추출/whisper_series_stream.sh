@@ -17,6 +17,13 @@ BGM_DIR="${BGM_DIR:-/Users/forrestdpark/Desktop/BlogImage/BGM_DIR}"
 TARGET_MINUTES="${TARGET_MINUTES:-}"
 # 고음 구간 앞뒤에 포함할 영상 여유(초) — 메뉴바 키패드에서 입력.
 HIGHLIGHT_PAD="${HIGHLIGHT_PAD:-1}"
+# ★ 2026-08-29: shift_alarm이 "완료되면 알림" 기능을 위해 실행마다 고유 ID를
+# 넘겨준다 — 이 스크립트는 새 iTerm 창(별도 프로세스)에서 도니까 shift_alarm의
+# Popen이 바로 리턴해버려서 원래는 완료 시점을 알 방법이 없었다. 완료 시
+# /tmp/_jp_subtitle_run_<ID>.done 마커 파일을 남기고, shift_alarm은 그 파일이
+# 생기는지 폴링해서 완료 알림을 띄운다. 메뉴에서 직접 실행하면 비어있으므로
+# 마커를 안 남기고 조용히 넘어간다(아래 참고).
+JP_SUBTITLE_RUN_ID="${JP_SUBTITLE_RUN_ID:-}"
 
 /opt/anaconda3/bin/python3 -m pip install requests pykakasi librosa soundfile --quiet --disable-pip-version-check 2>/dev/null
 
@@ -131,6 +138,9 @@ export TARGET_MINUTES='$TARGET_MINUTES'
 export HIGHLIGHT_PAD='$HIGHLIGHT_PAD'
 zsh "$TEMP_SCRIPT"
 rm -f "$TEMP_SCRIPT"
+if [[ -n '$JP_SUBTITLE_RUN_ID' ]]; then
+  echo done > "/tmp/_jp_subtitle_run_$JP_SUBTITLE_RUN_ID.done"
+fi
 LAUNCHEREOF
 chmod +x "$LAUNCHER"
 open -a iTerm "$LAUNCHER"

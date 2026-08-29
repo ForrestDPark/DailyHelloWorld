@@ -486,3 +486,5 @@ Claude가 동시에 만든 가변형 EPUB 후처리 프로토타입은 Apple Boo
 ## 메뉴바(shift_alarm) 연동
 
 `shift_alarm/README.md` 참조 — 메뉴의 `🎥 일본어 자막 추출 (폴더 선택)`을 누르면 폴더 선택 다이얼로그가 뜨고, 고른 폴더로 이 스크립트를 실행한다.
+
+★ 2026-08-29: `whisper_series_stream.sh`/`subtitle_notion_epub_only.sh`는 `JP_SUBTITLE_RUN_ID` 환경변수(shift_alarm이 실행마다 uuid를 넘겨줌)가 있으면 작업이 끝날 때 `/tmp/_jp_subtitle_run_<id>.done` 마커 파일을 남긴다 — shift_alarm이 이 파일이 생기는지 폴링해서 "자막 추출 완료" 알림을 띄우기 위한 용도(자세한 내용은 `shift_alarm/README.md`의 "일본어 자막 추출 완료 알림" 항목). 메뉴바를 거치지 않고 터미널에서 직접 실행하면 이 환경변수가 비어있으므로 마커 없이 기존과 동일하게 동작한다.

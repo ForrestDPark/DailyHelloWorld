@@ -50,6 +50,7 @@ import shutil
 import time
 import signal
 import ai_usage
+from shift_alarm_pet import ShiftAlarmPet
 import objc
 from PyObjCTools import AppHelper
 from AppKit import (
@@ -1906,9 +1907,14 @@ def get_today_reminders(schedule, now=None):
     return reminders
 
 
-def get_today_reminder_title_tokens(schedule, now=None):
-    """메뉴바 타이틀용으로 운동 부위와 통화 대상을 짧게 표시한다."""
+def get_today_reminder_title_tokens(schedule, now=None, checklist_state=None):
+    """메뉴바 타이틀용으로 운동 부위와 통화 대상을 짧게 표시한다.
+
+    ★ 2026-08-29: checklist_state({라벨: checked})를 주면 이미 체크된 리마인더는
+    타이틀에서 뺀다 — "리마인더 이모지가 타이틀에 너무 많이 뜬다"는 피드백. 아직
+    체크 안 한(할 일이 남은) 항목만 위에 노출해서 타이틀을 짧게 유지한다."""
     tokens = []
+    checklist_state = checklist_state or {}
     call_tokens = {
         REMINDERS["call_mom"]["label"]: "📞엄마",
         REMINDERS["call_heo_minjun"]["label"]: "📞민준",
@@ -1917,6 +1923,8 @@ def get_today_reminder_title_tokens(schedule, now=None):
         REMINDERS["call_sondongju"]["label"]: "📞동주",
     }
     for label in get_today_reminders(schedule, now=now):
+        if checklist_state.get(label):
+            continue
         if label.startswith("🏋️ 상체"):
             tokens.append("🏋️상")
         elif label.startswith("🏋️ 하체"):
@@ -2549,6 +2557,36 @@ def run_build_readaloud_epub(epub_dir):
     return True
 
 
+# ★ 2026-08-29: "자막 추출 다 되면 알람 발생하게 해줘" 요청 — whisper_series_stream.sh/
+# subtitle_notion_epub_only.sh는 새 iTerm 창(별도 프로세스 트리)에서 돌기 때문에
+# shift_alarm의 Popen은 iTerm을 띄우자마자 바로 리턴해버려서 완료 시점을 알 방법이
+# 없었다. 실행마다 고유 run_id를 환경변수로 넘기고, 스크립트가 끝나면
+# /tmp/_jp_subtitle_run_<id>.done 마커를 남기도록 스크립트 쪽도 같이 고쳤다 —
+# 여기서는 그 마커가 생기는지 백그라운드 스레드로 폴링만 한다.
+JP_SUBTITLE_MARKER_TIMEOUT_SECONDS = 3 * 60 * 60  # 영상 여러 개 처리 시 오래 걸릴 수 있어 3시간
+JP_SUBTITLE_MARKER_POLL_SECONDS = 15
+
+
+def _watch_jp_subtitle_completion(run_id, label, folder_path):
+    marker = f"/tmp/_jp_subtitle_run_{run_id}.done"
+    deadline = time.time() + JP_SUBTITLE_MARKER_TIMEOUT_SECONDS
+    while time.time() < deadline:
+        if os.path.exists(marker):
+            try:
+                os.remove(marker)
+            except OSError:
+                pass
+            notify_spoken(
+                f"🎬 {label} 완료",
+                os.path.basename(folder_path.rstrip("/")),
+                f"{folder_path}\n작업이 끝났습니다.",
+            )
+            return
+        time.sleep(JP_SUBTITLE_MARKER_POLL_SECONDS)
+    # 타임아웃 — 스크립트가 비정상 종료해 마커를 못 남겼거나 예상보다 훨씬 오래
+    # 걸리는 경우다. 조용히 감시를 그만둔다(무한정 스레드를 살려두지 않기 위함).
+
+
 def run_jp_subtitle_extraction(folder_path, target_minutes=None, highlight_pad=1):
     """일본어자막추출/whisper_series_stream.sh를 백그라운드로 실행한다.
     스크립트 자체가 새 터미널 창(.command + open)을 띄우고 바로 리턴하므로,
@@ -2561,7 +2599,14 @@ def run_jp_subtitle_extraction(folder_path, target_minutes=None, highlight_pad=1
     if target_minutes:
         env["TARGET_MINUTES"] = str(target_minutes)
     env["HIGHLIGHT_PAD"] = str(highlight_pad)
+    run_id = uuid.uuid4().hex[:12]
+    env["JP_SUBTITLE_RUN_ID"] = run_id
     subprocess.Popen(["zsh", JP_SUBTITLE_SCRIPT, folder_path], env=env)
+    threading.Thread(
+        target=_watch_jp_subtitle_completion,
+        args=(run_id, "일본어 자막 추출 (연달아)", folder_path),
+        daemon=True,
+    ).start()
     return True
 
 
@@ -2571,7 +2616,15 @@ def run_jp_subtitle_stage2_only(folder_path):
     리턴하므로, 여기서도 fire-and-forget으로 실행만 하면 된다."""
     if not os.path.exists(JP_SUBTITLE_STAGE2_SCRIPT):
         return False
-    subprocess.Popen(["zsh", JP_SUBTITLE_STAGE2_SCRIPT, folder_path])
+    env = os.environ.copy()
+    run_id = uuid.uuid4().hex[:12]
+    env["JP_SUBTITLE_RUN_ID"] = run_id
+    subprocess.Popen(["zsh", JP_SUBTITLE_STAGE2_SCRIPT, folder_path], env=env)
+    threading.Thread(
+        target=_watch_jp_subtitle_completion,
+        args=(run_id, "자막·번역·낭독판", folder_path),
+        daemon=True,
+    ).start()
     return True
 
 
@@ -2590,6 +2643,12 @@ def run_jp_workout_extraction_only(folder_path, target_minutes=None, highlight_p
     ]
     if target_minutes:
         args += ["--target-minutes", str(target_minutes)]
+
+    # ★ 2026-08-29: 다른 자막류 완료 알림과 같은 마커 폴링 패턴 — 이 launcher는
+    # 파이썬이 직접 생성하는 인라인 .command라 셸 스크립트를 따로 고칠 필요 없이
+    # job_status 판정 뒤에 바로 마커 줄만 추가하면 된다.
+    run_id = uuid.uuid4().hex[:12]
+    marker_path = f"/tmp/_jp_subtitle_run_{run_id}.done"
 
     launcher = "/tmp/_jp_workout_video_only.command"
     command = (
@@ -2617,11 +2676,17 @@ def run_jp_workout_extraction_only(folder_path, target_minutes=None, highlight_p
         "  echo '⚠️ 일부 파일이 실패했습니다. 위 로그를 확인하세요.'\n"
         "fi\n"
         "echo '이 창은 확인 후 닫아도 됩니다.'\n"
+        f"echo done > '{marker_path}'\n"
     )
     with open(launcher, "w", encoding="utf-8") as file:
         file.write(command)
     os.chmod(launcher, 0o700)
     subprocess.Popen(["open", "-a", "Terminal", launcher])
+    threading.Thread(
+        target=_watch_jp_subtitle_completion,
+        args=(run_id, "운동용 영상만 추출", folder_path),
+        daemon=True,
+    ).start()
     return True
 
 
@@ -4139,6 +4204,13 @@ class ShiftAlarmApp(rumps.App):
         sync_scriptable_widget_file()
         self.build_menu()
 
+        # 메뉴바가 노치나 다른 상태 항목에 밀려도 핵심 상태를 볼 수 있게 한다.
+        # 기존 메뉴바는 전체 기능과 Pet 복구 경로로 그대로 유지한다.
+        self.shift_pet = ShiftAlarmPet(
+            self, self.config, save_config,
+            os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "shift_alarm_pet.png"),
+        )
+
         # 날씨 10분마다 갱신
         self.weather_timer = rumps.Timer(self._refresh_weather, 600)
         self.weather_timer.start()
@@ -4326,7 +4398,54 @@ class ShiftAlarmApp(rumps.App):
             return self.config.get("current_shift")
         return None
 
-    def _update_title(self):
+    @staticmethod
+    def _compress_title_reminders(tokens, limit):
+        """메뉴바가 숨겨질 때만 리마인더를 단계적으로 압축한다."""
+        tokens = list(tokens)
+        if limit is None or len(tokens) <= limit:
+            return tokens
+        if limit <= 0:
+            return []
+        return tokens[:limit] + [f"+{len(tokens) - limit}"]
+
+    def _status_item_is_visible(self):
+        """AppKit이 현재 상태 항목을 실제 메뉴바에 배치했는지 확인한다."""
+        try:
+            button = self._nsapp.nsstatusitem.button()
+            window = button.window() if button is not None else None
+            if window is None or not window.isVisible():
+                return False
+            screen = window.screen()
+            if screen is None:
+                return True
+            window_frame = window.frame()
+            screen_frame = screen.frame()
+            window_min_x = window_frame.origin.x
+            window_max_x = window_min_x + window_frame.size.width
+            screen_min_x = screen_frame.origin.x
+            screen_max_x = screen_min_x + screen_frame.size.width
+            return (
+                window_frame.size.width > 0
+                and window_max_x > screen_min_x
+                and window_min_x < screen_max_x
+            )
+        except (AttributeError, TypeError):
+            # 구형 rumps/PyObjC에서 가시성 API를 못 읽으면 임의 축약하지 않는다.
+            return True
+
+    def _adapt_title_if_hidden(self, compact_step):
+        """전체 타이틀이 macOS에 숨겨졌을 때 리마인더만 1개, 0개 순으로 줄인다."""
+        if self._status_item_is_visible():
+            return
+        compact_limits = (1, 0)
+        if compact_step >= len(compact_limits):
+            return
+        self._update_title(
+            reminder_limit=compact_limits[compact_step], schedule_visibility_check=False
+        )
+        AppHelper.callLater(0.2, self._adapt_title_if_hidden, compact_step + 1)
+
+    def _update_title(self, reminder_limit=None, schedule_visibility_check=True):
         # NSStatusItem의 attributedTitle을 건드리므로 반드시 메인 스레드에서 실행돼야
         # 한다(백그라운드 스레드에서 부르면 CALayer 커밋 시점에 EXC_BREAKPOINT로
         # 크래시할 수 있음 — 2026-08-05 실측). 백그라운드 스레드에서 호출됐으면
@@ -4341,24 +4460,23 @@ class ShiftAlarmApp(rumps.App):
         current = self.config.get("current_shift")
         code = SHIFT_TO_SHORT_CODE.get(current, current or "?")
 
-        # ★ 2026-07-24: 공백 없이 이어붙이면(특히 휴무일처럼 리마인더가 여러 개
-        # 동시에 뜨는 날) 이모지들이 서로 겹쳐 보여 찌그러진 것처럼 보였다.
-        # ★ 2026-08-07: 리마인더가 몰리는 날(월초 휴무 시작일 등)은 최대 8개까지
-        # 겹쳐서 타이틀 전체가 macOS에 의해 통째로 숨겨지는 문제가 실제로 발생함
-        # (예: 2026-08-09에 8개 동시 발생 확인). 타이틀에는 최대 3개만 보여주고
-        # 나머지는 "+N"으로 압축한다 — 전체 목록은 드롭다운 메뉴에서 계속 확인 가능.
-        _reminder_tokens = get_today_reminder_title_tokens(self.schedule)
-        _REMINDER_TITLE_LIMIT = 3
-        if len(_reminder_tokens) > _REMINDER_TITLE_LIMIT:
-            _reminder_tokens = _reminder_tokens[:_REMINDER_TITLE_LIMIT] + [
-                f"+{len(_reminder_tokens) - _REMINDER_TITLE_LIMIT}"
-            ]
+        # 평상시에는 기존 리마인더를 전부 표시한다. 전체 상태 항목이 실제로 숨겨진
+        # 경우에만 _adapt_title_if_hidden()이 1개(+N), 0개 순으로 다시 요청한다.
+        _reminder_tokens = get_today_reminder_title_tokens(
+            self.schedule, checklist_state=self._checklist_state
+        )
+        _reminder_tokens = self._compress_title_reminders(_reminder_tokens, reminder_limit)
         reminder_icons = " ".join(_reminder_tokens)
 
         # ★ 2026-08-07: 이모지 없이 숫자만 표시하고, 항상 초록색(부족 시에만 빨강)으로
         # 색을 입혀서 이모지 없이도 한눈에 저장공간 항목인지 구분되게 했다.
         storage_num = self.storage_free_gb
         storage = str(storage_num) if storage_num is not None else ""
+        storage_alert = (
+            "🚨💾"
+            if storage_num is not None and storage_num <= LOW_STORAGE_WARNING_GB
+            else ""
+        )
 
         day_num = (
             _shift_block_day_number(self.schedule, datetime.date.today(), current)
@@ -4425,9 +4543,13 @@ class ShiftAlarmApp(rumps.App):
             thermal_token = ""
             thermal_color = None
 
+        # Codex/Claude 사용률은 최우선 정보라 적응형 축약 때도 항상 유지한다.
+        # 저장공간은 평상시 기존 숫자를, 임계치 이하면 짧은 경고를 표시한다.
+        storage_token = storage_alert or storage
+        storage_token_inner = [] if storage_alert else storage_inner
         segments = [
             (shift_text, shift_inner),
-            (storage, storage_inner),
+            (storage_token, storage_token_inner),
             (reminder_icons, []),
             (codex_token, [(0, _utf16_len(codex_token), codex_color)] if codex_token else []),
             (claude_token, [(0, _utf16_len(claude_token), claude_color)] if claude_token else []),
@@ -4435,10 +4557,19 @@ class ShiftAlarmApp(rumps.App):
         ]
 
         self.title = " ".join(text for text, _ in segments if text)
+        pet_usage = " · ".join(token for token in (
+            f"Codex {codex_token}" if codex_token else "Codex -",
+            f"Claude {claude_token}" if claude_token else "Claude -",
+            thermal_token,
+        ) if token)
+        if hasattr(self, "shift_pet"):
+            self.shift_pet.update(shift_text, pet_usage)
 
         # rumps의 title setter가 setTitle_()을 호출해 attributedTitle을 초기화시키므로,
         # 반드시 plain title을 먼저 설정한 뒤 setAttributedTitle_()로 덮어써야 한다.
         if not any(inner for _, inner in segments):
+            if schedule_visibility_check:
+                AppHelper.callLater(0.2, self._adapt_title_if_hidden, 0)
             self._write_mobile_status()
             return
 
@@ -4459,6 +4590,12 @@ class ShiftAlarmApp(rumps.App):
             self._nsapp.nsstatusitem.setAttributedTitle_(attributed)
         except AttributeError:
             pass
+
+        # title/attributedTitle 반영과 macOS 메뉴바 재배치가 끝난 뒤 실제 가시성을
+        # 확인한다. 화면 폭 추정치는 다른 상태 항목·노치 변화를 반영하지 못하므로
+        # NSStatusItem 창 자체가 보이는지를 신호로 사용한다.
+        if schedule_visibility_check:
+            AppHelper.callLater(0.2, self._adapt_title_if_hidden, 0)
 
         self._write_mobile_status()
 
@@ -5893,6 +6030,7 @@ class ShiftAlarmApp(rumps.App):
         more_menu.add(media_menu)
 
         more_menu.add(None)
+        more_menu.add(rumps.MenuItem("🐾 Shift Pet 표시/숨기기", callback=self.toggle_shift_pet))
         more_menu.add(rumps.MenuItem("현재 설정 확인", callback=self.show_status))
         self.menu.add(more_menu)
         self.menu.add(None)
@@ -6750,7 +6888,12 @@ class ShiftAlarmApp(rumps.App):
             msg = f"근무가 설정되지 않았습니다.\n오늘의 리마인더: {reminders_text}"
         rumps.alert("현재 설정", msg)
 
+    def toggle_shift_pet(self, _):
+        self.shift_pet.toggle()
+
     def quit_app(self, _):
+        if hasattr(self, "shift_pet"):
+            self.shift_pet.close()
         stop_caffeinate()
         rumps.quit_application()
 

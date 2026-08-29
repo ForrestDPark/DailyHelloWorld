@@ -4,6 +4,18 @@
 
 - 로컬 경로: `/Users/forrestdpark/Desktop/PDG/DailyHelloWorld_/shift_alarm/shift_alarm.py` (관련 파일 전부 `shift_alarm/` 폴더 안 — 손자병법 파이프라인이 `손자병법/` 폴더를 쓰는 것과 같은 패턴)
 - **실행 방식(★ 2026-07-23 확정): `~/Library/LaunchAgents/com.shiftalarm.menubar.plist`로 등록된 LaunchAgent다** (로그인 시 자동 시작, `RunAtLoad=true`). 코드 수정 후 재시작은 `nohup`이 아니라 `launchctl kickstart -k gui/$(id -u)/com.shiftalarm.menubar`로 한다 (기존 프로세스 kill + 재시작을 한 번에 처리). **주의: plist의 `ProgramArguments` 경로는 `shift_alarm.py` 파일을 옮기면 반드시 같이 수정해야 한다** — 코드 안 `__file__` 기준 상대경로와 달리 plist 진입점은 절대경로 고정이라 자동으로 안 따라가고, 이미 떠 있는 프로세스는 멀쩡히 돌다가 다음 재부팅/재로드 때(즉 "껐다 켤 때") 그제서야 조용히 실패한다(자세한 사례는 8-1 참조).
+
+### Shift Alarm Pet (2026-08-29)
+
+메뉴바가 노치나 다른 상태 항목에 밀려 숨는 경우에도 근무·날씨와 Codex/Claude 사용량을 볼 수 있도록 투명한 플로팅 Pet을 함께 띄운다. 기존 메뉴바는 fallback 및 전체 기능 메뉴로 유지한다.
+
+- Pet 클릭: 살짝 커졌다 줄어드는 팝 애니메이션과 함께, 메뉴바 아이콘을 눌렀을 때와 완전히 같은 NSMenu(rumps가 관리하는 실제 메뉴)가 Pet 바로 위에 뜬다 — 그 안의 모든 항목이 그대로 클릭 가능(★ 2026-08-29, 51번 항목 참고). "현재 설정 확인"은 그 메뉴의 `기타` 하위메뉴에 그대로 남아있다.
+- Pet 드래그: 위치 이동 및 `~/.shift_alarm_config.json`에 좌표 저장
+- Pet 우클릭: 숨김
+- 배경은 반투명(alpha 0.55, ★ 2026-08-29) — 뒤 배경이 은은하게 비친다.
+- 메뉴바 `기타 → 🐾 Shift Pet 표시/숨기기`: 숨긴 Pet 복구
+- 일반 Space에는 따라오지만 macOS native 전체화면 위에는 억지로 겹치지 않는다.
+- `assets/shift_alarm_pet.png`가 있으면 사용하고, 없으면 로봇 이모지를 표시한다.
   - **★ 2026-08-07 KeepAlive 추가**: 예전엔 `KeepAlive: false`라 앱이 정말로 죽으면(크래시 등) launchd가 자동으로 다시 안 띄워줘서, 수동으로 kickstart 해줄 때까지 메뉴바 아이콘이 계속 사라진 채로 남는 문제가 있었다. `KeepAlive: {SuccessfulExit: false}`로 바꿔서 **비정상 종료(크래시/kill)일 때만** 자동 재시작하고, 메뉴의 "종료"로 정상 종료(exit 0, `rumps.quit_application()`)했을 땐 재시작 안 함. `StandardOutPath`/`StandardErrorPath`를 `~/Library/Logs/shift_alarm.{out,err}.log`로 지정해서 다음에 또 죽으면 원인을 사후에 확인할 수 있게 했다. plist를 고친 뒤엔 `launchctl kickstart -k`만으로는 반영이 안 되고(플리스트 자체를 다시 안 읽음) `launchctl bootout gui/$(id -u)/com.shiftalarm.menubar && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.shiftalarm.menubar.plist`로 재로드해야 한다.
 - 사용자는 3교대(Day/Swing/GY) + 휴무로 도는 D조 근무자.
 
@@ -730,3 +742,33 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - 실측: 독립 실행으로 106초 걸려 Library(49.6GB)·Desktop(27.1GB)·.codex(5.2GB) 등을 정확히 큰 순서로 반환하는 것 확인.
 
 ★ 후속 버그 수정(같은 날): 스캔이 1~2분 걸리는 동안 사용자가 다른 앱으로 넘어가 있으면 `rumps.alert()` 결과 창이 그 뒤에 조용히 떠서 "아무것도 안 보인다"는 신고를 받았다. `rumps.notification()` 배너를 먼저 띄워 완료를 놓치지 않게 하고, `rumps.alert()` 대신 `NSAlert`를 직접 만들어 `activateIgnoringOtherApps_` + `NSModalPanelWindowLevel`로 다른 앱 창 뒤에 숨지 않게 강제했다 — 이 파일의 다른 NSPanel 프롬프트에서 이미 검증된 것과 같은 패턴.
+
+## 49. 🔕 메뉴바 타이틀 리마인더 — 체크 안 한 항목만 표시 (★ 2026-08-29 추가)
+
+**사용자 요청**: "리마인더용 이모지가 너무 많이 타이틀에 뜨는데 체크안된 리마인더 항목만 위에 뜨게 해."
+
+- `get_today_reminder_title_tokens()`에 `checklist_state` 인자를 추가했다 — 이미 메뉴 드롭다운(`_build_reminder_status_menu_items`)에서 ✅/⬜ 표시에 쓰던 `self._checklist_state`({라벨: checked})를 그대로 재사용해서, 오늘 리마인더 중 이미 체크한 항목은 타이틀 아이콘 나열에서 뺀다. 드롭다운 메뉴 쪽 표시는 그대로(체크된 것도 ✅로 계속 보임) — 타이틀만 "아직 안 한 일"로 좁힌 것.
+- `_update_title()` 호출부만 `checklist_state=self._checklist_state`를 넘기도록 고쳤고, 그 외 축약 로직(`_compress_title_reminders`, `_adapt_title_if_hidden`)은 그대로 재사용된다.
+
+## 50. 🎬 일본어 자막 추출 완료 알림 (★ 2026-08-29 추가)
+
+**사용자 요청**: "여태까지는 자막 추출 완성되었다는 알람 없었는데 자막 추출이 다 되면 shift alarm에서 알람 발생하게 해주면 좋겠어."
+
+- `whisper_series_stream.sh`/`subtitle_notion_epub_only.sh`는 새 iTerm 창(`open -a iTerm`)에서 돌기 때문에, shift_alarm이 `subprocess.Popen`으로 부른 원래 프로세스는 iTerm을 띄우자마자 바로 끝나버려서 완료 시점을 알 방법이 없었다.
+- 실행마다 `JP_SUBTITLE_RUN_ID`(uuid) 환경변수를 넘기고, 두 스크립트 모두 실제 작업이 끝나면 `/tmp/_jp_subtitle_run_<id>.done` 마커 파일을 남기도록 고쳤다. shift_alarm은 `_watch_jp_subtitle_completion()`을 백그라운드 스레드로 띄워 15초 간격으로 마커를 폴링하다가 발견하면 `notify_spoken()`으로 완료 알림(소리+음성)을 띄우고 마커를 지운다. 최대 3시간까지 기다리고 그 이후엔 조용히 포기(무한정 스레드가 안 남게).
+- `run_jp_subtitle_extraction()`(연달아)과 `run_jp_subtitle_stage2_only()`(자막만) 둘 다 적용. `run_jp_workout_extraction_only()`(운동용 영상만, 자막 없음)는 대상 아님 — 이미 자체 Terminal 창에 완료 로그를 찍고 자막 파이프라인과 무관한 별개 기능이라 이번 범위에서 제외.
+- 메뉴에서 직접 스크립트를 손으로 실행(shift_alarm 경유 안 함)하면 `JP_SUBTITLE_RUN_ID`가 비어있으므로 마커를 안 남기고 조용히 기존 동작 그대로 동작한다.
+
+## 51. 🐾 Shift Alarm Pet — 반투명 + 클릭 애니메이션 + 클릭 시 실제 메뉴 표시 (★ 2026-08-29 추가)
+
+**사용자 요청**: "codex pet처럼 클릭하면 움직인다던가 하는식으로 좀 ui 꾸미면좋겠고 이거 사각형이 좀 반투명 했으면 좋겠어 그리고 클릭하면 shift alarm의 항목이 보여서 클릭이 가능했으면 좋겠어."
+
+- **반투명**: 배경 사각형 alpha를 0.92 → 0.55로 낮춤(`drawRect_`).
+- **클릭 애니메이션**: `ShiftAlarmPet._bounce()` — `NSAnimationContext.runAnimationGroup_completionHandler_`로 panel의 frame을 0.08초 만에 살짝(가로+8/세로+6) 부풀렸다가, 완료 콜백에서 0.10초 만에 원래 크기로 되돌린다. 저장된 좌표(`petDidMove()`가 다루는 `pet_x`/`pet_y`)는 건드리지 않는다 — 애니메이션이 끝나면 정확히 원래 frame으로 복귀.
+- **클릭 시 실제 메뉴 표시**: 기존엔 클릭하면 `show_status()`(현재 설정 알림창)만 떴는데, 이제 `self.app.menu._menu`(rumps가 관리하는 실제 NSMenu — 메뉴바 아이콘의 그 메뉴와 완전히 동일한 객체)를 `NSMenu.popUpMenuPositioningItem_atLocation_inView_`로 Pet 바로 위에 띄운다. 메뉴 안의 모든 항목(리마인더 체크, 자막 추출 실행 등)이 그대로 클릭 가능해졌다. "현재 설정 확인"은 `기타` 하위메뉴에 남아있어 여전히 접근 가능.
+
+## 52. 🎬 운동용 영상만 추출도 완료 알림 추가 (★ 2026-08-29 추가)
+
+**사용자 요청**: "운동용 영상만, 자막 없음 도 알람 기능 있게 해" (50번 항목의 자막 추출 완료 알림을 이 기능에도 확장해달라는 요청).
+
+- `run_jp_workout_extraction_only()`는 파이썬이 직접 `.command` 런처를 생성하는 구조라, 별도 셸 스크립트를 고칠 필요 없이 job_status 판정 직후 같은 마커 파일(`/tmp/_jp_subtitle_run_<id>.done`)을 쓰는 줄만 추가했다. `_watch_jp_subtitle_completion()`(50번 항목에서 만든 공용 폴링 함수)을 그대로 재사용해서 완료되면 "운동용 영상만 추출 완료" 알림이 뜬다.
