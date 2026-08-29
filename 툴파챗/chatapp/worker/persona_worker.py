@@ -127,6 +127,68 @@ FILE_ORGANIZER_PERSONA_NAME = "손동주"
 OWNER_USERNAME = os.environ.get("CHATAPP_OWNER_USERNAME", "user")
 HOME_DIR = Path.home().resolve()
 TRASH_DIR = HOME_DIR / ".Trash"
+
+# ★ "shift_alarm 관리 기능 위주로 캐릭터를 만들어서 각각 현재 상태를 인지하고
+# 대화하게 해달라" 요청(2026-08-29) — 손동주(Read/Glob 도구)처럼 AI에게 직접
+# 파일 접근 권한을 주는 대신, shift_alarm이 스스로 남기는 상태 파일(설정·iOS
+# 위젯용 요약)을 이 함수가 직접 읽어 필요한 부분만 뽑아 매 턴 프롬프트에
+# 얹는다 — AI에게 도구를 주지 않아 더 안전하고 빠르다(파일 접근 승인·도구
+# 호출 왕복이 없음). shift_alarm.py가 이 두 파일의 실제 갱신 주체다.
+SHIFT_ALARM_CONFIG_PATH = HOME_DIR / ".shift_alarm_config.json"
+SHIFT_ALARM_STATUS_PATH = HOME_DIR / ".shift_alarm_icloud_sync" / "status.json"
+SHIFT_ALARM_PERSONA_STATE_KEY = {
+    "알람지기": "shift",
+    "불침번": "awake",
+    "곳간지기": "storage",
+}
+
+
+def _read_json_file(path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def load_shift_alarm_state(state_key):
+    """state_key(shift/awake/storage)에 맞는 항목만 뽑아 사람이 읽는 요약
+    문자열로 만든다. config.json엔 Gmail 요약·구직 후보 등 이 캐릭터들과
+    무관한 정보도 섞여 있어, 전체를 넘기지 않고 필요한 필드만 고른다."""
+    config = _read_json_file(SHIFT_ALARM_CONFIG_PATH)
+    status = _read_json_file(SHIFT_ALARM_STATUS_PATH)
+    if state_key == "shift":
+        shift = status.get("shift") or config.get("current_shift") or "알 수 없음"
+        day_no = status.get("shift_day_number")
+        is_last = status.get("shift_is_last_day")
+        alarm = (config.get("shift_times") or {}).get(shift)
+        alarm_str = f"{alarm['hour']:02d}:{alarm['minute']:02d}" if isinstance(alarm, dict) else "없음(휴무일이라 기상 알람 없음)"
+        reminders = status.get("reminders") or []
+        checked = status.get("reminders_checked") or {}
+        lines = [f"오늘 시프트: {shift}" + (f" ({day_no}일차)" if day_no else "") + (" · 이 시프트 마지막 날" if is_last else "")]
+        lines.append(f"기상 알람: {alarm_str}")
+        if reminders:
+            lines.append("오늘 리마인더:")
+            lines += [f"- {r} [{'완료' if checked.get(r) else '미완료'}]" for r in reminders]
+        return "\n".join(lines)
+    if state_key == "awake":
+        always = config.get("stay_awake_always", False)
+        return (
+            "절전 방지 '항상 켜기' 모드: " + ("켜짐" if always else "꺼짐")
+            + "\n" + ("항상 켜짐 상태라 근무 시간과 무관하게 잠들지 않는다." if always
+                      else "평소엔 꺼져 있고, 근무 시작·종료 전후 1시간 창에서만 자동으로 켜진다.")
+        )
+    if state_key == "storage":
+        free_gb = status.get("storage_free_gb")
+        if free_gb is None:
+            return "홈 디스크 여유 공간: 정보 없음(위젯 동기화 대기 중)"
+        return (
+            f"홈 디스크 여유 공간: 약 {free_gb}GB\n"
+            "(폴더별 상세 순위는 실시간으로 알 수 없음 — 사용자가 메뉴에서 직접 스캔해야 나옴. "
+            "자세한 걸 물으면 모른다고 솔직히 답하고 스캔을 권하기)"
+        )
+    return ""
+
+
 ORGANIZE_DENY_NAMES = {"Library", ".ssh", ".aws", ".codex", ".claude", ".gnupg", ".git", ".Trash", ".tulpachat"}
 ORGANIZE_PLAN_RE = re.compile(r"```plan\s*\n(.*?)\n```", re.DOTALL)
 ORGANIZE_APPROVE_KEYWORDS = ("승인", "진행")
@@ -901,7 +963,7 @@ def _speaker_label(sender, persona_names):
     return "나" if sender == OWNER_USERNAME else sender
 
 
-def build_prompt(persona_name, system_prompt, context, persona_names, has_images=False, notion_reference=""):
+def build_prompt(persona_name, system_prompt, context, persona_names, has_images=False, notion_reference="", live_state=""):
     lines = [system_prompt, "", "--- 최근 대화 ---"]
     other_humans = False
     for msg in context:
@@ -929,6 +991,11 @@ def build_prompt(persona_name, system_prompt, context, persona_names, has_images
             "여기 없는 내용을 지어내지 마세요.)\n"
             f"{notion_reference}"
         )
+    if live_state:
+        # ★ shift_alarm 담당 페르소나(알람지기·불침번·곳간지기) 전용 —
+        # persona_cache의 system_prompt와 달리 이건 매 턴 새로 읽은 실시간
+        # 값이라 build_prompt() 인자로만 전달하고 캐시에는 저장하지 않는다.
+        lines.append(f"\n(지금 이 순간의 실제 상태 — 반드시 이 값을 근거로 답하세요. 지어내지 마세요.)\n{live_state}")
     if any("📜 손자병법 새 구절 분석이 완료되었습니다" in msg["content"] for msg in context):
         lines.append(
             "\n(손자병법 새 구절 토론에서는 찬반 투표처럼 답하지 마세요. "
@@ -1205,9 +1272,13 @@ def _process_turn_inner(turn, persona_cache):
     image_paths = extract_image_paths(turn["context"])
     notion_page_ids = extract_notion_page_ids(turn["context"])
     notion_reference = load_notion_references(notion_page_ids)
+    live_state = ""
+    shift_alarm_state_key = SHIFT_ALARM_PERSONA_STATE_KEY.get(persona_name)
+    if shift_alarm_state_key:
+        live_state = load_shift_alarm_state(shift_alarm_state_key)
     prompt = build_prompt(
         persona_name, entry["system_prompt"], turn["context"], persona_cache.keys(),
-        has_images=bool(image_paths), notion_reference=notion_reference,
+        has_images=bool(image_paths), notion_reference=notion_reference, live_state=live_state,
     )
     # ★ "그냥 검색해서 링크 보내주면 될 텐데, 권한이 없어서 그런가?" 질문
     # 끝에 "웹 검색 열어줘"(2026-08-29), 이어서 "WebFetch도 열어줘"
