@@ -1698,9 +1698,10 @@ def get_room_members(room_id: str, request: Request):
     목록을 같이 준다 — 프론트의 초대 패널이 "누굴 더 부를 수 있는지" 보여줄 때 씀.
 
     ★ 2026-08-26: "단체톡방 만들기 + 초대" 요청으로 사용자 커스텀 방도 지원.
-    커스텀 방은 방 주인 + 소유자만 조회 가능, 초대 후보는 공개 페르소나(Notion) +
-    그 방 주인이 직접 만든 페르소나로 제한한다(다른 사람의 개인 페르소나가
-    남의 방에 노출되지 않게)."""
+    커스텀 방은 방 주인 + 소유자만 조회 가능, 일반 사용자의 초대 후보는 공개
+    페르소나(Notion) + 그 방 주인이 직접 만든 페르소나로 제한한다. 관리자는
+    전체 페르소나 관리 권한과 일치하도록 다른 계정의 개인 페르소나도 후보로
+    볼 수 있다."""
     user = getattr(request.state, "user", None)
     username = user["username"] if user else None
     is_owner_request = user["is_owner"] if user else True
@@ -1712,7 +1713,9 @@ def get_room_members(room_id: str, request: Request):
     persona_rows = conn.execute("SELECT name, group_name, owner_username FROM personas ORDER BY name").fetchall()
     members = _group_members(conn, room_id, persona_rows)
     conn.close()
-    if is_custom:
+    if is_owner_request:
+        candidates = [r["name"] for r in persona_rows]
+    elif is_custom:
         candidates = [r["name"] for r in persona_rows if r["owner_username"] is None or r["owner_username"] == room_owner]
     else:
         candidates = [r["name"] for r in persona_rows if r["owner_username"] is None]
@@ -1754,7 +1757,7 @@ def invite_to_room(room_id: str, body: InviteRequest, request: Request):
         conn.close()
         raise HTTPException(status_code=404, detail="그룹 회의방이 아닙니다")
     persona_owner = persona_map[body.persona_name]
-    if persona_owner is not None and persona_owner != room_owner:
+    if persona_owner is not None and persona_owner != room_owner and not is_owner_request:
         conn.close()
         raise HTTPException(status_code=403, detail="이 페르소나는 초대할 수 없습니다")
     # 기본 그룹 멤버를 내보낸 뒤 다시 초대하는 경우 방별 제외 표시를 먼저
