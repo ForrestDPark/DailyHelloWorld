@@ -2002,3 +2002,8 @@ live_state로 넣는 "오늘 읽은 내용"만으로는 과거 기록을 못 보
   단순 켜짐 상태와 구분되게 보여준다. 방을 옮길 때도(`showChatView`) 이제
   `stopAllPlayback()`을 불러 이전 방 재생을 실제로 끊는다(예전엔 대기 큐만 비우고
   이미 재생 중이던 오디오는 끝까지 흘러갔음).
+- **재생 시작 시 자동 스크롤**: "자동넘김 할 때 다음 메시지 읽으면 그 메시지가 보이게
+  화면도 스크롤됐으면 좋겠다"는 후속 요청 — `playAudioWithHighlight()`가 `msg-reading`
+  클래스를 붙이는 시점에 `scrollToMessage()`와 같은 방식(`scrollIntoView({behavior:
+  "smooth", block: "center"})`)으로 그 말풍선을 화면 가운데로 스크롤한다. 세 재생
+  경로가 전부 이 함수를 거치므로 자동으로 다 적용됨.

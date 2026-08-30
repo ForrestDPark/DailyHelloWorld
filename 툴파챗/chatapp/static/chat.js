@@ -2356,6 +2356,9 @@ async function requestMessageTtsJob(message) {
 async function playAudioWithHighlight(messageId, url) {
   const el = messagesEl.querySelector(`.msg[data-message-id="${messageId}"]`);
   el?.classList.add("msg-reading");
+  // ★ "자동넘김 할 때 다음 메시지 읽으면 그 메시지가 보이게 화면도 스크롤
+  // 됐으면 좋겠다" 요청(2026-08-30) — scrollToMessage()와 같은 방식.
+  el?.scrollIntoView({ behavior: "smooth", block: "center" });
   const audio = new Audio(url);
   try {
     await new Promise((resolve) => {
