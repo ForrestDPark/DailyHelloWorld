@@ -972,27 +972,57 @@ def _generate_edge_tts(text, persona_name):
     return f"/uploads/{filename}"
 
 
+# ★ 2026-08-30 추가 실측: edge-tts도 "No audio was received"로 실패했다 —
+# 원인을 추적해보니 Microsoft Edge TTS 백엔드 자체가 그 순간 다운돼 있었다
+# (speech.platform.bing.com이 "Our services aren't available right now"를
+# 반환, curl로 직접 확인). 외부 서비스 두 곳이 동시에(과금 소진 + 원격
+# 장애) 막힐 수 있다는 걸 실측했으니, 완전히 로컬이라 외부 요인에 영향받지
+# 않는 최후의 보루로 macOS 내장 `say`를 세 번째 단계로 추가한다. 한국어
+# 내장 음성은 "Yuna" 하나뿐이라 다양성은 포기하지만(요청의 핵심은 "매번
+# 안 되는 것보다 항상 되는 것"), 무조건 되는 게 여기서는 더 중요하다.
+SAY_VOICE = "Yuna"
+
+
+def _generate_say_tts(text, persona_name):
+    filename = f"tts_{int(time.time())}_{os.urandom(4).hex()}.m4a"
+    path = UPLOADS_DIR / filename
+    result = subprocess.run(
+        ["say", "-v", SAY_VOICE, "-o", str(path), text[:TTS_MAX_INPUT_CHARS]],
+        capture_output=True, text=True, timeout=60,
+    )
+    if result.returncode != 0 or not path.exists():
+        raise RuntimeError(f"macOS say 실패: {result.stderr.strip() or '알 수 없는 오류'}")
+    return f"/uploads/{filename}"
+
+
+TTS_ENGINES = (
+    ("openai", lambda content, persona_name, persona_cache: _generate_openai_tts(content, persona_name, persona_cache)),
+    ("edge", lambda content, persona_name, persona_cache: _generate_edge_tts(content, persona_name)),
+    ("say", lambda content, persona_name, persona_cache: _generate_say_tts(content, persona_name)),
+)
+
+
 def process_tts_job(job, persona_cache):
-    engine = "openai"
-    openai_error = None
-    try:
-        url = _generate_openai_tts(job["content"], job["persona_name"], persona_cache)
-    except Exception as exc:  # noqa: BLE001 — 무료 edge-tts로 넘어가기 위한 의도적 전체 캐치
-        openai_error = exc
-        engine = "edge"
-        print(f"⚠️ {job.get('persona_name')} OpenAI TTS 실패, edge-tts로 전환: {exc}", flush=True)
+    errors = []
+    url = None
+    engine = None
+    for name, generate in TTS_ENGINES:
         try:
-            url = _generate_edge_tts(job["content"], job["persona_name"])
-        except Exception as edge_exc:  # noqa: BLE001 — 실패를 영속화하고 워커는 계속 돈다
-            try:
-                _api("/api/worker/tts_jobs/complete", "POST", {
-                    "job_id": job["id"],
-                    "error": f"OpenAI 실패({openai_error}) / edge-tts도 실패({edge_exc})"[:1000],
-                })
-            except Exception as report_exc:  # noqa: BLE001
-                print(f"⚠️ TTS 작업 실패 상태 저장도 실패: {report_exc}", flush=True)
-            print(f"⚠️ {job.get('persona_name')} TTS 생성 실패(OpenAI+edge-tts 모두): {edge_exc}", flush=True)
-            return
+            url = generate(job["content"], job["persona_name"], persona_cache)
+            engine = name
+            break
+        except Exception as exc:  # noqa: BLE001 — 다음 엔진으로 넘어가기 위한 의도적 전체 캐치
+            errors.append(f"{name} 실패({exc})")
+            print(f"⚠️ {job.get('persona_name')} {name} TTS 실패, 다음 방법 시도: {exc}", flush=True)
+    if not url:
+        try:
+            _api("/api/worker/tts_jobs/complete", "POST", {
+                "job_id": job["id"], "error": " / ".join(errors)[:1000],
+            })
+        except Exception as report_exc:  # noqa: BLE001
+            print(f"⚠️ TTS 작업 실패 상태 저장도 실패: {report_exc}", flush=True)
+        print(f"⚠️ {job.get('persona_name')} TTS 생성 실패(모든 방법 소진): {errors}", flush=True)
+        return
     try:
         _api("/api/worker/tts_jobs/complete", "POST", {"job_id": job["id"], "url": url})
         print(f"🔊 {job['persona_name']} 메시지 #{job['message_id']} TTS 생성 완료({engine})", flush=True)

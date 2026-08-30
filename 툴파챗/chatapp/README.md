@@ -1928,14 +1928,24 @@ live_state로 넣는 "오늘 읽은 내용"만으로는 과거 기록을 못 보
   onyx/nova/shimmer) 중 하나로 고정 배정한다(매번 다른 목소리로 헷갈리지 않게, 같은
   페르소나는 항상 같은 목소리). `gpt-4o-mini-tts` 모델의 `instructions` 파라미터에
   페르소나의 프로필 요약(`profile_summary`)을 넣어 성격·말투를 살린 낭독을 시도한다.
-- **실측 — OpenAI 계정 크레딧 소진, 무료 폴백 자동 전환**: 실제로 돌려보니 프로필 이미지
-  자동 생성 때와 같은 계정이 크레딧 부족(`insufficient_quota`)으로 즉시 실패했다. 그
-  이미지 기능의 "OpenAI 실패 시 로컬 디퓨저로 자동 전환"과 똑같은 패턴으로,
+- **실측 1 — OpenAI 계정 크레딧 소진, edge-tts로 자동 전환**: 실제로 돌려보니 프로필
+  이미지 자동 생성 때와 같은 계정이 크레딧 부족(`insufficient_quota`)으로 즉시 실패했다.
+  그 이미지 기능의 "OpenAI 실패 시 로컬 디퓨저로 자동 전환"과 똑같은 패턴으로,
   `process_tts_job()`이 OpenAI 실패 시 무료 `edge-tts`(ebook_reader.py가 이미 쓰는
   라이브러리, 이 Mac에 이미 설치돼 있음)로 자동 전환하도록 만들었다 — 한국어 목소리
   8종(`ko-KR-SunHiNeural` 등, 이름에 `:edge`를 붙여 다른 해시 시드로 별도 배정)에서 고른다.
-  실제로 메시지 하나로 "OpenAI 실패 → edge-tts 전환 → 완료" 전체 경로를 확인했다
-  (`/uploads/tts_*.mp3`, 유효한 MP3 파일 생성 확인).
+- **실측 2 — 같은 날 edge-tts도 "No audio was received"로 실패, macOS `say`를 3단계로
+  추가**: 원인을 추적해보니 Microsoft Edge TTS 백엔드 자체가 그 순간 다운돼 있었다
+  (`curl https://speech.platform.bing.com/...`가 "Our services aren't available right
+  now" 반환 — edge-tts 라이브러리·버전·파라미터와는 무관한 완전한 외부 장애). 유료
+  API(과금 소진)와 무료 온라인 API(원격 장애)가 같은 날 동시에 막힐 수 있다는 걸
+  실측했으니, 외부 요인에 전혀 영향받지 않는 완전 로컬 최후 수단으로 macOS 내장
+  `say -v Yuna -o out.m4a`(m4a/AAC 출력, `<audio>`에서 바로 재생 가능)를 3단계로
+  추가했다. `TTS_ENGINES = (("openai", ...), ("edge", ...), ("say", ...))` 튜플을 순서대로
+  시도하는 구조로 `process_tts_job()`을 리팩터링 — 한국어 내장 음성이 "Yuna" 하나뿐이라
+  목소리 다양성은 이 단계에서 포기하지만(모든 페르소나가 같은 목소리), "가끔 안 되는 것"보다
+  "항상 되는 것"이 최후 수단에서는 더 중요하다고 판단. 실제로 메시지 하나로
+  "OpenAI 실패 → edge-tts 실패 → say로 완료" 전체 경로를 라이브 워커에서 확인했다.
 - **프론트엔드**: 메시지 롱프레스/우클릭 메뉴(`openMessageMenu`, 반응·답장·복사 등과 같은
   자리)에 페르소나 메시지에만 "🔊 읽어주기" 항목을 추가. 누르면 요청 후 최대 30초
   동안 1.2초 간격으로 상태를 폴링하다가 완료되면 `Audio` 객체로 바로 재생한다. 실패·
