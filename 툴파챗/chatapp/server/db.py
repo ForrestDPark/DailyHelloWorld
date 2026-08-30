@@ -144,6 +144,17 @@ def init_db():
             updated_at TEXT NOT NULL,
             PRIMARY KEY (username, provider)
         );
+        CREATE TABLE IF NOT EXISTS ai_fallback_requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            room_id TEXT NOT NULL,
+            turn_id INTEGER NOT NULL UNIQUE,
+            persona_name TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'pending',
+            reason TEXT,
+            created_at TEXT NOT NULL,
+            resolved_at TEXT
+        );
         CREATE TABLE IF NOT EXISTS qa_feedback_reports (
             source_message_id INTEGER PRIMARY KEY,
             report_message_id INTEGER,
@@ -218,6 +229,9 @@ def init_db():
     # 전송하는 문제가 실제로 있었다 — 워커 메모리가 아니라 서버 DB에
     # 플래그를 둬야 재시작 횟수와 무관하게 딱 한 번만 보낸다.
     _ensure_column(conn, "pending_turns", "restart_notice_sent", "INTEGER NOT NULL DEFAULT 0")
+    # 관리자 Claude/Codex가 모두 실패했을 때만 발신자 개인 API로 재시도한다.
+    # 1이면 사용자가 팝업에서 비용 안내를 확인하고 명시적으로 승인한 턴이다.
+    _ensure_column(conn, "pending_turns", "use_personal_ai", "INTEGER NOT NULL DEFAULT 0")
     # ★ "메시지 인물마다 다 띄우니까 정신없다, 방에 있는 툴파 중 대표로
     # 한 사람이 서버 업데이트 중입니다 라고만 알려주자" 요청(2026-08-28) —
     # 위 restart_notice_sent는 pending_turn(=페르소나 1명의 발화 1건)마다

@@ -1346,6 +1346,11 @@ class AiProviderSelect(BaseModel):
     provider: Optional[str] = None
 
 
+class PersonalAiFallbackRequest(BaseModel):
+    turn_id: int
+    reason: Optional[str] = None
+
+
 def _current_user(request):
     user = getattr(request.state, "user", None)
     if not user:
@@ -1373,6 +1378,81 @@ def get_my_ai_providers(request: Request):
             for provider in ai_keys.PROVIDERS
         ],
     }
+
+
+@app.get("/api/me/ai-fallback-request")
+def get_my_ai_fallback_request(request: Request):
+    """관리자 AI가 실패한 턴 중 로그인한 본인의 요청만 보여준다."""
+    user = _current_user(request)
+    conn = get_conn()
+    row = conn.execute(
+        """SELECT afr.id, afr.room_id, afr.turn_id, afr.persona_name, afr.created_at,
+                  EXISTS(
+                    SELECT 1 FROM users u JOIN user_ai_credentials c
+                      ON c.username=u.username AND c.provider=u.ai_provider
+                    WHERE u.username=afr.username
+                  ) AS configured
+           FROM ai_fallback_requests afr
+           WHERE afr.username=? AND afr.status='pending'
+           ORDER BY afr.id LIMIT 1""",
+        (user["username"],),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+@app.post("/api/me/ai-fallback-request/{request_id}/retry")
+def retry_my_ai_fallback_request(request_id: int, request: Request):
+    """개인 키가 등록된 경우에만 해당 사용자의 중단된 턴을 재개한다."""
+    user = _current_user(request)
+    conn = get_conn()
+    row = conn.execute(
+        """SELECT afr.turn_id FROM ai_fallback_requests afr
+           JOIN users u ON u.username=afr.username
+           JOIN user_ai_credentials c
+             ON c.username=u.username AND c.provider=u.ai_provider
+           WHERE afr.id=? AND afr.username=? AND afr.status='pending'""",
+        (request_id, user["username"]),
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=400, detail="선택한 개인 API 키를 먼저 등록하세요")
+    now = _now()
+    conn.execute(
+        "UPDATE ai_fallback_requests SET status='retrying' WHERE id=?", (request_id,)
+    )
+    conn.execute(
+        """UPDATE pending_turns
+           SET status='pending', started_at=NULL, error=NULL, completed_at=NULL,
+               use_personal_ai=1
+           WHERE id=?""",
+        (row["turn_id"],),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.post("/api/me/ai-fallback-request/{request_id}/dismiss")
+def dismiss_my_ai_fallback_request(request_id: int, request: Request):
+    user = _current_user(request)
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT turn_id FROM ai_fallback_requests WHERE id=? AND username=? AND status='pending'",
+        (request_id, user["username"]),
+    ).fetchone()
+    if row:
+        conn.execute(
+            "UPDATE ai_fallback_requests SET status='dismissed', resolved_at=? WHERE id=?",
+            (_now(), request_id),
+        )
+        conn.execute(
+            "UPDATE pending_turns SET status='failed', error='personal_api_declined', completed_at=? WHERE id=?",
+            (_now(), row["turn_id"]),
+        )
+        conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 @app.put("/api/me/ai-providers/key")
@@ -2864,7 +2944,7 @@ def worker_pending(authorization: Optional[str] = Header(None)):
         (stale_before,),
     )
     row = conn.execute(
-        "SELECT id, persona_name, room_id, rerouted, created_at, restart_notice_sent, source_message_id "
+        "SELECT id, persona_name, room_id, rerouted, created_at, restart_notice_sent, source_message_id, use_personal_ai "
         "FROM pending_turns WHERE status = 'pending' ORDER BY id LIMIT 1"
     ).fetchone()
     if not row:
@@ -2886,13 +2966,14 @@ def worker_pending(authorization: Optional[str] = Header(None)):
     source_is_owner = False
     if row["source_message_id"] is not None:
         source = conn.execute(
-            """SELECT messages.sender, COALESCE(users.is_owner, 0) AS is_owner
+            """SELECT messages.sender, COALESCE(users.is_owner, 0) AS is_owner,
+                      users.username IS NOT NULL AS is_user
                FROM messages LEFT JOIN users ON users.username=messages.sender
                WHERE messages.id=?""",
             (row["source_message_id"],),
         ).fetchone()
         if source:
-            source_username = source["sender"]
+            source_username = source["sender"] if source["is_user"] else None
             source_is_owner = bool(source["is_owner"])
     # ★ "메시지 인물마다 다 띄우니까 정신없다, 방에 있는 툴파 중 대표로
     # 한 사람만 알려주자" 요청(2026-08-28) — 페르소나별(pending_turns)이
@@ -2922,6 +3003,7 @@ def worker_pending(authorization: Optional[str] = Header(None)):
         "source_message_id": row["source_message_id"],
         "source_username": source_username,
         "source_is_owner": source_is_owner,
+        "use_personal_ai": bool(row["use_personal_ai"]),
         "batch_size": batch_size,
         "room_active_count": room_active_count,
         # ★ "서버 업데이트로 껐다 켜는 도중에 메시지 보내면 반응이 끊긴다"
@@ -2966,6 +3048,38 @@ def worker_ai_credentials(username: str, authorization: Optional[str] = Header(N
         "configured": True, "is_owner": bool(user["is_owner"]),
         "provider": user["ai_provider"], "api_key": api_key,
     }
+
+
+@app.post("/api/worker/request_personal_ai")
+def worker_request_personal_ai(body: PersonalAiFallbackRequest, authorization: Optional[str] = Header(None)):
+    """공용 엔진 실패를 발신자 본인에게만 알릴 복구 요청으로 바꾼다."""
+    _check_worker_auth(authorization)
+    conn = get_conn()
+    row = conn.execute(
+        """SELECT p.id, p.room_id, p.persona_name, m.sender
+           FROM pending_turns p JOIN messages m ON m.id=p.source_message_id
+           WHERE p.id=?""",
+        (body.turn_id,),
+    ).fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="복구할 턴이 없습니다")
+    conn.execute(
+        "UPDATE pending_turns SET status='waiting_personal_ai', started_at=NULL, error='shared_ai_unavailable' WHERE id=?",
+        (body.turn_id,),
+    )
+    conn.execute(
+        """INSERT INTO ai_fallback_requests
+           (username,room_id,turn_id,persona_name,status,reason,created_at)
+           VALUES (?,?,?,?, 'pending', ?,?)
+           ON CONFLICT(turn_id) DO UPDATE SET status='pending', reason=excluded.reason,
+             resolved_at=NULL""",
+        (row["sender"], row["room_id"], body.turn_id, row["persona_name"],
+         (body.reason or "shared_ai_unavailable")[:100], _now()),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 class RestartNoticeMark(BaseModel):
@@ -3279,6 +3393,10 @@ def worker_complete(result: WorkerResult, authorization: Optional[str] = Header(
             (row["room_id"], row["persona_name"], result.reply, now),
         )
         conn.execute(
+            "UPDATE ai_fallback_requests SET status='done', resolved_at=? WHERE turn_id=?",
+            (now, result.turn_id),
+        )
+        conn.execute(
             "UPDATE pending_turns SET status = 'done', reply = ?, completed_at = ? WHERE id = ?",
             (result.reply, now, result.turn_id),
         )
@@ -3290,6 +3408,10 @@ def worker_complete(result: WorkerResult, authorization: Optional[str] = Header(
         conn.execute(
             "UPDATE pending_turns SET status = 'failed', error = ?, completed_at = ? WHERE id = ?",
             (result.error or "unknown error", now, result.turn_id),
+        )
+        conn.execute(
+            "UPDATE ai_fallback_requests SET status='failed', resolved_at=? WHERE turn_id=?",
+            (now, result.turn_id),
         )
         conn.commit()
     conn.close()

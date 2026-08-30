@@ -262,9 +262,9 @@ function initAccountChip() {
 // (2026-08-28) — 헤더의 내 계정 이름을 누르면 이름·사진을 바로 고칠 수 있는
 // 팝업이 뜬다. showUserProfilePopup(다른 사람 보기 전용, 초대 UI 포함)과는
 // 별개 — 이건 "나 자신"을 수정하는 폼이다.
-document.getElementById("account-name-btn").addEventListener("click", showMyProfileEditor);
+document.getElementById("account-name-btn").addEventListener("click", () => showMyProfileEditor());
 
-function showMyProfileEditor() {
+function showMyProfileEditor(options = {}) {
   const overlay = document.createElement("div");
   overlay.className = "profile-popup-overlay";
   const popup = document.createElement("div");
@@ -290,7 +290,7 @@ function showMyProfileEditor() {
       myAvatarUrl = body.avatar_url;
       overlay.remove();
       initAccountChip();
-      showMyProfileEditor();
+      showMyProfileEditor(options);
     } catch (e) {
       if (e.message !== "unauthorized" && e.message !== "forbidden") alert("업로드 실패");
     }
@@ -388,6 +388,14 @@ function showMyProfileEditor() {
             if (!res.ok) throw new Error(result.detail || "저장 실패");
             input.value = "";
             await loadAiConnections();
+            if (options.fallbackRequestId) {
+              await apiFetch("/api/me/ai-providers/selected", {
+                method: "PUT", headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({provider: provider.id}),
+              });
+              await retryPersonalAi(options.fallbackRequestId);
+              overlay.remove();
+            }
           } catch (error) { alert(error.message || "API 키를 저장하지 못했습니다"); }
           finally { save.disabled = false; save.textContent = "저장"; }
         });
@@ -431,6 +439,70 @@ function showMyProfileEditor() {
   overlay.appendChild(popup);
   document.body.appendChild(overlay);
 }
+
+let shownAiFallbackRequestId = null;
+
+async function retryPersonalAi(requestId) {
+  const response = await apiFetch(`/api/me/ai-fallback-request/${requestId}/retry`, {method: "POST"});
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.detail || "답변을 다시 요청하지 못했습니다");
+  shownAiFallbackRequestId = null;
+}
+
+function showPersonalAiFallbackPrompt(request) {
+  shownAiFallbackRequestId = request.id;
+  const overlay = document.createElement("div");
+  overlay.className = "profile-popup-overlay ai-fallback-overlay";
+  const popup = document.createElement("div");
+  popup.className = "profile-popup ai-fallback-popup";
+  const title = document.createElement("h2");
+  title.textContent = "개인 API로 답변을 계속할까요?";
+  const note = document.createElement("p");
+  note.textContent = `관리자 AI를 지금 사용할 수 없어 ${request.persona_name}의 답변이 멈췄습니다. 개인 API를 사용하면 해당 공급자 계정에 사용료와 한도가 적용됩니다.`;
+  const actions = document.createElement("div");
+  actions.className = "profile-popup-actions";
+  const continueBtn = document.createElement("button");
+  continueBtn.type = "button";
+  continueBtn.textContent = request.configured ? "내 API로 답변 계속" : "API 등록하고 계속";
+  continueBtn.addEventListener("click", async () => {
+    try {
+      if (request.configured) {
+        continueBtn.disabled = true;
+        await retryPersonalAi(request.id);
+        overlay.remove();
+      } else {
+        overlay.remove();
+        showMyProfileEditor({fallbackRequestId: request.id});
+      }
+    } catch (error) {
+      continueBtn.disabled = false;
+      alert(error.message || "답변을 다시 요청하지 못했습니다");
+    }
+  });
+  const laterBtn = document.createElement("button");
+  laterBtn.type = "button"; laterBtn.className = "secondary"; laterBtn.textContent = "나중에";
+  laterBtn.addEventListener("click", async () => {
+    await apiFetch(`/api/me/ai-fallback-request/${request.id}/dismiss`, {method: "POST"});
+    overlay.remove();
+  });
+  actions.append(continueBtn, laterBtn);
+  popup.append(title, note, actions);
+  overlay.appendChild(popup);
+  document.body.appendChild(overlay);
+}
+
+async function checkPersonalAiFallback() {
+  if (!myUsername || document.querySelector(".ai-fallback-overlay")) return;
+  try {
+    const response = await apiFetch("/api/me/ai-fallback-request");
+    const request = await response.json();
+    if (request && request.id !== shownAiFallbackRequestId) showPersonalAiFallbackPrompt(request);
+  } catch (error) {
+    if (error.message !== "unauthorized" && error.message !== "forbidden") console.error(error);
+  }
+}
+
+setInterval(checkPersonalAiFallback, 3000);
 
 // ★ 위와 같은 요청(2026-08-27) — 웹 푸시 구독 흐름. 버튼 상태(꺼짐/켜짐)는
 // 매번 실제 구독 여부(PushManager.getSubscription())로 판단한다 — 로컬
