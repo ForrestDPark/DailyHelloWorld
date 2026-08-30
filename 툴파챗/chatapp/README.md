@@ -1883,3 +1883,25 @@ Ferriss의 "Tools of Titans"라 그 저자를 우선 만들었다 — 책이 바
   인물" 페르소나와 같은 프로필 템플릿(유형: 현대 실존 인물)으로 생성. 그룹 필드는
   "독서지기"로 설정해뒀지만(향후 group_name 매칭 방식을 쓸 경우를 대비), 실제 방 소속은
   위 `room_invites`가 담당한다.
+
+## 독서지기 — 전체 독서 기록 검색 권한 (2026-08-30)
+
+"오늘 딱 펼쳐진 구간(오늘 읽은 페이지)만 보여서 여태까지 등장한 인물을 정확히
+나열하기 어렵다"는 독서지기 본인의 정직한 한계 인정에 이어 사용자가 "노션에 저장된
+모든 독서 내용 읽고 학습하도록 하고 막힘없이 이야기하게 해달라"고 요청. 매 턴
+live_state로 넣는 "오늘 읽은 내용"만으로는 과거 기록을 못 보므로, 전체 기록을 프롬프트에
+욱여넣는 대신(수십 권·수 MB라 비현실적) 손동주(홈 폴더 Read/Glob)와 같은 패턴으로
+검색 권한을 줬다.
+
+- `shift_alarm/sync_ebook_notion.py`를 다시 돌려 `~/.ebook_reader/notion_cache/`를
+  최신화했다(마지막 동기화가 2026-08-03에 멈춰 있어 그 뒤 한 달 치가 비어 있었음 — 이제
+  42개 책 전부 최신 반영, Tools of Titans 파일 안에서 오늘 읽은 2184~2226페이지·
+  Scott Adams·Tony Robbins 언급까지 확인).
+- `persona_worker.py`에 `EBOOK_READER_ADDENDUM`(폴더 구조 안내 + "지어내지 말고 못
+  찾았으면 못 찾았다고 답하라" 명시)과 `EBOOK_READER_DATA_DIR`(`~/.ebook_reader`)를
+  추가. 독서지기에게만 `allow_tools=["Read","Glob","Grep","WebSearch","WebFetch"]` +
+  `add_dirs=[~/.ebook_reader]`를 줘서 그 폴더 안(세션 JSON + Notion 캐시 JSON)만 읽기
+  전용으로 훑을 수 있게 했다 — 손동주·유이와 마찬가지로 쓰기 도구는 전혀 없음.
+- 파일이 많고 커서(캐시 42개, 세션 24개+) Grep으로 키워드부터 찾고 걸린 파일만 Read하도록
+  addendum에 명시. 응답이 여러 파일을 훑느라 오래 걸릴 수 있어 타임아웃도
+  `EBOOK_READER_TIMEOUT_SECONDS=300`(손동주와 동일)으로 늘렸다.

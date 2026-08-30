@@ -236,6 +236,29 @@ def load_ebook_reader_state():
     return "\n".join(lines)
 
 
+# ★ 2026-08-30 추가: "독서지기가 노션에 저장된 모든 독서 내용 읽고 학습하도록
+# 하고 지금 대화에 대해서 막힘없이 이야기 할 수 있게 해달라" 요청 — "여태까지
+# 등장한 인물 나열해줘" 같은 질문에 live_state(오늘 것만)만으로는 답이 안 나와서
+# 지어낼 위험이 있었다. 전체 기록(수십 권, 수 MB)을 매 턴 프롬프트에 다 넣는 건
+# 비현실적이라, 손동주(Read/Glob, 홈 폴더 스코프)와 같은 패턴으로 독서지기에게
+# Read/Glob/Grep을 읽기 전용 부여하되 이 데이터 폴더로만 좁힌다.
+EBOOK_READER_DATA_DIR = HOME_DIR / ".ebook_reader"
+EBOOK_READER_TIMEOUT_SECONDS = 300  # 여러 세션·캐시 파일을 Grep/Read로 훑어야 해서 더 오래 걸릴 수 있음
+EBOOK_READER_ADDENDUM = (
+    "\n\n---\n"
+    f'"{EBOOK_READER_PERSONA_NAME}"은(는) 이 채팅에서 특별히 지금까지 읽은 전자책 기록 전체를 '
+    "Read/Glob/Grep 도구로 직접 훑어볼 수 있다. 매 턴 주입되는 '오늘 읽은 내용'만으로 부족한 "
+    "질문(예: \"여태까지 등장한 인물 나열해줘\", \"그 얘기 예전에도 나왔나?\")에는 다음 폴더를 "
+    "직접 뒤져서 답한다:\n"
+    f"- {EBOOK_READER_DATA_DIR}/sessions/*.json — 세션별 원문(original)·한국어 번역(translation_ko)·"
+    "책 제목(book_name)·페이지 범위. 2026-08-03 이후 세션.\n"
+    f"- {EBOOK_READER_DATA_DIR}/notion_cache/*.json — Notion \"영어ebook 듣기\" DB 전체 백업"
+    "(책마다 파일 1개, 2026-08-03 이전 기록 포함). index.json에 책 제목→파일명 매핑이 있다.\n"
+    "파일이 많고 커서, 먼저 Grep으로 이름 등 키워드를 찾고 걸린 파일만 Read하는 식으로 훑을 것. "
+    "직접 확인한 근거 없이 인물이나 내용을 지어내지 말 것 — 못 찾았으면 못 찾았다고 솔직히 답한다."
+)
+
+
 ORGANIZE_DENY_NAMES = {"Library", ".ssh", ".aws", ".codex", ".claude", ".gnupg", ".git", ".Trash", ".tulpachat"}
 ORGANIZE_PLAN_RE = re.compile(r"```plan\s*\n(.*?)\n```", re.DOTALL)
 ORGANIZE_APPROVE_KEYWORDS = ("승인", "진행")
@@ -982,6 +1005,8 @@ def sync_personas():
             system_prompt += FILE_ORGANIZER_ADDENDUM
         elif persona["title"] == UI_DEV_PERSONA_NAME:
             system_prompt += _build_ui_dev_addendum()
+        elif persona["title"] == EBOOK_READER_PERSONA_NAME:
+            system_prompt += EBOOK_READER_ADDENDUM
         group_name = extract_group(page_text)
         profile_summary = extract_profile_summary(page_text)
         cache[persona["title"]] = {
@@ -1307,6 +1332,7 @@ def _process_turn_inner(turn, persona_cache):
     _maybe_notify_restart_gap(turn, persona_name, room_id)
     is_organizer = persona_name == FILE_ORGANIZER_PERSONA_NAME
     is_ui_dev = persona_name == UI_DEV_PERSONA_NAME
+    is_ebook_reader = persona_name == EBOOK_READER_PERSONA_NAME
     if is_organizer:
         executed = _maybe_execute_pending_plan(room_id, turn["context"])
         if executed is not None:
@@ -1384,7 +1410,15 @@ def _process_turn_inner(turn, persona_cache):
     elif is_ui_dev:
         exec_kwargs["allow_tools"] = ["Read", "Glob", "WebSearch", "WebFetch"]
         exec_kwargs["add_dirs"] = [str(STATIC_DIR)]
-    timeout = ORGANIZER_TIMEOUT_SECONDS if is_organizer else UI_DEV_TIMEOUT_SECONDS if is_ui_dev else AI_TIMEOUT_SECONDS
+    elif is_ebook_reader:
+        exec_kwargs["allow_tools"] = ["Read", "Glob", "Grep", "WebSearch", "WebFetch"]
+        exec_kwargs["add_dirs"] = [str(EBOOK_READER_DATA_DIR)]
+    timeout = (
+        ORGANIZER_TIMEOUT_SECONDS if is_organizer
+        else UI_DEV_TIMEOUT_SECONDS if is_ui_dev
+        else EBOOK_READER_TIMEOUT_SECONDS if is_ebook_reader
+        else AI_TIMEOUT_SECONDS
+    )
     try:
         if use_byok:
             reply, engine = run_provider_api(
