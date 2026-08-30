@@ -4345,6 +4345,14 @@ class ShiftAlarmApp(rumps.App):
         self.midnight_timer.start()
         self._last_checked_date = datetime.date.today()
 
+        # ★ 2026-08-30: "일일 루틴 체크리스트는 자정이 아니라 기상알람 이후부터
+        # 새 하루로 쳐달라"는 요청 — 자정 타이머와 별개로, 기상 알람 시각을
+        # 지나는 순간만 감지해서 그때 루틴만 초기화한다(_current_routine_date()
+        # 참고). 리마인더는 그대로 자정 기준(midnight_timer)을 쓴다.
+        self._last_routine_date = self._current_routine_date()
+        self.routine_date_timer = rumps.Timer(self._check_routine_date_boundary, 60)
+        self.routine_date_timer.start()
+
         # 근무별 "전자제품 전원 끄기" 알람 (1분마다 시각 체크)
         self._last_electronics_off_notified = None
         self.electronics_off_timer = rumps.Timer(self._check_electronics_off, 60)
@@ -4994,6 +5002,20 @@ class ShiftAlarmApp(rumps.App):
             self._maybe_notify_reminders()
             self.build_menu()
 
+    def _check_routine_date_boundary(self, _):
+        """1분마다 '일일 루틴' 기준 하루(기상 알람 시각 경계)가 바뀌었는지 확인.
+        자정 타이머(_check_midnight)와 달리 실제 기상 알람 시각을 지나는 순간에
+        걸리므로, 자정과 다른 시각에 루틴만 따로 초기화된다."""
+        current = self._current_routine_date()
+        if current == self._last_routine_date:
+            return
+        self._last_routine_date = current
+        threading.Thread(
+            target=self._sync_daily_checklist_to_notion,
+            args=(datetime.date.today(), get_today_reminders(self.schedule)),
+            daemon=True,
+        ).start()
+
     def _check_electronics_off(self, _):
         """1분마다 현재 근무 기준 '전자제품 전원 끄기' 시각인지 확인, 하루 한 번만 알림."""
         current = self.config.get("current_shift")
@@ -5195,6 +5217,36 @@ class ShiftAlarmApp(rumps.App):
 
     # ── 리마인더 (헬스장/엄마 전화/카톡 정리 등) ────────────────
 
+    def _todays_wake_alarm_time(self, d):
+        """d(휴무 포함) 근무 상태에 따른 기상 알람 시각을 {'hour','minute'}로
+        반환. 등록된 기상 알람이 없는 날(연속 휴무 사흘째 이상 등)은 None."""
+        shift = get_shift_for_date(self.schedule, d)
+        t = SHIFT_TIMES.get(shift)
+        if t:
+            return t
+        if shift == "휴무":
+            if _is_day_to_gy_off_day(self.schedule, d):
+                return DAY_TO_GY_OFF_ALARM_TIME
+            if _is_gy_to_swing_off_day(self.schedule, d):
+                return GY_TO_SWING_OFF_ALARM_TIME
+            if _is_gy_to_swing_off_day2(self.schedule, d):
+                return GY_TO_SWING_OFF_DAY2_ALARM_TIME
+        return None
+
+    def _current_routine_date(self):
+        """★ 2026-08-30: "일일 루틴 체크리스트는 기상알람 이후부터 체크안된
+        상태로 해달라(교대근무자라 자정이 아니라 기상알람 이후가 진짜 하루
+        시작)"는 요청 — 리마인더/근무표는 그대로 자정(달력 날짜) 기준을 쓰고,
+        일일 루틴 체크리스트의 "오늘"만 이 기준으로 판단한다. 오늘 기상 알람
+        시각이 아직 안 지났으면 아직 어제의 루틴 하루가 이어지는 중으로 본다.
+        기상 알람이 없는 날은 그냥 자정 기준(오늘)으로 취급한다."""
+        now = datetime.datetime.now()
+        today = now.date()
+        wake_time = self._todays_wake_alarm_time(today)
+        if wake_time and now.time() < datetime.time(wake_time["hour"], wake_time["minute"]):
+            return today - datetime.timedelta(days=1)
+        return today
+
     def _maybe_notify_reminders(self):
         """리마인더를 알리고, 리마인더 유무와 무관하게 오늘 체크리스트를 만든다."""
         today = datetime.date.today()
@@ -5211,8 +5263,11 @@ class ShiftAlarmApp(rumps.App):
         ).start()
 
     def _sync_daily_checklist_to_notion(self, today, todays):
-        """고정 루틴 하나를 매일 초기화하고, 조건부 리마인더만 날짜별로 기록한다."""
+        """고정 루틴 하나를 매일 초기화하고, 조건부 리마인더만 날짜별로 기록한다.
+        고정 루틴(routine_date_str)은 기상 알람 기준, 조건부 리마인더(date_str)는
+        그대로 달력 날짜 기준 — _current_routine_date() 주석 참고."""
         date_str = today.isoformat()
+        routine_date_str = self._current_routine_date().isoformat()
         token = _notion_keychain_token()
         if not token:
             return  # Notion 미설정은 정상 상태일 수 있음 — 조용히 건너뜀
@@ -5324,7 +5379,7 @@ class ShiftAlarmApp(rumps.App):
                     )
                     checked_by_label[label] = bool(block.get("to_do", {}).get("checked"))
 
-                date_changed = previous_date != date_str
+                date_changed = previous_date != routine_date_str
                 template_changed = (
                     self.config.get("daily_routine_template_version") != template_version
                 )
@@ -5357,7 +5412,7 @@ class ShiftAlarmApp(rumps.App):
                         f"blocks/{routine_id}", "PATCH",
                         {"toggle": {"rich_text": [{
                             "type": "text", "text": {
-                                "content": DAILY_ROUTINE_TOGGLE_PREFIX + date_str
+                                "content": DAILY_ROUTINE_TOGGLE_PREFIX + routine_date_str
                             },
                         }]}},
                     )
@@ -5368,7 +5423,7 @@ class ShiftAlarmApp(rumps.App):
                     "object": "block", "type": "toggle",
                     "toggle": {
                         "rich_text": [{"type": "text", "text": {
-                            "content": DAILY_ROUTINE_TOGGLE_PREFIX + date_str
+                            "content": DAILY_ROUTINE_TOGGLE_PREFIX + routine_date_str
                         }}],
                         "children": routine_blocks(),
                     },
@@ -5477,10 +5532,12 @@ class ShiftAlarmApp(rumps.App):
         return {}
 
     def _load_cached_daily_routine_state(self):
+        """루틴은 기상 알람 기준 날짜(routine_date)로 캐시 유효성을 판단한다
+        (_current_routine_date() 참고) — 리마인더용 "date" 필드와는 별개."""
         try:
             with open(CHECKLIST_STATE_CACHE_PATH, encoding="utf-8") as f:
                 cached = json.load(f)
-            if cached.get("date") == datetime.date.today().isoformat():
+            if cached.get("routine_date") == self._current_routine_date().isoformat():
                 return cached.get("routine_state", {})
         except (OSError, json.JSONDecodeError):
             pass
@@ -5495,9 +5552,10 @@ class ShiftAlarmApp(rumps.App):
         if not token:
             return
         date_str = datetime.date.today().isoformat()
+        routine_date_str = self._current_routine_date().isoformat()
         try:
             state = fetch_reminder_checklist_state(token, date_str)
-            routine_items = fetch_daily_routine_state(token, date_str)
+            routine_items = fetch_daily_routine_state(token, routine_date_str)
         except (urllib.error.HTTPError, urllib.error.URLError, OSError) as exc:
             print(f"⚠️ 체크리스트 상태 동기화 실패: {exc}")
             return
@@ -5562,6 +5620,7 @@ class ShiftAlarmApp(rumps.App):
                 json.dump({
                     "date": datetime.date.today().isoformat(),
                     "state": self._checklist_state,
+                    "routine_date": self._current_routine_date().isoformat(),
                     "routine_state": self._daily_routine_state,
                 }, f, ensure_ascii=False)
         except OSError:
@@ -5696,7 +5755,7 @@ class ShiftAlarmApp(rumps.App):
             token = _notion_keychain_token()
             if not token:
                 raise ValueError("Notion 연결 토큰을 찾지 못했습니다.")
-            update_all_daily_routine_items(token, datetime.date.today().isoformat(), labels)
+            update_all_daily_routine_items(token, self._current_routine_date().isoformat(), labels)
             sync_unchecked_checklist_index(token)
         except (urllib.error.HTTPError, urllib.error.URLError, OSError, ValueError) as exc:
             error = str(exc)
@@ -5725,7 +5784,7 @@ class ShiftAlarmApp(rumps.App):
                 if not token:
                     raise ValueError("Notion 연결 토큰을 찾지 못했습니다.")
                 update_daily_routine_item(
-                    token, datetime.date.today().isoformat(), label, checked
+                    token, self._current_routine_date().isoformat(), label, checked
                 )
                 sync_unchecked_checklist_index(token)
             except (urllib.error.HTTPError, urllib.error.URLError, OSError, ValueError) as exc:

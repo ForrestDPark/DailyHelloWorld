@@ -821,3 +821,12 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - 첫째날 자체의 18:00 기상 알람(51번 항목, `GY_TO_SWING_OFF_ALARM_TIME`)은 그대로 두고, 57번의 둘째날용 멜라토닌 타이머와 같은 패턴으로 "첫째날의 다음날 03:00" 알림을 별도 타이머(`_check_gy_to_swing_day1_melatonin_reminder`, `GY_TO_SWING_DAY1_MELATONIN_REMINDER_TIME`)로 추가했다.
 - 기존 둘째날 멜라토닌 타이머·상수·상태변수 이름에 `_day2_`를 붙여 명확히 구분(`_check_gy_to_swing_melatonin_reminder` → `_check_gy_to_swing_day2_melatonin_reminder`, `GY_TO_SWING_MELATONIN_REMINDER_TIME` → `GY_TO_SWING_DAY2_MELATONIN_REMINDER_TIME`, `_last_melatonin_reminder_notified` → `_last_day2_melatonin_reminder_notified`) — 첫째날용과 헷갈리지 않게.
 - 결과적으로 GY→Swing 전환 휴무 구간엔 알람이 총 4개: 첫째날 18:00 기상 → 둘째날 03:00 멜라토닌 → 둘째날 13:00 기상 → 셋째날 02:00 멜라토닌.
+
+## 59. 🌅 일일 루틴 체크리스트 리셋 기준을 자정 → 기상 알람 시각으로 변경 (★ 2026-08-30 추가)
+
+**사용자 요청**: "나 오늘 일일루틴 체크리스트 전체 체크 하기 전인데 왜 전부 체크되어있어? 체크리스트는 기상알람 이후에는 체크안된상태로 해줘 나는 교대근무자라서 기상알람 이후부터가 진짜 하루시작이거든."
+
+- **원인**: 일일 루틴 체크리스트는 지금까지 `_check_midnight`(자정 00:00에 날짜 변경 감지)가 트리거하는 `_sync_daily_checklist_to_notion()`에서만 초기화됐다. 교대근무자는 자정이 하루 중간에 걸리는 경우가 흔해서(예: 오늘처럼 휴무 둘째날 기상 알람이 13:00인 날), 자정엔 아직 전날 체크 상태(이미 다 체크됨)가 그대로 새 날짜 라벨로 넘어가버리는 게 아니라 — 정확히는 자정 시점에 "루틴 날짜"가 아직 전날로 판단되어 리셋을 건너뛰고, 그 뒤로는 다음 자정까지 다시 안 건드리는 구조라 기상 알람(13:00)이 지나도 전날 체크 상태가 계속 남아있었다.
+- **수정**: `_current_routine_date()`를 새로 만들어 "일일 루틴만의 오늘"을 계산한다 — 오늘 근무/휴무에 해당하는 기상 알람 시각(`_todays_wake_alarm_time()`: `SHIFT_TIMES` + `DAY_TO_GY_OFF_ALARM_TIME`/`GY_TO_SWING_OFF_ALARM_TIME`/`GY_TO_SWING_OFF_DAY2_ALARM_TIME` 재사용)을 아직 안 지났으면 "루틴 날짜"는 여전히 어제, 지났으면 오늘. 기상 알람이 없는 날(연속 휴무 사흘째 이상)은 그냥 자정 기준.
+- 자정 타이머와는 별개로 1분 주기 `_check_routine_date_boundary` 타이머를 새로 추가해 `_current_routine_date()`가 실제로 바뀌는 순간(=오늘의 기상 알람 시각)에 `_sync_daily_checklist_to_notion()`을 다시 불러 루틴만 리셋한다. **리마인더(조건부 알림)는 그대로 자정 기준을 유지** — 이번 요청은 일일 루틴 체크리스트에만 해당.
+- Notion 연동 함수 4곳(`fetch_daily_routine_state`/`update_daily_routine_item`/`update_all_daily_routine_items`가 쓰이는 `_fetch_checklist_state_thread`/`_update_daily_routine_thread`/`_check_all_daily_routine_thread`)과 로컬 캐시(`_load_cached_daily_routine_state`/`_save_checklist_state_cache`의 `routine_date` 필드)도 전부 이 "루틴 날짜" 기준으로 맞췄다 — 그동안 흩어져 있던 `datetime.date.today()` 호출들을 전부 `_current_routine_date()`로 교체.
