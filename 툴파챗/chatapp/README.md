@@ -1905,3 +1905,38 @@ live_state로 넣는 "오늘 읽은 내용"만으로는 과거 기록을 못 보
 - 파일이 많고 커서(캐시 42개, 세션 24개+) Grep으로 키워드부터 찾고 걸린 파일만 Read하도록
   addendum에 명시. 응답이 여러 파일을 훑느라 오래 걸릴 수 있어 타임아웃도
   `EBOOK_READER_TIMEOUT_SECONDS=300`(손동주와 동일)으로 늘렸다.
+
+## 페르소나 목소리로 메시지 읽어주기 (2026-08-30)
+
+"페르소나화 된 인물들의 목소리도 넣을 수 있나? 메시지 읽기 기능으로 그 페르소나의
+목소리로 읽어주면 좋을 것 같아"는 요청. 목소리 엔진(OpenAI 유료 TTS vs macOS 시스템
+음성 vs edge-tts)과 재생 위치(브라우저 vs 이 Mac)를 먼저 물어봤고, "OpenAI, 브라우저
+재생"으로 답을 받았다.
+
+- **작업 큐 패턴 재사용**: 프로필 이미지 자동 생성(`persona_image_jobs`)과 완전히 같은
+  구조로 `message_tts_jobs` 테이블(`message_id` UNIQUE — 같은 메시지 재요청 시 캐시된
+  파일 재사용, 재생성 안 함)을 추가했다. OpenAI API 키는 서버가 아니라 워커(이 Mac)에만
+  있으므로, 실제 TTS 호출도 이미지와 동일하게 워커가 전담한다.
+  - 사용자용: `POST /api/messages/{id}/tts`(요청, 이미 있으면 캐시 반환) /
+    `GET /api/messages/{id}/tts`(폴링) — 둘 다 `get_messages()`와 같은 방 접근 판단
+    (`_ensure_message_visible`로 추출)을 거친다. 페르소나 메시지만 대상(사용자 본인
+    메시지는 읽어주기 대상 아님).
+  - 워커용: `GET /api/worker/tts_jobs/pending`(claim, 5분 넘게 processing이면 재시도) /
+    `POST /api/worker/tts_jobs/complete`(결과 URL은 `/uploads/[A-Za-z0-9_.-]+` 형식 +
+    실제 파일 존재 검증 후 반영 — 이미지 잡과 동일한 안전장치).
+- **목소리 배정**: 페르소나 이름을 SHA-256 해시해 OpenAI 6개 목소리(alloy/echo/fable/
+  onyx/nova/shimmer) 중 하나로 고정 배정한다(매번 다른 목소리로 헷갈리지 않게, 같은
+  페르소나는 항상 같은 목소리). `gpt-4o-mini-tts` 모델의 `instructions` 파라미터에
+  페르소나의 프로필 요약(`profile_summary`)을 넣어 성격·말투를 살린 낭독을 시도한다.
+- **실측 — OpenAI 계정 크레딧 소진, 무료 폴백 자동 전환**: 실제로 돌려보니 프로필 이미지
+  자동 생성 때와 같은 계정이 크레딧 부족(`insufficient_quota`)으로 즉시 실패했다. 그
+  이미지 기능의 "OpenAI 실패 시 로컬 디퓨저로 자동 전환"과 똑같은 패턴으로,
+  `process_tts_job()`이 OpenAI 실패 시 무료 `edge-tts`(ebook_reader.py가 이미 쓰는
+  라이브러리, 이 Mac에 이미 설치돼 있음)로 자동 전환하도록 만들었다 — 한국어 목소리
+  8종(`ko-KR-SunHiNeural` 등, 이름에 `:edge`를 붙여 다른 해시 시드로 별도 배정)에서 고른다.
+  실제로 메시지 하나로 "OpenAI 실패 → edge-tts 전환 → 완료" 전체 경로를 확인했다
+  (`/uploads/tts_*.mp3`, 유효한 MP3 파일 생성 확인).
+- **프론트엔드**: 메시지 롱프레스/우클릭 메뉴(`openMessageMenu`, 반응·답장·복사 등과 같은
+  자리)에 페르소나 메시지에만 "🔊 읽어주기" 항목을 추가. 누르면 요청 후 최대 30초
+  동안 1.2초 간격으로 상태를 폴링하다가 완료되면 `Audio` 객체로 바로 재생한다. 실패·
+  타임아웃 시에만 알림을 띄운다(성공 시엔 조용히 재생만).

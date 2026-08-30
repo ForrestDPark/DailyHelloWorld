@@ -2507,6 +2507,101 @@ def get_messages(request: Request, room_id: str = GROUP_ROOM_ID, since_id: int =
     return messages
 
 
+def _ensure_message_visible(conn, message, username, is_owner_request):
+    """message_tts_jobs 트리거/조회 양쪽에서 재사용 — get_messages()의 방
+    접근 판단(1:1 방/커스텀 방/Notion 그룹 회의방)과 같은 기준을 메시지
+    한 건 단위로 적용한다. 안 보이면 HTTPException을 던진다."""
+    room_id = message["room_id"]
+    persona_owner_rows = conn.execute("SELECT name, owner_username FROM personas").fetchall()
+    persona_owner = {r["name"]: r["owner_username"] for r in persona_owner_rows}
+    persona_names = set(persona_owner)
+    if room_id in persona_names:
+        if not _can_access_persona_room(persona_owner[room_id], username, is_owner_request):
+            raise HTTPException(status_code=403, detail="이 메시지를 볼 수 없습니다")
+        return
+    is_custom, allowed, _room_owner = _custom_room_access(conn, room_id, username, is_owner_request)
+    if is_custom and not allowed:
+        raise HTTPException(status_code=403, detail="이 메시지를 볼 수 없습니다")
+    if (
+        not is_custom and room_id != GROUP_ROOM_ID and _is_notion_group_room(conn, room_id)
+        and not _group_room_allowed(conn, room_id, username, is_owner_request)
+    ):
+        raise HTTPException(status_code=403, detail="이 메시지를 볼 수 없습니다")
+
+
+@app.post("/api/messages/{message_id}/tts")
+def request_message_tts(message_id: int, request: Request):
+    """★ "페르소나화 된 인물들의 목소리도 넣을 수 있나? 메시지 읽기 기능으로
+    그 페르소나의 목소리로 읽어주면 좋을 것 같아" 요청(2026-08-30) — 실제 TTS
+    생성(OpenAI API 호출)은 워커(이 Mac)가 담당한다(OPENAI_API_KEY가 서버에는
+    없음, 이미지 자동 생성과 같은 원칙). 여기서는 작업을 큐에 넣거나(없으면)
+    기존 결과를 그대로 돌려준다 — message_id에 UNIQUE라 같은 메시지를 여러 번
+    눌러도 재생성하지 않고 캐시된 파일을 재사용한다."""
+    if not getattr(request.state, "can_write", True):
+        raise HTTPException(status_code=403, detail="읽기 전용 계정입니다")
+    user = getattr(request.state, "user", None)
+    username = user["username"] if user else None
+    is_owner_request = user["is_owner"] if user else True
+    conn = get_conn()
+    message = conn.execute(
+        "SELECT id, room_id, sender FROM messages WHERE id = ?", (message_id,)
+    ).fetchone()
+    if not message:
+        conn.close()
+        raise HTTPException(status_code=404, detail="메시지를 찾을 수 없습니다")
+    is_persona = conn.execute(
+        "SELECT 1 FROM personas WHERE name = ?", (message["sender"],)
+    ).fetchone()
+    if not is_persona:
+        conn.close()
+        raise HTTPException(status_code=400, detail="페르소나 메시지만 읽어줄 수 있습니다")
+    try:
+        _ensure_message_visible(conn, message, username, is_owner_request)
+    except HTTPException:
+        conn.close()
+        raise
+    existing = conn.execute(
+        "SELECT status, result_url, error FROM message_tts_jobs WHERE message_id = ?", (message_id,)
+    ).fetchone()
+    if existing:
+        conn.close()
+        return {"status": existing["status"], "result_url": existing["result_url"], "error": existing["error"]}
+    conn.execute(
+        "INSERT INTO message_tts_jobs (message_id, persona_name, status, created_at) VALUES (?, ?, 'pending', ?)",
+        (message_id, message["sender"], _now()),
+    )
+    conn.commit()
+    conn.close()
+    return {"status": "pending", "result_url": None, "error": None}
+
+
+@app.get("/api/messages/{message_id}/tts")
+def get_message_tts(message_id: int, request: Request):
+    """프론트가 요청 후 짧게 폴링해서 결과(URL)를 받아간다."""
+    user = getattr(request.state, "user", None)
+    username = user["username"] if user else None
+    is_owner_request = user["is_owner"] if user else True
+    conn = get_conn()
+    message = conn.execute(
+        "SELECT id, room_id FROM messages WHERE id = ?", (message_id,)
+    ).fetchone()
+    if not message:
+        conn.close()
+        raise HTTPException(status_code=404, detail="메시지를 찾을 수 없습니다")
+    try:
+        _ensure_message_visible(conn, message, username, is_owner_request)
+    except HTTPException:
+        conn.close()
+        raise
+    row = conn.execute(
+        "SELECT status, result_url, error FROM message_tts_jobs WHERE message_id = ?", (message_id,)
+    ).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="아직 읽어주기가 요청되지 않았습니다")
+    return {"status": row["status"], "result_url": row["result_url"], "error": row["error"]}
+
+
 class ReadStateUpdate(BaseModel):
     room_id: str
     last_message_id: int
@@ -3352,6 +3447,69 @@ def worker_complete_image_job(body: WorkerImageJobResult, authorization: Optiona
         conn.execute(
             "UPDATE persona_image_jobs SET status='failed', error=?, completed_at=? WHERE id=?",
             ((body.error or "이미지 생성 실패")[:1000], _now(), body.job_id),
+        )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+class WorkerTtsJobResult(BaseModel):
+    job_id: int
+    url: Optional[str] = None
+    error: Optional[str] = None
+
+
+@app.get("/api/worker/tts_jobs/pending")
+def worker_pending_tts_job(authorization: Optional[str] = Header(None)):
+    _check_worker_auth(authorization)
+    conn = get_conn()
+    # TTS는 짧아서 보통 몇 초면 끝난다 — 이미지(15분)보다 훨씬 짧게, 5분
+    # 넘게 processing인 건 워커가 중간에 죽은 걸로 보고 재시도한다.
+    stale_before = (
+        datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=5)
+    ).isoformat(timespec="seconds")
+    conn.execute(
+        "UPDATE message_tts_jobs SET status='pending', started_at=NULL WHERE status='processing' AND started_at < ?",
+        (stale_before,),
+    )
+    row = conn.execute(
+        """SELECT j.id, j.message_id, j.persona_name, m.content
+             FROM message_tts_jobs j JOIN messages m ON m.id = j.message_id
+            WHERE j.status = 'pending' ORDER BY j.id LIMIT 1"""
+    ).fetchone()
+    if not row:
+        conn.close()
+        return None
+    changed = conn.execute(
+        "UPDATE message_tts_jobs SET status='processing', started_at=? WHERE id=? AND status='pending'",
+        (_now(), row["id"]),
+    ).rowcount
+    conn.commit()
+    conn.close()
+    return dict(row) if changed else None
+
+
+@app.post("/api/worker/tts_jobs/complete")
+def worker_complete_tts_job(body: WorkerTtsJobResult, authorization: Optional[str] = Header(None)):
+    _check_worker_auth(authorization)
+    if body.url and not re.fullmatch(r"/uploads/[A-Za-z0-9_.-]+", body.url):
+        raise HTTPException(status_code=400, detail="허용되지 않은 오디오 URL입니다")
+    if body.url and not (UPLOADS_DIR / Path(body.url).name).is_file():
+        raise HTTPException(status_code=400, detail="생성된 오디오 파일을 찾을 수 없습니다")
+    conn = get_conn()
+    row = conn.execute("SELECT status FROM message_tts_jobs WHERE id = ?", (body.job_id,)).fetchone()
+    if not row or row["status"] != "processing":
+        conn.close()
+        raise HTTPException(status_code=404, detail="처리 중인 TTS 작업이 아닙니다")
+    if body.url:
+        conn.execute(
+            "UPDATE message_tts_jobs SET status='done', result_url=?, completed_at=? WHERE id=?",
+            (body.url, _now(), body.job_id),
+        )
+    else:
+        conn.execute(
+            "UPDATE message_tts_jobs SET status='failed', error=?, completed_at=? WHERE id=?",
+            ((body.error or "TTS 생성 실패")[:1000], _now(), body.job_id),
         )
     conn.commit()
     conn.close()

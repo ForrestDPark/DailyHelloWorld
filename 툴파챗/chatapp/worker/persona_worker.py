@@ -12,6 +12,7 @@
 Services 앱에 위임하는 것과 같은 이유로, "민감한 작업은 신뢰된 로컬 프로세스가
 전담"하는 이 저장소의 기존 패턴을 그대로 따른다."""
 import json
+import asyncio
 import base64
 import datetime
 import html
@@ -29,6 +30,8 @@ import urllib.request
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 from threading import Lock, Thread
+
+import edge_tts  # ★ 2026-08-30: OpenAI TTS 크레딧 소진 시 무료 폴백용(아래 _generate_edge_tts)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ai_exec import run_ai_exec, run_provider_api  # noqa: E402
@@ -886,6 +889,117 @@ def process_automatic_image_job(job):
         print(f"⚠️ 이미지 작업 완료 보고 실패: {exc}", flush=True)
 
 
+# ★ "페르소나화 된 인물들의 목소리도 넣을 수 있나? 메시지 읽기 기능으로 그
+# 페르소나의 목소리로 읽어주면 좋을 것 같아" 요청(2026-08-30) — OpenAI TTS를
+# 골랐다(감정·성격을 살릴 수 있는 instructions 스티어링 지원). 페르소나마다
+# 매번 다른 목소리가 나오면 혼란스러우니 이름을 해시해 고정된 목소리 하나를
+# 배정한다(같은 페르소나는 항상 같은 목소리). 이미지 자동 생성과 같은 이유로
+# 서버가 아니라 이 워커(OPENAI_API_KEY 보유)가 실제 API 호출을 전담한다.
+TTS_MODEL = "gpt-4o-mini-tts"
+TTS_VOICE_POOL = ("alloy", "echo", "fable", "onyx", "nova", "shimmer")
+TTS_MAX_INPUT_CHARS = 3500  # OpenAI TTS 입력 길이 제한(4096자) 여유를 둠
+
+
+def _voice_for_persona(persona_name):
+    digest = hashlib.sha256(persona_name.encode("utf-8")).digest()
+    return TTS_VOICE_POOL[digest[0] % len(TTS_VOICE_POOL)]
+
+
+def _generate_openai_tts(text, persona_name, persona_cache):
+    if not OPENAI_API_KEY:
+        raise RuntimeError("OPENAI_API_KEY가 워커에 설정되지 않았습니다")
+    voice = _voice_for_persona(persona_name)
+    profile_summary = (persona_cache.get(persona_name) or {}).get("profile_summary") or ""
+    instructions = (
+        f"'{persona_name}' 캐릭터의 성격과 말투에 맞게 감정을 담아 한국어로 자연스럽게 "
+        f"읽어주세요. 참고 프로필: {profile_summary}"
+    )[:600]
+    payload = json.dumps({
+        "model": TTS_MODEL,
+        "voice": voice,
+        "input": text[:TTS_MAX_INPUT_CHARS],
+        "instructions": instructions,
+        "response_format": "mp3",
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.openai.com/v1/audio/speech",
+        data=payload,
+        headers={"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as response:
+            raw = response.read()
+    except urllib.error.HTTPError as exc:
+        body_text = exc.read().decode("utf-8", errors="replace")
+        try:
+            error_message = json.loads(body_text).get("error", {}).get("message", "")
+        except (json.JSONDecodeError, AttributeError):
+            error_message = ""
+        raise RuntimeError(error_message or f"HTTP {exc.code}: {body_text[:300]}") from exc
+    filename = f"tts_{int(time.time())}_{os.urandom(4).hex()}.mp3"
+    (UPLOADS_DIR / filename).write_bytes(raw)
+    return f"/uploads/{filename}"
+
+
+# ★ 2026-08-30: 실측 — OpenAI TTS가 계정 크레딧 소진(insufficient_quota)으로
+# 바로 실패했다(이미지 자동 생성과 같은 계정, 같은 증상). 프로필 이미지 때와
+# 같은 패턴으로 무료 로컬 대안(edge-tts, ebook_reader.py가 이미 씀)으로
+# 자동 전환한다. 페르소나별 목소리 배정도 같은 해시 방식을 쓰되, OpenAI
+# 목소리 이름과 값이 겹치지 않게 문자열에 ":edge"를 붙여 시드를 다르게 한다.
+EDGE_TTS_VOICE_POOL = (
+    "ko-KR-SunHiNeural", "ko-KR-InJoonNeural", "ko-KR-BongJinNeural",
+    "ko-KR-GookMinNeural", "ko-KR-JiMinNeural", "ko-KR-SeoHyeonNeural",
+    "ko-KR-SoonBokNeural", "ko-KR-YuJinNeural",
+)
+
+
+def _voice_for_persona_edge(persona_name):
+    digest = hashlib.sha256(f"{persona_name}:edge".encode("utf-8")).digest()
+    return EDGE_TTS_VOICE_POOL[digest[0] % len(EDGE_TTS_VOICE_POOL)]
+
+
+def _generate_edge_tts(text, persona_name):
+    voice = _voice_for_persona_edge(persona_name)
+    filename = f"tts_{int(time.time())}_{os.urandom(4).hex()}.mp3"
+    path = UPLOADS_DIR / filename
+
+    async def _save():
+        communicate = edge_tts.Communicate(text[:TTS_MAX_INPUT_CHARS], voice)
+        await communicate.save(str(path))
+
+    asyncio.run(_save())
+    return f"/uploads/{filename}"
+
+
+def process_tts_job(job, persona_cache):
+    engine = "openai"
+    openai_error = None
+    try:
+        url = _generate_openai_tts(job["content"], job["persona_name"], persona_cache)
+    except Exception as exc:  # noqa: BLE001 — 무료 edge-tts로 넘어가기 위한 의도적 전체 캐치
+        openai_error = exc
+        engine = "edge"
+        print(f"⚠️ {job.get('persona_name')} OpenAI TTS 실패, edge-tts로 전환: {exc}", flush=True)
+        try:
+            url = _generate_edge_tts(job["content"], job["persona_name"])
+        except Exception as edge_exc:  # noqa: BLE001 — 실패를 영속화하고 워커는 계속 돈다
+            try:
+                _api("/api/worker/tts_jobs/complete", "POST", {
+                    "job_id": job["id"],
+                    "error": f"OpenAI 실패({openai_error}) / edge-tts도 실패({edge_exc})"[:1000],
+                })
+            except Exception as report_exc:  # noqa: BLE001
+                print(f"⚠️ TTS 작업 실패 상태 저장도 실패: {report_exc}", flush=True)
+            print(f"⚠️ {job.get('persona_name')} TTS 생성 실패(OpenAI+edge-tts 모두): {edge_exc}", flush=True)
+            return
+    try:
+        _api("/api/worker/tts_jobs/complete", "POST", {"job_id": job["id"], "url": url})
+        print(f"🔊 {job['persona_name']} 메시지 #{job['message_id']} TTS 생성 완료({engine})", flush=True)
+    except Exception as exc:  # noqa: BLE001
+        print(f"⚠️ TTS 작업 완료 보고 실패: {exc}", flush=True)
+
+
 def _generate_image(prompt, source=None):
     if not prompt.strip():
         raise RuntimeError("이미지 생성 프롬프트가 비어 있습니다")
@@ -1691,6 +1805,14 @@ def main():
                 image_job = None
             if image_job:
                 process_automatic_image_job(image_job)
+                continue
+            try:
+                tts_job = _api("/api/worker/tts_jobs/pending")
+            except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+                print(f"⚠️ TTS 작업 조회 실패: {exc}", flush=True)
+                tts_job = None
+            if tts_job:
+                process_tts_job(tts_job, persona_cache)
                 continue
 
         server_failed = False

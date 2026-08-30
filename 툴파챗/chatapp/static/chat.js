@@ -2329,6 +2329,35 @@ async function notifyQaResolution(message, sourceMessageId = message.id) {
   }
 }
 
+// ★ "페르소나화 된 인물들의 목소리도 넣을 수 있나? 메시지 읽기 기능으로 그
+// 페르소나의 목소리로 읽어주면 좋을 것 같아" 요청(2026-08-30) — 실제 생성은
+// 워커(OpenAI TTS)가 하므로 바로 재생 못 하고 짧게 폴링한다. 같은 메시지를
+// 다시 누르면 서버가 캐시된 결과를 바로 돌려주므로(message_tts_jobs UNIQUE)
+// 재생성 없이 즉시 재생된다.
+async function playMessageTts(message) {
+  // addAction()은 클릭 즉시 메뉴를 닫아 버튼 자체가 사라지므로(다른 액션과
+  // 동일한 동작), 버튼 상태 대신 완료/실패 시점에만 알림을 띄운다.
+  try {
+    const res = await apiFetch(`/api/messages/${message.id}/tts`, { method: "POST" });
+    let job = await res.json();
+    const deadline = Date.now() + 30000;
+    while (job.status !== "done" && job.status !== "failed" && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      const pollRes = await apiFetch(`/api/messages/${message.id}/tts`);
+      job = await pollRes.json();
+    }
+    if (job.status === "done" && job.result_url) {
+      await new Audio(job.result_url).play().catch(() => {});
+    } else if (job.status === "failed") {
+      alert(`읽어주기 실패: ${job.error || "알 수 없는 오류"}`);
+    } else {
+      alert("읽어주기 시간이 초과됐어요. 잠시 후 다시 시도해주세요.");
+    }
+  } catch (e) {
+    if (e.message !== "unauthorized" && e.message !== "forbidden") alert("읽어주기 요청 실패");
+  }
+}
+
 function openMessageMenu(message, hostEl, x, y) {
   closeMessageMenu();
   const menu = document.createElement("div"); menu.className = "message-action-menu";
@@ -2343,6 +2372,7 @@ function openMessageMenu(message, hostEl, x, y) {
   addAction("선택 복사", () => openSelectiveCopy(message.content));
   addAction("복사", () => navigator.clipboard.writeText(message.content).catch(() => {}));
   addAction("프로필 보기", () => showProfilePopup(message));
+  if (message.is_persona) addAction("🔊 읽어주기", () => playMessageTts(message));
   const relayedQaSource = message.sender === "QA요정"
     ? Number(message.content.match(/원문: QA요정 방 메시지 #(\d+)/)?.[1] || 0)
     : 0;

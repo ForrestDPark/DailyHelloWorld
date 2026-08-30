@@ -174,6 +174,18 @@ def init_db():
             completed_at TEXT,
             FOREIGN KEY (persona_name) REFERENCES personas(name) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS message_tts_jobs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            message_id INTEGER NOT NULL UNIQUE,
+            persona_name TEXT NOT NULL,
+            status TEXT NOT NULL,
+            result_url TEXT,
+            error TEXT,
+            created_at TEXT NOT NULL,
+            started_at TEXT,
+            completed_at TEXT,
+            FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+        );
         """
     )
     _ensure_column(conn, "messages", "room_id", "TEXT NOT NULL DEFAULT 'group'")
