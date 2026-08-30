@@ -13,9 +13,10 @@
 - Pet 드래그(이미지·말풍선 어디서 시작해도 동작): 위치 이동 및 `~/.shift_alarm_config.json`에 좌표 저장
 - Pet 우클릭: 숨김
 - 배경 없는 이미지 + 꼬리 달린 말풍선(alpha 0.55) 구조(★ 2026-08-29 53번 항목) — 말풍선 안 텍스트는 근무·저장공간·오늘 리마인더·AI 사용량[·열 상태] 카드를 30초 간격으로 자동 순환 표시한다.
-- 메뉴바 `기타 → 🐾 Shift Pet 표시/숨기기`: 숨긴 Pet 복구
+- 메뉴바 `기타 → 🐾 Alarm Pet 켜기/끄기`: 체크 상태로 표시 여부 확인 및 숨긴 Pet 복구
 - 일반 Space에는 따라오지만 macOS native 전체화면 위에는 억지로 겹치지 않는다.
 - `assets/shift_alarm_pet.png`가 있으면 사용하고, 없으면 로봇 이모지를 표시한다.
+- Pet 단위 테스트: `cd /Users/forrestdpark/Desktop/PDG/DailyHelloWorld_/shift_alarm && /opt/anaconda3/bin/python3 -m unittest discover -s . -p 'test_shift_alarm_pet.py'`
   - **★ 2026-08-07 KeepAlive 추가**: 예전엔 `KeepAlive: false`라 앱이 정말로 죽으면(크래시 등) launchd가 자동으로 다시 안 띄워줘서, 수동으로 kickstart 해줄 때까지 메뉴바 아이콘이 계속 사라진 채로 남는 문제가 있었다. `KeepAlive: {SuccessfulExit: false}`로 바꿔서 **비정상 종료(크래시/kill)일 때만** 자동 재시작하고, 메뉴의 "종료"로 정상 종료(exit 0, `rumps.quit_application()`)했을 땐 재시작 안 함. `StandardOutPath`/`StandardErrorPath`를 `~/Library/Logs/shift_alarm.{out,err}.log`로 지정해서 다음에 또 죽으면 원인을 사후에 확인할 수 있게 했다. plist를 고친 뒤엔 `launchctl kickstart -k`만으로는 반영이 안 되고(플리스트 자체를 다시 안 읽음) `launchctl bootout gui/$(id -u)/com.shiftalarm.menubar && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.shiftalarm.menubar.plist`로 재로드해야 한다.
 - 사용자는 3교대(Day/Swing/GY) + 휴무로 도는 D조 근무자.
 
@@ -764,8 +765,8 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 **사용자 요청**: "codex pet처럼 클릭하면 움직인다던가 하는식으로 좀 ui 꾸미면좋겠고 이거 사각형이 좀 반투명 했으면 좋겠어 그리고 클릭하면 shift alarm의 항목이 보여서 클릭이 가능했으면 좋겠어."
 
 - **반투명**: 배경 사각형 alpha를 0.92 → 0.55로 낮춤(`drawRect_`).
-- **클릭 애니메이션**: `ShiftAlarmPet._bounce()` — `NSAnimationContext.runAnimationGroup_completionHandler_`로 panel의 frame을 0.08초 만에 살짝(가로+8/세로+6) 부풀렸다가, 완료 콜백에서 0.10초 만에 원래 크기로 되돌린다. 저장된 좌표(`petDidMove()`가 다루는 `pet_x`/`pet_y`)는 건드리지 않는다 — 애니메이션이 끝나면 정확히 원래 frame으로 복귀.
-- **클릭 시 실제 메뉴 표시**: 기존엔 클릭하면 `show_status()`(현재 설정 알림창)만 떴는데, 이제 `self.app.menu._menu`(rumps가 관리하는 실제 NSMenu — 메뉴바 아이콘의 그 메뉴와 완전히 동일한 객체)를 `NSMenu.popUpMenuPositioningItem_atLocation_inView_`로 Pet 바로 위에 띄운다. 메뉴 안의 모든 항목(리마인더 체크, 자막 추출 실행 등)이 그대로 클릭 가능해졌다. "현재 설정 확인"은 `기타` 하위메뉴에 남아있어 여전히 접근 가능.
+- **클릭 애니메이션(후속 개선)**: 패널 전체를 키우던 `_bounce()`는 제거했다. 이미지 클릭 시 캐릭터 그림만 약 0.23초 동안 점프·좌우 흔들기 후 원위치하고 말풍선과 패널 좌표는 고정된다.
+- **클릭 시 실제 메뉴 표시**: 기존엔 클릭하면 `show_status()`(현재 설정 알림창)만 떴는데, 이제 `self.app.menu._menu`(rumps가 관리하는 실제 NSMenu — 메뉴바 아이콘의 그 메뉴와 완전히 동일한 객체)를 화면 여유에 따라 Pet 위/아래에 자동 배치한다. 메뉴 안의 모든 항목(리마인더 체크, 자막 추출 실행 등)이 그대로 클릭 가능해졌다. "현재 설정 확인"은 `기타` 하위메뉴에 남아있어 여전히 접근 가능.
 
 ## 52. 🎬 운동용 영상만 추출도 완료 알림 추가 (★ 2026-08-29 추가)
 
@@ -779,6 +780,9 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 
 - **배경 제거 + 말풍선 분리**: 이미지+텍스트를 한 사각형에 감싸던 기존 디자인을 버렸다. 이제 이미지(`IMAGE_RECT`, 배경 없이 그대로)와 말풍선(`BUBBLE_RECT`, 꼬리 달린 둥근 사각형)을 완전히 분리해서 그린다. Pet 전체 크기도 326×76 → 210×120(이미지 아래, 말풍선 위)으로 바꿨다.
 - **이미지 전용 클릭 판정**: `mouseUp_`이 `event.locationInWindow()`를 뷰 좌표로 변환해 `IMAGE_RECT` 안에서 뗀 클릭일 때만 `petWasClicked()`(메뉴 팝업)를 부른다 — 말풍선이나 빈 공간을 눌러도 반응 안 함. 드래그는 기존대로 어디서 시작해도 동작(사용성 유지).
+- **명시적 닫기**: 말풍선 오른쪽 위 `×` 또는 우클릭으로 현재 실행 세션에서만 숨긴다. `×` 그림은 작지만 실제 클릭 표적은 24×24다. 숨김을 설정 파일에 영구 저장하지 않아 앱을 재시작하면 반드시 복구된다. 메뉴 `기타 → 🐾 Alarm Pet 켜기/끄기`의 체크 상태로 현재 표시 여부를 확인하고 다시 켤 수 있다.
+- **연속 클릭 보호**: 이미지 애니메이션 진행 중에는 추가 클릭을 무시하고 마지막 원위치 프레임에서 잠금을 해제해 애니메이션과 NSMenu가 중첩되지 않는다. 앱 종료 시 카드 순환 `NSTimer`도 `invalidate()`한다.
+- **메뉴 위치 보정**: Pet가 있는 모니터의 `screen.visibleFrame`과 `NSMenu.size()`를 사용한다. 화면 아래쪽 Pet은 위로, 위쪽 Pet은 아래로 메뉴를 열고 좌우 모서리·Dock·다중 모니터에서도 메뉴 anchor를 보이는 영역 안으로 제한한다.
 - **카드 순환**: shift_alarm이 `(제목, 내용)` 카드 리스트(근무·저장공간·오늘 리마인더·AI 사용량·[열 상태 있을 때만])를 `_update_title()`에서 만들어 `shift_pet.update(cards)`로 넘긴다. Pet 안의 `NSTimer`(`CARD_ROTATE_SECONDS=30`)가 30초마다 다음 카드로 자동으로 넘긴다 — 말풍선 한 칸엔 두 줄만 들어가서 여러 정보를 동시에 못 보여주던 문제 해결. `ShiftAlarmPet.update()`의 시그니처가 `(headline, usage)` → `(cards)`로 바뀌었다(기존 51번 항목의 2-인자 시그니처 폐기).
 
 ## 54. 💡🎵 Hue 거실 불끄기 시 재생 중인 음악 일시정지 (★ 2026-08-29 추가)
@@ -830,3 +834,13 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - **수정**: `_current_routine_date()`를 새로 만들어 "일일 루틴만의 오늘"을 계산한다 — 오늘 근무/휴무에 해당하는 기상 알람 시각(`_todays_wake_alarm_time()`: `SHIFT_TIMES` + `DAY_TO_GY_OFF_ALARM_TIME`/`GY_TO_SWING_OFF_ALARM_TIME`/`GY_TO_SWING_OFF_DAY2_ALARM_TIME` 재사용)을 아직 안 지났으면 "루틴 날짜"는 여전히 어제, 지났으면 오늘. 기상 알람이 없는 날(연속 휴무 사흘째 이상)은 그냥 자정 기준.
 - 자정 타이머와는 별개로 1분 주기 `_check_routine_date_boundary` 타이머를 새로 추가해 `_current_routine_date()`가 실제로 바뀌는 순간(=오늘의 기상 알람 시각)에 `_sync_daily_checklist_to_notion()`을 다시 불러 루틴만 리셋한다. **리마인더(조건부 알림)는 그대로 자정 기준을 유지** — 이번 요청은 일일 루틴 체크리스트에만 해당.
 - Notion 연동 함수 4곳(`fetch_daily_routine_state`/`update_daily_routine_item`/`update_all_daily_routine_items`가 쓰이는 `_fetch_checklist_state_thread`/`_update_daily_routine_thread`/`_check_all_daily_routine_thread`)과 로컬 캐시(`_load_cached_daily_routine_state`/`_save_checklist_state_cache`의 `routine_date` 필드)도 전부 이 "루틴 날짜" 기준으로 맞췄다 — 그동안 흩어져 있던 `datetime.date.today()` 호출들을 전부 `_current_routine_date()`로 교체.
+- 이 작업 도중 실제로 Notion에서 오늘치 19개 항목이 전부 체크된 채로 남아있는 걸 확인해서(리셋이 안 걸렸던 증거) 수동으로 전부 체크 해제했다.
+
+## 60. 🔓 Elmedia 관련 동작마다 뜨는 "bin이(가) 다른 앱의 데이터에 접근" 팝업 해결 (★ 2026-08-30 추가)
+
+**사용자 요청**: "shift alarm 에서 elmedia 클릭하면 왜 'bin' would like to access data from other apps. 라고 맨날나와? 이거 자동으로 allow 되게 할수없나?"
+
+- **원인**: `_is_elmedia_playing()`(휴 거실 불끄기 시 음악 일시정지 판단용, 54번 항목)과 `write_alarm_script()`가 생성하는 알람 자가검증 셸 스크립트 둘 다, launchd로 뜬 anaconda python3(`/opt/anaconda3/bin/python3`)/그 알람 셸에서 직접 `osascript -e 'tell application "System Events" to tell process "Elmedia Video Player" ...'`를 보내고 있었다. 8-1번(StyleEbookTerminal.app)·26번(iCloudSync.app) 항목과 완전히 같은 원인 — launchd 백그라운드 프로세스는 macOS Automation(`kTCCServiceAppleEvents`) 신원이 안정적으로 잡히지 않아("bin"처럼 표시) 한 번 허용해도 저장되지 않고 클릭할 때마다(그리고 알람이 울릴 때마다) 다시 뜬다.
+- **수정**: 같은 해법 재사용 — `osacompile`로 별도 컴파일 앱 `shift_alarm/ElmediaStatusHelper.app`(`com.shiftalarm.elmediastatus`, `iCloudSync.app`과 동일 레시피: `osacompile` → `plutil -insert CFBundleIdentifier` → `plutil -insert LSUIElement -bool true` → `codesign --force --deep -s -`)을 만들어, Elmedia 창의 정적 텍스트를 읽어 `~/.shift_alarm_elmedia_status.txt`에 써주는 역할만 위임한다. 파이썬(`_is_elmedia_playing()`)과 알람 셸 스크립트 양쪽 다 `open -na ElmediaStatusHelper.app`으로 비동기 실행 후 그 상태 파일을 최대 5초(셸은 6초) 폴링해서 읽는 방식으로 바꿨다.
+- `open -na`(Launch Services)로 여는 건 이 앱 자체(고정 경로·서명)로 신원이 안정되므로, 최초 1회만 허용하면 그 뒤로는 팝업이 다시 안 뜬다(8-1번 항목과 동일 메커니즘). 실제로 이번 세션에서 첫 실행 시 `TCC.db`에 `kTCCServiceAppleEvents / com.shiftalarm.elmediastatus / auth_value=2(허용)`로 기록된 것과, 이후 호출에서 팝업 없이 바로 Elmedia 창 상태를 읽어오는 것까지 확인했다.
+- `ElmediaStatusHelper.app`을 재빌드하려면: `osacompile -o ElmediaStatusHelper.app <script>.applescript` → `plutil -insert CFBundleIdentifier -string com.shiftalarm.elmediastatus Contents/Info.plist` → `plutil -insert LSUIElement -bool true Contents/Info.plist` → `codesign --force --deep -s - ElmediaStatusHelper.app` (Info.plist 수정 후 반드시 재서명 — iCloudSync.app과 동일 이유).

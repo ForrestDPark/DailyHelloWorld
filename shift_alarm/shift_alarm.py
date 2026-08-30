@@ -1269,6 +1269,19 @@ def set_hue_room_power(room_name, on):
 # 수 있다 — 그래서 반드시 실제로 재생 중인지 먼저 확인한 뒤에만 누른다.
 NX_KEYTYPE_PLAY = 16
 
+# ★ 2026-08-30: "Elmedia 관련 동작을 할 때마다 'bin이(가) 다른 앱의 데이터에
+# 접근하려고 합니다' 팝업이 매번 뜬다"는 신고 — launchd로 뜨는 anaconda
+# python3(`/opt/anaconda3/bin/python3`)가 직접 `osascript`로 `tell application
+# "System Events" to tell process ...`를 보내면, 8-1번 항목(StyleEbookTerminal.app)
+# ·26번 항목(iCloudSync.app)과 똑같은 원인으로 요청자 신원이 "bin"처럼 불안정하게
+# 잡혀 권한이 영구 저장되지 않고 매번 다시 뜬다. 같은 해법을 재사용: 이 AppleEvent
+# 전용으로 컴파일된 별도 .app(`ElmediaStatusHelper.app`, osacompile 빌드, git 추적됨)에
+# 위임한다 — `open -na`로 열면 Launch Services를 거쳐 신원이 이 앱(고정 경로/서명)으로
+# 안정되어, 최초 1회만 허용하면 그 뒤로는 팝업이 다시 안 뜬다. 결과는 동기 호출처럼
+# 쓸 수 있도록 앱이 로컬 상태 파일에 쓰고 파이썬이 짧게 폴링한다.
+ELMEDIA_STATUS_HELPER_APP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ElmediaStatusHelper.app")
+ELMEDIA_STATUS_FILE = os.path.expanduser("~/.shift_alarm_elmedia_status.txt")
+
 
 def _is_elmedia_playing():
     """Elmedia가 실행 중이고 재생 중인 것으로 보이면 True. write_alarm_script()의
@@ -1284,15 +1297,25 @@ def _is_elmedia_playing():
     if not running:
         return False
     try:
-        result = subprocess.run(
-            ["/usr/bin/osascript", "-e",
-             'tell application "System Events" to tell process "Elmedia Video Player" '
-             'to get value of every static text of every window'],
-            capture_output=True, timeout=5, text=True,
-        )
-    except (OSError, subprocess.TimeoutExpired):
+        os.remove(ELMEDIA_STATUS_FILE)
+    except OSError:
+        pass
+    try:
+        subprocess.Popen(["open", "-na", ELMEDIA_STATUS_HELPER_APP])
+    except OSError:
         return False
-    return "elapsed time" in result.stdout.lower()
+    deadline = time.time() + 5
+    while time.time() < deadline:
+        if os.path.exists(ELMEDIA_STATUS_FILE):
+            time.sleep(0.1)  # 헬퍼 앱의 쓰기가 끝날 시간을 살짝 준다
+            try:
+                with open(ELMEDIA_STATUS_FILE, encoding="utf-8") as f:
+                    text = f.read()
+            except OSError:
+                return False
+            return "elapsed time" in text.lower()
+        time.sleep(0.1)
+    return False
 
 
 def _send_media_play_pause_key():
@@ -3682,7 +3705,19 @@ RUNNING="false"
 /usr/bin/pgrep -x "Elmedia Video Player" >/dev/null 2>&1 && RUNNING="true"
 STATUS="unknown"
 if [ "$RUNNING" = "true" ]; then
-  TEXTS=$(/usr/bin/osascript -e 'tell application "System Events" to tell process "Elmedia Video Player" to get value of every static text of every window' 2>/dev/null)
+  # ★ 2026-08-30: 여기서 직접 osascript로 System Events를 부르면 launchd로 뜬
+  # 이 스크립트의 불안정한 신원("bin") 탓에 자동화 허용 팝업이 매번 다시 떴다
+  # (_is_elmedia_playing()과 같은 원인) — 안정된 신원을 가진 ElmediaStatusHelper.app에
+  # 위임하고 상태 파일을 폴링해서 읽는다.
+  ELMEDIA_STATUS_FILE="$HOME/.shift_alarm_elmedia_status.txt"
+  /bin/rm -f "$ELMEDIA_STATUS_FILE"
+  /usr/bin/open -na {shlex.quote(ELMEDIA_STATUS_HELPER_APP)}
+  for i in {{1..30}}; do
+    [ -f "$ELMEDIA_STATUS_FILE" ] && break
+    /bin/sleep 0.2
+  done
+  /bin/sleep 0.2
+  TEXTS=$(/bin/cat "$ELMEDIA_STATUS_FILE" 2>/dev/null)
   if echo "$TEXTS" | grep -qi "Nothing to open"; then
     STATUS="nothing_to_open"
   elif echo "$TEXTS" | grep -qi "Elapsed time"; then
@@ -4330,6 +4365,7 @@ class ShiftAlarmApp(rumps.App):
             self, self.config, save_config,
             os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "shift_alarm_pet.png"),
         )
+        self._sync_pet_menu_item()
 
         # 날씨 10분마다 갱신
         self.weather_timer = rumps.Timer(self._refresh_weather, 600)
@@ -6299,7 +6335,12 @@ class ShiftAlarmApp(rumps.App):
         more_menu.add(media_menu)
 
         more_menu.add(None)
-        more_menu.add(rumps.MenuItem("🐾 Shift Pet 표시/숨기기", callback=self.toggle_shift_pet))
+        self.shift_pet_menu_item = rumps.MenuItem(
+            "🐾 Alarm Pet 켜기/끄기", callback=self.toggle_shift_pet
+        )
+        if hasattr(self, "shift_pet"):
+            self.shift_pet_menu_item.state = bool(self.shift_pet.panel.isVisible())
+        more_menu.add(self.shift_pet_menu_item)
         more_menu.add(rumps.MenuItem("현재 설정 확인", callback=self.show_status))
         self.menu.add(more_menu)
         self.menu.add(None)
@@ -7162,6 +7203,12 @@ class ShiftAlarmApp(rumps.App):
 
     def toggle_shift_pet(self, _):
         self.shift_pet.toggle()
+
+    def _sync_pet_menu_item(self):
+        item = getattr(self, "shift_pet_menu_item", None)
+        pet = getattr(self, "shift_pet", None)
+        if item is not None and pet is not None:
+            item.state = bool(pet.panel.isVisible())
 
     def quit_app(self, _):
         if hasattr(self, "shift_pet"):
