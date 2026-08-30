@@ -1093,8 +1093,7 @@ def _maybe_reroute_turn(turn, persona_cache, candidates):
     # 같은 사용자 메시지에서 이미 여러 명에게 답변을 배정했다면 그 자체가
     # 의도된 다중 응답이다. 각 사람마다 담당자를 다시 고르는 호출은 중복이며
     # 모두 한 사람으로 몰릴 위험도 있으므로 완전히 생략한다.
-    if (turn.get("rerouted") or len(candidates) < 2 or turn.get("batch_size", 1) > 1
-            or not turn.get("source_is_owner", False)):
+    if turn.get("rerouted") or len(candidates) < 2 or turn.get("batch_size", 1) > 1:
         return None
     source_message_id = turn.get("source_message_id")
     cache_key = source_message_id if source_message_id is not None else f"turn:{turn['turn_id']}"
@@ -1341,14 +1340,9 @@ def _process_turn_inner(turn, persona_cache):
                 credentials["provider"], credentials["api_key"], prompt,
                 timeout=timeout, image_paths=image_paths or None,
             )
-        elif source_username and not turn.get("source_is_owner", False):
-            _api("/api/worker/complete", "POST", {
-                "turn_id": turn["turn_id"],
-                "reply": "AI 연결이 필요합니다. 상단의 내 프로필에서 OpenAI·Anthropic·Gemini API 키 중 하나를 등록하고 사용할 공급자를 선택해주세요.",
-            })
-            print(f"🔑 {source_username}: 개인 AI 키 미등록 — 관리자 CLI 미사용", flush=True)
-            return
         else:
+            # 개인 키는 선택 기능이다. 등록하지 않은 일반 사용자도 예전처럼
+            # 관리자가 제공하는 Claude→Codex 공용 경로로 대화할 수 있다.
             reply, engine = run_ai_exec(prompt, WORK_DIR, timeout=timeout, **exec_kwargs)
         reply = reply.strip()
         if is_organizer:
