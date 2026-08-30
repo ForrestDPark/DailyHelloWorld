@@ -606,7 +606,7 @@ async function renderAdminUsers() {
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "admin-grant-btn" + (u.ui_dev_granted ? " granted" : "");
-      btn.textContent = u.ui_dev_granted ? "유이 권한 있음" : "유이 권한 없음";
+      btn.textContent = u.ui_dev_granted ? "유이 개발 권한 있음" : "유이 일반 대화만";
       btn.addEventListener("click", async () => {
         try {
           await apiFetch(`/api/admin/ui_dev_grants/${encodeURIComponent(u.username)}`, {

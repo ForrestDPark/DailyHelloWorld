@@ -1540,6 +1540,17 @@ def _process_turn_inner(turn, persona_cache):
     _maybe_notify_restart_gap(turn, persona_name, room_id)
     is_organizer = persona_name == FILE_ORGANIZER_PERSONA_NAME
     is_ui_dev = persona_name == UI_DEV_PERSONA_NAME
+    ui_dev_full_access = bool(
+        is_ui_dev and (turn.get("source_is_owner") or turn.get("source_ui_dev_granted"))
+    )
+    if is_ui_dev and not ui_dev_full_access:
+        entry = dict(entry)
+        entry["system_prompt"] = entry["system_prompt"] + (
+            "\n\n[일반 대화 모드]\n"
+            "지금 말한 사용자는 툴파챗 UI 개발 권한이 없습니다. 그렇다고 대화를 거절하지 말고 "
+            "유이의 성격과 말투로 일반 질문·잡담·조언에 자연스럽게 답하세요. "
+            "코드나 화면에 실제로 반영할 수 있다고 말하지 말고, uiplan 코드블록도 만들지 마세요."
+        )
     is_ebook_reader = persona_name == EBOOK_READER_PERSONA_NAME
     if is_organizer:
         executed = _maybe_execute_pending_plan(room_id, turn["context"])
@@ -1615,7 +1626,7 @@ def _process_turn_inner(turn, persona_cache):
     if is_organizer:
         exec_kwargs["allow_tools"] = ["Read", "Glob", "WebSearch", "WebFetch"]
         exec_kwargs["add_dirs"] = [str(HOME_DIR)]
-    elif is_ui_dev:
+    elif ui_dev_full_access:
         exec_kwargs["allow_tools"] = ["Read", "Glob", "WebSearch", "WebFetch"]
         exec_kwargs["add_dirs"] = [str(STATIC_DIR)]
     elif is_ebook_reader:
@@ -1638,7 +1649,7 @@ def _process_turn_inner(turn, persona_cache):
         reply = reply.strip()
         if is_organizer:
             _capture_pending_plan(room_id, reply)
-        elif is_ui_dev:
+        elif ui_dev_full_access:
             _capture_pending_ui_plan(room_id, reply)
             _capture_pending_image_plan(room_id, reply)
         _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": reply})

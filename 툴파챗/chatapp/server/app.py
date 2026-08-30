@@ -1694,7 +1694,17 @@ def _mentioned_personas(content, candidates):
     mentioned = []
     for name in candidates:
         given = _given_name(name)
-        if f"@{name}" in content or (len(given) >= 2 and given in content):
+        compact_name = name.replace(" ", "")
+        compact_content = content.replace(" ", "")
+        # 영문 역할 접두사가 붙은 이름은 한국어 본체도 자연스러운 별칭으로
+        # 인정한다. 예: QA요정 → “요정”, “QA 요정”, “QA요정”.
+        role_alias = name[2:] if name.startswith("QA") else ""
+        if (
+            f"@{name}" in content
+            or compact_name in compact_content
+            or (len(given) >= 2 and given in content)
+            or (len(role_alias) >= 2 and role_alias in content)
+        ):
             mentioned.append(name)
     return mentioned
 
@@ -2949,14 +2959,10 @@ def post_message(msg: NewMessage, request: Request):
         # 1:1 방은 이미 위에서 막았지만, 단체/그룹 회의방에서는 다른 계정도
         # 메시지를 보낼 수 있다 — 그 경우에도 손동주는 응답 대상에서 뺀다.
         targets = [t for t in targets if t not in OWNER_ONLY_PERSONAS]
-        # ★ 유이(UI_DEV_PERSONAS)는 손동주처럼 무조건 막지는 않는다 — 소유자가
-        # ui_dev_grants에 등록해준 계정만 예외적으로 응답을 받을 수 있다.
-        if any(t in UI_DEV_PERSONAS for t in targets):
-            granted = conn.execute(
-                "SELECT 1 FROM ui_dev_grants WHERE username = ?", (sender,)
-            ).fetchone()
-            if not granted:
-                targets = [t for t in targets if t not in UI_DEV_PERSONAS]
+        # 유이는 누구에게나 일반 대화로 답한다. ui_dev_grants는 응답 여부가
+        # 아니라 Read/Glob 탐색·uiplan 제안 권한만 결정하며, 워커에 별도로
+        # 전달한다. 이 단계에서 유이를 제거하면 직전 발화자였을 때 targets가
+        # 빈 목록이 되어 일반 사용자의 메시지가 통째로 사라지는 버그가 난다.
     for persona_name in targets:
         conn.execute(
             "INSERT INTO pending_turns (persona_name, room_id, status, created_at, source_message_id) VALUES (?, ?, 'pending', ?, ?)",
@@ -3059,10 +3065,13 @@ def worker_pending(authorization: Optional[str] = Header(None)):
     ).fetchall()
     source_username = None
     source_is_owner = False
+    source_ui_dev_granted = False
     if row["source_message_id"] is not None:
         source = conn.execute(
             """SELECT messages.sender, COALESCE(users.is_owner, 0) AS is_owner,
-                      users.username IS NOT NULL AS is_user
+                      users.username IS NOT NULL AS is_user,
+                      EXISTS(SELECT 1 FROM ui_dev_grants g
+                             WHERE g.username=messages.sender) AS ui_dev_granted
                FROM messages LEFT JOIN users ON users.username=messages.sender
                WHERE messages.id=?""",
             (row["source_message_id"],),
@@ -3070,6 +3079,7 @@ def worker_pending(authorization: Optional[str] = Header(None)):
         if source:
             source_username = source["sender"] if source["is_user"] else None
             source_is_owner = bool(source["is_owner"])
+            source_ui_dev_granted = bool(source["ui_dev_granted"])
     # ★ "메시지 인물마다 다 띄우니까 정신없다, 방에 있는 툴파 중 대표로
     # 한 사람만 알려주자" 요청(2026-08-28) — 페르소나별(pending_turns)이
     # 아니라 방 단위로 이미 안내를 보냈는지를 본다.
@@ -3098,6 +3108,7 @@ def worker_pending(authorization: Optional[str] = Header(None)):
         "source_message_id": row["source_message_id"],
         "source_username": source_username,
         "source_is_owner": source_is_owner,
+        "source_ui_dev_granted": source_ui_dev_granted,
         "use_personal_ai": bool(row["use_personal_ai"]),
         "batch_size": batch_size,
         "room_active_count": room_active_count,
