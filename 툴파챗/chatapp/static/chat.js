@@ -1837,6 +1837,10 @@ async function showChatView(roomId) {
   const isMyCustomRoom = roomId.startsWith("custom_") && canWrite && (amOwner || (cached && cached.is_mine));
   document.getElementById("thumbnail-btn").classList.toggle("hidden", !isMyCustomRoom);
   document.getElementById("chat-bg-btn").classList.toggle("hidden", !canWrite || !myUsername);
+  autoReadQueue = []; // 방을 옮기면 이전 방에서 대기 중이던 자동 읽어주기는 취소
+  const autoReadOn = isAutoReadOn(roomId);
+  document.getElementById("auto-read-btn").classList.toggle("auto-read-on", autoReadOn);
+  document.getElementById("auto-read-btn").setAttribute("aria-label", autoReadOn ? "자동 읽어주기 끄기" : "자동 읽어주기 켜기");
   loadChatBackground(roomId);
   loadRoomNotice(roomId, isGroupMeetingRoom);
   poll();
@@ -2334,18 +2338,23 @@ async function notifyQaResolution(message, sourceMessageId = message.id) {
 // 워커(OpenAI TTS)가 하므로 바로 재생 못 하고 짧게 폴링한다. 같은 메시지를
 // 다시 누르면 서버가 캐시된 결과를 바로 돌려주므로(message_tts_jobs UNIQUE)
 // 재생성 없이 즉시 재생된다.
+async function requestMessageTtsJob(message) {
+  const res = await apiFetch(`/api/messages/${message.id}/tts`, { method: "POST" });
+  let job = await res.json();
+  const deadline = Date.now() + 30000;
+  while (job.status !== "done" && job.status !== "failed" && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    const pollRes = await apiFetch(`/api/messages/${message.id}/tts`);
+    job = await pollRes.json();
+  }
+  return job;
+}
+
 async function playMessageTts(message) {
   // addAction()은 클릭 즉시 메뉴를 닫아 버튼 자체가 사라지므로(다른 액션과
   // 동일한 동작), 버튼 상태 대신 완료/실패 시점에만 알림을 띄운다.
   try {
-    const res = await apiFetch(`/api/messages/${message.id}/tts`, { method: "POST" });
-    let job = await res.json();
-    const deadline = Date.now() + 30000;
-    while (job.status !== "done" && job.status !== "failed" && Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-      const pollRes = await apiFetch(`/api/messages/${message.id}/tts`);
-      job = await pollRes.json();
-    }
+    const job = await requestMessageTtsJob(message);
     if (job.status === "done" && job.result_url) {
       await new Audio(job.result_url).play().catch(() => {});
     } else if (job.status === "failed") {
@@ -2357,6 +2366,70 @@ async function playMessageTts(message) {
     if (e.message !== "unauthorized" && e.message !== "forbidden") alert("읽어주기 요청 실패");
   }
 }
+
+// ★ "메시지 하나만 읽는 게 아니라 이후의 내용도 자동 읽어주기 기능도 하나
+// 있으면 좋겠어" 요청(2026-08-30) — 방마다 켜고 끄는 자동 읽어주기 모드.
+// 켜져 있는 동안 폴링으로 새로 도착한(방에 처음 들어올 때의 기존 대화
+// 전체가 아니라) 페르소나 메시지만 순서대로 하나씩 읽어준다. 여러 개가
+// 한꺼번에 도착해도(예: 그룹방에서 여러 페르소나가 연달아 답할 때) 겹쳐
+// 재생되지 않도록 큐에 넣고 순차 재생한다. 방별 설정은 새로고침해도
+// 유지되게 localStorage에 저장(다른 읽음 상태 저장과 같은 이유 — 기기별로
+// 충분하고 서버 왕복이 필요 없음).
+const AUTO_READ_STORAGE_KEY = "tulpa_auto_read_rooms";
+let autoReadRooms = new Set(JSON.parse(localStorage.getItem(AUTO_READ_STORAGE_KEY) || "[]"));
+let autoReadQueue = [];
+let autoReadPlaying = false;
+
+function isAutoReadOn(roomId) {
+  return autoReadRooms.has(roomId);
+}
+
+function setAutoRead(roomId, on) {
+  if (on) autoReadRooms.add(roomId); else autoReadRooms.delete(roomId);
+  localStorage.setItem(AUTO_READ_STORAGE_KEY, JSON.stringify([...autoReadRooms]));
+}
+
+async function playMessageTtsAndWaitForEnd(message) {
+  try {
+    const job = await requestMessageTtsJob(message);
+    if (job.status !== "done" || !job.result_url) {
+      console.warn("자동 읽어주기 실패:", message.id, job.error || job.status);
+      return;
+    }
+    const audio = new Audio(job.result_url);
+    await new Promise((resolve) => {
+      audio.addEventListener("ended", resolve, { once: true });
+      audio.addEventListener("error", resolve, { once: true });
+      audio.play().catch(resolve);
+    });
+  } catch (e) {
+    console.warn("자동 읽어주기 오류:", e);
+  }
+}
+
+async function drainAutoReadQueue() {
+  if (autoReadPlaying) return;
+  autoReadPlaying = true;
+  while (autoReadQueue.length) {
+    await playMessageTtsAndWaitForEnd(autoReadQueue.shift());
+  }
+  autoReadPlaying = false;
+}
+
+function enqueueAutoRead(message) {
+  autoReadQueue.push(message);
+  drainAutoReadQueue();
+}
+
+const autoReadBtn = document.getElementById("auto-read-btn");
+autoReadBtn.addEventListener("click", () => {
+  if (!currentRoom) return;
+  const next = !isAutoReadOn(currentRoom);
+  setAutoRead(currentRoom, next);
+  autoReadBtn.classList.toggle("auto-read-on", next);
+  autoReadBtn.setAttribute("aria-label", next ? "자동 읽어주기 끄기" : "자동 읽어주기 켜기");
+  if (!next) autoReadQueue = []; // 끄면 아직 안 읽은 대기열도 비운다(재생 중인 것은 끝까지)
+});
 
 function openMessageMenu(message, hostEl, x, y) {
   closeMessageMenu();
@@ -2626,6 +2699,9 @@ async function poll() {
     for (const m of messages) {
       appendMessage(m, false, initialLoad);
       lastId = m.id;
+      // 방에 처음 들어올 때(initialLoad) 쌓여있던 기존 대화 전체를 읽어주면
+      // 안 되므로, 진짜 새로 도착한 메시지에만 자동 읽어주기를 적용한다.
+      if (!initialLoad && m.is_persona && isAutoReadOn(roomAtRequest)) enqueueAutoRead(m);
     }
     if (initialLoad) positionAtLastRead();
     else if (messages.length) requestAnimationFrame(markVisibleMessagesRead);

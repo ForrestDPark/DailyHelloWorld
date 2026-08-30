@@ -56,6 +56,8 @@ button { font-family: inherit; }
 .icon-button { position: relative; }
 /* ★ 웹 푸시 알림 켜짐 상태(2026-08-27) — 종 아이콘을 강조색으로 채워 구독됨을 표시 */
 #notify-btn.notify-on { color: var(--accent); }
+/* ★ 방별 자동 읽어주기 켜짐 상태(2026-08-30) — 스피커 아이콘을 강조색으로 표시 */
+#auto-read-btn.auto-read-on { color: var(--accent); }
 .icon-button > svg, #room-notice-icon svg {
   width: 21px;
   height: 21px;
