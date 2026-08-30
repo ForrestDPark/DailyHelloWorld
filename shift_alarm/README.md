@@ -804,3 +804,12 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - 먼저 완전히 안 뜨게 시도: `launchctl disable gui/<uid>/com.apple.replayd` + `launchctl bootout` — disable은 성공했지만 bootout은 SIP(System Integrity Protection)에 막혀 실패(`/System/Library/LaunchAgents`의 시스템 데몬이라 시스템 볼륨 보호 대상). 실제로 강제 종료해봐도 XPC 트리거로 즉시 재기동되는 걸 확인 — 완전 차단은 SIP를 끄지 않는 한 불가능.
 - 그래서 차선책(사용자가 함께 제시한 대안)으로 처리: 기존 `AUTO_KILL_HIGH_CPU_NAMES`(70% CPU · 30분 스턱 조건 + 발견 시 알람)에서 `replayd`를 빼고, 별도의 조용한 5분 주기 타이머(`REPLAYD_SILENT_KILL_INTERVAL_SECONDS`)로 옮겼다 — CPU%나 스턱 시간 조건 없이 `replayd`가 떠 있으면 그냥 `SIGKILL`, `notify_spoken` 알람 없음.
 - `StorageManagementService`/`ApplicationsStorageExtension`은 기존 70%/30분+알람 경로 그대로 유지(이번 요청은 replayd 한정).
+
+## 57. ⏰💊 GY→Swing 전환 휴무 둘째날 13:00 기상 + 다음날 02:00 멜라토닌·운기조식 알림 (★ 2026-08-30 추가)
+
+**사용자 요청**: "shift alarm 에서 gy에서 swing 으로 넘어가는 휴일 두번째날에는 13:00 에 기상알람 울리게하고 다음날 02:00 에 멜라토닌먹고 운기조식하라는 알람 뜨게 해줘."
+
+- 기존 51번 항목(GY→Swing 휴무 **첫날** 18:00 기상 알람)에 이어, **둘째날**도 `_is_gy_to_swing_off_day2()`로 판별해 13:00(`GY_TO_SWING_OFF_DAY2_ALARM_TIME`)에 기상 알람을 건다 — `_set_shift_internal()`의 기존 `register_alarm` 분기 체인에 순서대로 추가(첫날 분기 다음, 그 외 분기 이전).
+- 휴무 블록이 1일짜리면 둘째날 자체가 없으므로 해당 없음(근무표에 1일/2일/4일 블록이 섞여있어 "항상 2일 이상"이라고 가정하면 안 된다는 기존 주석 원칙 유지).
+- 멜라토닌+운기조식 알림은 "둘째날의 다음날 02:00"이라 `register_alarm`(근무 알람 슬롯 하나만 존재) 자리를 놓고 다투지 않도록 별도의 1분 주기 타이머(`_check_gy_to_swing_melatonin_reminder`, `electronics_off_timer`와 같은 패턴)로 분리했다 — 오늘 날짜의 전날이 `_is_gy_to_swing_off_day2`면 02:00에 `notify_spoken`으로 한 번만 알림.
+- "🔔 현재 설정" 메뉴의 휴무 알람 안내 문구에도 "(GY→Swing 전환 둘째날)" 케이스를 추가.
