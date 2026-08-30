@@ -851,3 +851,10 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 
 - 새 1분 주기 타이머 `_check_wake_alarm_ebook_resume`을 추가 — 59번 항목에서 만든 `_todays_wake_alarm_time()`(오늘 근무/휴무에 맞는 기상 알람 시각, `SHIFT_TIMES` + 각종 휴무 전환일 알람 재사용)이 반환하는 시각과 현재 시각이 일치하면, 메뉴의 "📖 전자책 이어읽기"(`resume_ebook_now`)와 똑같이 `load_last_ebook_state()`로 마지막 책을 찾아 `open_ebook_reader_terminal()`로 새 터미널 창을 열고 거실 조명도 켠다.
 - 근무일(Day/Swing/GY)·휴무 전환일 상관없이 등록된 기상 알람이 있는 날이면 전부 적용된다. 기상 알람이 없는 날(연속 휴무 사흘째 이상)이나 이어읽던 책 기록이 없으면 조용히 건너뛴다. 하루 한 번만 실행(`_last_ebook_resume_notified`로 중복 방지).
+
+## 62. 📖 전자책 리더 페르소나화 — "독서지기" (★ 2026-08-30 추가)
+
+**사용자 요청**: "ebook reader 도 손자병법처럼 페르소나화해서 매일 ebook read 하고 나면 페르소나 채팅방에서 오늘 무슨 내용읽었는지 간단하게 토론하면 좋겠어."
+
+- `ebook_reader.py`에 `notify_tulpachat_reading_done()`을 추가 — Ctrl+C로 세션을 마칠 때(`signal_handler`, 읽은 내용이 있을 때만) 방금 저장한 로컬 세션(`~/.ebook_reader/sessions/`의 가장 최근 파일)에서 책 제목·페이지 범위를 뽑아 툴파챗 "독서지기" 페르소나 명의로 그 채팅방에 "📖 오늘 {책} {시작}~{끝}페이지 읽었더라! 오늘 읽은 내용 궁금하면 말 걸어" 메시지를 보낸다(`/api/worker/post_message`, 워커 키체인 토큰 `com.forrest.tulpachat.worker` 재사용). 툴파챗 서버가 꺼져있어도 예외를 삼키고 조용히 넘어가며, 이북 리더 자체 종료는 절대 막지 않는다.
+- 이후 실제 대화는 툴파챗 쪽(`persona_worker.py`)의 "독서지기" 라이브 상태 주입이 담당한다 — 자세한 내용은 `툴파챗/chatapp/README.md`의 "전자책 독서 페르소나 '독서지기'" 항목 참고.

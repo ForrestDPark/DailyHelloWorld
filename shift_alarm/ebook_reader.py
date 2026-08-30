@@ -205,6 +205,55 @@ def update_local_session(path, record, **changes):
         json.dump(record, file, ensure_ascii=False, indent=2)
 
 
+TULPACHAT_WORKER_KEYCHAIN_SERVICE = "com.forrest.tulpachat.worker"
+TULPACHAT_POST_MESSAGE_URL = "http://127.0.0.1:8000/api/worker/post_message"
+EBOOK_TULPACHAT_PERSONA_NAME = "독서지기"
+
+
+def notify_tulpachat_reading_done():
+    """★ 2026-08-30: "ebook reader도 페르소나화해서 매일 읽고 나면 페르소나
+    채팅방에서 오늘 무슨 내용 읽었는지 간단하게 토론하면 좋겠어"는 요청 —
+    방금 저장한 세션(가장 최근 파일)을 읽어 '독서지기' 페르소나 명의로 그
+    채팅방에 짧게 알린다. 툴파챗 서버가 안 떠 있거나 키체인 토큰이 없어도
+    조용히 넘어간다(이북 리더 종료 자체를 막으면 안 됨)."""
+    try:
+        files = sorted(
+            (os.path.join(SESSION_DIR, name) for name in os.listdir(SESSION_DIR)),
+            key=os.path.getmtime,
+        )
+        if not files:
+            return
+        with open(files[-1], encoding="utf-8") as f:
+            record = json.load(f)
+    except (OSError, ValueError, IndexError):
+        return
+    book = record.get("book_name", "책")
+    start = record.get("start_page")
+    end = record.get("end_page")
+    content = (
+        f"📖 오늘 {book} {start}~{end}페이지 읽었더라!\n"
+        "오늘 읽은 내용 궁금하면 말 걸어, 같이 얘기해보자."
+    )
+    try:
+        result = subprocess.run(
+            ["security", "find-generic-password", "-s", TULPACHAT_WORKER_KEYCHAIN_SERVICE, "-w"],
+            capture_output=True, text=True, check=True, timeout=10,
+        )
+        token = result.stdout.strip()
+        requests.post(
+            TULPACHAT_POST_MESSAGE_URL,
+            json={
+                "persona_name": EBOOK_TULPACHAT_PERSONA_NAME,
+                "room_id": EBOOK_TULPACHAT_PERSONA_NAME,
+                "content": content,
+            },
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=10,
+        )
+    except Exception:
+        pass
+
+
 def notion_paragraphs(text, prefix=""):
     blocks = []
     for index, chunk in enumerate(split_text(text), 1):
@@ -312,6 +361,8 @@ def signal_handler(sig, frame):
     is_exiting = True
     print(f"\n\n{YELLOW}{BOLD}  ⏹  학습을 종료합니다...{RESET}\n")
     upload_bundle_to_notion(read_buffer, start_page_val, end_page_val or start_page_val)
+    if read_buffer:
+        notify_tulpachat_reading_done()
     try:
         os.remove(TMP_AUDIO)
     except OSError:

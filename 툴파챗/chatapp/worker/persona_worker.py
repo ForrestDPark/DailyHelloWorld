@@ -189,6 +189,45 @@ def load_shift_alarm_state(state_key):
     return ""
 
 
+# ★ "ebook reader도 손자병법처럼 페르소나화해서 매일 읽고 나면 페르소나
+# 채팅방에서 오늘 무슨 내용 읽었는지 간단하게 토론하면 좋겠어" 요청
+# (2026-08-30) — shift_alarm 라이브 상태 페르소나(위 SHIFT_ALARM_PERSONA_STATE_KEY)와
+# 같은 패턴: AI에게 파일 도구를 주는 대신, shift_alarm/ebook_reader.py가 이미
+# 남기는 상태 파일을 이 함수가 직접 읽어 오늘 읽은 내용만 뽑아 매 턴 주입한다.
+# 세션 완료 알림(오늘 읽었다고 먼저 말 거는 것)은 ebook_reader.py의
+# notify_tulpachat_reading_done()이 종료 시점에 별도로 담당한다.
+EBOOK_READER_PERSONA_NAME = "독서지기"
+EBOOK_LAST_STATE_PATH = HOME_DIR / ".ebook_reader_last.json"
+EBOOK_SESSIONS_DIR = HOME_DIR / ".ebook_reader" / "sessions"
+EBOOK_STATE_EXCERPT_MAX_CHARS = 2000
+
+
+def load_ebook_reader_state():
+    """오늘 읽은 전자책 세션(가장 최근 것)을 사람이 읽는 요약으로 만든다."""
+    last = _read_json_file(EBOOK_LAST_STATE_PATH)
+    lines = []
+    if last.get("file_name"):
+        lines.append(f"지금 이어읽는 중인 책: {last['file_name']}")
+    today_prefix = datetime.datetime.now().strftime("%Y%m%d")
+    today_sessions = (
+        sorted(EBOOK_SESSIONS_DIR.glob(f"{today_prefix}_*.json"))
+        if EBOOK_SESSIONS_DIR.exists() else []
+    )
+    if not today_sessions:
+        lines.append("오늘은 아직 읽은 기록이 없음 — 지어내지 말고 솔직히 말할 것.")
+        return "\n".join(lines)
+    session = _read_json_file(today_sessions[-1])
+    book = session.get("book_name", "알 수 없는 책")
+    start, end = session.get("start_page"), session.get("end_page")
+    excerpt = (session.get("translation_ko") or "")[:EBOOK_STATE_EXCERPT_MAX_CHARS]
+    lines.append(f"오늘 읽은 책: {book} ({start}~{end}페이지)")
+    if excerpt:
+        lines.append(f"오늘 읽은 부분(한국어 번역, 일부):\n{excerpt}")
+    if len(today_sessions) > 1:
+        lines.append(f"(오늘 세션이 {len(today_sessions)}개 더 있었음 — 위는 가장 최근 것만)")
+    return "\n".join(lines)
+
+
 ORGANIZE_DENY_NAMES = {"Library", ".ssh", ".aws", ".codex", ".claude", ".gnupg", ".git", ".Trash", ".tulpachat"}
 ORGANIZE_PLAN_RE = re.compile(r"```plan\s*\n(.*?)\n```", re.DOTALL)
 ORGANIZE_APPROVE_KEYWORDS = ("승인", "진행")
@@ -1302,6 +1341,8 @@ def _process_turn_inner(turn, persona_cache):
     shift_alarm_state_key = SHIFT_ALARM_PERSONA_STATE_KEY.get(persona_name)
     if shift_alarm_state_key:
         live_state = load_shift_alarm_state(shift_alarm_state_key)
+    elif persona_name == EBOOK_READER_PERSONA_NAME:
+        live_state = load_ebook_reader_state()
     credentials = None
     source_username = turn.get("source_username")
     if source_username:
@@ -1312,7 +1353,9 @@ def _process_turn_inner(turn, persona_cache):
         except (urllib.error.URLError, urllib.error.HTTPError) as exc:
             print(f"⚠️ {source_username} AI 연결 설정 조회 실패: {exc}", flush=True)
             credentials = {}
-    use_byok = bool(credentials and credentials.get("configured"))
+    # 평소에는 관리자 공용 Claude→Codex를 사용한다. 개인 키는 공용 엔진이
+    # 실패한 뒤 사용자가 비용 안내 팝업에서 승인해 재개한 턴에만 사용한다.
+    use_byok = bool(turn.get("use_personal_ai") and credentials and credentials.get("configured"))
     prompt = build_prompt(
         persona_name, entry["system_prompt"], turn["context"], persona_cache.keys(),
         has_images=bool(image_paths), notion_reference=notion_reference, live_state=live_state,
@@ -1341,8 +1384,6 @@ def _process_turn_inner(turn, persona_cache):
                 timeout=timeout, image_paths=image_paths or None,
             )
         else:
-            # 개인 키는 선택 기능이다. 등록하지 않은 일반 사용자도 예전처럼
-            # 관리자가 제공하는 Claude→Codex 공용 경로로 대화할 수 있다.
             reply, engine = run_ai_exec(prompt, WORK_DIR, timeout=timeout, **exec_kwargs)
         reply = reply.strip()
         if is_organizer:
@@ -1358,6 +1399,13 @@ def _process_turn_inner(turn, persona_cache):
             _api("/api/worker/complete", "POST", {
                 "turn_id": turn["turn_id"],
                 "reply": f"{credentials.get('provider', 'AI')} 연결로 답변을 만들지 못했습니다. 내 프로필의 AI 연결에서 키·잔액·사용 한도를 확인하거나 연결 테스트를 실행해주세요.",
+            })
+        elif source_username:
+            # 실패 상세(stderr·경로·계정 정보)는 브라우저에 노출하지 않는다.
+            # 서버가 source_message_id의 실제 발신자를 다시 검증해 그 사람에게만
+            # 개인 API 사용 여부를 묻는다.
+            _api("/api/worker/request_personal_ai", "POST", {
+                "turn_id": turn["turn_id"], "reason": "shared_ai_unavailable",
             })
         else:
             _maybe_send_ai_fallback(room_id, turn["turn_id"])
