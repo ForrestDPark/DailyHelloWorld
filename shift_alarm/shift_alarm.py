@@ -898,7 +898,13 @@ GY_TO_SWING_OFF_ALARM_TIME = {"hour": 18, "minute": 0}
 # 블록 길이가 1일뿐이면 둘째날 자체가 없어 해당 없음(1일/4일 블록도 섞여
 # 있으므로 "항상 2일 이상"이라고 가정하지 않는다).
 GY_TO_SWING_OFF_DAY2_ALARM_TIME = {"hour": 13, "minute": 0}
-GY_TO_SWING_MELATONIN_REMINDER_TIME = {"hour": 2, "minute": 0}
+GY_TO_SWING_DAY2_MELATONIN_REMINDER_TIME = {"hour": 2, "minute": 0}
+
+# ★ 2026-08-30: "GY→Swing 넘어가는 휴일 첫째날엔 18시에 일어나서 다음날
+# 03:00까지 활동하고 03:00에 멜라토닌 먹고 운기조식하라는 알람 띄워달라"는
+# 요청 — 첫날 자체의 18:00 기상 알람(GY_TO_SWING_OFF_ALARM_TIME)과는 별개로,
+# 그 다음날 새벽 3시에 멜라토닌 알림만 추가.
+GY_TO_SWING_DAY1_MELATONIN_REMINDER_TIME = {"hour": 3, "minute": 0}
 
 # ── 근무별 "전자제품 전원 끄기" 알람 시간 ─────────────────────────
 # 근무 끝나고 쉬는(자는) 시간대에 맞춰 전자제품을 끄라고 하루 한 번 알려준다.
@@ -4345,9 +4351,14 @@ class ShiftAlarmApp(rumps.App):
         self.electronics_off_timer.start()
 
         # GY→Swing 휴무 둘째날 다음날 02:00 멜라토닌+운기조식 알림 (1분마다 시각 체크)
-        self._last_melatonin_reminder_notified = None
-        self.melatonin_reminder_timer = rumps.Timer(self._check_gy_to_swing_melatonin_reminder, 60)
-        self.melatonin_reminder_timer.start()
+        self._last_day2_melatonin_reminder_notified = None
+        self.day2_melatonin_reminder_timer = rumps.Timer(self._check_gy_to_swing_day2_melatonin_reminder, 60)
+        self.day2_melatonin_reminder_timer.start()
+
+        # GY→Swing 휴무 첫째날 다음날 03:00 멜라토닌+운기조식 알림 (1분마다 시각 체크)
+        self._last_day1_melatonin_reminder_notified = None
+        self.day1_melatonin_reminder_timer = rumps.Timer(self._check_gy_to_swing_day1_melatonin_reminder, 60)
+        self.day1_melatonin_reminder_timer.start()
 
         # CPU 과부하 감지 (1분마다 표본, 70% 이상이 30분 이상 이어지면 알람)
         # 상태 딕셔너리(_high_cpu_tracking 등)는 build_menu()가 더 일찍 참조하므로
@@ -5002,24 +5013,44 @@ class ShiftAlarmApp(rumps.App):
             "지금부터 전자제품 전원을 꺼주세요."
         )
 
-    def _check_gy_to_swing_melatonin_reminder(self, _):
+    def _check_gy_to_swing_day2_melatonin_reminder(self, _):
         """1분마다 'GY→Swing 휴무 둘째날의 다음날' 02:00인지 확인, 하루 한 번만
         알림 (★ 2026-08-30: "그 다음날 02:00엔 멜라토닌 먹고 운기조식하라는
         알람 띄워달라"는 요청 — 둘째날 자체의 기상 알람(13:00)과는 별개로,
         register_alarm 자리 하나를 놓고 다투지 않도록 독립된 타이머로 처리)."""
         now = datetime.datetime.now()
-        t = GY_TO_SWING_MELATONIN_REMINDER_TIME
+        t = GY_TO_SWING_DAY2_MELATONIN_REMINDER_TIME
         if now.hour != t["hour"] or now.minute != t["minute"]:
             return
         today = now.date()
-        if self._last_melatonin_reminder_notified == today:
+        if self._last_day2_melatonin_reminder_notified == today:
             return
         if not _is_gy_to_swing_off_day2(self.schedule, today - datetime.timedelta(days=1)):
             return
-        self._last_melatonin_reminder_notified = today
+        self._last_day2_melatonin_reminder_notified = today
         notify_spoken(
             "💊 멜라토닌 + 운기조식",
             "GY→Swing 전환 휴무 둘째날 다음날",
+            "멜라토닌 먹고 운기조식 하세요."
+        )
+
+    def _check_gy_to_swing_day1_melatonin_reminder(self, _):
+        """1분마다 'GY→Swing 휴무 첫째날의 다음날' 03:00인지 확인, 하루 한 번만
+        알림 (★ 2026-08-30: "첫째날엔 18시에 일어나서 다음날 03:00까지 활동하고
+        03:00에 멜라토닌 먹고 운기조식하라는 알람 띄워달라"는 요청)."""
+        now = datetime.datetime.now()
+        t = GY_TO_SWING_DAY1_MELATONIN_REMINDER_TIME
+        if now.hour != t["hour"] or now.minute != t["minute"]:
+            return
+        today = now.date()
+        if self._last_day1_melatonin_reminder_notified == today:
+            return
+        if not _is_gy_to_swing_off_day(self.schedule, today - datetime.timedelta(days=1)):
+            return
+        self._last_day1_melatonin_reminder_notified = today
+        notify_spoken(
+            "💊 멜라토닌 + 운기조식",
+            "GY→Swing 전환 휴무 첫째날 다음날",
             "멜라토닌 먹고 운기조식 하세요."
         )
 

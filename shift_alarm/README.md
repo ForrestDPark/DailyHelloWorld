@@ -811,5 +811,13 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 
 - 기존 51번 항목(GY→Swing 휴무 **첫날** 18:00 기상 알람)에 이어, **둘째날**도 `_is_gy_to_swing_off_day2()`로 판별해 13:00(`GY_TO_SWING_OFF_DAY2_ALARM_TIME`)에 기상 알람을 건다 — `_set_shift_internal()`의 기존 `register_alarm` 분기 체인에 순서대로 추가(첫날 분기 다음, 그 외 분기 이전).
 - 휴무 블록이 1일짜리면 둘째날 자체가 없으므로 해당 없음(근무표에 1일/2일/4일 블록이 섞여있어 "항상 2일 이상"이라고 가정하면 안 된다는 기존 주석 원칙 유지).
-- 멜라토닌+운기조식 알림은 "둘째날의 다음날 02:00"이라 `register_alarm`(근무 알람 슬롯 하나만 존재) 자리를 놓고 다투지 않도록 별도의 1분 주기 타이머(`_check_gy_to_swing_melatonin_reminder`, `electronics_off_timer`와 같은 패턴)로 분리했다 — 오늘 날짜의 전날이 `_is_gy_to_swing_off_day2`면 02:00에 `notify_spoken`으로 한 번만 알림.
+- 멜라토닌+운기조식 알림은 "둘째날의 다음날 02:00"이라 `register_alarm`(근무 알람 슬롯 하나만 존재) 자리를 놓고 다투지 않도록 별도의 1분 주기 타이머(`_check_gy_to_swing_day2_melatonin_reminder`, `electronics_off_timer`와 같은 패턴)로 분리했다 — 오늘 날짜의 전날이 `_is_gy_to_swing_off_day2`면 02:00에 `notify_spoken`으로 한 번만 알림.
 - "🔔 현재 설정" 메뉴의 휴무 알람 안내 문구에도 "(GY→Swing 전환 둘째날)" 케이스를 추가.
+
+## 58. 💊 GY→Swing 전환 휴무 첫째날 다음날 03:00 멜라토닌·운기조식 알림 (★ 2026-08-30 추가)
+
+**사용자 요청**: "그리고 gy swing 전환 휴무 첫째날에는 18시에 일어나서 다음날03:00 까지 활동하고 03:00 에 멜라토닌 운기조식 하라고 알람 발생하게 해."
+
+- 첫째날 자체의 18:00 기상 알람(51번 항목, `GY_TO_SWING_OFF_ALARM_TIME`)은 그대로 두고, 57번의 둘째날용 멜라토닌 타이머와 같은 패턴으로 "첫째날의 다음날 03:00" 알림을 별도 타이머(`_check_gy_to_swing_day1_melatonin_reminder`, `GY_TO_SWING_DAY1_MELATONIN_REMINDER_TIME`)로 추가했다.
+- 기존 둘째날 멜라토닌 타이머·상수·상태변수 이름에 `_day2_`를 붙여 명확히 구분(`_check_gy_to_swing_melatonin_reminder` → `_check_gy_to_swing_day2_melatonin_reminder`, `GY_TO_SWING_MELATONIN_REMINDER_TIME` → `GY_TO_SWING_DAY2_MELATONIN_REMINDER_TIME`, `_last_melatonin_reminder_notified` → `_last_day2_melatonin_reminder_notified`) — 첫째날용과 헷갈리지 않게.
+- 결과적으로 GY→Swing 전환 휴무 구간엔 알람이 총 4개: 첫째날 18:00 기상 → 둘째날 03:00 멜라토닌 → 둘째날 13:00 기상 → 셋째날 02:00 멜라토닌.
