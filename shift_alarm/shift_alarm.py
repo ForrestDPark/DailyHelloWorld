@@ -1092,7 +1092,7 @@ def clear_user_caches():
 # - 동찬이형한테 전화: 2026-08-03을 기준으로 21일마다 한 번
 # - 손동주한테 전화: 2026-08-05를 기준으로 7일마다(주 1회) 한 번
 # - 화장실 잔떼 및 배수 점검: 2026-08-13을 기준으로 7일마다(주 1회) 한 번
-# - 머리 깎기: 2026-08-13을 기준으로 25일마다 한 번
+# - 머리 깎기: 2026-08-30을 기준으로 40일마다 한 번
 # - 에이전틱 코딩 책 읽기: 2026-08-08을 기준으로 3일마다 한 번
 # - 손동주 쉬는 날: 동주 본인 근무표(주간 2주/야간 2주 로테이션, 5일 근무+2일 휴무
 #   반복) 기준. 2026-08-04(야간 첫날)를 14일 주기 1일째로 놓으면, 주/야간 구분과
@@ -1116,7 +1116,7 @@ REMINDERS = {
     "call_sondongju":  {"label": "📞 손동주한테 전화(1주일에 1회)",   "enabled": True},
     "coding_academy":  {"label": "💬 코딩학원 카톡방에 연락(1주일에 1회)", "enabled": True},
     "bathroom_drain_check": {"label": "🚿 화장실 잔떼 및 배수 점검일(1주일에 1회)", "enabled": True},
-    "haircut":          {"label": "💇 머리 깎는 날(25일에 1회)", "enabled": True},
+    "haircut":          {"label": "💇 머리 깎는 날(40일에 1회)", "enabled": True},
     "agentic_coding_reading": {"label": "📚 에이전틱 코딩 책 읽기(3일에 1회)", "enabled": True},
     "sondongju_off":   {"label": "🎉 손동주 쉬는 날(동주 근무 주기 기준)",         "enabled": True},
     "nose_hair_trim":  {"label": "🪒 코털 정리(4일에 1회)",       "enabled": True},
@@ -1738,8 +1738,8 @@ CODING_ACADEMY_CHAT_ANCHOR = datetime.date(2026, 8, 7)
 CODING_ACADEMY_CHAT_INTERVAL_DAYS = 7
 BATHROOM_DRAIN_CHECK_ANCHOR = datetime.date(2026, 8, 13)
 BATHROOM_DRAIN_CHECK_INTERVAL_DAYS = 7
-HAIRCUT_ANCHOR = datetime.date(2026, 8, 13)
-HAIRCUT_INTERVAL_DAYS = 25
+HAIRCUT_ANCHOR = datetime.date(2026, 8, 30)
+HAIRCUT_INTERVAL_DAYS = 40
 AGENTIC_CODING_READING_ANCHOR = datetime.date(2026, 8, 8)
 AGENTIC_CODING_READING_INTERVAL_DAYS = 3
 # 동주 본인 근무표: 야간 2주(14일) → 주간 2주(14일) 로테이션, 각 14일 블록 안에서
@@ -1823,7 +1823,7 @@ def _is_bathroom_drain_check_day(d):
 
 
 def _is_haircut_day(d):
-    """2026-08-13부터 25일마다 돌아오는 머리 깎는 날인지 반환."""
+    """2026-08-30부터 40일마다 돌아오는 머리 깎는 날인지 반환."""
     days = (d - HAIRCUT_ANCHOR).days
     return days >= 0 and days % HAIRCUT_INTERVAL_DAYS == 0
 
@@ -1925,7 +1925,7 @@ def get_today_reminders(schedule, now=None):
     - 손동주한테 전화: 2026-08-05부터 7일마다(주 1회) 한 번
     - 코딩학원 카톡방 연락: 2026-08-07부터 7일마다(주 1회) 한 번
     - 화장실 잔떼 및 배수 점검: 2026-08-13부터 7일마다(주 1회) 한 번
-    - 머리 깎기: 2026-08-13부터 25일마다 한 번
+    - 머리 깎기: 2026-08-30부터 40일마다 한 번
     - 에이전틱 코딩 책 읽기: 2026-08-08(오늘)을 시작일로 3일마다 한 번
     - 손동주 쉬는 날: 동주 본인 근무표(야간 2주/주간 2주 로테이션, 5일 근무+2일 휴무
       반복) 기준. 2026-08-04(야간 첫날)를 14일 주기 1일째로 놓고 계산.
