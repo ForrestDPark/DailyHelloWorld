@@ -844,3 +844,10 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - **수정**: 같은 해법 재사용 — `osacompile`로 별도 컴파일 앱 `shift_alarm/ElmediaStatusHelper.app`(`com.shiftalarm.elmediastatus`, `iCloudSync.app`과 동일 레시피: `osacompile` → `plutil -insert CFBundleIdentifier` → `plutil -insert LSUIElement -bool true` → `codesign --force --deep -s -`)을 만들어, Elmedia 창의 정적 텍스트를 읽어 `~/.shift_alarm_elmedia_status.txt`에 써주는 역할만 위임한다. 파이썬(`_is_elmedia_playing()`)과 알람 셸 스크립트 양쪽 다 `open -na ElmediaStatusHelper.app`으로 비동기 실행 후 그 상태 파일을 최대 5초(셸은 6초) 폴링해서 읽는 방식으로 바꿨다.
 - `open -na`(Launch Services)로 여는 건 이 앱 자체(고정 경로·서명)로 신원이 안정되므로, 최초 1회만 허용하면 그 뒤로는 팝업이 다시 안 뜬다(8-1번 항목과 동일 메커니즘). 실제로 이번 세션에서 첫 실행 시 `TCC.db`에 `kTCCServiceAppleEvents / com.shiftalarm.elmediastatus / auth_value=2(허용)`로 기록된 것과, 이후 호출에서 팝업 없이 바로 Elmedia 창 상태를 읽어오는 것까지 확인했다.
 - `ElmediaStatusHelper.app`을 재빌드하려면: `osacompile -o ElmediaStatusHelper.app <script>.applescript` → `plutil -insert CFBundleIdentifier -string com.shiftalarm.elmediastatus Contents/Info.plist` → `plutil -insert LSUIElement -bool true Contents/Info.plist` → `codesign --force --deep -s - ElmediaStatusHelper.app` (Info.plist 수정 후 반드시 재서명 — iCloudSync.app과 동일 이유).
+
+## 61. 📖 기상 알람 시각에 전자책 이어읽기 자동 실행 (★ 2026-08-30 추가)
+
+**사용자 요청**: "그리고 기상알람할때 ebook reading 이어하기도 바로 실행해줘."
+
+- 새 1분 주기 타이머 `_check_wake_alarm_ebook_resume`을 추가 — 59번 항목에서 만든 `_todays_wake_alarm_time()`(오늘 근무/휴무에 맞는 기상 알람 시각, `SHIFT_TIMES` + 각종 휴무 전환일 알람 재사용)이 반환하는 시각과 현재 시각이 일치하면, 메뉴의 "📖 전자책 이어읽기"(`resume_ebook_now`)와 똑같이 `load_last_ebook_state()`로 마지막 책을 찾아 `open_ebook_reader_terminal()`로 새 터미널 창을 열고 거실 조명도 켠다.
+- 근무일(Day/Swing/GY)·휴무 전환일 상관없이 등록된 기상 알람이 있는 날이면 전부 적용된다. 기상 알람이 없는 날(연속 휴무 사흘째 이상)이나 이어읽던 책 기록이 없으면 조용히 건너뛴다. 하루 한 번만 실행(`_last_ebook_resume_notified`로 중복 방지).

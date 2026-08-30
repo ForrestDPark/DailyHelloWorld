@@ -4394,6 +4394,11 @@ class ShiftAlarmApp(rumps.App):
         self.electronics_off_timer = rumps.Timer(self._check_electronics_off, 60)
         self.electronics_off_timer.start()
 
+        # 기상 알람 시각에 이어읽던 전자책 자동 실행 (1분마다 시각 체크)
+        self._last_ebook_resume_notified = None
+        self.ebook_resume_alarm_timer = rumps.Timer(self._check_wake_alarm_ebook_resume, 60)
+        self.ebook_resume_alarm_timer.start()
+
         # GY→Swing 휴무 둘째날 다음날 02:00 멜라토닌+운기조식 알림 (1분마다 시각 체크)
         self._last_day2_melatonin_reminder_notified = None
         self.day2_melatonin_reminder_timer = rumps.Timer(self._check_gy_to_swing_day2_melatonin_reminder, 60)
@@ -5070,6 +5075,28 @@ class ShiftAlarmApp(rumps.App):
             f"{current} 근무 기준",
             "지금부터 전자제품 전원을 꺼주세요."
         )
+
+    def _check_wake_alarm_ebook_resume(self, _):
+        """1분마다 오늘의 기상 알람 시각인지 확인, 맞으면 이어읽던 전자책을
+        자동으로 새 터미널 창에서 연다 (★ 2026-08-30: "기상알람할때 ebook
+        reading 이어하기도 바로 실행해줘"는 요청). 근무/휴무 종류와 무관하게
+        _todays_wake_alarm_time()이 반환하는 시각을 그대로 쓴다 — 기상 알람이
+        없는 날(연속 휴무 사흘째 이상)은 아무것도 하지 않는다."""
+        wake_time = self._todays_wake_alarm_time(datetime.date.today())
+        if not wake_time:
+            return
+        now = datetime.datetime.now()
+        if now.hour != wake_time["hour"] or now.minute != wake_time["minute"]:
+            return
+        today = now.date()
+        if self._last_ebook_resume_notified == today:
+            return
+        self._last_ebook_resume_notified = today
+        last = load_last_ebook_state()
+        if not last:
+            return
+        open_ebook_reader_terminal(last["file"])
+        threading.Thread(target=self._turn_on_hue_for_reading, daemon=True).start()
 
     def _check_gy_to_swing_day2_melatonin_reminder(self, _):
         """1분마다 'GY→Swing 휴무 둘째날의 다음날' 02:00인지 확인, 하루 한 번만
