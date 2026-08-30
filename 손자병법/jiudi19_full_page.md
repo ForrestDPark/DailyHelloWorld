@@ -132,17 +132,23 @@
 	🏆 <span color="blue">**승군 측 결과**</span> 사선공격과 기병 반격으로 더 큰 군대를 무너뜨렸습니다.
 	##### 法을 압축하지 않고 보기 — 곡제·관도·주용
 	**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
-	<table><tr><td>진영</td><td>운용</td></tr>
+	<table>
+	<tr><td>진영</td><td>운용</td></tr>
 	<tr><td><span color="blue">**프로이센군**</span></td><td>보병 사선과 기병 예비를 결합</td></tr>
-	<tr><td><span color="red">**오스트리아군**</span></td><td>긴 선형진에 병력 분산</td></tr></table>
+	<tr><td><span color="red">**오스트리아군**</span></td><td>긴 선형진에 병력 분산</td></tr>
+	</table>
 	**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
-	<table><tr><td>진영</td><td>운용</td></tr>
+	<table>
+	<tr><td>진영</td><td>운용</td></tr>
 	<tr><td><span color="blue">**프로이센군**</span></td><td>프리드리히의 단일 작전 의도</td></tr>
-	<tr><td><span color="red">**오스트리아군**</span></td><td>넓은 전선에서 명령 지연</td></tr></table>
+	<tr><td><span color="red">**오스트리아군**</span></td><td>넓은 전선에서 명령 지연</td></tr>
+	</table>
 	**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
-	<table><tr><td>진영</td><td>운용</td></tr>
+	<table>
+	<tr><td>진영</td><td>운용</td></tr>
 	<tr><td><span color="blue">**프로이센군**</span></td><td>훈련된 사격과 기동을 집중</td></tr>
-	<tr><td><span color="red">**오스트리아군**</span></td><td>병력 우세를 동시 투입하지 못함</td></tr></table>
+	<tr><td><span color="red">**오스트리아군**</span></td><td>병력 우세를 동시 투입하지 못함</td></tr>
+	</table>
 
 	### 동양 — <span color="blue">**오다·도쿠가와 연합군**</span> vs <span color="red">**다케다군**</span> │ 나가시노 전투(長篠の戦い, 1575)
 	![나가시노 주요 지휘관](generated/jiudi19/nagashino_commanders.png)
@@ -194,17 +200,23 @@
 	🏆 <span color="blue">**승군 측 결과**</span> 성을 구하고 다케다의 반복 공격을 격퇴했습니다.
 	##### 法을 압축하지 않고 보기 — 곡제·관도·주용
 	**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
-	<table><tr><td>진영</td><td>운용</td></tr>
+	<table>
+	<tr><td>진영</td><td>운용</td></tr>
 	<tr><td><span color="blue">**연합군**</span></td><td>조총수·창병·우회대를 기능별 배치</td></tr>
-	<tr><td><span color="red">**다케다군**</span></td><td>가신별 공격이 차례로 소모</td></tr></table>
+	<tr><td><span color="red">**다케다군**</span></td><td>가신별 공격이 차례로 소모</td></tr>
+	</table>
 	**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
-	<table><tr><td>진영</td><td>운용</td></tr>
+	<table>
+	<tr><td>진영</td><td>운용</td></tr>
 	<tr><td><span color="blue">**연합군**</span></td><td>노부나가·이에야스가 정면과 구원을 분담</td></tr>
-	<tr><td><span color="red">**다케다군**</span></td><td>가쓰요리의 결전 아래 현장 의견 수렴 약화</td></tr></table>
+	<tr><td><span color="red">**다케다군**</span></td><td>가쓰요리의 결전 아래 현장 의견 수렴 약화</td></tr>
+	</table>
 	**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
-	<table><tr><td>진영</td><td>운용</td></tr>
+	<table>
+	<tr><td>진영</td><td>운용</td></tr>
 	<tr><td><span color="blue">**연합군**</span></td><td>화약·탄환·목재를 방어 체계로 전환</td></tr>
-	<tr><td><span color="red">**다케다군**</span></td><td>정예를 반복 정면공격에 투입</td></tr></table>
+	<tr><td><span color="red">**다케다군**</span></td><td>정예를 반복 정면공격에 투입</td></tr>
+	</table>
 
 ---
 

@@ -3258,15 +3258,34 @@ class RedirectTurn(BaseModel):
     persona_name: str
 
 
+class VictoryCommander(BaseModel):
+    name: str
+    battle: str
+    profile: str
+    opening: str
+
+
 class WorkerAnnouncement(BaseModel):
     room_id: str
     content: str
     dedupe_key: str
+    victory_commanders: list[VictoryCommander] = []
+
+
+def _build_battle_commander_prompt(name, battle, profile):
+    return (
+        f'당신은 실제 역사 인물 "{name}"을 재현한 가상 토론 페르소나입니다. '
+        f'주요 토론 근거는 "{battle}"입니다. 제공된 분석과 확인 가능한 사료의 범위에서만 '
+        "1인칭으로 말하고, 사실·후대 해석·불확실성을 구분하세요. 승리했다는 이유로 결과를 "
+        "필연으로 꾸미지 말고 자신의 판단, 상대의 대응, 우연, 실패 가능성을 함께 설명하세요. "
+        "현대의 폭력이나 기만을 무비판적으로 권하지 마세요.\n\n"
+        f"--- 전장 배경 ---\n{profile}"
+    )
 
 
 @app.post("/api/worker/announcements")
 def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] = Header(None)):
-    """주석가 한 명이 분석을 소개하고 나머지 그룹원의 토론을 시작한다."""
+    """승군 지휘관을 중복 없이 초대하고 해당 전장을 주제로 토론을 시작한다."""
     _check_worker_auth(authorization)
     room_id = body.room_id.strip()
     content = body.content.strip()
@@ -3275,6 +3294,31 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
         raise HTTPException(status_code=400, detail="방·내용·중복 방지 키가 필요합니다")
 
     conn = get_conn()
+    commander_results = []
+    for commander in body.victory_commanders:
+        name = commander.name.strip()
+        if not PERSONA_NAME_RE.match(name):
+            conn.close()
+            raise HTTPException(status_code=400, detail=f"유효하지 않은 장수 이름: {name}")
+        existing_persona = conn.execute(
+            "SELECT name FROM personas WHERE name = ?", (name,)
+        ).fetchone()
+        created = not bool(existing_persona)
+        if created:
+            profile = commander.profile.strip()[:USER_PERSONA_DESC_MAX_CHARS]
+            conn.execute(
+                "INSERT INTO personas (name, notion_page_id, system_prompt, group_name, owner_username, description, synced_at) "
+                "VALUES (?, '', ?, NULL, ?, ?, ?)",
+                (name, _build_battle_commander_prompt(name, commander.battle.strip(), profile),
+                 APP_USERNAME or "automation", profile, _now()),
+            )
+        # 기존 페르소나는 설정을 덮어쓰지 않고 방 초대만 보장한다.
+        conn.execute(
+            "INSERT OR IGNORE INTO room_invites (room_id, persona_name, invited_at) VALUES (?, ?, ?)",
+            (room_id, name, _now()),
+        )
+        commander_results.append({"name": name, "created": created, "battle": commander.battle.strip()})
+
     persona_rows = conn.execute(
         "SELECT name, group_name, owner_username FROM personas ORDER BY name"
     ).fetchall()
@@ -3293,12 +3337,14 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
     traditional_commentators = {
         "조조", "이전", "두목", "매요신", "장예", "왕석", "가림", "두우", "진호"
     }
+    commander_names = [item["name"] for item in commander_results]
     commentators = [name for name in targets if name in traditional_commentators]
     if not commentators:
         conn.close()
         raise HTTPException(status_code=409, detail="분석을 소개할 전통 주석가가 없습니다")
     digest = hashlib.sha256(dedupe_key.encode("utf-8")).digest()
-    sender = commentators[int.from_bytes(digest[:4], "big") % len(commentators)]
+    sender = (commander_names[0] if commander_names else
+              commentators[int.from_bytes(digest[:4], "big") % len(commentators)])
     existing = conn.execute(
         "SELECT message_id FROM automation_announcements WHERE dedupe_key = ?", (dedupe_key,)
     ).fetchone()
@@ -3329,20 +3375,29 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
         conn.close()
         return {
             "ok": True, "duplicate": True, "message_id": existing["message_id"],
-            "announcer": sender, "notified": [],
+            "announcer": sender, "notified": [], "commanders": commander_results,
         }
 
     now = _now()
+    lead_content = body.victory_commanders[0].opening.strip() if body.victory_commanders else content
     cursor = conn.execute(
         "INSERT INTO messages (room_id, sender, content, created_at) VALUES (?, ?, ?, ?)",
-        (room_id, sender, content, now),
+        (room_id, sender, lead_content, now),
     )
     message_id = cursor.lastrowid
+    for commander in body.victory_commanders[1:]:
+        conn.execute(
+            "INSERT INTO messages (room_id, sender, content, created_at) VALUES (?, ?, ?, ?)",
+            (room_id, commander.name.strip(), commander.opening.strip(), now),
+        )
     conn.execute(
         "INSERT INTO automation_announcements (dedupe_key, message_id, created_at) VALUES (?, ?, ?)",
         (dedupe_key, message_id, now),
     )
-    notified = [persona_name for persona_name in targets if persona_name != sender]
+    priority = ["손무", "조조", "두목", "두우", "매요신", "클라우제비츠", "한니발", "한신"]
+    notified = [name for name in priority if name in targets and name not in commander_names][:5]
+    if not notified:
+        notified = [name for name in targets if name not in commander_names][:5]
     for persona_name in notified:
         conn.execute(
             "INSERT INTO pending_turns (persona_name, room_id, status, created_at, source_message_id) VALUES (?, ?, 'pending', ?, ?)",
@@ -3352,7 +3407,7 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
     conn.close()
     return {
         "ok": True, "duplicate": False, "message_id": message_id,
-        "announcer": sender, "notified": notified,
+        "announcer": sender, "notified": notified, "commanders": commander_results,
     }
 
 

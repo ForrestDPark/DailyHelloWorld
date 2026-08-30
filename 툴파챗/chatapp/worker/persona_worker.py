@@ -895,24 +895,61 @@ def process_automatic_image_job(job):
 # 매번 다른 목소리가 나오면 혼란스러우니 이름을 해시해 고정된 목소리 하나를
 # 배정한다(같은 페르소나는 항상 같은 목소리). 이미지 자동 생성과 같은 이유로
 # 서버가 아니라 이 워커(OPENAI_API_KEY 보유)가 실제 API 호출을 전담한다.
+#
+# ★ 2026-08-30 후속 실측·요청: "남성 페르소나인데 여자 목소리가 나올 때가
+# 있다"는 신고 — 성별 무관하게 해시 하나로 전체 목소리 풀에서 뽑다 보니
+# 당연히 일어날 수 있는 문제였다. Notion 프로필에 "- 성별:"(및 "- 나이대:")
+# 줄을 추가하는 컨벤션을 만들고(notion_personas.extract_gender/extract_age_range),
+# 실제로 손자병법 주석가·역사 인물 등 성별이 명확한 페르소나 16명의 Notion
+# 페이지에 이 필드를 채워 넣었다. 이제 성별을 알면 그 성별의 풀에서만 뽑고,
+# 모르면(가상 페르소나 등) 기존처럼 전체 풀에서 뽑는다.
 TTS_MODEL = "gpt-4o-mini-tts"
-TTS_VOICE_POOL = ("alloy", "echo", "fable", "onyx", "nova", "shimmer")
+TTS_VOICE_POOL_MALE = ("echo", "fable", "onyx")
+TTS_VOICE_POOL_FEMALE = ("nova", "shimmer")
+TTS_VOICE_POOL_NEUTRAL = ("alloy",)
+TTS_VOICE_POOL_ALL = TTS_VOICE_POOL_MALE + TTS_VOICE_POOL_FEMALE + TTS_VOICE_POOL_NEUTRAL
 TTS_MAX_INPUT_CHARS = 3500  # OpenAI TTS 입력 길이 제한(4096자) 여유를 둠
 
+# ★ 2026-08-30: "미야모토 무사시는 가끔 일본어로 말할 때가 있는데 일본어도
+# 읽어달라" 요청 — 한글에는 절대 안 나오는 히라가나/가타카나 범위가 섞여
+# 있으면 그 메시지는 일본어로 간주한다(한자는 한국어 인용에도 흔해 신호로
+# 못 씀). OpenAI 쪽은 gpt-4o-mini-tts가 원래 다국어라 voice/instructions는
+# 그대로 두고 입력 텍스트만 넘기면 알아서 일본어로 읽는다 — 풀 분리가 필요한
+# 건 edge-tts·macOS say뿐(언어별로 아예 다른 음성 이름을 써야 함).
+_HIRAGANA_KATAKANA_RE = re.compile(r"[぀-ヿ]")
 
-def _voice_for_persona(persona_name):
+
+def _contains_japanese(text):
+    return bool(_HIRAGANA_KATAKANA_RE.search(text or ""))
+
+
+def _voice_pool_for_gender(gender, male_pool, female_pool, neutral_pool=()):
+    if gender == "male":
+        return male_pool
+    if gender == "female":
+        return female_pool
+    return male_pool + female_pool + neutral_pool
+
+
+def _voice_for_persona(persona_name, gender=None):
+    pool = _voice_pool_for_gender(gender, TTS_VOICE_POOL_MALE, TTS_VOICE_POOL_FEMALE, TTS_VOICE_POOL_NEUTRAL)
     digest = hashlib.sha256(persona_name.encode("utf-8")).digest()
-    return TTS_VOICE_POOL[digest[0] % len(TTS_VOICE_POOL)]
+    return pool[digest[0] % len(pool)]
 
 
 def _generate_openai_tts(text, persona_name, persona_cache):
     if not OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY가 워커에 설정되지 않았습니다")
-    voice = _voice_for_persona(persona_name)
-    profile_summary = (persona_cache.get(persona_name) or {}).get("profile_summary") or ""
+    entry = persona_cache.get(persona_name) or {}
+    gender = entry.get("gender")
+    age_range = entry.get("age_range")
+    voice = _voice_for_persona(persona_name, gender)
+    profile_summary = entry.get("profile_summary") or ""
+    age_hint = f"{age_range} " if age_range else ""
     instructions = (
-        f"'{persona_name}' 캐릭터의 성격과 말투에 맞게 감정을 담아 한국어로 자연스럽게 "
-        f"읽어주세요. 참고 프로필: {profile_summary}"
+        f"'{persona_name}' 캐릭터({age_hint}{('남성' if gender == 'male' else '여성' if gender == 'female' else '')})의 "
+        f"성격과 말투에 맞게 감정을 담아 자연스럽게 읽어주세요(입력 언어를 그대로 유지 — 한국어는 "
+        f"한국어로, 일본어 등 다른 언어가 섞여 있으면 그 부분은 그 언어 발음으로). 참고 프로필: {profile_summary}"
     )[:600]
     payload = json.dumps({
         "model": TTS_MODEL,
@@ -947,20 +984,27 @@ def _generate_openai_tts(text, persona_name, persona_cache):
 # 같은 패턴으로 무료 로컬 대안(edge-tts, ebook_reader.py가 이미 씀)으로
 # 자동 전환한다. 페르소나별 목소리 배정도 같은 해시 방식을 쓰되, OpenAI
 # 목소리 이름과 값이 겹치지 않게 문자열에 ":edge"를 붙여 시드를 다르게 한다.
-EDGE_TTS_VOICE_POOL = (
-    "ko-KR-SunHiNeural", "ko-KR-InJoonNeural", "ko-KR-BongJinNeural",
-    "ko-KR-GookMinNeural", "ko-KR-JiMinNeural", "ko-KR-SeoHyeonNeural",
-    "ko-KR-SoonBokNeural", "ko-KR-YuJinNeural",
-)
+# 실제로 지금 남아있는 한국어 음성은 2종(성별당 1개 안팎)뿐이라(Microsoft가
+# 예전에 있던 여러 음성을 정리한 걸로 보임, `edge-tts --list-voices`로 실측
+# 재확인) 성별 안에서의 다양성은 크지 않지만, 최소한 성별은 항상 맞는다.
+EDGE_TTS_VOICE_KO_MALE = ("ko-KR-InJoonNeural", "ko-KR-HyunsuMultilingualNeural")
+EDGE_TTS_VOICE_KO_FEMALE = ("ko-KR-SunHiNeural",)
+EDGE_TTS_VOICE_JA_MALE = ("ja-JP-KeitaNeural",)
+EDGE_TTS_VOICE_JA_FEMALE = ("ja-JP-NanamiNeural",)
 
 
-def _voice_for_persona_edge(persona_name):
+def _voice_for_persona_edge(persona_name, gender=None, text=""):
+    if _contains_japanese(text):
+        male_pool, female_pool = EDGE_TTS_VOICE_JA_MALE, EDGE_TTS_VOICE_JA_FEMALE
+    else:
+        male_pool, female_pool = EDGE_TTS_VOICE_KO_MALE, EDGE_TTS_VOICE_KO_FEMALE
+    pool = _voice_pool_for_gender(gender, male_pool, female_pool)
     digest = hashlib.sha256(f"{persona_name}:edge".encode("utf-8")).digest()
-    return EDGE_TTS_VOICE_POOL[digest[0] % len(EDGE_TTS_VOICE_POOL)]
+    return pool[digest[0] % len(pool)]
 
 
-def _generate_edge_tts(text, persona_name):
-    voice = _voice_for_persona_edge(persona_name)
+def _generate_edge_tts(text, persona_name, gender=None):
+    voice = _voice_for_persona_edge(persona_name, gender, text)
     filename = f"tts_{int(time.time())}_{os.urandom(4).hex()}.mp3"
     path = UPLOADS_DIR / filename
 
@@ -978,16 +1022,26 @@ def _generate_edge_tts(text, persona_name):
 # 반환, curl로 직접 확인). 외부 서비스 두 곳이 동시에(과금 소진 + 원격
 # 장애) 막힐 수 있다는 걸 실측했으니, 완전히 로컬이라 외부 요인에 영향받지
 # 않는 최후의 보루로 macOS 내장 `say`를 세 번째 단계로 추가한다. 한국어
-# 내장 음성은 "Yuna" 하나뿐이라 다양성은 포기하지만(요청의 핵심은 "매번
-# 안 되는 것보다 항상 되는 것"), 무조건 되는 게 여기서는 더 중요하다.
-SAY_VOICE = "Yuna"
+# 내장 음성은 성별 무관하게 "Yuna"(여성) 하나뿐이라 한국어일 땐 다양성을
+# 포기하지만(요청의 핵심은 "매번 안 되는 것보다 항상 되는 것"), 일본어는
+# 성별별로 다른 내장 음성(Kyoko/Otoya)이 있어 그건 성별을 맞춘다.
+SAY_VOICE_KO = "Yuna"
+SAY_VOICE_JA_MALE = "Otoya (Enhanced)"
+SAY_VOICE_JA_FEMALE = "Kyoko"
 
 
-def _generate_say_tts(text, persona_name):
+def _voice_for_persona_say(gender=None, text=""):
+    if _contains_japanese(text):
+        return SAY_VOICE_JA_FEMALE if gender == "female" else SAY_VOICE_JA_MALE
+    return SAY_VOICE_KO
+
+
+def _generate_say_tts(text, persona_name, gender=None):
+    voice = _voice_for_persona_say(gender, text)
     filename = f"tts_{int(time.time())}_{os.urandom(4).hex()}.m4a"
     path = UPLOADS_DIR / filename
     result = subprocess.run(
-        ["say", "-v", SAY_VOICE, "-o", str(path), text[:TTS_MAX_INPUT_CHARS]],
+        ["say", "-v", voice, "-o", str(path), text[:TTS_MAX_INPUT_CHARS]],
         capture_output=True, text=True, timeout=60,
     )
     if result.returncode != 0 or not path.exists():
@@ -995,10 +1049,14 @@ def _generate_say_tts(text, persona_name):
     return f"/uploads/{filename}"
 
 
+def _tts_gender(persona_name, persona_cache):
+    return (persona_cache.get(persona_name) or {}).get("gender")
+
+
 TTS_ENGINES = (
     ("openai", lambda content, persona_name, persona_cache: _generate_openai_tts(content, persona_name, persona_cache)),
-    ("edge", lambda content, persona_name, persona_cache: _generate_edge_tts(content, persona_name)),
-    ("say", lambda content, persona_name, persona_cache: _generate_say_tts(content, persona_name)),
+    ("edge", lambda content, persona_name, persona_cache: _generate_edge_tts(content, persona_name, _tts_gender(persona_name, persona_cache))),
+    ("say", lambda content, persona_name, persona_cache: _generate_say_tts(content, persona_name, _tts_gender(persona_name, persona_cache))),
 )
 
 
@@ -1238,6 +1296,12 @@ def build_prompt(persona_name, system_prompt, context, persona_names, has_images
             "'핵심 판단에 동의합니다', '동의하지 않습니다' 같은 상투적인 판정으로 시작하지 말고, "
             "자신의 주석 관점에서 구절의 뜻·역사 사례의 숨은 조건·현대 적용의 오용 위험 중 "
             "가장 중요한 쟁점 하나를 골라 곧바로 논하세요. 앞선 병법가와 같은 내용을 반복하지 마세요.)"
+        )
+    if any("⚔️ 승군 지휘관 전장 토론" in msg["content"] for msg in context):
+        lines.append(
+            "\n(승군 지휘관이 자신의 전장을 설명한 토론입니다. 막연히 동의한다고 답하지 말고, "
+            "그 지휘관이 말한 구체적 판단 하나를 직접 짚으세요. 자신의 주석이나 전쟁 경험과 "
+            "비교해 보완·반론·적용 한계 중 하나를 제시하고, 확인되지 않은 전장 사실은 지어내지 마세요.)"
         )
     # ★ "그냥 검색해서 링크 보내주면 될 텐데" 요청(2026-08-29) — 확인 안 된
     # 뉴스·사실 주장을 상대가 우길 때 페르소나가 검색도 안 해보고 그냥
