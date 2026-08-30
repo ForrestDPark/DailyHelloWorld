@@ -1837,10 +1837,8 @@ async function showChatView(roomId) {
   const isMyCustomRoom = roomId.startsWith("custom_") && canWrite && (amOwner || (cached && cached.is_mine));
   document.getElementById("thumbnail-btn").classList.toggle("hidden", !isMyCustomRoom);
   document.getElementById("chat-bg-btn").classList.toggle("hidden", !canWrite || !myUsername);
-  autoReadQueue = []; // 방을 옮기면 이전 방에서 대기 중이던 자동 읽어주기는 취소
-  const autoReadOn = isAutoReadOn(roomId);
-  document.getElementById("auto-read-btn").classList.toggle("auto-read-on", autoReadOn);
-  document.getElementById("auto-read-btn").setAttribute("aria-label", autoReadOn ? "자동 읽어주기 끄기" : "자동 읽어주기 켜기");
+  stopAllPlayback(); // 방을 옮기면 이전 방에서 재생/대기 중이던 읽어주기는 전부 중단
+  refreshAutoReadButton();
   loadChatBackground(roomId);
   loadRoomNotice(roomId, isGroupMeetingRoom);
   poll();
@@ -2350,13 +2348,37 @@ async function requestMessageTtsJob(message) {
   return job;
 }
 
+// ★ "현재 읽고 있는 메시지는 색깔이라던가 음영을 바꾸던가해서 표시해달라"
+// 요청(2026-08-30) — 수동/자동넘김/방별 자동 읽어주기가 전부 이 함수를
+// 거치므로 한 군데만 고치면 세 경로 모두에 적용된다. 재생 시작 시
+// msg-reading 클래스를 붙이고, 끝나거나(ended) 실패하거나(error) 아예 재생
+// 자체가 막혀도(play()가 reject) 항상 벗겨지도록 finally에서 제거한다.
+async function playAudioWithHighlight(messageId, url) {
+  const el = messagesEl.querySelector(`.msg[data-message-id="${messageId}"]`);
+  el?.classList.add("msg-reading");
+  const audio = new Audio(url);
+  try {
+    await new Promise((resolve) => {
+      activePlayback = { audio, resolve };
+      refreshAutoReadButton();
+      audio.addEventListener("ended", resolve, { once: true });
+      audio.addEventListener("error", resolve, { once: true });
+      audio.play().catch(resolve);
+    });
+  } finally {
+    if (activePlayback && activePlayback.audio === audio) activePlayback = null;
+    el?.classList.remove("msg-reading");
+    refreshAutoReadButton();
+  }
+}
+
 async function playMessageTts(message) {
   // addAction()은 클릭 즉시 메뉴를 닫아 버튼 자체가 사라지므로(다른 액션과
   // 동일한 동작), 버튼 상태 대신 완료/실패 시점에만 알림을 띄운다.
   try {
     const job = await requestMessageTtsJob(message);
     if (job.status === "done" && job.result_url) {
-      await new Audio(job.result_url).play().catch(() => {});
+      await playAudioWithHighlight(message.id, job.result_url);
     } else if (job.status === "failed") {
       alert(`읽어주기 실패: ${job.error || "알 수 없는 오류"}`);
     } else {
@@ -2379,6 +2401,7 @@ const AUTO_READ_STORAGE_KEY = "tulpa_auto_read_rooms";
 let autoReadRooms = new Set(JSON.parse(localStorage.getItem(AUTO_READ_STORAGE_KEY) || "[]"));
 let autoReadQueue = [];
 let autoReadPlaying = false;
+let activePlayback = null; // { audio, resolve } — 지금 재생 중인 오디오 하나(수동/자동넘김/자동읽기 공통)
 
 function isAutoReadOn(roomId) {
   return autoReadRooms.has(roomId);
@@ -2389,6 +2412,38 @@ function setAutoRead(roomId, on) {
   localStorage.setItem(AUTO_READ_STORAGE_KEY, JSON.stringify([...autoReadRooms]));
 }
 
+function isPlaybackActive() {
+  return autoReadPlaying || autoReadQueue.length > 0 || !!activePlayback;
+}
+
+// ★ "자동읽어주기 켜기 끄기는 읽는 도중에 강제 stop/start 할 수 있는 버튼으로
+// 만들어달라" 요청(2026-08-30) — 헤더 스피커 버튼 하나가 두 역할을 겸한다.
+// 뭔가 재생 중/대기 중이면(수동 읽어주기든, 자동넘김이든, 방별 자동
+// 읽어주기든 트리거와 무관하게) 누르면 즉시 멈춘다. 아무것도 재생 중이
+// 아니면 방별 "새 메시지 자동 읽어주기" 설정을 켜고 끄는 평범한 토글로
+// 동작한다. refreshAutoReadButton()이 재생 상태가 바뀔 때마다 버튼 모양을
+// 갱신한다.
+function stopAllPlayback() {
+  autoReadQueue = [];
+  if (activePlayback) {
+    const { audio, resolve } = activePlayback;
+    activePlayback = null;
+    audio.pause();
+    resolve(); // playAudioWithHighlight의 대기 중인 Promise를 강제로 풀어준다
+  }
+}
+
+function refreshAutoReadButton() {
+  const playing = isPlaybackActive();
+  const on = !!currentRoom && isAutoReadOn(currentRoom);
+  autoReadBtn.classList.toggle("auto-read-on", playing || on);
+  autoReadBtn.classList.toggle("auto-read-playing", playing);
+  autoReadBtn.setAttribute(
+    "aria-label",
+    playing ? "읽어주기 중지" : on ? "자동 읽어주기 끄기" : "자동 읽어주기 켜기"
+  );
+}
+
 async function playMessageTtsAndWaitForEnd(message) {
   try {
     const job = await requestMessageTtsJob(message);
@@ -2396,12 +2451,7 @@ async function playMessageTtsAndWaitForEnd(message) {
       console.warn("자동 읽어주기 실패:", message.id, job.error || job.status);
       return;
     }
-    const audio = new Audio(job.result_url);
-    await new Promise((resolve) => {
-      audio.addEventListener("ended", resolve, { once: true });
-      audio.addEventListener("error", resolve, { once: true });
-      audio.play().catch(resolve);
-    });
+    await playAudioWithHighlight(message.id, job.result_url);
   } catch (e) {
     console.warn("자동 읽어주기 오류:", e);
   }
@@ -2410,25 +2460,53 @@ async function playMessageTtsAndWaitForEnd(message) {
 async function drainAutoReadQueue() {
   if (autoReadPlaying) return;
   autoReadPlaying = true;
+  refreshAutoReadButton();
   while (autoReadQueue.length) {
     await playMessageTtsAndWaitForEnd(autoReadQueue.shift());
   }
   autoReadPlaying = false;
+  refreshAutoReadButton();
 }
 
 function enqueueAutoRead(message) {
   autoReadQueue.push(message);
+  refreshAutoReadButton();
+  drainAutoReadQueue();
+}
+
+// ★ "롱프레스 메뉴에 읽어주기 밑에 읽어주기(자동넘김)을 만들고, 클릭하면
+// 내가 선택했던 메시지부터 시작해서 마지막 메시지까지 쭉 읽어주는거야"
+// 요청(2026-08-30) — 지금 화면에 렌더링된 메시지 DOM 순서를 그대로 신뢰
+// 소스로 쓴다(별도 메시지 배열을 안 두어도 data-message-id로 충분). 클릭한
+// 메시지부터 끝까지 중 페르소나 메시지만 골라 같은 재생 큐에 순서대로
+// 넣는다 — 방별 자동 읽어주기와 큐를 공유하므로 방을 옮기거나 헤더
+// 스피커 버튼으로 멈추면 똑같이 취소된다.
+function collectPersonaMessagesFrom(startEl) {
+  const rendered = [...messagesEl.querySelectorAll(".msg[data-message-id]")];
+  const startIndex = rendered.indexOf(startEl);
+  if (startIndex === -1) return [];
+  return rendered.slice(startIndex)
+    .filter((el) => el.classList.contains("msg-persona"))
+    .map((el) => ({ id: Number(el.dataset.messageId) }));
+}
+
+function playMessagesFrom(startEl) {
+  const messages = collectPersonaMessagesFrom(startEl);
+  if (!messages.length) return;
+  autoReadQueue.push(...messages);
+  refreshAutoReadButton();
   drainAutoReadQueue();
 }
 
 const autoReadBtn = document.getElementById("auto-read-btn");
 autoReadBtn.addEventListener("click", () => {
-  if (!currentRoom) return;
-  const next = !isAutoReadOn(currentRoom);
-  setAutoRead(currentRoom, next);
-  autoReadBtn.classList.toggle("auto-read-on", next);
-  autoReadBtn.setAttribute("aria-label", next ? "자동 읽어주기 끄기" : "자동 읽어주기 켜기");
-  if (!next) autoReadQueue = []; // 끄면 아직 안 읽은 대기열도 비운다(재생 중인 것은 끝까지)
+  if (isPlaybackActive()) {
+    stopAllPlayback();
+    if (currentRoom) setAutoRead(currentRoom, false);
+  } else if (currentRoom) {
+    setAutoRead(currentRoom, !isAutoReadOn(currentRoom));
+  }
+  refreshAutoReadButton();
 });
 
 function openMessageMenu(message, hostEl, x, y) {
@@ -2445,7 +2523,10 @@ function openMessageMenu(message, hostEl, x, y) {
   addAction("선택 복사", () => openSelectiveCopy(message.content));
   addAction("복사", () => navigator.clipboard.writeText(message.content).catch(() => {}));
   addAction("프로필 보기", () => showProfilePopup(message));
-  if (message.is_persona) addAction("🔊 읽어주기", () => playMessageTts(message));
+  if (message.is_persona) {
+    addAction("🔊 읽어주기", () => playMessageTts(message));
+    addAction("🔊 읽어주기(자동넘김)", () => playMessagesFrom(hostEl));
+  }
   const relayedQaSource = message.sender === "QA요정"
     ? Number(message.content.match(/원문: QA요정 방 메시지 #(\d+)/)?.[1] || 0)
     : 0;

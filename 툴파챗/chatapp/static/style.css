@@ -58,6 +58,14 @@ button { font-family: inherit; }
 #notify-btn.notify-on { color: var(--accent); }
 /* ★ 방별 자동 읽어주기 켜짐 상태(2026-08-30) — 스피커 아이콘을 강조색으로 표시 */
 #auto-read-btn.auto-read-on { color: var(--accent); }
+/* ★ "읽는 도중에 강제 stop/start 할 수 있는 버튼으로 만들어달라"
+   요청(2026-08-30) — 실제로 뭔가 재생 중일 때는 은은하게 펄스를 줘서
+   "지금 누르면 멈춘다"는 걸 켜짐 상태와 구분되게 보여준다. */
+#auto-read-btn.auto-read-playing { animation: auto-read-pulse 1.2s ease-in-out infinite; }
+@keyframes auto-read-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
 .icon-button > svg, #room-notice-icon svg {
   width: 21px;
   height: 21px;
@@ -1048,6 +1056,15 @@ main#messages.has-custom-background {
    말풍선(회색)과 확실히 구분되게 색을 따로 둔다 — 공유방에서 "이건 내가
    아니라 다른 사람이 쓴 말"이라는 게 한눈에 보여야 하므로. */
 .msg-other .body { background: var(--bubble-other); color: var(--bubble-other-fg); }
+/* ★ "현재 읽고 있는 메시지를 색깔/음영으로 표시해달라" 요청(2026-08-30) —
+   읽어주기(수동·자동넘김·방별 자동 읽어주기 전부 공통 재생 경로)가 진행되는
+   동안 해당 말풍선에 강조 테두리 + 은은한 배경을 얹는다. 재생이 끝나거나
+   실패하면 클래스가 즉시 빠진다(playAudioWithHighlight의 finally). */
+.msg-reading .body {
+  box-shadow: 0 0 0 2px var(--accent);
+  background: color-mix(in srgb, var(--accent) 18%, var(--bubble-persona));
+  transition: box-shadow 0.15s ease, background 0.15s ease;
+}
 .msg .body .chat-image { max-width: 100%; border-radius: 12px; display: block; }
 .msg .body .message-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
 .msg-user .body .message-link { color: inherit; font-weight: 600; }
