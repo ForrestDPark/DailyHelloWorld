@@ -208,14 +208,21 @@ def update_local_session(path, record, **changes):
 TULPACHAT_WORKER_KEYCHAIN_SERVICE = "com.forrest.tulpachat.worker"
 TULPACHAT_POST_MESSAGE_URL = "http://127.0.0.1:8000/api/worker/post_message"
 EBOOK_TULPACHAT_PERSONA_NAME = "독서지기"
+# ★ 2026-08-30: "노션에 정리해온 내용을 바탕으로 독서 방에 저자를 페르소나화해서
+# 초대한다음 같이 토론하면 좋겠어"는 요청 — "독서지기"의 1:1 방 대신, 저자
+# 페르소나(현재는 Tools of Titans의 티모시 페리스)도 함께 초대해둔 전용
+# custom_rooms 방으로 옮겼다(손자병법 토론방과 같은 패턴). 읽는 책이 바뀌면
+# 이 방에 새 저자를 초대하고 이 room_id는 그대로 재사용하면 된다.
+EBOOK_DISCUSSION_ROOM_ID = "custom_8213ad5b05"
 
 
 def notify_tulpachat_reading_done():
     """★ 2026-08-30: "ebook reader도 페르소나화해서 매일 읽고 나면 페르소나
     채팅방에서 오늘 무슨 내용 읽었는지 간단하게 토론하면 좋겠어"는 요청 —
-    방금 저장한 세션(가장 최근 파일)을 읽어 '독서지기' 페르소나 명의로 그
-    채팅방에 짧게 알린다. 툴파챗 서버가 안 떠 있거나 키체인 토큰이 없어도
-    조용히 넘어간다(이북 리더 종료 자체를 막으면 안 됨)."""
+    방금 저장한 세션(가장 최근 파일)을 읽어 '독서지기' 페르소나 명의로 독서
+    토론방(EBOOK_DISCUSSION_ROOM_ID)에 짧게 알린다. 툴파챗 서버가 안 떠
+    있거나 키체인 토큰이 없어도 조용히 넘어간다(이북 리더 종료 자체를 막으면
+    안 됨)."""
     try:
         files = sorted(
             (os.path.join(SESSION_DIR, name) for name in os.listdir(SESSION_DIR)),
@@ -244,7 +251,7 @@ def notify_tulpachat_reading_done():
             TULPACHAT_POST_MESSAGE_URL,
             json={
                 "persona_name": EBOOK_TULPACHAT_PERSONA_NAME,
-                "room_id": EBOOK_TULPACHAT_PERSONA_NAME,
+                "room_id": EBOOK_DISCUSSION_ROOM_ID,
                 "content": content,
             },
             headers={"Authorization": f"Bearer {token}"},

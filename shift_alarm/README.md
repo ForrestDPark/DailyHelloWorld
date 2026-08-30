@@ -856,5 +856,13 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 
 **사용자 요청**: "ebook reader 도 손자병법처럼 페르소나화해서 매일 ebook read 하고 나면 페르소나 채팅방에서 오늘 무슨 내용읽었는지 간단하게 토론하면 좋겠어."
 
-- `ebook_reader.py`에 `notify_tulpachat_reading_done()`을 추가 — Ctrl+C로 세션을 마칠 때(`signal_handler`, 읽은 내용이 있을 때만) 방금 저장한 로컬 세션(`~/.ebook_reader/sessions/`의 가장 최근 파일)에서 책 제목·페이지 범위를 뽑아 툴파챗 "독서지기" 페르소나 명의로 그 채팅방에 "📖 오늘 {책} {시작}~{끝}페이지 읽었더라! 오늘 읽은 내용 궁금하면 말 걸어" 메시지를 보낸다(`/api/worker/post_message`, 워커 키체인 토큰 `com.forrest.tulpachat.worker` 재사용). 툴파챗 서버가 꺼져있어도 예외를 삼키고 조용히 넘어가며, 이북 리더 자체 종료는 절대 막지 않는다.
-- 이후 실제 대화는 툴파챗 쪽(`persona_worker.py`)의 "독서지기" 라이브 상태 주입이 담당한다 — 자세한 내용은 `툴파챗/chatapp/README.md`의 "전자책 독서 페르소나 '독서지기'" 항목 참고.
+- `ebook_reader.py`에 `notify_tulpachat_reading_done()`을 추가 — Ctrl+C로 세션을 마칠 때(`signal_handler`, 읽은 내용이 있을 때만) 방금 저장한 로컬 세션(`~/.ebook_reader/sessions/`의 가장 최근 파일)에서 책 제목·페이지 범위를 뽑아 툴파챗 "독서지기" 페르소나 명의로 "독서 토론방"에 "📖 오늘 {책} {시작}~{끝}페이지 읽었더라! 오늘 읽은 내용 궁금하면 말 걸어" 메시지를 보낸다(`/api/worker/post_message`, 워커 키체인 토큰 `com.forrest.tulpachat.worker` 재사용). 툴파챗 서버가 꺼져있어도 예외를 삼키고 조용히 넘어가며, 이북 리더 자체 종료는 절대 막지 않는다.
+- 이후 실제 대화는 툴파챗 쪽(`persona_worker.py`)의 라이브 상태 주입이 담당한다 — 자세한 내용은 `툴파챗/chatapp/README.md`의 "전자책 독서 페르소나 '독서지기'" 항목 참고.
+
+## 63. 📖 독서 토론방에 저자 페르소나(티모시 페리스) 초대 (★ 2026-08-30 추가)
+
+**사용자 요청**: "그동안 ebook reading 하면서 계속 노션에 읽은 내용들 정리해왔잖아 그내용들을 바탕으로 독서 방에 저자를 페르소나화해서 초대한다음 같이 토론을 하면 좋겠어."
+
+- 지금 계속 읽고 있는 책(Tools of Titans, Timothy Ferriss)의 저자를 페르소나로 만들어 "독서지기"와 같은 전용 방("독서 토론방", `custom_8213ad5b05`, 손자병법 토론방과 같은 구조)에 함께 초대했다.
+- `ebook_reader.py`의 `EBOOK_DISCUSSION_ROOM_ID` 상수가 알림 대상 방을 가리킨다 — 읽는 책이 바뀌면 값은 그대로 두고 그 방에 새 저자 페르소나만 추가로 초대하면 된다.
+- 자세한 배경(왜 "독서지기" 1:1 방을 그대로 못 썼는지 등)은 `툴파챗/chatapp/README.md`의 "독서 토론방 — 저자 페르소나 '티모시 페리스' 초대" 항목 참고.

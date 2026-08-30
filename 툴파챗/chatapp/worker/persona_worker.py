@@ -196,7 +196,15 @@ def load_shift_alarm_state(state_key):
 # 남기는 상태 파일을 이 함수가 직접 읽어 오늘 읽은 내용만 뽑아 매 턴 주입한다.
 # 세션 완료 알림(오늘 읽었다고 먼저 말 거는 것)은 ebook_reader.py의
 # notify_tulpachat_reading_done()이 종료 시점에 별도로 담당한다.
+#
+# ★ 2026-08-30 추가: "그동안 노션에 정리해온 내용을 바탕으로 독서 방에 저자를
+# 페르소나화해서 초대한다음 같이 토론하면 좋겠어" 요청 — 지금 읽고 있는 책
+# (Tools of Titans)의 저자 "티모시 페리스"를 만들어 "독서 토론방"
+# (custom_8213ad5b05, 손자병법 토론방과 같은 custom_rooms 패턴)에 독서지기와
+# 함께 초대했다. 저자도 오늘 읽은 내용을 근거로 이야기해야 하므로 같은
+# live_state를 받는다 — 책이 바뀌면 이 집합에 새 저자 이름을 추가/교체할 것.
 EBOOK_READER_PERSONA_NAME = "독서지기"
+EBOOK_DISCUSSION_PERSONA_NAMES = {EBOOK_READER_PERSONA_NAME, "티모시 페리스"}
 EBOOK_LAST_STATE_PATH = HOME_DIR / ".ebook_reader_last.json"
 EBOOK_SESSIONS_DIR = HOME_DIR / ".ebook_reader" / "sessions"
 EBOOK_STATE_EXCERPT_MAX_CHARS = 2000
@@ -1341,7 +1349,7 @@ def _process_turn_inner(turn, persona_cache):
     shift_alarm_state_key = SHIFT_ALARM_PERSONA_STATE_KEY.get(persona_name)
     if shift_alarm_state_key:
         live_state = load_shift_alarm_state(shift_alarm_state_key)
-    elif persona_name == EBOOK_READER_PERSONA_NAME:
+    elif persona_name in EBOOK_DISCUSSION_PERSONA_NAMES:
         live_state = load_ebook_reader_state()
     credentials = None
     source_username = turn.get("source_username")
