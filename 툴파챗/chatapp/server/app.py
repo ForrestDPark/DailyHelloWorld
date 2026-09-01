@@ -3781,6 +3781,52 @@ def worker_post_message(body: WorkerPostMessage, authorization: Optional[str] = 
     return {"ok": True}
 
 
+class ReadingSessionDone(BaseModel):
+    room_id: str
+    content: str
+
+
+@app.post("/api/worker/reading_session_done")
+def worker_reading_session_done(body: ReadingSessionDone, authorization: Optional[str] = Header(None)):
+    """★ "오늘 읽은 내용은 무엇이었는지 간단하게 요약하고 흥미로운점 설명해주는
+    방식으로 말해줘 그리고 저자가 직접 답변도 해주고" 요청(2026-08-30) —
+    ebook_reader.py가 캔 문구를 페르소나 명의로 바로 올리는 대신(그건
+    항상 같은 말투라 요청과 안 맞음), 시스템 알림 메시지 하나만 남기고 그
+    방 소속 페르소나 전원(독서지기·티모시 페리스, room_invites 순서)에게
+    진짜 AI 턴을 배정한다 — post_message()의 target 계산(_group_members)과
+    pending_turns 삽입을 그대로 재사용한 것. 각자 live_state(오늘 읽은
+    내용)를 근거로 실제로 응답한다. 독서지기가 먼저 요약하면, 워커 폴링
+    큐가 순서대로 처리되므로 티모시 페리스는 그 요약까지 포함된 컨텍스트로
+    이어서 답한다(그룹 회의방과 동일한 순차 처리 메커니즘)."""
+    _check_worker_auth(authorization)
+    room_id = body.room_id.strip()
+    content = body.content.strip()
+    if not room_id or not content:
+        raise HTTPException(status_code=400, detail="방·내용이 필요합니다")
+    conn = get_conn()
+    persona_rows = conn.execute(
+        "SELECT name, group_name, owner_username FROM personas ORDER BY name"
+    ).fetchall()
+    targets = _group_members(conn, room_id, persona_rows)
+    if not targets:
+        conn.close()
+        raise HTTPException(status_code=404, detail="구성원이 있는 방을 찾지 못했습니다")
+    now = _now()
+    cursor = conn.execute(
+        "INSERT INTO messages (room_id, sender, content, created_at, is_system) VALUES (?, 'system', ?, ?, 1)",
+        (room_id, content, now),
+    )
+    message_id = cursor.lastrowid
+    for persona_name in targets:
+        conn.execute(
+            "INSERT INTO pending_turns (persona_name, room_id, status, created_at, source_message_id) VALUES (?, ?, 'pending', ?, ?)",
+            (persona_name, room_id, now, message_id),
+        )
+    conn.commit()
+    conn.close()
+    return {"ok": True, "notified": targets}
+
+
 @app.get("/api/worker/group_rooms")
 def worker_group_rooms(authorization: Optional[str] = Header(None)):
     """공지사항 동기화(`sync_room_notices`)가 훑어야 할 "여러 사람이 보는 방"
