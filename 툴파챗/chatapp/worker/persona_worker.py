@@ -538,7 +538,12 @@ JOB_SYSTEM_ADDENDUM = (
     "곳인지, 공고 내용상 실제로 어떤 업무를 맡게 될지, 후보자 경력·스킬과 어디가 특히 "
     "잘 맞는지까지 구체적으로 풀어서 설명한다. 회사 소개가 live_state나 로컬 파일에 없으면 "
     "지어내지 말고 WebSearch로 직접 찾아본 뒤(이미 허용된 도구) 답하고, 그래도 못 찾으면 "
-    "모른다고 솔직히 말한다."
+    "모른다고 솔직히 말한다.\n"
+    "★ 2026-09-01 실측 피드백: \"웬만한 기업들은 기업홈페이지가 있으니까 링크같은거 보낼때 "
+    "기업홈페이지도 공유해주면 좋겠어\" — 회사를 언급할 때 WebSearch로 공식 홈페이지를 찾을 수 "
+    "있으면 그 URL을 메시지에 같이 적어준다(찾았는데 안 적는 게 제일 나쁨). 홈페이지를 더 깊이 "
+    "파고들거나 회사가 속한 업계의 대표 기업과 비교하는 건 같은 방에 있는 기업크롤러/업계분석가의 "
+    "역할이니 그쪽에 넘겨도 된다."
 )
 
 # ★ "일본어 자막추출도 비슷한 방식으로 플랜 만들어줘" → "일본어 스터디방으로
@@ -639,6 +644,81 @@ JP_SUBTITLE_ADDENDUM = (
     "반드시 붙인다. 예: 「相談事(そうだんごと)」, 「気(き)にすんな」. 이미 かな만으로 "
     "쓰인 표현(예: 「すっごい」)은 그대로 두면 된다."
 )
+
+# ★ 2026-09-01: "면접에서 'AI 에이전트 운영 경험 있어요?' 나오면 일본어자막추출
+# 파이프라인 얘기를 구체적 사례로 꺼낼 수 있게 정리해두자... 파이프라인을 남들에게
+# 설명할 때 어떤 식으로 설명하면 좋을까? 파이프라인 전문가 페르소나방도 만들어서
+# 이런 관점에서 분석하고 공부할 수 있게 해줘" 요청 — 소유자가 직접 만든 자동화
+# 파이프라인들(이직시스템/일본어자막추출/shift_alarm 등)을 코드까지 읽고 면접에서
+# 전문가처럼 설명할 수 있도록 코칭하는 전용 페르소나. 새 코드를 짜주는 역할이
+# 아니라 이미 있는 코드를 읽고 질문·설명하는 코칭 역할이라 손동주(Read/Glob)와
+# 같은 패턴이되 스코프를 REPO_ROOT 전체로 넓힌다.
+PIPELINE_EXPERT_PERSONA_NAME = "파이프라인 전문가"
+PIPELINE_EXPERT_TIMEOUT_SECONDS = 300
+PIPELINE_EXPERT_ADDENDUM = (
+    "\n\n---\n"
+    f'"{PIPELINE_EXPERT_PERSONA_NAME}"은(는) 소유자가 만든 자동화 파이프라인들(이직시스템 '
+    "채용공고 수집·분석, 일본어자막추출, shift_alarm, 손자병법 파이프라인 등 저장소 전체)을 "
+    "Read/Glob/Grep으로 직접 코드까지 읽고 리버스엔지니어링하듯 분석해준다. 목적은 소유자가 "
+    "면접 등에서 '이 파이프라인을 어떻게 설계했는지' 전문가처럼 구체적으로 설명할 수 있도록 "
+    "코칭하는 것 — 구조(수집→가공→저장→알림 등 단계), 왜 그렇게 설계했는지(캐시·재시도·"
+    "장애복구 같은 설계 결정의 이유), 어떤 기술적 도전이 있었는지를 소유자 눈높이에서 짚어주고, "
+    "실전 면접 질문('이 부분은 왜 이렇게 하셨어요?' 같은)을 직접 던지며 소유자가 스스로 "
+    "설명해보게 유도한다.\n"
+    "AI 코딩 도구를 활용해 구현했다는 사실을 숨기라고 코칭하지 않는다 — 요즘 개발 현장에서 "
+    "AI 코딩 도구 활용은 흔한 일이고, '아키텍처와 설계 결정은 내가 직접 하고 구현은 AI 코딩 "
+    "도구를 적극 활용했다'고 정직하게 말하되 왜 그렇게 설계했는지·어떤 트레이드오프를 "
+    "고려했는지를 소유자 본인이 술술 설명할 수 있게 만드는 데 집중한다. 코드를 통째로 새로 "
+    "짜주거나 수정하는 역할이 아니라, 이미 있는 코드를 읽고 설명·질문하는 역할이다. 확인 안 "
+    "된 내용은 지어내지 말고 코드를 직접 열어서 확인한 뒤 답한다."
+)
+
+# ★ 2026-09-01: "이직준비방에서 언급된 회사가 있으면 그 회사가 다루는 업계에서
+# 가장 큰 회사, 대표기업을 서칭해서 비교군으로 설명해주면 좋겠어" 요청 — 이직
+# 준비방(구직지기/커리어코치/스터디코치)에 새로 초대되는 멤버. 자체 live_state는
+# 없고 방 대화 맥락(구직지기가 언급한 회사)에서 회사명을 파악해 WebSearch로
+# 업계 대표기업을 찾아 비교해주는 역할이라 JOB_SYSTEM 페르소나들과 같은 도구
+# 접근(Read/Glob/Grep/WebSearch/WebFetch, JOB_SYSTEM_DIR)을 공유한다.
+INDUSTRY_ANALYST_PERSONA_NAME = "업계분석가"
+INDUSTRY_ANALYST_TIMEOUT_SECONDS = 300
+INDUSTRY_ANALYST_ADDENDUM = (
+    "\n\n---\n"
+    f'"{INDUSTRY_ANALYST_PERSONA_NAME}"은(는) 이직 준비방에 초대된 멤버로, 구직지기/'
+    "커리어코치/스터디코치가 대화 중 언급하는 회사가 나올 때마다 그 회사가 속한 업계에서 "
+    "가장 크거나 대표적인 기업을 WebSearch로 찾아 비교군으로 설명하는 역할이다. 예: 오늘 "
+    "언급된 회사가 특정 산업의 중소기업이면, 그 산업의 1위/대표 기업(매출·시장점유율·업계 "
+    "인지도 기준)을 찾아 규모(매출·인원·상장여부), 사업 영역, 최근 동향을 간단히 소개하고, "
+    "오늘 언급된 회사가 그 안에서 어느 위치에 있는지(예: 후발주자/틈새시장/하청/신생 등)를 "
+    "짚어준다. 지원 여부를 대신 판단해주는 역할이 아니라 '이 업계가 어떻게 생겼는지' 감을 "
+    "잡게 도와주는 참고자료 역할이다. 확인 안 된 수치는 지어내지 말고 출처(뉴스·공시·"
+    "잡플래닛 등)를 같이 언급하며, 못 찾으면 못 찾았다고 솔직히 말한다."
+)
+
+# ★ 2026-09-01: "싸이트로닉스 찾아보니까 기업홈페이지가 있잖아... 링크같은거
+# 보낼때 기업홈페이지도 공유해주면 좋겠고 기업 홈페이지에서 크롤링한다던지
+# 정보를 fetch 해서 알려주는 크롤러 페르소나도 생성해서 채팅방에 초대해" 요청 —
+# 업계분석가와 마찬가지로 이직 준비방에 초대되는 멤버. WebSearch로 공식
+# 홈페이지를 찾아 링크를 직접 공유하고, WebFetch로 홈페이지(및 회사소개/연혁/
+# 채용/뉴스 하위 페이지)를 실제로 열어서 구조화된 사실을 정리해준다.
+COMPANY_CRAWLER_PERSONA_NAME = "기업크롤러"
+COMPANY_CRAWLER_TIMEOUT_SECONDS = 300
+COMPANY_CRAWLER_ADDENDUM = (
+    "\n\n---\n"
+    f'"{COMPANY_CRAWLER_PERSONA_NAME}"은(는) 이직 준비방에 초대된 멤버로, 대화 중 회사가 '
+    "언급되면 그 회사의 공식 홈페이지를 WebSearch로 찾아 URL을 반드시 메시지에 직접 공유하고, "
+    "WebFetch로 홈페이지(및 회사소개/연혁/채용/뉴스·공지 같은 하위 페이지가 있으면 그것도)를 "
+    "직접 열어서 사업 영역, 연혁, 최근 소식, 현재 채용 중인 포지션 같은 정보를 구조화해서 "
+    "정리해준다. WebSearch 요약만으로 끝내지 말고 실제로 홈페이지를 열어(WebFetch) 확인한 "
+    "내용 위주로 답한다. 홈페이지를 못 찾거나 정보가 없으면 지어내지 말고 못 찾았다고 "
+    "솔직히 말한다."
+)
+
+# 업계분석가·기업크롤러는 각자 고유 addendum을 쓰지만(위 두 상수), 도구 접근·
+# 타임아웃은 JOB_SYSTEM_PERSONA_NAMES 3인과 완전히 같아서(이직 준비방 멤버,
+# JOB_SYSTEM_DIR 스코프) 재사용을 위해 합쳐둔다.
+JOB_ROOM_TOOL_PERSONA_NAMES = JOB_SYSTEM_PERSONA_NAMES | {
+    INDUSTRY_ANALYST_PERSONA_NAME, COMPANY_CRAWLER_PERSONA_NAME,
+}
 
 # ★ 2026-08-29: 소유자가 채팅에서 "손자병법 다음 구절 해석해"라고 직접
 # 명령하면 기존 야간 파이프라인을 그 자리에서 한 번 실행한다. 채팅 AI에는
@@ -1501,6 +1581,12 @@ def sync_personas():
             system_prompt += JOB_SYSTEM_ADDENDUM
         elif persona["title"] == JP_TEACHER_PERSONA_NAME:
             system_prompt += JP_SUBTITLE_ADDENDUM
+        elif persona["title"] == PIPELINE_EXPERT_PERSONA_NAME:
+            system_prompt += PIPELINE_EXPERT_ADDENDUM
+        elif persona["title"] == INDUSTRY_ANALYST_PERSONA_NAME:
+            system_prompt += INDUSTRY_ANALYST_ADDENDUM
+        elif persona["title"] == COMPANY_CRAWLER_PERSONA_NAME:
+            system_prompt += COMPANY_CRAWLER_ADDENDUM
         group_name = extract_group(page_text)
         profile_summary = extract_profile_summary(page_text)
         # ★ "각각의 페르소나 설정에서 남성인지 여성인지 나이대 구분되는 설정이
@@ -1860,8 +1946,9 @@ def _process_turn_inner(turn, persona_cache):
             "코드나 화면에 실제로 반영할 수 있다고 말하지 말고, uiplan 코드블록도 만들지 마세요."
         )
     is_ebook_reader = persona_name == EBOOK_READER_PERSONA_NAME
-    is_job_system = persona_name in JOB_SYSTEM_PERSONA_NAMES
+    is_job_system = persona_name in JOB_ROOM_TOOL_PERSONA_NAMES
     is_jp_teacher = persona_name == JP_TEACHER_PERSONA_NAME
+    is_pipeline_expert = persona_name == PIPELINE_EXPERT_PERSONA_NAME
     if is_organizer:
         executed = _maybe_execute_pending_plan(room_id, turn["context"])
         if executed is not None:
@@ -1952,12 +2039,16 @@ def _process_turn_inner(turn, persona_cache):
     elif is_jp_teacher:
         exec_kwargs["allow_tools"] = ["Read", "Glob", "Grep", "WebSearch", "WebFetch"]
         exec_kwargs["add_dirs"] = [str(JP_SUBTITLE_LIBRARY_DIR)]
+    elif is_pipeline_expert:
+        exec_kwargs["allow_tools"] = ["Read", "Glob", "Grep", "WebSearch", "WebFetch"]
+        exec_kwargs["add_dirs"] = [str(REPO_ROOT)]
     timeout = (
         ORGANIZER_TIMEOUT_SECONDS if is_organizer
         else UI_DEV_TIMEOUT_SECONDS if is_ui_dev
         else EBOOK_READER_TIMEOUT_SECONDS if is_ebook_reader
         else JOB_SYSTEM_TIMEOUT_SECONDS if is_job_system
         else JP_SUBTITLE_TIMEOUT_SECONDS if is_jp_teacher
+        else PIPELINE_EXPERT_TIMEOUT_SECONDS if is_pipeline_expert
         else AI_TIMEOUT_SECONDS
     )
     try:
