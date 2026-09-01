@@ -21,6 +21,7 @@ import gc
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 import sys
 import time
@@ -439,6 +440,74 @@ WORK_DIR = Path(__file__).resolve().parent
 # worker/ -> chatapp/ -> 툴파챗/ -> 저장소 루트
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PROJECT_README_MAX_CHARS = 3000  # 프로젝트당 README 발췌 상한 — 프롬프트 폭주 방지
+
+# ★ "이직시스템도 페르소나 방이 있으면 좋겠다" 요청(2026-09-01) — "이대로
+# 하되 커리어코치도 있는 단체방으로 만들고 자격증이랑 이직에 필요한 준비를
+# 위한 스터디코치도 있으면 좋겠어"로 확정된 3인조를 "이직 준비방"
+# (custom_0e5dc0b026, 독서 토론방과 같은 custom_rooms 패턴)에 초대했다.
+# 구직지기만 라이브 상태(오늘의 추천 공고·신규 공고 통계·후보자 목표 직무)를
+# 받고, 셋 다 데이터 폴더 검색 권한을 공유한다 — jobs-analyst 에이전트
+# (candidate_profile.json 기반 맞춤 자소서·포트폴리오 초안 작성)와 역할이
+# 겹치지 않게, 이 페르소나들은 "지금 상태를 보고 캐주얼하게 얘기하는" 대화
+# 표면만 담당하고 실제 문서 작성은 하지 않는다.
+JOB_SYSTEM_DIR = REPO_ROOT / "이직시스템"
+JOB_SYSTEM_DATA_DIR = JOB_SYSTEM_DIR / "data"
+JOB_SEEKER_PERSONA_NAME = "구직지기"
+CAREER_COACH_PERSONA_NAME = "커리어코치"
+STUDY_COACH_PERSONA_NAME = "스터디코치"
+JOB_SYSTEM_PERSONA_NAMES = {JOB_SEEKER_PERSONA_NAME, CAREER_COACH_PERSONA_NAME, STUDY_COACH_PERSONA_NAME}
+
+
+def load_job_system_state():
+    """오늘의 추천 공고(정규직/알바 각각) + 신규 공고 통계 + 후보자 목표
+    직무를 사람이 읽는 요약으로 만든다. 구직지기 전용 — 알람지기 등과 같은
+    패턴으로 AI에게 파일 도구를 주지 않고 필요한 값만 직접 읽어 넣는다."""
+    lines = []
+    for label, filename in (("정규직", "top_job_notion_career.json"), ("알바/파트타임", "top_job_notion_parttime.json")):
+        data = _read_json_file(JOB_SYSTEM_DATA_DIR / filename)
+        if not data:
+            continue
+        lines.append(
+            f"오늘의 추천 공고({label}): {data.get('company')} — {data.get('title')} "
+            f"[{data.get('score')}점, {data.get('source')}]"
+        )
+    try:
+        conn = sqlite3.connect(str(JOB_SYSTEM_DATA_DIR / "jobs.db"))
+        row = conn.execute("SELECT COUNT(*), MAX(score) FROM jobs").fetchone()
+        conn.close()
+        if row and row[0]:
+            lines.append(f"수집된 전체 공고: {row[0]}건 (수집 시점 키워드 점수 최고 {row[1]}점 — "
+                         f"이건 오늘의 추천 점수와 다른, 수집 단계의 간이 점수)")
+    except sqlite3.Error:
+        pass
+    profile = _read_json_file(JOB_SYSTEM_DIR / "candidate_profile.json")
+    identity = profile.get("identity") or {}
+    if identity.get("headline"):
+        lines.append(f"후보자 방향: {identity['headline']}")
+    target_roles = profile.get("target_roles") or []
+    if target_roles:
+        lines.append(f"목표 직무: {', '.join(target_roles)}")
+    if not lines:
+        return "오늘 데이터를 아직 못 찾음 — 지어내지 말고 솔직히 말할 것."
+    return "\n".join(lines)
+
+
+JOB_SYSTEM_TIMEOUT_SECONDS = 300  # 데이터 폴더를 Grep/Read로 훑어야 해서 더 오래 걸릴 수 있음
+JOB_SYSTEM_ADDENDUM = (
+    "\n\n---\n"
+    "이 채팅에서는 이직시스템(채용공고 수집·추천 파이프라인) 데이터 폴더를 "
+    "Read/Glob/Grep으로 직접 훑어볼 수 있다. 매 턴 주입되는 '오늘의 추천'만으로 부족한 "
+    "질문(예: \"이 회사 공고 전에도 봤었나?\", \"이 직무 요구 스킬이 보통 뭐야?\")에는 다음 폴더를 "
+    "직접 뒤져서 답한다:\n"
+    f"- {JOB_SYSTEM_DATA_DIR}/company_profiles/*.json — 회사별 재무·뉴스·분석 스냅샷.\n"
+    f"- {JOB_SYSTEM_DATA_DIR}/top_job_history_*.json, top_index_history.json — 과거 추천 이력.\n"
+    f"- {JOB_SYSTEM_DIR}/candidate_profile.json — 후보자 경력·스킬·프로젝트(연락처 등 민감정보는 "
+    "애초에 이 파일에 없음).\n"
+    "jobs.db(SQLite)는 도구로 직접 열 수 없으니 공고 개별 내용을 물으면 위 JSON들과 "
+    "candidate_profile.json 범위 안에서만 답하고, 그 밖은 모른다고 솔직히 말할 것. "
+    "맞춤 자소서·포트폴리오 초안 작성은 이 페르소나들의 역할이 아니다(그건 별도 절차로 "
+    "처리됨) — 대신 지금 상태를 보고 캐주얼하게 의견을 나누는 역할에 집중한다."
+)
 
 # ★ 2026-08-29: 소유자가 채팅에서 "손자병법 다음 구절 해석해"라고 직접
 # 명령하면 기존 야간 파이프라인을 그 자리에서 한 번 실행한다. 채팅 AI에는
@@ -1210,6 +1279,8 @@ def sync_personas():
             system_prompt += _build_ui_dev_addendum()
         elif persona["title"] == EBOOK_READER_PERSONA_NAME:
             system_prompt += EBOOK_READER_ADDENDUM
+        elif persona["title"] in JOB_SYSTEM_PERSONA_NAMES:
+            system_prompt += JOB_SYSTEM_ADDENDUM
         group_name = extract_group(page_text)
         profile_summary = extract_profile_summary(page_text)
         # ★ "각각의 페르소나 설정에서 남성인지 여성인지 나이대 구분되는 설정이
@@ -1569,6 +1640,7 @@ def _process_turn_inner(turn, persona_cache):
             "코드나 화면에 실제로 반영할 수 있다고 말하지 말고, uiplan 코드블록도 만들지 마세요."
         )
     is_ebook_reader = persona_name == EBOOK_READER_PERSONA_NAME
+    is_job_system = persona_name in JOB_SYSTEM_PERSONA_NAMES
     if is_organizer:
         executed = _maybe_execute_pending_plan(room_id, turn["context"])
         if executed is not None:
@@ -1613,6 +1685,8 @@ def _process_turn_inner(turn, persona_cache):
         live_state = load_shift_alarm_state(shift_alarm_state_key)
     elif persona_name in EBOOK_DISCUSSION_PERSONA_NAMES:
         live_state = load_ebook_reader_state()
+    elif persona_name == JOB_SEEKER_PERSONA_NAME:
+        live_state = load_job_system_state()
     credentials = None
     source_username = turn.get("source_username")
     if source_username:
@@ -1649,10 +1723,14 @@ def _process_turn_inner(turn, persona_cache):
     elif is_ebook_reader:
         exec_kwargs["allow_tools"] = ["Read", "Glob", "Grep", "WebSearch", "WebFetch"]
         exec_kwargs["add_dirs"] = [str(EBOOK_READER_DATA_DIR)]
+    elif is_job_system:
+        exec_kwargs["allow_tools"] = ["Read", "Glob", "Grep", "WebSearch", "WebFetch"]
+        exec_kwargs["add_dirs"] = [str(JOB_SYSTEM_DIR)]
     timeout = (
         ORGANIZER_TIMEOUT_SECONDS if is_organizer
         else UI_DEV_TIMEOUT_SECONDS if is_ui_dev
         else EBOOK_READER_TIMEOUT_SECONDS if is_ebook_reader
+        else JOB_SYSTEM_TIMEOUT_SECONDS if is_job_system
         else AI_TIMEOUT_SECONDS
     )
     try:
