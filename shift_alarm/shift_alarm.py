@@ -51,6 +51,10 @@ import time
 import signal
 import ai_usage
 from shift_alarm_pet import ShiftAlarmPet
+from shift_alarm_title import (
+    build_pet_cards, format_menubar_storage_gb, menubar_status_tokens,
+    shared_emoji_semantic_token,
+)
 import objc
 from PyObjCTools import AppHelper
 from AppKit import (
@@ -2075,7 +2079,12 @@ def get_today_reminder_title_tokens(schedule, now=None, checklist_state=None):
         elif label in call_tokens:
             tokens.append(call_tokens[label])
         else:
-            tokens.append(label.split(" ", 1)[0])
+            semantic_token = shared_emoji_semantic_token(
+                label,
+                REMINDERS["cafe_strategy_study"]["label"],
+                REMINDERS["day_shift_last_day_routine"]["label"],
+            )
+            tokens.append(semantic_token or label.split(" ", 1)[0])
     return tokens
 
 
@@ -2709,8 +2718,43 @@ def run_build_readaloud_epub(epub_dir):
 JP_SUBTITLE_MARKER_TIMEOUT_SECONDS = 3 * 60 * 60  # 영상 여러 개 처리 시 오래 걸릴 수 있어 3시간
 JP_SUBTITLE_MARKER_POLL_SECONDS = 15
 
+# ★ "일본어 자막추출도 일본어 스터디방으로 제목 붙이고 오늘 추출된 영상에서는
+# 무슨 이야기가 있었는지... 학습카드 위주로 설명하면 좋겠고, 만들었던 epub
+# 기반으로 하루에 하나씩 복습했으면 좋겠어" 요청(2026-09-01) — 완료 마커를
+# 이미 감지하고 있던 김에, 툴파챗 "일본어 스터디방"(일본어 선생님 페르소나)
+# 에도 같은 마커 감지 시점에 트리거를 보낸다. 실제 요약·학습카드 내용은
+# persona_worker.py의 load_jp_subtitle_state()가 라이브로 채운다 — 여기서는
+# 트리거 메시지만 던진다(ebook_reader.py의 notify_tulpachat_reading_done()과
+# 같은 /api/worker/reading_session_done 재사용).
+TULPACHAT_WORKER_KEYCHAIN_SERVICE = "com.forrest.tulpachat.worker"
+JP_SUBTITLE_STUDY_ROOM_ID = "custom_1fc73254c0"
+# "만들었던 epub 기반으로 하루에 하나씩 복습했으면 좋겠어" — 저녁에 한 번,
+# 그날의 로테이션 복습 대상을 일본어 선생님이 먼저 소개하게 트리거한다.
+# 어떤 회차인지는 persona_worker.py의 load_jp_subtitle_state()가 매 턴
+# 결정론적으로 계산하므로(라이브러리 전체를 날짜로 나눈 나머지), 여기서는
+# 그냥 "오늘 복습 대상을 소개해줘"라는 트리거만 보낸다.
+JP_SUBTITLE_DAILY_REVIEW_TIME = {"hour": 21, "minute": 0}
 
-def _watch_jp_subtitle_completion(run_id, label, folder_path):
+
+def _notify_jp_subtitle_study_room(content):
+    try:
+        result = subprocess.run(
+            ["security", "find-generic-password", "-s", TULPACHAT_WORKER_KEYCHAIN_SERVICE, "-w"],
+            capture_output=True, text=True, check=True, timeout=10,
+        )
+        token = result.stdout.strip()
+        request = urllib.request.Request(
+            f"{TULPACHAT_LOCAL_URL}/api/worker/reading_session_done",
+            data=json.dumps({"room_id": JP_SUBTITLE_STUDY_ROOM_ID, "content": content}).encode("utf-8"),
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        urllib.request.urlopen(request, timeout=10)
+    except Exception:
+        pass  # 툴파챗이 안 떠 있어도 자막 추출 완료 알림 자체는 계속 진행돼야 함
+
+
+def _watch_jp_subtitle_completion(run_id, label, folder_path, notify_room=True):
     marker = f"/tmp/_jp_subtitle_run_{run_id}.done"
     deadline = time.time() + JP_SUBTITLE_MARKER_TIMEOUT_SECONDS
     while time.time() < deadline:
@@ -2724,6 +2768,11 @@ def _watch_jp_subtitle_completion(run_id, label, folder_path):
                 os.path.basename(folder_path.rstrip("/")),
                 f"{folder_path}\n작업이 끝났습니다.",
             )
+            if notify_room:
+                _notify_jp_subtitle_study_room(
+                    "🔔 오늘 새 회차 자막 추출이 끝났습니다. "
+                    "오늘 새로 처리한 회차의 줄거리와 재미있는 표현을 학습카드 위주로 소개해주세요."
+                )
             return
         time.sleep(JP_SUBTITLE_MARKER_POLL_SECONDS)
     # 타임아웃 — 스크립트가 비정상 종료해 마커를 못 남겼거나 예상보다 훨씬 오래
@@ -2828,6 +2877,7 @@ def run_jp_workout_extraction_only(folder_path, target_minutes=None, highlight_p
     threading.Thread(
         target=_watch_jp_subtitle_completion,
         args=(run_id, "운동용 영상만 추출", folder_path),
+        kwargs={"notify_room": False},  # 자막·학습카드가 안 생기는 실행이라 스터디방 알림은 생략
         daemon=True,
     ).start()
     return True
@@ -4394,6 +4444,11 @@ class ShiftAlarmApp(rumps.App):
         self.electronics_off_timer = rumps.Timer(self._check_electronics_off, 60)
         self.electronics_off_timer.start()
 
+        # 일본어 스터디방 — 저녁 9시에 오늘의 복습 트리거 (1분마다 시각 체크)
+        self._last_jp_subtitle_review_notified = None
+        self.jp_subtitle_review_timer = rumps.Timer(self._check_jp_subtitle_daily_review, 60)
+        self.jp_subtitle_review_timer.start()
+
         # 기상 알람 시각에 이어읽던 전자책 자동 실행 (1분마다 시각 체크)
         self._last_ebook_resume_notified = None
         self.ebook_resume_alarm_timer = rumps.Timer(self._check_wake_alarm_ebook_resume, 60)
@@ -4581,54 +4636,7 @@ class ShiftAlarmApp(rumps.App):
             return self.config.get("current_shift")
         return None
 
-    @staticmethod
-    def _compress_title_reminders(tokens, limit):
-        """메뉴바가 숨겨질 때만 리마인더를 단계적으로 압축한다."""
-        tokens = list(tokens)
-        if limit is None or len(tokens) <= limit:
-            return tokens
-        if limit <= 0:
-            return []
-        return tokens[:limit] + [f"+{len(tokens) - limit}"]
-
-    def _status_item_is_visible(self):
-        """AppKit이 현재 상태 항목을 실제 메뉴바에 배치했는지 확인한다."""
-        try:
-            button = self._nsapp.nsstatusitem.button()
-            window = button.window() if button is not None else None
-            if window is None or not window.isVisible():
-                return False
-            screen = window.screen()
-            if screen is None:
-                return True
-            window_frame = window.frame()
-            screen_frame = screen.frame()
-            window_min_x = window_frame.origin.x
-            window_max_x = window_min_x + window_frame.size.width
-            screen_min_x = screen_frame.origin.x
-            screen_max_x = screen_min_x + screen_frame.size.width
-            return (
-                window_frame.size.width > 0
-                and window_max_x > screen_min_x
-                and window_min_x < screen_max_x
-            )
-        except (AttributeError, TypeError):
-            # 구형 rumps/PyObjC에서 가시성 API를 못 읽으면 임의 축약하지 않는다.
-            return True
-
-    def _adapt_title_if_hidden(self, compact_step):
-        """전체 타이틀이 macOS에 숨겨졌을 때 리마인더만 1개, 0개 순으로 줄인다."""
-        if self._status_item_is_visible():
-            return
-        compact_limits = (1, 0)
-        if compact_step >= len(compact_limits):
-            return
-        self._update_title(
-            reminder_limit=compact_limits[compact_step], schedule_visibility_check=False
-        )
-        AppHelper.callLater(0.2, self._adapt_title_if_hidden, compact_step + 1)
-
-    def _update_title(self, reminder_limit=None, schedule_visibility_check=True):
+    def _update_title(self):
         # NSStatusItem의 attributedTitle을 건드리므로 반드시 메인 스레드에서 실행돼야
         # 한다(백그라운드 스레드에서 부르면 CALayer 커밋 시점에 EXC_BREAKPOINT로
         # 크래시할 수 있음 — 2026-08-05 실측). 백그라운드 스레드에서 호출됐으면
@@ -4643,23 +4651,15 @@ class ShiftAlarmApp(rumps.App):
         current = self.config.get("current_shift")
         code = SHIFT_TO_SHORT_CODE.get(current, current or "?")
 
-        # 평상시에는 기존 리마인더를 전부 표시한다. 전체 상태 항목이 실제로 숨겨진
-        # 경우에만 _adapt_title_if_hidden()이 1개(+N), 0개 순으로 다시 요청한다.
-        _reminder_tokens = get_today_reminder_title_tokens(
+        # 리마인더는 메뉴바에서 완전히 제외하되 Pet 카드용 미완료 목록은 유지한다.
+        _all_reminder_tokens = get_today_reminder_title_tokens(
             self.schedule, checklist_state=self._checklist_state
         )
-        _reminder_tokens = self._compress_title_reminders(_reminder_tokens, reminder_limit)
-        reminder_icons = " ".join(_reminder_tokens)
 
         # ★ 2026-08-07: 이모지 없이 숫자만 표시하고, 항상 초록색(부족 시에만 빨강)으로
         # 색을 입혀서 이모지 없이도 한눈에 저장공간 항목인지 구분되게 했다.
         storage_num = self.storage_free_gb
-        storage = str(storage_num) if storage_num is not None else ""
-        storage_alert = (
-            "🚨💾"
-            if storage_num is not None and storage_num <= LOW_STORAGE_WARNING_GB
-            else ""
-        )
+        storage = format_menubar_storage_gb(storage_num)
 
         day_num = (
             _shift_block_day_number(self.schedule, datetime.date.today(), current)
@@ -4727,17 +4727,20 @@ class ShiftAlarmApp(rumps.App):
             thermal_color = None
 
         # Codex/Claude 사용률은 최우선 정보라 적응형 축약 때도 항상 유지한다.
-        # 저장공간은 평상시 기존 숫자를, 임계치 이하면 짧은 경고를 표시한다.
-        storage_token = storage_alert or storage
-        storage_token_inner = [] if storage_alert else storage_inner
+        # 저장공간은 수치를 항상 유지하고 임계치 이하면 숫자 자체를 빨갛게 표시한다.
+        storage_token = storage
+        storage_token_inner = storage_inner
+        title_tokens = menubar_status_tokens(
+            shift_text, storage_token, codex_token, claude_token, thermal_token
+        )
         segments = [
             (shift_text, shift_inner),
             (storage_token, storage_token_inner),
-            (reminder_icons, []),
             (codex_token, [(0, _utf16_len(codex_token), codex_color)] if codex_token else []),
             (claude_token, [(0, _utf16_len(claude_token), claude_color)] if claude_token else []),
             (thermal_token, [(0, _utf16_len(thermal_token), thermal_color)] if thermal_color else []),
         ]
+        assert tuple(text for text, _ in segments if text) == title_tokens
 
         self.title = " ".join(text for text, _ in segments if text)
         if hasattr(self, "shift_pet"):
@@ -4745,30 +4748,15 @@ class ShiftAlarmApp(rumps.App):
             # 바꿔가며 표기해달라" 요청 — 말풍선 한 칸엔 두 줄만 들어가서 근무·
             # 저장공간·리마인더·AI 사용량을 한 번에 다 못 보여준다. (제목, 내용)
             # 카드 여러 장을 만들어 넘기면 Pet이 알아서 30초마다 다음 카드로 넘긴다.
-            usage_summary = " · ".join(token for token in (
-                f"Codex {codex_token}" if codex_token else "Codex -",
-                f"Claude {claude_token}" if claude_token else "Claude -",
-            ) if token)
-            storage_summary = (
-                f"🚨 {storage_num}GB (부족)" if storage_num is not None and storage_num <= LOW_STORAGE_WARNING_GB
-                else f"{storage_num}GB 여유" if storage_num is not None
-                else "확인 중"
+            cards = build_pet_cards(
+                shift_text, self.weather_icon, storage_num, _all_reminder_tokens,
+                codex_token, claude_token, LOW_STORAGE_WARNING_GB, thermal_token,
             )
-            cards = [
-                ("근무", shift_text),
-                ("저장공간", storage_summary),
-                ("오늘 리마인더", reminder_icons or "체크할 항목 없음"),
-                ("AI 사용량", usage_summary),
-            ]
-            if thermal_token:
-                cards.append(("열 상태", thermal_token))
             self.shift_pet.update(cards)
 
         # rumps의 title setter가 setTitle_()을 호출해 attributedTitle을 초기화시키므로,
         # 반드시 plain title을 먼저 설정한 뒤 setAttributedTitle_()로 덮어써야 한다.
         if not any(inner for _, inner in segments):
-            if schedule_visibility_check:
-                AppHelper.callLater(0.2, self._adapt_title_if_hidden, 0)
             self._write_mobile_status()
             return
 
@@ -4789,12 +4777,6 @@ class ShiftAlarmApp(rumps.App):
             self._nsapp.nsstatusitem.setAttributedTitle_(attributed)
         except AttributeError:
             pass
-
-        # title/attributedTitle 반영과 macOS 메뉴바 재배치가 끝난 뒤 실제 가시성을
-        # 확인한다. 화면 폭 추정치는 다른 상태 항목·노치 변화를 반영하지 못하므로
-        # NSStatusItem 창 자체가 보이는지를 신호로 사용한다.
-        if schedule_visibility_check:
-            AppHelper.callLater(0.2, self._adapt_title_if_hidden, 0)
 
         self._write_mobile_status()
 
@@ -5075,6 +5057,23 @@ class ShiftAlarmApp(rumps.App):
             f"{current} 근무 기준",
             "지금부터 전자제품 전원을 꺼주세요."
         )
+
+    def _check_jp_subtitle_daily_review(self, _):
+        """1분마다 오늘의 일본어 복습 시각인지 확인, 하루 한 번만 스터디방에
+        트리거를 보낸다(★ 2026-09-01, "하루에 하나씩 복습했으면 좋겠어")."""
+        now = datetime.datetime.now()
+        t = JP_SUBTITLE_DAILY_REVIEW_TIME
+        if now.hour != t["hour"] or now.minute != t["minute"]:
+            return
+        today = now.date()
+        if self._last_jp_subtitle_review_notified == today:
+            return
+        self._last_jp_subtitle_review_notified = today
+        threading.Thread(
+            target=_notify_jp_subtitle_study_room,
+            args=("🔔 오늘의 일본어 복습 시간입니다. 오늘의 복습 대상을 학습카드 위주로 소개해주세요.",),
+            daemon=True,
+        ).start()
 
     def _check_wake_alarm_ebook_resume(self, _):
         """1분마다 오늘의 기상 알람 시각인지 확인, 맞으면 이어읽던 전자책을

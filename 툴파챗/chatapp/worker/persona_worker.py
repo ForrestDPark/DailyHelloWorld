@@ -509,6 +509,96 @@ JOB_SYSTEM_ADDENDUM = (
     "처리됨) — 대신 지금 상태를 보고 캐주얼하게 의견을 나누는 역할에 집중한다."
 )
 
+# ★ "일본어 자막추출도 비슷한 방식으로 플랜 만들어줘" → "일본어 스터디방으로
+# 제목 붙이고 오늘 추출된 영상에서는 무슨 이야기가 있었는지 무슨 표현이
+# 좋은지 학습카드 위주로 설명하면 좋겠고, 만들었던 epub 기반으로 하루에
+# 하나씩 복습했으면 좋겠어" 요청(2026-09-01) — jp-subtitle-study-writer
+# 에이전트(문법·어휘 7섹션 심층 분석, Notion 기록)와 안 겹치게, 이 페르소나는
+# 이미 만들어진 학습카드(scene_study_cards.json)를 가볍게 소개·잡담하는
+# 역할만 한다. 성인 영상 대사 추출물이라 "작품 속 인물" 페르소나는 어울리지
+# 않아 중립적인 "일본어 선생님" 1명만 둔다(독서지기의 저자 짝과 다른 점).
+JP_SUBTITLE_DIR = REPO_ROOT / "일본어자막추출"
+JP_SUBTITLE_LIBRARY_DIR = JP_SUBTITLE_DIR / "library"
+JP_TEACHER_PERSONA_NAME = "일본어 선생님"
+# 복습 로테이션 기준일 — "하루에 하나씩" 결정론적으로 도는 시작점. 라이브러리에
+# 새 회차가 추가돼도 굳이 다시 안 맞춘다(그날그날 총 개수 기준으로 자연스럽게
+# 재배열되는 정도는 허용 — 매일 다른 회차가 뜨는 게 핵심이지 순서 고정은 아님).
+JP_SUBTITLE_REVIEW_ANCHOR = datetime.date(2026, 9, 1)
+
+
+def _jp_subtitle_titles():
+    if not JP_SUBTITLE_LIBRARY_DIR.exists():
+        return []
+    return sorted(p.name for p in JP_SUBTITLE_LIBRARY_DIR.iterdir() if p.is_dir() and not p.name.startswith("."))
+
+
+def _jp_subtitle_summary(title):
+    path = JP_SUBTITLE_LIBRARY_DIR / title / "SUMMARY.md"
+    try:
+        return path.read_text(encoding="utf-8")[:1200]
+    except OSError:
+        return ""
+
+
+def _jp_subtitle_sample_cards(title, limit=3):
+    """scene_study_cards.json에서 앞쪽 카드 몇 개만 뽑아 사람이 읽는 요약으로
+    만든다(전체를 넣으면 너무 커서 대표 예시만)."""
+    data = _read_json_file(JP_SUBTITLE_LIBRARY_DIR / title / "scene_study_cards.json")
+    if not isinstance(data, dict):
+        return ""
+    lines = []
+    for scene_key in list(data.keys())[:limit]:
+        card = data[scene_key] or {}
+        for expr in (card.get("expressions") or [])[:2]:
+            lines.append(f"- {expr.get('ja')}({expr.get('reading')}) = {expr.get('ko')}")
+        shadowing = card.get("shadowing") or {}
+        if shadowing.get("ja"):
+            lines.append(f"- (쉐도잉 추천) {shadowing['ja']} = {shadowing.get('ko')}")
+    return "\n".join(lines)
+
+
+def load_jp_subtitle_state():
+    """오늘 새로 처리된 회차(있으면) + 오늘의 복습 대상(라이브러리 전체를
+    하루에 하나씩 도는 결정론적 로테이션)을 사람이 읽는 요약으로 만든다."""
+    titles = _jp_subtitle_titles()
+    if not titles:
+        return "아직 처리된 회차가 없음 — 지어내지 말고 솔직히 말할 것."
+    lines = []
+    today = datetime.date.today()
+    newest = max(
+        (JP_SUBTITLE_LIBRARY_DIR / t for t in titles),
+        key=lambda p: p.stat().st_mtime,
+    )
+    if datetime.date.fromtimestamp(newest.stat().st_mtime) == today:
+        lines.append(f"오늘 새로 처리한 회차: {newest.name}")
+        lines.append(_jp_subtitle_summary(newest.name))
+        cards = _jp_subtitle_sample_cards(newest.name)
+        if cards:
+            lines.append(f"학습카드 예시:\n{cards}")
+    review_idx = (today - JP_SUBTITLE_REVIEW_ANCHOR).days % len(titles)
+    review_title = titles[review_idx]
+    lines.append(f"\n오늘의 복습 대상: {review_title}")
+    lines.append(_jp_subtitle_summary(review_title))
+    review_cards = _jp_subtitle_sample_cards(review_title)
+    if review_cards:
+        lines.append(f"학습카드 예시:\n{review_cards}")
+    return "\n".join(lines)
+
+
+JP_SUBTITLE_TIMEOUT_SECONDS = 300
+JP_SUBTITLE_ADDENDUM = (
+    "\n\n---\n"
+    f'"{JP_TEACHER_PERSONA_NAME}"은(는) 이 채팅에서 일본어자막추출 라이브러리 전체를 '
+    "Read/Glob/Grep으로 직접 훑어볼 수 있다. 매 턴 주입되는 '오늘 새로 처리한 회차'/'오늘의 "
+    "복습 대상' 외에 다른 회차가 궁금하면 다음 폴더를 직접 뒤져서 답한다:\n"
+    f"- {JP_SUBTITLE_LIBRARY_DIR}/<회차명>/SUMMARY.md — 줄거리 요약.\n"
+    f"- {JP_SUBTITLE_LIBRARY_DIR}/<회차명>/scene_study_cards.json — 장면별 학습카드"
+    "(expressions/vocabulary/grammar/shadowing).\n"
+    "문법·어휘를 통째로 새로 분석하지 말고(그건 별도 절차가 이미 깊게 함), 이미 만들어진 "
+    "학습카드를 소개하고 가볍게 대화하는 역할에 집중한다. 확인 안 된 회차 내용은 지어내지 "
+    "말고 못 찾았다고 솔직히 답할 것."
+)
+
 # ★ 2026-08-29: 소유자가 채팅에서 "손자병법 다음 구절 해석해"라고 직접
 # 명령하면 기존 야간 파이프라인을 그 자리에서 한 번 실행한다. 채팅 AI에는
 # Bash 권한을 주지 않는다. 아래 코드는 입력으로 받은 경로나 명령을 실행하지
@@ -1281,6 +1371,8 @@ def sync_personas():
             system_prompt += EBOOK_READER_ADDENDUM
         elif persona["title"] in JOB_SYSTEM_PERSONA_NAMES:
             system_prompt += JOB_SYSTEM_ADDENDUM
+        elif persona["title"] == JP_TEACHER_PERSONA_NAME:
+            system_prompt += JP_SUBTITLE_ADDENDUM
         group_name = extract_group(page_text)
         profile_summary = extract_profile_summary(page_text)
         # ★ "각각의 페르소나 설정에서 남성인지 여성인지 나이대 구분되는 설정이
@@ -1641,6 +1733,7 @@ def _process_turn_inner(turn, persona_cache):
         )
     is_ebook_reader = persona_name == EBOOK_READER_PERSONA_NAME
     is_job_system = persona_name in JOB_SYSTEM_PERSONA_NAMES
+    is_jp_teacher = persona_name == JP_TEACHER_PERSONA_NAME
     if is_organizer:
         executed = _maybe_execute_pending_plan(room_id, turn["context"])
         if executed is not None:
@@ -1687,6 +1780,8 @@ def _process_turn_inner(turn, persona_cache):
         live_state = load_ebook_reader_state()
     elif persona_name == JOB_SEEKER_PERSONA_NAME:
         live_state = load_job_system_state()
+    elif persona_name == JP_TEACHER_PERSONA_NAME:
+        live_state = load_jp_subtitle_state()
     credentials = None
     source_username = turn.get("source_username")
     if source_username:
@@ -1726,11 +1821,15 @@ def _process_turn_inner(turn, persona_cache):
     elif is_job_system:
         exec_kwargs["allow_tools"] = ["Read", "Glob", "Grep", "WebSearch", "WebFetch"]
         exec_kwargs["add_dirs"] = [str(JOB_SYSTEM_DIR)]
+    elif is_jp_teacher:
+        exec_kwargs["allow_tools"] = ["Read", "Glob", "Grep", "WebSearch", "WebFetch"]
+        exec_kwargs["add_dirs"] = [str(JP_SUBTITLE_LIBRARY_DIR)]
     timeout = (
         ORGANIZER_TIMEOUT_SECONDS if is_organizer
         else UI_DEV_TIMEOUT_SECONDS if is_ui_dev
         else EBOOK_READER_TIMEOUT_SECONDS if is_ebook_reader
         else JOB_SYSTEM_TIMEOUT_SECONDS if is_job_system
+        else JP_SUBTITLE_TIMEOUT_SECONDS if is_jp_teacher
         else AI_TIMEOUT_SECONDS
     )
     try:
