@@ -731,6 +731,9 @@ header h1 { font-size: 18px; margin: 0; flex: 1; min-width: 0; }
 .swipe-action-btn { width: 64px; height: 100%; border: none; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; }
 .swipe-action-btn.edit { background: var(--accent); }
 .swipe-action-btn.danger { background: var(--danger); }
+/* ★ 채팅방 상위 고정핀(2026-09-01) — 노란 계열로 "고정" 액션임을 구분 */
+.swipe-action-btn.pin { background: #d69e2e; }
+.pin-mark { font-size: 13px; line-height: 1; }
 .avatar {
   width: 44px;
   height: 44px;

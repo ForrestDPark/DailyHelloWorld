@@ -1191,6 +1191,23 @@ document.addEventListener("pointerdown", (e) => {
   if (!stillInside) closeAllSwipes();
 });
 
+// ★ "점점 채팅방이 많아지니까 채팅방 상위고정핀같은것도 있으면 좋겠어"
+// 요청(2026-09-01) — 방별 자동 읽어주기와 같은 패턴으로 localStorage에
+// 고정 방 목록을 저장한다(기기별로 충분, 서버 동기화 불필요). "채팅" 탭
+// 정렬에서 고정 방을 최근 메시지 순보다 먼저 보여준다.
+const PINNED_ROOMS_STORAGE_KEY = "tulpa_pinned_rooms";
+let pinnedRooms = new Set(JSON.parse(localStorage.getItem(PINNED_ROOMS_STORAGE_KEY) || "[]"));
+
+function isRoomPinned(roomId) {
+  return pinnedRooms.has(roomId);
+}
+
+function toggleRoomPinned(roomId) {
+  if (pinnedRooms.has(roomId)) pinnedRooms.delete(roomId); else pinnedRooms.add(roomId);
+  localStorage.setItem(PINNED_ROOMS_STORAGE_KEY, JSON.stringify([...pinnedRooms]));
+  renderCurrentList();
+}
+
 function makeSwipeable(item, content, actionsConfig) {
   if (!actionsConfig || !actionsConfig.length) return;
   const actionsEl = document.createElement("div");
@@ -1274,10 +1291,11 @@ function renderRoomItem(r) {
     : isMeta
       ? '<svg class="room-type-icon" aria-hidden="true"><use href="#icon-users"></use></svg>'
       : escapeHtml(avatarChar);
+  const pinned = isRoomPinned(r.room_id);
   content.innerHTML = `
     <div class="avatar${r.thumbnail_url ? " avatar-image" : ""}">${avatarInner}</div>
     <div class="room-info">
-      <div class="room-name">${escapeHtml(roomLabel)}${unread ? '<span class="unread-badge"></span>' : ""}</div>
+      <div class="room-name">${pinned ? '<span class="pin-mark" aria-hidden="true">📌</span>' : ""}${escapeHtml(roomLabel)}${unread ? '<span class="unread-badge"></span>' : ""}</div>
       <div class="room-preview">${r.last_message ? escapeHtml(r.last_message) : "대화를 시작해보세요"}</div>
     </div>
   `;
@@ -1340,6 +1358,13 @@ function renderRoomItem(r) {
     content.addEventListener("click", openChat);
     content.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") openChat(); });
   }
+  // ★ 채팅방 상위 고정핀(2026-09-01) — 방 종류와 무관하게 항상 첫 스와이프
+  // 액션으로 넣는다. "group"(전체 채팅방)은 이미 항상 맨 위 고정 위치라 제외.
+  const pinAction = r.room_id === "group" ? null : {
+    label: pinned ? "고정 해제" : "고정",
+    className: "pin",
+    onClick: () => toggleRoomPinned(r.room_id),
+  };
   if (r.room_id.startsWith("custom_")) {
     const roomTitle = roomLabel;
     const doRename = () => {
@@ -1367,9 +1392,12 @@ function renderRoomItem(r) {
         await showRoomList();
       } catch (e) { if (e.message !== "unauthorized" && e.message !== "forbidden") alert("나가기 실패"); }
     };
-    const actionsConfig = (amOwner || r.is_mine)
-      ? [{ label: "수정", className: "edit", onClick: doRename }, { label: "삭제", className: "danger", onClick: doDelete }]
-      : [{ label: "나가기", className: "danger", onClick: doLeave }];
+    const actionsConfig = [
+      pinAction,
+      ...((amOwner || r.is_mine)
+        ? [{ label: "수정", className: "edit", onClick: doRename }, { label: "삭제", className: "danger", onClick: doDelete }]
+        : [{ label: "나가기", className: "danger", onClick: doLeave }]),
+    ];
     makeSwipeable(item, content, actionsConfig);
   } else if (amOwner && r.is_group_room && r.room_id !== "group") {
     // ★ "그룹채팅방도 관리자가 채팅방 삭제 가능하게 해줘" 요청(2026-08-29) —
@@ -1386,7 +1414,11 @@ function renderRoomItem(r) {
         await showRoomList();
       } catch (e) { if (e.message !== "unauthorized" && e.message !== "forbidden") alert("삭제 실패"); }
     };
-    makeSwipeable(item, content, [{ label: "삭제", className: "danger", onClick: doDeleteGroupRoom }]);
+    makeSwipeable(item, content, [pinAction, { label: "삭제", className: "danger", onClick: doDeleteGroupRoom }]);
+  } else if (pinAction) {
+    // 위 두 분기에 안 걸리는 방(페르소나 1:1 방 등)은 예전엔 스와이프 액션이
+    // 아예 없었다 — 고정 핀만이라도 쓸 수 있게 최소한으로 스와이프 가능하게 한다.
+    makeSwipeable(item, content, [pinAction]);
   }
   return item;
 }
@@ -1465,7 +1497,11 @@ function renderCurrentList() {
   if (listMode === "chats") {
     const chats = rooms
       .filter((r) => r.room_id === "group" || r.is_group_room || r.last_message_id)
-      .sort((a, b) => String(b.last_message_at || "").localeCompare(String(a.last_message_at || "")));
+      .sort((a, b) => {
+        const pinDiff = Number(isRoomPinned(b.room_id)) - Number(isRoomPinned(a.room_id));
+        if (pinDiff !== 0) return pinDiff;
+        return String(b.last_message_at || "").localeCompare(String(a.last_message_at || ""));
+      });
     if (!chats.length) {
       roomListEl.innerHTML = '<div class="empty-hint"><strong>아직 대화가 없습니다</strong><br>친구 탭에서 페르소나를 골라 대화를 시작해보세요.</div>';
       return;
