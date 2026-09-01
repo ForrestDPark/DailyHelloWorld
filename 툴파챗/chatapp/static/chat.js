@@ -1208,6 +1208,91 @@ function toggleRoomPinned(roomId) {
   renderCurrentList();
 }
 
+// ★ "채팅방 롱프레스해서 순서 정렬같은거 할수있게 해줘" 요청(2026-09-01) —
+// 채팅 탭에서 방을 길게 눌러 드래그하면 원하는 순서로 옮길 수 있다. 아직
+// 한 번도 옮긴 적 없는 방은 지금처럼 최근 메시지 순을 그대로 따르고
+// (customRoomOrder가 비어 있으면 정렬 결과가 이전과 완전히 같음), 드래그로
+// 한 번이라도 옮기면 그 시점의 전체 방 순서를 통째로 저장해 그 뒤로는
+// 수동 순서를 최근 메시지 순보다 우선한다(고정핀은 여전히 최우선 — 고정
+// 여부가 같은 방끼리만 수동 순서를 비교한다).
+const ROOM_ORDER_STORAGE_KEY = "tulpa_room_order";
+let customRoomOrder = JSON.parse(localStorage.getItem(ROOM_ORDER_STORAGE_KEY) || "[]");
+
+function saveRoomOrder(order) {
+  customRoomOrder = order;
+  localStorage.setItem(ROOM_ORDER_STORAGE_KEY, JSON.stringify(order));
+}
+
+function chatSortComparator(a, b) {
+  const pinDiff = Number(isRoomPinned(b.room_id)) - Number(isRoomPinned(a.room_id));
+  if (pinDiff !== 0) return pinDiff;
+  const orderA = customRoomOrder.indexOf(a.room_id);
+  const orderB = customRoomOrder.indexOf(b.room_id);
+  if (orderA !== -1 || orderB !== -1) {
+    if (orderA === -1) return 1;
+    if (orderB === -1) return -1;
+    return orderA - orderB;
+  }
+  return String(b.last_message_at || "").localeCompare(String(a.last_message_at || ""));
+}
+
+const ROOM_REORDER_LONG_PRESS_MS = 500;
+const ROOM_REORDER_MOVE_CANCEL_PX = 10;
+
+function attachRoomReorder(item, content) {
+  let pressTimer = null;
+  let pressStart = null;
+  let dragging = false;
+
+  const cancelPress = () => { if (pressTimer) clearTimeout(pressTimer); pressTimer = null; };
+
+  const endDrag = () => {
+    if (!dragging) return;
+    dragging = false;
+    item.classList.remove("reordering");
+    item.style.transform = "";
+    document.body.classList.remove("room-reorder-active");
+    lastSwipeDragAt = Date.now(); // 드래그 직후 클릭으로 방이 열리는 걸 억제(스와이프와 같은 방식)
+    saveRoomOrder([...roomListEl.children].map((el) => el.dataset.roomId).filter(Boolean));
+  };
+
+  content.addEventListener("pointerdown", (event) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    pressStart = { x: event.clientX, y: event.clientY };
+    pressTimer = setTimeout(() => {
+      dragging = true;
+      closeAllSwipes();
+      item.classList.add("reordering");
+      document.body.classList.add("room-reorder-active");
+      if (navigator.vibrate) navigator.vibrate(15);
+    }, ROOM_REORDER_LONG_PRESS_MS);
+  });
+  content.addEventListener("pointermove", (event) => {
+    if (!dragging) {
+      if (pressStart && Math.hypot(event.clientX - pressStart.x, event.clientY - pressStart.y) > ROOM_REORDER_MOVE_CANCEL_PX) cancelPress();
+      return;
+    }
+    event.preventDefault();
+    const delta = event.clientY - pressStart.y;
+    item.style.transform = `translateY(${delta}px)`;
+    const rect = item.getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    const prev = item.previousElementSibling;
+    const next = item.nextElementSibling;
+    if (prev && midY < prev.getBoundingClientRect().top + prev.getBoundingClientRect().height / 2) {
+      roomListEl.insertBefore(item, prev);
+      pressStart = { x: event.clientX, y: event.clientY };
+      item.style.transform = "translateY(0px)";
+    } else if (next && midY > next.getBoundingClientRect().top + next.getBoundingClientRect().height / 2) {
+      roomListEl.insertBefore(next, item);
+      pressStart = { x: event.clientX, y: event.clientY };
+      item.style.transform = "translateY(0px)";
+    }
+  });
+  content.addEventListener("pointerup", () => { cancelPress(); endDrag(); });
+  content.addEventListener("pointercancel", () => { cancelPress(); endDrag(); });
+}
+
 function makeSwipeable(item, content, actionsConfig) {
   if (!actionsConfig || !actionsConfig.length) return;
   const actionsEl = document.createElement("div");
@@ -1270,6 +1355,7 @@ function makeSwipeable(item, content, actionsConfig) {
 function renderRoomItem(r) {
   const item = document.createElement("div");
   item.className = "room-item";
+  item.dataset.roomId = r.room_id;
   const content = document.createElement("div");
   content.className = "swipe-content";
   content.tabIndex = 0;
@@ -1420,6 +1506,7 @@ function renderRoomItem(r) {
     // 아예 없었다 — 고정 핀만이라도 쓸 수 있게 최소한으로 스와이프 가능하게 한다.
     makeSwipeable(item, content, [pinAction]);
   }
+  if (listMode === "chats") attachRoomReorder(item, content);
   return item;
 }
 
@@ -1497,11 +1584,7 @@ function renderCurrentList() {
   if (listMode === "chats") {
     const chats = rooms
       .filter((r) => r.room_id === "group" || r.is_group_room || r.last_message_id)
-      .sort((a, b) => {
-        const pinDiff = Number(isRoomPinned(b.room_id)) - Number(isRoomPinned(a.room_id));
-        if (pinDiff !== 0) return pinDiff;
-        return String(b.last_message_at || "").localeCompare(String(a.last_message_at || ""));
-      });
+      .sort(chatSortComparator);
     if (!chats.length) {
       roomListEl.innerHTML = '<div class="empty-hint"><strong>아직 대화가 없습니다</strong><br>친구 탭에서 페르소나를 골라 대화를 시작해보세요.</div>';
       return;

@@ -715,6 +715,13 @@ header h1 { font-size: 18px; margin: 0; flex: 1; min-width: 0; }
   transition: background 0.1s ease;
 }
 .room-item.selected .swipe-content { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 15%, transparent); }
+/* ★ "채팅방 롱프레스해서 순서 정렬" 요청(2026-09-01) — 드래그 중인 방을
+   다른 방 위로 살짝 띄워 보이게 한다. .room-item의 overflow:hidden(스와이프
+   액션을 가리는 용도)을 켜둔 채로는 그림자가 잘려서, 드래그 중일 때만
+   visible로 풀어준다. */
+.room-item.reordering { overflow: visible; z-index: 10; }
+.room-item.reordering .swipe-content { box-shadow: 0 10px 24px rgba(0, 0, 0, .2); border-radius: 12px; }
+body.room-reorder-active { -webkit-user-select: none; user-select: none; }
 /* ★ "친구선택 1:1채팅하기 항목 등이 가려서 팝업이 안 보여" 버그(2026-08-29) —
    .room-item의 overflow:hidden(스와이프 뒤 액션 버튼을 가리는 용도, 위 주석
    참고)이 position:absolute인 .friend-action-menu까지 같이 잘라내고 있었다.
