@@ -53,6 +53,17 @@ def init_db():
             created_at TEXT NOT NULL,
             completed_at TEXT
         );
+        CREATE TABLE IF NOT EXISTS automation_discussion_queue (
+            source_message_id INTEGER NOT NULL,
+            sequence INTEGER NOT NULL,
+            persona_name TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'waiting',
+            pending_turn_id INTEGER,
+            created_at TEXT NOT NULL,
+            completed_at TEXT,
+            PRIMARY KEY (source_message_id, sequence),
+            FOREIGN KEY (source_message_id) REFERENCES messages(id) ON DELETE CASCADE
+        );
         CREATE TABLE IF NOT EXISTS story_sync (
             persona_name TEXT PRIMARY KEY,
             last_message_id INTEGER NOT NULL DEFAULT 0,

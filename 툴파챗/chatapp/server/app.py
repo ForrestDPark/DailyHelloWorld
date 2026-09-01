@@ -3302,6 +3302,35 @@ def _build_battle_commander_prompt(name, battle, profile):
     )
 
 
+def _enqueue_next_automation_discussion_turn(conn, source_message_id, now):
+    """한 사람이 답한 뒤에만 다음 토론자를 호출해 발언 순서를 보존한다."""
+    active = conn.execute(
+        "SELECT 1 FROM pending_turns WHERE source_message_id = ? "
+        "AND status IN ('pending', 'processing') LIMIT 1",
+        (source_message_id,),
+    ).fetchone()
+    if active:
+        return None
+    next_turn = conn.execute(
+        "SELECT sequence, persona_name FROM automation_discussion_queue "
+        "WHERE source_message_id = ? AND status = 'waiting' ORDER BY sequence LIMIT 1",
+        (source_message_id,),
+    ).fetchone()
+    if not next_turn:
+        return None
+    cursor = conn.execute(
+        "INSERT INTO pending_turns (persona_name, room_id, status, created_at, source_message_id) "
+        "SELECT ?, room_id, 'pending', ?, id FROM messages WHERE id = ?",
+        (next_turn["persona_name"], now, source_message_id),
+    )
+    conn.execute(
+        "UPDATE automation_discussion_queue SET status = 'queued', pending_turn_id = ? "
+        "WHERE source_message_id = ? AND sequence = ?",
+        (cursor.lastrowid, source_message_id, next_turn["sequence"]),
+    )
+    return next_turn["persona_name"]
+
+
 @app.post("/api/worker/announcements")
 def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] = Header(None)):
     """승군 지휘관을 중복 없이 초대하고 해당 전장을 주제로 토론을 시작한다."""
@@ -3362,8 +3391,7 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
         conn.close()
         raise HTTPException(status_code=409, detail="분석을 소개할 전통 주석가가 없습니다")
     digest = hashlib.sha256(dedupe_key.encode("utf-8")).digest()
-    sender = (commander_names[0] if commander_names else
-              commentators[int.from_bytes(digest[:4], "big") % len(commentators)])
+    sender = commentators[int.from_bytes(digest[:4], "big") % len(commentators)]
     existing = conn.execute(
         "SELECT message_id FROM automation_announcements WHERE dedupe_key = ?", (dedupe_key,)
     ).fetchone()
@@ -3398,16 +3426,16 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
         }
 
     now = _now()
-    lead_content = body.victory_commanders[0].opening.strip() if body.victory_commanders else content
     cursor = conn.execute(
         "INSERT INTO messages (room_id, sender, content, created_at) VALUES (?, ?, ?, ?)",
-        (room_id, sender, lead_content, now),
+        (room_id, sender, content, now),
     )
     message_id = cursor.lastrowid
-    for commander in body.victory_commanders[1:]:
+    for commander in body.victory_commanders:
         conn.execute(
-            "INSERT INTO messages (room_id, sender, content, created_at) VALUES (?, ?, ?, ?)",
-            (room_id, commander.name.strip(), commander.opening.strip(), now),
+            "INSERT INTO messages (room_id, sender, content, created_at, reply_message_id) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (room_id, commander.name.strip(), commander.opening.strip(), now, message_id),
         )
     conn.execute(
         "INSERT INTO automation_announcements (dedupe_key, message_id, created_at) VALUES (?, ?, ?)",
@@ -3417,11 +3445,26 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
     notified = [name for name in priority if name in targets and name not in commander_names][:5]
     if not notified:
         notified = [name for name in targets if name not in commander_names][:5]
-    for persona_name in notified:
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS automation_discussion_queue (
+               source_message_id INTEGER NOT NULL,
+               sequence INTEGER NOT NULL,
+               persona_name TEXT NOT NULL,
+               status TEXT NOT NULL DEFAULT 'waiting',
+               pending_turn_id INTEGER,
+               created_at TEXT NOT NULL,
+               completed_at TEXT,
+               PRIMARY KEY (source_message_id, sequence)
+           )"""
+    )
+    for sequence, persona_name in enumerate(notified):
         conn.execute(
-            "INSERT INTO pending_turns (persona_name, room_id, status, created_at, source_message_id) VALUES (?, ?, 'pending', ?, ?)",
-            (persona_name, room_id, now, message_id),
+            "INSERT INTO automation_discussion_queue "
+            "(source_message_id, sequence, persona_name, status, created_at) "
+            "VALUES (?, ?, ?, 'waiting', ?)",
+            (message_id, sequence, persona_name, now),
         )
+    _enqueue_next_automation_discussion_turn(conn, message_id, now)
     conn.commit()
     conn.close()
     return {
@@ -3613,7 +3656,7 @@ def worker_complete(result: WorkerResult, authorization: Optional[str] = Header(
     _check_worker_auth(authorization)
     conn = get_conn()
     row = conn.execute(
-        "SELECT persona_name, room_id FROM pending_turns WHERE id = ?", (result.turn_id,)
+        "SELECT persona_name, room_id, source_message_id FROM pending_turns WHERE id = ?", (result.turn_id,)
     ).fetchone()
     if not row:
         conn.close()
@@ -3632,6 +3675,13 @@ def worker_complete(result: WorkerResult, authorization: Optional[str] = Header(
             "UPDATE pending_turns SET status = 'done', reply = ?, completed_at = ? WHERE id = ?",
             (result.reply, now, result.turn_id),
         )
+        if row["source_message_id"]:
+            conn.execute(
+                "UPDATE automation_discussion_queue SET status = 'done', completed_at = ? "
+                "WHERE pending_turn_id = ?",
+                (now, result.turn_id),
+            )
+            _enqueue_next_automation_discussion_turn(conn, row["source_message_id"], now)
         conn.commit()
         preview = result.reply[:80] + ("…" if len(result.reply) > 80 else "")
         notify_room_members_new_message(conn, row["room_id"], row["persona_name"], row["persona_name"], preview)
@@ -3641,6 +3691,13 @@ def worker_complete(result: WorkerResult, authorization: Optional[str] = Header(
             "UPDATE pending_turns SET status = 'failed', error = ?, completed_at = ? WHERE id = ?",
             (result.error or "unknown error", now, result.turn_id),
         )
+        if row["source_message_id"]:
+            conn.execute(
+                "UPDATE automation_discussion_queue SET status = 'failed', completed_at = ? "
+                "WHERE pending_turn_id = ?",
+                (now, result.turn_id),
+            )
+            _enqueue_next_automation_discussion_turn(conn, row["source_message_id"], now)
         conn.execute(
             "UPDATE ai_fallback_requests SET status='failed', resolved_at=? WHERE turn_id=?",
             (now, result.turn_id),
