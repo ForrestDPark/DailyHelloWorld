@@ -986,6 +986,12 @@ main#messages.has-custom-background {
 .profile-popup-invite { margin-top: 18px; text-align: left; }
 .profile-popup-invite-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .profile-popup-invite .invite-candidate.invited { opacity: .55; cursor: default; }
+/* ★ 성별·나이대·배정 목소리 배지(2026-08-30) */
+.profile-popup-meta { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 14px; }
+.profile-popup-meta-chip {
+  padding: 4px 10px; border-radius: 999px; background: var(--accent-soft);
+  color: var(--fg); font-size: 12px; white-space: nowrap;
+}
 
 /* ★ "자기 이름·프로필사진 바꿀 수 있게 해달라" 요청(2026-08-28) — 내
    프로필 수정 팝업(showMyProfileEditor)의 아바타·이름 입력 폼. */

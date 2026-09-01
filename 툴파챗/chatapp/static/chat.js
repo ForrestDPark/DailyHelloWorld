@@ -2272,8 +2272,32 @@ async function showProfilePopup(message) {
   else avatar.textContent = label.charAt(0) || "?";
   const name = document.createElement("h2"); name.textContent = label;
   const summary = document.createElement("p"); summary.textContent = profile?.summary || (message.is_persona ? "프로필 정보가 없습니다." : "채팅방 참여자");
+  popup.append(close, avatar, name, summary);
+  // ★ "각각의 페르소나 설정에서 성별/나이대 구분되는 설정이 있으면 좋겠고
+  // AI가 판단한 목소리 음색설정 같은것도 프로필에서 보이면 좋을거 같아"
+  // 요청(2026-08-30) — 성별·나이대(Notion "- 성별:"/"- 나이대:" 필드)와
+  // 실제로 TTS가 배정한 기본 목소리 이름을 배지로 보여준다. 셋 다 없으면
+  // (가상 페르소나 다수, 또는 사람 메시지) 아무것도 안 그린다.
+  if (message.is_persona && profile && (profile.gender || profile.age_range || profile.voice_openai)) {
+    const meta = document.createElement("div");
+    meta.className = "profile-popup-meta";
+    const genderLabel = profile.gender === "male" ? "남성" : profile.gender === "female" ? "여성" : null;
+    if (genderLabel) meta.append(_profileMetaChip(`👤 ${genderLabel}`));
+    if (profile.age_range) meta.append(_profileMetaChip(`🎂 ${profile.age_range}`));
+    if (profile.voice_openai) {
+      meta.append(_profileMetaChip(`🔊 ${profile.voice_openai}${profile.voice_edge ? ` / ${profile.voice_edge}` : ""}`));
+    }
+    popup.appendChild(meta);
+  }
   close.addEventListener("click", () => overlay.remove()); overlay.addEventListener("click", (e) => { if (e.target === overlay) overlay.remove(); });
-  popup.append(close, avatar, name, summary); overlay.appendChild(popup); document.body.appendChild(overlay); close.focus();
+  overlay.appendChild(popup); document.body.appendChild(overlay); close.focus();
+}
+
+function _profileMetaChip(text) {
+  const chip = document.createElement("span");
+  chip.className = "profile-popup-meta-chip";
+  chip.textContent = text;
+  return chip;
 }
 
 document.addEventListener("keydown", (event) => {

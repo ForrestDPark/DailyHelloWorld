@@ -1607,7 +1607,9 @@ def list_persona_profiles(request: Request):
     is_owner_request = bool(user and user["is_owner"])
     conn = get_conn()
     rows = conn.execute(
-        "SELECT name, owner_username, description, profile_summary, avatar_url FROM personas ORDER BY name"
+        """SELECT name, owner_username, description, profile_summary, avatar_url,
+                  gender, age_range, voice_openai, voice_edge
+             FROM personas ORDER BY name"""
     ).fetchall()
     granted = {
         r["persona_name"] for r in conn.execute(
@@ -1628,6 +1630,12 @@ def list_persona_profiles(request: Request):
             "is_mine": bool(username) and r["owner_username"] == username,
             "summary": summary,
             "avatar_url": r["avatar_url"],
+            # ★ "성별/나이대 설정, AI가 판단한 목소리 음색설정도 프로필에서
+            # 보이면 좋겠다" 요청(2026-08-30).
+            "gender": r["gender"],
+            "age_range": r["age_range"],
+            "voice_openai": r["voice_openai"],
+            "voice_edge": r["voice_edge"],
         })
     return result
 
@@ -3648,6 +3656,10 @@ class PersonaSync(BaseModel):
     system_prompt: str
     group_name: Optional[str] = None
     profile_summary: Optional[str] = None
+    gender: Optional[str] = None
+    age_range: Optional[str] = None
+    voice_openai: Optional[str] = None
+    voice_edge: Optional[str] = None
 
 
 @app.post("/api/worker/sync_persona")
@@ -3662,17 +3674,23 @@ def sync_persona(persona: PersonaSync, authorization: Optional[str] = Header(Non
     effective_group = (admin_group_name or None) if admin_group_name is not None else persona.group_name
     conn.execute(
         """
-        INSERT INTO personas (name, notion_page_id, system_prompt, group_name, profile_summary, synced_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO personas (name, notion_page_id, system_prompt, group_name, profile_summary,
+                               gender, age_range, voice_openai, voice_edge, synced_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(name) DO UPDATE SET
             notion_page_id = excluded.notion_page_id,
             system_prompt = excluded.system_prompt,
             group_name = excluded.group_name,
             profile_summary = excluded.profile_summary,
+            gender = excluded.gender,
+            age_range = excluded.age_range,
+            voice_openai = excluded.voice_openai,
+            voice_edge = excluded.voice_edge,
             synced_at = excluded.synced_at
         """,
         (persona.name, persona.notion_page_id, effective_prompt, effective_group,
-         effective_summary, _now()),
+         effective_summary, persona.gender, persona.age_range, persona.voice_openai,
+         persona.voice_edge, _now()),
     )
     conn.commit()
     conn.close()

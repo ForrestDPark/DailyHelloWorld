@@ -36,7 +36,8 @@ import edge_tts  # ★ 2026-08-30: OpenAI TTS 크레딧 소진 시 무료 폴백
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ai_exec import run_ai_exec, run_provider_api  # noqa: E402
 from notion_personas import (  # noqa: E402
-    append_story_summary, build_system_prompt, extract_group, extract_profile_summary,
+    append_story_summary, build_system_prompt, extract_age_range, extract_gender,
+    extract_group, extract_profile_summary,
     extract_projects, fetch_page_text, list_personas, notion_token,
 )
 
@@ -1211,8 +1212,20 @@ def sync_personas():
             system_prompt += EBOOK_READER_ADDENDUM
         group_name = extract_group(page_text)
         profile_summary = extract_profile_summary(page_text)
+        # ★ "각각의 페르소나 설정에서 남성인지 여성인지 나이대 구분되는 설정이
+        # 있으면 좋겠고 AI가 판단한 목소리 음색설정 같은것도 프로필에서
+        # 보이면 좋을거 같아" 요청(2026-08-30) — Notion에서 읽은 성별·나이대와
+        # 그걸로 실제 결정된 기본(한국어) 목소리 이름을 서버에 같이 올려서
+        # 프로필 팝업에 그대로 보여줄 수 있게 한다. 실제 TTS 시점엔 메시지가
+        # 일본어면 다른 풀에서 뽑지만(_voice_for_persona_edge의 text 인자),
+        # 여기 프로필 표시는 "기본값" 스냅샷이라 문제없다.
+        gender = extract_gender(page_text)
+        age_range = extract_age_range(page_text)
+        voice_openai = _voice_for_persona(persona["title"], gender)
+        voice_edge = _voice_for_persona_edge(persona["title"], gender)
         cache[persona["title"]] = {
             "system_prompt": system_prompt, "page_id": persona["id"], "profile_summary": profile_summary,
+            "gender": gender, "age_range": age_range,
         }
         try:
             _api("/api/worker/sync_persona", "POST", {
@@ -1221,6 +1234,10 @@ def sync_personas():
                 "system_prompt": system_prompt,
                 "group_name": group_name,
                 "profile_summary": profile_summary,
+                "gender": gender,
+                "age_range": age_range,
+                "voice_openai": voice_openai,
+                "voice_edge": voice_edge,
             })
         except (urllib.error.URLError, urllib.error.HTTPError) as exc:
             print(f"⚠️ '{persona['title']}' 서버 동기화 실패: {exc}", flush=True)

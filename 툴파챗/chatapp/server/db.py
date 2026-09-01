@@ -225,6 +225,14 @@ def init_db():
     _ensure_column(conn, "personas", "avatar_url", "TEXT")
     _ensure_column(conn, "personas", "admin_description", "TEXT")
     _ensure_column(conn, "personas", "admin_group_name", "TEXT")
+    # ★ "성별/나이대 설정, AI가 판단한 목소리 음색설정도 프로필에서 보이면
+    # 좋겠다" 요청(2026-08-30) — Notion "- 성별:"/"- 나이대:" 필드(TTS 목소리
+    # 성별 오배정 신고로 새로 만든 컨벤션)와 그걸로 워커가 실제로 정한 기본
+    # 목소리 이름을 서버에도 캐시해서 프로필 팝업에 그대로 보여준다.
+    _ensure_column(conn, "personas", "gender", "TEXT")
+    _ensure_column(conn, "personas", "age_range", "TEXT")
+    _ensure_column(conn, "personas", "voice_openai", "TEXT")
+    _ensure_column(conn, "personas", "voice_edge", "TEXT")
     # ★ "담당이 아닌 페르소나가 엉뚱하게 대답하는 버그" 요청(2026-08-26) —
     # 이름이 안 불렸을 때 "직전 발화자"로 고른 턴을 워커가 한 번 재검토해서
     # 더 알맞은 담당자로 돌려보낼 수 있다(rerouted=1이면 재검토 끝, 무한

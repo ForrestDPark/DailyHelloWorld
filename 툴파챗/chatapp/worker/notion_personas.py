@@ -131,6 +131,35 @@ def extract_projects(page_text):
     return [name.strip() for name in match.group(1).split(",") if name.strip()]
 
 
+_GENDER_LINE_RE = re.compile(r"^-\s*성별\s*:\s*(.+?)\s*$", re.MULTILINE)
+_AGE_LINE_RE = re.compile(r"^-\s*나이대\s*:\s*(.+?)\s*$", re.MULTILINE)
+
+
+def extract_gender(page_text):
+    """페르소나 페이지의 프로필 섹션에서 "- 성별: 남성/여성" 줄을 찾아
+    "male"/"female"로 정규화해 반환한다 (★ 2026-08-30, "TTS가 남성
+    페르소나에도 여자 목소리를 낼 때가 있다" 신고 — 목소리 배정을 성별에
+    맞게 하기 위해). "남"/"여"로 시작하지 않는 값(중립·미상 등)이나 필드
+    자체가 없으면 None — 이 경우 목소리 배정은 전체 풀에서 고른다."""
+    match = _GENDER_LINE_RE.search(page_text)
+    if not match:
+        return None
+    value = match.group(1).strip()
+    if value.startswith("남"):
+        return "male"
+    if value.startswith("여"):
+        return "female"
+    return None
+
+
+def extract_age_range(page_text):
+    """페르소나 페이지의 프로필 섹션에서 "- 나이대: 중년" 줄을 찾아 그대로
+    반환한다(청년/중년/노년 등 자유 텍스트 — TTS instructions에 그대로
+    넘겨 쓰므로 정규화하지 않는다). 없으면 None."""
+    match = _AGE_LINE_RE.search(page_text)
+    return match.group(1).strip() if match else None
+
+
 _PROFILE_SECTION_RE = re.compile(r"^## 프로필\n(.*?)(?=\n## |\Z)", re.DOTALL | re.MULTILINE)
 _PROFILE_FIELD_RE = re.compile(r"^-\s*(유형|정체성/관계|성격|말투|배경)\s*:\s*(.+?)\s*$", re.MULTILINE)
 
