@@ -461,7 +461,15 @@ JOB_SYSTEM_PERSONA_NAMES = {JOB_SEEKER_PERSONA_NAME, CAREER_COACH_PERSONA_NAME, 
 def load_job_system_state():
     """오늘의 추천 공고(정규직/알바 각각) + 신규 공고 통계 + 후보자 목표
     직무를 사람이 읽는 요약으로 만든다. 구직지기 전용 — 알람지기 등과 같은
-    패턴으로 AI에게 파일 도구를 주지 않고 필요한 값만 직접 읽어 넣는다."""
+    패턴으로 AI에게 파일 도구를 주지 않고 필요한 값만 직접 읽어 넣는다.
+
+    ★ 2026-09-01 실측 피드백: "이런식으로만 끝내지 말고 이 회사는 무슨
+    회사이고 이 공고를 보니까 무슨 업무를 지원할 수 있고 어떤 것에 강점이
+    있는지 알아서 썰을 풀면 좋겠어" — 점수 한 줄 요약만으로는 부족해서,
+    jobs.db에서 해당 공고의 원본 행(location/employment_type/salary/
+    keywords/skills 등)과 job_url을 같이 넣는다. 구직지기가 회사 자체를
+    설명하려면 이 정보만으론 부족할 수 있어(회사 소개는 공고에 없을 때가
+    많음) WebSearch로 직접 찾아보라고 addendum에 명시했다."""
     lines = []
     for label, filename in (("정규직", "top_job_notion_career.json"), ("알바/파트타임", "top_job_notion_parttime.json")):
         data = _read_json_file(JOB_SYSTEM_DATA_DIR / filename)
@@ -471,6 +479,23 @@ def load_job_system_state():
             f"오늘의 추천 공고({label}): {data.get('company')} — {data.get('title')} "
             f"[{data.get('score')}점, {data.get('source')}]"
         )
+        if data.get("job_url"):
+            lines.append(f"  공고 원문 링크: {data['job_url']}")
+        try:
+            conn = sqlite3.connect(str(JOB_SYSTEM_DATA_DIR / "jobs.db"))
+            conn.row_factory = sqlite3.Row
+            posting = conn.execute(
+                "SELECT location, experience, education, employment_type, salary, "
+                "posted_at, deadline, keywords, skills FROM jobs WHERE url = ? LIMIT 1",
+                (data.get("job_url"),),
+            ).fetchone()
+            conn.close()
+            if posting:
+                details = {k: posting[k] for k in posting.keys() if posting[k]}
+                if details:
+                    lines.append(f"  공고 상세: {details}")
+        except sqlite3.Error:
+            pass
     try:
         conn = sqlite3.connect(str(JOB_SYSTEM_DATA_DIR / "jobs.db"))
         row = conn.execute("SELECT COUNT(*), MAX(score) FROM jobs").fetchone()
@@ -506,7 +531,14 @@ JOB_SYSTEM_ADDENDUM = (
     "jobs.db(SQLite)는 도구로 직접 열 수 없으니 공고 개별 내용을 물으면 위 JSON들과 "
     "candidate_profile.json 범위 안에서만 답하고, 그 밖은 모른다고 솔직히 말할 것. "
     "맞춤 자소서·포트폴리오 초안 작성은 이 페르소나들의 역할이 아니다(그건 별도 절차로 "
-    "처리됨) — 대신 지금 상태를 보고 캐주얼하게 의견을 나누는 역할에 집중한다."
+    "처리됨) — 대신 지금 상태를 보고 캐주얼하게 의견을 나누는 역할에 집중한다.\n"
+    "★ 2026-09-01 실측 피드백: \"이런식으로만 끝내지 말고 이 회사는 무슨 회사이고 이 공고를 "
+    "보니까 무슨 업무를 지원할 수 있고 어떤 것에 강점이 있는지 알아서 썰을 풀면 좋겠어\" — "
+    "'○○점이라 애매하다/좋다' 같은 한 줄 평으로 끝내지 말 것. 회사 자체가 뭘 하는 "
+    "곳인지, 공고 내용상 실제로 어떤 업무를 맡게 될지, 후보자 경력·스킬과 어디가 특히 "
+    "잘 맞는지까지 구체적으로 풀어서 설명한다. 회사 소개가 live_state나 로컬 파일에 없으면 "
+    "지어내지 말고 WebSearch로 직접 찾아본 뒤(이미 허용된 도구) 답하고, 그래도 못 찾으면 "
+    "모른다고 솔직히 말한다."
 )
 
 # ★ "일본어 자막추출도 비슷한 방식으로 플랜 만들어줘" → "일본어 스터디방으로
@@ -596,7 +628,16 @@ JP_SUBTITLE_ADDENDUM = (
     "(expressions/vocabulary/grammar/shadowing).\n"
     "문법·어휘를 통째로 새로 분석하지 말고(그건 별도 절차가 이미 깊게 함), 이미 만들어진 "
     "학습카드를 소개하고 가볍게 대화하는 역할에 집중한다. 확인 안 된 회차 내용은 지어내지 "
-    "말고 못 찾았다고 솔직히 답할 것."
+    "말고 못 찾았다고 솔직히 답할 것.\n"
+    "★ 2026-09-01 실측 피드백: \"한자는 내가 후리가나를 몰라서 한자표현 나오면 후리가나도 "
+    "있게 표현해주면 좋겠고... 한국어랑 일본어랑 같이 있으면 한국어는 한국어 tts 가 읽고 "
+    "일본어는 일본어 tts 가 읽으면 좋겠어\" — 아래 두 가지를 항상 지킨다.\n"
+    "1) 일본어 표현은 예외 없이 「」로 감싼다(한 단어짜리 표현이라도). 「」 바깥은 한국어만 "
+    "쓰고, 「」 안에 한국어를 섞지 않는다 — 이 구분이 음성 안내에서 한국어/일본어 음성을 "
+    "따로 골라 읽는 유일한 기준이라 지켜지지 않으면 발음이 뒤섞인다.\n"
+    "2) 「」 안에 한자가 하나라도 있으면 그 한자 바로 뒤 괄호 안에 히라가나 후리가나를 "
+    "반드시 붙인다. 예: 「相談事(そうだんごと)」, 「気(き)にすんな」. 이미 かな만으로 "
+    "쓰인 표현(예: 「すっごい」)은 그대로 두면 된다."
 )
 
 # ★ 2026-08-29: 소유자가 채팅에서 "손자병법 다음 구절 해석해"라고 직접
@@ -1220,30 +1261,117 @@ TTS_ENGINES = (
 )
 
 
-def process_tts_job(job, persona_cache):
+def _generate_tts_for_text(text, persona_name, persona_cache):
+    """3단계 폴백(OpenAI→edge-tts→macOS say)으로 텍스트 한 덩어리를 합성해
+    (url, 엔진이름)을 반환한다. 셋 다 실패하면 RuntimeError(세 시도 결과를
+    모은 메시지)를 던진다."""
     errors = []
-    url = None
-    engine = None
     for name, generate in TTS_ENGINES:
         try:
-            url = generate(job["content"], job["persona_name"], persona_cache)
-            engine = name
-            break
+            return generate(text, persona_name, persona_cache), name
         except Exception as exc:  # noqa: BLE001 — 다음 엔진으로 넘어가기 위한 의도적 전체 캐치
             errors.append(f"{name} 실패({exc})")
-            print(f"⚠️ {job.get('persona_name')} {name} TTS 실패, 다음 방법 시도: {exc}", flush=True)
-    if not url:
+            print(f"⚠️ {persona_name} {name} TTS 실패, 다음 방법 시도: {exc}", flush=True)
+    raise RuntimeError(" / ".join(errors))
+
+
+# ★ "한국어랑 일본어랑 같이 있으면 한국어는 한국어 tts 가 읽고 일본어는
+# 일본어 tts 가 읽으면 좋겠어" 요청(2026-09-01) — 지금까지는 메시지 전체를
+# 한 번에 한 엔진에 넘겨서, 문장에 히라가나/가타카나가 조금이라도 섞이면
+# _contains_japanese()가 전체를 일본어로 판단해 한국어 부분까지 일본어
+# 음성으로 읽혔다. 일본어 선생님(등)이 항상 일본어 표현을 「」로 감싸는
+# 말투(JP_SUBTITLE_ADDENDUM에서 강제)를 이용해 「」 안쪽은 일본어, 바깥쪽은
+# 한국어로 나눠서 각각 맞는 언어 음성으로 따로 합성한 뒤 ffmpeg로 이어붙인다.
+JP_QUOTE_SEGMENT_RE = re.compile(r"「([^」]+)」")
+
+
+def _split_ko_ja_segments(text):
+    """「...」로 감싼 부분은 일본어, 나머지는 한국어로 보고 순서를 지킨
+    [(lang, text), ...]를 만든다. 빈 조각은 버리고 같은 언어가 연달아
+    나오면 하나로 합쳐 불필요한 API 호출을 줄인다."""
+    raw = []
+    last_end = 0
+    for m in JP_QUOTE_SEGMENT_RE.finditer(text):
+        if m.start() > last_end:
+            raw.append(("ko", text[last_end:m.start()]))
+        raw.append(("ja", m.group(1)))
+        last_end = m.end()
+    if last_end < len(text):
+        raw.append(("ko", text[last_end:]))
+    merged = []
+    for lang, chunk in raw:
+        if not chunk.strip():
+            continue
+        if merged and merged[-1][0] == lang:
+            merged[-1] = (lang, merged[-1][1] + chunk)
+        else:
+            merged.append((lang, chunk))
+    return merged
+
+
+# 후리가나 표기(相談事(そうだんごと))는 화면에 보여줄 때는 필요하지만, TTS
+# 엔진은 한자 자체를 이미 올바르게 읽으므로 그대로 두면 같은 발음이 괄호
+# 안에서 한 번 더 반복돼(또는 "카코…토지카코"처럼 어색하게) 들린다. 한자
+# 바로 뒤에 붙는 (かな) 괄호만 음성 합성 직전에 제거한다.
+FURIGANA_PAREN_RE = re.compile(r"(?<=[一-鿿])[(（]([ぁ-んー]+)[)）]")
+
+
+def _strip_furigana_for_tts(text):
+    return FURIGANA_PAREN_RE.sub("", text)
+
+
+def _concat_audio_files(paths, output_path):
+    """ffmpeg filter_complex concat으로 서로 다른 포맷(mp3/m4a 등 엔진별로
+    다를 수 있음)이 섞여 있어도 각각 디코드한 뒤 재인코딩해 하나로 합친다."""
+    inputs = []
+    for p in paths:
+        inputs += ["-i", str(p)]
+    filter_str = "".join(f"[{i}:a]" for i in range(len(paths))) + f"concat=n={len(paths)}:v=0:a=1[out]"
+    result = subprocess.run(
+        ["ffmpeg", "-y", *inputs, "-filter_complex", filter_str, "-map", "[out]", str(output_path)],
+        capture_output=True, text=True, timeout=60,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"오디오 합치기 실패: {result.stderr[-500:]}")
+
+
+def process_tts_job(job, persona_cache):
+    persona_name = job["persona_name"]
+    segments = _split_ko_ja_segments(job["content"])
+    segment_paths = []
+    try:
+        if len(segments) <= 1:
+            lang = segments[0][0] if segments else "ko"
+            text = _strip_furigana_for_tts(job["content"]) if lang == "ja" else job["content"]
+            url, engine = _generate_tts_for_text(text, persona_name, persona_cache)
+        else:
+            engines_used = []
+            for lang, seg_text in segments:
+                text = _strip_furigana_for_tts(seg_text) if lang == "ja" else seg_text
+                seg_url, seg_engine = _generate_tts_for_text(text, persona_name, persona_cache)
+                engines_used.append(seg_engine)
+                segment_paths.append(UPLOADS_DIR / Path(seg_url).name)
+            filename = f"tts_{int(time.time())}_{os.urandom(4).hex()}.mp3"
+            out_path = UPLOADS_DIR / filename
+            _concat_audio_files(segment_paths, out_path)
+            url = f"/uploads/{filename}"
+            engine = "+".join(dict.fromkeys(engines_used))
+    except Exception as exc:  # noqa: BLE001 — 실패를 영속화하고 워커는 계속 돈다
         try:
-            _api("/api/worker/tts_jobs/complete", "POST", {
-                "job_id": job["id"], "error": " / ".join(errors)[:1000],
-            })
+            _api("/api/worker/tts_jobs/complete", "POST", {"job_id": job["id"], "error": str(exc)[:1000]})
         except Exception as report_exc:  # noqa: BLE001
             print(f"⚠️ TTS 작업 실패 상태 저장도 실패: {report_exc}", flush=True)
-        print(f"⚠️ {job.get('persona_name')} TTS 생성 실패(모든 방법 소진): {errors}", flush=True)
+        print(f"⚠️ {persona_name} TTS 생성 실패(모든 방법 소진): {exc}", flush=True)
         return
+    finally:
+        for p in segment_paths:
+            try:
+                p.unlink(missing_ok=True)  # 이어붙이기용 중간 조각은 최종 파일만 남기고 정리
+            except OSError:
+                pass
     try:
         _api("/api/worker/tts_jobs/complete", "POST", {"job_id": job["id"], "url": url})
-        print(f"🔊 {job['persona_name']} 메시지 #{job['message_id']} TTS 생성 완료({engine})", flush=True)
+        print(f"🔊 {persona_name} 메시지 #{job['message_id']} TTS 생성 완료({engine})", flush=True)
     except Exception as exc:  # noqa: BLE001
         print(f"⚠️ TTS 작업 완료 보고 실패: {exc}", flush=True)
 
