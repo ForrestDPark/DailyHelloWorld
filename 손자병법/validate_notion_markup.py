@@ -103,19 +103,11 @@ def validate(
             if count != 1:
                 errors.append(f"{number}번 섹션 헤더 개수가 {count}개입니다(정상: 1개)")
 
-        expected_section_attrs = {
-            "1": None,
-            "2": '{toggle="true" color="blue_bg"}',
-            "3": '{toggle="true" color="green_bg"}',
-            "4": '{toggle="true"}',
-            "5": '{toggle="true" color="purple_bg"}',
-        }
         for match in re.finditer(r"^##\s+([1-5])\.\s+.*?(?:\{[^}]+\})?$", text, re.MULTILINE):
             number, heading = match.group(1), match.group(0)
-            expected = expected_section_attrs[number]
-            if (expected is None and "{" in heading) or (expected and not heading.endswith(expected)):
+            if "{" in heading or 'toggle="true"' in heading:
                 line = text.count("\n", 0, match.start()) + 1
-                errors.append(f"{line}행: {number}번 섹션 토글 서식이 기준본과 다릅니다")
+                errors.append(f"{line}행: {number}번 섹션 제목에 토글·색상 속성이 남아 있습니다")
 
         for match in re.finditer(r"<details\b[^>]*>(.*?)</details>", text, re.DOTALL):
             if re.search(r"^##\s+[1-5]\.\s+", match.group(1), re.MULTILINE):

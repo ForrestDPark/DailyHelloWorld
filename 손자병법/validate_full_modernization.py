@@ -187,35 +187,10 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
 
     for section_number in range(2, 6):
         heading = re.search(rf"^## {section_number}\..*$", text, re.MULTILINE)
-        if not heading or 'toggle="true"' not in heading.group(0):
-            errors.append(f"{section_number}번 섹션 제목에 기준본 대형 토글이 없습니다")
-            continue
-        section_end = text.find("\n---", heading.end())
-        if section_end < 0:
-            section_end = len(text)
-        body_lines = []
-        table_depth = 0
-        for line in text[heading.end():section_end].splitlines():
-            stripped = line.strip()
-            if not stripped:
-                continue
-            if stripped.startswith("<table"):
-                body_lines.append(line)
-                table_depth += 1
-                continue
-            if stripped == "</table>":
-                table_depth = max(0, table_depth - 1)
-                continue
-            # Notion 재조회 Markdown은 토글 안의 표 블록 자체는 들여쓰지만
-            # 표 내부 tr/td 태그의 탭은 정규화해 제거한다. 표 루트의 소속만
-            # 검사하고 내부 태그는 토글 들여쓰기 판정에서 제외한다.
-            if table_depth:
-                continue
-            body_lines.append(line)
-        if not body_lines or any(not line.startswith("\t") for line in body_lines):
-            errors.append(
-                f"{section_number}번 섹션 본문 전체가 대형 토글의 자식으로 들여쓰기되지 않았습니다"
-            )
+        if not heading:
+            errors.append(f"{section_number}번 섹션 제목이 없습니다")
+        elif "{" in heading.group(0) or 'toggle="true"' in heading.group(0):
+            errors.append(f"{section_number}번 섹션 제목에 토글·색상 속성이 남아 있습니다")
 
     if text.count("🏳️ <span color=\"red\">**패군 측 결과**</span>") != 2:
         errors.append("패군 측 결과 라벨이 정확히 2개가 아닙니다")
