@@ -119,7 +119,14 @@ def main() -> None:
     parser.add_argument("page", type=Path)
     parser.add_argument("--notion-url", required=True)
     parser.add_argument("--site-url", required=True)
+    parser.add_argument(
+        "--discussion-run",
+        default="commanders-v1",
+        help="같은 구절 토론을 의도적으로 다시 시작할 때 쓰는 중복 방지 실행명",
+    )
     args = parser.parse_args()
+    if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,39}", args.discussion_run):
+        parser.error("--discussion-run은 영문 소문자·숫자·밑줄·하이픈만 사용할 수 있습니다")
 
     number, original, subtitle = read_page(args.page)
     markdown = args.page.read_text(encoding="utf-8")
@@ -137,7 +144,7 @@ def main() -> None:
         {
             "room_id": ROOM_ID,
             "content": content,
-            "dedupe_key": f"{ROOM_ID}:sunzi-jiudi-{number}:commanders-v1",
+            "dedupe_key": f"{ROOM_ID}:sunzi-jiudi-{number}:{args.discussion_run}",
             "victory_commanders": commanders,
         },
         ensure_ascii=False,
