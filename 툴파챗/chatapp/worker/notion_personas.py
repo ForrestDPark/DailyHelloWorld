@@ -219,3 +219,40 @@ def append_story_summary(page_id, token, date_label, summary_text):
         },
     ]
     _request(f"blocks/{page_id}/children", token, method="PATCH", payload={"children": children})
+
+
+# ★ "독서지기가 독서할때 특정인물이 등장했다거나 그인물에대한 이야기를 하면
+# 그이야기를 수집해서 페르소나화할수있게 되면 관리자에게 최종승인을 받아서
+# 페르소나를 생성해주게 하자" 요청(2026-09-02) — 페르소나 관리자가 소유자
+# 승인을 받은 뒤 실제로 새 페르소나 페이지를 만들 때 쓴다. "## 제목"은
+# heading_2, "- 항목"은 bulleted_list_item으로 바꾸는 최소 변환만 지원
+# (다른 페르소나 페이지들의 "## 프로필\n- 유형: ...\n- ..." 관례와 맞춰
+# fetch_page_text()가 그대로 다시 읽을 수 있게).
+def create_persona_page(title, profile_markdown, token):
+    children = []
+    for line in profile_markdown.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.startswith("## "):
+            children.append({
+                "object": "block", "type": "heading_2",
+                "heading_2": {"rich_text": [{"type": "text", "text": {"content": line[3:].strip()}}]},
+            })
+        elif line.startswith("- "):
+            children.append({
+                "object": "block", "type": "bulleted_list_item",
+                "bulleted_list_item": {"rich_text": [{"type": "text", "text": {"content": line[2:].strip()}}]},
+            })
+        else:
+            children.append({
+                "object": "block", "type": "paragraph",
+                "paragraph": {"rich_text": [{"type": "text", "text": {"content": line}}]},
+            })
+    payload = {
+        "parent": {"page_id": TULPA_ROOT_PAGE_ID},
+        "properties": {"title": {"title": [{"type": "text", "text": {"content": title}}]}},
+        "children": children[:100],  # 페이지 생성 시 children은 한 번에 최대 100블록
+    }
+    data = _request("pages", token, method="POST", payload=payload)
+    return data["id"]

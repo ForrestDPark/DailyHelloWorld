@@ -37,8 +37,8 @@ import edge_tts  # ★ 2026-08-30: OpenAI TTS 크레딧 소진 시 무료 폴백
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ai_exec import run_ai_exec, run_provider_api  # noqa: E402
 from notion_personas import (  # noqa: E402
-    append_story_summary, build_system_prompt, extract_age_range, extract_gender,
-    extract_group, extract_profile_summary,
+    append_story_summary, build_system_prompt, create_persona_page, extract_age_range,
+    extract_gender, extract_group, extract_profile_summary,
     extract_projects, fetch_page_text, list_personas, notion_token,
 )
 
@@ -261,6 +261,44 @@ EBOOK_READER_ADDENDUM = (
     "(책마다 파일 1개, 2026-08-03 이전 기록 포함). index.json에 책 제목→파일명 매핑이 있다.\n"
     "파일이 많고 커서, 먼저 Grep으로 이름 등 키워드를 찾고 걸린 파일만 Read하는 식으로 훑을 것. "
     "직접 확인한 근거 없이 인물이나 내용을 지어내지 말 것 — 못 찾았으면 못 찾았다고 솔직히 답한다."
+)
+
+# ★ "독서할때마다 어떤 캐릭터나 인물들이 나오는데 독서토론방에 페르소나
+# 관리자 생성해서 초대하고, 독서지기가 독서할때 특정인물이 등장했다거나
+# 그인물에대한 이야기를 하면 그이야기를 수집해서 페르소나화할수있게 되면
+# 관리자에게 최종승인을 받아서 페르소나를 생성해주게 하자" 요청(2026-09-02) —
+# 유이(UI 개발자)의 "제안 → 소유자 승인 → 결정론적 워커 코드만 실제 실행"
+# 안전 패턴을 그대로 재사용한다. AI는 절대 스스로 Notion 페이지를 만들지
+# 않고, ```personaplan 코드 블록으로 "제안"만 하며, 실제 생성은
+# create_persona_page()(아래, 결정론적 코드)가 담당한다.
+PERSONA_MANAGER_PERSONA_NAME = "페르소나 관리자"
+PERSONA_PROPOSAL_RE = re.compile(r"```personaplan\s*\n(.*?)\n```", re.DOTALL)
+PERSONA_MANAGER_TIMEOUT_SECONDS = 300
+_pending_persona_proposals = {}  # room_id -> {"name":..., "profile":...} — 워커 재시작하면 초기화(의도적)
+
+PERSONA_MANAGER_ADDENDUM = (
+    "\n\n---\n"
+    f'"{PERSONA_MANAGER_PERSONA_NAME}"은(는) 독서 토론방에 초대된 멤버로, 독서지기·티모시 페리스가 '
+    "책 이야기를 하다가 특정 인물(등장인물이든 실존 인물이든)을 반복해서 언급하거나 그 인물에 대해 "
+    "구체적인 이야기(성격·말투·사연·관계 등)를 하면, 그 내용을 눈여겨봤다가 새 페르소나로 만들만한 "
+    "인물인지 판단하는 역할이다.\n"
+    "판단 기준: 대화에서 그 인물의 성격·말투·배경을 실제로 페르소나 프로필에 채울 만큼 구체적인 "
+    "내용이 쌓였을 때만 제안한다 — 이름만 스치듯 나온 인물, 자료가 부족한 인물은 제안하지 않는다"
+    "(모든 등장인물을 다 페르소나로 만들 필요는 없다).\n"
+    "제안할 때는 다음 형식을 반드시 지켜라:\n"
+    "1) 먼저 사람이 읽을 자연스러운 설명 — 어떤 인물인지, 왜 페르소나로 만들만하다고 판단했는지, "
+    "대화에서 어떤 근거가 나왔는지를 쓴다.\n"
+    '2) 그다음 실제로 만들 페르소나를 ```personaplan 코드 블록 안에 JSON으로 정확히 적는다. '
+    '형식은 {"name":"페르소나 이름","profile":"## 프로필\\n- 유형: ...\\n- 정체성/관계: ...\\n'
+    '- 성격: ...\\n- 말투: ...\\n- 배경: ...\\n- 그룹: 독서 토론방\\n- 성별: 남성 또는 여성\\n'
+    '- 나이대: 청년/중년/노년","reason":"왜 지금 제안하는지 한 줄"} — 다른 페르소나 페이지들과 '
+    "같은 관례(유형/정체성·관계/성격/말투/배경 항목)를 그대로 따른다. 대화에서 실제로 나온 내용만 "
+    "채우고, 확인 안 된 디테일은 지어내지 말고 비워두거나 생략한다.\n"
+    "3) 스스로는 절대 페르소나를 만들지 않는다 — 이 제안은 소유자가 다음 메시지에서 \"승인\" 또는 "
+    '"진행"이라는 단어를 포함해 답해야만 실제로 생성된다(다른 사용자가 승인해도 무시된다). 그 외의 '
+    "답이면 제안은 자동으로 취소된다.\n"
+    "4) 한 번에 하나의 인물만 제안한다. 소유자가 명시적으로 요청하지 않는 한 매 턴 제안을 반복하지 "
+    "말고, 새로 쌓인 이야기가 있을 때만 나선다."
 )
 
 
@@ -1548,6 +1586,46 @@ def _maybe_execute_pending_ui_plan(room_id, context):
     return "UI 변경을 적용했습니다(새로고침하면 바로 보입니다).\n" + "\n".join(results)
 
 
+def _execute_persona_proposal(proposal):
+    name = (proposal.get("name") or "").strip() if isinstance(proposal, dict) else ""
+    profile = (proposal.get("profile") or "").strip() if isinstance(proposal, dict) else ""
+    if not name or not profile:
+        return ["❌ 이름 또는 프로필이 비어 있어 건너뜀"]
+    token = notion_token()
+    if not token:
+        return ["❌ Notion 토큰을 찾지 못해 페르소나를 만들지 못했습니다"]
+    try:
+        create_persona_page(name, profile, token)
+    except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+        return [f"❌ Notion 페이지 생성 실패: {exc}"]
+    return [f"✅ '{name}' 페르소나를 만들었습니다. 다음 동기화(몇 분 내) 뒤 채팅 목록에 나타납니다."]
+
+
+def _capture_pending_persona_proposal(room_id, reply_text):
+    m = PERSONA_PROPOSAL_RE.search(reply_text)
+    if not m:
+        return
+    try:
+        proposal = json.loads(m.group(1))
+    except json.JSONDecodeError:
+        return
+    if isinstance(proposal, dict) and proposal.get("name") and proposal.get("profile"):
+        _pending_persona_proposals[room_id] = proposal
+
+
+def _maybe_execute_pending_persona_proposal(room_id, context):
+    """UI 개발자의 _maybe_execute_pending_ui_plan과 완전히 같은 규칙 — 소유자
+    (OWNER_USERNAME)의 가장 최근 메시지에 승인 키워드가 있을 때만 실행한다."""
+    proposal = _pending_persona_proposals.pop(room_id, None)
+    if not proposal:
+        return None
+    if not context or context[-1]["sender"] != OWNER_USERNAME:
+        return None
+    if not any(k in context[-1]["content"] for k in ORGANIZE_APPROVE_KEYWORDS):
+        return None
+    return "\n".join(_execute_persona_proposal(proposal))
+
+
 def sync_personas():
     """Notion에서 페르소나 목록·본문을 읽어 이름→{system_prompt, page_id} 캐시를
     만들고, 서버에도 참고용으로 올려둔다(서버가 /api/personas로 목록을 보여줄
@@ -1577,6 +1655,8 @@ def sync_personas():
             system_prompt += _build_ui_dev_addendum()
         elif persona["title"] == EBOOK_READER_PERSONA_NAME:
             system_prompt += EBOOK_READER_ADDENDUM
+        elif persona["title"] == PERSONA_MANAGER_PERSONA_NAME:
+            system_prompt += PERSONA_MANAGER_ADDENDUM
         elif persona["title"] in JOB_SYSTEM_PERSONA_NAMES:
             system_prompt += JOB_SYSTEM_ADDENDUM
         elif persona["title"] == JP_TEACHER_PERSONA_NAME:
@@ -1949,6 +2029,13 @@ def _process_turn_inner(turn, persona_cache):
     is_job_system = persona_name in JOB_ROOM_TOOL_PERSONA_NAMES
     is_jp_teacher = persona_name == JP_TEACHER_PERSONA_NAME
     is_pipeline_expert = persona_name == PIPELINE_EXPERT_PERSONA_NAME
+    is_persona_manager = persona_name == PERSONA_MANAGER_PERSONA_NAME
+    if is_persona_manager:
+        executed = _maybe_execute_pending_persona_proposal(room_id, turn["context"])
+        if executed is not None:
+            _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": executed})
+            print(f"🧑‍🎨 {persona_name} 페르소나 생성 실행: {executed[:80]}", flush=True)
+            return
     if is_organizer:
         executed = _maybe_execute_pending_plan(room_id, turn["context"])
         if executed is not None:
@@ -2049,6 +2136,7 @@ def _process_turn_inner(turn, persona_cache):
         else JOB_SYSTEM_TIMEOUT_SECONDS if is_job_system
         else JP_SUBTITLE_TIMEOUT_SECONDS if is_jp_teacher
         else PIPELINE_EXPERT_TIMEOUT_SECONDS if is_pipeline_expert
+        else PERSONA_MANAGER_TIMEOUT_SECONDS if is_persona_manager
         else AI_TIMEOUT_SECONDS
     )
     try:
@@ -2065,6 +2153,8 @@ def _process_turn_inner(turn, persona_cache):
         elif ui_dev_full_access:
             _capture_pending_ui_plan(room_id, reply)
             _capture_pending_image_plan(room_id, reply)
+        elif is_persona_manager:
+            _capture_pending_persona_proposal(room_id, reply)
         _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": reply})
         print(f"💬 {persona_name} ({engine}): {reply[:60]}", flush=True)
     except Exception as exc:  # noqa: BLE001 — 이 턴만 실패 처리하고 워커는 계속 돈다
