@@ -2996,45 +2996,87 @@ def get_trash_size_bytes():
 
 
 # ★ "System Data 어디에 쓰이는지 용량 큰 순서로 보고 싶다" 요청(2026-08-29) —
-# `du`를 subprocess로 부르면 위 get_trash_size_str()에서 이미 겪은 것과 같은
-# 이유(launchd GUI 에이전트에서 capture_output이 조용히 실패)로 launchd가
-# 띄운 실제 앱에서는 못 믿을 수 있어, 순수 파이썬 os.walk로 직접 합산한다.
-def _dir_size_bytes(path):
-    """path 이하 모든 파일 크기 합계(심볼릭 링크는 따라가지 않음). 읽기 실패한
-    개별 파일/폴더는 조용히 건너뛴다."""
-    total = 0
-    for root, dirs, files in os.walk(path, onerror=lambda e: None):
-        for name in files:
-            try:
-                fp = os.path.join(root, name)
-                if not os.path.islink(fp):
-                    total += os.path.getsize(fp)
-            except OSError:
-                continue
-    return total
-
-
+# 처음엔 `du`를 subprocess로 부르면 get_trash_size_str()에서 이미 겪은 것과
+# 같은 이유(launchd GUI 에이전트에서 capture_output이 조용히 실패)로 못 믿을
+# 것 같아 순수 파이썬 os.walk로 직접 합산했었다.
+#
+# ★ 2026-09-02 실측 버그: "저장공간 상세보기 항목 눌러도 아무것도
+# 안나오는데" 신고 — 실제로 이 홈 폴더(수백만 개 파일이 있는 저장소 여러
+# 개, node_modules·.git 등) 기준으로 os.walk 버전을 직접 돌려봤더니 5분
+# (300초) 넘게 줘도 안 끝났다 — 절대 "느린" 정도가 아니라 사실상 이
+# 홈 폴더에서는 끝나지 않는 수준이었다. `du -d1`은 네이티브 바이너리라
+# 훨씬 빠르다(같은 폴더에서 실측 약 70초) — capture_output 대신 임시
+# 파일로 출력을 리다이렉트해서 launchd FD 문제도 같이 피한다
+# (get_trash_size_str가 이미 겪은 문제의 해법과 동일한 우회).
 def scan_top_level_sizes(root, top_n=12):
     """root 바로 아래 항목들의 용량을 큰 순서로 top_n개 반환한다
-    ([(이름, 바이트), ...]). 시간이 좀 걸릴 수 있어(수십~수백만 파일이면
-    수 분) 반드시 백그라운드 스레드에서 호출할 것."""
-    entries = []
+    ([(이름, 바이트), ...]). 그래도 수십 초 이상 걸릴 수 있어 반드시
+    백그라운드 스레드에서 호출할 것. `du`가 없거나 시간 초과되면 빈 리스트
+    (이번엔 못 가져왔다는 뜻 — 호출부가 캐시된 이전 결과를 대신 보여줄 수
+    있으면 그렇게 한다)."""
+    root_norm = os.path.normpath(root)
+    fd, tmp_path = tempfile.mkstemp(suffix=".txt")
+    os.close(fd)
     try:
-        with os.scandir(root) as it:
-            names = [e.name for e in it]
-    except OSError:
+        with open(tmp_path, "w", encoding="utf-8") as out:
+            subprocess.run(
+                ["du", "-d", "1", "-k", root],
+                stdout=out, stderr=subprocess.DEVNULL, timeout=180,
+            )
+        with open(tmp_path, encoding="utf-8", errors="replace") as f:
+            lines = f.read().splitlines()
+    except (OSError, subprocess.TimeoutExpired):
         return []
-    for name in names:
-        full = os.path.join(root, name)
-        if os.path.islink(full):
-            continue
+    finally:
         try:
-            size = _dir_size_bytes(full) if os.path.isdir(full) else os.path.getsize(full)
+            os.remove(tmp_path)
         except OSError:
+            pass
+    entries = []
+    for line in lines:
+        parts = line.split("\t", 1)
+        if len(parts) != 2:
             continue
-        entries.append((name, size))
+        kb_str, path = parts
+        try:
+            kb = int(kb_str)
+        except ValueError:
+            continue
+        path = os.path.normpath(path)
+        if path == root_norm:
+            continue  # du -d1은 root 자신의 총합도 한 줄로 포함하므로 제외
+        entries.append((os.path.basename(path), kb * 1024))
     entries.sort(key=lambda x: x[1], reverse=True)
     return entries[:top_n]
+
+
+# ★ 2026-09-02: du로 바꿔도 이 홈 폴더는 여전히 수십 초가 걸려서(위 주석의
+# 실측 70초), 클릭하자마자 뭐라도 즉시 보이도록 이전 결과를 캐시해둔다 —
+# 캐시가 있으면 그걸로 바로 창을 띄우고, 새 스캔은 조용히 뒤에서 돌려
+# 다음번 클릭 때 최신값이 나오게 한다("눌러도 아무것도 안나온다" 신고의
+# 재발 방지).
+SYSTEM_DATA_SCAN_CACHE_PATH = os.path.expanduser("~/.shift_alarm_storage_scan_cache.json")
+
+
+def _load_system_data_scan_cache():
+    try:
+        with open(SYSTEM_DATA_SCAN_CACHE_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        data["entries"] = [(name, size) for name, size in data["entries"]]
+        return data
+    except (OSError, json.JSONDecodeError, KeyError, ValueError):
+        return None
+
+
+def _save_system_data_scan_cache(entries):
+    try:
+        with open(SYSTEM_DATA_SCAN_CACHE_PATH, "w", encoding="utf-8") as f:
+            json.dump(
+                {"scanned_at": datetime.datetime.now().isoformat(), "entries": entries},
+                f, ensure_ascii=False,
+            )
+    except OSError:
+        pass
 
 
 def format_file_size(total):
@@ -7354,24 +7396,56 @@ class ShiftAlarmApp(rumps.App):
     def show_system_data_breakdown(self, _):
         """★ "System Data 어디에 쓰이는지 용량 순으로 보고 싶다" 요청
         (2026-08-29) — 홈 폴더 바로 아래 항목들을 큰 순서로 스캔해서 보여준다.
-        파일 수가 많으면 수십 초~몇 분 걸릴 수 있어 백그라운드 스레드에서
-        돌리고, 끝나면 알림으로 "준비됨"을 알린 뒤 결과 창을 띄운다."""
-        notify_spoken("저장공간 스캔 시작", "", "홈 폴더를 훑어보고 있습니다. 완료되면 알려드릴게요.")
-        threading.Thread(target=self._scan_and_show_system_data, daemon=True).start()
 
-    def _scan_and_show_system_data(self):
+        ★ 2026-09-02 실측 버그: "눌러도 아무것도 안나온다" 신고 — scan_top_level_sizes를
+        du 기반으로 바꿔도(위 주석 참고) 이 홈 폴더는 여전히 수십 초가 걸려서,
+        캐시된 이전 결과가 있으면 그걸로 즉시 창을 띄우고(오래된 결과라는
+        표시와 함께) 새로 스캔은 뒤에서 조용히 돌려 다음번엔 최신값이
+        나오게 한다. 캐시가 아예 없는(첫 실행) 경우에만 예전처럼 기다린다."""
+        cached = _load_system_data_scan_cache()
+        if cached:
+            self._present_system_data_from_cache(cached, refreshing=True)
+        else:
+            notify_spoken("저장공간 스캔 시작", "", "처음 스캔이라 1~2분 정도 걸릴 수 있습니다. 완료되면 알려드릴게요.")
+        threading.Thread(target=self._scan_and_show_system_data, args=(cached is not None,), daemon=True).start()
+
+    def _present_system_data_from_cache(self, cached, refreshing):
+        lines = [f"{format_file_size(size):>8}  {name}" for name, size in cached["entries"]]
+        try:
+            scanned_at = datetime.datetime.fromisoformat(cached["scanned_at"]).strftime("%m/%d %H:%M")
+        except ValueError:
+            scanned_at = "?"
+        message = "\n".join(lines)
+        if refreshing:
+            message += "\n\n(새로 스캔 중 — 완료되면 알림으로 알려드려요)"
+        AppHelper.callAfter(self._present_system_data_alert, f"{scanned_at} 기준", message)
+
+    def _scan_and_show_system_data(self, had_cache):
         home = os.path.expanduser("~")
         entries = scan_top_level_sizes(home, top_n=12)
-        lines = [f"{format_file_size(size):>8}  {name}" for name, size in entries]
-        message = "\n".join(lines) if lines else "스캔 결과를 가져오지 못했습니다."
-        free_gb = get_free_storage_gb()
-        subtitle = f"남은 공간: {free_gb}GB" if free_gb is not None else ""
+        if not entries:
+            if not had_cache:
+                AppHelper.callAfter(
+                    self._present_system_data_alert, "",
+                    "스캔 결과를 가져오지 못했습니다(du 실행 실패 또는 시간 초과)."
+                )
+            return
+        _save_system_data_scan_cache(entries)
         # ★ 2026-08-29 실측 버그: rumps.alert()만 쓰면 스캔이 1~2분 걸리는 동안
         # 사용자가 다른 앱으로 넘어가 있다가 결과 창이 그 뒤에 조용히 떠서
         # "아무것도 안 보인다"는 신고를 받았다. (1) 배너 알림을 먼저 띄워
         # 놓치지 않게 하고 (2) NSAlert 창을 직접 만들어 activateIgnoringOtherApps_
         # + 모달 패널 레벨로 다른 앱 창 뒤에 숨지 않게 강제한다 — 이 파일의
         # 다른 NSPanel(예: _prompt_* 계열)에서 이미 검증된 것과 같은 패턴.
+        if had_cache:
+            # 이미 캐시로 창을 띄워둔 상태라 두 번째 모달을 강제로 띄우면
+            # 충돌하니, 조용히 배너 알림만 남긴다(다음에 열면 최신값).
+            rumps.notification("📊 저장공간 스캔 완료", "", "최신 결과로 갱신됐습니다 — 다시 열면 확인할 수 있어요.")
+            return
+        lines = [f"{format_file_size(size):>8}  {name}" for name, size in entries]
+        message = "\n".join(lines)
+        free_gb = get_free_storage_gb()
+        subtitle = f"남은 공간: {free_gb}GB" if free_gb is not None else ""
         rumps.notification("📊 저장공간 스캔 완료", "", "결과 창을 확인하세요.")
         AppHelper.callAfter(self._present_system_data_alert, subtitle, message)
 
