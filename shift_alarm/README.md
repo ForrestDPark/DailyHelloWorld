@@ -884,3 +884,11 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - `_watch_jp_subtitle_completion()`(51번 항목, 완료 마커 감지)에 `notify_room` 옵션을 추가 — 마커가 뜨면 툴파챗 "일본어 스터디방"("일본어 선생님" 페르소나)에도 `/api/worker/reading_session_done`으로 트리거를 보낸다. "운동용 영상만 추출"(자막이 안 생김)은 `notify_room=False`로 빠짐.
 - 새 1분 주기 타이머 `_check_jp_subtitle_daily_review`가 매일 저녁 9시에 "오늘의 복습 대상을 소개해달라"는 트리거를 한 번 보낸다 — 어떤 회차인지는 shift_alarm이 몰라도 되고, 페르소나 쪽(라이브러리 전체를 날짜로 나눈 나머지 — 상태 파일 없는 순수 계산이라 양쪽이 각자 계산해도 항상 같은 답) 계산이 알아서 채운다.
 - 자세한 내용(라이브 상태 로직, 학습카드 데이터 구조, 실측 결과)은 `툴파챗/chatapp/README.md`의 "일본어 스터디방 — '일본어 선생님' + 하루 하나씩 복습" 항목 참고.
+
+## 66. 🌅 출근시간 알림 → 루틴지기가 일일 루틴 다 했는지 채팅으로 먼저 물어봄 (★ 2026-09-02 추가)
+
+**사용자 요청**: "내 출근시간에 맞춰 shift alarm 채팅방에서 메시지 와서 일일루틴 다하셨나요? 전부체크할까요? 라고 물어보고 내가 그러라고 하면 일일루틴 체크리스트에 전부 체크하게 해줘 그리고 여타 리마인더 체크도 내가 메시지로 이거 했다 저거했다하면 승인받지 않고 바로 체크 하도록 해줘."
+
+- 새 1분 주기 타이머 `_check_routine_keeper_work_start`(61번 항목의 `_check_wake_alarm_ebook_resume`과 완전히 같은 "하루 한 번, `_todays_wake_alarm_time()` 기준" 패턴)가 출근시간(=기상 알람 시각)에 툴파챗 "루틴지기" 1:1 방에 트리거 메시지를 보낸다(`_notify_routine_keeper_room()`, `/api/worker/reading_session_done` 재사용).
+- 실제 "다 하셨나요?" 질문 문구·전부 체크 실행 판단·개별 항목 즉시 체크는 툴파챗 워커 쪽(`persona_worker.py`의 `ROUTINE_KEEPER_ADDENDUM`)이 담당한다 — shift_alarm은 트리거만 던지고, 체크는 Notion을 직접 갱신하므로(shift_alarm의 `update_all_daily_routine_items()`와 같은 로직을 워커 프로세스에 최소 복제) shift_alarm 자체는 다음 주기적 동기화 때 그 변경을 그대로 반영한다.
+- 자세한 내용(승인 흐름, 즉시 체크 안전장치, 실측 결과)은 `툴파챗/chatapp/README.md`의 "루틴지기 — 출근시간 일일 루틴 확인 + 채팅으로 즉시 체크" 항목 참고.
