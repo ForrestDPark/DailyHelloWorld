@@ -50,6 +50,7 @@ import shutil
 import time
 import signal
 import ai_usage
+from korean_lunar_calendar import KoreanLunarCalendar
 from shift_alarm_pet import ShiftAlarmPet
 from shift_alarm_title import (
     build_pet_cards, format_menubar_storage_gb, menubar_status_tokens,
@@ -911,17 +912,29 @@ GY_TO_SWING_DAY2_MELATONIN_REMINDER_TIME = {"hour": 2, "minute": 0}
 GY_TO_SWING_DAY1_MELATONIN_REMINDER_TIME = {"hour": 3, "minute": 0}
 
 # ★ "8.15일을 음력으로 계산하면 몇월몇일이야? 엄마생일인데 일주일전에
-# 미리 리마인더 해주고 당일에 리마인더 알람 생성해줘" 요청(2026-09-02) —
-# 2026년 음력 8월 15일(추석)은 양력 9월 25일(금)로 확인함(WebSearch로
-# dallyeok.com 등 복수 출처 교차 확인). 음력 생일이라 해마다 양력 날짜가
-# 바뀌는데, 자동 변환 라이브러리 없이 올해분만 날짜를 직접 박아뒀다 —
-# 내년 이후에도 자동으로 이어가려면 별도 음력→양력 변환이 필요(요청하면
-# 추가). 근무/휴무와 무관하게 항상 봐야 하는 개인 일정이라, 다른
+# 미리 리마인더 해주고 당일에 리마인더 알람 생성해줘" → "어 필요해 매년
+# 알람 해줘" 요청(2026-09-02) — 2026년 음력 8월 15일(추석)이 양력 9월
+# 25일(금)이라는 건 WebSearch로 복수 출처 교차 확인했다. 매년 자동으로
+# 이어지게 korean_lunar_calendar(KASI 변환 테이블, 윤달까지 정확) 라이브러리로
+# 매번 "올해" 기준 양력 날짜를 계산한다 — 하드코딩된 연도별 상수를 두지
+# 않는다. 근무/휴무와 무관하게 항상 봐야 하는 개인 일정이라, 다른
 # 리마인더들처럼 기상 알람 시각에 얹지 않고 고정 시각(09:00)에 울린다.
+MOM_BIRTHDAY_LUNAR_MONTH = 8
+MOM_BIRTHDAY_LUNAR_DAY = 15
 MOM_BIRTHDAY_LUNAR_LABEL = "음력 8월 15일"
-MOM_BIRTHDAY_SOLAR_DATE_2026 = datetime.date(2026, 9, 25)
-MOM_BIRTHDAY_ADVANCE_REMINDER_DATE_2026 = MOM_BIRTHDAY_SOLAR_DATE_2026 - datetime.timedelta(days=7)
 MOM_BIRTHDAY_REMINDER_TIME = {"hour": 9, "minute": 0}
+
+
+def _mom_birthday_solar_date(year):
+    """음력 8월 15일을 주어진 연도 기준 양력 날짜로 변환한다. 라이브러리가
+    지원 범위(~2050년) 밖에서도 예외 없이 마지막 유효값을 조용히 돌려주는
+    걸 봐서(2050년 이후로 테스트해보니 전부 2050-09-30을 반환) 반환된
+    SolarYear가 입력 연도와 동떨어지면 신뢰할 수 없다고 보고 None을 준다."""
+    cal = KoreanLunarCalendar()
+    cal.setLunarDate(year, MOM_BIRTHDAY_LUNAR_MONTH, MOM_BIRTHDAY_LUNAR_DAY, False)
+    if abs(cal.solarYear - year) > 1:
+        return None
+    return datetime.date(cal.solarYear, cal.solarMonth, cal.solarDay)
 
 # ── 근무별 "전자제품 전원 끄기" 알람 시간 ─────────────────────────
 # 근무 끝나고 쉬는(자는) 시간대에 맞춰 전자제품을 끄라고 하루 한 번 알려준다.
@@ -5219,41 +5232,46 @@ class ShiftAlarmApp(rumps.App):
         )
 
     def _check_mom_birthday_advance_reminder(self, _):
-        """1분마다 엄마 생신(양력 변환값) 일주일 전 09:00인지 확인, 하루
-        한 번만 알림 (★ 2026-09-02: "일주일전에 미리 리마인더 해주고"
-        요청)."""
+        """1분마다 엄마 생신(그해 음력 8/15를 양력으로 변환한 값) 일주일 전
+        09:00인지 확인, 하루 한 번만 알림 (★ 2026-09-02: "일주일전에 미리
+        리마인더 해주고" → "매년 알람 해줘" 요청 — 연도를 하드코딩하지 않고
+        _mom_birthday_solar_date()가 매번 올해 기준으로 다시 계산해서
+        해마다 자동으로 이어진다)."""
         now = datetime.datetime.now()
         t = MOM_BIRTHDAY_REMINDER_TIME
         if now.hour != t["hour"] or now.minute != t["minute"]:
             return
         today = now.date()
-        if today != MOM_BIRTHDAY_ADVANCE_REMINDER_DATE_2026:
+        birthday = _mom_birthday_solar_date(today.year)
+        if not birthday or today != birthday - datetime.timedelta(days=7):
             return
         if self._last_mom_birthday_advance_notified == today:
             return
         self._last_mom_birthday_advance_notified = today
         notify_spoken(
             "🎂 엄마 생신 일주일 전",
-            f"{MOM_BIRTHDAY_LUNAR_LABEL} (양력 {MOM_BIRTHDAY_SOLAR_DATE_2026.strftime('%m월 %d일')})",
+            f"{MOM_BIRTHDAY_LUNAR_LABEL} (양력 {birthday.strftime('%m월 %d일')})",
             "엄마 생신이 일주일 남았어요. 미리 준비하세요."
         )
 
     def _check_mom_birthday_alarm(self, _):
         """1분마다 엄마 생신 당일 09:00인지 확인, 하루 한 번만 알림
-        (★ 2026-09-02: "당일에 리마인더 알람 생성해줘" 요청)."""
+        (★ 2026-09-02: "당일에 리마인더 알람 생성해줘" → "매년 알람 해줘"
+        요청 — 위와 같은 이유로 연도를 매번 다시 계산한다)."""
         now = datetime.datetime.now()
         t = MOM_BIRTHDAY_REMINDER_TIME
         if now.hour != t["hour"] or now.minute != t["minute"]:
             return
         today = now.date()
-        if today != MOM_BIRTHDAY_SOLAR_DATE_2026:
+        birthday = _mom_birthday_solar_date(today.year)
+        if not birthday or today != birthday:
             return
         if self._last_mom_birthday_alarm_notified == today:
             return
         self._last_mom_birthday_alarm_notified = today
         notify_spoken(
             "🎂 오늘 엄마 생신입니다!",
-            MOM_BIRTHDAY_LUNAR_LABEL,
+            f"{MOM_BIRTHDAY_LUNAR_LABEL} (양력 {birthday.strftime('%m월 %d일')})",
             "오늘 엄마 생신이에요. 축하 연락 잊지 마세요!"
         )
 
