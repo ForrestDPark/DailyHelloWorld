@@ -2309,7 +2309,79 @@ function formatTime(isoString) {
   return d.toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" });
 }
 
-const IMAGE_MARKER_RE = /!\[\]\((\/uploads\/[^)]+)\)/;
+const IMAGE_MARKER_RE = /!\[([^\]]*)\]\(((?:https?:\/\/|\/uploads\/)[^)\s]+)\)/g;
+const DIRECT_IMAGE_URL_RE = /https?:\/\/[^\s<>()]+\.(?:avif|gif|jpe?g|png|webp)(?:\?[^\s<>()]*)?/gi;
+
+function messageMedia(content) {
+  const images = [];
+  const seen = new Set();
+  const text = String(content || "").replace(IMAGE_MARKER_RE, (_whole, alt, url) => {
+    if (!seen.has(url)) { images.push({url, alt: alt || "채팅 이미지"}); seen.add(url); }
+    return "";
+  }).trim();
+  for (const match of text.matchAll(DIRECT_IMAGE_URL_RE)) {
+    const url = match[0];
+    if (!seen.has(url)) { images.push({url, alt: "링크된 이미지"}); seen.add(url); }
+  }
+  return {images, text};
+}
+
+function messageTextPreview(content) {
+  const media = messageMedia(content);
+  return `${media.images.length ? "[사진] " : ""}${media.text}`.trim();
+}
+
+function openImageLightbox(url, alt) {
+  const overlay = document.createElement("div");
+  overlay.className = "image-lightbox";
+  const full = document.createElement("img");
+  full.src = url;
+  full.alt = alt || "확대된 채팅 사진";
+  overlay.appendChild(full);
+  overlay.addEventListener("click", () => overlay.remove());
+  document.body.appendChild(overlay);
+}
+
+function appendMessageMedia(container, content) {
+  const media = messageMedia(content);
+  if (media.images.length) {
+    const gallery = document.createElement("div");
+    gallery.className = "message-image-gallery";
+    for (const item of media.images) {
+      const figure = document.createElement("figure");
+      figure.className = "message-image-preview";
+      const img = document.createElement("img");
+      img.src = item.url;
+      img.alt = item.alt;
+      img.referrerPolicy = "no-referrer";
+      img.className = "chat-image";
+      img.loading = "lazy";
+      img.tabIndex = 0;
+      img.setAttribute("role", "button");
+      img.setAttribute("aria-label", `${item.alt} 크게 보기`);
+      const enlarge = () => openImageLightbox(item.url, item.alt);
+      img.addEventListener("click", enlarge);
+      img.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); enlarge(); }
+      });
+      img.addEventListener("error", () => figure.classList.add("image-load-failed"));
+      figure.appendChild(img);
+      if (item.alt && item.alt !== "채팅 이미지" && item.alt !== "링크된 이미지") {
+        const caption = document.createElement("figcaption");
+        caption.textContent = item.alt;
+        figure.appendChild(caption);
+      }
+      gallery.appendChild(figure);
+    }
+    container.appendChild(gallery);
+  }
+  if (media.text) {
+    const text = document.createElement("div");
+    appendLinkifiedText(text, media.text);
+    container.appendChild(text);
+  }
+  return media;
+}
 
 // ★ "한명한테 답장하는 기능" 요청(2026-08-25) — 그룹/회의방에서 페르소나
 // 메시지의 이름을 탭하면 그 사람에게만 답장하는 모드로 들어간다. @멘션을
@@ -2324,7 +2396,7 @@ function setReplyTarget(name, message = null) {
   replyMessage = message;
   if (name || message) {
     const who = displayName(message?.sender || name || "메시지");
-    const preview = message?.content ? ` · ${message.content.replace(IMAGE_MARKER_RE, "[사진]").slice(0, 45)}` : "";
+    const preview = message?.content ? ` · ${messageTextPreview(message.content).slice(0, 45)}` : "";
     replyBannerText.textContent = `${who}에게 답장${preview}`;
     replyBanner.classList.remove("hidden");
   } else {
@@ -2683,7 +2755,7 @@ function openMessageMenu(message, hostEl, x, y) {
     addAction("QA 원문 방 열기", () => { location.hash = "#room=" + encodeURIComponent("QA요정"); });
   }
   const isMine = !message.is_persona && message.sender === myUsername;
-  const hasImage = IMAGE_MARKER_RE.test(message.content);
+  const hasImage = messageMedia(message.content).images.length > 0;
   if (canWrite && isMine && !hasImage) addAction("수정", () => editMessage(message, hostEl));
   if (canWrite && (isMine || amOwner)) addAction("삭제", () => deleteMessage(message, hostEl));
   document.body.appendChild(menu); messageMenu = menu;
@@ -2823,7 +2895,7 @@ function appendMessage(m, forceScroll = false, suppressScroll = false) {
       ? displayName(m.reply_sender)
       : (m.reply_display_name || m.reply_sender);
     const quoteText = document.createElement("span");
-    quoteText.textContent = (m.reply_content || "").replace(IMAGE_MARKER_RE, "[사진]").slice(0, 90);
+    quoteText.textContent = messageTextPreview(m.reply_content || "").slice(0, 90);
     quote.append(quoteName, quoteText);
     // ★ "답장 메시지에서 원 메시지 클릭하면 화면이 원 메시지로 스크롤되게
     // 해달라" 요청(2026-08-27) — 카톡처럼 인용문을 탭하면 원본으로 이동.
@@ -2834,35 +2906,7 @@ function appendMessage(m, forceScroll = false, suppressScroll = false) {
     });
     body.appendChild(quote);
   }
-  const imageMatch = IMAGE_MARKER_RE.exec(m.content);
-  if (imageMatch) {
-    const img = document.createElement("img");
-    img.src = imageMatch[1];
-    img.className = "chat-image";
-    img.tabIndex = 0;
-    img.setAttribute("role", "button");
-    img.setAttribute("aria-label", "사진 크게 보기");
-    const enlarge = () => {
-      const overlay = document.createElement("div");
-      overlay.className = "image-lightbox";
-      const full = document.createElement("img");
-      full.src = img.src; full.alt = "확대된 채팅 사진";
-      overlay.appendChild(full);
-      overlay.addEventListener("click", () => overlay.remove());
-      document.body.appendChild(overlay);
-    };
-    img.addEventListener("click", enlarge);
-    img.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === " ") enlarge(); });
-    body.appendChild(img);
-    const rest = m.content.replace(IMAGE_MARKER_RE, "").trim();
-    if (rest) {
-      const caption = document.createElement("div");
-      appendLinkifiedText(caption, rest);
-      body.appendChild(caption);
-    }
-  } else {
-    appendLinkifiedText(body, m.content);
-  }
+  appendMessageMedia(body, m.content);
   const time = document.createElement("div");
   time.className = "msg-time";
   time.textContent = formatTime(m.created_at);
@@ -2980,7 +3024,7 @@ async function sendMessage(content, roomId = currentRoom) {
         throw error;
       }
       if (roomId === currentRoom) setReplyTarget(null);
-      if (roomId === currentRoom && !content.startsWith("![](")) setAiResponseStatus(true);
+      if (roomId === currentRoom && !messageMedia(content).images.length) setAiResponseStatus(true);
       return true;
     } catch (e) {
       if (e.message === "unauthorized" || e.message === "forbidden") return false;

@@ -1100,7 +1100,13 @@ main#messages.has-custom-background {
   background: color-mix(in srgb, var(--accent) 18%, var(--bubble-persona));
   transition: box-shadow 0.15s ease, background 0.15s ease;
 }
-.msg .body .chat-image { max-width: 100%; border-radius: 12px; display: block; }
+.message-image-gallery { display: grid; gap: 7px; margin-bottom: 6px; }
+.message-image-gallery:last-child { margin-bottom: 0; }
+.message-image-preview { margin: 0; overflow: hidden; border-radius: 12px; background: rgba(0,0,0,.05); }
+.message-image-preview figcaption { padding: 6px 9px 8px; color: var(--muted); font-size: 12px; line-height: 1.35; }
+.message-image-preview.image-load-failed img { display: none; }
+.message-image-preview.image-load-failed::before { content: "이미지를 불러오지 못했습니다"; display: block; padding: 14px; color: var(--muted); font-size: 12px; }
+.msg .body .chat-image { width: 100%; max-width: 100%; max-height: 420px; object-fit: contain; border-radius: 12px; display: block; cursor: zoom-in; }
 .msg .body .message-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
 .msg-user .body .message-link { color: inherit; font-weight: 600; }
 /* ★ 채팅 친 시각(2026-08-25 요청) — 말풍선 옆에 작게 */

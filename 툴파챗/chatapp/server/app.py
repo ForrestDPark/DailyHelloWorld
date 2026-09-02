@@ -120,7 +120,9 @@ UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10MB
 ALLOWED_UPLOAD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic"}
 BACKGROUND_UPLOAD_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
-IMAGE_MARKER_RE = re.compile(r"!\[\]\(/uploads/[^)]+\)")
+IMAGE_MARKER_RE = re.compile(
+    r"!\[[^\]]*\]\((?:/uploads/[^)\s]+|https?://[^)\s]+)\)"
+)
 
 
 def _preview_text(content):
@@ -3282,6 +3284,8 @@ class VictoryCommander(BaseModel):
     battle: str
     profile: str
     opening: str
+    image_url: Optional[str] = None
+    image_alt: str = ""
 
 
 class WorkerAnnouncement(BaseModel):
@@ -3432,6 +3436,16 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
     )
     message_id = cursor.lastrowid
     for commander in body.victory_commanders:
+        if commander.image_url and not re.fullmatch(r"https?://[^\s]+", commander.image_url):
+            conn.close()
+            raise HTTPException(status_code=400, detail="유효하지 않은 전장 이미지 URL입니다")
+        if commander.image_url:
+            alt = commander.image_alt.strip()[:120] or f"{commander.battle.strip()} 전장 자료"
+            conn.execute(
+                "INSERT INTO messages (room_id, sender, content, created_at, reply_message_id) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (room_id, commander.name.strip(), f"![{alt}]({commander.image_url})", now, message_id),
+            )
         conn.execute(
             "INSERT INTO messages (room_id, sender, content, created_at, reply_message_id) "
             "VALUES (?, ?, ?, ?, ?)",

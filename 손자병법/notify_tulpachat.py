@@ -13,11 +13,16 @@ from pathlib import Path
 ROOM_ID = "custom_16ea779e1f"
 API_URL = "http://127.0.0.1:8000/api/worker/announcements"
 KEYCHAIN_SERVICE = "com.forrest.tulpachat.worker"
+MARKDOWN_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\((https?://[^)\s]+)\)")
 
 
 def plain(value: str) -> str:
+    # 이미지 Markdown이 전장 설명에 합쳐지면 채팅에서 URL이 문장 중간에
+    # 잘려 보인다. 이미지는 별도 필드로 보내므로 일반 문장에서는 제거한다.
+    value = MARKDOWN_IMAGE_RE.sub("", value)
     value = re.sub(r"<br\s*/?>", " ", value, flags=re.I)
     value = re.sub(r"<[^>]+>", "", value)
+    value = re.sub(r"(?m)^\s*#{1,6}\s*", "", value)
     value = re.sub(r"\*\*|__|`", "", value)
     return " ".join(html.unescape(value).split())
 
@@ -67,6 +72,11 @@ def victorious_commanders(markdown: str, original: str) -> list[dict[str, str]]:
         commander = max(dict.fromkeys(candidates), key=commander_score, default="")
         if not commander or any(item["name"] == commander for item in found):
             continue
+        image_matches = list(MARKDOWN_IMAGE_RE.finditer(block))
+        preferred_image = next(
+            (match for match in image_matches if "command_structure" in match.group(2)),
+            image_matches[0] if image_matches else None,
+        )
         narrative = plain(re.split(r"^####\s+", block, maxsplit=1, flags=re.M)[0])
         narrative = narrative[:900].strip()
         profile = (
@@ -80,7 +90,14 @@ def victorious_commanders(markdown: str, original: str) -> list[dict[str, str]]:
             "이 전투에서 실제로 승패를 가른 조건과, 다른 상황에서는 같은 선택이 실패할 수 있는 "
             "지점을 병법적으로 함께 짚어 보시지요."
         )
-        found.append({"name": commander, "battle": battle, "profile": profile, "opening": opening})
+        found.append({
+            "name": commander,
+            "battle": battle,
+            "profile": profile,
+            "opening": opening,
+            "image_url": preferred_image.group(2) if preferred_image else None,
+            "image_alt": plain(preferred_image.group(1)) if preferred_image else "",
+        })
     return found
 
 
