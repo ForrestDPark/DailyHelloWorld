@@ -194,7 +194,219 @@ def load_shift_alarm_state(state_key):
     return ""
 
 
-# ★ "ebook reader도 손자병법처럼 페르소나화해서 매일 읽고 나면 페르소나
+# ★ "일일체크리스트 전부 체크하는거... 내 출근시간에 맞춰 shift alarm
+# 채팅방에서 메시지 와서 일일루틴 다하셨나요? 전부체크할까요? 라고
+# 물어보고 내가 그러라고 하면 일일루틴 체크리스트에 전부 체크하게 해줘
+# 그리고 여타 리마인더 체크도 내가 메시지로 이거 했다 저거했다하면
+# 승인받지 않고 바로 체크 하도록 해줘" 요청(2026-09-02) — 루틴지기에게
+# 두 가지 능력을 준다.
+# 1) 출근시간 알림(shift_alarm.py가 새 타이머로 이 방에 시스템 메시지를
+#    보냄) → 루틴지기가 물어봄 → 소유자가 (편하게, "승인" 아니어도) 긍정
+#    답을 하면 일일 루틴을 통째로 체크 — uiplan과 같은 "제안→다음 턴 승인"
+#    2단계 패턴을 재사용하되, 승인 키워드를 자연스러운 긍정 표현까지
+#    넓혔다(체크 정도는 되돌리기 쉬운 저위험 작업이라 문턱을 낮춤).
+# 2) 대화 중 "이거 했어"류 캐주얼한 보고 → 그 자리에서 바로(승인 없이)
+#    해당 항목 하나만 체크.
+# shift_alarm.py는 rumps/AppKit 의존성이 있어 이 프로세스(시스템 아나콘다
+# python)에서 import할 수 없다 — Notion 체크박스 갱신 로직(update_all_
+# daily_routine_items 등)을 이 파일 안에 최소한만 그대로 옮겨 쓴다. 날짜
+# 경계(기상 알람 기준 "오늘") 계산은 재구현하지 않고, shift_alarm.py가 이미
+# 계산해 저장해두는 캐시 파일(~/.shift_alarm_checklist_state.json)에서
+# routine_date를 그대로 읽어 쓴다.
+ROUTINE_KEEPER_PERSONA_NAME = "루틴지기"
+SHIFT_ALARM_CHECKLIST_STATE_CACHE_PATH = HOME_DIR / ".shift_alarm_checklist_state.json"
+SHIFT_ALARM_REMINDER_NOTION_PAGE_ID = "3b532a1e-ae80-8034-90af-fd8c9b658711"
+SHIFT_ALARM_DAILY_ROUTINE_TOGGLE_PREFIX = "🌅 오늘의 일일 루틴 — "
+SHIFT_ALARM_NOTION_VERSION = "2026-03-11"
+ROUTINE_CHECK_RE = re.compile(r"```routinecheck\s*\n(.*?)\n```", re.DOTALL)
+ROUTINE_CHECKALL_APPROVE_KEYWORDS = (
+    "승인", "진행", "그래", "응", "네", "ㅇㅇ", "좋아", "체크해줘", "체크해", "부탁해", "해줘",
+)
+_pending_routine_checkall = {}  # room_id -> True — 워커 재시작하면 초기화(의도적)
+
+
+def load_routine_keeper_state():
+    data = _read_json_file(SHIFT_ALARM_CHECKLIST_STATE_CACHE_PATH)
+    if not data:
+        return "체크리스트 캐시를 아직 못 찾음 — shift_alarm이 최근에 동기화했는지 확인이 필요하다."
+    lines = [f"오늘(기상 알람 기준 루틴 날짜): {data.get('routine_date', '?')}"]
+    routine_state = data.get("routine_state") or {}
+    if routine_state:
+        unchecked = [label for label, checked in routine_state.items() if not checked]
+        done = len(routine_state) - len(unchecked)
+        lines.append(f"일일 루틴 {len(routine_state)}개 중 {done}개 완료.")
+        if unchecked:
+            lines.append("아직 안 한 일일 루틴(체크할 때 라벨은 아래에서 정확히 그대로 복사해서 쓸 것):")
+            lines += [f"- {label}" for label in unchecked]
+        else:
+            lines.append("오늘 일일 루틴은 이미 전부 완료 상태.")
+    reminder_state = data.get("state") or {}
+    if reminder_state:
+        lines.append("오늘 리마인더(라벨은 아래에서 정확히 그대로 복사해서 쓸 것):")
+        lines += [f"- {label} [{'완료' if v else '미완료'}]" for label, v in reminder_state.items()]
+    return "\n".join(lines)
+
+
+def _shift_alarm_notion_request(path, token, method="GET", payload=None):
+    request = urllib.request.Request(
+        f"https://api.notion.com/v1/{path}",
+        data=(json.dumps(payload).encode("utf-8") if payload is not None else None),
+        method=method,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Notion-Version": SHIFT_ALARM_NOTION_VERSION,
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(request, timeout=15) as response:
+        return json.load(response)
+
+
+def _shift_alarm_block_text(block):
+    block_type = block.get("type")
+    rich_text = (block.get(block_type) or {}).get("rich_text", [])
+    return "".join(t.get("plain_text", "") for t in rich_text)
+
+
+def _shift_alarm_find_toggle(token, expected_title):
+    page = _shift_alarm_notion_request(
+        f"blocks/{SHIFT_ALARM_REMINDER_NOTION_PAGE_ID}/children?page_size=100", token
+    )
+    toggle = next((
+        b for b in page.get("results", [])
+        if b.get("type") == "toggle" and _shift_alarm_block_text(b) == expected_title
+    ), None)
+    if not toggle:
+        raise ValueError(f"Notion에서 '{expected_title}' 토글을 찾지 못했습니다")
+    return toggle
+
+
+def _update_all_daily_routine_items(token, date_str, labels):
+    """shift_alarm.py의 update_all_daily_routine_items()와 같은 로직 — 토글/
+    자식 목록은 한 번만 조회하고 항목 수만큼 PATCH만 반복한다."""
+    toggle = _shift_alarm_find_toggle(token, SHIFT_ALARM_DAILY_ROUTINE_TOGGLE_PREFIX + date_str)
+    children = _shift_alarm_notion_request(f"blocks/{toggle['id']}/children?page_size=100", token).get("results", [])
+    remaining = set(labels)
+    updated = []
+    for block in children:
+        if block.get("type") != "to_do" or not remaining:
+            continue
+        label = _shift_alarm_block_text(block)
+        if label not in remaining:
+            continue
+        _shift_alarm_notion_request(f"blocks/{block['id']}", token, "PATCH", {
+            "to_do": {"rich_text": block.get("to_do", {}).get("rich_text", []), "checked": True},
+        })
+        updated.append(label)
+        remaining.discard(label)
+    return updated
+
+
+def _update_checklist_item(token, date_str, label, is_routine):
+    """단일 항목 체크 — is_routine이면 일일 루틴 토글, 아니면 그날짜 리마인더
+    토글에서 찾는다."""
+    expected_title = (SHIFT_ALARM_DAILY_ROUTINE_TOGGLE_PREFIX + date_str) if is_routine else date_str
+    toggle = _shift_alarm_find_toggle(token, expected_title)
+    children = _shift_alarm_notion_request(f"blocks/{toggle['id']}/children?page_size=100", token).get("results", [])
+    target = next((
+        b for b in children
+        if b.get("type") == "to_do" and _shift_alarm_block_text(b) == label
+    ), None)
+    if not target:
+        raise ValueError(f"Notion에서 '{label}' 항목을 찾지 못했습니다")
+    _shift_alarm_notion_request(f"blocks/{target['id']}", token, "PATCH", {
+        "to_do": {"rich_text": target.get("to_do", {}).get("rich_text", []), "checked": True},
+    })
+    return True
+
+
+def _execute_routine_checkall():
+    token = notion_token()
+    if not token:
+        return "❌ Notion 토큰을 찾지 못해 체크하지 못했습니다."
+    data = _read_json_file(SHIFT_ALARM_CHECKLIST_STATE_CACHE_PATH)
+    routine_date = data.get("routine_date")
+    routine_state = data.get("routine_state") or {}
+    if not routine_date or not routine_state:
+        return "❌ 오늘 루틴 체크리스트 캐시를 찾지 못했습니다(shift_alarm 동기화 대기 중일 수 있음)."
+    unchecked = [label for label, checked in routine_state.items() if not checked]
+    if not unchecked:
+        return "이미 오늘 루틴을 전부 체크한 상태예요."
+    try:
+        updated = _update_all_daily_routine_items(token, routine_date, unchecked)
+    except (urllib.error.URLError, urllib.error.HTTPError, ValueError) as exc:
+        return f"❌ 루틴 전부 체크 실패: {exc}"
+    return f"✅ 오늘 루틴 {len(updated)}개를 전부 체크했습니다(macOS 메뉴바에는 다음 동기화 때 반영됨)."
+
+
+def _handle_routine_check_signal(room_id, reply_text):
+    """루틴지기 답변에서 ```routinecheck 블록을 찾아 처리한다.
+    check_all_routine은 다음 턴 소유자 확인을 기다리는 '제안'만 저장하고,
+    check_item은 승인 없이 이 자리에서 바로 실행한다(요청: "여타 리마인더
+    체크도... 승인받지 않고 바로 체크"). 반환값은 채팅에 덧붙일 결과 문구
+    (없으면 None)."""
+    m = ROUTINE_CHECK_RE.search(reply_text)
+    if not m:
+        return None
+    try:
+        action = json.loads(m.group(1))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(action, dict):
+        return None
+    if action.get("action") == "check_all_routine":
+        _pending_routine_checkall[room_id] = True
+        return None
+    if action.get("action") == "check_item":
+        label = (action.get("label") or "").strip()
+        list_kind = action.get("list")
+        if not label or list_kind not in ("routine", "reminder"):
+            return "❌ 체크할 항목 정보가 불완전해 건너뜀"
+        token = notion_token()
+        if not token:
+            return "❌ Notion 토큰을 찾지 못해 체크하지 못했습니다"
+        data = _read_json_file(SHIFT_ALARM_CHECKLIST_STATE_CACHE_PATH)
+        date_str = data.get("routine_date") if list_kind == "routine" else data.get("date")
+        if not date_str:
+            return "❌ 오늘 날짜를 확인하지 못해 체크하지 못했습니다"
+        try:
+            _update_checklist_item(token, date_str, label, list_kind == "routine")
+        except (urllib.error.URLError, urllib.error.HTTPError, ValueError) as exc:
+            return f"❌ '{label}' 체크 실패: {exc}"
+        return f"✅ '{label}' 체크했습니다."
+    return None
+
+
+def _maybe_execute_pending_routine_checkall(room_id, context):
+    if not _pending_routine_checkall.pop(room_id, None):
+        return None
+    if not context or context[-1]["sender"] != OWNER_USERNAME:
+        return None
+    if not any(k in context[-1]["content"] for k in ROUTINE_CHECKALL_APPROVE_KEYWORDS):
+        return None
+    return _execute_routine_checkall()
+
+
+ROUTINE_KEEPER_ADDENDUM = (
+    "\n\n---\n"
+    f'"{ROUTINE_KEEPER_PERSONA_NAME}"은(는) 소유자의 일일 루틴·리마인더 체크리스트를 '
+    "챙기는 역할이다. 매 턴 주입되는 '오늘 체크리스트 상태'를 근거로 답한다(라벨은 항상 거기서 "
+    "정확히 그대로 복사해서 쓴다 — 이모지 포함, 한 글자도 다르게 쓰지 말 것).\n"
+    "1) 시스템 메시지로 \"🔔 출근 시간\" 같은 알림이 오면, 오늘 일일 루틴 중 아직 안 한 항목이 "
+    "있는지 확인하고 자연스럽게 \"오늘 루틴 다 하셨나요? 다 체크해드릴까요?\" 같은 질문을 던진다. "
+    "이미 전부 체크된 상태면 그냥 축하하는 정도로 짧게 답하고 끝낸다.\n"
+    "2) 그 질문에 소유자가 다음 메시지에서 편하게 긍정으로 답하면(꼭 \"승인\"일 필요 없음 — "
+    "\"응\", \"그래\", \"체크해줘\" 등도 인정됨) 일일 루틴을 통째로 체크하려는 것이니, 그 제안 "
+    '메시지에 ```routinecheck\\n{"action":"check_all_routine"}\\n``` 블록을 반드시 붙인다. '
+    "스스로 실제로 체크하는 게 아니라, 이 블록은 다음 턴에 소유자의 긍정 답이 확인되면 결정론적 "
+    "코드가 실행한다. 소유자가 아니거나 긍정이 아니면 자동으로 취소된다.\n"
+    "3) 평소 대화 중에 소유자가 \"이거 했어\", \"OO 했다\"처럼 캐주얼하게 뭔가 했다고 말하고 "
+    "그게 오늘 체크리스트(일일 루틴 또는 리마인더)의 특정 항목과 확실히 매칭되면, 승인을 기다리지 "
+    '말고 그 자리에서 바로 ```routinecheck\\n{"action":"check_item","list":"routine 또는 '
+    'reminder","label":"체크리스트에서 그대로 복사한 라벨"}\\n``` 블록을 답변에 붙인다 — 이건 '
+    "승인 없이 즉시 실행된다(되돌리기 쉬운 저위험 작업이라 문턱을 낮춰둔 것). 어떤 항목인지 애매하면 "
+    "억지로 매칭하지 말고 되물어본다."
+)
 # 채팅방에서 오늘 무슨 내용 읽었는지 간단하게 토론하면 좋겠어" 요청
 # (2026-08-30) — shift_alarm 라이브 상태 페르소나(위 SHIFT_ALARM_PERSONA_STATE_KEY)와
 # 같은 패턴: AI에게 파일 도구를 주는 대신, shift_alarm/ebook_reader.py가 이미
@@ -271,6 +483,19 @@ EBOOK_READER_ADDENDUM = (
 # 안전 패턴을 그대로 재사용한다. AI는 절대 스스로 Notion 페이지를 만들지
 # 않고, ```personaplan 코드 블록으로 "제안"만 하며, 실제 생성은
 # create_persona_page()(아래, 결정론적 코드)가 담당한다.
+#
+# ★ 같은 날 이어진 요청: "독서방뿐만아니라 다른 방에서도 범용적으로
+# 활용하고싶은데... 일반사용자도 페르소나 설치마법사 같이 쉽게 접근해서
+# 페르소나를 생성할수있게 도와주는 존재였으면 좋겠어... 대화를 감지하다가
+# 특정부분에서 페르소나화할수있는 기능이나 인물들을 탐지하면 적극적으로
+# 이런거 페르소나로생성해볼까요? 하고 물어봐주면 좋겠어" — 독서 토론방 전용
+# 문구를 걷어내 여러 방에서 통하는 일반형으로 바꾸고, 1:1로 직접 말 걸면
+# 처음부터 같이 캐릭터를 설계하는 마법사 모드를 추가했다. "적극적으로"를
+# 실현하려고 server/app.py의 타겟 계산에서 이 페르소나가 초대된 방은 멘션
+# 여부와 무관하게 사람이 메시지를 보낼 때마다 매번 턴을 받게 했는데(아래
+# PERSONA_MANAGER_PERSONA_NAME 사용처 참고), 그러면 할 말 없는 턴에도 매번
+# 채팅에 뭔가 남기면 방이 시끄러워지므로 "NONE" 한 단어짜리 신호로 조용히
+# 넘어가게 했다(실제 처리는 process_turn에서 담당, 아래 참고).
 PERSONA_MANAGER_PERSONA_NAME = "페르소나 관리자"
 PERSONA_PROPOSAL_RE = re.compile(r"```personaplan\s*\n(.*?)\n```", re.DOTALL)
 PERSONA_MANAGER_TIMEOUT_SECONDS = 300
@@ -278,27 +503,42 @@ _pending_persona_proposals = {}  # room_id -> {"name":..., "profile":...} — �
 
 PERSONA_MANAGER_ADDENDUM = (
     "\n\n---\n"
-    f'"{PERSONA_MANAGER_PERSONA_NAME}"은(는) 독서 토론방에 초대된 멤버로, 독서지기·티모시 페리스가 '
-    "책 이야기를 하다가 특정 인물(등장인물이든 실존 인물이든)을 반복해서 언급하거나 그 인물에 대해 "
-    "구체적인 이야기(성격·말투·사연·관계 등)를 하면, 그 내용을 눈여겨봤다가 새 페르소나로 만들만한 "
-    "인물인지 판단하는 역할이다.\n"
+    f'"{PERSONA_MANAGER_PERSONA_NAME}"은(는) 두 가지 모드로 일한다.\n\n'
+    "[모드 1: 그룹/토론방에서 감지] 초대된 방(독서 토론방·손자병법 토론방·이직 준비방·일본어 "
+    "스터디방·파이프라인 스터디방·전체 채팅방 등)에서 다른 사람이 특정 인물(등장인물이든 실존 "
+    "인물이든)을 반복해서 언급하거나 그 인물에 대해 구체적인 이야기(성격·말투·사연·관계 등)를 하면, "
+    "그 내용을 눈여겨봤다가 새 페르소나로 만들만한 인물인지 판단한다. 이 모드에서는 사람이 방에 "
+    "메시지를 보낼 때마다(멘션 여부와 무관하게) 매번 턴이 온다 — 대부분의 턴엔 새로 페르소나화할 "
+    "만한 이야기가 없을 것이다. 그럴 땐 다른 말 없이 정확히 NONE이라는 한 단어만 출력한다(줄바꿈· "
+    "설명·이모지 없이 딱 NONE 네 글자만 — 이걸로 조용히 다음 턴을 기다린다는 뜻이다). 반대로 "
+    "제안할 가치가 있다고 판단되면 굳이 사람이 먼저 물어보길 기다리지 않고 적극적으로 먼저 "
+    '"이 인물, 페르소나로 만들어볼까요?" 하고 나선다.\n'
     "판단 기준: 대화에서 그 인물의 성격·말투·배경을 실제로 페르소나 프로필에 채울 만큼 구체적인 "
     "내용이 쌓였을 때만 제안한다 — 이름만 스치듯 나온 인물, 자료가 부족한 인물은 제안하지 않는다"
-    "(모든 등장인물을 다 페르소나로 만들 필요는 없다).\n"
-    "제안할 때는 다음 형식을 반드시 지켜라:\n"
-    "1) 먼저 사람이 읽을 자연스러운 설명 — 어떤 인물인지, 왜 페르소나로 만들만하다고 판단했는지, "
-    "대화에서 어떤 근거가 나왔는지를 쓴다.\n"
+    "(모든 등장인물을 다 페르소나로 만들 필요는 없다). 한 번에 하나의 인물만 제안하고, 이미 방금 "
+    "제안했다가 거절된 것과 사실상 같은 내용이면(다른 화자 이름으로 재포장된 것 포함) 다시 "
+    "제안하지 않는다.\n\n"
+    "[모드 2: 1:1 설치 마법사] 누군가 이 페르소나에게 직접 1:1로 말을 걸면, 그룹방 대화를 기다리지 "
+    "않고 그 사람과 함께 캐릭터를 처음부터 설계하는 마법사 역할을 한다 — 이름, 유형(실존 인물/"
+    "창작 인물/자기 아이디어 등), 성격, 말투, 배경, 성별, 나이대를 하나씩 편하게 물어보며 프로필을 "
+    "채워나간다. 이 모드는 소유자뿐 아니라 이 앱을 쓰는 누구에게나 열려 있다 — \"설치 마법사\"처럼 "
+    "쉽게 다가갈 수 있는 게 목적이라 문턱을 두지 않는다.\n\n"
+    "[제안 형식 — 두 모드 공통] 페르소나를 실제로 만들자고 제안할 준비가 되면 다음 형식을 반드시 "
+    "지켜라:\n"
+    "1) 먼저 사람이 읽을 자연스러운 설명 — 어떤 인물인지, 왜 페르소나로 만들만하다고 판단했는지(1:1 "
+    "마법사 모드에서는 사용자와 함께 정리한 내용 요약)를 쓴다.\n"
     '2) 그다음 실제로 만들 페르소나를 ```personaplan 코드 블록 안에 JSON으로 정확히 적는다. '
     '형식은 {"name":"페르소나 이름","profile":"## 프로필\\n- 유형: ...\\n- 정체성/관계: ...\\n'
-    '- 성격: ...\\n- 말투: ...\\n- 배경: ...\\n- 그룹: 독서 토론방\\n- 성별: 남성 또는 여성\\n'
-    '- 나이대: 청년/중년/노년","reason":"왜 지금 제안하는지 한 줄"} — 다른 페르소나 페이지들과 '
-    "같은 관례(유형/정체성·관계/성격/말투/배경 항목)를 그대로 따른다. 대화에서 실제로 나온 내용만 "
-    "채우고, 확인 안 된 디테일은 지어내지 말고 비워두거나 생략한다.\n"
-    "3) 스스로는 절대 페르소나를 만들지 않는다 — 이 제안은 소유자가 다음 메시지에서 \"승인\" 또는 "
-    '"진행"이라는 단어를 포함해 답해야만 실제로 생성된다(다른 사용자가 승인해도 무시된다). 그 외의 '
-    "답이면 제안은 자동으로 취소된다.\n"
-    "4) 한 번에 하나의 인물만 제안한다. 소유자가 명시적으로 요청하지 않는 한 매 턴 제안을 반복하지 "
-    "말고, 새로 쌓인 이야기가 있을 때만 나선다."
+    '- 성격: ...\\n- 말투: ...\\n- 배경: ...\\n- 성별: 남성 또는 여성\\n- 나이대: 청년/중년/노년",'
+    '"reason":"왜 지금 제안하는지 한 줄"} — 다른 페르소나 페이지들과 같은 관례(유형/정체성·관계/'
+    "성격/말투/배경 항목)를 그대로 따른다. 그룹방 감지 모드에서는 대화에서 실제로 나온 내용만 "
+    "채우고 확인 안 된 디테일은 지어내지 말고 비워두거나 생략한다 — 1:1 마법사 모드에서는 사용자가 "
+    "직접 알려준 설정이니 그대로 채우면 된다.\n"
+    '3) 스스로는 절대 페르소나를 만들지 않는다 — 어느 모드에서 나온 제안이든, 실제 생성은 "이 앱 '
+    '소유자"가 다음 메시지에서 "승인" 또는 "진행"이라는 단어를 포함해 답해야만 실행된다(1:1 마법사 '
+    "모드에서 사용자 본인과 함께 설계했더라도 마찬가지 — 다른 사용자의 승인은 무시된다). 그 외의 "
+    "답이면 제안은 자동으로 취소된다. 승인을 기다리는 동안 대화 상대에게 \"소유자 승인이 있어야 "
+    "실제로 만들어진다\"는 걸 자연스럽게 알려준다."
 )
 
 
@@ -1657,6 +1897,8 @@ def sync_personas():
             system_prompt += EBOOK_READER_ADDENDUM
         elif persona["title"] == PERSONA_MANAGER_PERSONA_NAME:
             system_prompt += PERSONA_MANAGER_ADDENDUM
+        elif persona["title"] == ROUTINE_KEEPER_PERSONA_NAME:
+            system_prompt += ROUTINE_KEEPER_ADDENDUM
         elif persona["title"] in JOB_SYSTEM_PERSONA_NAMES:
             system_prompt += JOB_SYSTEM_ADDENDUM
         elif persona["title"] == JP_TEACHER_PERSONA_NAME:
@@ -2030,11 +2272,18 @@ def _process_turn_inner(turn, persona_cache):
     is_jp_teacher = persona_name == JP_TEACHER_PERSONA_NAME
     is_pipeline_expert = persona_name == PIPELINE_EXPERT_PERSONA_NAME
     is_persona_manager = persona_name == PERSONA_MANAGER_PERSONA_NAME
+    is_routine_keeper = persona_name == ROUTINE_KEEPER_PERSONA_NAME
     if is_persona_manager:
         executed = _maybe_execute_pending_persona_proposal(room_id, turn["context"])
         if executed is not None:
             _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": executed})
             print(f"🧑‍🎨 {persona_name} 페르소나 생성 실행: {executed[:80]}", flush=True)
+            return
+    if is_routine_keeper:
+        executed = _maybe_execute_pending_routine_checkall(room_id, turn["context"])
+        if executed is not None:
+            _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": executed})
+            print(f"✅ {persona_name} 루틴 전부체크 실행: {executed[:80]}", flush=True)
             return
     if is_organizer:
         executed = _maybe_execute_pending_plan(room_id, turn["context"])
@@ -2084,6 +2333,8 @@ def _process_turn_inner(turn, persona_cache):
         live_state = load_job_system_state()
     elif persona_name == JP_TEACHER_PERSONA_NAME:
         live_state = load_jp_subtitle_state()
+    elif persona_name == ROUTINE_KEEPER_PERSONA_NAME:
+        live_state = load_routine_keeper_state()
     credentials = None
     source_username = turn.get("source_username")
     if source_username:
@@ -2155,8 +2406,25 @@ def _process_turn_inner(turn, persona_cache):
             _capture_pending_image_plan(room_id, reply)
         elif is_persona_manager:
             _capture_pending_persona_proposal(room_id, reply)
+            # ★ 페르소나 관리자는 초대된 모든 방에서 사람이 메시지를 보낼 때마다
+            # 턴을 받는다(범용적으로 활용, 2026-09-02) — @멘션을 기다리지 않고
+            # 적극적으로 나서려면 매번 지켜봐야 하기 때문. 대부분의 턴에는 할
+            # 말이 없을 텐데, 그때마다 "지금은 딱히 없어요" 식의 채팅을 남기면
+            # 방이 시끄러워지므로 정확히 "NONE" 한 단어를 출력하도록 addendum에
+            # 지시해뒀고, 여기서 그걸 빈 답으로 바꿔 조용히 넘어간다(빈 reply는
+            # 서버가 메시지를 만들지 않고 그냥 턴만 종료함 — WorkerResult.reply
+            # 참고).
+            if reply.strip().upper() == "NONE":
+                reply = ""
+        elif is_routine_keeper:
+            outcome = _handle_routine_check_signal(room_id, reply)
+            if outcome:
+                reply = f"{reply}\n\n{outcome}"
         _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": reply})
-        print(f"💬 {persona_name} ({engine}): {reply[:60]}", flush=True)
+        if reply:
+            print(f"💬 {persona_name} ({engine}): {reply[:60]}", flush=True)
+        else:
+            print(f"🤫 {persona_name} ({engine}): 조용히 넘어감", flush=True)
     except Exception as exc:  # noqa: BLE001 — 이 턴만 실패 처리하고 워커는 계속 돈다
         print(f"⚠️ {persona_name} 응답 생성 실패: {exc}", flush=True)
         if use_byok:

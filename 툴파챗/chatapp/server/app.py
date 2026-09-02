@@ -1196,6 +1196,19 @@ ADMIN_PERSONA_NAME = "툴파관리자"
 QA_PERSONA_NAME = "QA요정"
 QA_REPORTER_USERNAME = "qqq"
 
+# ★ "독서방뿐만아니라 다른 방에서도 범용적으로 활용하고싶은데...
+# 적극적으로 이런거 페르소나로생성해볼까요? 하고 물어봐주면 좋겠어"
+# 요청(2026-09-02) — worker/persona_worker.py의 PERSONA_MANAGER_PERSONA_NAME과
+# 이름이 같아야 한다. 이 페르소나가 초대된 방에서는 멘션·직전 발화자 여부와
+# 무관하게 사람이 메시지를 보낼 때마다 매번 턴을 받아야 "적극적으로" 먼저
+# 나설 수 있다 — 그래서 아래 post_message()에서 targets 계산 뒤 별도로
+# 추가한다(다른 멤버들과 같은 _default_targets 규칙을 적용하면 대부분
+# "직전 발화자 1인에게만 이어짐"에 걸려 거의 턴을 못 받는다). 할 말 없는
+# 턴이 대부분일 텐데, 그건 워커 쪽에서 "NONE" 신호로 조용히 넘어가게
+# 처리한다(persona_worker.py의 PERSONA_MANAGER_ADDENDUM 참고) — 여기서는
+# 그냥 타겟에 추가만 하면 된다.
+PERSONA_MANAGER_PERSONA_NAME = "페르소나 관리자"
+
 
 def _require_owner(request):
     user = getattr(request.state, "user", None)
@@ -2939,6 +2952,8 @@ def post_message(msg: NewMessage, request: Request):
         # 는 요청.
         mentioned = _mentioned_personas(content, all_personas)
         targets = _default_targets(conn, room_id, all_personas, mentioned, msg.reply_to, content)
+        if PERSONA_MANAGER_PERSONA_NAME in all_personas and PERSONA_MANAGER_PERSONA_NAME not in targets:
+            targets = targets + [PERSONA_MANAGER_PERSONA_NAME]
     elif room_id in all_personas:
         # 1:1 방은 방 이름 = 그 페르소나 이름이므로 항상 그 한 명만 응답한다.
         targets = [room_id]
@@ -2953,6 +2968,8 @@ def post_message(msg: NewMessage, request: Request):
         group_members = _group_members(conn, room_id, persona_rows)
         mentioned = _mentioned_personas(content, group_members)
         targets = _default_targets(conn, room_id, group_members, mentioned, msg.reply_to, content)
+        if PERSONA_MANAGER_PERSONA_NAME in group_members and PERSONA_MANAGER_PERSONA_NAME not in targets:
+            targets = targets + [PERSONA_MANAGER_PERSONA_NAME]
     # "손자병법 다음 구절 해석해"는 소유자가 직접 입력한 문장 자체를 이번
     # 한 건의 명시 승인으로 본다. 여러 페르소나가 같은 작업을 중복 시작하지
     # 않도록 손무 한 명에게만 결정론적 실행 턴을 배정한다.
@@ -3878,7 +3895,16 @@ def worker_reading_session_done(body: ReadingSessionDone, authorization: Optiona
     persona_rows = conn.execute(
         "SELECT name, group_name, owner_username FROM personas ORDER BY name"
     ).fetchall()
-    targets = _group_members(conn, room_id, persona_rows)
+    all_persona_names = {r["name"] for r in persona_rows}
+    # ★ "출근시간에 맞춰 루틴지기가 먼저 채팅으로 말 걸게 해줘" 요청(2026-09-02) —
+    # 지금까지는 독서 토론방처럼 room_invites/group_name이 있는 여러명 방만
+    # 다뤘는데, 1:1 방(room_id=페르소나 이름)엔 room_invites가 없어
+    # _group_members가 빈 리스트를 돌려주고 404가 났다. post_message()의
+    # 1:1 분기(elif room_id in all_personas)와 같은 폴백을 추가한다.
+    if room_id in all_persona_names:
+        targets = [room_id]
+    else:
+        targets = _group_members(conn, room_id, persona_rows)
     if not targets:
         conn.close()
         raise HTTPException(status_code=404, detail="구성원이 있는 방을 찾지 못했습니다")
