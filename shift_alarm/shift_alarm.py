@@ -2803,7 +2803,12 @@ JP_SUBTITLE_STUDY_ROOM_ID = "custom_1fc73254c0"
 JP_SUBTITLE_DAILY_REVIEW_TIME = {"hour": 21, "minute": 0}
 
 
-def _notify_jp_subtitle_study_room(content):
+# ★ 2026-09-02: 처음엔 방마다(_notify_jp_subtitle_study_room/
+# _notify_routine_keeper_room) 거의 똑같은 함수를 하나씩 복붙했는데, 세
+# 번째로 이직 준비방(_notify_job_prep_room, 아래) 알림까지 필요해지면서
+# 공통 로직을 하나로 합쳤다 — room_id만 인자로 받는다. 1:1 방(예: 루틴지기)도
+# server/app.py의 폴백 덕분에 그대로 쓸 수 있다.
+def _notify_tulpachat_room(room_id, content):
     try:
         result = subprocess.run(
             ["security", "find-generic-password", "-s", TULPACHAT_WORKER_KEYCHAIN_SERVICE, "-w"],
@@ -2812,13 +2817,17 @@ def _notify_jp_subtitle_study_room(content):
         token = result.stdout.strip()
         request = urllib.request.Request(
             f"{TULPACHAT_LOCAL_URL}/api/worker/reading_session_done",
-            data=json.dumps({"room_id": JP_SUBTITLE_STUDY_ROOM_ID, "content": content}).encode("utf-8"),
+            data=json.dumps({"room_id": room_id, "content": content}).encode("utf-8"),
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
             method="POST",
         )
         urllib.request.urlopen(request, timeout=10)
     except Exception:
-        pass  # 툴파챗이 안 떠 있어도 자막 추출 완료 알림 자체는 계속 진행돼야 함
+        pass  # 툴파챗이 안 떠 있어도 알람 자체는 계속 진행돼야 함
+
+
+def _notify_jp_subtitle_study_room(content):
+    _notify_tulpachat_room(JP_SUBTITLE_STUDY_ROOM_ID, content)
 
 
 # ★ "내 출근시간에 맞춰 shift alarm 채팅방에서 메시지 와서 일일루틴
@@ -2833,21 +2842,20 @@ ROUTINE_KEEPER_ROOM_ID = "루틴지기"
 
 
 def _notify_routine_keeper_room(content):
-    try:
-        result = subprocess.run(
-            ["security", "find-generic-password", "-s", TULPACHAT_WORKER_KEYCHAIN_SERVICE, "-w"],
-            capture_output=True, text=True, check=True, timeout=10,
-        )
-        token = result.stdout.strip()
-        request = urllib.request.Request(
-            f"{TULPACHAT_LOCAL_URL}/api/worker/reading_session_done",
-            data=json.dumps({"room_id": ROUTINE_KEEPER_ROOM_ID, "content": content}).encode("utf-8"),
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            method="POST",
-        )
-        urllib.request.urlopen(request, timeout=10)
-    except Exception:
-        pass  # 툴파챗이 안 떠 있어도 알람 자체는 계속 진행돼야 함
+    _notify_tulpachat_room(ROUTINE_KEEPER_ROOM_ID, content)
+
+
+# ★ "추천경진 알람도 떴는데 이거 관련해서 이직준비방에서 이야기해주면
+# 좋겠어" 요청(2026-09-02) — 구직지기가 있는 이직 준비방(custom_0e5dc0b026,
+# 이직시스템 페르소나 방과 같은 room_id — 이미 room_invites에 구직지기·
+# 커리어코치·스터디코치·업계분석가·기업크롤러가 초대돼 있음)에도 새 추천
+# 경진대회가 나올 때마다 트리거를 보낸다. 실제 코멘트는 각 페르소나가
+# 알아서 하고, 여기서는 "이런 경진대회가 새로 추천됐다"는 사실만 던진다.
+JOB_PREP_ROOM_ID = "custom_0e5dc0b026"
+
+
+def _notify_job_prep_room(content):
+    _notify_tulpachat_room(JOB_PREP_ROOM_ID, content)
 
 
 def _watch_jp_subtitle_completion(run_id, label, folder_path, notify_room=True):
@@ -7020,6 +7028,25 @@ class ShiftAlarmApp(rumps.App):
                             f"{score_text}{top.get('organizer', '')} — {truncate_title(top.get('title', ''), 40)}",
                             "메뉴바에서 클릭하면 Notion 분석으로 이동합니다.",
                         )
+                        # ★ "추천경진 알람도 떴는데 이거 관련해서 이직준비방에서
+                        # 이야기해주면 좋겠어" 요청(2026-09-02) — 이직 준비방
+                        # 구성원(구직지기·커리어코치·스터디코치·업계분석가·
+                        # 기업크롤러)이 각자 관점에서 이 추천 경진대회를 논의하게
+                        # 트리거만 던진다(실제 코멘트는 각자 판단).
+                        deadline = top.get("deadline") or "정보 없음"
+                        threading.Thread(
+                            target=_notify_job_prep_room,
+                            args=(
+                                f"🏆 새 추천 경진대회 — {cat_label} 카테고리 {score_text}\n"
+                                f"주최: {top.get('organizer', '')}\n"
+                                f"제목: {top.get('title', '')}\n"
+                                f"마감: {deadline}\n"
+                                f"원문: {top.get('contest_url', '')}\n"
+                                "각자 관점에서 이 경진대회를 어떻게 보는지, 후보자에게 "
+                                "도움이 될지 자유롭게 이야기해주세요.",
+                            ),
+                            daemon=True,
+                        ).start()
                 elif analyze_result.returncode != 0:
                     print(f"⚠️ {cat_label} 경진대회 AI 분석 실패: {analyze_result.stderr.strip()[:300]}")
         except (OSError, subprocess.TimeoutExpired) as exc:
