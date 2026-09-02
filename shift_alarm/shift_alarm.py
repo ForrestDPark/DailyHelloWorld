@@ -910,6 +910,19 @@ GY_TO_SWING_DAY2_MELATONIN_REMINDER_TIME = {"hour": 2, "minute": 0}
 # 그 다음날 새벽 3시에 멜라토닌 알림만 추가.
 GY_TO_SWING_DAY1_MELATONIN_REMINDER_TIME = {"hour": 3, "minute": 0}
 
+# ★ "8.15일을 음력으로 계산하면 몇월몇일이야? 엄마생일인데 일주일전에
+# 미리 리마인더 해주고 당일에 리마인더 알람 생성해줘" 요청(2026-09-02) —
+# 2026년 음력 8월 15일(추석)은 양력 9월 25일(금)로 확인함(WebSearch로
+# dallyeok.com 등 복수 출처 교차 확인). 음력 생일이라 해마다 양력 날짜가
+# 바뀌는데, 자동 변환 라이브러리 없이 올해분만 날짜를 직접 박아뒀다 —
+# 내년 이후에도 자동으로 이어가려면 별도 음력→양력 변환이 필요(요청하면
+# 추가). 근무/휴무와 무관하게 항상 봐야 하는 개인 일정이라, 다른
+# 리마인더들처럼 기상 알람 시각에 얹지 않고 고정 시각(09:00)에 울린다.
+MOM_BIRTHDAY_LUNAR_LABEL = "음력 8월 15일"
+MOM_BIRTHDAY_SOLAR_DATE_2026 = datetime.date(2026, 9, 25)
+MOM_BIRTHDAY_ADVANCE_REMINDER_DATE_2026 = MOM_BIRTHDAY_SOLAR_DATE_2026 - datetime.timedelta(days=7)
+MOM_BIRTHDAY_REMINDER_TIME = {"hour": 9, "minute": 0}
+
 # ── 근무별 "전자제품 전원 끄기" 알람 시간 ─────────────────────────
 # 근무 끝나고 쉬는(자는) 시간대에 맞춰 전자제품을 끄라고 하루 한 번 알려준다.
 # Day:   17:00~02:00 / GY: 08:00~16:00 / Swing: 23:50~08:00
@@ -4499,6 +4512,15 @@ class ShiftAlarmApp(rumps.App):
         self.day1_melatonin_reminder_timer = rumps.Timer(self._check_gy_to_swing_day1_melatonin_reminder, 60)
         self.day1_melatonin_reminder_timer.start()
 
+        # 엄마 생신(음력 8/15 → 2026년 양력 9/25) 일주일 전 리마인더 + 당일 알람
+        # (1분마다 시각 체크)
+        self._last_mom_birthday_advance_notified = None
+        self.mom_birthday_advance_timer = rumps.Timer(self._check_mom_birthday_advance_reminder, 60)
+        self.mom_birthday_advance_timer.start()
+        self._last_mom_birthday_alarm_notified = None
+        self.mom_birthday_alarm_timer = rumps.Timer(self._check_mom_birthday_alarm, 60)
+        self.mom_birthday_alarm_timer.start()
+
         # CPU 과부하 감지 (1분마다 표본, 70% 이상이 30분 이상 이어지면 알람)
         # 상태 딕셔너리(_high_cpu_tracking 등)는 build_menu()가 더 일찍 참조하므로
         # 위쪽(super().__init__ 직후)에서 이미 초기화했다 — 여기선 타이머만 켠다.
@@ -5196,6 +5218,45 @@ class ShiftAlarmApp(rumps.App):
             "멜라토닌 먹고 운기조식 하세요."
         )
 
+    def _check_mom_birthday_advance_reminder(self, _):
+        """1분마다 엄마 생신(양력 변환값) 일주일 전 09:00인지 확인, 하루
+        한 번만 알림 (★ 2026-09-02: "일주일전에 미리 리마인더 해주고"
+        요청)."""
+        now = datetime.datetime.now()
+        t = MOM_BIRTHDAY_REMINDER_TIME
+        if now.hour != t["hour"] or now.minute != t["minute"]:
+            return
+        today = now.date()
+        if today != MOM_BIRTHDAY_ADVANCE_REMINDER_DATE_2026:
+            return
+        if self._last_mom_birthday_advance_notified == today:
+            return
+        self._last_mom_birthday_advance_notified = today
+        notify_spoken(
+            "🎂 엄마 생신 일주일 전",
+            f"{MOM_BIRTHDAY_LUNAR_LABEL} (양력 {MOM_BIRTHDAY_SOLAR_DATE_2026.strftime('%m월 %d일')})",
+            "엄마 생신이 일주일 남았어요. 미리 준비하세요."
+        )
+
+    def _check_mom_birthday_alarm(self, _):
+        """1분마다 엄마 생신 당일 09:00인지 확인, 하루 한 번만 알림
+        (★ 2026-09-02: "당일에 리마인더 알람 생성해줘" 요청)."""
+        now = datetime.datetime.now()
+        t = MOM_BIRTHDAY_REMINDER_TIME
+        if now.hour != t["hour"] or now.minute != t["minute"]:
+            return
+        today = now.date()
+        if today != MOM_BIRTHDAY_SOLAR_DATE_2026:
+            return
+        if self._last_mom_birthday_alarm_notified == today:
+            return
+        self._last_mom_birthday_alarm_notified = today
+        notify_spoken(
+            "🎂 오늘 엄마 생신입니다!",
+            MOM_BIRTHDAY_LUNAR_LABEL,
+            "오늘 엄마 생신이에요. 축하 연락 잊지 마세요!"
+        )
+
     def _check_tulpachat_messages(self, _):
         """1분마다 툴파챗에 새 메시지(페르소나 응답)가 있는지 확인한다.
         HTTP 호출이라 백그라운드 스레드에서 돈다."""
@@ -5702,7 +5763,16 @@ class ShiftAlarmApp(rumps.App):
                 self._daily_routine_updates_running.pop(label, None)
             else:
                 routine_state[label] = desired
+        # ★ "루틴지기한테 일일체크 전부체크 해달라고 하면 알아서 거실 1 조명
+        # off 하게 해줘 음악도 자동으로 꺼지게 해주고" 요청(2026-09-02) —
+        # 메뉴 클릭이든 루틴지기 채팅 승인이든 결국 같은 Notion 데이터를
+        # 갱신하므로, 출처를 가리지 않고 "방금 막 전부 체크됨"으로 전이하는
+        # 순간만 여기서 감지한다(직전 상태는 전부 체크가 아니었는데 이번에
+        # 전부 체크로 바뀐 경우).
+        previously_all_checked = bool(self._daily_routine_state) and all(self._daily_routine_state.values())
         self._daily_routine_state = routine_state
+        if routine_state and all(routine_state.values()) and not previously_all_checked:
+            threading.Thread(target=self._on_daily_routine_all_checked, daemon=True).start()
         self._save_checklist_state_cache()
         # NSMenu/NSStatusItem을 안 건드리는 순수 데이터 갱신은 여기까지고,
         # build_menu()/_write_mobile_status()는 AppKit을 건드리므로 메인 스레드로 넘긴다.
@@ -6083,6 +6153,19 @@ class ShiftAlarmApp(rumps.App):
             title = "제어 실패"
             message = str(exc)
         AppHelper.callAfter(rumps.notification, "Philips Hue", title, message)
+
+    def _on_daily_routine_all_checked(self):
+        """★ "루틴지기한테 일일체크 전부체크 해달라고 하면 알아서 거실 1
+        조명 off 하게 해줘 음악도 자동으로 꺼지게 해주고" 요청(2026-09-02) —
+        _fetch_checklist_state_thread()가 일일 루틴이 방금 막 전부 체크로
+        전이한 걸 감지하면 여기로 온다. toggle_hue_room 대신 set_hue_room_power로
+        무조건 끄기만 한다(이미 꺼져 있어도 안전)."""
+        try:
+            set_hue_room_power(HUE_WAKE_ROOM_NAME, False)
+        except (OSError, KeyError, IndexError, ValueError, RuntimeError,
+                json.JSONDecodeError, urllib.error.HTTPError, urllib.error.URLError) as exc:
+            print(f"⚠️ 일일 루틴 전부 체크 후 거실 조명 끄기 실패: {exc}")
+        pause_music_if_playing()
 
     def _turn_on_hue_for_reading(self):
         """★ 2026-08-18: "이어서보기 할 때 거실 불이 켜지면 좋겠다"는 요청 —
