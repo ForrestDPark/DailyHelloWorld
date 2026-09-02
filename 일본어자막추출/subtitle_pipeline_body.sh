@@ -195,6 +195,7 @@ while true; do
         export ORIGINAL_VIDEO="$FILENAME"
         export FILENAME_NO_EXT="$FILENAME_NO_EXT"
         export WORKING_DIR="$WORKING_DIR"
+        export SCRIPT_DIR="$SCRIPT_DIR"
         export MYTMP="$MYTMP"
 
         cat << 'PYEOF' > "$PY_WORKER"
@@ -242,22 +243,93 @@ def generate_furigana(text):
             out += orig
     return out
 
-def translate(text, retries=3):
+TRANSLATION_MEMORY = {}
+try:
+    memory_path = os.path.join(os.environ.get("SCRIPT_DIR", ""), "translation_memory.json")
+    with open(memory_path, encoding="utf-8") as memory_file:
+        loaded_memory = json.load(memory_file)
+        if isinstance(loaded_memory, dict):
+            TRANSLATION_MEMORY = loaded_memory
+except (OSError, ValueError):
+    pass
+
+# ★ 2026-09-03: "구글번역안되는게 너무 많다 최근에... 이유가 뭘까?" 질문 —
+# 이 translate()는 Google의 비공식 무료 엔드포인트(translate.googleapis.com,
+# googletrans류 도구가 쓰는 것과 동일)를 쓴다. 공식 유료 API가 아니라서
+# 호출량이 늘면 Google이 IP 기준으로 자주 429(Too Many Requests)를 건다 —
+# 코드 버그가 아니라 무료 엔드포인트의 태생적 한계. 실패한 문장은 아래
+# TRANSLATION_MEMORY에 저장되지 않고 "[번역 실패]"로 남는데, 파이프라인
+# 뒷단(refine_translations.py)이 "[번역 실패]"만은 검수 상한(--max-review)과
+# 무관하게 전부 Codex/Claude로 문맥 기반 재번역하고, 그래도 남으면 최종 EPUB
+# 생성 자체를 막는다 — 그래서 "dictionary화가 안 되고 그냥 넘어가는" 일은
+# 없다(설계상 사전 없이 흘려보내는 걸 시스템이 스스로 막음). 다만 유사
+# 문장을 사전 기준으로 "응용 해석"하는 퍼지 매칭은 일부러 안 넣었다 —
+# "一人でしないの?"/"一人でするの?"처럼 부정 하나 차이로 뜻이 뒤집히는
+# 문장이 흔해서, 유사도 기준 재사용은 눈치 못 채게 오역을 만들 위험이 있고
+# refine_translations.py의 문맥 기반 AI 재번역이 이미 더 정확하다.
+#
+# 대신 진짜 비효율은 따로 있었다: Google이 지금 이 세션을 막고 있는 동안에도
+# 문장마다 6회 지수 백오프를 그대로 반복해 문장 하나당 최대 수십 초씩
+# 허비했다(사용자가 붙여준 로그처럼 연속으로 6/6 실패가 이어지는 구간).
+# 이런 문장은 결국 "[번역 실패]"로 끝나 refine_translations.py로 넘어갈
+# 뿐이므로, 연속 실패가 쌓이면(Google이 지금 막고 있다는 신호) 이후
+# 문장들은 재시도 횟수를 크게 줄여 시간을 아낀다 — 최종 결과물 품질은
+# 그대로(같은 refine_translations.py 경로), 쓸데없이 오래 기다리는 것만 줄인다.
+_CONSECUTIVE_TRANSLATE_FAILURES = 0
+TRANSLATE_CIRCUIT_BREAKER_THRESHOLD = 5
+TRANSLATE_CIRCUIT_BREAKER_RETRIES = 2
+_translate_circuit_breaker_announced = False
+
+
+def translate(text, retries=6):
+    global _CONSECUTIVE_TRANSLATE_FAILURES, _translate_circuit_breaker_announced
     _t0 = time.time()
     try:
-        for attempt in range(retries):
+        memory_key = text.strip()
+        remembered = TRANSLATION_MEMORY.get(memory_key, "")
+        if remembered and remembered != "[번역 실패]":
+            return remembered
+        effective_retries = retries
+        if _CONSECUTIVE_TRANSLATE_FAILURES >= TRANSLATE_CIRCUIT_BREAKER_THRESHOLD:
+            effective_retries = TRANSLATE_CIRCUIT_BREAKER_RETRIES
+            if not _translate_circuit_breaker_announced:
+                _translate_circuit_breaker_announced = True
+                print(
+                    f"⏭️ Google 번역이 연속 {_CONSECUTIVE_TRANSLATE_FAILURES}문장 실패 — "
+                    f"지금 세션이 막힌 것으로 보고 이후 재시도를 {TRANSLATE_CIRCUIT_BREAKER_RETRIES}회로 "
+                    "줄입니다(실패분은 뒤에서 Codex/Claude가 문맥 기반으로 다시 채웁니다).",
+                    file=sys.stderr,
+                )
+        for attempt in range(effective_retries):
             try:
                 url = (
                     "https://translate.googleapis.com/translate_a/single"
                     f"?client=gtx&sl=ja&tl=ko&dt=t&q={requests.utils.quote(text)}"
                 )
-                r = requests.get(url, timeout=7)
+                r = requests.get(url, timeout=12)
                 if r.status_code == 200:
-                    return "".join(s[0] for s in r.json()[0] if s[0])
-            except Exception:
-                pass
-            if attempt < retries - 1:
-                time.sleep(1.5 * (attempt + 1))
+                    translated = "".join(s[0] for s in r.json()[0] if s[0]).strip()
+                    if translated:
+                        _CONSECUTIVE_TRANSLATE_FAILURES = 0
+                        _translate_circuit_breaker_announced = False
+                        return translated
+                print(
+                    f"⚠️ Google 번역 HTTP {r.status_code} "
+                    f"(시도 {attempt + 1}/{effective_retries}, 원문 {memory_key[:30]!r})",
+                    file=sys.stderr,
+                )
+            except Exception as exc:
+                print(
+                    f"⚠️ Google 번역 예외 {type(exc).__name__} "
+                    f"(시도 {attempt + 1}/{effective_retries}, 원문 {memory_key[:30]!r})",
+                    file=sys.stderr,
+                )
+            if attempt < effective_retries - 1:
+                # 연속 요청 제한을 피하기 위한 지수 백오프. 작품 전체가 같은
+                # 간격으로 재시도하지 않도록 현재 시각 기반의 작은 지연도 더한다.
+                jitter = time.time() % 0.7
+                time.sleep(min(20.0, 1.5 * (2 ** attempt)) + jitter)
+        _CONSECUTIVE_TRANSLATE_FAILURES += 1
         return "[번역 실패]"
     finally:
         TIMING["translate"] += time.time() - _t0
@@ -1005,8 +1077,10 @@ drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese 
     # 판정한 일부 문장만 앞뒤 일본어 문맥과 함께 작품당 한 번 Codex로 검수하고,
     # 확정 결과는 translation_memory.json에 저장해 다음 작품에서 즉시 재사용한다.
     echo "\n🔎 Google 번역 이상 문장 선택 검수 중..."
-    if ! /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/refine_translations.py" "$BOOK_DIR" --no-ai; then
-        echo "⚠️  선택 번역 검수 실패 — 기존 Google 번역으로 계속 진행합니다."
+    if ! /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/refine_translations.py" "$BOOK_DIR"; then
+        echo "❌ 번역 실패 문장이 남아 이 작품의 최종 EPUB 생성을 중단합니다."
+        echo "   작업 자료는 $BOOK_DIR 에 보존되므로 검수 재실행 후 이어서 만들 수 있습니다."
+        continue
     fi
 
     # ★ 2026-07-28: 원래 "Codex가 transcript_part*.jsonl과 대표 이미지를 읽고
