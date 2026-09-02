@@ -908,3 +908,12 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - 새 1분 주기 타이머 2개(`_check_mom_birthday_advance_reminder`/`_check_mom_birthday_alarm`)가 각각 그해 생신 9월 18일(일주일 전)·생신 당일 09:00에 하루 한 번 `notify_spoken()`으로 알림(화면 배너+음성)을 띄운다. 근무/휴무와 무관하게 항상 봐야 하는 개인 일정이라 기상 알람 시각이 아닌 고정 시각(09:00)을 쓴다.
 - "매년 알람 해줘" 요청으로 연도 하드코딩 대신 `korean_lunar_calendar`(KASI 변환 테이블, 윤달까지 정확, `/opt/anaconda3/bin/python3 -m pip install korean_lunar_calendar`로 설치) 라이브러리를 붙였다 — `_mom_birthday_solar_date(year)`가 매번 그해 기준으로 음력 8/15를 양력으로 다시 계산해서 해마다 자동으로 이어진다.
   - 이 라이브러리는 2050년 이후 연도를 넣어도 예외 없이 2050-09-30을 그대로 돌려주는 것을 직접 실행해보고 확인했다(조용한 데이터 오류 위험) — `_mom_birthday_solar_date()`에 반환된 연도가 입력 연도와 1년 넘게 어긋나면 `None`을 돌려주는 방어 코드를 넣었다.
+
+## 69. ⚠️→⛔ CPU 과부하 프로세스 자동 종료를 화이트리스트 → "일본어자막추출 빼고 전부"로 전환 (★ 2026-09-02 추가)
+
+**사용자 요청**: "cpu 사용율 말인데 뭐가됬던 70%이상으로 30분이상 붙잡고있으면 꺼지게 해줘 일본어 자막추출 프로그램 말고는 다 적용하면 좋겠어."
+
+- 48번 항목(CPU 과부하 감지)은 원래 안전하다고 확인된 시스템 데몬 2개(`StorageManagementService`·`ApplicationsStorageExtension`)만 자동 종료하고 나머지는 알림만 띄웠다. 이제 기본을 뒤집어 "70%/30분 스턱이면 예외 아닌 한 자동 종료"로 바꿨다(`AUTO_KILL_HIGH_CPU_EXCLUDE_NAMES`).
+- 예외는 이름 하나(`whisper-cli`, 일본어자막추출의 전사 작업 — 긴 영상은 30분 넘게 걸리는 게 정상)와 macOS가 죽으면 로그아웃/재부팅으로 이어지는 핵심 시스템 프로세스(`kernel_task`/`WindowServer`/`loginwindow`/`launchd`)뿐이다.
+- **실측 중 발견한 함정**: 이름만으로 예외를 걸러내려 했더니, 검증하던 바로 그 순간에 일본어자막추출 소속 `ffmpeg`(고음 영상 추출, `extract_high_pitch_video.py`)가 실제로 98%로 돌고 있었다. `ffmpeg`는 다른 작업(TTS 오디오 이어붙이기 등)에서도 흔히 쓰는 이름이라 통째로 이름 예외 처리하면 진짜 멈춰버린 다른 ffmpeg는 못 잡는다 — 그래서 이름 대신 **작업 디렉터리(cwd)** 로 판단하는 `_process_belongs_to_jp_subtitle()`을 추가했다(`lsof -a -p PID -d cwd`). 일본어자막추출 저장소 폴더뿐 아니라, 실제 입출력 파일을 두는 `~/Desktop/BlogImage`(`JP_WORKOUT_BGM_DIR`/`JP_COMPLETED_EPUB_DIR`이 가리키는 곳)도 같이 봐야 정확히 걸러진다는 걸 실측으로 확인했다.
+- 실제 그 ffmpeg(pid) 대상으로 `_process_belongs_to_jp_subtitle()`을 직접 호출해 `True`가 나오는 것까지 확인한 뒤 반영했다.

@@ -954,14 +954,22 @@ HIGH_CPU_STUCK_MINUTES = 30
 HIGH_CPU_CHECK_INTERVAL_SECONDS = 60
 
 # ★ 2026-08-25 추가: "요주의 프로세스로 선정하고 필요없다고 판단하면 자동으로
-# 킬해달라"는 요청 — 이번에 실제로 몇 시간씩 CPU를 붙잡고 있던 두 프로세스를
-# 대상으로만 자동 종료를 허용한다. 임의의 새로 붙잡힌 프로세스를 전부 자동
-# 종료하는 건 하지 않는다(중요한 작업 중인 프로세스를 잘못 죽일 위험) —
-# 이 화이트리스트는 사용자와 함께 "안전하게 죽여도 된다"고 확인한 macOS
-# 시스템 데몬만 담는다(둘 다 필요하면 macOS가 알아서 다시 띄움).
-# replayd는 2026-08-30부터 아래 REPLAYD_SILENT_KILL_INTERVAL_SECONDS 쪽
-# 전용 경로로 옮겨서 여기서는 뺐다(중복 처리 방지).
-AUTO_KILL_HIGH_CPU_NAMES = {"StorageManagementService", "ApplicationsStorageExtension"}
+# 킬해달라"는 요청 — 처음엔 실제로 몇 시간씩 CPU를 붙잡고 있던 두 프로세스만
+# 화이트리스트로 자동 종료했다. replayd는 2026-08-30부터 아래
+# REPLAYD_SILENT_KILL_INTERVAL_SECONDS 쪽 전용 경로로 옮겨서 여기선 뺐다.
+#
+# ★ 2026-09-02: "뭐가됬던 70%이상으로 30분이상 붙잡고있으면 꺼지게 해줘
+# 일본어 자막추출 프로그램 말고는 다 적용하면 좋겠어" 요청 — 화이트리스트
+# (안전하다고 확인된 것만 죽임)를 뒤집어 기본을 "70%/30분 스턱이면 죽인다"로
+# 바꾸고, 예외만 명시한다. whisper-cli(일본어자막추출의 핵심 전사 작업 —
+# 긴 영상은 30분 넘게 걸리는 게 정상)는 사용자가 직접 지목한 예외. 거기에
+# macOS가 죽으면 로그아웃/재부팅으로 이어지는 핵심 시스템 프로세스도
+# 최소한으로 같이 뺐다 — "런어웨이 프로세스를 죽여달라"는 의도지 "맥
+# 자체를 강제 재부팅시켜달라"는 의도는 아닐 것이므로.
+AUTO_KILL_HIGH_CPU_EXCLUDE_NAMES = {
+    "whisper-cli",
+    "kernel_task", "WindowServer", "loginwindow", "launchd",
+}
 
 # ── replayd 조용히 자동 종료 (★ 2026-08-30 추가) ──────────────────
 # "replayd 는 아무 쓸데가 없으니 5분마다 돌아가고 있으면 그냥 바로 조용히
@@ -1020,6 +1028,26 @@ def _sample_high_cpu_processes(threshold=HIGH_CPU_THRESHOLD_PERCENT):
         if cpu >= threshold:
             processes.append((pid, comm, cpu))
     return processes
+
+
+def _process_belongs_to_jp_subtitle(pid):
+    """pid의 현재 작업 디렉터리(cwd)가 일본어자막추출 관련 폴더 밑이면 True.
+    lsof로 cwd 파일디스크립터만 조회 — 실패하거나 시간 초과하면 안전하게
+    False(=자동 종료 대상에서 빼지 않음, 확실할 때만 예외 처리)."""
+    try:
+        result = subprocess.run(
+            ["lsof", "-a", "-p", str(pid), "-d", "cwd", "-Fn"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    for line in result.stdout.splitlines():
+        if not line.startswith("n"):
+            continue
+        cwd = line[1:]
+        if any(cwd.startswith(marker) for marker in JP_SUBTITLE_CWD_MARKERS):
+            return True
+    return False
 
 # ── 근무별 실제 근무 시작/종료 시각 (근로계약서 기준) ─────────────
 SHIFT_WORK_HOURS = {
@@ -1384,10 +1412,23 @@ EBOOK_LAST_STATE_FILE = os.path.expanduser("~/.ebook_reader_last.json")
 STYLE_TERMINAL_APP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "StyleEbookTerminal.app")
 
 # ── 일본어자막추출 프로젝트(형제 폴더) 연동 경로 ────────────────────
-JP_SUBTITLE_SCRIPT = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "일본어자막추출", "whisper_series_stream.sh"
+JP_SUBTITLE_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "일본어자막추출"
 )
+JP_SUBTITLE_SCRIPT = os.path.join(JP_SUBTITLE_DIR, "whisper_series_stream.sh")
+
+# ★ 2026-09-02: "일본어 자막추출 프로그램 말고는 다 적용"(CPU 자동 종료
+# 예외) 요청 — 이름만으로 걸러내려 했더니(whisper-cli), 실제로 이 순간에도
+# 일본어자막추출 소속 ffmpeg(고음 영상 추출, extract_high_pitch_video.py)가
+# 70%대로 돌고 있는 게 확인됐다. ffmpeg는 다른 작업(TTS 오디오 이어붙이기
+# 등)에서도 흔히 쓰는 이름이라 통째로 이름 예외 처리하면 진짜 멈춰버린
+# 다른 ffmpeg는 못 잡는다 — 그래서 이름이 아니라 "어느 작업 디렉터리에서
+# 실행됐는지"로 판단한다(_process_belongs_to_jp_subtitle(), 위쪽에 정의).
+# 저장소 폴더뿐 아니라 이 파이프라인이 실제로 입출력 파일을 두는 작업
+# 폴더(JP_WORKOUT_BGM_DIR·JP_COMPLETED_EPUB_DIR이 가리키는
+# ~/Desktop/BlogImage 밑)도 같이 봐야 한다(방금 발견한 ffmpeg의 cwd가
+# 정확히 이 밑이었음).
+JP_SUBTITLE_CWD_MARKERS = (JP_SUBTITLE_DIR, os.path.expanduser("~/Desktop/BlogImage"))
 # 운동용 고음 영상 추출과 자막·번역·Notion·EPUB 단계를 하나로 묶어서 돌리면
 # (JP_SUBTITLE_SCRIPT) 너무 오래 걸려서, 각각 단독으로도 실행할 수 있게 나눈
 # 진입점 2개. 실제 로직은 일본어자막추출/subtitle_pipeline_body.sh에 있고
@@ -5366,10 +5407,13 @@ class ShiftAlarmApp(rumps.App):
             for pid, comm, cpu, elapsed in newly_stuck:
                 minutes = int(elapsed.total_seconds() // 60)
                 name = os.path.basename(comm)
-                # ★ 2026-08-25: 화이트리스트에 있는 프로세스는 알리는 데서
-                # 그치지 않고 바로 강제 종료한다(AUTO_KILL_HIGH_CPU_NAMES 주석
-                # 참고 — 사용자와 함께 안전하다고 확인한 시스템 데몬만 대상).
-                if name in AUTO_KILL_HIGH_CPU_NAMES:
+                # ★ 2026-09-02: 이름 예외(AUTO_KILL_HIGH_CPU_EXCLUDE_NAMES —
+                # whisper-cli·핵심 시스템 프로세스) 또는 작업 디렉터리 예외
+                # (_process_belongs_to_jp_subtitle — ffmpeg처럼 이름만으론
+                # 못 가리는 일본어자막추출 소속 프로세스)만 빼고 전부 자동
+                # 종료한다.
+                is_excluded = name in AUTO_KILL_HIGH_CPU_EXCLUDE_NAMES or _process_belongs_to_jp_subtitle(pid)
+                if not is_excluded:
                     try:
                         os.kill(pid, signal.SIGKILL)
                         outcome = "자동 종료함"
@@ -5382,7 +5426,7 @@ class ShiftAlarmApp(rumps.App):
                     self._high_cpu_alerted.discard(key)
                     self._high_cpu_stuck.pop(key, None)
                 else:
-                    outcome = "메뉴바에서 확인하세요"
+                    outcome = "예외 대상이라 자동 종료하지 않음(일본어 자막추출/시스템 필수 프로세스)"
                 notify_spoken(
                     "⚠️ CPU 과부하 감지",
                     f"{name} — {cpu:.0f}%, {minutes}분째 붙잡힘",
