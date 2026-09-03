@@ -37,9 +37,10 @@ import edge_tts  # ★ 2026-08-30: OpenAI TTS 크레딧 소진 시 무료 폴백
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ai_exec import run_ai_exec, run_provider_api  # noqa: E402
 from notion_personas import (  # noqa: E402
-    append_story_summary, build_system_prompt, create_persona_page, extract_age_range,
-    extract_gender, extract_group, extract_profile_summary,
-    extract_projects, fetch_page_text, list_personas, notion_token,
+    append_persona_candidate_note, append_story_summary, build_system_prompt,
+    create_persona_page, extract_age_range, extract_gender, extract_group,
+    extract_profile_summary, extract_projects, fetch_page_text, list_personas,
+    notion_token,
 )
 
 # ★ 2026-08-25: "업로드된 이미지 보고 서로 분석하면 좋겠다" 요청 — server/app.py의
@@ -501,9 +502,19 @@ PERSONA_PROPOSAL_RE = re.compile(r"```personaplan\s*\n(.*?)\n```", re.DOTALL)
 PERSONA_MANAGER_TIMEOUT_SECONDS = 300
 _pending_persona_proposals = {}  # room_id -> {"name":..., "profile":...} — 워커 재시작하면 초기화(의도적)
 
+# ★ "이거 ebook reading 한거 노션에 다 저장되고있잖아. 그거 기반으로
+# 페르소나관리자가 학습하고 페르소나화할수있는 인물들 쭉 정리해서 리스트로
+# 챙기고있으면 좋겠어 그리고 그게 노션에 정리되면 좋겠는데" 요청(2026-09-03) —
+# 독서지기가 이미 하는 것처럼 EBOOK_READER_DATA_DIR을 Read/Glob으로 직접
+# 훑어(아래 exec_kwargs 배선 참고), 인물 후보를 찾으면 이 목록 페이지에
+# 승인 없이 바로 추가한다("페르소나로 실제로 만들기" 자체는 여전히
+# personaplan → 소유자 승인이 필요 — 이건 그 전 단계의 관찰 메모일 뿐).
+PERSONA_CANDIDATE_LIST_PAGE_ID = "3d032a1e-ae80-8150-8a06-e1c1095b565f"
+PERSONA_CANDIDATE_RE = re.compile(r"```candidatelist\s*\n(.*?)\n```", re.DOTALL)
+
 PERSONA_MANAGER_ADDENDUM = (
     "\n\n---\n"
-    f'"{PERSONA_MANAGER_PERSONA_NAME}"은(는) 두 가지 모드로 일한다.\n\n'
+    f'"{PERSONA_MANAGER_PERSONA_NAME}"은(는) 세 가지 모드로 일한다.\n\n'
     "[모드 1: 그룹/토론방에서 감지] 초대된 방(독서 토론방·손자병법 토론방·이직 준비방·일본어 "
     "스터디방·파이프라인 스터디방·전체 채팅방 등)에서 다른 사람이 특정 인물(등장인물이든 실존 "
     "인물이든)을 반복해서 언급하거나 그 인물에 대해 구체적인 이야기(성격·말투·사연·관계 등)를 하면, "
@@ -523,7 +534,20 @@ PERSONA_MANAGER_ADDENDUM = (
     "창작 인물/자기 아이디어 등), 성격, 말투, 배경, 성별, 나이대를 하나씩 편하게 물어보며 프로필을 "
     "채워나간다. 이 모드는 소유자뿐 아니라 이 앱을 쓰는 누구에게나 열려 있다 — \"설치 마법사\"처럼 "
     "쉽게 다가갈 수 있는 게 목적이라 문턱을 두지 않는다.\n\n"
-    "[제안 형식 — 두 모드 공통] 페르소나를 실제로 만들자고 제안할 준비가 되면 다음 형식을 반드시 "
+    "[모드 3: 독서 기록 기반 후보 수집] \"이거 ebook reading 한거 노션에 다 저장되고있잖아... 그거 "
+    "기반으로 학습하고 페르소나화할수있는 인물들 쭉 정리해서 리스트로 챙기고있으면 좋겠어\" 요청으로 "
+    "생긴 모드 — 독서 세션 완료 트리거(시스템 메시지로 옴)가 오면, 독서지기와 같은 방식으로 "
+    f"{EBOOK_READER_DATA_DIR}/sessions/*.json(원문 original·번역 translation_ko·책 제목 book_name)을 "
+    "Read/Glob으로 직접 훑어 오늘·최근 세션에서 실제로 등장하거나 다뤄진 실존/등장 인물 중 "
+    "페르소나로 만들만한 후보가 있는지 살펴본다. 아직 그룹방 대화에서 충분히 다뤄지지 않아 "
+    "personaplan을 바로 제안할 단계는 아니어도, '이 사람 흥미로운데 나중에 후보로 챙겨볼 만하다' "
+    "싶으면 ```candidatelist 코드 블록으로 목록 페이지에 관찰 메모를 남긴다(승인 불필요 — 이건 "
+    "실제 페르소나 생성이 아니라 나중에 참고할 메모일 뿐). 형식: "
+    '{"name":"인물 이름","source":"책 제목 또는 세션 정보","note":"왜 흥미로운지, 어떤 특징이 있는지 '
+    '한두 문장"}. 이미 목록에 올린 것과 사실상 같은 인물이면 중복으로 또 올리지 않는다. 이 모드에서 '
+    "쓸 말이 없으면(새로 챙길 후보가 없으면) 역시 NONE만 출력한다.\n\n"
+    "[제안 형식 — 정식 페르소나 제안(모드 1·2) 공통] 페르소나를 실제로 만들자고 제안할 준비가 되면 "
+    "다음 형식을 반드시 "
     "지켜라:\n"
     "1) 먼저 사람이 읽을 자연스러운 설명 — 어떤 인물인지, 왜 페르소나로 만들만하다고 판단했는지(1:1 "
     "마법사 모드에서는 사용자와 함께 정리한 내용 요약)를 쓴다.\n"
@@ -1866,6 +1890,43 @@ def _maybe_execute_pending_persona_proposal(room_id, context):
     return "\n".join(_execute_persona_proposal(proposal))
 
 
+def _handle_candidate_list_signal(reply_text):
+    """독서 기록에서 페르소나 후보를 찾으면 승인 없이 바로 목록 페이지에
+    관찰 메모를 남긴다(personaplan과 달리 실제 생성이 아니라 추적용 메모라
+    문턱을 낮춤). 한 턴에 후보를 여러 명 메모할 수 있어(finditer) 블록마다
+    처리한다 — search()만 쓰면 첫 번째 후보 뒤에 나오는 후보들이 조용히
+    누락된다(2026-09-03 실측: 숀 화이트·체이스 자비스 두 명을 한 번에
+    제안했는데 첫 명만 저장되는 걸 발견). 반환값은 채팅에 덧붙일 결과
+    문구를 줄바꿈으로 합친 것(하나도 없으면 None)."""
+    matches = list(PERSONA_CANDIDATE_RE.finditer(reply_text))
+    if not matches:
+        return None
+    token = notion_token()
+    outcomes = []
+    for m in matches:
+        try:
+            candidate = json.loads(m.group(1))
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(candidate, dict):
+            continue
+        name = (candidate.get("name") or "").strip()
+        if not name:
+            continue
+        source = (candidate.get("source") or "").strip() or "출처 미상"
+        note = (candidate.get("note") or "").strip() or "(메모 없음)"
+        if not token:
+            outcomes.append("❌ Notion 토큰을 찾지 못해 후보 목록에 추가하지 못했습니다")
+            continue
+        try:
+            append_persona_candidate_note(PERSONA_CANDIDATE_LIST_PAGE_ID, token, name, source, note)
+        except (urllib.error.URLError, urllib.error.HTTPError) as exc:
+            outcomes.append(f"❌ '{name}' 후보 등록 실패: {exc}")
+            continue
+        outcomes.append(f"📋 '{name}'을(를) 페르소나 후보 목록에 메모해뒀습니다.")
+    return "\n".join(outcomes) if outcomes else None
+
+
 def sync_personas():
     """Notion에서 페르소나 목록·본문을 읽어 이름→{system_prompt, page_id} 캐시를
     만들고, 서버에도 참고용으로 올려둔다(서버가 /api/personas로 목록을 보여줄
@@ -2380,6 +2441,9 @@ def _process_turn_inner(turn, persona_cache):
     elif is_pipeline_expert:
         exec_kwargs["allow_tools"] = ["Read", "Glob", "Grep", "WebSearch", "WebFetch"]
         exec_kwargs["add_dirs"] = [str(REPO_ROOT)]
+    elif is_persona_manager:
+        exec_kwargs["allow_tools"] = ["Read", "Glob", "Grep", "WebSearch", "WebFetch"]
+        exec_kwargs["add_dirs"] = [str(EBOOK_READER_DATA_DIR)]
     timeout = (
         ORGANIZER_TIMEOUT_SECONDS if is_organizer
         else UI_DEV_TIMEOUT_SECONDS if is_ui_dev
@@ -2406,6 +2470,13 @@ def _process_turn_inner(turn, persona_cache):
             _capture_pending_image_plan(room_id, reply)
         elif is_persona_manager:
             _capture_pending_persona_proposal(room_id, reply)
+            # ★ "그거 기반으로 학습하고 페르소나화할수있는 인물들 쭉 정리해서
+            # 리스트로 챙기고있으면 좋겠어"(2026-09-03) — candidatelist 블록은
+            # personaplan과 달리 승인 없이 이 자리에서 바로 실행(추적용 메모라
+            # 저위험).
+            candidate_outcome = _handle_candidate_list_signal(reply)
+            if candidate_outcome:
+                reply = f"{reply}\n\n{candidate_outcome}"
             # ★ 페르소나 관리자는 초대된 모든 방에서 사람이 메시지를 보낼 때마다
             # 턴을 받는다(범용적으로 활용, 2026-09-02) — @멘션을 기다리지 않고
             # 적극적으로 나서려면 매번 지켜봐야 하기 때문. 대부분의 턴에는 할

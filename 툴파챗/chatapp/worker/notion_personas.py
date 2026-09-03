@@ -256,3 +256,22 @@ def create_persona_page(title, profile_markdown, token):
     }
     data = _request("pages", token, method="POST", payload=payload)
     return data["id"]
+
+
+# ★ "이거 ebook reading 한거 노션에 다 저장되고있잖아. 그거 기반으로
+# 페르소나관리자가 학습하고 페르소나화할수있는 인물들 쭉 정리해서 리스트로
+# 챙기고있으면 좋겠어 그리고 그게 노션에 정리되면 좋겠는데" 요청(2026-09-03) —
+# 이 목록은 순수 추적용 메모라 페르소나 생성(personaplan, 소유자 승인 필요)과
+# 달리 페르소나 관리자가 승인 없이 바로 추가한다. append_story_summary()와
+# 같은 "페이지 끝에 추가" 패턴.
+def append_persona_candidate_note(page_id, token, name, source, note):
+    children = [
+        {
+            "object": "block", "type": "bulleted_list_item",
+            "bulleted_list_item": {"rich_text": [
+                {"type": "text", "text": {"content": f"{name} — "}, "annotations": {"bold": True}},
+                {"type": "text", "text": {"content": f"({source}) {note}"}},
+            ]},
+        },
+    ]
+    _request(f"blocks/{page_id}/children", token, method="PATCH", payload={"children": children})
