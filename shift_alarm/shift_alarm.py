@@ -2810,16 +2810,22 @@ JP_SUBTITLE_DAILY_REVIEW_TIME = {"hour": 21, "minute": 0}
 # 번째로 이직 준비방(_notify_job_prep_room, 아래) 알림까지 필요해지면서
 # 공통 로직을 하나로 합쳤다 — room_id만 인자로 받는다. 1:1 방(예: 루틴지기)도
 # server/app.py의 폴백 덕분에 그대로 쓸 수 있다.
-def _notify_tulpachat_room(room_id, content):
+def _notify_tulpachat_room(room_id, content, target_persona=None):
+    """target_persona를 주면 방 전체가 아니라 그 한 명에게만 턴을 배정한다
+    (서버 /api/worker/reading_session_done의 target_persona 확장, 2026-09-03 —
+    "경진이라는 페르소나 만들어서... 경진대회 분야 맡아서 하는걸로하자" 요청)."""
     try:
         result = subprocess.run(
             ["security", "find-generic-password", "-s", TULPACHAT_WORKER_KEYCHAIN_SERVICE, "-w"],
             capture_output=True, text=True, check=True, timeout=10,
         )
         token = result.stdout.strip()
+        payload = {"room_id": room_id, "content": content}
+        if target_persona:
+            payload["target_persona"] = target_persona
         request = urllib.request.Request(
             f"{TULPACHAT_LOCAL_URL}/api/worker/reading_session_done",
-            data=json.dumps({"room_id": room_id, "content": content}).encode("utf-8"),
+            data=json.dumps(payload).encode("utf-8"),
             headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
             method="POST",
         )
@@ -2851,13 +2857,19 @@ def _notify_routine_keeper_room(content):
 # 좋겠어" 요청(2026-09-02) — 구직지기가 있는 이직 준비방(custom_0e5dc0b026,
 # 이직시스템 페르소나 방과 같은 room_id — 이미 room_invites에 구직지기·
 # 커리어코치·스터디코치·업계분석가·기업크롤러가 초대돼 있음)에도 새 추천
-# 경진대회가 나올 때마다 트리거를 보낸다. 실제 코멘트는 각 페르소나가
-# 알아서 하고, 여기서는 "이런 경진대회가 새로 추천됐다"는 사실만 던진다.
+# 경진대회가 나올 때마다 트리거를 보낸다.
+# ★ 2026-09-03: "이거 그냥 메시지화 하면안되나? ... 경진이라는 페르소나
+# 만들어서 채팅방 초대하고 경진이는 이직시스템에서 경진대회 분야 맡아서
+# 하는걸로하자" 요청 — 방 전체에 시스템 배너로 데이터를 나열하던 방식을
+# 버리고, 경진 전용으로 짧은 트리거만 보낸다. 실제 소개 문구(주최·제목·
+# 마감·링크)는 경진이 자기 live_state(load_contest_system_state())를
+# 근거로 직접 자연스러운 채팅 메시지로 만든다.
 JOB_PREP_ROOM_ID = "custom_0e5dc0b026"
+CONTEST_PERSONA_NAME = "경진"
 
 
-def _notify_job_prep_room(content):
-    _notify_tulpachat_room(JOB_PREP_ROOM_ID, content)
+def _notify_job_prep_room(content, target_persona=None):
+    _notify_tulpachat_room(JOB_PREP_ROOM_ID, content, target_persona=target_persona)
 
 
 def _watch_jp_subtitle_completion(run_id, label, folder_path, notify_room=True):
@@ -7043,22 +7055,18 @@ class ShiftAlarmApp(rumps.App):
                             "메뉴바에서 클릭하면 Notion 분석으로 이동합니다.",
                         )
                         # ★ "추천경진 알람도 떴는데 이거 관련해서 이직준비방에서
-                        # 이야기해주면 좋겠어" 요청(2026-09-02) — 이직 준비방
-                        # 구성원(구직지기·커리어코치·스터디코치·업계분석가·
-                        # 기업크롤러)이 각자 관점에서 이 추천 경진대회를 논의하게
-                        # 트리거만 던진다(실제 코멘트는 각자 판단).
-                        deadline = top.get("deadline") or "정보 없음"
+                        # 이야기해주면 좋겠어"(2026-09-02) → "이거 그냥
+                        # 메시지화 하면안되나? 경진이라는 페르소나 만들어서...
+                        # 경진대회 분야 맡아서 하는걸로하자"(2026-09-03) —
+                        # 방 전체에 데이터를 나열하는 시스템 배너 대신, 경진
+                        # 전용으로 짧은 트리거만 보낸다. 실제 소개(주최·제목·
+                        # 마감·링크·후보자 적합도)는 경진이 load_contest_
+                        # system_state()로 직접 채워서 자연스러운 채팅
+                        # 메시지로 만든다(persona_worker.py CONTEST_ADDENDUM).
                         threading.Thread(
                             target=_notify_job_prep_room,
-                            args=(
-                                f"🏆 새 추천 경진대회 — {cat_label} 카테고리 {score_text}\n"
-                                f"주최: {top.get('organizer', '')}\n"
-                                f"제목: {top.get('title', '')}\n"
-                                f"마감: {deadline}\n"
-                                f"원문: {top.get('contest_url', '')}\n"
-                                "각자 관점에서 이 경진대회를 어떻게 보는지, 후보자에게 "
-                                "도움이 될지 자유롭게 이야기해주세요.",
-                            ),
+                            args=(f"🏆 새 추천 경진대회({cat_label} 카테고리)가 나왔어요. 소개해주세요.",),
+                            kwargs={"target_persona": CONTEST_PERSONA_NAME},
                             daemon=True,
                         ).start()
                 elif analyze_result.returncode != 0:
