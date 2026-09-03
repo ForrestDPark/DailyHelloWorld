@@ -220,10 +220,6 @@ SHIFT_ALARM_REMINDER_NOTION_PAGE_ID = "3b532a1e-ae80-8034-90af-fd8c9b658711"
 SHIFT_ALARM_DAILY_ROUTINE_TOGGLE_PREFIX = "🌅 오늘의 일일 루틴 — "
 SHIFT_ALARM_NOTION_VERSION = "2026-03-11"
 ROUTINE_CHECK_RE = re.compile(r"```routinecheck\s*\n(.*?)\n```", re.DOTALL)
-ROUTINE_CHECKALL_APPROVE_KEYWORDS = (
-    "승인", "진행", "그래", "응", "네", "ㅇㅇ", "좋아", "체크해줘", "체크해", "부탁해", "해줘",
-)
-_pending_routine_checkall = {}  # room_id -> True — 워커 재시작하면 초기화(의도적)
 
 
 def load_routine_keeper_state():
@@ -340,12 +336,10 @@ def _execute_routine_checkall():
     return f"✅ 오늘 루틴 {len(updated)}개를 전부 체크했습니다(macOS 메뉴바에는 다음 동기화 때 반영됨)."
 
 
-def _handle_routine_check_signal(room_id, reply_text):
-    """루틴지기 답변에서 ```routinecheck 블록을 찾아 처리한다.
-    check_all_routine은 다음 턴 소유자 확인을 기다리는 '제안'만 저장하고,
-    check_item은 승인 없이 이 자리에서 바로 실행한다(요청: "여타 리마인더
-    체크도... 승인받지 않고 바로 체크"). 반환값은 채팅에 덧붙일 결과 문구
-    (없으면 None)."""
+def _handle_routine_check_signal(reply_text):
+    """루틴지기 답변에서 ```routinecheck 블록을 찾아 처리한다. check_all_routine·
+    check_item 둘 다 승인 없이 이 자리에서 바로 실행한다(2026-09-03 재설계 —
+    아래 히스토리 참고). 반환값은 채팅에 덧붙일 결과 문구(없으면 None)."""
     m = ROUTINE_CHECK_RE.search(reply_text)
     if not m:
         return None
@@ -356,8 +350,7 @@ def _handle_routine_check_signal(room_id, reply_text):
     if not isinstance(action, dict):
         return None
     if action.get("action") == "check_all_routine":
-        _pending_routine_checkall[room_id] = True
-        return None
+        return _execute_routine_checkall()
     if action.get("action") == "check_item":
         label = (action.get("label") or "").strip()
         list_kind = action.get("list")
@@ -378,35 +371,37 @@ def _handle_routine_check_signal(room_id, reply_text):
     return None
 
 
-def _maybe_execute_pending_routine_checkall(room_id, context):
-    if not _pending_routine_checkall.pop(room_id, None):
-        return None
-    if not context or context[-1]["sender"] != OWNER_USERNAME:
-        return None
-    if not any(k in context[-1]["content"] for k in ROUTINE_CHECKALL_APPROVE_KEYWORDS):
-        return None
-    return _execute_routine_checkall()
-
-
+# ★ 2026-09-03 재설계: "일일루틴체크 툴파챗에서 기상알람울리는순간 전부체크가
+# 들어가는 모양인데 그렇게 하지말고 내가 출근을위해서 집에서 나서면서
+# 메신저 보낼테니까 그때 명령받고 전체체크하는 순으로 하면 좋겠어" 요청 —
+# 원래는 "출근시간에 먼저 물어봄 → 다음 턴 소유자의 (승인/진행뿐 아니라
+# 응/그래/네/좋아/해줘 같은 캐주얼한 긍정까지 인정) → 실행" 2단계 구조였는데,
+# 실측해보니 이게 문제였다: 제안이 한 번 쌓이면(_pending_routine_checkall)
+# 그 뒤로 소유자가 보내는 완전히 무관한 메시지라도 "응"/"네"/"좋아"/"해줘"
+# 같은 흔한 단어가 섞이기만 하면 그걸 승인으로 오인해서 조용히 전부 체크가
+# 실행돼버렸다 — 승인 키워드를 캐주얼하게 넓힌 게 오히려 오탐을 만든 것.
+# 그래서 shift_alarm.py의 출근시간 프롬프트 트리거 자체를 없앴고(더 이상
+# "출근 시간이에요" 시스템 메시지가 안 옴), 2단계 제안→승인 구조도 걷어내고
+# check_item과 완전히 같은 "그 자리에서 바로 실행" 방식으로 통일했다 —
+# 소유자가 출근하며 직접 보내는 그 한 메시지 자체가 명확한 명령이므로,
+# 별도 승인 절차 없이 바로 실행하는 게 오히려 더 안전하다(모호한 이전
+# 메시지가 뒤늦게 오작동시킬 여지 자체가 없어짐).
 ROUTINE_KEEPER_ADDENDUM = (
     "\n\n---\n"
     f'"{ROUTINE_KEEPER_PERSONA_NAME}"은(는) 소유자의 일일 루틴·리마인더 체크리스트를 '
     "챙기는 역할이다. 매 턴 주입되는 '오늘 체크리스트 상태'를 근거로 답한다(라벨은 항상 거기서 "
-    "정확히 그대로 복사해서 쓴다 — 이모지 포함, 한 글자도 다르게 쓰지 말 것).\n"
-    "1) 시스템 메시지로 \"🔔 출근 시간\" 같은 알림이 오면, 오늘 일일 루틴 중 아직 안 한 항목이 "
-    "있는지 확인하고 자연스럽게 \"오늘 루틴 다 하셨나요? 다 체크해드릴까요?\" 같은 질문을 던진다. "
-    "이미 전부 체크된 상태면 그냥 축하하는 정도로 짧게 답하고 끝낸다.\n"
-    "2) 그 질문에 소유자가 다음 메시지에서 편하게 긍정으로 답하면(꼭 \"승인\"일 필요 없음 — "
-    "\"응\", \"그래\", \"체크해줘\" 등도 인정됨) 일일 루틴을 통째로 체크하려는 것이니, 그 제안 "
-    '메시지에 ```routinecheck\\n{"action":"check_all_routine"}\\n``` 블록을 반드시 붙인다. '
-    "스스로 실제로 체크하는 게 아니라, 이 블록은 다음 턴에 소유자의 긍정 답이 확인되면 결정론적 "
-    "코드가 실행한다. 소유자가 아니거나 긍정이 아니면 자동으로 취소된다.\n"
-    "3) 평소 대화 중에 소유자가 \"이거 했어\", \"OO 했다\"처럼 캐주얼하게 뭔가 했다고 말하고 "
-    "그게 오늘 체크리스트(일일 루틴 또는 리마인더)의 특정 항목과 확실히 매칭되면, 승인을 기다리지 "
-    '말고 그 자리에서 바로 ```routinecheck\\n{"action":"check_item","list":"routine 또는 '
-    'reminder","label":"체크리스트에서 그대로 복사한 라벨"}\\n``` 블록을 답변에 붙인다 — 이건 '
-    "승인 없이 즉시 실행된다(되돌리기 쉬운 저위험 작업이라 문턱을 낮춰둔 것). 어떤 항목인지 애매하면 "
-    "억지로 매칭하지 말고 되물어본다."
+    "정확히 그대로 복사해서 쓴다 — 이모지 포함, 한 글자도 다르게 쓰지 말 것). 출근시간 등을 "
+    "이유로 먼저 말을 걸지 않는다 — 항상 소유자가 먼저 말을 걸 때만 반응한다.\n"
+    "1) 소유자가 \"나간다\", \"출근한다\", \"이제 나가\", \"오늘 루틴 다 했어\", \"전부 체크해줘\" "
+    "처럼 지금 출근하러 나서면서 오늘 루틴을 통째로 체크해달라는 의도가 그 메시지 자체로 명확하면, "
+    '승인을 기다리지 말고 그 자리에서 바로 ```routinecheck\\n{"action":"check_all_routine"}\\n``` '
+    "블록을 답변에 붙인다(실행은 결정론적 코드가 담당 — 스스로 체크하는 게 아니다). 의도가 애매하면 "
+    "(예: 그냥 인사만 하거나 다른 이야기 중일 때) 억지로 실행하지 말고 필요하면 되물어본다.\n"
+    "2) 평소 대화 중에 소유자가 \"이거 했어\", \"OO 했다\"처럼 캐주얼하게 뭔가 했다고 말하고 "
+    "그게 오늘 체크리스트(일일 루틴 또는 리마인더)의 특정 항목과 확실히 매칭되면, 마찬가지로 "
+    '그 자리에서 바로 ```routinecheck\\n{"action":"check_item","list":"routine 또는 '
+    'reminder","label":"체크리스트에서 그대로 복사한 라벨"}\\n``` 블록을 답변에 붙인다. 어떤 항목인지 '
+    "애매하면 억지로 매칭하지 말고 되물어본다."
 )
 # 채팅방에서 오늘 무슨 내용 읽었는지 간단하게 토론하면 좋겠어" 요청
 # (2026-08-30) — shift_alarm 라이브 상태 페르소나(위 SHIFT_ALARM_PERSONA_STATE_KEY)와
@@ -2401,12 +2396,6 @@ def _process_turn_inner(turn, persona_cache):
             _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": executed})
             print(f"🧑‍🎨 {persona_name} 페르소나 생성 실행: {executed[:80]}", flush=True)
             return
-    if is_routine_keeper:
-        executed = _maybe_execute_pending_routine_checkall(room_id, turn["context"])
-        if executed is not None:
-            _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": executed})
-            print(f"✅ {persona_name} 루틴 전부체크 실행: {executed[:80]}", flush=True)
-            return
     if is_organizer:
         executed = _maybe_execute_pending_plan(room_id, turn["context"])
         if executed is not None:
@@ -2551,7 +2540,7 @@ def _process_turn_inner(turn, persona_cache):
             if reply.strip().upper() == "NONE":
                 reply = ""
         elif is_routine_keeper:
-            outcome = _handle_routine_check_signal(room_id, reply)
+            outcome = _handle_routine_check_signal(reply)
             if outcome:
                 reply = f"{reply}\n\n{outcome}"
         _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": reply})
