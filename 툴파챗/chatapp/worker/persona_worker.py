@@ -819,6 +819,54 @@ def load_job_system_state():
     return "\n".join(lines)
 
 
+# ★ "새 추천 경진대회... 이거 그냥 메시지화 하면안되나? ... 경진이라는
+# 페르소나 만들어서 채팅방 초대하고 경진이는 이직시스템에서 경진대회 분야
+# 맡아서 하는걸로하자" 요청(2026-09-03) — 지금까지는 shift_alarm.py가 시스템
+# 배너 메시지로 "각자 이야기해주세요"라고 방 전체에 던졌는데, 그 대신 경진
+# 전용으로 진짜 AI 턴을 배정해 자연스러운 채팅 메시지로 소개하게 바꾼다
+# (server/app.py의 target_persona 확장, shift_alarm.py 쪽 트리거 변경 참고).
+# load_job_system_state()와 같은 패턴 — AI에게 파일 도구를 주는 대신 필요한
+# 값만 직접 읽어 매 턴 주입한다.
+CONTEST_PERSONA_NAME = "경진"
+
+
+def load_contest_system_state():
+    lines = []
+    for category, filename in (("AI", "top_contest_notion_ai.json"), ("일반", "top_contest_notion_general.json")):
+        data = _read_json_file(JOB_SYSTEM_DATA_DIR / filename)
+        if not data:
+            continue
+        score = data.get("score")
+        score_text = f"[{score}점] " if score is not None else ""
+        lines.append(
+            f"오늘의 추천 경진대회({category} 카테고리): {score_text}{data.get('organizer', '')} — "
+            f"{data.get('title', '')}"
+        )
+        if data.get("deadline"):
+            lines.append(f"  마감: {data['deadline']}")
+        if data.get("contest_url"):
+            lines.append(f"  원문 링크: {data['contest_url']}")
+    profile = _read_json_file(JOB_SYSTEM_DIR / "candidate_profile.json")
+    identity = profile.get("identity") or {}
+    if identity.get("headline"):
+        lines.append(f"후보자 방향: {identity['headline']}")
+    if not lines:
+        return "오늘 데이터를 아직 못 찾음 — 지어내지 말고 솔직히 말할 것."
+    return "\n".join(lines)
+
+
+CONTEST_ADDENDUM = (
+    "\n\n---\n"
+    f'"{CONTEST_PERSONA_NAME}"은(는) 이직 준비방에서 경진대회·공모전 분야를 전담한다. 매 턴 '
+    "주입되는 '오늘의 추천 경진대회'(AI/일반 카테고리)를 근거로 답한다. 시스템 메시지로 새 "
+    "추천 경진대회 소식이 오면(예: \"새 추천 경진대회가 나왔어요\") 그 자리에서 그냥 데이터를 "
+    "나열하지 말고, 이 대회가 어떤 분야인지, 어떤 실력을 요구하는지, 후보자 이력·목표와 어디가 "
+    "맞고 안 맞는지까지 구체적으로 자연스럽게 소개한다(딱딱한 요약 말고 실제 동료가 '이런 대회 "
+    "나왔던데' 하고 말 거는 느낌으로). 확인 안 된 내용(주최 기관 성격, 실제 요구 역량 등)은 "
+    "WebSearch로 직접 찾아보고, 그래도 모르면 모른다고 솔직히 말한다. 마감이 임박했거나 후보자 "
+    "방향과 안 맞으면 좋게 포장하지 말고 그대로 짚어준다."
+)
+
 JOB_SYSTEM_TIMEOUT_SECONDS = 300  # 데이터 폴더를 Grep/Read로 훑어야 해서 더 오래 걸릴 수 있음
 JOB_SYSTEM_ADDENDUM = (
     "\n\n---\n"
@@ -1019,7 +1067,7 @@ COMPANY_CRAWLER_ADDENDUM = (
 # 타임아웃은 JOB_SYSTEM_PERSONA_NAMES 3인과 완전히 같아서(이직 준비방 멤버,
 # JOB_SYSTEM_DIR 스코프) 재사용을 위해 합쳐둔다.
 JOB_ROOM_TOOL_PERSONA_NAMES = JOB_SYSTEM_PERSONA_NAMES | {
-    INDUSTRY_ANALYST_PERSONA_NAME, COMPANY_CRAWLER_PERSONA_NAME,
+    INDUSTRY_ANALYST_PERSONA_NAME, COMPANY_CRAWLER_PERSONA_NAME, CONTEST_PERSONA_NAME,
 }
 
 # ★ 2026-08-29: 소유자가 채팅에서 "손자병법 다음 구절 해석해"라고 직접
@@ -1970,6 +2018,8 @@ def sync_personas():
             system_prompt += INDUSTRY_ANALYST_ADDENDUM
         elif persona["title"] == COMPANY_CRAWLER_PERSONA_NAME:
             system_prompt += COMPANY_CRAWLER_ADDENDUM
+        elif persona["title"] == CONTEST_PERSONA_NAME:
+            system_prompt += CONTEST_ADDENDUM
         group_name = extract_group(page_text)
         profile_summary = extract_profile_summary(page_text)
         # ★ "각각의 페르소나 설정에서 남성인지 여성인지 나이대 구분되는 설정이
@@ -2392,6 +2442,8 @@ def _process_turn_inner(turn, persona_cache):
         live_state = load_ebook_reader_state()
     elif persona_name == JOB_SEEKER_PERSONA_NAME:
         live_state = load_job_system_state()
+    elif persona_name == CONTEST_PERSONA_NAME:
+        live_state = load_contest_system_state()
     elif persona_name == JP_TEACHER_PERSONA_NAME:
         live_state = load_jp_subtitle_state()
     elif persona_name == ROUTINE_KEEPER_PERSONA_NAME:

@@ -3872,6 +3872,7 @@ def worker_post_message(body: WorkerPostMessage, authorization: Optional[str] = 
 class ReadingSessionDone(BaseModel):
     room_id: str
     content: str
+    target_persona: Optional[str] = None
 
 
 @app.post("/api/worker/reading_session_done")
@@ -3901,7 +3902,18 @@ def worker_reading_session_done(body: ReadingSessionDone, authorization: Optiona
     # 다뤘는데, 1:1 방(room_id=페르소나 이름)엔 room_invites가 없어
     # _group_members가 빈 리스트를 돌려주고 404가 났다. post_message()의
     # 1:1 분기(elif room_id in all_personas)와 같은 폴백을 추가한다.
-    if room_id in all_persona_names:
+    # ★ "새 추천 경진대회... 이거 그냥 메시지화 하면안되나? 경진이라는
+    # 페르소나 만들어서... 경진대회 분야 맡아서 하는걸로하자" 요청(2026-09-03) —
+    # 지금까지는 이 엔드포인트가 항상 방 전체(_group_members)에 턴을
+    # 배정했는데, "이 소식은 딱 한 명한테만 맡기고 싶다"는 경우를 위해
+    # target_persona를 명시하면 그 한 명에게만 배정한다.
+    target_persona = (body.target_persona or "").strip()
+    if target_persona:
+        if target_persona not in all_persona_names:
+            conn.close()
+            raise HTTPException(status_code=404, detail=f"'{target_persona}' 페르소나를 찾지 못했습니다")
+        targets = [target_persona]
+    elif room_id in all_persona_names:
         targets = [room_id]
     else:
         targets = _group_members(conn, room_id, persona_rows)
