@@ -673,6 +673,30 @@ def _is_deadline_expired(deadline_str: str, today: "date") -> bool:
     return end is not None and end < today
 
 
+_ORGANIZER_HOMEPAGE_ROW_RE = re.compile(r'홈페이지\s*</th>\s*<td>(.*?)</td>', re.S)
+_HREF_URL_RE = re.compile(r'href="(https?://[^"]+)"')
+
+
+def _extract_organizer_homepage_link(raw_html: str) -> str:
+    """콘테스트코리아 상세 페이지의 '홈페이지' 표 행에서 주최사 링크를 찾는다.
+    ★ 2026-09-03 실측: 진짜 링크가 <a href="javascript:void(0)">로 가려져
+    있고(클릭 추적용), 원래 URL은 그 위에 주석 처리된
+    <!-- <a href="..."> --> 안에 그대로 남아 있다 — href="..." 패턴만 찾으면
+    주석 여부와 무관하게 잡힌다. 이 표 행이 없는 출처(링커리어 등)에서는
+    그냥 빈 문자열을 돌려주고 조용히 건너뛴다."""
+    m = _ORGANIZER_HOMEPAGE_ROW_RE.search(raw_html)
+    if not m:
+        return ""
+    href_match = _HREF_URL_RE.search(m.group(1))
+    return href_match.group(1) if href_match else ""
+
+
+def _strip_html_to_text(body: str) -> str:
+    body = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", body, flags=re.S | re.I)
+    text = html.unescape(re.sub(r"<[^>]+>", " ", body))
+    return re.sub(r"\s+", " ", text).strip()
+
+
 def fetch_contest_detail_text(url: str) -> str:
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     try:
@@ -682,9 +706,27 @@ def fetch_contest_detail_text(url: str) -> str:
         raise RuntimeError(f"공모전 상세 페이지 HTTP {exc.code}") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"공모전 상세 페이지 연결 실패: {exc.reason}") from exc
-    body = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", body, flags=re.S | re.I)
-    text = html.unescape(re.sub(r"<[^>]+>", " ", body))
-    return re.sub(r"\s+", " ", text).strip()[:8000]
+    text = _strip_html_to_text(body)[:8000]
+
+    # ★ "이직시스템 파이프라인안에서 경진대회 크롤링할때 주최사 홈페이지
+    # 링크가 있는 경우에는 주최사 홈페이지로 가서 관련정보도 수집했으면
+    # 좋겠어" 요청(2026-09-03) — 콘테스트코리아 같은 곳은 자체 페이지에
+    # 요약만 있고 실제 상세 요강(참여대상·평가기준 등)은 주최사 사이트에
+    # 따로 있는 경우가 있다(실측: "K-인공지능 제조데이터 분석 경진대회"가
+    # kamp-ai.kr에 상세를 두고 있었음). 링크가 있으면 그 페이지도 같이
+    # 받아 붙인다 — 실패해도(주최사 사이트가 막혀 있거나 느려도) 원본
+    # 텍스트는 그대로 살아있게 조용히 넘어간다.
+    homepage_url = _extract_organizer_homepage_link(body)
+    if homepage_url:
+        try:
+            homepage_request = urllib.request.Request(homepage_url, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(homepage_request, timeout=30) as homepage_response:
+                homepage_body = homepage_response.read().decode("utf-8", "replace")
+            homepage_text = _strip_html_to_text(homepage_body)[:8000]
+            text += f"\n\n--- 주최사 홈페이지 상세({homepage_url}) ---\n{homepage_text}"
+        except (urllib.error.HTTPError, urllib.error.URLError):
+            pass
+    return text
 
 
 def _content_available(detail_text: str) -> bool:
