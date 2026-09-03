@@ -933,48 +933,73 @@ def _jp_subtitle_summary(title):
         return ""
 
 
-def _jp_subtitle_sample_cards(title, limit=3):
-    """scene_study_cards.json에서 앞쪽 카드 몇 개만 뽑아 사람이 읽는 요약으로
-    만든다(전체를 넣으면 너무 커서 대표 예시만)."""
+def _jp_subtitle_all_cards(title):
+    """scene_study_cards.json의 모든 장면·모든 학습카드(표현/어휘/문법/쉐도잉)를
+    빠짐없이 사람이 읽는 요약으로 만든다.
+    ★ 2026-09-03 실측 피드백: "학습카드 하나만 올라오는데 한작품에있는 모든
+    학습카드에 해당하는 대화를 생성했으면 좋겠어" — 예전엔 앞쪽 3개 장면·
+    장면당 표현 2개만 예시로 뽑아서(_jp_subtitle_sample_cards, limit=3) 대부분의
+    카드가 조용히 누락됐다. 이제 장면 전체를 다 준다."""
     data = _read_json_file(JP_SUBTITLE_LIBRARY_DIR / title / "scene_study_cards.json")
     if not isinstance(data, dict):
         return ""
     lines = []
-    for scene_key in list(data.keys())[:limit]:
-        card = data[scene_key] or {}
-        for expr in (card.get("expressions") or [])[:2]:
-            lines.append(f"- {expr.get('ja')}({expr.get('reading')}) = {expr.get('ko')}")
+    for scene_key, card in data.items():
+        card = card or {}
+        scene_lines = []
+        for expr in card.get("expressions") or []:
+            scene_lines.append(f"  - {expr.get('ja')}({expr.get('reading')}) = {expr.get('ko')}")
+        for vocab in card.get("vocabulary") or []:
+            scene_lines.append(f"  - [어휘] {vocab.get('ja')}({vocab.get('reading')}) = {vocab.get('ko')}")
+        for grammar in card.get("grammar") or []:
+            # 스키마가 회차별로 다르다 — 예전 회차는 grammar가 그냥 설명 문자열,
+            # 최근 회차는 {"pattern":..., "meaning":...} 딕셔너리(2026-09-03 확인).
+            if isinstance(grammar, dict):
+                scene_lines.append(f"  - [문법] {grammar.get('pattern')} = {grammar.get('meaning')}")
+            elif grammar:
+                scene_lines.append(f"  - [문법] {grammar}")
         shadowing = card.get("shadowing") or {}
         if shadowing.get("ja"):
-            lines.append(f"- (쉐도잉 추천) {shadowing['ja']} = {shadowing.get('ko')}")
+            scene_lines.append(f"  - (쉐도잉 추천) {shadowing['ja']} = {shadowing.get('ko')}")
+        if scene_lines:
+            lines.append(f"[{scene_key}]")
+            lines.extend(scene_lines)
     return "\n".join(lines)
 
 
 def load_jp_subtitle_state():
-    """오늘 새로 처리된 회차(있으면) + 오늘의 복습 대상(라이브러리 전체를
-    하루에 하나씩 도는 결정론적 로테이션)을 사람이 읽는 요약으로 만든다."""
+    """오늘 새로 처리된 회차 전부(있으면) + 오늘의 복습 대상(라이브러리 전체를
+    하루에 하나씩 도는 결정론적 로테이션)을 사람이 읽는 요약으로 만든다.
+    ★ 2026-09-03 실측 피드백: "일본어 자막추출 3개했는데도 하나밖에 안뜨는데
+    shift alarm 에서 인식하는 모든 epub 대해서 대화방에서 이야기되면 좋겠어" —
+    예전엔 mtime 기준 가장 최근 회차 딱 1개만 "오늘 새로 처리한 회차"로 골랐는데,
+    하루에 여러 회차를 처리하면 나머지가 조용히 묻혔다(트리거는 회차마다 따로
+    오는데, 그때마다 이 함수가 "가장 최근" 1개만 다시 계산해서 매번 마지막
+    회차만 반복해서 소개하는 꼴이 됨). 이제 오늘 mtime인 회차를 전부 모은다."""
     titles = _jp_subtitle_titles()
     if not titles:
         return "아직 처리된 회차가 없음 — 지어내지 말고 솔직히 말할 것."
     lines = []
     today = datetime.date.today()
-    newest = max(
-        (JP_SUBTITLE_LIBRARY_DIR / t for t in titles),
-        key=lambda p: p.stat().st_mtime,
+    today_titles = sorted(
+        (t for t in titles if datetime.date.fromtimestamp((JP_SUBTITLE_LIBRARY_DIR / t).stat().st_mtime) == today),
+        key=lambda t: (JP_SUBTITLE_LIBRARY_DIR / t).stat().st_mtime,
     )
-    if datetime.date.fromtimestamp(newest.stat().st_mtime) == today:
-        lines.append(f"오늘 새로 처리한 회차: {newest.name}")
-        lines.append(_jp_subtitle_summary(newest.name))
-        cards = _jp_subtitle_sample_cards(newest.name)
-        if cards:
-            lines.append(f"학습카드 예시:\n{cards}")
+    if today_titles:
+        lines.append(f"오늘 새로 처리한 회차({len(today_titles)}개): {', '.join(today_titles)}")
+        for t in today_titles:
+            lines.append(f"\n=== {t} ===")
+            lines.append(_jp_subtitle_summary(t))
+            cards = _jp_subtitle_all_cards(t)
+            if cards:
+                lines.append(f"학습카드 전체:\n{cards}")
     review_idx = (today - JP_SUBTITLE_REVIEW_ANCHOR).days % len(titles)
     review_title = titles[review_idx]
     lines.append(f"\n오늘의 복습 대상: {review_title}")
     lines.append(_jp_subtitle_summary(review_title))
-    review_cards = _jp_subtitle_sample_cards(review_title)
+    review_cards = _jp_subtitle_all_cards(review_title)
     if review_cards:
-        lines.append(f"학습카드 예시:\n{review_cards}")
+        lines.append(f"학습카드 전체:\n{review_cards}")
     return "\n".join(lines)
 
 
@@ -990,6 +1015,16 @@ JP_SUBTITLE_ADDENDUM = (
     "문법·어휘를 통째로 새로 분석하지 말고(그건 별도 절차가 이미 깊게 함), 이미 만들어진 "
     "학습카드를 소개하고 가볍게 대화하는 역할에 집중한다. 확인 안 된 회차 내용은 지어내지 "
     "말고 못 찾았다고 솔직히 답할 것.\n"
+    "★ 2026-09-03 실측 피드백: \"학습카드 하나만 올라오는데 한작품에있는 모든 학습카드에 "
+    "해당하는 대화를 생성했으면 좋겠어\" — 매 턴 주입되는 '학습카드 전체'에는 그 회차의 "
+    "장면 전부가 들어있다. 앞쪽 몇 개만 골라서 소개하고 나머지를 생략하지 말고, 장면을 "
+    "순서대로 훑으면서 표현·어휘·문법·쉐도잉을 빠짐없이 대화에 담는다(한 번에 다 담기 "
+    "부담스러우면 장면 단위로 나눠 설명해도 되지만, 특정 장면을 통째로 건너뛰지는 않는다).\n"
+    "★ 2026-09-03 실측 피드백: \"일본어 자막추출 3개했는데도 하나밖에 안뜨는데 shift "
+    "alarm 에서 인식하는 모든 epub 대해서 대화방에서 이야기되면 좋겠어\" — '오늘 새로 처리한 "
+    "회차'가 여러 개면(=== 회차명 === 로 구분됨) 그중 하나만 골라 말하지 말고 전부 순서대로 "
+    "소개한다. 여러 회차를 언급할 때는 '이거'/'이 회차는' 같은 지시어만 쓰지 말고 회차명을 "
+    "문장에 다시 넣어서 어떤 회차 얘기인지 항상 명확히 한다.\n"
     "★ 2026-09-01 실측 피드백: \"한자는 내가 후리가나를 몰라서 한자표현 나오면 후리가나도 "
     "있게 표현해주면 좋겠고... 한국어랑 일본어랑 같이 있으면 한국어는 한국어 tts 가 읽고 "
     "일본어는 일본어 tts 가 읽으면 좋겠어\" — 아래 두 가지를 항상 지킨다.\n"
