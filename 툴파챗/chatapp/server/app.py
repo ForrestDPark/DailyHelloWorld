@@ -3314,6 +3314,7 @@ class WorkerAnnouncement(BaseModel):
     room_id: str
     content: str
     dedupe_key: str
+    hanja_lesson: str
     victory_commanders: list[VictoryCommander] = []
 
 
@@ -3364,11 +3365,32 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
     room_id = body.room_id.strip()
     content = body.content.strip()
     dedupe_key = body.dedupe_key.strip()
-    if not room_id or not content or not dedupe_key:
-        raise HTTPException(status_code=400, detail="방·내용·중복 방지 키가 필요합니다")
+    if not room_id or not content or not dedupe_key or not body.hanja_lesson.strip():
+        raise HTTPException(status_code=400, detail="방·내용·중복 방지 키·한자 풀이가 필요합니다")
 
     conn = get_conn()
     commander_results = []
+    hanja_teacher_name = "한자선생님"
+    hanja_teacher = conn.execute(
+        "SELECT name FROM personas WHERE name = ?", (hanja_teacher_name,)
+    ).fetchone()
+    if not hanja_teacher:
+        hanja_prompt = (
+            "당신은 한문 원전 풀이를 맡은 한자선생님 가상 페르소나입니다. 손자병법 구절을 "
+            "원문, 한국 한자음, 글자별 훈과 문맥상 뜻, 문장 구조, 직역 순서로 설명하세요. "
+            "의역과 역사 사례 토론으로 먼저 뛰어가지 말고 이체자·다의어·문법상 불확실성은 "
+            "분명히 밝히세요. 어려운 한자어는 초학자도 이해할 수 있는 한국어로 풀이하세요."
+        )
+        conn.execute(
+            "INSERT INTO personas (name, notion_page_id, system_prompt, group_name, owner_username, description, synced_at) "
+            "VALUES (?, '', ?, NULL, ?, ?, ?)",
+            (hanja_teacher_name, hanja_prompt, APP_USERNAME or "automation",
+             "손자병법 원문·독음·직역·한자 문법을 먼저 풀이하는 한문 선생", _now()),
+        )
+    conn.execute(
+        "INSERT OR IGNORE INTO room_invites (room_id, persona_name, invited_at) VALUES (?, ?, ?)",
+        (room_id, hanja_teacher_name, _now()),
+    )
     kahneman_name = "데니얼 카너먼"
     kahneman = conn.execute("SELECT name FROM personas WHERE name = ?", (kahneman_name,)).fetchone()
     if not kahneman:
@@ -3480,6 +3502,12 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
         (room_id, sender, content, now),
     )
     message_id = cursor.lastrowid
+    lesson_cursor = conn.execute(
+        "INSERT INTO messages (room_id, sender, content, created_at, reply_message_id) "
+        "VALUES (?, ?, ?, ?, ?)",
+        (room_id, hanja_teacher_name, body.hanja_lesson.strip(), now, message_id),
+    )
+    hanja_lesson_message_id = lesson_cursor.lastrowid
     posted_image_count = 0
     for commander in body.victory_commanders:
         for image_index, battle_image in enumerate(commander.images, start=1):
@@ -3533,6 +3561,7 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
         "ok": True, "duplicate": False, "message_id": message_id,
         "announcer": sender, "notified": notified, "commanders": commander_results,
         "posted_image_count": posted_image_count,
+        "hanja_lesson_message_id": hanja_lesson_message_id,
     }
 
 
