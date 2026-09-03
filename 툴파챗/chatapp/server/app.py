@@ -3299,6 +3299,7 @@ class RedirectTurn(BaseModel):
 class BattleImage(BaseModel):
     url: str
     alt: str = ""
+    comment: str = ""
 
 
 class VictoryCommander(BaseModel):
@@ -3489,7 +3490,8 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
             conn.execute(
                 "INSERT INTO messages (room_id, sender, content, created_at, reply_message_id) "
                 "VALUES (?, ?, ?, ?, ?)",
-                (room_id, commander.name.strip(), f"![{alt}]({battle_image.url})", now, message_id),
+                (room_id, commander.name.strip(),
+                 f"![{alt}]({battle_image.url})\n\n{battle_image.comment.strip()[:500]}", now, message_id),
             )
             posted_image_count += 1
         conn.execute(
