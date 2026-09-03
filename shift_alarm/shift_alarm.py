@@ -971,14 +971,16 @@ AUTO_KILL_HIGH_CPU_EXCLUDE_NAMES = {
     "kernel_task", "WindowServer", "loginwindow", "launchd",
 }
 
-# ── replayd 조용히 자동 종료 (★ 2026-08-30 추가) ──────────────────
-# "replayd 는 아무 쓸데가 없으니 5분마다 돌아가고 있으면 그냥 바로 조용히
-# 죽여달라(알람 없이)"는 요청. launchctl disable + bootout을 시도했지만
-# SIP 때문에 완전히 못 없애고(System Integrity Protection이 걸려 있어
-# /System/Library/LaunchAgents의 시스템 데몬은 bootout이 막힘) XPC 트리거로
-# 바로 재기동되는 걸 확인 — 그래서 70%/30분 스턱 판정 없이 그냥 주기적으로
-# 죽이는 방식으로 우회한다.
-REPLAYD_SILENT_KILL_INTERVAL_SECONDS = 5 * 60
+# ── replayd 조용히 자동 종료 (★ 2026-08-30 추가, ★ 2026-09-03: 30초로 단축) ──
+# "replayd 는 아무 쓸데가 없으니 돌아가고 있으면 그냥 바로 조용히 죽여달라
+# (알람 없이)"는 요청. launchctl disable + bootout을 시도했지만 SIP 때문에
+# 완전히 못 없애고(System Integrity Protection이 걸려 있어 /System/Library/
+# LaunchAgents의 시스템 데몬은 bootout이 막힘) XPC 트리거로 바로 재기동되는
+# 걸 확인 — 그래서 70%/30분 스턱 판정 없이 그냥 주기적으로 죽이는 방식으로
+# 우회한다. 처음엔 5분 주기였는데 "이거 30초안에 바로꺼지도록 자동화해줘"
+# 요청으로 30초로 단축 — 어차피 SIP 때문에 완전 차단은 못 하니, 재기동되고
+# 실행 중인 창을 최대한 짧게 줄이는 게 목표.
+REPLAYD_SILENT_KILL_INTERVAL_SECONDS = 30
 
 
 def _kill_all_processes_named(name):
@@ -4643,7 +4645,7 @@ class ShiftAlarmApp(rumps.App):
         self.high_cpu_timer = rumps.Timer(self._check_high_cpu, HIGH_CPU_CHECK_INTERVAL_SECONDS)
         self.high_cpu_timer.start()
 
-        # replayd 조용히 자동 종료 (5분마다, 알람 없음 — REPLAYD_SILENT_KILL_INTERVAL_SECONDS 주석 참고)
+        # replayd 조용히 자동 종료 (30초마다, 알람 없음 — REPLAYD_SILENT_KILL_INTERVAL_SECONDS 주석 참고)
         self.replayd_kill_timer = rumps.Timer(self._kill_replayd_silently, REPLAYD_SILENT_KILL_INTERVAL_SECONDS)
         self.replayd_kill_timer.start()
 
@@ -5431,7 +5433,7 @@ class ShiftAlarmApp(rumps.App):
         threading.Thread(target=self._check_high_cpu_thread, daemon=True).start()
 
     def _kill_replayd_silently(self, _):
-        """5분마다 replayd가 떠 있으면 CPU%·스턱 시간 상관없이 그냥 조용히
+        """30초마다 replayd가 떠 있으면 CPU%·스턱 시간 상관없이 그냥 조용히
         죽인다(알람 없음) — REPLAYD_SILENT_KILL_INTERVAL_SECONDS 주석 참고."""
         threading.Thread(target=_kill_all_processes_named, args=("replayd",), daemon=True).start()
 

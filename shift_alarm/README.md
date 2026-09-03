@@ -942,3 +942,10 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - `write_alarm_script()`가 생성하는 실제 알람 스크립트엔 지금까지 시스템 출력 볼륨을 맞추는 줄이 아예 없었다(전자책 리더의 `open_ebook_reader_terminal()`엔 있었는데 알람 쪽엔 빠져 있었음) — Elmedia가 그 순간의 시스템 볼륨을 그대로 썼으므로 사실상 "그때그때 다른, 대개 최대치"였다.
 - Elmedia 자체(App Store 샌드박스 빌드)는 표준 AppleScript 볼륨 제어를 지원하지 않아(다른 Elmedia 관련 항목들과 같은 제약) 앱 내부 볼륨을 직접 낮출 수 없다 — 대신 클래식 트랙을 열기 직전에 macOS 시스템 출력 볼륨을 `ALARM_OUTPUT_VOLUME_PERCENT`(70)로 명시적으로 맞춘다(`osascript -e 'set volume output volume 70'`).
 - 실측: `write_alarm_script()`를 직접 호출해 실제 배포 스크립트(`~/Library/Scripts/shift_alarm_run.sh`)에 이 줄이 정확히 반영되는 것을 확인했다.
+
+## 73. 🔇 replayd 조용히 종료 주기를 5분 → 30초로 단축 (★ 2026-09-03 추가)
+
+**사용자 요청**: "replayd 가 실행되고있네.. 이거 30초안에 바로꺼지도록 자동화해줘."
+
+- 26번 항목의 `REPLAYD_SILENT_KILL_INTERVAL_SECONDS`를 `5 * 60` → `30`으로 변경. SIP 때문에 완전 차단은 여전히 안 되지만(XPC 트리거로 재기동), 재기동 후 실제로 살아 있는 시간을 최대한 짧게 줄이는 게 목표.
+- 실측: 재시작 직후 PID/경과시간을 8초 간격으로 샘플링 — 각 인스턴스가 대략 20~30초 사이에 새 PID로 교체되는 것(=이전 PID가 그 사이에 죽었다는 뜻)을 여러 사이클에 걸쳐 확인. 고정 30초 주기 타이머와 임의 시점 재기동이 겹치는 특성상 개별 인스턴스 수명은 0~30초 사이에서 변동한다(평균적으로 목표에 부합).
