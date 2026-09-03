@@ -881,6 +881,9 @@ main#messages.has-custom-background {
   height: 1px;
   background: var(--border);
 }
+/* ★ "이직준비방에서... 링크를 클릭할수있게 하면 좋겠어" 요청(2026-09-03) —
+   시스템 메시지 안 링크도 일반 메시지와 같은 강조색으로 통일 */
+.msg-system .message-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
 .date-separator {
   align-self: center;
   margin: 10px 0 4px;

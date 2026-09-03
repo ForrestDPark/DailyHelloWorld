@@ -2819,7 +2819,11 @@ function renderSystemMessage(m, shouldScroll = false) {
   const el = document.createElement("div");
   el.className = "msg-system";
   el.dataset.messageId = String(m.id);
-  el.textContent = m.content;
+  // ★ "이직준비방에서... 링크를 클릭할수있게 하면 좋겠어" 요청(2026-09-03) —
+  // 시스템 메시지(경진대회·독서 세션 완료 등 트리거 알림)는 지금까지
+  // textContent로만 넣어서 URL이 그냥 텍스트로 보였다. 페르소나 메시지와
+  // 같은 링크화 함수를 재사용.
+  appendLinkifiedText(el, m.content);
   messagesEl.appendChild(el);
   while (messagesEl.children.length > 500) messagesEl.firstElementChild.remove();
   if (shouldScroll) el.scrollIntoView({behavior: "smooth", block: "end"});
