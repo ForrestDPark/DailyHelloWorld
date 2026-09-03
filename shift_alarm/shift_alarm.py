@@ -2838,19 +2838,16 @@ def _notify_jp_subtitle_study_room(content):
     _notify_tulpachat_room(JP_SUBTITLE_STUDY_ROOM_ID, content)
 
 
-# ★ "내 출근시간에 맞춰 shift alarm 채팅방에서 메시지 와서 일일루틴
-# 다하셨나요? 전부체크할까요? 라고 물어보고 내가 그러라고 하면 일일루틴
-# 체크리스트에 전부 체크하게 해줘" 요청(2026-09-02) — 위 _notify_jp_subtitle_
-# study_room()과 같은 /api/worker/reading_session_done 재사용 패턴이지만
-# 대상이 여러명 방(custom_)이 아니라 루틴지기 1:1 방이라, 서버 쪽에
-# room_id가 페르소나 1인일 때의 폴백을 추가해뒀다(server/app.py 참고).
-# 실제 "다 하셨나요?" 질문 문구·체크 실행 여부 판단은 persona_worker.py의
-# ROUTINE_KEEPER_ADDENDUM이 담당 — 여기서는 트리거 메시지만 던진다.
-ROUTINE_KEEPER_ROOM_ID = "루틴지기"
-
-
-def _notify_routine_keeper_room(content):
-    _notify_tulpachat_room(ROUTINE_KEEPER_ROOM_ID, content)
+# ★ 2026-09-02: "내 출근시간에 맞춰 shift alarm 채팅방에서 메시지 와서
+# 일일루틴 다하셨나요? 전부체크할까요? 라고 물어보고..." 요청으로 만들었던
+# 출근시간 프롬프트 트리거는 2026-09-03에 없앴다 — "출근시간에 자동으로
+# 물어보지 말고, 내가 출근하며 직접 메시지 보낼 때 그걸 명령으로 받아
+# 체크해달라"는 요청. 이유: 제안이 한 번 쌓이면 그 뒤로 소유자가 보내는
+# 완전히 무관한 메시지에 "응"/"네"/"좋아" 같은 흔한 단어가 섞이기만 해도
+# 승인으로 오인해 조용히 전부 체크가 실행되는 오탐이 실측 확인됨(자세한
+# 내용은 persona_worker.py의 ROUTINE_KEEPER_ADDENDUM 히스토리 참고). 이제는
+# 소유자가 직접 보내는 메시지 자체가 명령이므로 shift_alarm이 먼저 말을 걸
+# 필요가 없다.
 
 
 # ★ "추천경진 알람도 떴는데 이거 관련해서 이직준비방에서 이야기해주면
@@ -4626,12 +4623,6 @@ class ShiftAlarmApp(rumps.App):
         self.ebook_resume_alarm_timer = rumps.Timer(self._check_wake_alarm_ebook_resume, 60)
         self.ebook_resume_alarm_timer.start()
 
-        # 출근시간(기상 알람 시각)에 루틴지기가 오늘 루틴 다 했는지 먼저
-        # 물어보게 트리거 (1분마다 시각 체크)
-        self._last_routine_keeper_notified = None
-        self.routine_keeper_timer = rumps.Timer(self._check_routine_keeper_work_start, 60)
-        self.routine_keeper_timer.start()
-
         # GY→Swing 휴무 둘째날 다음날 02:00 멜라토닌+운기조식 알림 (1분마다 시각 체크)
         self._last_day2_melatonin_reminder_notified = None
         self.day2_melatonin_reminder_timer = rumps.Timer(self._check_gy_to_swing_day2_melatonin_reminder, 60)
@@ -5283,29 +5274,6 @@ class ShiftAlarmApp(rumps.App):
             return
         open_ebook_reader_terminal(last["file"])
         threading.Thread(target=self._turn_on_hue_for_reading, daemon=True).start()
-
-    def _check_routine_keeper_work_start(self, _):
-        """1분마다 오늘의 기상 알람(=출근) 시각인지 확인, 맞으면 루틴지기
-        1:1 방에 "오늘 루틴 다 하셨나요?" 트리거 메시지를 보낸다 (★2026-09-02:
-        "내 출근시간에 맞춰 shift alarm 채팅방에서 메시지 와서 일일루틴
-        다하셨나요? 전부체크할까요? 라고 물어보고" 요청). _check_wake_alarm_
-        ebook_resume()과 완전히 같은 "하루 한 번만" 패턴 — 기상 알람이 없는
-        날(연속 휴무)은 아무것도 안 보낸다."""
-        wake_time = self._todays_wake_alarm_time(datetime.date.today())
-        if not wake_time:
-            return
-        now = datetime.datetime.now()
-        if now.hour != wake_time["hour"] or now.minute != wake_time["minute"]:
-            return
-        today = now.date()
-        if self._last_routine_keeper_notified == today:
-            return
-        self._last_routine_keeper_notified = today
-        threading.Thread(
-            target=_notify_routine_keeper_room,
-            args=("🔔 출근 시간이에요. 오늘 일일 루틴은 잘 챙기셨는지 여쭤봐주세요.",),
-            daemon=True,
-        ).start()
 
     def _check_gy_to_swing_day2_melatonin_reminder(self, _):
         """1분마다 'GY→Swing 휴무 둘째날의 다음날' 02:00인지 확인, 하루 한 번만
