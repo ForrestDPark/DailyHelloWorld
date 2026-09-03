@@ -2,8 +2,7 @@
 
 ## 1. 원문 + 독음 + 직역 + 한자어 뜻풀이
 <details color="orange_bg">
-<summary>
-<span color="red">易</span>其居, <span color="red">迂</span>其途, 使人不得<span color="red">慮</span>, 帥與之<span color="red">期</span>, 如登高而去其<span color="red">梯</span>.<br>역기거, 우기도, 사이부득려, 수여지기, 여등고이거기제.</summary>
+<summary><span color="red">易</span>其居, <span color="red">迂</span>其途, 使人不得<span color="red">慮</span>, 帥與之<span color="red">期</span>, 如登高而去其<span color="red">梯</span>.<br>역기거, 우기도, 사이부득려, 수여지기, 여등고이거기제.</summary>
 
 **직역**
 
