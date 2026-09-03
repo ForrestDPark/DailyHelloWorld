@@ -3296,13 +3296,17 @@ class RedirectTurn(BaseModel):
     persona_name: str
 
 
+class BattleImage(BaseModel):
+    url: str
+    alt: str = ""
+
+
 class VictoryCommander(BaseModel):
     name: str
     battle: str
     profile: str
     opening: str
-    image_url: Optional[str] = None
-    image_alt: str = ""
+    images: list[BattleImage] = []
 
 
 class WorkerAnnouncement(BaseModel):
@@ -3364,6 +3368,29 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
 
     conn = get_conn()
     commander_results = []
+    kahneman_name = "데니얼 카너먼"
+    kahneman = conn.execute("SELECT name FROM personas WHERE name = ?", (kahneman_name,)).fetchone()
+    if not kahneman:
+        kahneman_prompt = (
+            "당신은 행동경제학자 데니얼 카너먼의 연구 관점을 재현한 가상 토론 페르소나입니다. "
+            "전장 서사에서 누가 누구를 속였는지, 거짓 신호와 사실이지만 오해를 유도한 신호를 "
+            "구분하고, 가용성 편향·확증 편향·기준율 무시·과신·손실회피·매몰비용·대표성 휴리스틱 "
+            "가운데 실제 장면에 근거가 있는 것만 골라 설명하세요. 상대가 왜 그 판단을 믿고 싶어 "
+            "했는지와 생략한 독립 확인을 밝히고, 기만이 없어도 같은 오판이 생겼을 반사실도 "
+            "검토하세요. 모든 패배를 편향 하나로 환원하지 말고 사료상 사실·추론·불확실성을 "
+            "구분하며, 노션 분석의 속임수 일곱 질문을 반복 나열하지 말고 핵심 인과를 대화체로 "
+            "풀이하세요. 현대 적용에서는 신뢰·동의·안전을 해치는 조작을 권하지 마세요."
+        )
+        conn.execute(
+            "INSERT INTO personas (name, notion_page_id, system_prompt, group_name, owner_username, description, synced_at) "
+            "VALUES (?, '', ?, NULL, ?, ?, ?)",
+            (kahneman_name, kahneman_prompt, APP_USERNAME or "automation",
+             "전쟁의 속임수와 판단 편향을 분석하는 행동경제학 관점", _now()),
+        )
+    conn.execute(
+        "INSERT OR IGNORE INTO room_invites (room_id, persona_name, invited_at) VALUES (?, ?, ?)",
+        (room_id, kahneman_name, _now()),
+    )
     for commander in body.victory_commanders:
         name = commander.name.strip()
         if not PERSONA_NAME_RE.match(name):
@@ -3452,17 +3479,19 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
         (room_id, sender, content, now),
     )
     message_id = cursor.lastrowid
+    posted_image_count = 0
     for commander in body.victory_commanders:
-        if commander.image_url and not re.fullmatch(r"https?://[^\s]+", commander.image_url):
-            conn.close()
-            raise HTTPException(status_code=400, detail="유효하지 않은 전장 이미지 URL입니다")
-        if commander.image_url:
-            alt = commander.image_alt.strip()[:120] or f"{commander.battle.strip()} 전장 자료"
+        for image_index, battle_image in enumerate(commander.images, start=1):
+            if not re.fullmatch(r"https?://[^\s]+", battle_image.url):
+                conn.close()
+                raise HTTPException(status_code=400, detail="유효하지 않은 전장 이미지 URL입니다")
+            alt = battle_image.alt.strip()[:120] or f"{commander.battle.strip()} 전장 자료 {image_index}"
             conn.execute(
                 "INSERT INTO messages (room_id, sender, content, created_at, reply_message_id) "
                 "VALUES (?, ?, ?, ?, ?)",
-                (room_id, commander.name.strip(), f"![{alt}]({commander.image_url})", now, message_id),
+                (room_id, commander.name.strip(), f"![{alt}]({battle_image.url})", now, message_id),
             )
+            posted_image_count += 1
         conn.execute(
             "INSERT INTO messages (room_id, sender, content, created_at, reply_message_id) "
             "VALUES (?, ?, ?, ?, ?)",
@@ -3472,8 +3501,8 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
         "INSERT INTO automation_announcements (dedupe_key, message_id, created_at) VALUES (?, ?, ?)",
         (dedupe_key, message_id, now),
     )
-    priority = ["손무", "조조", "두목", "두우", "매요신", "클라우제비츠", "한니발", "한신"]
-    notified = [name for name in priority if name in targets and name not in commander_names][:5]
+    priority = ["데니얼 카너먼", "손무", "조조", "두목", "두우", "매요신", "클라우제비츠", "한니발", "한신"]
+    notified = [name for name in priority if name in targets and name not in commander_names][:6]
     if not notified:
         notified = [name for name in targets if name not in commander_names][:5]
     conn.execute(
@@ -3501,6 +3530,7 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
     return {
         "ok": True, "duplicate": False, "message_id": message_id,
         "announcer": sender, "notified": notified, "commanders": commander_results,
+        "posted_image_count": posted_image_count,
     }
 
 
