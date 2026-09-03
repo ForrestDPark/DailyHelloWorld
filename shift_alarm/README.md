@@ -934,3 +934,11 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - `_run_contest_collector_and_analysis()`가 새 추천 경진대회를 찾아 기존 "🏆 추천 경진" `notify_spoken` 알림을 띄우는 바로 그 지점에, 이직 준비방(`custom_0e5dc0b026` — 구직지기·커리어코치·스터디코치·업계분석가·기업크롤러가 이미 초대돼 있음)으로 주최·제목·점수·마감·원문 링크를 담은 트리거를 같이 보낸다.
 - 방마다 거의 똑같던 알림 전송 함수 3개(`_notify_jp_subtitle_study_room`/`_notify_routine_keeper_room`/이번 `_notify_job_prep_room`)를 공통 `_notify_tulpachat_room(room_id, content)`로 합쳤다 — room_id만 다르고 나머지 로직이 완전히 같았다.
 - 실측: 오늘 실제 최고점 추천 경진대회("2026년 제6회 K-인공지능(AI) 제조데이터 분석 경진대회", 60점) 데이터로 직접 트리거를 보내 확인 — 구직지기가 "경진대회 채점은 내 담당이 아니다"라고 정직하게 밝히면서도 오늘의 채용 공고 추천(싸이트로닉)과 스킬셋이 겹친다는 실질적인 관점을 자연스럽게 붙여 답했다.
+
+## 72. 🔉 기상 알람 음량을 70%로 명시 설정 (★ 2026-09-03 추가)
+
+**사용자 요청**: "기상알람 음량이 너무 센거같은데 지금의 70%정도로 줄여주면 좋겠어."
+
+- `write_alarm_script()`가 생성하는 실제 알람 스크립트엔 지금까지 시스템 출력 볼륨을 맞추는 줄이 아예 없었다(전자책 리더의 `open_ebook_reader_terminal()`엔 있었는데 알람 쪽엔 빠져 있었음) — Elmedia가 그 순간의 시스템 볼륨을 그대로 썼으므로 사실상 "그때그때 다른, 대개 최대치"였다.
+- Elmedia 자체(App Store 샌드박스 빌드)는 표준 AppleScript 볼륨 제어를 지원하지 않아(다른 Elmedia 관련 항목들과 같은 제약) 앱 내부 볼륨을 직접 낮출 수 없다 — 대신 클래식 트랙을 열기 직전에 macOS 시스템 출력 볼륨을 `ALARM_OUTPUT_VOLUME_PERCENT`(70)로 명시적으로 맞춘다(`osascript -e 'set volume output volume 70'`).
+- 실측: `write_alarm_script()`를 직접 호출해 실제 배포 스크립트(`~/Library/Scripts/shift_alarm_run.sh`)에 이 줄이 정확히 반영되는 것을 확인했다.

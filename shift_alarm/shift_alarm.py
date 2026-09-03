@@ -3801,6 +3801,17 @@ def open_ebook_study_build_terminal(book_path):
 # 알람 실행 셸 스크립트 (launchd가 이 스크립트를 실행)
 # ════════════════════════════════════════════════════════════
 
+# ★ "기상알람 음량이 너무 센거같은데 지금의 70%정도로 줄여주면 좋겠어"
+# 요청(2026-09-03) — 지금까지 이 스크립트엔 시스템 출력 볼륨을 맞추는 줄이
+# 아예 없어서(전자책 리더의 open_ebook_reader_terminal()엔 있었는데 알람
+# 쪽엔 빠져 있었음), Elmedia가 그 순간의 시스템 볼륨을 그대로 썼다 — 보통
+# 거의 최대치였을 것. Elmedia 자체(샌드박스 빌드)는 표준 AppleScript 볼륨
+# 제어가 없어서(다른 Elmedia 관련 항목들과 같은 제약), 대신 macOS 시스템
+# 출력 볼륨을 재생 직전에 명시적으로 맞춘다 — "지금(사실상 최대)의 70%"로
+# 해석해 70으로 설정.
+ALARM_OUTPUT_VOLUME_PERCENT = 70
+
+
 def write_alarm_script():
     """실제 알람 시 Elmedia를 새 세션으로 열어 클래식만 재생한다.
     ★ 2026-08-12 버그 수정: "Nothing to Open" 반복 신고 원인 — Elmedia(Mac App
@@ -3889,6 +3900,7 @@ if /usr/bin/pgrep -x "Elmedia Video Player" >/dev/null 2>&1; then
 fi
 /usr/bin/sqlite3 "{ELMEDIA_PLAYLIST_DB}" \
   'DELETE FROM item_order; DELETE FROM playlist_items;' 2>/dev/null || true
+/usr/bin/osascript -e 'set volume output volume {ALARM_OUTPUT_VOLUME_PERCENT}' >/dev/null 2>&1
 {open_line}
 
 # ★ 2026-08-12 추가: 알람이 "진짜로" 재생을 시작했는지 자가 검증해서 기록한다.
