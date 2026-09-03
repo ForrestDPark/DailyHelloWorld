@@ -10,6 +10,19 @@ SPEC.loader.exec_module(notify)
 
 
 class NotifyTulpaChatTest(unittest.TestCase):
+    def test_hanja_lesson_prepares_reading_literal_and_glosses(self):
+        page = Path(__file__).with_name("jiudi22_full_page.md")
+        markdown = page.read_text(encoding="utf-8")
+        _number, original, subtitle = notify.read_page(page)
+
+        lesson = notify.build_hanja_lesson(markdown, original, subtitle)
+
+        self.assertTrue(lesson.startswith("📚 한자선생님"))
+        self.assertIn("독음: 역기거", lesson)
+        self.assertIn("직역:", lesson)
+        self.assertIn("易居(역기거)", lesson)
+        self.assertIn("梯", lesson)
+
     def test_all_images_are_separated_and_preserved_in_order(self):
         page = Path(__file__).with_name("jiudi22_full_page.md")
         markdown = page.read_text(encoding="utf-8")

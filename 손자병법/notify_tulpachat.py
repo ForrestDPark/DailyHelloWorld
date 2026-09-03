@@ -42,6 +42,32 @@ def image_comment(alt: str, battle: str) -> str:
     return f"🖼️ 도판 해설 — {battle}: {focus} 그림은 분석을 돕는 재구성이며 사료 원본은 아닙니다."
 
 
+def build_hanja_lesson(markdown: str, original: str, subtitle: str) -> str:
+    """1절 정본에서 독음·직역·핵심 한자 풀이를 추려 첫 수업 메시지를 만든다."""
+    section_match = re.search(r"^##\s+1\.[^\n]*\n([\s\S]*?)(?=^---\s*$)", markdown, flags=re.M)
+    if not section_match:
+        raise ValueError("한자선생님 수업에 필요한 1절 원문 풀이를 찾지 못했습니다")
+    section = section_match.group(1)
+    reading = subtitle.split("—", 1)[0].strip().rstrip(".")
+    literal_match = re.search(r"\*\*직역\*\*\s*\n+([^\n]+)", section)
+    literal = plain(literal_match.group(1)) if literal_match else "직역을 정본에서 확인해 주십시오."
+    glosses = []
+    for match in re.finditer(
+        r"^####\s+([^\n]+)\n([\s\S]*?)(?=^####\s+|</details>)", section, flags=re.M
+    ):
+        heading = plain(match.group(1))
+        if "글자들이 완성" in heading:
+            continue
+        explanation = plain(match.group(2))[:260]
+        glosses.append(f"- {heading}: {explanation}")
+    return (
+        "📚 한자선생님 — 구절 풀이부터 시작하겠습니다.\n\n"
+        f"원문: {original}\n독음: {reading}\n직역: {literal}\n\n"
+        "핵심 한자와 문장 결\n" + "\n".join(glosses[:8]) +
+        "\n\n이제 이 글자 뜻과 문장 구조를 바탕으로 전투 사례와 현대 적용을 토론하겠습니다."
+    )
+
+
 def read_page(path: Path) -> tuple[int, str, str]:
     match = re.search(r"jiudi(\d+)_full_page\.md$", path.name)
     if not match:
@@ -159,6 +185,7 @@ def main() -> None:
     number, original, subtitle = read_page(args.page)
     markdown = args.page.read_text(encoding="utf-8")
     commanders = victorious_commanders(markdown, original)
+    hanja_lesson = build_hanja_lesson(markdown, original, subtitle)
     content = (
         f"📜 손자병법 새 구절 분석이 완료되었습니다 — 구지편 {number}구절\n\n"
         f"원문: {original}\n"
@@ -175,6 +202,7 @@ def main() -> None:
             "room_id": ROOM_ID,
             "content": content,
             "dedupe_key": f"{ROOM_ID}:sunzi-jiudi-{number}:{args.discussion_run}",
+            "hanja_lesson": hanja_lesson,
             "victory_commanders": commanders,
         },
         ensure_ascii=False,
@@ -189,6 +217,8 @@ def main() -> None:
         result = json.load(response)
     if not result.get("ok"):
         raise RuntimeError(f"Tulpa Chat 보고 실패: {result}")
+    if not result.get("duplicate") and not isinstance(result.get("hanja_lesson_message_id"), int):
+        raise RuntimeError("Tulpa Chat 한자선생님 첫 풀이 메시지가 생성되지 않았습니다")
     expected_image_count = sum(len(item["images"]) for item in commanders)
     if not result.get("duplicate") and result.get("posted_image_count") != expected_image_count:
         raise RuntimeError(
