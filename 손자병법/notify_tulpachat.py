@@ -73,30 +73,43 @@ def victorious_commanders(markdown: str, original: str) -> list[dict[str, str]]:
         if not commander or any(item["name"] == commander for item in found):
             continue
         image_matches = list(MARKDOWN_IMAGE_RE.finditer(block))
-        preferred_image = next(
-            (match for match in image_matches if "command_structure" in match.group(2)),
-            image_matches[0] if image_matches else None,
-        )
+        images = [
+            {"url": match.group(2), "alt": plain(match.group(1)) or f"{battle} 전장 자료"}
+            for match in image_matches
+        ]
         narrative = plain(re.split(r"^####\s+", block, maxsplit=1, flags=re.M)[0])
         narrative = narrative[:900].strip()
+        deception_match = re.search(
+            r"^####\s+전투에서 사용된 속임수[^\n]*\n([\s\S]*?)(?=^####\s+法 한눈 비교)",
+            block,
+            flags=re.M,
+        )
+        deception = plain(deception_match.group(0))[:1800] if deception_match else (
+            "이 전투에서는 사료로 확인되는 명시적 기만보다 정보 격차·지형·시간차가 "
+            "상대의 오판을 키웠다. 기만과 단순 오판을 구분해 설명한다."
+        )
         profile = (
             f"{battle}의 승군 대장급 지휘관. 이 페르소나는 해당 전투의 검증된 분석 범위에서만 "
             f"자신의 판단과 한계를 설명한다. 분석 근거: {narrative}"
+            f" 속임수·오판 분석: {deception}"
         )
         opening = (
             f"⚔️ 승군 지휘관 전장 토론 — {battle}\n\n"
             f"저는 {commander}입니다. 이 전장에서 제가 지휘한 승군의 선택과 그 한계를 "
             f"『손자』의 ‘{original}’에 비추어 이야기해 보겠습니다. {narrative[:500]}\n\n"
-            "이 전투에서 실제로 승패를 가른 조건과, 다른 상황에서는 같은 선택이 실패할 수 있는 "
-            "지점을 병법적으로 함께 짚어 보시지요."
+            f"제가 패군의 판단을 흔든 방식은 다음과 같습니다. {deception}\n\n"
+            "제가 보인 신호 가운데 무엇이 거짓이었고 무엇이 진실이지만 오해를 유도했는지, "
+            "상대가 왜 믿고 싶어 했으며 어떤 독립 확인을 생략했는지 함께 짚어 보시지요. "
+            "사료상 기만이 확인되지 않는 부분은 단순 오판과 구분하겠습니다."
+            " 이어서 공유된 모든 도판을 순서대로 보며 지형, 병력 배치, 기동 화살표, 기만 신호가 "
+            "무엇을 뜻하는지 설명하고 도판만으로 단정할 수 없는 부분도 밝히겠습니다."
         )
         found.append({
             "name": commander,
             "battle": battle,
             "profile": profile,
             "opening": opening,
-            "image_url": preferred_image.group(2) if preferred_image else None,
-            "image_alt": plain(preferred_image.group(1)) if preferred_image else "",
+            "images": images,
         })
     return found
 
@@ -139,6 +152,8 @@ def main() -> None:
         f"사이트 분석: {args.site_url}\n\n"
         "병법가들은 각자의 주석 관점에서 이 구절의 뜻, 역사 사례에서 놓치기 쉬운 조건, "
         "현대에 옮길 때의 오용 위험 가운데 가장 중요하다고 보는 한 가지를 논합니다."
+        " 역사 사례의 전투 도판은 빠짐없이 공유하며, 장수들은 각 도판의 지형·배치·기동·기만 "
+        "신호를 설명하고 카너먼은 그 신호가 판단 편향에 미친 영향을 분석합니다."
     )
     payload = json.dumps(
         {
@@ -159,6 +174,12 @@ def main() -> None:
         result = json.load(response)
     if not result.get("ok"):
         raise RuntimeError(f"Tulpa Chat 보고 실패: {result}")
+    expected_image_count = sum(len(item["images"]) for item in commanders)
+    if not result.get("duplicate") and result.get("posted_image_count") != expected_image_count:
+        raise RuntimeError(
+            "Tulpa Chat 전투 도판 게시 수 불일치: "
+            f"원고 {expected_image_count}장, 게시 {result.get('posted_image_count')}장"
+        )
     print(json.dumps(result, ensure_ascii=False))
 
 
