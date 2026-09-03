@@ -29,6 +29,8 @@ class NotifyTulpaChatTest(unittest.TestCase):
             self.assertIn("공유된 모든 도판", item["opening"])
             for image in item["images"]:
                 self.assertTrue(image["url"].startswith("https://"))
+                self.assertTrue(image["comment"].startswith("🖼️ 도판 해설"))
+                self.assertIn("사료 원본은 아닙니다", image["comment"])
 
 
 if __name__ == "__main__":

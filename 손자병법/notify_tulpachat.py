@@ -27,6 +27,21 @@ def plain(value: str) -> str:
     return " ".join(html.unescape(value).split())
 
 
+def image_comment(alt: str, battle: str) -> str:
+    """도판이 맥락 없는 그림으로 게시되지 않도록 읽을 초점을 함께 보낸다."""
+    guides = (
+        (("인물", "장수"), "주요 지휘관의 역할과 승패 판단이 어디서 갈렸는지 보십시오."),
+        (("병사", "무기", "생활"), "당시 병사의 무장·방호·식량과 대형의 강점·취약점을 함께 보십시오."),
+        (("지휘", "편제"), "명령 계통과 부대 간 연결이 정보 전달과 대응 속도에 미친 영향을 보십시오."),
+        (("세력", "시대"), "전장이 더 큰 전쟁에서 차지한 위치와 각 세력의 접근축을 보십시오."),
+        (("전략지형", "지형도"), "강·도로·도시·산맥 등 기동을 제한하거나 은폐한 핵심 지형을 보십시오."),
+        (("단계", "흐름"), "시간순 기동과 전환점, 상대가 뒤늦게 알아챈 신호를 화살표 순서로 보십시오."),
+    )
+    focus = next((guide for keys, guide in guides if any(key in alt for key in keys)),
+                 "도판의 배치와 기동 표시를 전투 서사와 대조해 보십시오.")
+    return f"🖼️ 도판 해설 — {battle}: {focus} 그림은 분석을 돕는 재구성이며 사료 원본은 아닙니다."
+
+
 def read_page(path: Path) -> tuple[int, str, str]:
     match = re.search(r"jiudi(\d+)_full_page\.md$", path.name)
     if not match:
@@ -73,10 +88,10 @@ def victorious_commanders(markdown: str, original: str) -> list[dict[str, str]]:
         if not commander or any(item["name"] == commander for item in found):
             continue
         image_matches = list(MARKDOWN_IMAGE_RE.finditer(block))
-        images = [
-            {"url": match.group(2), "alt": plain(match.group(1)) or f"{battle} 전장 자료"}
-            for match in image_matches
-        ]
+        images = []
+        for match in image_matches:
+            alt = plain(match.group(1)) or f"{battle} 전장 자료"
+            images.append({"url": match.group(2), "alt": alt, "comment": image_comment(alt, battle)})
         narrative = plain(re.split(r"^####\s+", block, maxsplit=1, flags=re.M)[0])
         narrative = narrative[:900].strip()
         deception_match = re.search(
