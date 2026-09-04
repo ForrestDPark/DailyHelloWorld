@@ -1893,6 +1893,80 @@ function appendLinkifiedText(container, text) {
   if (cursor < text.length) container.appendChild(document.createTextNode(text.slice(cursor)));
 }
 
+const MESSAGE_ACCENT_PATTERN = /\[\[(red|blue|green|orange|purple)\]\]([\s\S]*?)\[\[\/\1\]\]/g;
+
+function appendRichInline(container, text) {
+  let cursor = 0;
+  for (const match of text.matchAll(MESSAGE_ACCENT_PATTERN)) {
+    if (match.index > cursor) appendLinkifiedText(container, text.slice(cursor, match.index));
+    const accent = document.createElement("span");
+    accent.className = `message-accent message-accent-${match[1]}`;
+    appendLinkifiedText(accent, match[2]);
+    container.appendChild(accent);
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < text.length) appendLinkifiedText(container, text.slice(cursor));
+}
+
+function messageTableCells(line) {
+  const trimmed = line.trim();
+  if (!trimmed.startsWith("|") || !trimmed.endsWith("|")) return null;
+  return trimmed.slice(1, -1).split("|").map((cell) => cell.trim());
+}
+
+function appendRichText(container, text) {
+  const lines = text.split("\n");
+  let index = 0;
+  let plainLines = [];
+  const flushPlain = () => {
+    if (!plainLines.length) return;
+    appendRichInline(container, plainLines.join("\n"));
+    plainLines = [];
+  };
+  while (index < lines.length) {
+    const firstCells = messageTableCells(lines[index]);
+    const separatorCells = index + 1 < lines.length ? messageTableCells(lines[index + 1]) : null;
+    const isSeparator = separatorCells && separatorCells.every((cell) => /^:?-{3,}:?$/.test(cell));
+    if (!firstCells || !isSeparator || firstCells.length !== separatorCells.length) {
+      plainLines.push(lines[index]);
+      index += 1;
+      continue;
+    }
+    flushPlain();
+    const wrap = document.createElement("div");
+    wrap.className = "message-table-wrap";
+    const table = document.createElement("table");
+    table.className = "message-table";
+    const head = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    for (const cell of firstCells) {
+      const th = document.createElement("th");
+      appendRichInline(th, cell);
+      headRow.appendChild(th);
+    }
+    head.appendChild(headRow);
+    table.appendChild(head);
+    const body = document.createElement("tbody");
+    index += 2;
+    while (index < lines.length) {
+      const cells = messageTableCells(lines[index]);
+      if (!cells || cells.length !== firstCells.length) break;
+      const row = document.createElement("tr");
+      for (const cell of cells) {
+        const td = document.createElement("td");
+        appendRichInline(td, cell);
+        row.appendChild(td);
+      }
+      body.appendChild(row);
+      index += 1;
+    }
+    table.appendChild(body);
+    wrap.appendChild(table);
+    container.appendChild(wrap);
+  }
+  flushPlain();
+}
+
 async function showChatView(roomId) {
   pollGeneration += 1;
   if (activePollController) activePollController.abort();
@@ -2377,7 +2451,7 @@ function appendMessageMedia(container, content) {
   }
   if (media.text) {
     const text = document.createElement("div");
-    appendLinkifiedText(text, media.text);
+    appendRichText(text, media.text);
     container.appendChild(text);
   }
   return media;
