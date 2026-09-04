@@ -269,15 +269,27 @@ button { font-family: inherit; }
    헤더와 공지를 실제 레이아웃 높이까지 접어 본문 공간을 돌려준다.
    위로 스크롤하면 JS가 클래스를 제거해 다시 나타난다. */
 #chat-view .chat-header,
-#chat-view #room-notice {
+#chat-view #room-notice,
+#chat-view #reply-banner,
+#chat-view #ai-response-status,
+#chat-view form#composer,
+#chat-view #upload-preview {
   overflow: hidden;
   transition: max-height .2s ease, min-height .2s ease, padding .2s ease,
               margin .2s ease, border-width .2s ease, opacity .16s ease;
 }
 #chat-view .chat-header { max-height: 88px; }
 #chat-view #room-notice { max-height: 40vh; }
+#chat-view #reply-banner,
+#chat-view #ai-response-status,
+#chat-view form#composer,
+#chat-view #upload-preview { max-height: 220px; }
 #chat-view.chat-chrome-collapsed .chat-header,
-#chat-view.chat-chrome-collapsed #room-notice {
+#chat-view.chat-chrome-collapsed #room-notice,
+#chat-view.chat-chrome-collapsed #reply-banner,
+#chat-view.chat-chrome-collapsed #ai-response-status,
+#chat-view.chat-chrome-collapsed form#composer,
+#chat-view.chat-chrome-collapsed #upload-preview {
   min-height: 0;
   max-height: 0;
   padding-top: 0;
@@ -288,6 +300,7 @@ button { font-family: inherit; }
   opacity: 0;
   pointer-events: none;
 }
+#chat-view.chat-chrome-collapsed #scroll-bottom-btn { bottom: 16px; }
 
 /* ★ "채팅 입력창 가운데 위에 아래화살표 버튼 누르면 최신 메시지로 이동"
    요청(2026-08-28) — 메시지 영역을 스크롤해서 위로 올라갔을 때만 보이고,
