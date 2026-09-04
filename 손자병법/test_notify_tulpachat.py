@@ -39,7 +39,10 @@ class NotifyTulpaChatTest(unittest.TestCase):
         for item in commanders:
             self.assertNotIn("![", item["opening"])
             self.assertNotIn("raw.githubusercontent.com", item["opening"])
-            self.assertIn("공유된 모든 도판", item["opening"])
+            self.assertIn("공유된 도판도 차례대로", item["opening"])
+            self.assertIn("\n1. 누가 누구를 속였는가?", item["opening"])
+            self.assertIn("\n2. 어떤 사실이 거짓이었는가?", item["opening"])
+            self.assertNotIn("뒤에서 반복될 지형을 먼저 잡아두기", item["opening"])
             for image in item["images"]:
                 self.assertTrue(image["url"].startswith("https://"))
                 self.assertTrue(image["comment"].startswith("🖼️ 도판 해설"))

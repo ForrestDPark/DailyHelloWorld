@@ -27,6 +27,17 @@ def plain(value: str) -> str:
     return " ".join(html.unescape(value).split())
 
 
+def chat_format(value: str) -> str:
+    """Notion 원고를 채팅용 문단과 목록으로 정리한다."""
+    value = MARKDOWN_IMAGE_RE.sub("", value)
+    value = re.sub(r"<br\s*/?>", "\n", value, flags=re.I)
+    value = re.sub(r"<[^>]+>", "", value)
+    value = re.sub(r"(?m)^\s*#{1,6}\s*", "", value)
+    value = re.sub(r"\*\*|__|`", "", value)
+    lines = [re.sub(r"[ \t]+", " ", html.unescape(line)).strip() for line in value.splitlines()]
+    return "\n".join(line for i, line in enumerate(lines) if line or (i and lines[i - 1])).strip()
+
+
 def image_comment(alt: str, battle: str) -> str:
     """도판이 맥락 없는 그림으로 게시되지 않도록 읽을 초점을 함께 보낸다."""
     guides = (
@@ -125,7 +136,7 @@ def victorious_commanders(markdown: str, original: str) -> list[dict[str, str]]:
             block,
             flags=re.M,
         )
-        deception = plain(deception_match.group(0))[:1800] if deception_match else (
+        deception = chat_format(deception_match.group(0))[:3600] if deception_match else (
             "이 전투에서는 사료로 확인되는 명시적 기만보다 정보 격차·지형·시간차가 "
             "상대의 오판을 키웠다. 기만과 단순 오판을 구분해 설명한다."
         )
@@ -136,14 +147,11 @@ def victorious_commanders(markdown: str, original: str) -> list[dict[str, str]]:
         )
         opening = (
             f"⚔️ 승군 지휘관 전장 토론 — {battle}\n\n"
-            f"저는 {commander}입니다. 이 전장에서 제가 지휘한 승군의 선택과 그 한계를 "
-            f"『손자』의 ‘{original}’에 비추어 이야기해 보겠습니다. {narrative[:500]}\n\n"
-            f"제가 패군의 판단을 흔든 방식은 다음과 같습니다. {deception}\n\n"
-            "제가 보인 신호 가운데 무엇이 거짓이었고 무엇이 진실이지만 오해를 유도했는지, "
-            "상대가 왜 믿고 싶어 했으며 어떤 독립 확인을 생략했는지 함께 짚어 보시지요. "
-            "사료상 기만이 확인되지 않는 부분은 단순 오판과 구분하겠습니다."
-            " 이어서 공유된 모든 도판을 순서대로 보며 지형, 병력 배치, 기동 화살표, 기만 신호가 "
-            "무엇을 뜻하는지 설명하고 도판만으로 단정할 수 없는 부분도 밝히겠습니다."
+            f"저는 {commander}입니다. 이 전투에서 상대의 판단이 어디서 어긋났는지부터 "
+            f"『손자』의 ‘{original}’에 비추어 말씀드리겠습니다.\n\n"
+            f"{deception}\n\n"
+            "공유된 도판도 차례대로 보겠습니다. 지형과 병력 배치가 무엇을 가능하게 했는지, "
+            "그림만으로 단정할 수 없는 부분은 무엇인지 함께 짚겠습니다."
         )
         found.append({
             "name": commander,
