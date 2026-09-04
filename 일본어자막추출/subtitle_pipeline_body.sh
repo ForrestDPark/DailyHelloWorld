@@ -75,6 +75,79 @@ echo "📋 발견된 영상 ${#VALID_FILES[@]}개: ${VALID_FILES[@]}"
 ATTEMPTED_FILES=()
 COMPLETED_COUNT=0
 
+# ── 학습카드 누락 회차 자동 복구 ──────────────────────────────────
+# ★ 2026-09-04: "만약에 epub 에서 학습카드가 없는경우에는 학습카드를
+# 다시 만들도록 파이프라인 수정하면 좋겠어" 요청 — 새 영상을 처리하기
+# 전에 매번, library/<제목>/ 폴더 중 대사 원재료(transcript_part*.jsonl)는
+# 남아 있는데 scene_study_cards.json이 없거나 비어 있는(예전 실행에서
+# generate_summary.py가 쿼터 소진 등으로 실패했던) 회차를 찾아 재시도한다.
+# 대사 원재료조차 없는 회차(정리 단계에서 이미 삭제됨 — 위 SUMMARY_OK 수정
+# 이전에 처리된 것들)는 여기서 되살릴 수 없으니 건너뛴다(원본 영상부터
+# 재추출해야 함).
+echo "\n\033[1;36m==================================================\033[0m"
+echo "\033[1;36m🩹 학습카드 누락 회차 자동 복구 확인 중...\033[0m"
+echo "\033[1;36m==================================================\033[0m"
+LIBRARY_DIR="${SCRIPT_DIR}/library"
+COMPLETED_EPUB_DIR_FOR_BACKFILL="/Users/forrestdpark/Desktop/BlogImage/av완성작"
+if [[ -d "$LIBRARY_DIR" ]]; then
+    for BOOK_CANDIDATE in "$LIBRARY_DIR"/*(N/); do
+        TRANSCRIPT_FILES=("${BOOK_CANDIDATE}"/transcript_part*.jsonl(N))
+        if [[ ${#TRANSCRIPT_FILES[@]} -eq 0 ]]; then
+            continue
+        fi
+        CARDS_FILE="${BOOK_CANDIDATE}/scene_study_cards.json"
+        NEEDS_RETRY=0
+        if [[ ! -s "$CARDS_FILE" ]]; then
+            NEEDS_RETRY=1
+        elif ! /opt/anaconda3/bin/python3 -c '
+import json, sys
+try:
+    data = json.load(open(sys.argv[1], encoding="utf-8"))
+    sys.exit(0 if isinstance(data, dict) and data else 1)
+except Exception:
+    sys.exit(1)
+' "$CARDS_FILE"; then
+            NEEDS_RETRY=1
+        fi
+        if (( NEEDS_RETRY == 0 )); then
+            continue
+        fi
+        echo "🩹 학습카드 없음 — 재시도: ${BOOK_CANDIDATE:t}"
+        if ! /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_summary.py" "$BOOK_CANDIDATE"; then
+            echo "⚠️  학습카드 복구 실패(쿼터 소진 등) — 다음 실행에서 다시 시도"
+            continue
+        fi
+        RETRY_FINAL_EPUB="${BOOK_CANDIDATE}/${BOOK_CANDIDATE:t}.epub"
+        if ! /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/finalize_japanese_book.py" "$BOOK_CANDIDATE" \
+            || [[ ! -f "$RETRY_FINAL_EPUB" ]]; then
+            echo "⚠️  학습카드는 복구됐지만 EPUB 재빌드 실패 — 요약 자료는 보존됨"
+            continue
+        fi
+        RETRY_DISPLAY_TITLE=$(
+            /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/book_title.py" \
+                "$BOOK_CANDIDATE" --base-name "${BOOK_CANDIDATE:t}" --filename
+        )
+        [[ -z "$RETRY_DISPLAY_TITLE" ]] && RETRY_DISPLAY_TITLE="${BOOK_CANDIDATE:t}"
+        RETRY_READALOUD_NAME="${RETRY_DISPLAY_TITLE}_낭독판.epub"
+        RETRY_READALOUD_TMP="${MYTMP}/${RETRY_READALOUD_NAME}"
+        if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/build_readaloud_epub.py" \
+            "$BOOK_CANDIDATE" --output "$RETRY_READALOUD_TMP"; then
+            mkdir -p "$COMPLETED_EPUB_DIR_FOR_BACKFILL"
+            # 학습카드 없이 이미 배포됐던 옛 파일(같은 제목 접두사)을 지우고
+            # 학습카드 포함 버전으로 교체한다.
+            rm -f "${COMPLETED_EPUB_DIR_FOR_BACKFILL}/${BOOK_CANDIDATE:t}"*"_낭독판.epub"
+            if cp "$RETRY_READALOUD_TMP" "${COMPLETED_EPUB_DIR_FOR_BACKFILL}/${RETRY_READALOUD_NAME}"; then
+                echo "✅ 학습카드 포함 낭독판으로 교체 완료: ${RETRY_READALOUD_NAME}"
+            else
+                echo "⚠️  복구된 낭독판을 av완성작으로 복사하지 못함"
+            fi
+            rm -f "$RETRY_READALOUD_TMP"
+        else
+            echo "⚠️  학습카드는 복구됐지만 낭독판 EPUB 재빌드 실패"
+        fi
+    done
+fi
+
 echo "\n\033[1;35m==================================================\033[0m"
 echo "\033[1;35m📝 자막·번역·Notion·EPUB 순차 처리 시작\033[0m"
 echo "\033[1;35m==================================================\033[0m"
@@ -1274,9 +1347,23 @@ except Exception:
             if [[ -n "$FINAL_DIR" && "$FINAL_DIR" != "." && -d "$FINAL_DIR" ]]; then
                 rm -rf -- "$FINAL_DIR"
             fi
-            if [[ -n "$BOOK_DIR" && "$BOOK_DIR" == "${SCRIPT_DIR}/library/"* \
-                  && -d "$BOOK_DIR" ]]; then
+            # ★ 2026-09-04: "epub 에서 학습카드가 없는경우에는 학습카드를 다시
+            # 만들도록 파이프라인 수정하면 좋겠어" 요청으로 실측 확인한 원인 —
+            # generate_summary.py가 AI 쿼터 소진 등으로 실패해도(SUMMARY_OK=0)
+            # 낭독판 EPUB 자체는 whisper 대사만으로 만들어져 av완성작에
+            # 배포된다. 예전엔 이 정리 단계가 SUMMARY_OK를 확인하지 않고
+            # library/<제목>/ 폴더(BOOK_DIR)를 통째로 지워서, 학습카드를 나중에
+            # 다시 만들 원재료(transcript_part*.jsonl)까지 같이 사라졌다
+            # (WAAA-681·IPZZ-923·EBWH-356 라이브러리 폴더가 흔적도 없이
+            # 사라진 걸로 실측 확인). 이제 학습카드가 실제로 만들어졌을
+            # 때(SUMMARY_OK==1)만 지운다 — 실패한 경우는 아래 "학습카드 누락
+            # 회차 자동 복구" 단계가 다음 실행에서 재시도할 수 있게 보존한다.
+            if (( SUMMARY_OK == 1 )) \
+                && [[ -n "$BOOK_DIR" && "$BOOK_DIR" == "${SCRIPT_DIR}/library/"* \
+                      && -d "$BOOK_DIR" ]]; then
                 rm -rf -- "$BOOK_DIR"
+            elif (( SUMMARY_OK == 0 )); then
+                echo "🩹 학습카드 미생성 — library 원재료는 다음 실행 자동 복구를 위해 보존: $BOOK_DIR"
             fi
             echo "✅ 정리 완료 — 원본 영상 + av완성작 낭독판 + avMusic BGM 영상 보존"
         else
