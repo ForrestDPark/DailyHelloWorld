@@ -180,7 +180,7 @@ def victorious_commanders(markdown: str, original: str) -> list[dict[str, str]]:
         return []
     section = re.split(r"^##\s+5\.", section[1], maxsplit=1, flags=re.M)[0]
     blocks = re.split(r"(?=^\s*###\s+(?:서양|동양)\s*[—-])", section, flags=re.M)
-    rejected = ("군", "연합", "제국", "왕국", "공화국", "방진", "함대", "부대", "세력", "지휘부")
+    rejected = ("군", "연합", "동맹", "원정대", "제국", "왕국", "공화국", "방진", "함대", "부대", "세력", "지휘부")
     found: list[dict[str, str]] = []
     for block in blocks:
         heading = re.search(r"^\s*###\s+(?:서양|동양)\s*[—-]\s*(.+)$", block, flags=re.M)

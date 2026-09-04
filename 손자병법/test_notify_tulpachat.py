@@ -52,6 +52,15 @@ class NotifyTulpaChatTest(unittest.TestCase):
                 self.assertTrue(image["comment"].startswith("🖼️ 도판 해설"))
                 self.assertNotIn("사료 원본은 아닙니다", image["comment"])
 
+    def test_generic_winning_force_is_not_mistaken_for_commander(self):
+        page = Path(__file__).with_name("jiudi23_full_page.md")
+        markdown = page.read_text(encoding="utf-8")
+        _number, original, _subtitle = notify.read_page(page)
+
+        commanders = notify.victorious_commanders(markdown, original)
+
+        self.assertEqual([item["name"] for item in commanders], ["코르테스", "항우"])
+
 
 if __name__ == "__main__":
     unittest.main()
