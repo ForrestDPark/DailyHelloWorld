@@ -2126,6 +2126,14 @@ def _speaker_label(sender, persona_names):
 
 
 def build_prompt(persona_name, system_prompt, context, persona_names, has_images=False, notion_reference="", live_state="", api_mode=False):
+    # 자동 손자병법 토론은 가장 최근 완료 공지부터가 하나의 독립 세션이다.
+    # 그 이전의 시·일상 대화가 새 구절 답변에 섞이지 않도록 문맥을 잘라낸다.
+    sunzi_starts = [
+        index for index, msg in enumerate(context)
+        if "📜 손자병법 새 구절 분석이 완료되었습니다" in msg.get("content", "")
+    ]
+    if sunzi_starts:
+        context = context[sunzi_starts[-1]:]
     lines = [system_prompt, "", "--- 최근 대화 ---"]
     other_humans = False
     for msg in context:
@@ -2163,13 +2171,16 @@ def build_prompt(persona_name, system_prompt, context, persona_names, has_images
             "\n(손자병법 새 구절 토론에서는 찬반 투표처럼 답하지 마세요. "
             "'핵심 판단에 동의합니다', '동의하지 않습니다' 같은 상투적인 판정으로 시작하지 말고, "
             "자신의 주석 관점에서 구절의 뜻·역사 사례의 숨은 조건·현대 적용의 오용 위험 중 "
-            "가장 중요한 쟁점 하나를 골라 곧바로 논하세요. 앞선 병법가와 같은 내용을 반복하지 마세요.)"
+            "가장 중요한 쟁점 하나를 골라 곧바로 논하세요. 앞선 병법가와 같은 내용을 반복하지 마세요. "
+            "앞사람의 이름이나 말을 예의상 다시 언급하지 말고, 대화를 잇기 위한 질문도 억지로 붙이지 마세요. "
+            "이미 나온 내용과 구별되는 새 사실·명확한 반론·실질적인 한계가 하나도 없다면 정확히 NONE만 답하세요.)"
         )
     if any("⚔️ 승군 지휘관 전장 토론" in msg["content"] for msg in context):
         lines.append(
             "\n(승군 지휘관이 자신의 전장을 설명한 토론입니다. 막연히 동의한다고 답하지 말고, "
             "그 지휘관이 말한 구체적 판단 하나를 직접 짚으세요. 자신의 주석이나 전쟁 경험과 "
-            "비교해 보완·반론·적용 한계 중 하나를 제시하고, 확인되지 않은 전장 사실은 지어내지 마세요.)"
+            "비교해 보완·반론·적용 한계 중 하나를 제시하고, 확인되지 않은 전장 사실은 지어내지 마세요. "
+            "다른 토론자의 이름을 불러 같은 결론을 되풀이하지 마세요. 새로 보탤 내용이 없으면 정확히 NONE만 답하세요.)"
         )
     # ★ "그냥 검색해서 링크 보내주면 될 텐데" 요청(2026-08-29) — 확인 안 된
     # 뉴스·사실 주장을 상대가 우길 때 페르소나가 검색도 안 해보고 그냥
@@ -2578,6 +2589,10 @@ def _process_turn_inner(turn, persona_cache):
             outcome = _handle_routine_check_signal(reply)
             if outcome:
                 reply = f"{reply}\n\n{outcome}"
+        # 자동 토론뿐 아니라 다른 페르소나도 명시적으로 침묵을 선택할 수 있다.
+        # 빈 답은 서버가 메시지를 만들지 않고 턴만 정상 완료한다.
+        if reply.strip().upper() == "NONE":
+            reply = ""
         _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": reply})
         if reply:
             print(f"💬 {persona_name} ({engine}): {reply[:60]}", flush=True)
