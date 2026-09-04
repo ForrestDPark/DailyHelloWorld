@@ -45,6 +45,7 @@ class NotifyTulpaChatTest(unittest.TestCase):
             self.assertIn("\n1. 누가 누구를 속였는가?", item["opening"])
             self.assertIn("\n2. 어떤 사실이 거짓이었는가?", item["opening"])
             self.assertNotIn("뒤에서 반복될 지형을 먼저 잡아두기", item["opening"])
+            self.assertNotRegex(item["opening"], r"(?:했다|였다|보였다|눌렀다|정확하다)\.")
             for image in item["images"]:
                 self.assertTrue(image["url"].startswith("https://"))
                 self.assertTrue(image["comment"].startswith("🖼️ 도판 해설"))

@@ -48,6 +48,63 @@ def chat_format(value: str) -> str:
     return "\n".join(line for i, line in enumerate(lines) if line or (i and lines[i - 1])).strip()
 
 
+def spoken_korean(value: str) -> str:
+    """분석문 서술어를 장수가 직접 설명하는 자연스러운 존댓말로 바꾼다."""
+    text = plain(value).strip()
+    replacements = (
+        ("하지 않았다.", "하지 않았습니다."), ("하지 못했다.", "하지 못했습니다."),
+        ("눌렀다.", "눌렀습니다."),
+        ("할 것이다.", "할 것입니다."), ("했을 것이다.", "했을 것입니다."),
+        ("이었다.", "이었습니다."), ("였다.", "였습니다."), ("했다.", "했습니다."),
+        ("됐다.", "됐습니다."), ("되었다.", "되었습니다."), ("보였다.", "보였습니다."),
+        ("있었다.", "있었습니다."), ("없었다.", "없었습니다."), ("늦었다.", "늦었습니다."),
+        ("어렵다.", "어렵습니다."), ("아니다.", "아닙니다."), ("이다.", "입니다."),
+        ("한다.", "합니다."), ("된다.", "됩니다."), ("있다.", "있습니다."),
+        ("하다.", "합니다."), ("았다.", "았습니다."), ("었다.", "었습니다."),
+    )
+    for old, new in replacements:
+        text = text.replace(old, new)
+    return text
+
+
+def commander_deception_chat(block: str, commander: str) -> str:
+    """노션의 사실을 추출하되 표 복사가 아닌 장수의 대화로 다시 구성한다."""
+    match = re.search(
+        r"^####\s+전투에서 사용된 속임수\s*[—-]\s*([^\n]+)\n([\s\S]*?)(?=^####\s+法 한눈 비교)",
+        block, flags=re.M,
+    )
+    if not match:
+        return "기만으로 확인되는 부분과 단순한 오판을 나누어 말씀드리겠습니다."
+    title, body = plain(match.group(1)), match.group(2)
+    intro = re.split(r"^####\s+속임수 작동 구조", body, maxsplit=1, flags=re.M)[0]
+    parts = [f"제가 사용한 방식을 한마디로 말하면 ‘{title}’입니다.", spoken_korean(intro)]
+
+    labels = (("주체와 의도", "제가 노린 것은 이렇습니다."),
+              ("보인 신호와 믿은 이유", "상대에게는 이렇게 보였습니다."),
+              ("유발된 행동과 결과", "그 결과 상대는 이렇게 움직였습니다."),
+              ("사료의 경계", "다만 과장해서는 안 될 부분도 있습니다."))
+    for label, bridge in labels:
+        field = re.search(rf"\*\*{re.escape(label)}\.\*\*\s*([\s\S]*?)(?=\n\n|^####)", body, flags=re.M)
+        if field:
+            parts.extend((bridge, spoken_korean(field.group(1))))
+
+    questions = re.search(r"^####\s+속임수 일곱 질문\s*\n([\s\S]*?)(?=^####\s+시계편)", body, flags=re.M)
+    if questions:
+        parts.append("이제 일곱 가지 질문으로 하나씩 확인해 보겠습니다.")
+        for number, question, answer in re.findall(r"^\s*(\d+)\.\s*\*\*([^*]+)\*\*\s*(.+)$", questions.group(1), flags=re.M):
+            parts.append(f"{number}. {plain(question)}\n\n{spoken_korean(answer)}")
+
+    rows = re.findall(r"<tr>\s*<td>([\s\S]*?)</td>\s*<td>([\s\S]*?)</td>\s*</tr>", body)
+    useful_rows = [(spoken_korean(left), spoken_korean(right)) for left, right in rows
+                   if "해당 구절" not in plain(left)]
+    if useful_rows:
+        parts.append("시계편의 열두 가지 길 가운데 이 전장에 실제로 해당하는 것은 다음과 같습니다.")
+        for label, scene in useful_rows:
+            parts.append(f"{label}\n\n{scene}")
+    result = "\n\n".join(part for part in parts if part).strip()
+    return result.replace(f"{commander}은", "저는").replace(f"{commander}는", "저는")
+
+
 def image_comment(alt: str, battle: str) -> str:
     """도판이 맥락 없는 그림으로 게시되지 않도록 읽을 초점을 함께 보낸다."""
     guides = (
@@ -155,7 +212,7 @@ def victorious_commanders(markdown: str, original: str) -> list[dict[str, str]]:
             block,
             flags=re.M,
         )
-        deception = chat_format(deception_match.group(0))[:3600] if deception_match else (
+        deception = commander_deception_chat(block, commander)[:5000] if deception_match else (
             "이 전투에서는 사료로 확인되는 명시적 기만보다 정보 격차·지형·시간차가 "
             "상대의 오판을 키웠다. 기만과 단순 오판을 구분해 설명한다."
         )
