@@ -58,17 +58,31 @@ const CHAT_CHROME_SCROLL_THRESHOLD_PX = 18;
 let chatChromeScrollAnchor = 0;
 let chatChromeScrollDirection = 0;
 let chatChromeLastScrollTop = 0;
+let chatChromeSettleTimer = null;
+let chatChromePendingState = null;
 
 function setChatChromeCollapsed(collapsed) {
   chatView.classList.toggle("chat-chrome-collapsed", collapsed);
 }
 
 function resetChatChromeForRoom() {
+  if (chatChromeSettleTimer) clearTimeout(chatChromeSettleTimer);
+  chatChromeSettleTimer = null;
+  chatChromePendingState = null;
   chatChromeScrollAnchor = 0;
   chatChromeScrollDirection = 0;
   chatChromeLastScrollTop = 0;
   const compactLandscape = window.matchMedia("(orientation: landscape) and (max-height: 500px)").matches;
   setChatChromeCollapsed(compactLandscape);
+}
+
+function settleChatChromeAfterScroll(collapsed) {
+  chatChromePendingState = collapsed;
+  if (chatChromeSettleTimer) clearTimeout(chatChromeSettleTimer);
+  chatChromeSettleTimer = setTimeout(() => {
+    setChatChromeCollapsed(chatChromePendingState);
+    chatChromeSettleTimer = null;
+  }, 140);
 }
 
 function updateScrollBottomVisibility() {
@@ -80,11 +94,39 @@ function markVisibleMessagesRead() {
   if (!currentRoom) return;
   const viewport = messagesEl.getBoundingClientRect();
   let highestVisibleId = lastVisibleReadId;
-  for (const message of messagesEl.querySelectorAll(".msg[data-message-id], .msg-system[data-message-id]")) {
-    if (message.classList.contains("hidden")) continue;
-    const rect = message.getBoundingClientRect();
-    if (rect.bottom > viewport.top && rect.top < viewport.bottom) {
-      highestVisibleId = Math.max(highestVisibleId, Number(message.dataset.messageId) || 0);
+  const messages = [...messagesEl.querySelectorAll(".msg[data-message-id], .msg-system[data-message-id]")];
+  if (messageSearch.value.trim()) {
+    // 검색 결과는 중간 요소가 display:none이라 위치가 단조롭지 않으므로
+    // 드문 검색 중에만 기존 전체 검사를 유지한다.
+    for (const message of messages) {
+      if (message.classList.contains("hidden")) continue;
+      const rect = message.getBoundingClientRect();
+      if (rect.bottom > viewport.top && rect.top < viewport.bottom) {
+        highestVisibleId = Math.max(highestVisibleId, Number(message.dataset.messageId) || 0);
+      }
+    }
+  } else {
+    // 평상시에는 위쪽 좌표가 정렬돼 있으므로 이진 탐색으로 화면 하단보다
+    // 위에 있는 마지막 메시지만 찾는다. 매 프레임 최대 500개를 재던 일을
+    // 약 9개 측정으로 줄여 모바일 스크롤의 메인 스레드 점유를 낮춘다.
+    let low = 0;
+    let high = messages.length - 1;
+    let candidate = -1;
+    while (low <= high) {
+      const middle = (low + high) >> 1;
+      if (messages[middle].getBoundingClientRect().top < viewport.bottom) {
+        candidate = middle;
+        low = middle + 1;
+      } else {
+        high = middle - 1;
+      }
+    }
+    if (candidate >= 0) {
+      const message = messages[candidate];
+      const rect = message.getBoundingClientRect();
+      if (rect.bottom > viewport.top) {
+        highestVisibleId = Math.max(highestVisibleId, Number(message.dataset.messageId) || 0);
+      }
     }
   }
   if (highestVisibleId > lastVisibleReadId) {
@@ -98,16 +140,17 @@ messagesEl.addEventListener("scroll", () => {
   const currentScrollTop = Math.max(0, messagesEl.scrollTop);
   const direction = Math.sign(currentScrollTop - chatChromeLastScrollTop);
   if (currentScrollTop <= 8) {
-    setChatChromeCollapsed(false);
+    chatChromePendingState = false;
     chatChromeScrollAnchor = currentScrollTop;
     chatChromeScrollDirection = 0;
   } else if (direction && direction !== chatChromeScrollDirection) {
     chatChromeScrollDirection = direction;
     chatChromeScrollAnchor = chatChromeLastScrollTop;
   } else if (Math.abs(currentScrollTop - chatChromeScrollAnchor) >= CHAT_CHROME_SCROLL_THRESHOLD_PX) {
-    setChatChromeCollapsed(direction > 0);
+    chatChromePendingState = direction > 0;
     chatChromeScrollAnchor = currentScrollTop;
   }
+  if (chatChromePendingState !== null) settleChatChromeAfterScroll(chatChromePendingState);
   chatChromeLastScrollTop = currentScrollTop;
   if (readVisibilityFrame) cancelAnimationFrame(readVisibilityFrame);
   readVisibilityFrame = requestAnimationFrame(markVisibleMessagesRead);
