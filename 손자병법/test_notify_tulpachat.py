@@ -18,12 +18,12 @@ class NotifyTulpaChatTest(unittest.TestCase):
         lesson = notify.build_hanja_lesson(markdown, original, subtitle)
 
         self.assertTrue(lesson.startswith("📚 한자선생님입니다"))
-        self.assertIn("독음\n\n역기거", lesson)
-        self.assertIn("직역\n\n", lesson)
+        self.assertIn("[[orange]]독음[[/orange]]\n\n역기거", lesson)
+        self.assertIn("[[orange]]직역[[/orange]]\n\n", lesson)
         self.assertIn("易居(역기거)", lesson)
         self.assertIn("梯", lesson)
-        self.assertIn("易 — 바꿀 역\n\n其 — 그 기", lesson)
-        self.assertIn("梯 — 사다리 제", lesson)
+        self.assertIn("| [[red]]易[[/red]] | 바꿀 | 역 |", lesson)
+        self.assertIn("| [[red]]梯[[/red]] | 사다리 | 제 |", lesson)
 
     def test_all_images_are_separated_and_preserved_in_order(self):
         page = Path(__file__).with_name("jiudi22_full_page.md")
@@ -42,8 +42,9 @@ class NotifyTulpaChatTest(unittest.TestCase):
             self.assertNotIn("![", item["opening"])
             self.assertNotIn("raw.githubusercontent.com", item["opening"])
             self.assertIn("공유된 도판도 차례대로", item["opening"])
-            self.assertIn("\n1. 누가 누구를 속였는가?", item["opening"])
-            self.assertIn("\n2. 어떤 사실이 거짓이었는가?", item["opening"])
+            self.assertIn("1. 누가 누구를 속였는가?[[/green]]", item["opening"])
+            self.assertIn("2. 어떤 사실이 거짓이었는가?[[/green]]", item["opening"])
+            self.assertEqual(item["opening"].count("[["), item["opening"].count("]]"))
             self.assertNotIn("뒤에서 반복될 지형을 먼저 잡아두기", item["opening"])
             self.assertNotRegex(item["opening"], r"(?:했다|였다|보였다|눌렀다|정확하다)\.")
             for image in item["images"]:

@@ -77,7 +77,7 @@ def commander_deception_chat(block: str, commander: str) -> str:
         return "기만으로 확인되는 부분과 단순한 오판을 나누어 말씀드리겠습니다."
     title, body = plain(match.group(1)), match.group(2)
     intro = re.split(r"^####\s+속임수 작동 구조", body, maxsplit=1, flags=re.M)[0]
-    parts = [f"제가 사용한 방식을 한마디로 말하면 ‘{title}’입니다.", spoken_korean(intro)]
+    parts = [f"[[orange]]제가 사용한 방식을 한마디로 말하면[[/orange]] ‘{title}’입니다.", spoken_korean(intro)]
 
     labels = (("주체와 의도", "제가 노린 것은 이렇습니다."),
               ("보인 신호와 믿은 이유", "상대에게는 이렇게 보였습니다."),
@@ -86,21 +86,21 @@ def commander_deception_chat(block: str, commander: str) -> str:
     for label, bridge in labels:
         field = re.search(rf"\*\*{re.escape(label)}\.\*\*\s*([\s\S]*?)(?=\n\n|^####)", body, flags=re.M)
         if field:
-            parts.extend((bridge, spoken_korean(field.group(1))))
+            parts.extend((f"[[blue]]{bridge}[[/blue]]", spoken_korean(field.group(1))))
 
     questions = re.search(r"^####\s+속임수 일곱 질문\s*\n([\s\S]*?)(?=^####\s+시계편)", body, flags=re.M)
     if questions:
-        parts.append("이제 일곱 가지 질문으로 하나씩 확인해 보겠습니다.")
+        parts.append("[[orange]]이제 일곱 가지 질문으로 하나씩 확인해 보겠습니다.[[/orange]]")
         for number, question, answer in re.findall(r"^\s*(\d+)\.\s*\*\*([^*]+)\*\*\s*(.+)$", questions.group(1), flags=re.M):
-            parts.append(f"{number}. {plain(question)}\n\n{spoken_korean(answer)}")
+            parts.append(f"[[green]]{number}. {plain(question)}[[/green]]\n\n{spoken_korean(answer)}")
 
     rows = re.findall(r"<tr>\s*<td>([\s\S]*?)</td>\s*<td>([\s\S]*?)</td>\s*</tr>", body)
     useful_rows = [(spoken_korean(left), spoken_korean(right)) for left, right in rows
                    if "해당 구절" not in plain(left)]
     if useful_rows:
-        parts.append("시계편의 열두 가지 길 가운데 이 전장에 실제로 해당하는 것은 다음과 같습니다.")
+        parts.append("[[orange]]시계편의 열두 가지 길 가운데 이 전장에 실제로 해당하는 것은 다음과 같습니다.[[/orange]]")
         for label, scene in useful_rows:
-            parts.append(f"{label}\n\n{scene}")
+            parts.append(f"[[purple]]{label}[[/purple]]\n\n{scene}")
     result = "\n\n".join(part for part in parts if part).strip()
     return result.replace(f"{commander}은", "저는").replace(f"{commander}는", "저는")
 
@@ -133,7 +133,10 @@ def build_hanja_lesson(markdown: str, original: str, subtitle: str) -> str:
     missing = [char for char in unique_chars if char not in HANJA_HUN_EUM]
     if missing:
         raise ValueError("훈·음 사전에 없는 한자: " + ", ".join(missing))
-    definitions = [f"{char} — {HANJA_HUN_EUM[char]}" for char in unique_chars]
+    definitions = []
+    for char in unique_chars:
+        *hun_parts, eum = HANJA_HUN_EUM[char].split()
+        definitions.append(f"| [[red]]{char}[[/red]] | {' '.join(hun_parts)} | {eum} |")
     explanations = []
     for match in re.finditer(
         r"^####\s+([^\n]+)\n([\s\S]*?)(?=^####\s+|</details>)", section, flags=re.M
@@ -145,9 +148,11 @@ def build_hanja_lesson(markdown: str, original: str, subtitle: str) -> str:
         explanations.append(f"{heading}\n\n{explanation}")
     return (
         "📚 한자선생님입니다. 먼저 글자부터 천천히 살펴보겠습니다.\n\n"
-        f"원문\n\n{original}\n\n독음\n\n{reading}\n\n"
-        "모든 한자의 훈과 음\n\n" + "\n\n".join(definitions) +
-        f"\n\n직역\n\n{literal}\n\n"
+        f"[[orange]]원문[[/orange]]\n\n[[red]]{original}[[/red]]\n\n"
+        f"[[orange]]독음[[/orange]]\n\n{reading}\n\n"
+        "[[orange]]모든 한자의 훈과 음[[/orange]]\n\n"
+        "| 한자 | 훈 | 음 |\n|---|---|---|\n" + "\n".join(definitions) +
+        f"\n\n[[orange]]직역[[/orange]]\n\n[[blue]]{literal}[[/blue]]\n\n"
         "이제 문장이 실제로 어떤 장면을 만드는지 말씀드리겠습니다.\n\n" +
         "\n\n".join(explanations[:8]) +
         "\n\n정리하면, 이 구절은 글자 하나하나가 이어져 하나의 지휘 장면을 만듭니다. "
