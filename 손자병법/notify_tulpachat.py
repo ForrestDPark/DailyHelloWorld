@@ -14,6 +14,16 @@ ROOM_ID = "custom_16ea779e1f"
 API_URL = "http://127.0.0.1:8000/api/worker/announcements"
 KEYCHAIN_SERVICE = "com.forrest.tulpachat.worker"
 MARKDOWN_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\((https?://[^)\s]+)\)")
+HANJA_HUN_EUM = {
+    "易": "바꿀 역", "其": "그 기", "居": "살 거", "迂": "멀 우", "途": "길 도",
+    "使": "하여금 사", "人": "사람 인", "不": "아닐 불", "得": "얻을 득", "慮": "생각할 려",
+    "帥": "장수 수", "與": "더불 여", "之": "갈 지", "期": "기약할 기", "如": "같을 여",
+    "登": "오를 등", "高": "높을 고", "而": "말 이을 이", "去": "버릴 거", "梯": "사다리 제",
+    "深": "깊을 심", "入": "들 입", "諸": "모두 제", "侯": "제후 후", "地": "땅 지",
+    "發": "필 발", "機": "틀 기", "焚": "사를 분", "舟": "배 주", "破": "깨뜨릴 파",
+    "釜": "가마 부", "若": "같을 약", "驅": "몰 구", "群": "무리 군", "羊": "양 양",
+    "往": "갈 왕", "來": "올 래", "莫": "없을 막", "知": "알 지", "所": "바 소",
+}
 
 
 def plain(value: str) -> str:
@@ -50,11 +60,11 @@ def image_comment(alt: str, battle: str) -> str:
     )
     focus = next((guide for keys, guide in guides if any(key in alt for key in keys)),
                  "도판의 배치와 기동 표시를 전투 서사와 대조해 보십시오.")
-    return f"🖼️ 도판 해설 — {battle}: {focus} 그림은 분석을 돕는 재구성이며 사료 원본은 아닙니다."
+    return f"🖼️ 도판 해설 — {battle}: {focus}"
 
 
 def build_hanja_lesson(markdown: str, original: str, subtitle: str) -> str:
-    """1절 정본에서 독음·직역·핵심 한자 풀이를 추려 첫 수업 메시지를 만든다."""
+    """모든 글자의 훈·음을 먼저 보이고 정본 해설을 말하듯 풀어낸다."""
     section_match = re.search(r"^##\s+1\.[^\n]*\n([\s\S]*?)(?=^---\s*$)", markdown, flags=re.M)
     if not section_match:
         raise ValueError("한자선생님 수업에 필요한 1절 원문 풀이를 찾지 못했습니다")
@@ -62,20 +72,29 @@ def build_hanja_lesson(markdown: str, original: str, subtitle: str) -> str:
     reading = subtitle.split("—", 1)[0].strip().rstrip(".")
     literal_match = re.search(r"\*\*직역\*\*\s*\n+([^\n]+)", section)
     literal = plain(literal_match.group(1)) if literal_match else "직역을 정본에서 확인해 주십시오."
-    glosses = []
+    unique_chars = list(dict.fromkeys(re.findall(r"[\u3400-\u9fff]", original)))
+    missing = [char for char in unique_chars if char not in HANJA_HUN_EUM]
+    if missing:
+        raise ValueError("훈·음 사전에 없는 한자: " + ", ".join(missing))
+    definitions = [f"{char} — {HANJA_HUN_EUM[char]}" for char in unique_chars]
+    explanations = []
     for match in re.finditer(
         r"^####\s+([^\n]+)\n([\s\S]*?)(?=^####\s+|</details>)", section, flags=re.M
     ):
         heading = plain(match.group(1))
         if "글자들이 완성" in heading:
             continue
-        explanation = plain(match.group(2))[:260]
-        glosses.append(f"- {heading}: {explanation}")
+        explanation = plain(match.group(2))[:420]
+        explanations.append(f"먼저 {heading}을 보겠습니다.\n\n{explanation}")
     return (
-        "📚 한자선생님 — 구절 풀이부터 시작하겠습니다.\n\n"
-        f"원문: {original}\n독음: {reading}\n직역: {literal}\n\n"
-        "핵심 한자와 문장 결\n" + "\n".join(glosses[:8]) +
-        "\n\n이제 이 글자 뜻과 문장 구조를 바탕으로 전투 사례와 현대 적용을 토론하겠습니다."
+        "📚 한자선생님입니다. 먼저 글자부터 천천히 살펴보겠습니다.\n\n"
+        f"원문\n\n{original}\n\n독음\n\n{reading}\n\n"
+        "모든 한자의 훈과 음\n\n" + "\n\n".join(definitions) +
+        f"\n\n직역\n\n{literal}\n\n"
+        "이제 문장이 실제로 어떤 장면을 만드는지 말씀드리겠습니다.\n\n" +
+        "\n\n".join(explanations[:8]) +
+        "\n\n정리하면, 이 구절은 글자 하나하나가 이어져 하나의 지휘 장면을 만듭니다. "
+        "이 뜻을 바탕으로 이제 전투 사례를 함께 살펴보겠습니다."
     )
 
 

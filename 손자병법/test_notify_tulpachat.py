@@ -17,11 +17,13 @@ class NotifyTulpaChatTest(unittest.TestCase):
 
         lesson = notify.build_hanja_lesson(markdown, original, subtitle)
 
-        self.assertTrue(lesson.startswith("📚 한자선생님"))
-        self.assertIn("독음: 역기거", lesson)
-        self.assertIn("직역:", lesson)
+        self.assertTrue(lesson.startswith("📚 한자선생님입니다"))
+        self.assertIn("독음\n\n역기거", lesson)
+        self.assertIn("직역\n\n", lesson)
         self.assertIn("易居(역기거)", lesson)
         self.assertIn("梯", lesson)
+        self.assertIn("易 — 바꿀 역\n\n其 — 그 기", lesson)
+        self.assertIn("梯 — 사다리 제", lesson)
 
     def test_all_images_are_separated_and_preserved_in_order(self):
         page = Path(__file__).with_name("jiudi22_full_page.md")
@@ -46,7 +48,7 @@ class NotifyTulpaChatTest(unittest.TestCase):
             for image in item["images"]:
                 self.assertTrue(image["url"].startswith("https://"))
                 self.assertTrue(image["comment"].startswith("🖼️ 도판 해설"))
-                self.assertIn("사료 원본은 아닙니다", image["comment"])
+                self.assertNotIn("사료 원본은 아닙니다", image["comment"])
 
 
 if __name__ == "__main__":
