@@ -85,7 +85,7 @@ def build_hanja_lesson(markdown: str, original: str, subtitle: str) -> str:
         if "글자들이 완성" in heading:
             continue
         explanation = plain(match.group(2))[:420]
-        explanations.append(f"먼저 {heading}을 보겠습니다.\n\n{explanation}")
+        explanations.append(f"{heading}\n\n{explanation}")
     return (
         "📚 한자선생님입니다. 먼저 글자부터 천천히 살펴보겠습니다.\n\n"
         f"원문\n\n{original}\n\n독음\n\n{reading}\n\n"
