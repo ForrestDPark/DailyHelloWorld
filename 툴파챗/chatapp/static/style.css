@@ -275,8 +275,10 @@ button { font-family: inherit; }
 #chat-view form#composer,
 #chat-view #upload-preview {
   overflow: hidden;
-  transition: max-height .2s ease, min-height .2s ease, padding .2s ease,
-              margin .2s ease, border-width .2s ease, opacity .16s ease;
+  /* 높이·여백을 애니메이션하면 스와이프 도중 flex 영역이 여러 프레임에
+     걸쳐 변하면서 모바일 브라우저의 스크롤 앵커 보정과 충돌한다.
+     레이아웃은 즉시 접고 시각 효과는 opacity에만 제한한다. */
+  transition: opacity .1s ease;
 }
 #chat-view .chat-header { max-height: 88px; }
 #chat-view #room-notice { max-height: 40vh; }
@@ -301,6 +303,13 @@ button { font-family: inherit; }
   pointer-events: none;
 }
 #chat-view.chat-chrome-collapsed #scroll-bottom-btn { bottom: 16px; }
+
+@media (hover: none), (pointer: coarse) {
+  /* 손가락 관성 스크롤은 운영체제에 맡긴다. 전역 smooth 설정은 버튼으로
+     이동할 때는 유용하지만 터치 스크롤과 레이아웃 전환이 겹치면 둔하게
+     느껴질 수 있다. */
+  main#messages { scroll-behavior: auto; }
+}
 
 /* ★ "채팅 입력창 가운데 위에 아래화살표 버튼 누르면 최신 메시지로 이동"
    요청(2026-08-28) — 메시지 영역을 스크롤해서 위로 올라갔을 때만 보이고,
