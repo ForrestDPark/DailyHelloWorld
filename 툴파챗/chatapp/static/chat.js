@@ -54,6 +54,22 @@ messageSearch.addEventListener("input", () => {
 // 지난 대화를 읽고 있을 때만 의미가 있다.
 const scrollBottomBtn = document.getElementById("scroll-bottom-btn");
 const SCROLL_BOTTOM_THRESHOLD_PX = 120;
+const CHAT_CHROME_SCROLL_THRESHOLD_PX = 18;
+let chatChromeScrollAnchor = 0;
+let chatChromeScrollDirection = 0;
+let chatChromeLastScrollTop = 0;
+
+function setChatChromeCollapsed(collapsed) {
+  chatView.classList.toggle("chat-chrome-collapsed", collapsed);
+}
+
+function resetChatChromeForRoom() {
+  chatChromeScrollAnchor = 0;
+  chatChromeScrollDirection = 0;
+  chatChromeLastScrollTop = 0;
+  const compactLandscape = window.matchMedia("(orientation: landscape) and (max-height: 500px)").matches;
+  setChatChromeCollapsed(compactLandscape);
+}
 
 function updateScrollBottomVisibility() {
   const distanceFromBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight;
@@ -79,6 +95,20 @@ function markVisibleMessagesRead() {
 
 messagesEl.addEventListener("scroll", () => {
   updateScrollBottomVisibility();
+  const currentScrollTop = Math.max(0, messagesEl.scrollTop);
+  const direction = Math.sign(currentScrollTop - chatChromeLastScrollTop);
+  if (currentScrollTop <= 8) {
+    setChatChromeCollapsed(false);
+    chatChromeScrollAnchor = currentScrollTop;
+    chatChromeScrollDirection = 0;
+  } else if (direction && direction !== chatChromeScrollDirection) {
+    chatChromeScrollDirection = direction;
+    chatChromeScrollAnchor = chatChromeLastScrollTop;
+  } else if (Math.abs(currentScrollTop - chatChromeScrollAnchor) >= CHAT_CHROME_SCROLL_THRESHOLD_PX) {
+    setChatChromeCollapsed(direction > 0);
+    chatChromeScrollAnchor = currentScrollTop;
+  }
+  chatChromeLastScrollTop = currentScrollTop;
   if (readVisibilityFrame) cancelAnimationFrame(readVisibilityFrame);
   readVisibilityFrame = requestAnimationFrame(markVisibleMessagesRead);
 });
@@ -1833,6 +1863,7 @@ let usersCache = [];
 
 async function showRoomList() {
   currentRoom = null;
+  setChatChromeCollapsed(false);
   pollGeneration += 1;
   if (activePollController) activePollController.abort();
   if (pollTimer) clearTimeout(pollTimer);
@@ -1988,6 +2019,7 @@ async function showChatView(roomId) {
   scrollBottomBtn.classList.add("hidden");
   roomListView.classList.add("hidden");
   chatView.classList.remove("hidden");
+  resetChatChromeForRoom();
   // ★ 새로고침·직접 URL 접속처럼 showRoomList()를 거치지 않고 바로 이
   // 방으로 들어온 경우 roomsCache가 비어 있어 그룹 회의방 여부(공지 배너,
   // 참여자 버튼, "(가상)" 라벨)를 전부 잘못 판단하는 버그가 있었다
