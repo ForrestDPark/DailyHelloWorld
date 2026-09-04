@@ -844,6 +844,9 @@ body.room-reorder-active { -webkit-user-select: none; user-select: none; }
 main#messages {
   flex: 1;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+  overscroll-behavior-y: contain;
   padding: 12px 16px;
   display: flex;
   flex-direction: column;

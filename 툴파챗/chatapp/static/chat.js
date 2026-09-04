@@ -76,12 +76,18 @@ function resetChatChromeForRoom() {
   setChatChromeCollapsed(compactLandscape);
 }
 
-function settleChatChromeAfterScroll(collapsed) {
-  chatChromePendingState = collapsed;
+function settleChatUiAfterScroll() {
   if (chatChromeSettleTimer) clearTimeout(chatChromeSettleTimer);
   chatChromeSettleTimer = setTimeout(() => {
-    setChatChromeCollapsed(chatChromePendingState);
+    if (chatChromePendingState !== null) setChatChromeCollapsed(chatChromePendingState);
     chatChromeSettleTimer = null;
+    // 접힘으로 flex 높이가 바뀐 다음 프레임에 한 번만 치수와 읽음 위치를
+    // 잰다. 스크롤 중에는 강제 레이아웃 계산을 전혀 하지 않는다.
+    readVisibilityFrame = requestAnimationFrame(() => {
+      updateScrollBottomVisibility();
+      markVisibleMessagesRead();
+      readVisibilityFrame = null;
+    });
   }, 140);
 }
 
@@ -136,7 +142,6 @@ function markVisibleMessagesRead() {
 }
 
 messagesEl.addEventListener("scroll", () => {
-  updateScrollBottomVisibility();
   const currentScrollTop = Math.max(0, messagesEl.scrollTop);
   const direction = Math.sign(currentScrollTop - chatChromeLastScrollTop);
   if (currentScrollTop <= 8) {
@@ -150,11 +155,11 @@ messagesEl.addEventListener("scroll", () => {
     chatChromePendingState = direction > 0;
     chatChromeScrollAnchor = currentScrollTop;
   }
-  if (chatChromePendingState !== null) settleChatChromeAfterScroll(chatChromePendingState);
   chatChromeLastScrollTop = currentScrollTop;
-  if (readVisibilityFrame) cancelAnimationFrame(readVisibilityFrame);
-  readVisibilityFrame = requestAnimationFrame(markVisibleMessagesRead);
-});
+  // 스크롤 중 실행하는 작업은 여기까지다. DOM 클래스 변경, scrollHeight,
+  // getBoundingClientRect 같은 레이아웃 작업은 관성이 멈춘 뒤 한 번만 한다.
+  settleChatUiAfterScroll();
+}, { passive: true });
 scrollBottomBtn.addEventListener("click", () => {
   messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: "smooth" });
 });
