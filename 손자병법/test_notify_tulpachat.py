@@ -10,6 +10,11 @@ SPEC.loader.exec_module(notify)
 
 
 class NotifyTulpaChatTest(unittest.TestCase):
+    def test_discussion_key_changes_only_for_explicit_republish(self):
+        stable = notify.discussion_dedupe_key(24, "format-v1", False)
+        self.assertEqual(stable, notify.discussion_dedupe_key(24, "format-v2", False))
+        self.assertNotEqual(stable, notify.discussion_dedupe_key(24, "format-v2", True))
+
     def test_hanja_lesson_prepares_reading_literal_and_glosses(self):
         page = Path(__file__).with_name("jiudi22_full_page.md")
         markdown = page.read_text(encoding="utf-8")
