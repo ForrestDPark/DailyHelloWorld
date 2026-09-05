@@ -912,6 +912,8 @@ JOB_SYSTEM_ADDENDUM = (
 # 않아 중립적인 "일본어 선생님" 1명만 둔다(독서지기의 저자 짝과 다른 점).
 JP_SUBTITLE_DIR = REPO_ROOT / "일본어자막추출"
 JP_SUBTITLE_LIBRARY_DIR = JP_SUBTITLE_DIR / "library"
+JP_EPUB_FINAL_DIR = Path(os.environ.get("JP_EPUB_LIBRARY_DIR", "/Users/forrestdpark/Desktop/BlogImage/av완성작"))
+JP_EPUB_WEB_PUBLIC_URL = os.environ.get("JP_EPUB_WEB_PUBLIC_URL", "").rstrip("/")
 JP_TEACHER_PERSONA_NAME = "일본어 선생님"
 # 복습 로테이션 기준일 — "하루에 하나씩" 결정론적으로 도는 시작점. 라이브러리에
 # 새 회차가 추가돼도 굳이 다시 안 맞춘다(그날그날 총 개수 기준으로 자연스럽게
@@ -931,6 +933,24 @@ def _jp_subtitle_summary(title):
         return path.read_text(encoding="utf-8")[:1200]
     except OSError:
         return ""
+
+
+def _jp_epub_read_url(title):
+    """웹 리더와 동일한 불투명 ID로 해당 회차의 바로 읽기 URL을 만든다.
+
+    공개 주소가 설정되지 않았거나 EPUB이 없으면 깨진 링크를 만들지 않는다.
+    """
+    if not JP_EPUB_WEB_PUBLIC_URL or not JP_EPUB_FINAL_DIR.exists():
+        return ""
+    title_key = title.casefold()
+    candidates = sorted(
+        (p for p in JP_EPUB_FINAL_DIR.glob("*.epub") if p.stem.casefold().startswith(title_key)),
+        key=lambda p: ("낭독판" not in p.stem, p.name),
+    )
+    if not candidates:
+        return ""
+    book_id = hashlib.sha256(str(candidates[0].resolve()).encode()).hexdigest()[:20]
+    return f"{JP_EPUB_WEB_PUBLIC_URL}/?book={book_id}"
 
 
 def _jp_subtitle_all_cards(title):
@@ -989,6 +1009,9 @@ def load_jp_subtitle_state():
         lines.append(f"오늘 새로 처리한 회차({len(today_titles)}개): {', '.join(today_titles)}")
         for t in today_titles:
             lines.append(f"\n=== {t} ===")
+            read_url = _jp_epub_read_url(t)
+            if read_url:
+                lines.append(f"웹에서 EPUB 읽기: {read_url}")
             lines.append(_jp_subtitle_summary(t))
             cards = _jp_subtitle_all_cards(t)
             if cards:
@@ -996,6 +1019,9 @@ def load_jp_subtitle_state():
     review_idx = (today - JP_SUBTITLE_REVIEW_ANCHOR).days % len(titles)
     review_title = titles[review_idx]
     lines.append(f"\n오늘의 복습 대상: {review_title}")
+    review_url = _jp_epub_read_url(review_title)
+    if review_url:
+        lines.append(f"웹에서 EPUB 읽기: {review_url}")
     lines.append(_jp_subtitle_summary(review_title))
     review_cards = _jp_subtitle_all_cards(review_title)
     if review_cards:
@@ -1015,6 +1041,9 @@ JP_SUBTITLE_ADDENDUM = (
     "문법·어휘를 통째로 새로 분석하지 말고(그건 별도 절차가 이미 깊게 함), 이미 만들어진 "
     "학습카드를 소개하고 가볍게 대화하는 역할에 집중한다. 확인 안 된 회차 내용은 지어내지 "
     "말고 못 찾았다고 솔직히 답할 것.\n"
+    "★ 회차를 소개할 때 라이브 상태에 '웹에서 EPUB 읽기:' URL이 있으면 반드시 회차명과 "
+    "함께 그 링크를 별도 줄에 적는다. URL을 문장 안에 숨기거나 임의로 바꾸지 말고, 링크가 "
+    "주입되지 않은 회차에는 존재할 것 같은 주소를 지어내지 않는다.\n"
     "★ 2026-09-03 실측 피드백: \"학습카드 하나만 올라오는데 한작품에있는 모든 학습카드에 "
     "해당하는 대화를 생성했으면 좋겠어\" — 매 턴 주입되는 '학습카드 전체'에는 그 회차의 "
     "장면 전부가 들어있다. 앞쪽 몇 개만 골라서 소개하고 나머지를 생략하지 말고, 장면을 "

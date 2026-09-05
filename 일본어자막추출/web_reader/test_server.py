@@ -1,0 +1,48 @@
+import tempfile
+import unittest
+import zipfile
+from pathlib import Path
+from unittest.mock import patch
+
+import server
+
+
+def make_epub(path: Path, title="테스트 책"):
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("META-INF/container.xml", '<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>')
+        z.writestr("OEBPS/content.opf", f'''<package xmlns="http://www.idpf.org/2007/opf"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>{title}</dc:title></metadata><manifest><item id="cover" href="images/cover.jpg" media-type="image/jpeg" properties="cover-image"/><item id="p1" href="pages/1.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="p1"/></spine></package>''')
+        z.writestr("OEBPS/images/cover.jpg", b"jpeg")
+        z.writestr("OEBPS/pages/1.xhtml", "<html>본문</html>")
+
+
+class ReaderTests(unittest.TestCase):
+    def test_parse_and_scan(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); make_epub(root / "ABC-001_낭독판.epub")
+            book = server.parse_book(root / "ABC-001_낭독판.epub")
+            self.assertEqual(book.title, "테스트 책"); self.assertEqual(book.spine, ("OEBPS/pages/1.xhtml",)); self.assertEqual(book.cover, "OEBPS/images/cover.jpg")
+            self.assertEqual(len(server.Library([root]).books), 1)
+
+    def test_readaloud_alias_is_deduplicated(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); (root / "old").mkdir()
+            make_epub(root / "ABC-001 — 제목_낭독판.epub")
+            make_epub(root / "old" / "ABC-001_읽어주기.epub")
+            self.assertEqual(len(server.Library([root]).books), 1)
+
+    def test_rejects_traversal(self):
+        for value in ("../secret", "%2e%2e/secret", ""):
+            with self.assertRaises(ValueError): server._safe_member(value)
+
+    def test_progress_is_persisted(self):
+        with tempfile.TemporaryDirectory() as td:
+            store = server.Store(Path(td) / "state.db"); store.save("book", 3, 42.5)
+            self.assertEqual(store.get("book")["spine_index"], 3)
+
+    def test_signed_session_expires(self):
+        secret = b"secret"; self.assertTrue(server.valid_session(secret, server.sign_session(secret)))
+        with patch.object(server.time, "time", return_value=0): token = server.sign_session(secret)
+        self.assertFalse(server.valid_session(secret, token))
+
+
+if __name__ == "__main__": unittest.main()
