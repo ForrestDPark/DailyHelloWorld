@@ -89,6 +89,37 @@ echo "\033[1;36m🩹 학습카드 누락 회차 자동 복구 확인 중...\033[
 echo "\033[1;36m==================================================\033[0m"
 LIBRARY_DIR="${SCRIPT_DIR}/library"
 COMPLETED_EPUB_DIR_FOR_BACKFILL="/Users/forrestdpark/Desktop/BlogImage/av완성작"
+
+# ★ 2026-09-05: "라이브러리가 없으면 여기서(av완성작) 보충해" 요청 — 위 SUMMARY_OK
+# 수정 이전에 이미 library/<작품명>/이 통째로 지워진 회차는 원본 영상 없이는 복구
+# 불가능하다고 판단했었는데, 낭독판 EPUB 자체가 전체 대사(ja/ko/후리가나)를 페이지마다
+# 그대로 담고 있어서 원본 영상 없이도 여기서 다시 뽑아낼 수 있다
+# (recover_study_cards_from_epub.py, 2026-09-05). av완성작의 낭독판 중 library에
+# 대응 폴더가 없는 것을 찾아 먼저 대사 원재료부터 복구한 뒤, 아래 기존 재시도
+# 루프가 학습카드까지 이어서 만든다.
+if [[ -d "$COMPLETED_EPUB_DIR_FOR_BACKFILL" ]]; then
+    for OLD_EPUB in "$COMPLETED_EPUB_DIR_FOR_BACKFILL"/*_낭독판.epub(N); do
+        RECOVER_CHECK=$(/opt/anaconda3/bin/python3 -c '
+import os, re, sys
+epub_path = sys.argv[1]
+library_dir = sys.argv[2]
+base = os.path.basename(epub_path)
+base = re.sub(r"_낭독판\.epub$", "", base)
+code = base.split(" — ", 1)[0].strip()
+existing = os.listdir(library_dir) if os.path.isdir(library_dir) else []
+found = any(t == code or t.startswith(code) for t in existing)
+print("0" if found else "1")
+' "$OLD_EPUB" "$LIBRARY_DIR")
+        if [[ "$RECOVER_CHECK" != "1" ]]; then
+            continue
+        fi
+        echo "🩹 library 원재료 없음 — EPUB에서 대사 복구 시도: ${OLD_EPUB:t}"
+        if ! /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/recover_study_cards_from_epub.py" "$OLD_EPUB"; then
+            echo "⚠️  EPUB에서 대사 복구 실패 — 이 회차는 건너뜀"
+        fi
+    done
+fi
+
 if [[ -d "$LIBRARY_DIR" ]]; then
     for BOOK_CANDIDATE in "$LIBRARY_DIR"/*(N/); do
         TRANSCRIPT_FILES=("${BOOK_CANDIDATE}"/transcript_part*.jsonl(N))
