@@ -14,6 +14,7 @@ import re
 import shutil
 import subprocess
 import sys
+import unicodedata
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 LIBRARY_DIR = os.path.join(SCRIPT_DIR, "library")
@@ -36,7 +37,10 @@ def _has_valid_cards(book_dir):
 
 
 def _epub_code_and_subtitle(epub_path):
-    base = re.sub(r"_낭독판\.epub$", "", os.path.basename(epub_path))
+    # ★ 2026-09-06: macOS NFD 파일명 정규화 문제 — recover_study_cards_from_epub.py
+    # 참고 주석과 동일한 이유로 NFC 정규화 후 처리한다.
+    base = unicodedata.normalize("NFC", os.path.basename(epub_path))
+    base = re.sub(r"_낭독판\.epub$", "", base)
     if " — " in base:
         code, subtitle = base.split(" — ", 1)
         return code.strip(), subtitle.strip()

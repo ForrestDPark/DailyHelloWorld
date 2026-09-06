@@ -545,6 +545,15 @@ Claude가 동시에 만든 가변형 EPUB 후처리 프로토타입은 Apple Boo
 
 ## 메뉴바(shift_alarm) 연동
 
+## 모바일 EPUB 좌우 스와이프 보강 (2026-09-06)
+
+휴대폰에서 EPUB 본문을 왼쪽으로 밀면 다음 페이지, 오른쪽으로 밀면 이전
+페이지로 이동한다. 짧은 가로 움직임부터 방향을 판별하되 실제 페이지 이동은
+45px 이상일 때만 실행한다. 세로 움직임은 가로 제스처로 확정하지 않으므로 긴
+본문의 상하 스크롤과 구절 선택은 그대로 사용할 수 있다. EPUB 페이지가 바뀔
+때마다 새 iframe 문서에 제스처를 다시 연결하며, 첫 페이지와 마지막 페이지의
+범위를 벗어나지는 않는다.
+
 ## 모바일 작업실 연동 (2026-09-06)
 
 EPUB 웹 서재를 독립 모바일 웹앱으로 설치할 수 있도록 웹앱 manifest와 iOS 메타
@@ -556,3 +565,20 @@ EPUB 웹 서재를 독립 모바일 웹앱으로 설치할 수 있도록 웹앱 
 `shift_alarm/README.md` 참조 — 메뉴의 `🎥 일본어 자막 추출 (폴더 선택)`을 누르면 폴더 선택 다이얼로그가 뜨고, 고른 폴더로 이 스크립트를 실행한다.
 
 ★ 2026-08-29: `whisper_series_stream.sh`/`subtitle_notion_epub_only.sh`는 `JP_SUBTITLE_RUN_ID` 환경변수(shift_alarm이 실행마다 uuid를 넘겨줌)가 있으면 작업이 끝날 때 `/tmp/_jp_subtitle_run_<id>.done` 마커 파일을 남긴다 — shift_alarm이 이 파일이 생기는지 폴링해서 "자막 추출 완료" 알림을 띄우기 위한 용도(자세한 내용은 `shift_alarm/README.md`의 "일본어 자막 추출 완료 알림" 항목). 메뉴바를 거치지 않고 터미널에서 직접 실행하면 이 환경변수가 비어있으므로 마커 없이 기존과 동일하게 동작한다.
+
+## "일반 EPUB" 후리가나가 괄호로 그대로 노출되던 버그 (2026-09-06)
+
+"SONE-670... 후리가나 표현이 안되고 가로에 후리가나가있지? 이러니까 읽기할때 이상하게 읽는거같아 사이트에서 확인한건데" 피드백으로 발견.
+
+- **원인**: `generate_furigana()`가 만드는 `漢字(かんじ)` 괄호 표기는 `transcript_part*.jsonl`의 `furigana` 필드에 저장하는 내부 중간 표현이고, `build_readaloud_epub.py`(낭독판 EPUB 빌더)만 이걸 실제 `<ruby><rt>` 태그로 바꿔왔다. 그런데 `transcript_part*.md`(→ `finalize_japanese_book.py`가 pandoc으로 만드는 "일반 EPUB")는 이 변환 없이 괄호 표기를 그대로 문장에 박아넣고 있었다 — README 절대 규칙("실제 한자 덩어리 위에만 `<ruby>`로 표시")과도 어긋난 상태.
+- **왜 사용자가 직접 보게 됐나**: "일반 EPUB"은 원래 낭독판 생성용 내부 재빌드 자료일 뿐인데(README, "일반 EPUB은... 내부 중간 산출물로만 사용"), `web_reader/server.py`의 서재 스캔이 `av완성작`뿐 아니라 `library/`도 폴백 경로로 함께 훑는다(`DEFAULT_FALLBACK_DIR`). 아직 낭독판이 안 만들어진 회차는 이 "일반 EPUB"이 그대로 서재에 노출되면서 괄호 표기가 화면에 보이고, 웹 읽어주기(TTS)도 괄호 안 읽기를 문장인 것처럼 그대로 읽어 발음이 이상해진다.
+- **수정**: `subtitle_pipeline_body.sh`가 `transcript_part*.md`를 쓰는 두 지점 모두에서 `furigana_paren_to_ruby_html()`(신규, `build_readaloud_epub.py`의 `kanji_only_ruby()`와 동일한 로직)을 거쳐 실제 `<ruby>` 태그로 쓰도록 고쳤다. `furigana` JSONL 필드 자체는 다른 스크립트들이 괄호 형식을 그대로 기대하므로 건드리지 않았다.
+- **이미 만들어진 파일 즉시 복구**: `fix_general_epub_furigana.py`(신규) — 기존 `transcript_part*.md`의 `<p class="ja">` 안 괄호 표기를 제자리에서 `<ruby>`로 치환하고(AI 호출 없음, 순수 텍스트 처리), `finalize_japanese_book.py`로 "일반 EPUB"만 재빌드한다. 이 스크립트로 당시 서재에 노출 중이던 4개 회차(SONE-670·ABF-369·GVH-694_J·OYC-126)를 즉시 고쳤다(실측: 총 4,700줄 이상 변환, 재빌드한 EPUB에서 `<ruby>` 태그 실제 존재 확인).
+
+## "[번역 실패]"가 서재에 그대로 보이던 문제 + recover 스크립트 NFD 파일명 버그 (2026-09-06)
+
+"완성돼서 서재에 올라간 62권 중 2권에 [번역 실패]가 그대로 남아있다... 이거 재검증해서 번역실패라는 말 안뜨게 다시시작해" 요청.
+
+- **원인**: 구글 번역이 계속 실패하면 `"[번역 실패]"` placeholder가 남고, `refine_translations.py`가 AI(Codex/Claude)로 재검수해서 채워야 하는데 그 시점에 AI 쿼터가 소진되면 예외를 잡아 경고만 찍고 그냥 넘어간다(`remaining_failures`가 남으면 원래 `sys.exit`으로 파이프라인을 막게 설계돼 있었는데, `SQTE-704`·`MIDV-592-...`는 그 안전장치를 통과해 배포된 상태였다).
+- **재검증 결과**: 오후 사이 AI 쿼터가 회복됐다. `SQTE-704`는 이미 `translation_memory.json`(다른 회차 검수로 누적된 영구 캐시)만으로 남은 실패 0건까지 자동 해결된 상태였고, `refine_translations.py` → `finalize_japanese_book.py` → `build_readaloud_epub.py`로 재빌드해 배포본을 교체했다. `MIDV-592`는 library 폴더가 아예 없어서 `recover_study_cards_from_epub.py`로 먼저 복구한 뒤 `refine_translations.py`(67문장 AI로 재검수, 잔여 0건) → `generate_summary.py` → 재빌드 순으로 처리했다. 서재 62권 전체를 다시 스캔해 `"번역 실패"`가 남은 파일이 0개임을 확인했다.
+- **★ 부수 발견 — recover 스크립트의 NFD 파일명 버그**: `MIDV-592`를 복구하는 과정에서 부제가 `"무너진 동경의 오후_낭독판"`처럼 `"_낭독판"` 접미사가 안 지워진 채로 저장되는 걸 발견했다. macOS(APFS)는 한글 파일명을 NFD(자모 분해형)로 저장하는데, `os.listdir()`/`glob.glob()`으로 얻은 경로 문자열이 NFD 상태 그대로 `recover_study_cards_from_epub.py`/`backfill_all_missing_study_cards.py`의 정규식(`_낭독판\.epub$` 등)에 들어가면 NFC로 타이핑된 패턴과 바이트 단위로 달라 조용히 매칭에 실패한다(터미널에 직접 타이핑한 경로는 NFC라 이 문제가 안 보였다 — 실제 파일시스템 목록에서 얻은 경로에서만 재현됨). 두 스크립트 모두 파일명을 다루기 전에 `unicodedata.normalize("NFC", ...)`를 거치도록 고쳤다.

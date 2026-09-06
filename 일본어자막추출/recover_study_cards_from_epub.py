@@ -22,6 +22,7 @@ import html
 import os
 import re
 import sys
+import unicodedata
 import zipfile
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -189,7 +190,12 @@ def clean_furigana(raw):
 
 
 def derive_title_and_subtitle(epub_path):
-    base = os.path.basename(epub_path)
+    # ★ 2026-09-06 실측 버그: macOS(APFS)는 한글 파일명을 NFD(분해형)로
+    # 저장한다 — os.listdir()/glob.glob()으로 얻은 경로는 NFD라 아래 정규식이
+    # "_낭독판" 등을 조용히 매칭 실패시켜 부제에 "_낭독판" 같은 접미사가
+    # 그대로 남는 사고가 있었다(MIDV-592 복구 때 실측). NFC로 정규화한 뒤
+    # 처리해야 이 셸/파이썬 어디서 왔든 일관되게 매칭된다.
+    base = unicodedata.normalize("NFC", os.path.basename(epub_path))
     base = re.sub(r"_낭독판\.epub$", "", base)
     base = re.sub(r"\.epub$", "", base)
     if " — " in base:

@@ -347,6 +347,65 @@ def generate_furigana(text):
             out += orig
     return out
 
+# ★ 2026-09-06: "SONE-670... 후리가나 표현이 안되고 가로에 후리가나가있지?
+# 이러니까 읽기할때 이상하게 읽는거같아" 실측 피드백 — generate_furigana()가
+# 만드는 "漢字(かんじ)" 괄호 표기는 JSONL의 furigana 필드에 저장하는 내부
+# 중간 표현일 뿐이고(다른 소비자들이 이 형식을 그대로 기대하므로 여기서
+# 바꾸면 안 됨), build_readaloud_epub.py의 kanji_only_ruby()가 최종
+# 낭독판 EPUB에서만 실제 <ruby> 태그로 변환해왔다. 그런데
+# transcript_part*.md(→ finalize_japanese_book.py가 pandoc으로 만드는
+# "일반 EPUB")는 이 변환 없이 괄호 표기를 그대로 문장에 박아넣고 있었다.
+# 절대 규칙(README, "실제 한자 덩어리 위에만 <ruby>로 표시")과도 어긋난다.
+# 이 "일반 EPUB"는 원래 내부 재빌드용 자료일 뿐이지만, 웹 리더가 낭독판이
+# 아직 없는 회차의 대체 표시로 그대로 노출하고 있어(web_reader/server.py의
+# library/ 폴백) 사용자에게 괄호 그대로 보이고 TTS가 괄호 안 읽기까지
+# 중복으로 읽어버리는 원인이 됐다. .md에 쓰기 직전에만 실제 <ruby>로
+# 바꾼다 — JSONL furigana 필드 자체(다른 스크립트가 소비)는 그대로 둔다.
+_KANJI_RUN_RE = re.compile(r'[一-鿿々〆ヵヶ]+')
+
+def _kanji_only_ruby(ja, reading):
+    ja, reading = str(ja or ""), str(reading or "")
+    if not reading or not _KANJI_RUN_RE.search(ja):
+        return html.escape(ja)
+    matches = list(_KANJI_RUN_RE.finditer(ja))
+    output, ja_cursor, reading_cursor = [], 0, 0
+    for index, match in enumerate(matches):
+        plain = ja[ja_cursor:match.start()]
+        output.append(html.escape(plain))
+        kana = "".join(re.findall(r'[ぁ-ゖァ-ヺー]+', plain))
+        if kana:
+            found = reading.find(kana, reading_cursor)
+            if found >= 0:
+                reading_cursor = found + len(kana)
+        following_start = match.end()
+        following_end = matches[index + 1].start() if index + 1 < len(matches) else len(ja)
+        following = ja[following_start:following_end]
+        anchor_match = re.search(r'[ぁ-ゖァ-ヺー]+', following)
+        anchor = anchor_match.group(0) if anchor_match else ""
+        anchor_at = reading.find(anchor, reading_cursor) if anchor else -1
+        ruby_reading = reading[reading_cursor:anchor_at] if anchor_at >= 0 else reading[reading_cursor:]
+        if ruby_reading:
+            output.append(f'<ruby>{html.escape(match.group(0))}<rt>{html.escape(ruby_reading)}</rt></ruby>')
+            reading_cursor = anchor_at if anchor_at >= 0 else len(reading)
+        else:
+            output.append(html.escape(match.group(0)))
+        ja_cursor = following_start
+    output.append(html.escape(ja[ja_cursor:]))
+    return "".join(output)
+
+def furigana_paren_to_ruby_html(text):
+    """generate_furigana()가 만든 "漢字(かんじ)" 괄호 표기를 한자 부분만
+    <ruby>인 XHTML로 바꾼다(이미 html.escape까지 끝난 상태를 반환하므로
+    호출부에서 다시 escape하면 안 됨)."""
+    output, cursor = [], 0
+    pattern = re.compile(r'([一-鿿々〆ヵヶ]+[ぁ-ゖァ-ヺー]*)\(([ぁ-ゖァ-ヺー]+)\)')
+    for match in pattern.finditer(text or ""):
+        output.append(html.escape(text[cursor:match.start()]))
+        output.append(_kanji_only_ruby(match.group(1), match.group(2)))
+        cursor = match.end()
+    output.append(html.escape((text or "")[cursor:]))
+    return "".join(output)
+
 TRANSLATION_MEMORY = {}
 try:
     memory_path = os.path.join(os.environ.get("SCRIPT_DIR", ""), "translation_memory.json")
@@ -742,7 +801,7 @@ def save_to_md(work_dir, note_title, representative_img_path, secondary_img_path
         f.write('<div class="set">\n\n')
         for ja, ko in zip(ja_list, ko_list):
             furi = generate_furigana(ja)
-            f.write(f'<p class="ja ibooks-dark-theme-use-custom-text-color">{html.escape(furi)}</p>\n')
+            f.write(f'<p class="ja ibooks-dark-theme-use-custom-text-color">{furigana_paren_to_ruby_html(furi)}</p>\n')
             f.write(f'<p class="ko ibooks-dark-theme-use-custom-text-color">{html.escape(ko)}</p>\n\n')
         f.write("</div>\n\n")
         if chunk_idx % SCENE_SIZE == 0:
@@ -967,7 +1026,7 @@ for idx in range(0, len(parsed_lines), 3):
             # CSS 클래스가 없어서 epub_style.css의 p.ja(금색)/p.ko(회색) 색 구분이
             # 전혀 적용 안 되고 본문 기본색으로만 보였다 — save_to_md()가 쓰는
             # _work 폴더 md와 똑같이 클래스 있는 HTML로 맞춘다.
-            mf.write(f'<p class="ja ibooks-dark-theme-use-custom-text-color">{html.escape(furi)}</p>\n')
+            mf.write(f'<p class="ja ibooks-dark-theme-use-custom-text-color">{furigana_paren_to_ruby_html(furi)}</p>\n')
             mf.write(f'<p class="ko ibooks-dark-theme-use-custom-text-color">{html.escape(ko)}</p>\n\n')
         mf.write("\n")
 
