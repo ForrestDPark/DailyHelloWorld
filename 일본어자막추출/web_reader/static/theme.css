@@ -1,0 +1,15 @@
+:root{color-scheme:light dark}
+@media(prefers-color-scheme:dark){
+  :root{--ink:#eeeaf4;--muted:#b9b1c2;--paper:#151319;--accent:#bda5ff;--line:#3d3745}
+  body{background:radial-gradient(circle at 12% 0,#30264a 0,transparent 32%),var(--paper)!important;color:var(--ink)}
+  .login-card,.book{background:#211e27e8!important;box-shadow:0 20px 60px #0006}
+  input,.sort-control select,.readaloud-bar select{background:#29252f!important;color:var(--ink)!important}
+  .subtle,.icon{background:#332e3c!important;color:#ded6e8!important}
+  .cover{background:linear-gradient(145deg,#4a3d66,#7256b3)}
+  .bar{background:#3a3540}.reader,.reader-stage{background:#17151c!important}
+  .reader nav,.reader footer{background:#211e27!important}.reader iframe{background:#1d1a21;box-shadow:0 8px 30px #0008}
+  .readaloud-bar{background:#292431!important;color:var(--muted)}.focus-mode{background:#3b3349!important;color:#d7c8ff!important}
+  .library-dock{border-color:#443c4d!important;background:#211e27eb!important;box-shadow:0 12px 35px #0007!important}
+  .library-dock a.active{background:#3b3150!important;color:#d3c2ff!important}
+  .sort-control{background:#211e27d9!important}
+}
