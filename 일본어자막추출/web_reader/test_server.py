@@ -1,6 +1,8 @@
 import tempfile
 import unittest
 import zipfile
+import datetime
+import sqlite3
 from pathlib import Path
 from unittest.mock import patch
 
@@ -43,6 +45,18 @@ class ReaderTests(unittest.TestCase):
         secret = b"secret"; self.assertTrue(server.valid_session(secret, server.sign_session(secret)))
         with patch.object(server.time, "time", return_value=0): token = server.sign_session(secret)
         self.assertFalse(server.valid_session(secret, token))
+
+    def test_chatapp_session_allows_only_owner(self):
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "chat.db"
+            with sqlite3.connect(db_path) as db:
+                db.executescript("CREATE TABLE users(id INTEGER PRIMARY KEY,is_owner INTEGER); CREATE TABLE sessions(token TEXT,user_id INTEGER,expires_at TEXT);")
+                future = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1)).isoformat()
+                db.execute("INSERT INTO users VALUES(1,1),(2,0)")
+                db.execute("INSERT INTO sessions VALUES('owner',1,?),('user',2,?)", (future, future))
+            app = object.__new__(server.App); app.chatapp_db = db_path
+            self.assertTrue(app.valid_chat_owner_session("owner"))
+            self.assertFalse(app.valid_chat_owner_session("user"))
 
 
 if __name__ == "__main__": unittest.main()

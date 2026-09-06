@@ -913,7 +913,7 @@ JOB_SYSTEM_ADDENDUM = (
 JP_SUBTITLE_DIR = REPO_ROOT / "일본어자막추출"
 JP_SUBTITLE_LIBRARY_DIR = JP_SUBTITLE_DIR / "library"
 JP_EPUB_FINAL_DIR = Path(os.environ.get("JP_EPUB_LIBRARY_DIR", "/Users/forrestdpark/Desktop/BlogImage/av완성작"))
-JP_EPUB_WEB_PUBLIC_URL = os.environ.get("JP_EPUB_WEB_PUBLIC_URL", "").rstrip("/")
+JP_EPUB_WEB_PUBLIC_URL = os.environ.get("JP_EPUB_WEB_PUBLIC_URL", "https://chat.tulpa-chat.site/epub").rstrip("/")
 JP_TEACHER_PERSONA_NAME = "일본어 선생님"
 # 복습 로테이션 기준일 — "하루에 하나씩" 결정론적으로 도는 시작점. 라이브러리에
 # 새 회차가 추가돼도 굳이 다시 안 맞춘다(그날그날 총 개수 기준으로 자연스럽게

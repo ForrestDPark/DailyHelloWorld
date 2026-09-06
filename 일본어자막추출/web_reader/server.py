@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import datetime
 import hashlib
 import hmac
 import json
@@ -28,6 +29,7 @@ DEFAULT_FINAL_DIR = Path("/Users/forrestdpark/Desktop/BlogImage/av완성작")
 DEFAULT_FALLBACK_DIR = ROOT.parent / "library"
 STATE_DIR = Path(os.environ.get("JP_WEB_READER_STATE_DIR", "~/.japanese_epub_web")).expanduser()
 SESSION_COOKIE = "jp_reader_session"
+CHAT_SESSION_COOKIE = "tulpa_session"
 SESSION_TTL = 60 * 60 * 24 * 30
 MAX_JSON = 64 * 1024
 XML_NS = {"c": "urn:oasis:names:tc:opendocument:xmlns:container", "opf": "http://www.idpf.org/2007/opf", "dc": "http://purl.org/dc/elements/1.1/"}
@@ -61,13 +63,13 @@ class Book:
     modified: float
     size: int
 
-    def public(self, progress: dict | None = None) -> dict:
+    def public(self, progress: dict | None = None, base_path: str = "") -> dict:
         return {
             "id": self.id, "title": self.title, "chapters": len(self.spine),
             "modified": int(self.modified), "size": self.size,
-            "cover_url": f"/api/books/{self.id}/cover" if self.cover else None,
+            "cover_url": f"{base_path}/api/books/{self.id}/cover" if self.cover else None,
             "progress": progress or {"spine_index": 0, "percent": 0},
-            "read_url": f"/?book={self.id}",
+            "read_url": f"{base_path}/?book={self.id}",
         }
 
 
@@ -203,14 +205,23 @@ class ReaderHandler(BaseHTTPRequestHandler):
     def _authenticated(self) -> bool:
         jar = cookies.SimpleCookie(self.headers.get("Cookie", ""))
         morsel = jar.get(SESSION_COOKIE)
-        return bool(morsel and valid_session(self.app.secret, morsel.value))
+        if morsel and valid_session(self.app.secret, morsel.value):
+            return True
+        chat_session = jar.get(CHAT_SESSION_COOKIE)
+        return bool(chat_session and self.app.valid_chat_owner_session(chat_session.value))
+
+    def _path(self) -> str:
+        path = urllib.parse.urlsplit(self.path).path
+        if self.app.base_path and (path == self.app.base_path or path.startswith(self.app.base_path + "/")):
+            return path[len(self.app.base_path):] or "/"
+        return path
 
     def _need_auth(self) -> bool:
         if self._authenticated(): return True
         self._json(401, {"ok": False, "detail": "로그인이 필요합니다"}); return False
 
     def do_POST(self):
-        path = urllib.parse.urlsplit(self.path).path
+        path = self._path()
         if path == "/api/login":
             try: supplied = str(self._body().get("password", ""))
             except (json.JSONDecodeError, ValueError): return self._json(400, {"ok": False})
@@ -226,7 +237,7 @@ class ReaderHandler(BaseHTTPRequestHandler):
         self._json(404, {"ok": False})
 
     def do_PUT(self):
-        path = urllib.parse.urlsplit(self.path).path
+        path = self._path()
         parts = path.strip("/").split("/")
         if len(parts) == 4 and parts[:2] == ["api", "books"] and parts[3] == "progress" and self._need_auth():
             book = self.app.library.books.get(parts[2])
@@ -239,11 +250,11 @@ class ReaderHandler(BaseHTTPRequestHandler):
         self._json(404, {"ok": False})
 
     def do_GET(self):
-        parsed = urllib.parse.urlsplit(self.path); path = parsed.path
+        path = self._path()
         if path == "/api/session": return self._json(200, {"authenticated": self._authenticated()})
         if path == "/api/books" and self._need_auth():
             books = sorted(self.app.library.books.values(), key=lambda b: b.modified, reverse=True)
-            return self._json(200, [b.public(self.app.store.get(b.id)) for b in books])
+            return self._json(200, [b.public(self.app.store.get(b.id), self.app.base_path) for b in books])
         if path.startswith("/api/books/") and self._need_auth(): return self._book_route(path)
         return self._static(path)
 
@@ -252,8 +263,8 @@ class ReaderHandler(BaseHTTPRequestHandler):
         if not book: return self._json(404, {"detail": "책을 찾을 수 없습니다"})
         action = parts[3] if len(parts) > 3 else ""
         if action == "manifest":
-            chapters = [{"index": i, "url": f"/api/books/{book.id}/resource/{urllib.parse.quote(href, safe='/')}"} for i, href in enumerate(book.spine)]
-            return self._json(200, {**book.public(self.app.store.get(book.id)), "chapters": chapters})
+            chapters = [{"index": i, "url": f"{self.app.base_path}/api/books/{book.id}/resource/{urllib.parse.quote(href, safe='/')}"} for i, href in enumerate(book.spine)]
+            return self._json(200, {**book.public(self.app.store.get(book.id), self.app.base_path), "chapters": chapters})
         if action == "progress": return self._json(200, self.app.store.get(book.id))
         if action == "cover" and book.cover: return self._resource(book, book.cover)
         if action == "download":
@@ -289,17 +300,42 @@ class ReaderHandler(BaseHTTPRequestHandler):
 
 class App:
     def __init__(self, password: str, roots: list[Path]):
-        self.password = password; self.secret = load_secret(); self.library = Library(roots); self.store = Store(STATE_DIR / "reader.db")
+        self.password = password
+        base = os.environ.get("JP_WEB_READER_BASE_PATH", "").strip("/")
+        self.base_path = f"/{base}" if base else ""
+        self.chatapp_db = Path(os.environ.get("JP_WEB_READER_CHATAPP_DB", "~/.tulpachat/chatapp.db")).expanduser()
+        self.secret = load_secret(); self.library = Library(roots); self.store = Store(STATE_DIR / "reader.db")
+
+    def valid_chat_owner_session(self, token: str) -> bool:
+        """같은 호스트의 툴파챗 로그인 쿠키를 읽되 관리자 계정만 허용한다."""
+        if not token or not self.chatapp_db.is_file():
+            return False
+        try:
+            with sqlite3.connect(f"file:{self.chatapp_db}?mode=ro", uri=True, timeout=2) as db:
+                row = db.execute(
+                    "SELECT sessions.expires_at, users.is_owner FROM sessions "
+                    "JOIN users ON users.id=sessions.user_id WHERE sessions.token=?",
+                    (token,),
+                ).fetchone()
+            if not row or not bool(row[1]):
+                return False
+            expires = datetime.datetime.fromisoformat(row[0])
+            now = datetime.datetime.now(datetime.timezone.utc)
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=datetime.timezone.utc)
+            return expires >= now
+        except (OSError, sqlite3.Error, TypeError, ValueError):
+            return False
 
 
 def main():
     parser = argparse.ArgumentParser(description="일본어 EPUB 비공개 웹 리더")
     parser.add_argument("--host", default=os.environ.get("JP_WEB_READER_HOST", "127.0.0.1")); parser.add_argument("--port", type=int, default=int(os.environ.get("JP_WEB_READER_PORT", "8766")))
     args = parser.parse_args(); password = os.environ.get("JP_WEB_READER_PASSWORD", "")
-    if len(password) < 8: raise SystemExit("JP_WEB_READER_PASSWORD를 8자 이상으로 설정하세요.")
+    if password and len(password) < 8: raise SystemExit("JP_WEB_READER_PASSWORD를 설정한다면 8자 이상이어야 합니다.")
     roots = [Path(os.environ.get("JP_EPUB_LIBRARY_DIR", DEFAULT_FINAL_DIR)), DEFAULT_FALLBACK_DIR]
     httpd = ThreadingHTTPServer((args.host, args.port), ReaderHandler); httpd.app = App(password, roots)  # type: ignore[attr-defined]
-    print(f"일본어 EPUB 웹 서재: http://{args.host}:{args.port} ({len(httpd.app.library.books)}권)")
+    print(f"일본어 EPUB 웹 서재: http://{args.host}:{args.port}{httpd.app.base_path}/ ({len(httpd.app.library.books)}권)")
     httpd.serve_forever()
 
 

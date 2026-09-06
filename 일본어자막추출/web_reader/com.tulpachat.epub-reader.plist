@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>JP_WEB_READER_BASE_PATH</key><string>epub</string>
+    <key>JP_WEB_READER_CHATAPP_DB</key><string>/Users/forrestdpark/.tulpachat/chatapp.db</string>
+    <key>JP_EPUB_LIBRARY_DIR</key><string>/Users/forrestdpark/Desktop/BlogImage/av완성작</string>
+  </dict>
+  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  <key>Label</key><string>com.tulpachat.epub-reader</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/anaconda3/bin/python3</string><string>-u</string>
+    <string>/Users/forrestdpark/Desktop/PDG/DailyHelloWorld_/일본어자막추출/web_reader/server.py</string>
+    <string>--host</string><string>127.0.0.1</string>
+    <string>--port</string><string>8766</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>StandardErrorPath</key><string>/Users/forrestdpark/Library/Logs/tulpachat_epub_reader.err.log</string>
+  <key>StandardOutPath</key><string>/Users/forrestdpark/Library/Logs/tulpachat_epub_reader.out.log</string>
+</dict>
+</plist>

@@ -7,7 +7,7 @@
 
 ```bash
 cd /Users/forrestdpark/Desktop/PDG/DailyHelloWorld_/일본어자막추출/web_reader
-JP_WEB_READER_PASSWORD='8자 이상의 서재 비밀번호' ./run_web_reader.sh
+JP_WEB_READER_BASE_PATH=epub ./run_web_reader.sh
 ```
 
 기본 주소는 `http://127.0.0.1:8766`이다. 외부 공개 시에는 반드시 HTTPS 역방향
@@ -16,7 +16,9 @@ JP_WEB_READER_PASSWORD='8자 이상의 서재 비밀번호' ./run_web_reader.sh
 
 환경변수:
 
-- `JP_WEB_READER_PASSWORD`: 필수, 8자 이상
+- `JP_WEB_READER_PASSWORD`: 독립 실행할 때만 쓰는 선택 비밀번호, 설정 시 8자 이상
+- `JP_WEB_READER_CHATAPP_DB`: 툴파챗 세션을 확인할 DB. 관리자 계정만 허용한다.
+- `JP_WEB_READER_BASE_PATH`: 기존 도메인의 하위 경로. 운영값은 `epub`
 - `JP_EPUB_LIBRARY_DIR`: 완성 EPUB 폴더. 기본값은 `~/Desktop/BlogImage/av완성작`
 - `JP_WEB_READER_HOST`, `JP_WEB_READER_PORT`: 기본값 `127.0.0.1`, `8766`
 - `JP_WEB_READER_STATE_DIR`: 로그인 서명 키와 읽기 위치 DB 저장 폴더
