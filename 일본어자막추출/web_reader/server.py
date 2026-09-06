@@ -336,9 +336,9 @@ class ReaderHandler(BaseHTTPRequestHandler):
             extra = "default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; media-src 'self'; font-src 'self';"
         return self._send_bytes(data, mime, csp=extra)
 
-    def _send_bytes(self, data: bytes, mime: str, disposition: str | None = None, csp: str | None = None):
+    def _send_bytes(self, data: bytes, mime: str, disposition: str | None = None, csp: str | None = None, cache_control: str = "private, max-age=3600"):
         self.send_response(200); self.send_header("Content-Type", mime); self.send_header("Content-Length", str(len(data)))
-        self.send_header("Cache-Control", "private, max-age=3600"); self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Cache-Control", cache_control); self.send_header("X-Content-Type-Options", "nosniff")
         if disposition: self.send_header("Content-Disposition", disposition)
         if csp: self.send_header("Content-Security-Policy", csp)
         self.end_headers(); self.wfile.write(data)
@@ -348,7 +348,8 @@ class ReaderHandler(BaseHTTPRequestHandler):
         try: target = (STATIC_DIR / name).resolve(); target.relative_to(STATIC_DIR.resolve())
         except (ValueError, OSError): return self.send_error(404)
         if not target.is_file(): target = STATIC_DIR / "index.html"
-        return self._send_bytes(target.read_bytes(), mimetypes.guess_type(target.name)[0] or "application/octet-stream")
+        cache_control = "no-store" if target.name == "index.html" else "private, max-age=3600"
+        return self._send_bytes(target.read_bytes(), mimetypes.guess_type(target.name)[0] or "application/octet-stream", cache_control=cache_control)
 
 
 class App:
