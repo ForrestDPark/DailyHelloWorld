@@ -8,6 +8,7 @@
   .cover{background:linear-gradient(145deg,#4a3d66,#7256b3)}
   .bar{background:#3a3540}.reader,.reader-stage{background:#17151c!important}
   .reader nav,.reader footer{background:#211e27!important}.reader iframe{background:#1d1a21;box-shadow:0 8px 30px #0008}
+  .scroll-pages iframe{background:#211e27!important}
   .readaloud-bar{background:#292431!important;color:var(--muted)}.focus-mode{background:#3b3349!important;color:#d7c8ff!important}
   .library-dock{border-color:#443c4d!important;background:#211e27eb!important;box-shadow:0 12px 35px #0007!important}
   .library-dock a.active{background:#3b3150!important;color:#d3c2ff!important}
