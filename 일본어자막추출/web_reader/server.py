@@ -97,7 +97,11 @@ def _smil_audio(zf: zipfile.ZipFile, smil_member: str) -> tuple[dict, ...]:
     except (KeyError, ValueError, ET.ParseError):
         return ()
     result = []
-    for node in root.findall(".//{*}audio"):
+    for par in root.findall(".//{*}par"):
+        node = par.find("{*}audio")
+        text_node = par.find("{*}text")
+        if node is None:
+            continue
         src = (node.get("src") or "").split("#", 1)[0]
         if not src:
             continue
@@ -107,7 +111,9 @@ def _smil_audio(zf: zipfile.ZipFile, smil_member: str) -> tuple[dict, ...]:
             continue
         begin = _clock_seconds(node.get("clipBegin"))
         end = _clock_seconds(node.get("clipEnd"))
-        result.append({"member": member, "begin": begin, "end": end or None})
+        text_src = text_node.get("src") if text_node is not None else ""
+        target = urllib.parse.unquote(text_src.split("#", 1)[1]) if "#" in text_src else None
+        result.append({"member": member, "begin": begin, "end": end or None, "target": target})
     return tuple(result)
 
 
@@ -308,7 +314,7 @@ class ReaderHandler(BaseHTTPRequestHandler):
                 "url": f"{self.app.base_path}/api/books/{book.id}/resource/{urllib.parse.quote(href, safe='/')}",
                 "audio": [{
                     "url": f"{self.app.base_path}/api/books/{book.id}/resource/{urllib.parse.quote(clip['member'], safe='/')}",
-                    "begin": clip["begin"], "end": clip["end"],
+                    "begin": clip["begin"], "end": clip["end"], "target": clip["target"],
                 } for clip in book.audio[i]],
             } for i, href in enumerate(book.spine)]
             return self._json(200, {**book.public(self.app.store.get(book.id), self.app.base_path), "chapters": chapters})
