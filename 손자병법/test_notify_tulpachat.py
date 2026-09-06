@@ -66,6 +66,16 @@ class NotifyTulpaChatTest(unittest.TestCase):
 
         self.assertEqual([item["name"] for item in commanders], ["코르테스", "항우"])
 
+    def test_verse_24_commanders_use_chat_safe_korean_names(self):
+        page = Path(__file__).with_name("jiudi24_full_page.md")
+        markdown = page.read_text(encoding="utf-8")
+        _number, original, _subtitle = notify.read_page(page)
+
+        commanders = notify.victorious_commanders(markdown, original)
+
+        self.assertEqual([item["name"] for item in commanders], ["조지 워싱턴", "등애"])
+        self.assertEqual([len(item["images"]) for item in commanders], [6, 6])
+
 
 if __name__ == "__main__":
     unittest.main()

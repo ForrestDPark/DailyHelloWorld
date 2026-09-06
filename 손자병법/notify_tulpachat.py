@@ -27,6 +27,13 @@ HANJA_HUN_EUM = {
     "於": "어조사 어", "險": "험할 험", "此": "이 차", "謂": "이를 위", "將": "장수 장",
     "事": "일 사", "也": "어조사 야",
 }
+COMMANDER_NAME_ALIASES = {
+    "에르난 코르테스": "코르테스",
+}
+BATTLE_COMMANDER_PREFERENCES = {
+    "요크타운": "조지 워싱턴",
+    "거록": "항우",
+}
 
 
 def plain(value: str) -> str:
@@ -194,17 +201,27 @@ def victorious_commanders(markdown: str, original: str) -> list[dict[str, str]]:
         blue_names = re.findall(
             r'<span\s+color="blue">\s*\*\*([^*<>]+)\*\*\s*</span>', block, flags=re.I
         )
-        candidates = [
-            plain(name) for name in blue_names
-            if 1 < len(plain(name)) <= 20 and not any(word in plain(name) for word in rejected)
-            and "·" not in plain(name) and plain(name) not in {"승군 측 결과", "▰"}
-        ]
+        candidates = []
+        for raw_name in blue_names:
+            # 채팅 페르소나 이름에는 괄호·한자가 허용되지 않는다. 원고의
+            # `등애(鄧艾)` 같은 병기를 화면용 한국어 이름으로 정규화한다.
+            name = plain(raw_name).split("(", 1)[0].strip()
+            name = COMMANDER_NAME_ALIASES.get(name, name)
+            if (1 < len(name) <= 20 and not any(word in name for word in rejected)
+                    and "·" not in name and name not in {"승군 측 결과", "▰"}):
+                candidates.append(name)
         winning_force = plain(blue_names[0]) if blue_names else ""
         def commander_score(name: str) -> tuple[int, int]:
             short_forms = {name, name.split()[0], name.split()[-1]}
-            mentions = sum(block.count(form) for form in short_forms if len(form) >= 2)
+            preferred_bonus = 300 if any(
+                key in battle and name == preferred
+                for key, preferred in BATTLE_COMMANDER_PREFERENCES.items()
+            ) else 0
             force_bonus = 100 if any(form in winning_force for form in short_forms if len(form) >= 2) else 0
-            return force_bonus + mentions, -candidates.index(name)
+            battle_bonus = 200 if any(form in battle for form in short_forms if len(form) >= 2) else 0
+            # 사례 제목에 이름이 있으면 그 지휘관을 우선하고, 그렇지 않으면
+            # 전투 서사에서 처음 소개된 대장급 인물을 택한다.
+            return preferred_bonus + battle_bonus + force_bonus, -candidates.index(name)
         commander = max(dict.fromkeys(candidates), key=commander_score, default="")
         if not commander or any(item["name"] == commander for item in found):
             continue
