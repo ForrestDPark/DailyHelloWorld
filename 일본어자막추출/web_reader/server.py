@@ -59,6 +59,7 @@ class Book:
     title: str
     opf_path: str
     spine: tuple[str, ...]
+    audio: tuple[tuple[dict, ...], ...]
     cover: str | None
     modified: float
     size: int
@@ -68,9 +69,46 @@ class Book:
             "id": self.id, "title": self.title, "chapters": len(self.spine),
             "modified": int(self.modified), "size": self.size,
             "cover_url": f"{base_path}/api/books/{self.id}/cover" if self.cover else None,
+            "has_audio": any(self.audio),
             "progress": progress or {"spine_index": 0, "percent": 0},
             "read_url": f"{base_path}/?book={self.id}",
         }
+
+
+def _clock_seconds(value: str | None) -> float:
+    """SMIL 시각(00:00:01.250, 1.25s 등)을 초로 바꾼다."""
+    if not value:
+        return 0.0
+    value = value.strip().lower().removeprefix("npt=")
+    try:
+        if value.endswith("ms"):
+            return float(value[:-2]) / 1000
+        if value.endswith("s"):
+            return float(value[:-1])
+        parts = [float(part) for part in value.split(":")]
+        return sum(part * (60 ** index) for index, part in enumerate(reversed(parts)))
+    except ValueError:
+        return 0.0
+
+
+def _smil_audio(zf: zipfile.ZipFile, smil_member: str) -> tuple[dict, ...]:
+    try:
+        root = ET.fromstring(zf.read(smil_member))
+    except (KeyError, ValueError, ET.ParseError):
+        return ()
+    result = []
+    for node in root.findall(".//{*}audio"):
+        src = (node.get("src") or "").split("#", 1)[0]
+        if not src:
+            continue
+        try:
+            member = _safe_member(posixpath.join(posixpath.dirname(smil_member), src))
+        except ValueError:
+            continue
+        begin = _clock_seconds(node.get("clipBegin"))
+        end = _clock_seconds(node.get("clipEnd"))
+        result.append({"member": member, "begin": begin, "end": end or None})
+    return tuple(result)
 
 
 def parse_book(path: Path) -> Book:
@@ -85,22 +123,24 @@ def parse_book(path: Path) -> Book:
         title = (title_node.text or "").strip() if title_node is not None else path.stem
         title = title or path.stem
         opf_dir = posixpath.dirname(opf_path)
-        items: dict[str, tuple[str, str, str]] = {}
+        items: dict[str, dict] = {}
         for item in package.findall(".//opf:manifest/opf:item", XML_NS):
             item_id, href = item.get("id"), item.get("href")
             if item_id and href:
                 member = _safe_member(posixpath.join(opf_dir, urllib.parse.unquote(href)))
-                items[item_id] = (member, item.get("media-type", ""), item.get("properties", ""))
-        spine = tuple(items[ref.get("idref")][0] for ref in package.findall(".//opf:spine/opf:itemref", XML_NS) if ref.get("idref") in items)
-        cover = next((v[0] for v in items.values() if "cover-image" in v[2].split()), None)
+                items[item_id] = {"member": member, "media_type": item.get("media-type", ""), "properties": item.get("properties", ""), "overlay": item.get("media-overlay")}
+        spine_items = [items[ref.get("idref")] for ref in package.findall(".//opf:spine/opf:itemref", XML_NS) if ref.get("idref") in items]
+        spine = tuple(item["member"] for item in spine_items)
+        audio = tuple(_smil_audio(zf, items[item["overlay"]]["member"]) if item.get("overlay") in items else () for item in spine_items)
+        cover = next((v["member"] for v in items.values() if "cover-image" in v["properties"].split()), None)
         if not cover:
             meta = package.find(".//opf:metadata/opf:meta[@name='cover']", XML_NS)
             if meta is not None and meta.get("content") in items:
-                cover = items[meta.get("content")][0]
+                cover = items[meta.get("content")]["member"]
         if not cover:
-            cover = next((v[0] for key, v in items.items() if v[1].startswith("image/") and "cover" in key.casefold()), None)
+            cover = next((v["member"] for key, v in items.items() if v["media_type"].startswith("image/") and "cover" in key.casefold()), None)
         stat = path.stat()
-        return Book(_book_id(path), path.resolve(), title, opf_path, spine, cover, stat.st_mtime, stat.st_size)
+        return Book(_book_id(path), path.resolve(), title, opf_path, spine, audio, cover, stat.st_mtime, stat.st_size)
 
 
 class Library:
@@ -263,7 +303,14 @@ class ReaderHandler(BaseHTTPRequestHandler):
         if not book: return self._json(404, {"detail": "책을 찾을 수 없습니다"})
         action = parts[3] if len(parts) > 3 else ""
         if action == "manifest":
-            chapters = [{"index": i, "url": f"{self.app.base_path}/api/books/{book.id}/resource/{urllib.parse.quote(href, safe='/')}"} for i, href in enumerate(book.spine)]
+            chapters = [{
+                "index": i,
+                "url": f"{self.app.base_path}/api/books/{book.id}/resource/{urllib.parse.quote(href, safe='/')}",
+                "audio": [{
+                    "url": f"{self.app.base_path}/api/books/{book.id}/resource/{urllib.parse.quote(clip['member'], safe='/')}",
+                    "begin": clip["begin"], "end": clip["end"],
+                } for clip in book.audio[i]],
+            } for i, href in enumerate(book.spine)]
             return self._json(200, {**book.public(self.app.store.get(book.id), self.app.base_path), "chapters": chapters})
         if action == "progress": return self._json(200, self.app.store.get(book.id))
         if action == "cover" and book.cover: return self._resource(book, book.cover)

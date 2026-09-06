@@ -9,12 +9,17 @@ from unittest.mock import patch
 import server
 
 
-def make_epub(path: Path, title="테스트 책"):
+def make_epub(path: Path, title="테스트 책", readaloud=False):
     with zipfile.ZipFile(path, "w") as z:
         z.writestr("META-INF/container.xml", '<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>')
-        z.writestr("OEBPS/content.opf", f'''<package xmlns="http://www.idpf.org/2007/opf"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>{title}</dc:title></metadata><manifest><item id="cover" href="images/cover.jpg" media-type="image/jpeg" properties="cover-image"/><item id="p1" href="pages/1.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="p1"/></spine></package>''')
+        overlay = ' media-overlay="s1"' if readaloud else ''
+        smil = '<item id="s1" href="overlays/1.smil" media-type="application/smil+xml"/><item id="a1" href="audio/1.m4a" media-type="audio/mp4"/>' if readaloud else ''
+        z.writestr("OEBPS/content.opf", f'''<package xmlns="http://www.idpf.org/2007/opf"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>{title}</dc:title></metadata><manifest><item id="cover" href="images/cover.jpg" media-type="image/jpeg" properties="cover-image"/><item id="p1" href="pages/1.xhtml" media-type="application/xhtml+xml"{overlay}/>{smil}</manifest><spine><itemref idref="p1"/></spine></package>''')
         z.writestr("OEBPS/images/cover.jpg", b"jpeg")
         z.writestr("OEBPS/pages/1.xhtml", "<html>본문</html>")
+        if readaloud:
+            z.writestr("OEBPS/overlays/1.smil", '<smil xmlns="http://www.w3.org/ns/SMIL"><body><seq><par><audio src="../audio/1.m4a" clipBegin="00:00:01.250" clipEnd="00:00:02.500"/></par></seq></body></smil>')
+            z.writestr("OEBPS/audio/1.m4a", b"audio")
 
 
 class ReaderTests(unittest.TestCase):
@@ -31,6 +36,15 @@ class ReaderTests(unittest.TestCase):
             make_epub(root / "ABC-001 — 제목_낭독판.epub")
             make_epub(root / "old" / "ABC-001_읽어주기.epub")
             self.assertEqual(len(server.Library([root]).books), 1)
+
+    def test_smil_audio_is_connected_to_spine_page(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); make_epub(root / "ABC-001_낭독판.epub", readaloud=True)
+            book = server.parse_book(root / "ABC-001_낭독판.epub")
+            self.assertTrue(book.public()["has_audio"])
+            self.assertEqual(book.audio[0][0]["member"], "OEBPS/audio/1.m4a")
+            self.assertEqual(book.audio[0][0]["begin"], 1.25)
+            self.assertEqual(book.audio[0][0]["end"], 2.5)
 
     def test_rejects_traversal(self):
         for value in ("../secret", "%2e%2e/secret", ""):
