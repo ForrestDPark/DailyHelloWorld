@@ -935,22 +935,60 @@ def _jp_subtitle_summary(title):
         return ""
 
 
-def _jp_epub_read_url(title):
-    """웹 리더와 동일한 불투명 ID로 해당 회차의 바로 읽기 URL을 만든다.
-
-    공개 주소가 설정되지 않았거나 EPUB이 없으면 깨진 링크를 만들지 않는다.
-    """
-    if not JP_EPUB_WEB_PUBLIC_URL or not JP_EPUB_FINAL_DIR.exists():
-        return ""
+def _jp_epub_book_id(title):
+    """웹 리더(web_reader/server.py)의 _book_id()와 정확히 같은 공식
+    (epub 절대경로 sha256 앞 20자)으로 이 회차의 EPUB을 찾아 ID를 만든다.
+    EPUB이 없으면 None."""
+    if not JP_EPUB_FINAL_DIR.exists():
+        return None
     title_key = title.casefold()
     candidates = sorted(
         (p for p in JP_EPUB_FINAL_DIR.glob("*.epub") if p.stem.casefold().startswith(title_key)),
         key=lambda p: ("낭독판" not in p.stem, p.name),
     )
     if not candidates:
+        return None
+    return hashlib.sha256(str(candidates[0].resolve()).encode()).hexdigest()[:20]
+
+
+def _jp_epub_read_url(title):
+    """웹 리더와 동일한 불투명 ID로 해당 회차의 바로 읽기 URL을 만든다.
+
+    공개 주소가 설정되지 않았거나 EPUB이 없으면 깨진 링크를 만들지 않는다.
+    """
+    if not JP_EPUB_WEB_PUBLIC_URL:
         return ""
-    book_id = hashlib.sha256(str(candidates[0].resolve()).encode()).hexdigest()[:20]
-    return f"{JP_EPUB_WEB_PUBLIC_URL}/?book={book_id}"
+    book_id = _jp_epub_book_id(title)
+    return f"{JP_EPUB_WEB_PUBLIC_URL}/?book={book_id}" if book_id else ""
+
+
+# ★ 2026-09-06: "새로 만들고있는 chat.tulpa-chat.site/epub/ 이 싸이트도
+# 활용하면 좋겠어" 요청 — 웹 리더가 이미 읽은 위치를 ~/.japanese_epub_web/
+# reader.db(progress 테이블, book_id별 spine_index/percent/updated_at)에
+# 저장해두고 있다는 걸 확인했다. 여기서 그대로 읽기만 하면(쓰기는 웹
+# 리더만 해야 함) 일본어 선생님이 "지난번에 몇 %까지 읽으셨네요"처럼
+# 실제 진행 상황을 알고 대화할 수 있다.
+JP_EPUB_READER_STATE_DIR = Path(os.environ.get("JP_WEB_READER_STATE_DIR", "~/.japanese_epub_web")).expanduser()
+JP_EPUB_READER_DB = JP_EPUB_READER_STATE_DIR / "reader.db"
+
+
+def _jp_epub_progress_text(title):
+    book_id = _jp_epub_book_id(title)
+    if not book_id or not JP_EPUB_READER_DB.exists():
+        return ""
+    try:
+        conn = sqlite3.connect(f"file:{JP_EPUB_READER_DB}?mode=ro", uri=True, timeout=3)
+        row = conn.execute(
+            "SELECT percent, updated_at FROM progress WHERE book_id=?", (book_id,)
+        ).fetchone()
+        conn.close()
+    except sqlite3.Error:
+        return ""
+    if not row:
+        return ""
+    percent, updated_at = row
+    updated = datetime.datetime.fromtimestamp(updated_at).strftime("%m/%d %H:%M")
+    return f"웹 리더 읽기 진행률: {percent:.0f}%(마지막 갱신 {updated})"
 
 
 def _jp_subtitle_all_cards(title):
@@ -987,6 +1025,43 @@ def _jp_subtitle_all_cards(title):
     return "\n".join(lines)
 
 
+def _jp_subtitle_has_cards(title):
+    data = _read_json_file(JP_SUBTITLE_LIBRARY_DIR / title / "scene_study_cards.json")
+    return isinstance(data, dict) and bool(data)
+
+
+JP_SUBTITLE_KNOWN_TITLES_FILE = JP_SUBTITLE_DIR / ".known_titles_snapshot.json"
+
+
+def _jp_subtitle_new_titles_today(current_titles):
+    """"오늘 새로 처리한 회차"를 폴더 mtime이 아니라 날짜별 스냅샷 비교로
+    판정한다.
+    ★ 2026-09-06 실측 사고: recover_study_cards_from_epub.py로 과거에
+    학습카드 없이 방치됐던 32개 회차를 한꺼번에 복구했더니, 그 폴더들의
+    파일 mtime이 전부 "오늘"이 되면서 mtime 기반 today_titles가 32개를
+    "오늘 새로 처리한 회차"로 오판했다(실제로는 몇 달 전 회차들). 원본
+    영상 처리든 EPUB 역추출 복구든 백업 복원이든, library 폴더의 파일
+    mtime은 언제든 오늘 날짜로 바뀔 수 있어 신뢰할 수 없는 신호다. 대신
+    "오늘 하루의 시작 시점에 존재했던 제목 목록" 스냅샷을 파일로 남겨두고,
+    그 이후 새로 나타난 제목만 "오늘 새로 처리한 회차"로 센다."""
+    today_str = str(datetime.date.today())
+    snapshot = _read_json_file(JP_SUBTITLE_KNOWN_TITLES_FILE) or {}
+    known_titles = set(snapshot.get("titles") or [])
+    snapshot_date = snapshot.get("as_of_date")
+    # 스냅샷이 아예 없던 첫 실행(예: 이번 사고 복구용 배포 직후)에는 지금
+    # 있는 걸 전부 "오늘 새로 처리함"으로 잘못 알리지 않도록 new=[]로 시작한다.
+    new_titles = sorted(set(current_titles) - known_titles) if snapshot_date is not None else []
+    if snapshot_date != today_str:
+        try:
+            JP_SUBTITLE_KNOWN_TITLES_FILE.write_text(
+                json.dumps({"as_of_date": today_str, "titles": sorted(current_titles)}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
+    return new_titles
+
+
 def load_jp_subtitle_state():
     """오늘 새로 처리된 회차 전부(있으면) + 오늘의 복습 대상(라이브러리 전체를
     하루에 하나씩 도는 결정론적 로테이션)을 사람이 읽는 요약으로 만든다.
@@ -995,16 +1070,20 @@ def load_jp_subtitle_state():
     예전엔 mtime 기준 가장 최근 회차 딱 1개만 "오늘 새로 처리한 회차"로 골랐는데,
     하루에 여러 회차를 처리하면 나머지가 조용히 묻혔다(트리거는 회차마다 따로
     오는데, 그때마다 이 함수가 "가장 최근" 1개만 다시 계산해서 매번 마지막
-    회차만 반복해서 소개하는 꼴이 됨). 이제 오늘 mtime인 회차를 전부 모은다."""
+    회차만 반복해서 소개하는 꼴이 됨). 이제 오늘 mtime인 회차를 전부 모은다.
+    ★ 2026-09-06 실측 피드백: "오늘도 「DLDSS-138」이네요, 아직 자료가 준비가
+    안 됐나 봐요... 이렇게 말하는데 한편을 온전하게 다 소개 하면 좋겠어" —
+    AI 요약이 실패해 학습카드가 없는 회차(library 폴더는 있지만
+    scene_study_cards.json이 비어있음)가 로테이션에 그대로 걸리면 소개할
+    내용이 없어 늘 어제 얘기로 때우게 됐다. 복습 로테이션은 학습카드가 실제로
+    있는 회차만 대상으로 돈다 — 학습카드 없는 회차는 나중에 자동 복구가
+    채운 뒤에 자연스럽게 로테이션에 들어온다."""
     titles = _jp_subtitle_titles()
     if not titles:
         return "아직 처리된 회차가 없음 — 지어내지 말고 솔직히 말할 것."
     lines = []
     today = datetime.date.today()
-    today_titles = sorted(
-        (t for t in titles if datetime.date.fromtimestamp((JP_SUBTITLE_LIBRARY_DIR / t).stat().st_mtime) == today),
-        key=lambda t: (JP_SUBTITLE_LIBRARY_DIR / t).stat().st_mtime,
-    )
+    today_titles = _jp_subtitle_new_titles_today(titles)
     if today_titles:
         lines.append(f"오늘 새로 처리한 회차({len(today_titles)}개): {', '.join(today_titles)}")
         for t in today_titles:
@@ -1012,16 +1091,25 @@ def load_jp_subtitle_state():
             read_url = _jp_epub_read_url(t)
             if read_url:
                 lines.append(f"웹에서 EPUB 읽기: {read_url}")
+            progress = _jp_epub_progress_text(t)
+            if progress:
+                lines.append(progress)
             lines.append(_jp_subtitle_summary(t))
             cards = _jp_subtitle_all_cards(t)
             if cards:
                 lines.append(f"학습카드 전체:\n{cards}")
-    review_idx = (today - JP_SUBTITLE_REVIEW_ANCHOR).days % len(titles)
-    review_title = titles[review_idx]
+            else:
+                lines.append("(아직 학습카드 없음 — AI 요약 대기 중, 지어내지 말 것)")
+    reviewable_titles = [t for t in titles if _jp_subtitle_has_cards(t)] or titles
+    review_idx = (today - JP_SUBTITLE_REVIEW_ANCHOR).days % len(reviewable_titles)
+    review_title = reviewable_titles[review_idx]
     lines.append(f"\n오늘의 복습 대상: {review_title}")
     review_url = _jp_epub_read_url(review_title)
     if review_url:
         lines.append(f"웹에서 EPUB 읽기: {review_url}")
+    review_progress = _jp_epub_progress_text(review_title)
+    if review_progress:
+        lines.append(review_progress)
     lines.append(_jp_subtitle_summary(review_title))
     review_cards = _jp_subtitle_all_cards(review_title)
     if review_cards:

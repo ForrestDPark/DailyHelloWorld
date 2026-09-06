@@ -309,15 +309,26 @@ def main():
 
     base_name, subtitle = derive_title_and_subtitle(args.epub_path)
     book_dir = os.path.join(args.library_dir, base_name)
+    # ★ 같은 코드(예: MIDA-764, PRED-870)로 부제만 다른 별개 회차가 여러 개
+    # 있을 수 있다 — 코드만으로 된 폴더가 이미 있으면(이번 배치에서 먼저
+    # 처리된 다른 회차일 수 있음) 부제까지 포함한 전체 제목을 폴더명으로
+    # 써서 충돌을 피한다. 이 경우 BOOK_SUBTITLE.txt는 따로 안 만든다 —
+    # 부제가 이미 폴더명에 들어있어 book_title.py가 또 붙이면 중복된다.
+    if os.path.isdir(book_dir) and not args.force and subtitle:
+        fallback_dir = os.path.join(args.library_dir, base_name + " — " + subtitle)
+        if not os.path.isdir(fallback_dir):
+            book_dir = fallback_dir
+            subtitle = ""
     if os.path.isdir(book_dir) and not args.force:
         sys.exit(f"❌ 이미 존재함(--force로 덮어쓰기): {book_dir}")
     os.makedirs(book_dir, exist_ok=True)
 
+    folder_name = os.path.basename(book_dir)
     with zipfile.ZipFile(args.epub_path) as zf:
         pages = extract_pages(zf)
         if not pages:
             sys.exit("❌ EPUB에서 대사 페이지를 찾지 못했습니다(형식이 다를 수 있음).")
-        total_lines = write_transcripts(book_dir, base_name, pages)
+        total_lines = write_transcripts(book_dir, folder_name, pages)
         extract_images(zf, book_dir, pages)
         extract_cover(zf, book_dir)
 
