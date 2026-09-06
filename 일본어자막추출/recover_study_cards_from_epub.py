@@ -317,14 +317,19 @@ def main():
     book_dir = os.path.join(args.library_dir, base_name)
     # ★ 같은 코드(예: MIDA-764, PRED-870)로 부제만 다른 별개 회차가 여러 개
     # 있을 수 있다 — 코드만으로 된 폴더가 이미 있으면(이번 배치에서 먼저
-    # 처리된 다른 회차일 수 있음) 부제까지 포함한 전체 제목을 폴더명으로
-    # 써서 충돌을 피한다. 이 경우 BOOK_SUBTITLE.txt는 따로 안 만든다 —
-    # 부제가 이미 폴더명에 들어있어 book_title.py가 또 붙이면 중복된다.
-    if os.path.isdir(book_dir) and not args.force and subtitle:
-        fallback_dir = os.path.join(args.library_dir, base_name + " — " + subtitle)
-        if not os.path.isdir(fallback_dir):
-            book_dir = fallback_dir
-            subtitle = ""
+    # 처리된 다른 회차일 수 있음) 폴더명 뒤에 숫자를 붙여 충돌을 피한다.
+    # ★ 2026-09-07 실측 버그: 처음엔 "code — subtitle"을 폴더명으로 쓰고
+    # subtitle=""로 비웠는데, 그러면 BOOK_SUBTITLE.txt가 안 남아
+    # generate_summary.py가 원본 부제를 모른 채 새 부제를 또 만들어서
+    # display_title()이 "code — 원래부제 — 새부제"처럼 두 번 겹쳐 붙는
+    # 사고가 났다(MIDA-764·PRED-870·RBK-132 3건 실측). 폴더명은 코드만
+    # 숫자로 구분하고, 원래 부제는 그대로 BOOK_SUBTITLE.txt에 남겨 정상
+    # 경로와 똑같이 한 번만 붙게 한다.
+    if os.path.isdir(book_dir) and not args.force:
+        suffix = 2
+        while os.path.isdir(f"{book_dir}-{suffix}"):
+            suffix += 1
+        book_dir = f"{book_dir}-{suffix}"
     if os.path.isdir(book_dir) and not args.force:
         sys.exit(f"❌ 이미 존재함(--force로 덮어쓰기): {book_dir}")
     os.makedirs(book_dir, exist_ok=True)

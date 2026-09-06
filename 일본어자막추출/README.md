@@ -582,3 +582,11 @@ EPUB 웹 서재를 독립 모바일 웹앱으로 설치할 수 있도록 웹앱 
 - **원인**: 구글 번역이 계속 실패하면 `"[번역 실패]"` placeholder가 남고, `refine_translations.py`가 AI(Codex/Claude)로 재검수해서 채워야 하는데 그 시점에 AI 쿼터가 소진되면 예외를 잡아 경고만 찍고 그냥 넘어간다(`remaining_failures`가 남으면 원래 `sys.exit`으로 파이프라인을 막게 설계돼 있었는데, `SQTE-704`·`MIDV-592-...`는 그 안전장치를 통과해 배포된 상태였다).
 - **재검증 결과**: 오후 사이 AI 쿼터가 회복됐다. `SQTE-704`는 이미 `translation_memory.json`(다른 회차 검수로 누적된 영구 캐시)만으로 남은 실패 0건까지 자동 해결된 상태였고, `refine_translations.py` → `finalize_japanese_book.py` → `build_readaloud_epub.py`로 재빌드해 배포본을 교체했다. `MIDV-592`는 library 폴더가 아예 없어서 `recover_study_cards_from_epub.py`로 먼저 복구한 뒤 `refine_translations.py`(67문장 AI로 재검수, 잔여 0건) → `generate_summary.py` → 재빌드 순으로 처리했다. 서재 62권 전체를 다시 스캔해 `"번역 실패"`가 남은 파일이 0개임을 확인했다.
 - **★ 부수 발견 — recover 스크립트의 NFD 파일명 버그**: `MIDV-592`를 복구하는 과정에서 부제가 `"무너진 동경의 오후_낭독판"`처럼 `"_낭독판"` 접미사가 안 지워진 채로 저장되는 걸 발견했다. macOS(APFS)는 한글 파일명을 NFD(자모 분해형)로 저장하는데, `os.listdir()`/`glob.glob()`으로 얻은 경로 문자열이 NFD 상태 그대로 `recover_study_cards_from_epub.py`/`backfill_all_missing_study_cards.py`의 정규식(`_낭독판\.epub$` 등)에 들어가면 NFC로 타이핑된 패턴과 바이트 단위로 달라 조용히 매칭에 실패한다(터미널에 직접 타이핑한 경로는 NFC라 이 문제가 안 보였다 — 실제 파일시스템 목록에서 얻은 경로에서만 재현됨). 두 스크립트 모두 파일명을 다루기 전에 `unicodedata.normalize("NFC", ...)`를 거치도록 고쳤다.
+
+## 일괄 복구 2차 실행 — 부제 중복 붙는 버그 (2026-09-07)
+
+나머지 25개 회차를 배치로 마저 복구하는 중 `MIDA-764`·`PRED-870`·`RBK-132`(같은 코드로 부제만 다른 회차가 2개씩 있는 케이스) 3건에서 제목이 `"MIDA-764 — 행복을 뒤흔든 은밀한 시선 — 행복을 엿보던 불길한 시선"`처럼 부제가 두 번 겹쳐 붙는 사고가 났다(학습카드·번역 등 실제 콘텐츠는 정상, 표시 제목만 문제).
+
+- **원인**: 코드 충돌 회피를 위해 두 번째 회차의 폴더명을 `"code — 원래부제"`로 만들면서 `BOOK_SUBTITLE.txt`는 일부러 안 남겼다("폴더명에 이미 있으니 중복 방지"라는 의도였는데 거꾸로 작동함) — `generate_summary.py`는 `BOOK_SUBTITLE.txt`가 없으면 그냥 새 부제를 만들어버리므로, `display_title()`이 결국 폴더명(원래부제 포함) + 새로 만든 부제를 둘 다 붙여버렸다.
+- **수정**: `recover_study_cards_from_epub.py`의 충돌 회피 방식을 바꿨다 — 폴더명에는 부제를 넣지 않고 `code-2`처럼 숫자만 붙이고, 원래 부제는 평소처럼 `BOOK_SUBTITLE.txt`에 그대로 남긴다. 일반 경로와 완전히 같은 흐름이라 이번 같은 이중 부제가 구조적으로 생길 수 없다.
+- **이미 배포된 3개는 직접 정리**: 콘텐츠 재빌드 없이 `av완성작`의 파일명만 원래 부제로 되돌리고, 해당 library 폴더의 `BOOK_SUBTITLE.txt`도 맞춰 고쳤다(다음에 그 폴더로 재빌드해도 다시 안 겹치게).
