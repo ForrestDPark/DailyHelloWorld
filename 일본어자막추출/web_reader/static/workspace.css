@@ -15,6 +15,7 @@
 .readaloud-bar{display:flex;align-items:center;gap:12px;padding:9px 16px;background:#f7f3ff;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted)}
 .readaloud-bar button{min-width:90px;padding:9px 14px}
 .readaloud-bar button.playing{background:#b3261e}
+.readaloud-bar .read-stop{min-width:auto;background:#e8e1f7;color:#5b4777}
 .readaloud-bar #readStatus{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .readaloud-bar label{display:flex;align-items:center;gap:6px;white-space:nowrap}
 .readaloud-bar select{border:1px solid var(--line);border-radius:9px;background:white;padding:6px;color:var(--ink)}
@@ -50,6 +51,7 @@
   .scroll-pages iframe{margin:0;border-radius:0}
   .readaloud-bar{gap:5px 8px;padding:6px 8px}
   .readaloud-bar button{min-width:76px;padding:8px;font-size:12px}
+  .readaloud-bar .read-stop{min-width:62px}
   .readaloud-bar select{padding:4px}
   .reader footer{min-height:48px;padding-top:6px;padding-bottom:calc(6px + env(safe-area-inset-bottom))}
   .reader footer button{padding:8px 12px}
