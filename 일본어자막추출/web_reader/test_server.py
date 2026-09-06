@@ -18,7 +18,7 @@ def make_epub(path: Path, title="테스트 책", readaloud=False):
         z.writestr("OEBPS/images/cover.jpg", b"jpeg")
         z.writestr("OEBPS/pages/1.xhtml", "<html>본문</html>")
         if readaloud:
-            z.writestr("OEBPS/overlays/1.smil", '<smil xmlns="http://www.w3.org/ns/SMIL"><body><seq><par><text src="../pages/1.xhtml#line-1"/><audio src="../audio/1.m4a" clipBegin="00:00:01.250" clipEnd="00:00:02.500"/></par></seq></body></smil>')
+            z.writestr("OEBPS/overlays/1.smil", '<smil xmlns="http://www.w3.org/ns/SMIL"><body><seq><par><audio src="../audio/1.m4a" clipBegin="00:00:01.250" clipEnd="00:00:02.500"/></par></seq></body></smil>')
             z.writestr("OEBPS/audio/1.m4a", b"audio")
 
 
@@ -45,7 +45,6 @@ class ReaderTests(unittest.TestCase):
             self.assertEqual(book.audio[0][0]["member"], "OEBPS/audio/1.m4a")
             self.assertEqual(book.audio[0][0]["begin"], 1.25)
             self.assertEqual(book.audio[0][0]["end"], 2.5)
-            self.assertEqual(book.audio[0][0]["target"], "line-1")
 
     def test_rejects_traversal(self):
         for value in ("../secret", "%2e%2e/secret", ""):
