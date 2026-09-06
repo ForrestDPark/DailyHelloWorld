@@ -6,8 +6,8 @@
 .reader{grid-template-rows:auto auto 1fr auto}
 .reader nav{min-height:52px;padding:8px 14px}
 .reader nav strong{font-size:14px}
-.reader-stage{display:flex;justify-content:center;padding:12px;background:#e5e1e9}
-.reader iframe{max-width:860px;border-radius:10px}
+.reader-stage{display:flex;justify-content:center;padding:12px;background:#e5e1e9;overscroll-behavior-x:none;touch-action:pan-y}
+.reader iframe{max-width:860px;border-radius:10px;overscroll-behavior-x:none;touch-action:pan-y}
 .reader footer{min-height:54px;padding-top:8px;padding-bottom:8px}
 .readaloud-bar{display:flex;align-items:center;gap:12px;padding:9px 16px;background:#f7f3ff;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted)}
 .readaloud-bar button{min-width:90px;padding:9px 14px}
