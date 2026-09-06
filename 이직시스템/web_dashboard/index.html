@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#173f36">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>이직 준비실</title>
+  <link rel="manifest" href="/career/static/manifest.webmanifest">
+  <link rel="stylesheet" href="/career/static/style.css?v=20260906">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/#home" aria-label="툴파챗 홈"><span>T</span><b>나의 작업실</b></a>
+    <nav><a href="/#friends">친구</a><a href="/#chats">채팅</a><a class="active" href="/career/">이직</a></nav>
+  </header>
+  <main>
+    <section class="hero">
+      <p class="eyebrow">CAREER LOOP</p>
+      <h1>지원할 일을<br>한눈에 정리해요.</h1>
+      <p>수집기가 고른 최신 커리어·알바 후보를 모바일에서도 빠르게 확인할 수 있습니다.</p>
+      <div class="hero-status"><i></i><span id="status">추천 데이터를 불러오는 중이에요</span></div>
+    </section>
+    <section class="section-head"><div><p class="eyebrow">TODAY'S PICKS</p><h2>오늘 확인할 추천</h2></div><button id="refresh" type="button">새로고침</button></section>
+    <section id="cards" class="cards" aria-live="polite"></section>
+    <section class="workflow">
+      <p class="eyebrow">NEXT ACTION</p><h2>기록에서 행동까지</h2>
+      <div class="steps"><article><b>1</b><div><h3>공고 확인</h3><p>원문에서 마감일과 자격을 다시 확인합니다.</p></div></article><article><b>2</b><div><h3>분석 읽기</h3><p>Notion에 정리된 적합도와 회사 분석을 봅니다.</p></div></article><article><b>3</b><div><h3>지원 결정</h3><p>지원 여부와 준비할 일을 기록합니다.</p></div></article></div>
+    </section>
+  </main>
+  <nav class="dock" aria-label="작업실 바로가기"><a href="/#home"><span>⌂</span>홈</a><a href="/#chats"><span>◌</span>채팅</a><a class="active" href="/career/"><span>↗</span>이직</a><a href="/epub/"><span>本</span>서재</a></nav>
+  <script src="/career/static/app.js?v=20260906" defer></script>
+</body>
+</html>

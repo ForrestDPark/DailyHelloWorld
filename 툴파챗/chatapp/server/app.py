@@ -51,6 +51,9 @@ from server import ai_keys, auth, oauth
 from server.db import get_conn, init_db
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+REPO_ROOT = BASE_DIR.parent.parent
+CAREER_WEB_DIR = REPO_ROOT / "이직시스템" / "web_dashboard"
+CAREER_DATA_DIR = REPO_ROOT / "이직시스템" / "data"
 # ★ "업데이트할 때마다 페이지를 재시작(새로고침)해야 하는 게 맞냐" 요청
 # (2026-08-28) — 서버 프로세스(app.py 등 백엔드 코드)가 바뀌면 재시작 시
 # 이 값이 새로 생성돼서 바뀐다. static/*(프론트 HTML·JS·CSS)는 서버를
@@ -411,6 +414,54 @@ def _message_reactions(conn, message_ids, username):
 @app.get("/")
 def index():
     return FileResponse(str(BASE_DIR / "static" / "index.html"))
+
+
+@app.get("/career")
+def career_redirect():
+    return RedirectResponse("/career/", status_code=307)
+
+
+@app.get("/career/")
+def career_dashboard(request: Request):
+    _require_owner(request)
+    return FileResponse(str(CAREER_WEB_DIR / "index.html"))
+
+
+@app.get("/career/static/{filename}")
+def career_static(filename: str, request: Request):
+    _require_owner(request)
+    allowed = {"style.css", "app.js", "manifest.webmanifest"}
+    if filename not in allowed:
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
+    return FileResponse(str(CAREER_WEB_DIR / filename))
+
+
+def _read_career_card(filename: str):
+    path = CAREER_DATA_DIR / filename
+    if not path.exists():
+        return None
+    try:
+        result = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    result["updated_at"] = datetime.datetime.fromtimestamp(
+        path.stat().st_mtime, datetime.timezone.utc
+    ).isoformat(timespec="seconds")
+    return result
+
+
+@app.get("/api/career-summary")
+def career_summary(request: Request):
+    """소유자에게만 최신 추천 요약을 제공한다.
+
+    후보자 개인정보와 API 키는 내보내지 않고, 이미 공개용 추천 결과 JSON에
+    적힌 회사·공고·점수·링크만 최소한으로 전달한다.
+    """
+    _require_owner(request)
+    return {
+        "career": _read_career_card("top_job_notion_career.json"),
+        "parttime": _read_career_card("top_job_notion_parttime.json"),
+    }
 
 
 class SignupRequest(BaseModel):

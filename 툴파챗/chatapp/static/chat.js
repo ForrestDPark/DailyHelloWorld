@@ -20,6 +20,7 @@ let myAvatarUrl = null;
 let currentChatBackgroundUrl = null;
 
 const authView = document.getElementById("auth-view");
+const homeView = document.getElementById("home-view");
 const roomListView = document.getElementById("room-list-view");
 const chatView = document.getElementById("chat-view");
 const roomListEl = document.getElementById("room-list");
@@ -254,6 +255,7 @@ document.querySelectorAll(".auth-tab").forEach((el) => {
 });
 
 function showAuthView(message) {
+  homeView.classList.add("hidden");
   authView.classList.remove("hidden");
   roomListView.classList.add("hidden");
   chatView.classList.add("hidden");
@@ -1848,10 +1850,8 @@ document.getElementById("chats-tab").addEventListener("click", () => setListMode
 // "홈"은 기본 탭(친구)으로 리셋 + 목록 맨 위로 스크롤을 뜻한다. 열려있는
 // 패널도 같이 정리한다.
 document.getElementById("home-brand-btn").addEventListener("click", () => {
-  location.hash = "";
+  location.hash = "#home";
   closeMainListPanels();
-  setListMode("friends");
-  roomListEl.scrollTo({ top: 0, behavior: "smooth" });
 });
 
 // ★ "그룹 이름을 매번 직접 타이핑하지 말고, 이미 있는 그룹 목록에서 고르고
@@ -1909,6 +1909,37 @@ document.addEventListener("click", (event) => {
 // 보여준다.
 let usersCache = [];
 
+async function loadDirectoryData() {
+  const rooms = await (await apiFetch("/api/rooms")).json();
+  roomsCache = new Map(rooms.map((room) => [room.room_id, room]));
+  for (const room of rooms) {
+    const knownRead = getLastRead(room.room_id);
+    if (knownRead) markRoomRead(room.room_id, knownRead);
+  }
+  try { usersCache = await (await apiFetch("/api/users")).json(); }
+  catch (error) { usersCache = []; if (error.message !== "unauthorized" && error.message !== "forbidden") console.error(error); }
+  return rooms;
+}
+
+async function showPortalHome(focusSystems = false) {
+  currentRoom = null;
+  pollGeneration += 1;
+  if (activePollController) activePollController.abort();
+  if (pollTimer) clearTimeout(pollTimer);
+  authView.classList.add("hidden"); chatView.classList.add("hidden"); roomListView.classList.add("hidden"); homeView.classList.remove("hidden");
+  document.getElementById("portal-greeting-name").textContent = myDisplayName || myUsername || "오늘도";
+  try {
+    const rooms = await loadDirectoryData();
+    // 메시지 ID는 서버 전체에서 증가하므로 두 ID의 차이는 메시지 개수가 아니다.
+    // 마지막 메시지가 읽음 기준보다 새로운 "방"만 세어 과장된 숫자를 피한다.
+    const unread = rooms.reduce((sum, room) => sum + (Number(room.last_message_id || 0) > getLastRead(room.room_id) ? 1 : 0), 0);
+    document.getElementById("portal-unread").textContent = unread;
+  } catch (error) { console.error(error); }
+  if (focusSystems) document.querySelector(".portal-services")?.scrollIntoView({behavior:"smooth", block:"start"});
+}
+
+document.getElementById("portal-account-btn").addEventListener("click", () => document.getElementById("account-name-btn").click());
+
 async function showRoomList() {
   currentRoom = null;
   setChatChromeCollapsed(false);
@@ -1916,24 +1947,11 @@ async function showRoomList() {
   if (activePollController) activePollController.abort();
   if (pollTimer) clearTimeout(pollTimer);
   authView.classList.add("hidden");
+  homeView.classList.add("hidden");
   chatView.classList.add("hidden");
   roomListView.classList.remove("hidden");
   try {
-    const res = await apiFetch("/api/rooms");
-    const rooms = await res.json();
-    roomsCache = new Map(rooms.map((r) => [r.room_id, r]));
-    // 예전 비계정 localStorage 또는 현재 계정 localStorage가 서버보다 앞선
-    // 방은 목록 진입 시 즉시 서버로 마이그레이션한다.
-    for (const room of rooms) {
-      const knownRead = getLastRead(room.room_id);
-      if (knownRead) markRoomRead(room.room_id, knownRead);
-    }
-    try {
-      usersCache = await (await apiFetch("/api/users")).json();
-    } catch (e) {
-      usersCache = [];
-      if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
-    }
+    const rooms = await loadDirectoryData();
     if (!rooms.length && !usersCache.length) {
       roomListEl.innerHTML = '<div class="empty-hint">아직 페르소나가 없습니다</div>';
       return;
@@ -2047,6 +2065,7 @@ function appendRichText(container, text) {
 }
 
 async function showChatView(roomId) {
+  homeView.classList.add("hidden");
   pollGeneration += 1;
   if (activePollController) activePollController.abort();
   if (readVisibilityFrame) cancelAnimationFrame(readVisibilityFrame);
@@ -3310,7 +3329,7 @@ document.getElementById("upload-cancel-btn").addEventListener("click", () => {
 });
 
 document.getElementById("back-btn").addEventListener("click", () => {
-  location.hash = "";
+  location.hash = "#chats";
 });
 
 // ★ "처음 사용하는 사람들도 기능을 알 수 있게 도움말이 있으면 좋겠다"
@@ -3327,8 +3346,11 @@ async function route() {
   const room = parseRoomFromHash();
   if (room) {
     await showChatView(room);
-  } else {
+  } else if (location.hash === "#friends" || location.hash === "#chats") {
+    setListMode(location.hash === "#chats" ? "chats" : "friends");
     await showRoomList();
+  } else {
+    await showPortalHome(location.hash === "#systems");
   }
 }
 

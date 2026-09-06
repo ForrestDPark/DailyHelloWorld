@@ -1,4 +1,5 @@
 const $=s=>document.querySelector(s),BASE=location.pathname.startsWith('/epub')?'/epub':'';let books=[],active=null,index=0;
+const workspaceStyle=document.createElement('link');workspaceStyle.rel='stylesheet';workspaceStyle.href=`${BASE}/workspace.css?v=20260906`;document.head.appendChild(workspaceStyle);
 async function api(url,opts={}){const r=await fetch(url,{...opts,headers:{'Content-Type':'application/json',...(opts.headers||{})}});if(r.status===401){show('login');throw new Error('로그인이 필요합니다')}if(!r.ok)throw new Error((await r.json().catch(()=>({}))).detail||'요청에 실패했습니다');return r.json()}
 function show(id){['login','library','reader'].forEach(x=>$('#'+x).classList.toggle('hidden',x!==id))}
 function esc(s){return String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}

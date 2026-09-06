@@ -20,7 +20,7 @@
 <meta name="twitter:title" content="툴파챗">
 <meta name="twitter:description" content="나만의 페르소나들과 이어가는 채팅">
 <meta name="twitter:image" content="/static/og-image.png">
-<link rel="stylesheet" href="/static/style.css?v=20260903-system-links">
+<link rel="stylesheet" href="/static/style.css?v=20260906-portal">
 <!-- ★ "새 메시지 알림(웹 푸시)" 요청(2026-08-27) — iOS Safari는 PWA로
      "홈 화면에 추가"돼 있어야만 웹 푸시가 동작한다. manifest.json이 그
      설치 가능 상태를 만든다. -->
@@ -74,6 +74,22 @@
     </div>
   </div>
 
+  <!-- 개인 시스템 전체의 시작점. 긴 친구/방 목록은 각각 별도 화면으로 분리한다. -->
+  <div id="home-view" class="hidden">
+    <header class="portal-header"><a class="portal-brand" href="#home"><span>T</span><b>나의 작업실</b></a><button id="portal-account-btn" type="button" class="subtle-button">내 프로필</button></header>
+    <main class="portal-main">
+      <section class="portal-hero"><p class="portal-kicker">PERSONAL AI WORKSPACE</p><h1><span id="portal-greeting-name">오늘도</span>, 어디서 이어갈까요?</h1><p>대화와 공부, 구직 기록을 한곳에서 이어보세요.</p></section>
+      <section class="portal-services" aria-label="시스템 바로가기">
+        <a class="portal-card chat" href="#chats"><span class="portal-card-mark">T</span><div><small>CONVERSATION</small><h2>툴파챗</h2><p>안 읽은 대화 <b id="portal-unread">0</b>개 · 최근 대화 이어가기</p></div><i>→</i></a>
+        <a class="portal-card japanese" href="/epub/"><span class="portal-card-mark">本</span><div><small>JAPANESE LIBRARY</small><h2>일본어 학습</h2><p>EPUB 62권 · 오늘의 회차와 표현 복습</p></div><i>→</i></a>
+        <a class="portal-card sunzi" href="https://sunzi-strategy-notes.pulpilisory.chatgpt.site/"><span class="portal-card-mark">孫</span><div><small>STRATEGY NOTES</small><h2>손자병법</h2><p>최신 구절 · 역사 사례 · 13편 전체 목차</p></div><i>→</i></a>
+        <a class="portal-card career" href="/career/"><span class="portal-card-mark">職</span><div><small>CAREER SYSTEM</small><h2>이직 시스템</h2><p>추천 공고 · 준비 과제 · 지원 우선순위</p></div><i>→</i></a>
+      </section>
+      <section class="portal-quick"><div class="portal-section-head"><div><small>QUICK START</small><h2>바로 시작하기</h2></div></div><div class="portal-quick-grid"><a href="#friends"><b>친구</b><span>페르소나와 사람 찾기</span></a><a href="#chats"><b>채팅방</b><span>최근 대화와 안 읽은 방</span></a><a href="#systems"><b>시스템</b><span>학습·병법·이직 도구 모아보기</span></a></div></section>
+    </main>
+    <nav class="portal-dock" aria-label="주요 화면"><a href="#home">홈</a><a href="#friends">친구</a><a href="#chats">채팅</a><a href="#systems">시스템</a></nav>
+  </div>
+
   <!-- 방 목록 (카카오톡 채팅 목록처럼) -->
   <div id="room-list-view" class="hidden">
     <header>
@@ -124,6 +140,7 @@
       <button id="chats-tab" type="button"><svg aria-hidden="true"><use href="#icon-chat"/></svg><span>채팅</span></button>
     </nav>
     <div id="room-list"><div class="empty-hint">불러오는 중...</div></div>
+    <nav class="portal-dock list-dock" aria-label="주요 화면"><a href="#home">홈</a><a href="#friends">친구</a><a href="#chats">채팅</a><a href="#systems">시스템</a></nav>
   </div>
 
   <!-- 채팅방 -->
@@ -270,6 +287,6 @@
     </div>
   </div>
 
-  <script src="/static/chat.js?v=20260903-system-links"></script>
+  <script src="/static/chat.js?v=20260906-portal"></script>
 </body>
 </html>

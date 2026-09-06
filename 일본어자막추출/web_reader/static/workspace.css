@@ -1,0 +1,11 @@
+.workspace-link{display:inline-flex;margin-bottom:4px;color:var(--muted);font-size:12px;font-weight:800;text-decoration:none}
+.workspace-link:hover{color:var(--accent)}
+.library-dock{display:none}
+@media(max-width:600px){
+  body{padding-bottom:calc(70px + env(safe-area-inset-bottom))}
+  .reader{position:fixed;inset:0;z-index:20}
+  .library-dock{position:fixed;display:grid;grid-template-columns:repeat(4,1fr);z-index:15;left:10px;right:10px;bottom:calc(8px + env(safe-area-inset-bottom));padding:7px;border:1px solid #ffffffcc;border-radius:20px;background:#fffdf9e8;box-shadow:0 12px 35px #3f2f681f;backdrop-filter:blur(18px)}
+  .library-dock a{padding:9px 5px;text-align:center;border-radius:13px;color:var(--muted);font-size:11px;font-weight:750;text-decoration:none}
+  .library-dock a.active{background:#eee7ff;color:var(--accent)}
+}
+@media(display-mode:standalone){#library{padding-top:calc(24px + env(safe-area-inset-top))}}
