@@ -51,5 +51,20 @@ class StudyCardAudioTest(unittest.TestCase):
         ElementTree.fromstring(opf)
 
 
+class LegacyFuriganaFallbackTest(unittest.TestCase):
+    def test_generates_ruby_when_legacy_record_has_no_furigana_field(self):
+        xhtml = builder.make_page_xhtml(
+            "1편 장면 3 · 13쪽", 13,
+            [{"ja": "これ渡してアウターもらいます", "ko": "이걸 건넵니다."}],
+        )
+        self.assertIn("<ruby>渡<rt>わた</rt></ruby>して", xhtml)
+
+    def test_same_initial_kana_does_not_drop_ruby(self):
+        self.assertEqual(
+            builder.generated_furigana_html("今いくつになったの?"),
+            "<ruby>今<rt>いま</rt></ruby>いくつになったの?",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

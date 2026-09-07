@@ -218,6 +218,28 @@ h1 { margin: 0 0 18px; color: #9a6a00; font-size: 34px; }
 
 
 KANJI_RUN_RE = re.compile(r"[一-鿿々〆ヵヶ]+")
+_KAKASI = None
+
+
+def generated_furigana_html(text):
+    """구형 JSONL에 furigana가 없으면 로컬 사전으로 ruby HTML을 보충한다."""
+    global _KAKASI
+    if not KANJI_RUN_RE.search(text or ""):
+        return text or ""
+    if _KAKASI is None:
+        try:
+            from pykakasi import kakasi
+        except ImportError:
+            return html.escape(text or "")
+        _KAKASI = kakasi()
+    output = []
+    for item in _KAKASI.convert(text):
+        original, reading = item["orig"], item["hira"]
+        if original != reading and KANJI_RUN_RE.search(original):
+            output.append(kanji_only_ruby(original, reading))
+        else:
+            output.append(html.escape(original))
+    return "".join(output)
 
 
 def inline_furigana_html(text):
@@ -255,6 +277,12 @@ def kanji_only_ruby(ja, reading):
         anchor_match = re.search(r"[ぁ-ゖァ-ヺー]+", following)
         anchor = anchor_match.group(0) if anchor_match else ""
         anchor_at = reading.find(anchor, reading_cursor) if anchor else -1
+        # `今い` → `いまい`처럼 한자의 읽기 첫 음과 오쿠리가나가 같은
+        # 경우 첫 번째 `い`를 경계로 잘못 잡으면 ruby가 빈 문자열이 된다.
+        if anchor and anchor_at == reading_cursor:
+            later_anchor = reading.find(anchor, reading_cursor + 1)
+            if later_anchor >= 0:
+                anchor_at = later_anchor
         ruby_reading = reading[reading_cursor:anchor_at] if anchor_at >= 0 else reading[reading_cursor:]
         if ruby_reading:
             output.append(
@@ -351,10 +379,15 @@ def make_page_xhtml(title, page_number, records, image_href=None):
     pairs = []
     for index, record in enumerate(records, 1):
         line_id = f"line-{page_number:04d}-{index:02d}"
+        japanese_html = (
+            inline_furigana_html(record["furigana"])
+            if record.get("furigana")
+            else generated_furigana_html(record["ja"])
+        )
         pairs.append(
             '<div class="pair">'
             f'<p id="{line_id}" class="ja ibooks-dark-theme-use-custom-text-color">'
-            f'{inline_furigana_html(record.get("furigana") or record["ja"])}</p>'
+            f'{japanese_html}</p>'
             f'<p class="ko ibooks-dark-theme-use-custom-text-color">'
             f'{html.escape(record["ko"])}</p></div>'
         )
