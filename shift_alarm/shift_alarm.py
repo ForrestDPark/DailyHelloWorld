@@ -911,12 +911,22 @@ GY_TO_SWING_DAY2_MELATONIN_REMINDER_TIME = {"hour": 2, "minute": 0}
 # 그 다음날 새벽 3시에 멜라토닌 알림만 추가.
 GY_TO_SWING_DAY1_MELATONIN_REMINDER_TIME = {"hour": 3, "minute": 0}
 
-# ── Swing → Day 전환 사이 휴무일 멜라토닌 알림 ─────────────────────
+# ── Swing → Day 전환 사이 휴무일 멜라토닌·기상 알림 ─────────────────
 # ★ 2026-09-07: "swing 에서 day 로 넘어가는 휴일에는 오후 8시에 멜라토닌
-# 먹기 알람 리마인드해줘" 요청 — GY→Swing 전환처럼 첫날/둘째날을 나눠
-# 다르게 다뤄달라는 말은 없었으므로, 블록에 속하는 휴무일이면 매일
-# 20:00에 똑같이 알린다(블록 길이와 무관하게 적용).
+# 먹기 알람 리마인드해줘" 요청 당시엔 블록 길이와 무관하게 매일 적용했는데,
+# 곧이어 "오후 8시 멜라토닌 → 취침 → 오전 6시 기상알람" 구조로 이어지는
+# 요청이 와서 재검토한 결과 — 이 구조는 Day 근무 시작 바로 전날(블록의
+# 마지막날) 하루에만 맞는다고 사용자가 명확히 함. 그래서 아래 두 알림 모두
+# _is_swing_to_day_off_day_last()로 마지막날에만 걸리게 좁혔다(그 앞
+# 휴무일들은 특별 처리 없음).
 SWING_TO_DAY_MELATONIN_REMINDER_TIME = {"hour": 20, "minute": 0}
+SWING_TO_DAY_LAST_DAY_WAKE_ALARM_TIME = {"hour": 6, "minute": 0}
+
+# ★ 2026-09-07: "일일루틴 체크리스트 관련 알람은 기상후 2시간 후에 알람이
+# 발생하면 좋겠어" 요청 — 오늘 등록된 기상 알람 시각(_todays_wake_alarm_time)
+# 기준으로 2시간 뒤에 한 번 알린다. 기상 알람이 없는 날(연속 휴무 사흘째
+# 이상 등)은 계산 기준이 없어 조용히 건너뛴다.
+DAILY_ROUTINE_CHECKLIST_REMINDER_OFFSET_MINUTES = 120
 
 # ★ "8.15일을 음력으로 계산하면 몇월몇일이야? 엄마생일인데 일주일전에
 # 미리 리마인더 해주고 당일에 리마인더 알람 생성해줘" → "어 필요해 매년
@@ -1152,7 +1162,6 @@ def clear_user_caches():
 
 # ── 주간 리마인더 설정 ───────────────────────────────────────
 # 대부분 요일이 아니라 근무표의 "휴무 블록"을 기준으로 잡는다.
-# - 헬스장: 근무·휴무와 무관하게 격일 간격 반복. 상체/하체를 번갈아 표시
 # - 엄마한테 전화: 휴무 블록의 첫날 (근무 마치고 쉬기 시작하는 날)
 # - 카페에서 밥·커피·병법 공부: 휴무 블록의 첫날
 # - 허민준한테 전화: 한 달에 한 번. 그 달의 첫 번째 휴무 블록 시작일
@@ -1173,31 +1182,86 @@ def clear_user_caches():
 #   안 뜨는 문제가 있어 재설계 — "일주일에 2번은 있어야 한다"는 사용자 지적)
 # - 빨래: 휴무일마다 매번
 # 각 항목은 메뉴의 "🔔 리마인더 켜기/끄기"에서 개별적으로 켜고 끌 수 있음.
+# ★ 2026-09-07: "카톡정리, 빨래돌리기 등등의 리마인더에 그것을 실행해야할
+# 시간까지 함께 체크리스트에 올리고 그시간에 맞춰서 해당 알람이울리게" 요청 —
+# 항목마다 "time"(실행 시각, {"hour","minute"})을 추가했다. 아래 기본값은
+# 통화·정리는 오전~저녁, 그루밍류는 취침 전 21~22시로 서로 안 겹치게 분산한
+# 값이고, day_shift_last_day_routine만 Day 근무(06:00~14:00) 중에 안 울리게
+# 근무 끝난 직후(14:30)로 잡았다. 정확한 "적정 시각"은 개인 취향 영역이라
+# 실제로는 아래 코드값이 아니라 REMINDER_TIMES_SOURCE_PAGE_ID Notion 페이지의
+# 표를 기준으로 주기적으로 덮어써진다(_sync_reminder_times_from_notion) — 여기
+# 코드값은 Notion을 못 읽었을 때(토큰 없음·네트워크 오류 등)의 안전망 기본값이다.
 REMINDERS = {
-    "gym":             {"label": "🏋️ 헬스장 가는 날(상체/하체·격일)", "enabled": True},
-    "call_mom":        {"label": "📞 엄마한테 전화(휴무 시작일)",   "enabled": True},
-    "cafe_strategy_study": {"label": "☕ 카페에서 밥먹고 커피마시면서 병법공부하기(휴무 첫날)", "enabled": True},
-    "call_heo_minjun": {"label": "📞 허민준한테 전화(월 1회)", "enabled": True},
-    "call_sibling":    {"label": "📞 동생한테 전화(월 1회)", "enabled": True},
-    "call_dongchan":   {"label": "📞 동찬이형한테 전화(21일에 1회)", "enabled": True},
-    "call_sondongju":  {"label": "📞 손동주한테 전화(1주일에 1회)",   "enabled": True},
-    "coding_academy":  {"label": "💬 코딩학원 카톡방에 연락(1주일에 1회)", "enabled": True},
-    "bathroom_drain_check": {"label": "🚿 화장실 잔떼 및 배수 점검일(1주일에 1회)", "enabled": True},
-    "haircut":          {"label": "💇 머리 깎는 날(40일에 1회)", "enabled": True},
-    "agentic_coding_reading": {"label": "📚 에이전틱 코딩 책 읽기(3일에 1회)", "enabled": True},
-    "sondongju_off":   {"label": "🎉 손동주 쉬는 날(동주 근무 주기 기준)",         "enabled": True},
-    "nose_hair_trim":  {"label": "🪒 코털 정리(4일에 1회)",       "enabled": True},
-    "nail_trim":       {"label": "💅 손톱발톱 정리(11일에 1회)",   "enabled": True},
-    "earphone_charge": {"label": "🎧 이어폰 충전(4일에 1회)",     "enabled": True},
-    "kakao_cleanup":   {"label": "🧹 카톡 정리(휴무 마지막날)",       "enabled": True},
-    "outlet_shopping": {"label": "🛍️ 아울렛 쇼핑(월 1회)",    "enabled": True},
-    "walk_20k":        {"label": "🚶 2만보 걷는 날(주 2회)",         "enabled": True},
-    "laundry":         {"label": "🧺 빨래 돌리는 날(휴무일마다)",         "enabled": True},
-    "outing":          {"label": "🗺️ 나들이 추천(월 1회)",    "enabled": True},
-    "beef_bbq":        {"label": "🥩 소고기 구워먹는 날(월 1회·휴무일)", "enabled": True},
-    "day_shift_last_day_routine": {"label": "☕ 점심 먹고 아아 한잔·헬스장 갔다 오후 9시 이후 취침(주간 마지막날)", "enabled": True},
-    "engine_oil_change": {"label": "🛢️ 엔진오일 가는 날(5개월에 1회)", "enabled": True},
+    "call_mom":        {"label": "📞 엄마한테 전화(휴무 시작일)",   "enabled": True, "time": {"hour": 10, "minute": 0}},
+    "cafe_strategy_study": {"label": "☕ 카페에서 밥먹고 커피마시면서 병법공부하기(휴무 첫날)", "enabled": True, "time": {"hour": 11, "minute": 0}},
+    "call_heo_minjun": {"label": "📞 허민준한테 전화(월 1회)", "enabled": True, "time": {"hour": 10, "minute": 0}},
+    "call_sibling":    {"label": "📞 동생한테 전화(월 1회)", "enabled": True, "time": {"hour": 10, "minute": 15}},
+    "call_dongchan":   {"label": "📞 동찬이형한테 전화(21일에 1회)", "enabled": True, "time": {"hour": 19, "minute": 0}},
+    "call_sondongju":  {"label": "📞 손동주한테 전화(1주일에 1회)",   "enabled": True, "time": {"hour": 19, "minute": 15}},
+    "coding_academy":  {"label": "💬 코딩학원 카톡방에 연락(1주일에 1회)", "enabled": True, "time": {"hour": 19, "minute": 30}},
+    "bathroom_drain_check": {"label": "🚿 화장실 잔떼 및 배수 점검일(1주일에 1회)", "enabled": True, "time": {"hour": 19, "minute": 45}},
+    "haircut":          {"label": "💇 머리 깎는 날(40일에 1회)", "enabled": True, "time": {"hour": 12, "minute": 0}},
+    "agentic_coding_reading": {"label": "📚 에이전틱 코딩 책 읽기(3일에 1회)", "enabled": True, "time": {"hour": 21, "minute": 0}},
+    "sondongju_off":   {"label": "🎉 손동주 쉬는 날(동주 근무 주기 기준)",         "enabled": True, "time": {"hour": 12, "minute": 0}},
+    "nose_hair_trim":  {"label": "🪒 코털 정리(4일에 1회)",       "enabled": True, "time": {"hour": 21, "minute": 15}},
+    "nail_trim":       {"label": "💅 손톱발톱 정리(11일에 1회)",   "enabled": True, "time": {"hour": 21, "minute": 30}},
+    "earphone_charge": {"label": "🎧 이어폰 충전(4일에 1회)",     "enabled": True, "time": {"hour": 22, "minute": 0}},
+    "kakao_cleanup":   {"label": "🧹 카톡 정리(휴무 마지막날)",       "enabled": True, "time": {"hour": 20, "minute": 0}},
+    "outlet_shopping": {"label": "🛍️ 아울렛 쇼핑(월 1회)",    "enabled": True, "time": {"hour": 10, "minute": 30}},
+    "walk_20k":        {"label": "🚶 2만보 걷는 날(주 2회)",         "enabled": True, "time": {"hour": 15, "minute": 0}},
+    "laundry":         {"label": "🧺 빨래 돌리는 날(휴무일마다)",         "enabled": True, "time": {"hour": 11, "minute": 30}},
+    "outing":          {"label": "🗺️ 나들이 추천(월 1회)",    "enabled": True, "time": {"hour": 12, "minute": 0}},
+    "beef_bbq":        {"label": "🥩 소고기 구워먹는 날(월 1회·휴무일)", "enabled": True, "time": {"hour": 18, "minute": 0}},
+    "day_shift_last_day_routine": {"label": "☕ 점심 먹고 아아 한잔·헬스장 갔다 오후 9시 이후 취침(주간 마지막날)", "enabled": True, "time": {"hour": 14, "minute": 30}},
+    "engine_oil_change": {"label": "🛢️ 엔진오일 가는 날(5개월에 1회)", "enabled": True, "time": {"hour": 12, "minute": 0}},
 }
+
+# "⏰ 리마인더 시각표" Notion 페이지 — REMINDERS 위 "time" 값은 코드 기본값(안전망)이고,
+# 실제 사용 시각은 이 표를 주기적으로 읽어와 덮어쓴다. 사용자가 표의 시각 칸만
+# 고치면 코드를 손대지 않고도 알람 시각이 바뀐다(라벨 텍스트는 체크리스트 기록과
+# 연결된 식별자라 표에서도 바꾸면 안 된다고 페이지 안내문에 명시해뒀다).
+REMINDER_TIMES_SOURCE_PAGE_ID = "3d432a1e-ae80-8171-b8e1-e0d3c545a707"
+REMINDER_TIMES_SYNC_INTERVAL_SECONDS = 900
+
+
+def _fetch_reminder_times_from_notion(token):
+    """⏰ 리마인더 시각표의 표를 {라벨: {"hour","minute"}}로 반환. 토큰 없음·
+    표 없음·형식 오류 등 실패 시 빈 dict — 호출부는 실패하면 기존 시각 값을
+    그대로 둔다(코드 기본값이 안전망 역할)."""
+    def notion_get(path):
+        request = urllib.request.Request(
+            f"https://api.notion.com/v1/{path}",
+            headers={"Authorization": f"Bearer {token}", "Notion-Version": NOTION_VERSION},
+        )
+        with urllib.request.urlopen(request, timeout=15) as response:
+            return json.load(response)
+
+    def cell_text(cell):
+        return "".join(part.get("plain_text", "") for part in cell).strip()
+
+    try:
+        children = notion_get(f"blocks/{REMINDER_TIMES_SOURCE_PAGE_ID}/children?page_size=100")
+        table_block = next(
+            (b for b in children.get("results", []) if b.get("type") == "table"), None
+        )
+        if not table_block:
+            return {}
+        rows = notion_get(f"blocks/{table_block['id']}/children?page_size=100")
+        result = {}
+        for index, row in enumerate(rows.get("results", [])):
+            if index == 0 or row.get("type") != "table_row":
+                continue  # 첫 행은 "리마인더/시각" 머리글
+            cells = row["table_row"]["cells"]
+            if len(cells) < 2:
+                continue
+            label = cell_text(cells[0])
+            match = re.fullmatch(r"(\d{1,2}):(\d{2})", cell_text(cells[1]))
+            if not label or not match:
+                continue
+            result[label] = {"hour": int(match.group(1)), "minute": int(match.group(2))}
+        return result
+    except (OSError, urllib.error.URLError, json.JSONDecodeError, KeyError, ValueError):
+        return {}
 
 # ── 월 1회 나들이 추천 장소 (아산시 기준 + 근교) ────────────────────
 # 2026-07-24 추가. 매달 다른 곳이 뜨도록 (연도,월) 기준으로 순환시킨다.
@@ -1846,11 +1910,16 @@ def _is_swing_to_day_off_day(schedule, d):
     return prev_shift == "Swing" and next_shift == "Day"
 
 
-# ── 헬스장 운영 시간 ─────────────────────────────────────────
-# 평일(월~금)은 24시간, 토/일은 06:00~17:00만 운영.
-GYM_WEEKEND_OPEN  = datetime.time(6, 0)
-GYM_WEEKEND_CLOSE = datetime.time(17, 0)
-GYM_CYCLE_ANCHOR = datetime.date(2026, 8, 3)
+def _is_swing_to_day_off_day_last(schedule, d):
+    """d가 Swing→Day 전환 휴무 블록의 "마지막날"(내일은 근무)인지 반환.
+    ★ 2026-09-07 재설계: "오후 8시 멜라토닌→취침→오전 6시 기상알람" 구조는
+    블록 전체가 아니라 Day 근무 시작 바로 전날 하루에만 맞는다는 걸
+    사용자가 명확히 함(그 앞 휴무일들은 특별 처리 없이 자유 시간)."""
+    if not _is_swing_to_day_off_day(schedule, d):
+        return False
+    return get_shift_for_date(schedule, d + datetime.timedelta(days=1)) != "휴무"
+
+
 CALL_DONGCHAN_ANCHOR = datetime.date(2026, 8, 3)
 CALL_DONGCHAN_INTERVAL_DAYS = 21
 CALL_SONDONGJU_ANCHOR = datetime.date(2026, 8, 5)
@@ -1887,36 +1956,6 @@ WALK_20K_CYCLE_DAYS = 7
 WALK_20K_OFFSETS = (0, 3)
 ENGINE_OIL_CHANGE_ANCHOR = datetime.date(2026, 8, 20)
 ENGINE_OIL_CHANGE_INTERVAL_MONTHS = 5
-
-
-def is_gym_open(dt):
-    """주어진 시각에 헬스장이 열려있는지 (토/일만 06:00~17:00로 제한)."""
-    if dt.weekday() in (5, 6):  # 5=토요일, 6=일요일
-        return GYM_WEEKEND_OPEN <= dt.time() < GYM_WEEKEND_CLOSE
-    return True
-
-
-def _gym_time_ok(schedule, d):
-    """
-    d에 헬스장을 간다면(근무일이면 "근무 끝나고" 기준) 그 시각에 헬스장이 열려있는지.
-    휴무일이면 언제든 갈 수 있다고 보고 항상 통과 (근무 종료 시각이라는 제약이 없으므로).
-    """
-    shift = get_shift_for_date(schedule, d)
-    info = SHIFT_WORK_HOURS.get(shift)
-    if not info:
-        return True
-    end_date = d + datetime.timedelta(days=1) if info["crosses_midnight"] else d
-    end_dt = datetime.datetime.combine(end_date, datetime.time(*info["end"]))
-    return is_gym_open(end_dt)
-
-
-def _gym_cycle_index(d):
-    """격일(2일 간격) 운동 주기의 회차. 운동일이 아니면 None.
-    ★ 2026-08-07: 기존 3일→2일 교대 간격을 격일 고정으로 단순화(사용자 요청)."""
-    days = (d - GYM_CYCLE_ANCHOR).days
-    if days < 0 or days % 2 != 0:
-        return None
-    return days // 2
 
 
 def _is_dongchan_call_day(d):
@@ -2032,12 +2071,14 @@ def _is_last_off_block_start_of_month(schedule, d):
     return True
 
 
-def get_today_reminders(schedule, now=None):
+def _get_today_reminder_items(schedule, now=None):
     """
-    오늘 근무표 기준으로 해당하는 리마인더 라벨 목록을 반환.
+    오늘 근무표 기준으로 해당하는 리마인더를 (key, label) 쌍 목록으로 반환.
+    ★ 2026-09-07: 날짜 적용 로직(아래 각 조건)을 이 함수 한 곳에만 두고,
+    라벨만 필요한 get_today_reminders()와 시각까지 필요한 알람 타이머
+    (_check_timed_reminders)가 함께 재사용한다 — 로직을 두 곳에 복붙하면
+    한쪽만 고치고 잊어버리는 문제가 생기므로 이렇게 합쳤다.
 
-    - 헬스장: 근무·휴무와 무관하게 2026-08-03부터 격일(2일 간격)로 반복한다.
-      상체/하체는 매회 번갈아 표시하며 운영시간 때문에 알림을 생략하지 않는다.
     - 엄마한테 전화: 오늘이 휴무 블록의 첫날 (어제는 근무였음)
     - 카페에서 밥·커피·병법 공부: 오늘이 휴무 블록의 첫날
     - 허민준한테 전화: 월 1회, 이번 달의 첫 번째 휴무 블록 시작일
@@ -2069,83 +2110,82 @@ def get_today_reminders(schedule, now=None):
     now = now or datetime.datetime.now()
     today = now.date()
 
-    reminders = []
-    gym_index = _gym_cycle_index(today) if REMINDERS["gym"]["enabled"] else None
-    if gym_index is not None:
-        # 실제 운동 순서 기준: 2026-08-03은 하체, 다음 회차부터 상체/하체 교대.
-        workout = "하체" if gym_index % 2 == 0 else "상체"
-        reminders.append(f"🏋️ {workout} 운동")
-
+    items = []
     if get_shift_for_date(schedule, today) == "휴무":
         yesterday = today - datetime.timedelta(days=1)
         tomorrow = today + datetime.timedelta(days=1)
         is_block_start = get_shift_for_date(schedule, yesterday) != "휴무"
         is_block_end = get_shift_for_date(schedule, tomorrow) != "휴무"
         if is_block_start and REMINDERS["call_mom"]["enabled"]:
-            reminders.append(REMINDERS["call_mom"]["label"])
+            items.append(("call_mom", REMINDERS["call_mom"]["label"]))
         if is_block_start and REMINDERS["cafe_strategy_study"]["enabled"]:
-            reminders.append(REMINDERS["cafe_strategy_study"]["label"])
+            items.append(("cafe_strategy_study", REMINDERS["cafe_strategy_study"]["label"]))
         if is_block_end and REMINDERS["kakao_cleanup"]["enabled"]:
-            reminders.append(REMINDERS["kakao_cleanup"]["label"])
+            items.append(("kakao_cleanup", REMINDERS["kakao_cleanup"]["label"]))
         if REMINDERS["laundry"]["enabled"]:
-            reminders.append(REMINDERS["laundry"]["label"])
+            items.append(("laundry", REMINDERS["laundry"]["label"]))
 
     if REMINDERS["walk_20k"]["enabled"] and _is_walk_20k_day(today):
-        reminders.append(REMINDERS["walk_20k"]["label"])
+        items.append(("walk_20k", REMINDERS["walk_20k"]["label"]))
 
     if REMINDERS["outlet_shopping"]["enabled"] and _is_first_off_block_start_of_month(schedule, today):
-        reminders.append(REMINDERS["outlet_shopping"]["label"])
+        items.append(("outlet_shopping", REMINDERS["outlet_shopping"]["label"]))
 
     if REMINDERS["call_heo_minjun"]["enabled"] and _is_first_off_block_start_of_month(schedule, today):
-        reminders.append(REMINDERS["call_heo_minjun"]["label"])
+        items.append(("call_heo_minjun", REMINDERS["call_heo_minjun"]["label"]))
 
     if REMINDERS["call_sibling"]["enabled"] and _is_first_off_block_start_of_month(schedule, today):
-        reminders.append(REMINDERS["call_sibling"]["label"])
+        items.append(("call_sibling", REMINDERS["call_sibling"]["label"]))
 
     if REMINDERS["call_dongchan"]["enabled"] and _is_dongchan_call_day(today):
-        reminders.append(REMINDERS["call_dongchan"]["label"])
+        items.append(("call_dongchan", REMINDERS["call_dongchan"]["label"]))
 
     if REMINDERS["call_sondongju"]["enabled"] and _is_sondongju_call_day(today):
-        reminders.append(REMINDERS["call_sondongju"]["label"])
+        items.append(("call_sondongju", REMINDERS["call_sondongju"]["label"]))
 
     if REMINDERS["coding_academy"]["enabled"] and _is_coding_academy_chat_day(today):
-        reminders.append(REMINDERS["coding_academy"]["label"])
+        items.append(("coding_academy", REMINDERS["coding_academy"]["label"]))
 
     if REMINDERS["bathroom_drain_check"]["enabled"] and _is_bathroom_drain_check_day(today):
-        reminders.append(REMINDERS["bathroom_drain_check"]["label"])
+        items.append(("bathroom_drain_check", REMINDERS["bathroom_drain_check"]["label"]))
 
     if REMINDERS["haircut"]["enabled"] and _is_haircut_day(today):
-        reminders.append(REMINDERS["haircut"]["label"])
+        items.append(("haircut", REMINDERS["haircut"]["label"]))
 
     if REMINDERS["agentic_coding_reading"]["enabled"] and _is_agentic_coding_reading_day(today):
-        reminders.append(REMINDERS["agentic_coding_reading"]["label"])
+        items.append(("agentic_coding_reading", REMINDERS["agentic_coding_reading"]["label"]))
 
     if REMINDERS["sondongju_off"]["enabled"] and _is_sondongju_off_day(today):
-        reminders.append(REMINDERS["sondongju_off"]["label"])
+        items.append(("sondongju_off", REMINDERS["sondongju_off"]["label"]))
 
     if REMINDERS["nose_hair_trim"]["enabled"] and _is_nose_hair_trim_day(today):
-        reminders.append(REMINDERS["nose_hair_trim"]["label"])
+        items.append(("nose_hair_trim", REMINDERS["nose_hair_trim"]["label"]))
 
     if REMINDERS["nail_trim"]["enabled"] and _is_nail_trim_day(today):
-        reminders.append(REMINDERS["nail_trim"]["label"])
+        items.append(("nail_trim", REMINDERS["nail_trim"]["label"]))
 
     if REMINDERS["earphone_charge"]["enabled"] and _is_earphone_charge_day(today):
-        reminders.append(REMINDERS["earphone_charge"]["label"])
+        items.append(("earphone_charge", REMINDERS["earphone_charge"]["label"]))
 
     if REMINDERS["outing"]["enabled"] and _is_last_off_block_start_of_month(schedule, today):
         place = pick_monthly_outing_place(today)
-        reminders.append(f"🗺️ 어디 가보자: {place}")
+        items.append(("outing", f"🗺️ 어디 가보자: {place}"))
 
     if REMINDERS["beef_bbq"]["enabled"] and _is_last_off_block_start_of_month(schedule, today):
-        reminders.append(REMINDERS["beef_bbq"]["label"])
+        items.append(("beef_bbq", REMINDERS["beef_bbq"]["label"]))
 
     if REMINDERS["day_shift_last_day_routine"]["enabled"] and _is_day_shift_block_end(schedule, today):
-        reminders.append(REMINDERS["day_shift_last_day_routine"]["label"])
+        items.append(("day_shift_last_day_routine", REMINDERS["day_shift_last_day_routine"]["label"]))
 
     if REMINDERS["engine_oil_change"]["enabled"] and _is_engine_oil_change_day(today):
-        reminders.append(REMINDERS["engine_oil_change"]["label"])
+        items.append(("engine_oil_change", REMINDERS["engine_oil_change"]["label"]))
 
-    return reminders
+    return items
+
+
+def get_today_reminders(schedule, now=None):
+    """(기존 시그니처·동작 그대로 유지 — 다른 모든 호출부는 라벨 목록만 본다)"""
+    return [label for _key, label in _get_today_reminder_items(schedule, now=now)]
 
 
 def get_today_reminder_title_tokens(schedule, now=None, checklist_state=None):
@@ -2166,11 +2206,7 @@ def get_today_reminder_title_tokens(schedule, now=None, checklist_state=None):
     for label in get_today_reminders(schedule, now=now):
         if checklist_state.get(label):
             continue
-        if label.startswith("🏋️ 상체"):
-            tokens.append("🏋️상")
-        elif label.startswith("🏋️ 하체"):
-            tokens.append("🏋️하")
-        elif label in call_tokens:
+        if label in call_tokens:
             tokens.append(call_tokens[label])
         else:
             semantic_token = shared_emoji_semantic_token(
@@ -4524,14 +4560,17 @@ def _build_reminder_status_menu_items(
     ★ 2026-08-08: checklist_state({라벨: checked})가 있으면 각 항목 앞에 ✅/⬜를
     붙여서 휴대폰 Notion에서 체크한 상태가 메뉴바에도 보이게 한다.
     ★ 2026-08-13: 여러 항목을 '/'로 연결하면 메뉴 폭이 가로로 과도하게 커지므로
-    제목과 개별 항목을 세로 목록으로 반환한다."""
+    제목과 개별 항목을 세로 목록으로 반환한다.
+    ★ 2026-09-07: today_reminders가 이제 (label, display_text) 쌍 목록이다 —
+    체크 상태·콜백은 계속 원본 label로만 동작하고(Notion 식별자 불변),
+    화면에 보이는 display_text에만 실행 시각을 붙인다(build_menu 참고)."""
     checklist_state = checklist_state or {}
     if not today_reminders:
         return [rumps.MenuItem("🔔 오늘 예정된 리마인더 없음", callback=header_callback)]
 
     items = [rumps.MenuItem("🔔 오늘 리마인더", callback=header_callback)]
-    for i, label in enumerate(today_reminders):
-        text = f"    {'✅' if checklist_state.get(label) else '⬜'} {label}"
+    for i, (label, display_text) in enumerate(today_reminders):
+        text = f"    {'✅' if checklist_state.get(label) else '⬜'} {display_text}"
         item = rumps.MenuItem(text, callback=toggle_callback_factory(label))
         attributed = NSMutableAttributedString.alloc().initWithString_(text)
         color_fn = REMINDER_MENU_COLOR_CYCLE[i % len(REMINDER_MENU_COLOR_CYCLE)]
@@ -4648,6 +4687,13 @@ class ShiftAlarmApp(rumps.App):
         self.ebook_resume_alarm_timer = rumps.Timer(self._check_wake_alarm_ebook_resume, 60)
         self.ebook_resume_alarm_timer.start()
 
+        # 기상 알람 시각 + 2시간에 일일 루틴 체크리스트 확인 알림 (1분마다 시각 체크)
+        self._last_daily_routine_checklist_reminder_notified = None
+        self.daily_routine_checklist_reminder_timer = rumps.Timer(
+            self._check_daily_routine_checklist_reminder, 60
+        )
+        self.daily_routine_checklist_reminder_timer.start()
+
         # GY→Swing 휴무 둘째날 다음날 02:00 멜라토닌+운기조식 알림 (1분마다 시각 체크)
         self._last_day2_melatonin_reminder_notified = None
         self.day2_melatonin_reminder_timer = rumps.Timer(self._check_gy_to_swing_day2_melatonin_reminder, 60)
@@ -4664,6 +4710,22 @@ class ShiftAlarmApp(rumps.App):
             self._check_swing_to_day_melatonin_reminder, 60
         )
         self.swing_to_day_melatonin_reminder_timer.start()
+
+        # 리마인더 22개 개별 시각 알림 (1분마다, key별 독립 dedup)
+        self._last_timed_reminder_notified = {}
+        self.timed_reminders_timer = rumps.Timer(self._check_timed_reminders, 60)
+        self.timed_reminders_timer.start()
+
+        # ⏰ 리마인더 시각표 Notion 동기화 — 시작 시 1회 + 주기적으로 재확인
+        # (★ 2026-09-07: "표형식으로 노션에 만들고 그거를 기준으로 알람을
+        # 설정해주면... 시간같은거 수정하면 니가 그거를 읽고 알람을 변경하는
+        # 식으로 하면 더 효율적이지 않을까?" 요청 — REMINDERS의 "time" 코드
+        # 기본값은 안전망이고, 실제로는 이 Notion 표가 우선한다).
+        threading.Thread(target=self._sync_reminder_times_from_notion, daemon=True).start()
+        self.reminder_times_sync_timer = rumps.Timer(
+            self._check_reminder_times_sync, REMINDER_TIMES_SYNC_INTERVAL_SECONDS
+        )
+        self.reminder_times_sync_timer.start()
 
         # 엄마 생신(음력 8/15 → 2026년 양력 9/25) 일주일 전 리마인더 + 당일 알람
         # (1분마다 시각 체크)
@@ -5307,6 +5369,27 @@ class ShiftAlarmApp(rumps.App):
         open_ebook_reader_terminal(last["file"])
         threading.Thread(target=self._turn_on_hue_for_reading, daemon=True).start()
 
+    def _check_daily_routine_checklist_reminder(self, _):
+        """1분마다 '오늘 기상 알람 시각 + 2시간'인지 확인, 하루 한 번만 일일
+        루틴 체크리스트 확인을 알림 (★ 2026-09-07: "일일루틴 체크리스트 관련
+        알람은 기상후 2시간 후에 알람이 발생하면 좋겠어" 요청). 기상 알람이
+        없는 날(연속 휴무 사흘째 이상 등)은 계산 기준이 없어 건너뛴다."""
+        wake_time = self._todays_wake_alarm_time(datetime.date.today())
+        if not wake_time:
+            return
+        target = (
+            datetime.datetime.combine(datetime.date.today(), datetime.time(wake_time["hour"], wake_time["minute"]))
+            + datetime.timedelta(minutes=DAILY_ROUTINE_CHECKLIST_REMINDER_OFFSET_MINUTES)
+        )
+        now = datetime.datetime.now()
+        if now.hour != target.hour or now.minute != target.minute:
+            return
+        today = now.date()
+        if self._last_daily_routine_checklist_reminder_notified == today:
+            return
+        self._last_daily_routine_checklist_reminder_notified = today
+        notify_spoken("🌅 일일 루틴 체크리스트", "", "오늘 체크리스트 확인하세요.")
+
     def _check_gy_to_swing_day2_melatonin_reminder(self, _):
         """1분마다 'GY→Swing 휴무 둘째날의 다음날' 02:00인지 확인, 하루 한 번만
         알림 (★ 2026-08-30: "그 다음날 02:00엔 멜라토닌 먹고 운기조식하라는
@@ -5349,9 +5432,10 @@ class ShiftAlarmApp(rumps.App):
         )
 
     def _check_swing_to_day_melatonin_reminder(self, _):
-        """1분마다 'Swing→Day 전환 휴무일' 20:00인지 확인, 하루 한 번만 알림
-        (★ 2026-09-07: "swing 에서 day 로 넘어가는 휴일에는 오후 8시에
-        멜라토닌 먹기 알람 리마인드해줘" 요청)."""
+        """1분마다 'Swing→Day 전환 휴무 블록 마지막날' 20:00인지 확인, 하루
+        한 번만 알림 (★ 2026-09-07 재설계: "오후 8시 멜라토닌→취침→오전
+        6시 기상알람" 구조는 Day 근무 시작 바로 전날에만 맞는다고 명확히 해서
+        블록 전체에서 마지막날로 좁힘 — _is_swing_to_day_off_day_last() 참고)."""
         now = datetime.datetime.now()
         t = SWING_TO_DAY_MELATONIN_REMINDER_TIME
         if now.hour != t["hour"] or now.minute != t["minute"]:
@@ -5359,7 +5443,7 @@ class ShiftAlarmApp(rumps.App):
         today = now.date()
         if self._last_swing_to_day_melatonin_reminder_notified == today:
             return
-        if not _is_swing_to_day_off_day(self.schedule, today):
+        if not _is_swing_to_day_off_day_last(self.schedule, today):
             return
         self._last_swing_to_day_melatonin_reminder_notified = today
         notify_spoken(
@@ -5367,6 +5451,25 @@ class ShiftAlarmApp(rumps.App):
             "Swing→Day 전환 휴무일",
             "멜라토닌 드세요."
         )
+
+    def _sync_reminder_times_from_notion(self):
+        """⏰ 리마인더 시각표에서 시각을 읽어와 REMINDERS[key]["time"]에
+        반영한다. 네트워크 호출이라 타이머에서 직접 부르지 않고 스레드로
+        감싸서 부른다(_check_reminder_times_sync). Notion을 못 읽으면
+        기존 값을 그대로 둔다(조용히 실패)."""
+        token = _notion_keychain_token()
+        if not token:
+            return
+        times_by_label = _fetch_reminder_times_from_notion(token)
+        if not times_by_label:
+            return
+        for info in REMINDERS.values():
+            t = times_by_label.get(info["label"])
+            if t:
+                info["time"] = t
+
+    def _check_reminder_times_sync(self, _):
+        threading.Thread(target=self._sync_reminder_times_from_notion, daemon=True).start()
 
     def _check_mom_birthday_advance_reminder(self, _):
         """1분마다 엄마 생신(그해 음력 8/15를 양력으로 변환한 값) 일주일 전
@@ -5570,6 +5673,8 @@ class ShiftAlarmApp(rumps.App):
                 return GY_TO_SWING_OFF_ALARM_TIME
             if _is_gy_to_swing_off_day2(self.schedule, d):
                 return GY_TO_SWING_OFF_DAY2_ALARM_TIME
+            if _is_swing_to_day_off_day_last(self.schedule, d):
+                return SWING_TO_DAY_LAST_DAY_WAKE_ALARM_TIME
         return None
 
     def _current_routine_date(self):
@@ -5587,19 +5692,39 @@ class ShiftAlarmApp(rumps.App):
         return today
 
     def _maybe_notify_reminders(self):
-        """리마인더를 알리고, 리마인더 유무와 무관하게 오늘 체크리스트를 만든다."""
+        """리마인더 유무와 무관하게 오늘 체크리스트를 만든다.
+        ★ 2026-09-07: 예전엔 여기서 오늘의 리마인더를 한꺼번에 묶어
+        notify_spoken 한 번으로 알렸는데, 이제 각 리마인더가 자기 시각에
+        개별로 알림을 울리므로(_check_timed_reminders) 자정에 또 한꺼번에
+        알리면 중복이라 그 notify_spoken 호출은 없앴다. 체크리스트 동기화는
+        그대로 필요해서 남긴다."""
         today = datetime.date.today()
         if self._last_reminder_notified == today:
             return
         self._last_reminder_notified = today
 
         todays = get_today_reminders(self.schedule)
-        if todays:
-            notify_spoken("오늘의 리마인더", "", "\n".join(todays))
         threading.Thread(
             target=self._sync_daily_checklist_to_notion,
             args=(today, todays), daemon=True,
         ).start()
+
+    def _check_timed_reminders(self, _):
+        """1분마다 오늘 해당하는 리마인더 중 지금이 지정 시각인 항목을 찾아
+        개별 알림 (★ 2026-09-07: "카톡정리, 빨래돌리기 등등의 리마인더에
+        그것을 실행해야할 시간까지... 그시간에 맞춰서 해당 알람이울리게" 요청).
+        key별로 독립 dedup — outing처럼 라벨이 매달 바뀌는 항목도 key로
+        매칭하므로 문제없다."""
+        now = datetime.datetime.now()
+        today = now.date()
+        for key, label in _get_today_reminder_items(self.schedule, now=now):
+            t = REMINDERS[key].get("time")
+            if not t or now.hour != t["hour"] or now.minute != t["minute"]:
+                continue
+            if self._last_timed_reminder_notified.get(key) == today:
+                continue
+            self._last_timed_reminder_notified[key] = today
+            notify_spoken(label, "", "지금 할 시간이에요.")
 
     def _sync_daily_checklist_to_notion(self, today, todays):
         """고정 루틴 하나를 매일 초기화하고, 조건부 리마인더만 날짜별로 기록한다.
@@ -6245,6 +6370,12 @@ class ShiftAlarmApp(rumps.App):
             if notify:
                 notify_spoken("교대근무 알람 설정", "휴무 둘째날(GY→Swing 전환)",
                                    f"알람이 {time['hour']:02d}:{time['minute']:02d}으로 설정되었습니다.")
+        elif _is_swing_to_day_off_day_last(self.schedule, date):
+            time = SWING_TO_DAY_LAST_DAY_WAKE_ALARM_TIME
+            register_alarm(time["hour"], time["minute"])
+            if notify:
+                notify_spoken("교대근무 알람 설정", "휴무 마지막날(Swing→Day 전환)",
+                                   f"알람이 {time['hour']:02d}:{time['minute']:02d}으로 설정되었습니다.")
         else:
             unregister_alarm()
             if notify:
@@ -6373,7 +6504,14 @@ class ShiftAlarmApp(rumps.App):
             self.menu.add(cpu_alert_menu)
 
         self.menu.add(None)
-        today_reminders = get_today_reminders(self.schedule)
+        # ★ 2026-09-07: 메뉴에 라벨과 함께 실행 시각도 보여준다 — 체크
+        # 상태·콜백에 쓰이는 식별자(label)는 그대로, 화면 표시용
+        # display_text에만 시각을 붙인다.
+        today_reminders = []
+        for key, label in _get_today_reminder_items(self.schedule):
+            t = REMINDERS[key].get("time")
+            display = f"{label} · {t['hour']:02d}:{t['minute']:02d}" if t else label
+            today_reminders.append((label, display))
         reminder_callback = self.make_open_url_callback(REMINDER_CHECKLIST_NOTION_URL)
         for reminder_item in _build_reminder_status_menu_items(
             today_reminders, reminder_callback, self.make_checklist_item_callback,
@@ -7565,6 +7703,9 @@ class ShiftAlarmApp(rumps.App):
             elif _is_gy_to_swing_off_day2(self.schedule, datetime.date.today()):
                 t = GY_TO_SWING_OFF_DAY2_ALARM_TIME
                 alarm_text = f"알람 {t['hour']:02d}:{t['minute']:02d}(GY→Swing 전환 둘째날)"
+            elif _is_swing_to_day_off_day_last(self.schedule, datetime.date.today()):
+                t = SWING_TO_DAY_LAST_DAY_WAKE_ALARM_TIME
+                alarm_text = f"알람 {t['hour']:02d}:{t['minute']:02d}(Swing→Day 전환 마지막날)"
             else:
                 alarm_text = "알람 없음"
             msg = (f"현재: 휴무 ({auto_text}, {alarm_text})\n{earnings_text}\n"

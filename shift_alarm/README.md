@@ -964,3 +964,39 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - `_is_swing_to_day_off_day(schedule, d)`(신규) — d가 휴무이고, 블록 앞쪽 근무가 "Swing", 뒤쪽 근무가 "Day"면 True(블록 내 며칠째인지는 안 가림).
 - `SWING_TO_DAY_MELATONIN_REMINDER_TIME = {"hour": 20, "minute": 0}`, `_check_swing_to_day_melatonin_reminder()` 1분마다 시각 체크 타이머로 등록.
 - 실측: 2026년 근무표 전체를 스캔해 Swing→Day 휴무일 26일을 정확히 찾아냈고, 오늘(2026-09-07)이 그중 하루(09-04·09-05 Swing → 09-06·09-07 휴무 → 09-08 Day)임을 실제 근무표로 확인했다.
+
+## 76. 💊 Swing→Day 전환 — "매일 20시"에서 "블록 마지막날에만 + 기상알람 추가"로 재설계 (★ 2026-09-07 추가)
+
+**사용자 요청**: "예를들어서 오늘 swing-day 간 휴일이면 오후 8시부터 오전 5시까지는 취침시간이라 치고 오전 6시부터 기상알람이 울리게 해주고 8시에는 멜라토닌 알람이 울리게 해줘." (뒤이은 확인 질문에 "휴무 블록 마지막날에만 적용" 선택)
+
+- 75번 항목의 "블록 전체 매일 20시 멜라토닌"은 과했다는 게 확인됨 — Day 근무 시작 바로 전날(블록 마지막날) 하루에만 "멜라토닌→취침→기상" 구조가 맞는다.
+- `_is_swing_to_day_off_day_last(schedule, d)`(신규) — `_is_swing_to_day_off_day`이면서 내일이 근무인 날(=블록 마지막날)만 True. 2026년 근무표로 검증: 블록 15개, 마지막날 판정도 정확히 15일.
+- `SWING_TO_DAY_LAST_DAY_WAKE_ALARM_TIME = {"hour": 6, "minute": 0}`(신규) 추가하고, 기존 GY→Swing 패턴처럼 **세 곳 모두**에 새 분기를 넣었다 — `_todays_wake_alarm_time`(이북 자동 재생·루틴 날짜 판정용), `_set_shift_internal`(실제 launchd 기상 알람을 등록하는 곳 — 여기 빠지면 진짜 알람이 안 울림), `show_status`(현재 설정 확인 표시용). `_check_swing_to_day_melatonin_reminder`의 조건도 `_is_swing_to_day_off_day` → `_is_swing_to_day_off_day_last`로 좁혔다.
+- 블록의 마지막날이 아닌 휴무일(2일 이상 블록의 첫날 등)은 이제 특별 처리 없음(75번 이전 상태로 복귀).
+
+## 77. 🌅 일일 루틴 체크리스트 — 기상 2시간 후 알림 추가 (★ 2026-09-07 추가)
+
+**사용자 요청**: "일일루틴 체크리스트 관련 알람은 기상후 2시간 후에 알람이 발생하면 좋겠어."
+
+- `DAILY_ROUTINE_CHECKLIST_REMINDER_OFFSET_MINUTES = 120`, `_check_daily_routine_checklist_reminder()`(신규) — 오늘의 기상 알람 시각(`_todays_wake_alarm_time`)에서 2시간 뒤 딱 한 번 알린다. 기상 알람이 없는 날(연속 휴무 사흘째 이상 등)은 계산 기준이 없어 조용히 건너뛴다.
+- 검증: 현재 등록된 모든 기상 시각 상수(Day 02:55, Swing 08:30, GY 16:30, Day→GY 08:00, GY→Swing 첫날 18:00, GY→Swing 둘째날 13:00, Swing→Day 마지막날 06:00)에 +2시간을 적용해도 자정을 안 넘고 04:55~20:30 사이의 상식적인 시각에 떨어지는 것을 확인했다.
+
+## 78. 🔔 리마인더 22개 전체를 개별 실행 시각 기반으로 재설계 + Notion 표로 시각 관리 (★ 2026-09-07 추가)
+
+**사용자 요청**: "카톡정리, 빨래돌리기 등등의 리마인더에 그것을 실행해야할 시간까지 함께 체크리스트에 올리고 그시간에 맞춰서 해당 알람이울리게 하는거지" → "리마인더 리스트에서 해야하는 시간을... 표형식으로 노션에 만들고 그거를 기준으로 알람을 설정해주면 내가 시간같은거 수정하면 니가 그거를 읽고 알람을 변경하는 식으로 하면 더 효율적이지 않을까?"
+
+- `REMINDERS` 22개 항목 전부에 `"time"`(코드 기본값, Notion을 못 읽을 때의 안전망) 필드를 추가했다. 통화·정리류는 오전~저녁(10:00~20:00), 그루밍류는 취침 전 21~22시로 서로 안 겹치게 분산했다. `day_shift_last_day_routine`은 Day 근무(06:00~14:00) 도중엔 안 울리게 근무 종료 직후인 14:30으로 잡았다(처음엔 12:00으로 뒀다가 근무 시간과 겹치는 걸 발견해 수정).
+- **`get_today_reminders` 리팩터** — 날짜 적용 로직(각 리마인더별 조건 판단)을 `_get_today_reminder_items(schedule, now=None)`(신규, `(key, label)` 쌍 반환)로 옮기고, `get_today_reminders`는 그 라벨만 뽑는 얇은 래퍼로 남겼다. 기존 시그니처·동작은 그대로라 다른 호출부는 안 건드렸다 — 근무표 365일 전체를 스캔해 리팩터 전후 결과가 완전히 같은 것을 확인했다.
+- **`_check_timed_reminders()`**(신규, 1분마다) — 오늘 해당하는 리마인더 중 `REMINDERS[key]["time"]`과 지금 시각이 같은 항목을 개별 알림. dedup은 `key` 기준(라벨이 매달 바뀌는 `outing`도 안전).
+- **중복 제거**: `_maybe_notify_reminders`가 자정에 오늘의 리마인더를 한꺼번에 알리던 `notify_spoken` 호출을 없앴다 — 이제 각자 자기 시각에 개별로 울리므로 자정에 또 알리면 중복. 체크리스트를 만드는 `_sync_daily_checklist_to_notion` 호출은 그대로 유지.
+- **메뉴 표시**: `_build_reminder_status_menu_items`가 `(label, display_text)` 쌍을 받도록 바꿔 "🔔 오늘 리마인더" 메뉴에 시각을 같이 보여준다(`build_menu`에서 조립). 체크 상태·토글 콜백은 계속 원본 `label` 문자열로만 동작 — Notion 체크리스트 식별자는 전혀 안 바뀐다.
+- **⏰ 리마인더 시각표(Notion)** — 22개 항목의 라벨·시각을 표로 정리한 새 페이지를 만들었다(`REMINDER_TIMES_SOURCE_PAGE_ID`, "🎎 일일 체크리스트" 하위). `_fetch_reminder_times_from_notion()`으로 표를 읽어 `_sync_reminder_times_from_notion()`이 `REMINDERS[key]["time"]`에 반영한다 — 앱 시작 시 1회 + 15분마다(`REMINDER_TIMES_SYNC_INTERVAL_SECONDS`) 자동 재동기화. 사용자가 이 표의 시각 칸만 고치면 코드를 안 건드리고도 알람 시각이 바뀐다. 라벨 텍스트는 체크리스트 기록과 연결된 식별자라 표에서도 바꾸면 안 된다고 페이지 안내문에 명시했다. Notion을 못 읽으면(토큰 없음·네트워크 오류 등) 코드의 기본 시각값을 그대로 쓴다.
+- 실측: 표 22행 전부 정상 파싱되는 것과 즉시 반영되는 것을 직접 확인했다.
+
+## 79. 🏋️ "상하체 운동하기" 헬스장 리마인더 삭제 (★ 2026-09-07 추가)
+
+**사용자 요청**: "shift alarm 에서 상하체 운동하기 리마인드는 삭제 하면 좋겠어."
+
+- `REMINDERS`에서 `"gym"` 항목(격일로 상체/하체 번갈아 표시하던 것)을 완전히 제거했다 — `get_today_reminders`의 해당 계산 블록, 메뉴바 타이틀 토큰(`get_today_reminder_title_tokens`)의 "🏋️상"/"🏋️하" 분기, 이제 아무 데서도 안 쓰이는 `_gym_cycle_index`/`GYM_CYCLE_ANCHOR`도 함께 정리했다.
+- `is_gym_open`/`_gym_time_ok`/`GYM_WEEKEND_OPEN`/`GYM_WEEKEND_CLOSE`도 이 항목 삭제 전부터 이미 아무 데서도 호출되지 않던 죽은 코드였음을 확인하고 같이 정리했다.
+- `shift_alarm_title.py`의 `_PET_ACTIONS` 매핑에서도 "상"/"하" 항목을 제거했다(더는 그 토큰이 만들어지지 않으므로).
