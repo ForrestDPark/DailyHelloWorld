@@ -2249,15 +2249,49 @@ def _speaker_label(sender, persona_names):
     return "나" if sender == OWNER_USERNAME else sender
 
 
+SUNZI_PERSONA_HISTORICAL_SCOPE = {
+    "조조": (
+        "조조가 자신의 경험을 예로 들 때 관도·오소에만 머물지 마세요. 사실관계가 쟁점에 맞을 때 "
+        "연주에서 여포와 싸운 전역, 완성에서 장수에게 패한 경험, 관도 전후의 원소 세력과의 전쟁, "
+        "백랑산을 포함한 오환 원정, 적벽의 패전과 철수, 동관에서 마초·한수와 싸운 전역, "
+        "한중에서 유비에게 주도권을 내주고 철수한 경험, 유수구에서 손권과 대치한 전역 등 "
+        "승리·실패·철수를 고르게 검토하세요. 다만 실제로 확인되는 지휘·판단만 1인칭 경험으로 "
+        "말하고, 후대 소설의 장면이나 불확실한 일화를 정사처럼 단정하지 마세요."
+    ),
+}
+
+
+def _sunzi_example_history(context, persona_name, current_start):
+    """새 구절 문맥에서 잘린 과거 발언을 사례 반복 방지용으로만 압축한다."""
+    if current_start <= 0:
+        return ""
+    previous = [
+        _display_content(msg.get("content", "")).replace("\n", " ").strip()
+        for msg in context[:current_start]
+        if msg.get("sender") == persona_name and msg.get("content", "").strip()
+    ][-6:]
+    if not previous:
+        return ""
+    excerpts = "\n".join(f"- {text[:220]}" for text in previous)
+    return (
+        "\n(최근 구절 토론에서는 잘렸지만, 이 인물이 앞서 사용한 사례·논지는 다음과 같습니다. "
+        "사용자가 바로 그 사례를 묻지 않았다면 같은 전투·일화·결론을 다시 꺼내지 마세요. "
+        "새 근거가 없으면 억지로 다른 사례를 붙이지 말고 NONE으로 넘어가세요.)\n"
+        f"{excerpts}"
+    )
+
+
 def build_prompt(persona_name, system_prompt, context, persona_names, has_images=False, notion_reference="", live_state="", api_mode=False):
     # 자동 손자병법 토론은 가장 최근 완료 공지부터가 하나의 독립 세션이다.
     # 그 이전의 시·일상 대화가 새 구절 답변에 섞이지 않도록 문맥을 잘라낸다.
+    original_context = context
     sunzi_starts = [
         index for index, msg in enumerate(context)
         if "📜 손자병법 새 구절 분석이 완료되었습니다" in msg.get("content", "")
     ]
+    latest_sunzi_start = sunzi_starts[-1] if sunzi_starts else 0
     if sunzi_starts:
-        context = context[sunzi_starts[-1]:]
+        context = context[latest_sunzi_start:]
     lines = [system_prompt, "", "--- 최근 대화 ---"]
     other_humans = False
     for msg in context:
@@ -2291,12 +2325,22 @@ def build_prompt(persona_name, system_prompt, context, persona_names, has_images
         # 값이라 build_prompt() 인자로만 전달하고 캐시에는 저장하지 않는다.
         lines.append(f"\n(지금 이 순간의 실제 상태 — 반드시 이 값을 근거로 답하세요. 지어내지 마세요.)\n{live_state}")
     if any("📜 손자병법 새 구절 분석이 완료되었습니다" in msg["content"] for msg in context):
+        history_guard = _sunzi_example_history(original_context, persona_name, latest_sunzi_start)
+        if history_guard:
+            lines.append(history_guard)
+        historical_scope = SUNZI_PERSONA_HISTORICAL_SCOPE.get(persona_name)
+        if historical_scope:
+            lines.append(f"\n({historical_scope})")
         lines.append(
             "\n(손자병법 새 구절 토론에서는 찬반 투표처럼 답하지 마세요. "
             "'핵심 판단에 동의합니다', '동의하지 않습니다' 같은 상투적인 판정으로 시작하지 말고, "
             "자신의 주석 관점에서 구절의 뜻·역사 사례의 숨은 조건·현대 적용의 오용 위험 중 "
             "가장 중요한 쟁점 하나를 골라 곧바로 논하세요. 앞선 병법가와 같은 내용을 반복하지 마세요. "
             "앞사람의 이름이나 말을 예의상 다시 언급하지 말고, 대화를 잇기 위한 질문도 억지로 붙이지 마세요. "
+            "모든 발언에 자기 일화를 넣을 필요는 없습니다. 역사 사례를 들 때는 최근 자신의 발언에서 쓴 "
+            "전투를 반복하지 말고, 쟁점에 더 정확한 다른 사례를 고르세요. 실존 지휘관은 자신이 실제 참여한 "
+            "전투만 1인칭 경험으로 말하고, 주석가는 문헌에서 확인한 사례와 자신의 체험을 구분하세요. "
+            "승전만 고르지 말고 패전·철수·판단 수정도 함께 사례 후보로 삼으세요. "
             "이미 나온 내용과 구별되는 새 사실·명확한 반론·실질적인 한계가 하나도 없다면 정확히 NONE만 답하세요.)"
         )
     if any("⚔️ 승군 지휘관 전장 토론" in msg["content"] for msg in context):
