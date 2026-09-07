@@ -75,6 +75,15 @@ def save_rows(rows):
         )
 
 
+def save_memory(memory):
+    """중간 종료에도 사전 JSON이 반쪽만 기록되지 않도록 원자적으로 교체한다."""
+    temp_path = MEMORY_PATH.with_suffix(MEMORY_PATH.suffix + ".tmp")
+    temp_path.write_text(
+        json.dumps(memory, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    os.replace(temp_path, MEMORY_PATH)
+
+
 def codex_refine(book_dir, candidates):
     payload = []
     for item in candidates:
@@ -100,12 +109,38 @@ def codex_refine(book_dir, candidates):
     return {str(key): str(value).strip() for key, value in data.items() if str(value).strip()}
 
 
+def codex_refine_with_retry(book_dir, batch):
+    """★ 2026-09-08: "JSON 객체를 찾지 못함" 배치 실패(40개 단위로 한꺼번에
+    버려짐)를 실제로 확인 — Claude가 큰 배치에서 응답을 도중에 끊거나 설명을
+    덧붙여 JSON 파싱이 깨지는 사례가 있었다. 실패하면 배치를 절반으로 나눠
+    재시도한다 — 배치가 작아질수록 한 번에 요청하는 출력 길이가 줄어 성공률이
+    올라가고, 정말 안 되는 문장 하나만 남기고 나머지는 구제할 수 있다."""
+    try:
+        return codex_refine(book_dir, batch)
+    except Exception as exc:
+        if len(batch) <= 1:
+            raise
+        mid = len(batch) // 2
+        refined = {}
+        errors = []
+        for half in (batch[:mid], batch[mid:]):
+            try:
+                refined.update(codex_refine_with_retry(book_dir, half))
+            except Exception as half_exc:
+                errors.append(str(half_exc))
+        if errors and not refined:
+            raise RuntimeError(f"{exc} (분할 재시도도 실패: {'; '.join(errors)})")
+        return refined
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("book_dir")
     parser.add_argument("--dry-run", action="store_true", help="탐지만 하고 파일과 메모리를 바꾸지 않음")
     parser.add_argument("--no-ai", action="store_true", help="영구 메모리만 적용하고 Codex/Claude 검수는 생략")
-    parser.add_argument("--max-review", type=int, default=int(os.environ.get("JP_TRANSLATION_REVIEW_MAX", "60")))
+    parser.add_argument("--max-review", type=int, default=int(os.environ.get("JP_TRANSLATION_REVIEW_MAX", "60")),
+                        help="번역 실패를 제외한 일반 이상 후보의 최대 검수 수")
+    parser.add_argument("--batch-size", type=int, default=int(os.environ.get("JP_TRANSLATION_REVIEW_BATCH", "40")))
     args = parser.parse_args()
 
     book_dir = Path(args.book_dir).resolve()
@@ -132,10 +167,15 @@ def main():
                 "next": rows[index + 1]["data"].get("ja", "") if index + 1 < len(rows) else "",
             })
     ranked.sort(key=lambda item: (-item["score"], item["index"]))
-    candidates = ranked[:max(0, args.max_review)]
+    # 번역 실패는 일반 품질 후보 한도와 무관하게 전부 복구한다. 실패가 60개를
+    # 넘었다는 이유로 뒤쪽 문장을 그대로 EPUB에 흘려보내지 않도록 한다.
+    failures = [item for item in ranked if "번역 실패" in item["reasons"]]
+    other_candidates = [item for item in ranked if "번역 실패" not in item["reasons"]]
+    candidates = failures + other_candidates[:max(0, args.max_review)]
     print(
         f"🔎 번역 품질 검사: 전체 {len(rows)}문장 · 메모리 적용 {memory_hits}문장 · "
-        f"이상 후보 {len(ranked)}문장 · 이번 검수 {len(candidates)}문장"
+        f"이상 후보 {len(ranked)}문장 · 번역 실패 {len(failures)}문장 · "
+        f"이번 검수 {len(candidates)}문장"
     )
     if args.dry_run:
         for item in candidates:
@@ -144,24 +184,40 @@ def main():
 
     changed = 0
     if candidates and not args.no_ai:
-        try:
-            refined = codex_refine(book_dir, candidates)
-        except Exception as exc:
-            print(f"⚠️ Codex/Claude 선택 검수 모두 실패 — Google 번역 유지: {exc}")
-            refined = {}
+        refined = {}
+        batch_size = max(1, args.batch_size)
+        for start in range(0, len(candidates), batch_size):
+            batch = candidates[start:start + batch_size]
+            try:
+                refined.update(codex_refine_with_retry(book_dir, batch))
+            except Exception as exc:
+                print(
+                    f"⚠️ Codex/Claude 선택 검수 배치 실패 "
+                    f"({start + 1}~{start + len(batch)}): {exc}"
+                )
         for item in candidates:
             corrected = refined.get(item["id"], "")
             if corrected and KO_RE.search(corrected) and not JP_RE.search(corrected):
                 row = rows[item["index"]]
                 if corrected != row["data"].get("ko"):
                     row["data"]["ko"] = corrected
-                    memory[item["ja"].strip()] = corrected
                     changed += 1
+                # 변경 여부와 관계없이 검수 통과 결과를 영구 사전에 올린다.
+                # 다음 작품에서는 Google 호출 전에 이 값을 바로 재사용한다.
+                memory_key = item["ja"].strip()
+                if memory_key:
+                    memory[memory_key] = corrected
     save_rows(rows)
-    MEMORY_PATH.write_text(
-        json.dumps(memory, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    save_memory(memory)
+    remaining_failures = sum(
+        1 for row in rows if row["data"].get("ko", "").strip() in ("", "[번역 실패]")
     )
-    print(f"✅ 선택 번역 보정 완료: {changed}문장 수정 · 영구 메모리 {len(memory)}개")
+    print(
+        f"✅ 선택 번역 보정 완료: {changed}문장 수정 · 영구 메모리 {len(memory)}개 · "
+        f"남은 번역 실패 {remaining_failures}문장"
+    )
+    if remaining_failures:
+        sys.exit(f"❌ 번역 실패 {remaining_failures}문장이 남아 최종 EPUB 생성을 중단합니다.")
 
 
 if __name__ == "__main__":
