@@ -440,7 +440,8 @@ Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으
 - `_refresh_checklist_state()`(타이머 콜백, 메인 스레드) → `_fetch_checklist_state_thread()`(백그라운드 스레드에서 네트워크 호출) → 결과를 `self._checklist_state`에 저장 + `~/.shift_alarm_checklist_state.json`에 캐시(오늘 날짜분만 유효, 재시작 직후에도 빈 상태로 안 보이게) → `AppHelper.callAfter()`로 `build_menu()`/`_write_mobile_status()`를 메인 스레드에 재스케줄.
 - **메뉴바**: `_build_reminder_status_menu_items()`에 `checklist_state` 인자가 추가돼, 각 리마인더 앞에 `✅`/`⬜`를 붙인다.
 - **위젯**: `status.reminders_checked`(`{라벨: checked}`)와 `reminder_notion_url`이 들어간다. `buildLeftColumn()`의 리마인더 목록은 `✅`/`⬜`로 표시되며, `오늘의 리마인더` 제목과 각 항목을 누르면 Notion 일일 체크리스트가 열린다(★ 2026-08-10: 이전에는 URL 필드 자체를 내보내지 않아 탭해도 아무 동작이 없던 버그 수정).
-- **모바일·웹 상세 인터페이스(2026-09-07)**: 기존 `status.reminders`와 `status.reminders_checked`는 그대로 유지하고 `status.reminders_detailed`를 추가했다. 오늘 적용되는 순서대로 `{"label": 원문, "time": "HH:MM", "checked": boolean}` 객체를 제공한다. 모든 설정은 `reminder_schedule`의 `{key,label,time,enabled}`, 기상 알람 기준 루틴 날짜는 `routine_date`, 현재 루틴은 `daily_routine`의 `{label,checked}`로 제공한다. 시각은 앱 시작 후 Notion 표 동기화가 반영된 현재 `REMINDERS` 값을 사용하며 민감정보는 포함하지 않는다. 웹 서버는 Shift Alarm 내부 UI 메서드를 호출하거나 로직을 복제하지 않고 동기화된 `status.json`만 읽으면 안전하게 같은 상태를 표시할 수 있다.
+- **모바일·웹 상세 인터페이스(2026-09-07)**: 기존 `status.reminders`와 `status.reminders_checked`는 그대로 유지하고 `status.reminders_detailed`를 추가했다. 오늘 적용되는 순서대로 `{"label": 원문, "time": "HH:MM", "checked": boolean}` 객체를 제공하며 `time`은 오늘 근무/전환 휴무 override가 있으면 그 값, 없으면 기본 시각이다. 모든 설정은 `reminder_schedule`의 `{key,label,time,times,enabled}`로 제공한다. `times`에는 `시각`, `Swing`, `Day`, `GY`, `S-D휴`, `D-G휴`, `G-S휴` 전 열이 `HH:MM` 또는 null로 들어가 웹에서 표를 그대로 편집할 수 있다. 기상 알람 기준 루틴 날짜는 `routine_date`, 현재 루틴은 `daily_routine`의 `{label,checked}`로 제공한다. 민감정보는 포함하지 않는다. 웹 서버는 Shift Alarm 내부 UI 메서드를 호출하거나 로직을 복제하지 않고 동기화된 `status.json`만 읽으면 안전하게 같은 상태를 표시할 수 있다.
+- **웹의 오늘만 삭제 tombstone**: 웹 DELETE는 `~/.tulpachat/shift_alarm_dismissed.json`에 `{YYYY-MM-DD:[label,...]}`로 기록한다. `_get_today_reminder_items()` 반환 직전의 공용 필터가 오늘 라벨을 제외하므로 모바일 status, 개별 시각 알람, Notion 날짜별 체크리스트 생성이 모두 같은 삭제 상태를 따른다. `REMINDERS` 반복 정의는 건드리지 않아 다음 적용일에는 자동으로 다시 나타난다. 파일이 없거나 쓰는 도중 JSON이 불완전하면 안전하게 삭제 없음으로 처리한다.
 - 앱 시작 시 캐시를 먼저 읽어 즉시 반영(`build_menu()`가 그 값을 참조하므로 반드시 `build_menu()` 호출보다 먼저 초기화해야 함 — 순서를 반대로 했다가 `AttributeError`로 크래시한 적 있음, 초기화 위치는 `__init__` 맨 앞쪽 참고).
 
 ### 16-3. ★★ 백그라운드 스레드에서 AppKit 직접 호출 → EXC_BREAKPOINT 크래시 (2026-08-05, 근본 원인 확정)
@@ -1020,3 +1021,21 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - 주요 조정 예: `call_dongchan`/`call_sondongju`/`coding_academy`/`bathroom_drain_check`(기본 19:00~19:45, 근무·무관 주기 알림)는 Swing 근무일엔 근무 시작(14:00) 전인 12:00대로 당겼다. `agentic_coding_reading`/`nose_hair_trim`/`nail_trim`(기본 21:00~21:30)은 Swing 근무일엔 퇴근(22:00) 이후로 밀었다. `haircut`/`sondongju_off`/`engine_oil_change`(기본 12:00, 근무·무관)는 Day 근무일엔 퇴근 후(15:00), GY 근무일엔 기상 후(18:00)로 옮겼다. `earphone_charge`(기본 22:00)는 GY 근무 시작 시각과 겹쳐서 GY만 20:00으로 당겼다. `kakao_cleanup`(기본 20:00, 휴무 마지막날)은 S-D휴 마지막날의 20:00 멜라토닌 알림과 정확히 겹쳐서 S-D휴만 18:00으로 당겼다. `call_mom`/`cafe_strategy_study`/`call_heo_minjun`/`call_sibling`/`outlet_shopping`(휴무 첫날류, 기본 10:00대)은 G-S휴 첫날 기상이 18:00으로 늦어서 G-S휴만 저녁(20:00~21:00대)으로 옮겼다.
 - `day_shift_last_day_routine`은 조건 자체가 "오늘이 Day 근무 블록 마지막날"이라 항상 Day 컨텍스트로만 걸리므로, 6칼럼 전부 빈칸으로 남겼다(기본 "시각" 14:30이 이미 Day 컨텍스트 전용 값).
 - Notion 표 업데이트 후 `_fetch_reminder_times_from_notion`으로 실 페이지를 다시 읽어 21/22행에 오버라이드가 정상 파싱되는 것, `_resolve_reminder_time`이 G-S휴/Swing/D-G휴 각 컨텍스트에서 기대한 값(오버라이드 있으면 오버라이드, 없으면 기본)을 반환하는 것을 직접 확인했다.
+
+## 82. 🌙 웹 시각표에 기상·멜라토닌 일정 통합 + 오늘 근무 자동 선택 (★ 2026-09-07 추가)
+
+**사용자 요청**: "멜라토닌 먹는 시간도 리마인더 시각표에 있으면 좋겠는데, 그냥
+알람만 나오는 상태잖아? 기상시간도 시각표에 정리해줘" 및 "웹앱의 근무유형은
+오늘 날짜에 해당하는 유형으로 기본 선택해줘."
+
+- 웹앱의 전체 리마인더 시각표에 기존 개별 리마인더뿐 아니라 근무일 기상
+  (Day 02:55·Swing 08:30·GY 16:30), 전환 휴무 기상(D→G 08:00,
+  S→D 마지막날 06:00, G→S 첫날 18:00·둘째날 13:00), 멜라토닌
+  (S→D 마지막 휴무 20:00, G→S 첫날 다음 새벽 03:00·둘째날 다음 새벽
+  02:00)을 별도 행으로 표시한다.
+- 이 행들은 실제 알람 상수를 그대로 읽어 표시하며 상태를 `자동`으로 표기한다.
+  날짜 조건으로 계산되는 시스템 일정이라 웹에서 잘못 수정하지 못하도록 시각과
+  저장 버튼은 비활성화했다.
+- 상태 JSON에 오늘의 `reminder_time_profile`을 추가했다. 웹앱 최초 진입 시 오늘이
+  근무일이면 Day/Swing/GY, 전환 휴무면 S-D휴/D-G휴/G-S휴 열을 자동 선택한다.
+  사용자가 그 뒤 직접 고른 열은 화면을 갱신해도 유지한다.

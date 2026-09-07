@@ -69,6 +69,7 @@ import Quartz
 
 # ── 설정 파일 경로 ──────────────────────────────────────────
 CONFIG_FILE = os.path.expanduser("~/.shift_alarm_config.json")
+REMINDER_DISMISSED_FILE = os.path.expanduser("~/.tulpachat/shift_alarm_dismissed.json")
 
 # ── 모바일 접근용 상태 파일 ───────────────────────────────────
 # iCloud Drive에 오늘의 근무/리마인더/날씨를 JSON으로 써두면 아이폰에서 읽을 수
@@ -1236,6 +1237,31 @@ REMINDER_TIME_CONTEXT_COLUMNS = ["Swing", "Day", "GY", "S-D휴", "D-G휴", "G-S�
 _REMINDER_CONTEXT_TIMES = {}
 
 
+def _parse_reminder_time_text(text):
+    match = re.fullmatch(r"(\d{1,2}):(\d{2})", str(text).strip())
+    if not match:
+        return None
+    hour, minute = int(match.group(1)), int(match.group(2))
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return {"hour": hour, "minute": minute}
+
+
+def _parse_reminder_time_row(cell_values):
+    """실제 8열 시각표 한 행을 label/base/context mapping으로 파싱."""
+    if len(cell_values) < 2 or not str(cell_values[0]).strip():
+        return None, None, {}
+    label = str(cell_values[0]).strip()
+    base = _parse_reminder_time_text(cell_values[1])
+    contexts = {}
+    for offset, context_name in enumerate(REMINDER_TIME_CONTEXT_COLUMNS, start=2):
+        if offset < len(cell_values):
+            parsed = _parse_reminder_time_text(cell_values[offset])
+            if parsed:
+                contexts[context_name] = parsed
+    return label, base, contexts
+
+
 def _fetch_reminder_times_from_notion(token):
     """⏰ 리마인더 시각표의 표를 (base_times, context_times) 튜플로 반환한다.
     base_times는 {라벨: {"hour","minute"}}(기본 "시각" 칼럼), context_times는
@@ -1253,12 +1279,6 @@ def _fetch_reminder_times_from_notion(token):
     def cell_text(cell):
         return "".join(part.get("plain_text", "") for part in cell).strip()
 
-    def parse_time(text):
-        match = re.fullmatch(r"(\d{1,2}):(\d{2})", text)
-        if not match:
-            return None
-        return {"hour": int(match.group(1)), "minute": int(match.group(2))}
-
     try:
         children = notion_get(f"blocks/{REMINDER_TIMES_SOURCE_PAGE_ID}/children?page_size=100")
         table_block = next(
@@ -1275,18 +1295,12 @@ def _fetch_reminder_times_from_notion(token):
             cells = row["table_row"]["cells"]
             if len(cells) < 2:
                 continue
-            label = cell_text(cells[0])
-            base = parse_time(cell_text(cells[1]))
+            label, base, contexts = _parse_reminder_time_row([cell_text(cell) for cell in cells])
             if not label or not base:
                 continue
             base_times[label] = base
-            for offset, context_name in enumerate(REMINDER_TIME_CONTEXT_COLUMNS):
-                cell_index = 2 + offset
-                if cell_index >= len(cells):
-                    break
-                context_time = parse_time(cell_text(cells[cell_index]))
-                if context_time:
-                    context_times.setdefault(label, {})[context_name] = context_time
+            if contexts:
+                context_times[label] = contexts
         return base_times, context_times
     except (OSError, urllib.error.URLError, json.JSONDecodeError, KeyError, ValueError):
         return {}, {}
@@ -2262,7 +2276,23 @@ def _get_today_reminder_items(schedule, now=None):
     if REMINDERS["engine_oil_change"]["enabled"] and _is_engine_oil_change_day(today):
         items.append(("engine_oil_change", REMINDERS["engine_oil_change"]["label"]))
 
-    return items
+    return filter_dismissed_reminder_items(items, today)
+
+
+def filter_dismissed_reminder_items(items, date, path=REMINDER_DISMISSED_FILE):
+    """웹에서 오늘만 삭제한 라벨을 제외하고 반복 정의는 그대로 보존한다.
+
+    tombstone 형식은 ``{YYYY-MM-DD: [label, ...]}``이다. 파일 부재·부분 쓰기·
+    형식 오류는 삭제 없음으로 취급해 Shift Alarm의 핵심 루틴을 막지 않는다.
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            tombstones = json.load(f)
+        labels = tombstones.get(date.isoformat(), []) if isinstance(tombstones, dict) else []
+        dismissed = {label for label in labels if isinstance(label, str)}
+    except (OSError, json.JSONDecodeError, AttributeError):
+        dismissed = set()
+    return [(key, label) for key, label in items if label not in dismissed]
 
 
 def get_today_reminders(schedule, now=None):
@@ -2279,34 +2309,89 @@ def _format_reminder_time(reminder_time):
     return None
 
 
-def build_reminders_detailed(reminder_items, reminder_definitions, checklist_state=None):
+def build_reminders_detailed(
+    reminder_items, reminder_definitions, checklist_state=None, resolved_times=None
+):
     """(key, label) 목록을 모바일/웹 소비용 상세 리마인더로 변환한다.
 
     time은 정렬·표시하기 쉬운 24시간제 ``HH:MM`` 문자열이며, 미설정이면 None이다.
     label 기반 checked 판정은 기존 Notion 체크리스트 상태와 동일한 계약을 쓴다.
     """
     checklist_state = checklist_state or {}
+    resolved_times = resolved_times or {}
     detailed = []
     for key, label in reminder_items:
         definition = reminder_definitions.get(key, {})
         detailed.append({
             "label": label,
-            "time": _format_reminder_time(definition.get("time")),
+            "time": _format_reminder_time(resolved_times.get(key, definition.get("time"))),
             "checked": bool(checklist_state.get(label, False)),
         })
     return detailed
 
 
-def build_reminder_schedule(reminder_definitions):
+def build_reminder_schedule(reminder_definitions, context_times=None):
     """Notion 동기화까지 반영된 현재 전체 리마인더 설정의 공개용 목록."""
+    context_times = context_times or {}
     return [
         {
             "key": key,
             "label": definition.get("label", ""),
             "time": _format_reminder_time(definition.get("time")),
+            "times": {
+                "시각": _format_reminder_time(definition.get("time")),
+                **{
+                    context: _format_reminder_time(context_times.get(key, {}).get(context))
+                    for context in REMINDER_TIME_CONTEXT_COLUMNS
+                },
+            },
             "enabled": bool(definition.get("enabled", False)),
         }
         for key, definition in reminder_definitions.items()
+    ]
+
+
+def build_sleep_schedule():
+    """교대표로 자동 계산되는 기상·멜라토닌 시각을 리마인더 시각표에 표시한다.
+
+    일반 리마인더와 달리 날짜/전환 순서가 조건이므로 웹에서 직접 수정하지 않고,
+    실제 알람 상수와 같은 값을 내보내 중복된 하드코딩이 생기지 않게 한다.
+    """
+    def row(key, label, times):
+        formatted = {
+            "시각": None,
+            **{context: _format_reminder_time(times.get(context))
+               for context in REMINDER_TIME_CONTEXT_COLUMNS},
+        }
+        return {
+            "key": key, "label": label, "time": None,
+            "times": formatted, "enabled": True, "editable": False,
+        }
+
+    return [
+        row("wake_shift", "⏰ 기상 알람 (근무일)", {
+            "Swing": SHIFT_TIMES["Swing"], "Day": SHIFT_TIMES["Day"],
+            "GY": SHIFT_TIMES["GY"],
+        }),
+        row("wake_transition", "⏰ 기상 알람 (전환 휴무)", {
+            "S-D휴": SWING_TO_DAY_LAST_DAY_WAKE_ALARM_TIME,
+            "D-G휴": DAY_TO_GY_OFF_ALARM_TIME,
+        }),
+        row("wake_gy_swing_day1", "⏰ 기상 알람 (G→S 휴무 첫날)", {
+            "G-S휴": GY_TO_SWING_OFF_ALARM_TIME,
+        }),
+        row("wake_gy_swing_day2", "⏰ 기상 알람 (G→S 휴무 둘째날)", {
+            "G-S휴": GY_TO_SWING_OFF_DAY2_ALARM_TIME,
+        }),
+        row("melatonin_swing_day", "💊 멜라토닌 (S→D 마지막 휴무)", {
+            "S-D휴": SWING_TO_DAY_MELATONIN_REMINDER_TIME,
+        }),
+        row("melatonin_gy_swing_day1", "💊 멜라토닌 (G→S 첫날 다음 새벽)", {
+            "G-S휴": GY_TO_SWING_DAY1_MELATONIN_REMINDER_TIME,
+        }),
+        row("melatonin_gy_swing_day2", "💊 멜라토닌 (G→S 둘째날 다음 새벽)", {
+            "G-S휴": GY_TO_SWING_DAY2_MELATONIN_REMINDER_TIME,
+        }),
     ]
 
 
@@ -5240,6 +5325,7 @@ class ShiftAlarmApp(rumps.App):
             "updated_at": datetime.datetime.now().isoformat(timespec="seconds"),
             "date": today.isoformat(),
             "shift": current,
+            "reminder_time_profile": _context_key_for_date(self.schedule, today) or "시각",
             "shift_day_number": day_num,
             "shift_is_last_day": bool(
                 current == "휴무"
@@ -5249,9 +5335,16 @@ class ShiftAlarmApp(rumps.App):
             "reminders": [label for _key, label in today_reminder_items],
             "reminders_checked": self._checklist_state,
             "reminders_detailed": build_reminders_detailed(
-                today_reminder_items, REMINDERS, self._checklist_state
+                today_reminder_items, REMINDERS, self._checklist_state,
+                {
+                    key: _resolve_reminder_time(self.schedule, key, today)
+                    for key, _label in today_reminder_items
+                },
             ),
-            "reminder_schedule": build_reminder_schedule(REMINDERS),
+            "reminder_schedule": (
+                build_reminder_schedule(REMINDERS, _REMINDER_CONTEXT_TIMES)
+                + build_sleep_schedule()
+            ),
             "routine_date": self._current_routine_date().isoformat(),
             "daily_routine": build_daily_routine(self._daily_routine_state),
             "reminder_notion_url": REMINDER_CHECKLIST_NOTION_URL,
@@ -5605,9 +5698,8 @@ class ShiftAlarmApp(rumps.App):
             t = base_times.get(info["label"])
             if t:
                 info["time"] = t
-            contexts = context_times.get(info["label"])
-            if contexts:
-                _REMINDER_CONTEXT_TIMES[key] = contexts
+            # Notion에서 값을 비우는 편집도 반영되게 이전 override를 교체한다.
+            _REMINDER_CONTEXT_TIMES[key] = context_times.get(info["label"], {})
 
     def _check_reminder_times_sync(self, _):
         threading.Thread(target=self._sync_reminder_times_from_notion, daemon=True).start()
