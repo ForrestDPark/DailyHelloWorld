@@ -309,11 +309,16 @@ class ReaderHandler(BaseHTTPRequestHandler):
         if not book: return self._json(404, {"detail": "책을 찾을 수 없습니다"})
         action = parts[3] if len(parts) > 3 else ""
         if action == "manifest":
+            # 같은 경로의 EPUB을 재빌드해 교체해도 실행 중인 Library 객체의
+            # modified 값은 예전 값일 수 있다. 실제 파일 mtime을 URL에 붙여
+            # 브라우저가 이전 XHTML/오디오를 한 시간 동안 재사용하지 않게 한다.
+            try: resource_version = book.path.stat().st_mtime_ns
+            except OSError: resource_version = int(book.modified * 1_000_000_000)
             chapters = [{
                 "index": i,
-                "url": f"{self.app.base_path}/api/books/{book.id}/resource/{urllib.parse.quote(href, safe='/')}",
+                "url": f"{self.app.base_path}/api/books/{book.id}/resource/{urllib.parse.quote(href, safe='/')}?v={resource_version}",
                 "audio": [{
-                    "url": f"{self.app.base_path}/api/books/{book.id}/resource/{urllib.parse.quote(clip['member'], safe='/')}",
+                    "url": f"{self.app.base_path}/api/books/{book.id}/resource/{urllib.parse.quote(clip['member'], safe='/')}?v={resource_version}",
                     "begin": clip["begin"], "end": clip["end"], "target": clip["target"],
                 } for clip in book.audio[i]],
             } for i, href in enumerate(book.spine)]
@@ -334,7 +339,8 @@ class ReaderHandler(BaseHTTPRequestHandler):
         extra = None
         if mime in {"application/xhtml+xml", "text/html"}:
             extra = "default-src 'none'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; media-src 'self'; font-src 'self';"
-        return self._send_bytes(data, mime, csp=extra)
+        cache_control = "private, no-cache" if mime in {"application/xhtml+xml", "text/html"} else "private, max-age=3600"
+        return self._send_bytes(data, mime, csp=extra, cache_control=cache_control)
 
     def _send_bytes(self, data: bytes, mime: str, disposition: str | None = None, csp: str | None = None, cache_control: str = "private, max-age=3600"):
         self.send_response(200); self.send_header("Content-Type", mime); self.send_header("Content-Length", str(len(data)))
