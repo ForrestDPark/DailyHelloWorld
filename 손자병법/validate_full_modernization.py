@@ -384,9 +384,15 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         law_heading = re.search(
             r"^\s*#### 法 한눈 비교 — 곡제·관도·주용\s*$", case, re.MULTILINE
         )
+        # 제목이 조금 달라졌다는 이유로 불완전한 속임수 묶음이 검사 대상에서
+        # 빠지지 않게 한다. 과거의 `속임수의 경계와 작동 구조` 같은 축약
+        # 제목도 속임수 분석을 시작한 것으로 간주한다.
+        deception_signal_headings = list(re.finditer(
+            r"^\s*####\s+.*(?:속임수|兵者詭道也).*$", case, re.MULTILINE
+        ))
         has_deception_bundle = bool(
-            deception_headings or structure_headings or questions_headings
-            or selected_deception_headings
+            deception_signal_headings or deception_headings or structure_headings
+            or questions_headings or selected_deception_headings
         )
         if has_deception_bundle and len(deception_headings) < 1:
             errors.append(f"{index + 1}번째 역사 사례의 선택 속임수 묶음에 전투서사가 없습니다")
@@ -395,10 +401,10 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
                 f"{index + 1}번째 역사 사례의 속임수 작동 구조 제목이 "
                 f"{len(structure_headings)}개입니다(정상: 1개)"
             )
-        if has_deception_bundle and len(questions_headings) > 1:
+        if has_deception_bundle and len(questions_headings) != 1:
             errors.append(
                 f"{index + 1}번째 역사 사례의 속임수 일곱 질문 제목이 "
-                f"{len(questions_headings)}개입니다(정상: 0~1개)"
+                f"{len(questions_headings)}개입니다(정상: 1개)"
             )
         if has_deception_bundle and len(selected_deception_headings) != 1:
             errors.append(
