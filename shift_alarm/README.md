@@ -440,6 +440,7 @@ Mac이 잠들어 있거나 앱이 꺼져 있으면 파일이 갱신되지 않으
 - `_refresh_checklist_state()`(타이머 콜백, 메인 스레드) → `_fetch_checklist_state_thread()`(백그라운드 스레드에서 네트워크 호출) → 결과를 `self._checklist_state`에 저장 + `~/.shift_alarm_checklist_state.json`에 캐시(오늘 날짜분만 유효, 재시작 직후에도 빈 상태로 안 보이게) → `AppHelper.callAfter()`로 `build_menu()`/`_write_mobile_status()`를 메인 스레드에 재스케줄.
 - **메뉴바**: `_build_reminder_status_menu_items()`에 `checklist_state` 인자가 추가돼, 각 리마인더 앞에 `✅`/`⬜`를 붙인다.
 - **위젯**: `status.reminders_checked`(`{라벨: checked}`)와 `reminder_notion_url`이 들어간다. `buildLeftColumn()`의 리마인더 목록은 `✅`/`⬜`로 표시되며, `오늘의 리마인더` 제목과 각 항목을 누르면 Notion 일일 체크리스트가 열린다(★ 2026-08-10: 이전에는 URL 필드 자체를 내보내지 않아 탭해도 아무 동작이 없던 버그 수정).
+- **모바일·웹 상세 인터페이스(2026-09-07)**: 기존 `status.reminders`와 `status.reminders_checked`는 그대로 유지하고 `status.reminders_detailed`를 추가했다. 오늘 적용되는 순서대로 `{"label": 원문, "time": "HH:MM", "checked": boolean}` 객체를 제공한다. 모든 설정은 `reminder_schedule`의 `{key,label,time,enabled}`, 기상 알람 기준 루틴 날짜는 `routine_date`, 현재 루틴은 `daily_routine`의 `{label,checked}`로 제공한다. 시각은 앱 시작 후 Notion 표 동기화가 반영된 현재 `REMINDERS` 값을 사용하며 민감정보는 포함하지 않는다. 웹 서버는 Shift Alarm 내부 UI 메서드를 호출하거나 로직을 복제하지 않고 동기화된 `status.json`만 읽으면 안전하게 같은 상태를 표시할 수 있다.
 - 앱 시작 시 캐시를 먼저 읽어 즉시 반영(`build_menu()`가 그 값을 참조하므로 반드시 `build_menu()` 호출보다 먼저 초기화해야 함 — 순서를 반대로 했다가 `AttributeError`로 크래시한 적 있음, 초기화 위치는 `__init__` 맨 앞쪽 참고).
 
 ### 16-3. ★★ 백그라운드 스레드에서 AppKit 직접 호출 → EXC_BREAKPOINT 크래시 (2026-08-05, 근본 원인 확정)
@@ -1000,3 +1001,13 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - `REMINDERS`에서 `"gym"` 항목(격일로 상체/하체 번갈아 표시하던 것)을 완전히 제거했다 — `get_today_reminders`의 해당 계산 블록, 메뉴바 타이틀 토큰(`get_today_reminder_title_tokens`)의 "🏋️상"/"🏋️하" 분기, 이제 아무 데서도 안 쓰이는 `_gym_cycle_index`/`GYM_CYCLE_ANCHOR`도 함께 정리했다.
 - `is_gym_open`/`_gym_time_ok`/`GYM_WEEKEND_OPEN`/`GYM_WEEKEND_CLOSE`도 이 항목 삭제 전부터 이미 아무 데서도 호출되지 않던 죽은 코드였음을 확인하고 같이 정리했다.
 - `shift_alarm_title.py`의 `_PET_ACTIONS` 매핑에서도 "상"/"하" 항목을 제거했다(더는 그 토큰이 만들어지지 않으므로).
+
+## 80. ⏰ 리마인더 시각표에 근무일·전환휴무별 시각 오버라이드 칼럼 추가 (★ 2026-09-07 추가)
+
+**사용자 요청**: "그러니까 리마인더 시각표에 칼럼을 6개 더만드는거야 각각 swing, day, gy, s-d휴, d-g휴, g-s휴 일때의 시각이 달라야하는거지." (카페 리마인더를 "기상 후 3시간, 카페 영업시간 10:00~22:00으로 clamp"라는 계산식으로 처리해달라던 직전 요청을, 특정 리마인더 하나가 아니라 전체 리마인더에 적용되는 일반적인 컨텍스트별 시각 오버라이드 메커니즘으로 확장한 것.)
+
+- "⏰ 리마인더 시각표" Notion 표에 기존 "리마인더"/"시각" 2칼럼 뒤로 `Swing`/`Day`/`GY`/`S-D휴`/`D-G휴`/`G-S휴` 6칼럼을 추가했다(총 8칼럼, 22행은 그대로, 새 칸은 전부 빈칸으로 시작 — 빈칸이면 기존 "시각" 칼럼값이 그대로 쓰인다). 표 안내문에도 칼럼 의미를 설명해뒀다.
+- `_context_key_for_date(schedule, d)` (신규 모듈 함수) — 오늘이 Day/Swing/GY 근무일이면 그 이름 그대로, 휴무일이면 `_is_day_to_gy_off_day`/`_is_gy_to_swing_off_day`(+`_is_gy_to_swing_off_day2`)/`_is_swing_to_day_off_day`로 어느 전환 사이 휴무인지 판별해 `"D-G휴"`/`"G-S휴"`/`"S-D휴"` 중 하나로, 어디에도 안 걸리면(연속 휴무 사흘째 이상 등) `None`으로 반환한다. G-S휴는 기존에 이미 따로 있던 GY→Swing 휴무 첫날/둘째날 구분(`_is_gy_to_swing_off_day`/`_is_gy_to_swing_off_day2`)을 하나의 컨텍스트로 합친 것 — 2026년 근무표 365일 전체를 스캔해 정확히 7가지 값(Swing/Day/GY/S-D휴/D-G휴/G-S휴/None) 중 하나로만 떨어지는 것을 확인했다.
+- `_resolve_reminder_time(schedule, key, today)` (신규 모듈 함수) — 오늘의 컨텍스트에 해당하는 오버라이드가 있으면 그 값을, 없으면 `REMINDERS[key]["time"]`(기본 시각)을 반환한다. `_check_timed_reminders`(개별 알림 타이머)와 `build_menu`의 메뉴 표시 시각 계산이 둘 다 이 함수를 쓰도록 바꿨다(직접 `REMINDERS[key]["time"]`을 읽던 곳을 교체).
+- `_fetch_reminder_times_from_notion`을 `(base_times, context_times)` 튜플을 반환하도록 확장 — 표의 3~8번째 칸을 `REMINDER_TIME_CONTEXT_COLUMNS = ["Swing","Day","GY","S-D휴","D-G휴","G-S휴"]` 순서로 파싱해 라벨별 `{컨텍스트명: {"hour","minute"}}`를 만든다. `_sync_reminder_times_from_notion`이 이걸 모듈 전역 `_REMINDER_CONTEXT_TIMES`(key → 컨텍스트별 시각)에 반영한다. Notion 실 페이지 fetch로 22행 모두 파싱되고 빈 컨텍스트 칸은 무시되는 것을 확인했다.
+- 실제 값 채우기는 이번 범위에 넣지 않았다 — 스키마와 읽기/우선순위 로직만 만들고, 어떤 리마인더를 어떤 상황에서 다르게 하고 싶은지는 표에서 직접 채워 넣도록 남겨뒀다(카페 리마인더처럼 "휴무 첫날마다 다른 컨텍스트일 수 있는" 항목이 그 예).

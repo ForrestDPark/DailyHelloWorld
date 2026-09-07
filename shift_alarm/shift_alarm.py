@@ -1226,11 +1226,22 @@ REMINDER_TIMES_SOURCE_PAGE_URL = (
 )
 REMINDER_TIMES_SYNC_INTERVAL_SECONDS = 900
 
+# ★ 2026-09-07: "리마인더 시각표에 칼럼을 6개 더 만드는거야 각각 swing, day,
+# gy, s-d휴, d-g휴, g-s휴 일때의 시각이 달라야하는거지" 요청 — 표의 3번째
+# 칼럼부터 이 순서로 컨텍스트별 시각 칼럼이 온다. 빈 칸이면 그 컨텍스트에는
+# 오버라이드가 없다는 뜻(기본 "시각" 칼럼 그대로 사용, _resolve_reminder_time).
+REMINDER_TIME_CONTEXT_COLUMNS = ["Swing", "Day", "GY", "S-D휴", "D-G휴", "G-S휴"]
+
+# key -> {컨텍스트명: {"hour","minute"}} — _sync_reminder_times_from_notion이 채운다.
+_REMINDER_CONTEXT_TIMES = {}
+
 
 def _fetch_reminder_times_from_notion(token):
-    """⏰ 리마인더 시각표의 표를 {라벨: {"hour","minute"}}로 반환. 토큰 없음·
-    표 없음·형식 오류 등 실패 시 빈 dict — 호출부는 실패하면 기존 시각 값을
-    그대로 둔다(코드 기본값이 안전망 역할)."""
+    """⏰ 리마인더 시각표의 표를 (base_times, context_times) 튜플로 반환한다.
+    base_times는 {라벨: {"hour","minute"}}(기본 "시각" 칼럼), context_times는
+    {라벨: {컨텍스트명: {"hour","minute"}}}(Swing/Day/GY/S-D휴/D-G휴/G-S휴
+    칼럼 중 값이 채워진 것만). 토큰 없음·표 없음·형식 오류 등 실패 시
+    ({}, {}) — 호출부는 실패하면 기존 값을 그대로 둔다(코드 기본값이 안전망)."""
     def notion_get(path):
         request = urllib.request.Request(
             f"https://api.notion.com/v1/{path}",
@@ -1242,29 +1253,43 @@ def _fetch_reminder_times_from_notion(token):
     def cell_text(cell):
         return "".join(part.get("plain_text", "") for part in cell).strip()
 
+    def parse_time(text):
+        match = re.fullmatch(r"(\d{1,2}):(\d{2})", text)
+        if not match:
+            return None
+        return {"hour": int(match.group(1)), "minute": int(match.group(2))}
+
     try:
         children = notion_get(f"blocks/{REMINDER_TIMES_SOURCE_PAGE_ID}/children?page_size=100")
         table_block = next(
             (b for b in children.get("results", []) if b.get("type") == "table"), None
         )
         if not table_block:
-            return {}
+            return {}, {}
         rows = notion_get(f"blocks/{table_block['id']}/children?page_size=100")
-        result = {}
+        base_times = {}
+        context_times = {}
         for index, row in enumerate(rows.get("results", [])):
             if index == 0 or row.get("type") != "table_row":
-                continue  # 첫 행은 "리마인더/시각" 머리글
+                continue  # 첫 행은 머리글
             cells = row["table_row"]["cells"]
             if len(cells) < 2:
                 continue
             label = cell_text(cells[0])
-            match = re.fullmatch(r"(\d{1,2}):(\d{2})", cell_text(cells[1]))
-            if not label or not match:
+            base = parse_time(cell_text(cells[1]))
+            if not label or not base:
                 continue
-            result[label] = {"hour": int(match.group(1)), "minute": int(match.group(2))}
-        return result
+            base_times[label] = base
+            for offset, context_name in enumerate(REMINDER_TIME_CONTEXT_COLUMNS):
+                cell_index = 2 + offset
+                if cell_index >= len(cells):
+                    break
+                context_time = parse_time(cell_text(cells[cell_index]))
+                if context_time:
+                    context_times.setdefault(label, {})[context_name] = context_time
+        return base_times, context_times
     except (OSError, urllib.error.URLError, json.JSONDecodeError, KeyError, ValueError):
-        return {}
+        return {}, {}
 
 # ── 월 1회 나들이 추천 장소 (아산시 기준 + 근교) ────────────────────
 # 2026-07-24 추가. 매달 다른 곳이 뜨도록 (연도,월) 기준으로 순환시킨다.
@@ -1923,6 +1948,60 @@ def _is_swing_to_day_off_day_last(schedule, d):
     return get_shift_for_date(schedule, d + datetime.timedelta(days=1)) != "휴무"
 
 
+def _todays_wake_alarm_time_for_schedule(schedule, d):
+    """d(휴무 포함) 근무 상태에 따른 기상 알람 시각을 {'hour','minute'}로
+    반환. 등록된 기상 알람이 없는 날(연속 휴무 사흘째 이상 등)은 None.
+    ★ 2026-09-07: 원래 ShiftAlarmApp 메서드였는데, 리마인더 시각 계산
+    (_resolve_reminder_time)도 self 없이 이 로직이 필요해져서 schedule을
+    인자로 받는 모듈 함수로 뺐다 — 메서드는 이제 얇은 래퍼."""
+    shift = get_shift_for_date(schedule, d)
+    t = SHIFT_TIMES.get(shift)
+    if t:
+        return t
+    if shift == "휴무":
+        if _is_day_to_gy_off_day(schedule, d):
+            return DAY_TO_GY_OFF_ALARM_TIME
+        if _is_gy_to_swing_off_day(schedule, d):
+            return GY_TO_SWING_OFF_ALARM_TIME
+        if _is_gy_to_swing_off_day2(schedule, d):
+            return GY_TO_SWING_OFF_DAY2_ALARM_TIME
+        if _is_swing_to_day_off_day_last(schedule, d):
+            return SWING_TO_DAY_LAST_DAY_WAKE_ALARM_TIME
+    return None
+
+
+def _context_key_for_date(schedule, d):
+    """d가 "⏰ 리마인더 시각표"의 6개 컨텍스트 칼럼(Swing/Day/GY 근무일,
+    S-D휴/D-G휴/G-S휴 전환 휴무) 중 무엇에 해당하는지 반환. ★ 2026-09-07:
+    "리마인더 시각표에 칼럼을 6개 더 만드는거야... 시각이 달라야하는거지"
+    요청 — 근무일은 그대로, 휴무일은 어느 전환 사이 휴무인지로 좁힌다.
+    전환 패턴에 안 걸리는 휴무(연속 휴무 사흘째 등)는 None(기본 "시각" 칼럼
+    그대로 사용)."""
+    shift = get_shift_for_date(schedule, d)
+    if shift in ("Day", "Swing", "GY"):
+        return shift
+    if shift == "휴무":
+        if _is_day_to_gy_off_day(schedule, d):
+            return "D-G휴"
+        if _is_gy_to_swing_off_day(schedule, d) or _is_gy_to_swing_off_day2(schedule, d):
+            return "G-S휴"
+        if _is_swing_to_day_off_day(schedule, d):
+            return "S-D휴"
+    return None
+
+
+def _resolve_reminder_time(schedule, key, today):
+    """리마인더 key의 오늘 실행 시각을 반환한다 — 오늘의 컨텍스트(위
+    _context_key_for_date)에 맞는 시각표 칼럼 값이 있으면 그걸 쓰고,
+    없으면 기본 "시각" 칼럼(REMINDERS[key]["time"])으로 대체한다."""
+    context = _context_key_for_date(schedule, today)
+    if context:
+        override = _REMINDER_CONTEXT_TIMES.get(key, {}).get(context)
+        if override:
+            return override
+    return REMINDERS[key].get("time")
+
+
 CALL_DONGCHAN_ANCHOR = datetime.date(2026, 8, 3)
 CALL_DONGCHAN_INTERVAL_DAYS = 21
 CALL_SONDONGJU_ANCHOR = datetime.date(2026, 8, 5)
@@ -2189,6 +2268,54 @@ def _get_today_reminder_items(schedule, now=None):
 def get_today_reminders(schedule, now=None):
     """(기존 시그니처·동작 그대로 유지 — 다른 모든 호출부는 라벨 목록만 본다)"""
     return [label for _key, label in _get_today_reminder_items(schedule, now=now)]
+
+
+def _format_reminder_time(reminder_time):
+    if isinstance(reminder_time, dict):
+        hour = reminder_time.get("hour")
+        minute = reminder_time.get("minute")
+        if isinstance(hour, int) and isinstance(minute, int):
+            return f"{hour:02d}:{minute:02d}"
+    return None
+
+
+def build_reminders_detailed(reminder_items, reminder_definitions, checklist_state=None):
+    """(key, label) 목록을 모바일/웹 소비용 상세 리마인더로 변환한다.
+
+    time은 정렬·표시하기 쉬운 24시간제 ``HH:MM`` 문자열이며, 미설정이면 None이다.
+    label 기반 checked 판정은 기존 Notion 체크리스트 상태와 동일한 계약을 쓴다.
+    """
+    checklist_state = checklist_state or {}
+    detailed = []
+    for key, label in reminder_items:
+        definition = reminder_definitions.get(key, {})
+        detailed.append({
+            "label": label,
+            "time": _format_reminder_time(definition.get("time")),
+            "checked": bool(checklist_state.get(label, False)),
+        })
+    return detailed
+
+
+def build_reminder_schedule(reminder_definitions):
+    """Notion 동기화까지 반영된 현재 전체 리마인더 설정의 공개용 목록."""
+    return [
+        {
+            "key": key,
+            "label": definition.get("label", ""),
+            "time": _format_reminder_time(definition.get("time")),
+            "enabled": bool(definition.get("enabled", False)),
+        }
+        for key, definition in reminder_definitions.items()
+    ]
+
+
+def build_daily_routine(routine_state):
+    """내부 딕셔너리를 순서가 보존되는 공개용 label/checked 목록으로 변환."""
+    return [
+        {"label": label, "checked": bool(checked)}
+        for label, checked in (routine_state or {}).items()
+    ]
 
 
 def get_today_reminder_title_tokens(schedule, now=None, checklist_state=None):
@@ -5107,6 +5234,7 @@ class ShiftAlarmApp(rumps.App):
             if item.get("unread")
         ][:MOBILE_STATUS_MAIL_LIMIT]
         codex_progress = _codex_primary_window_progress(self._codex_quota)
+        today_reminder_items = _get_today_reminder_items(self.schedule)
         status = {
             "widget_schema_version": WIDGET_SCHEMA_VERSION,
             "updated_at": datetime.datetime.now().isoformat(timespec="seconds"),
@@ -5118,8 +5246,14 @@ class ShiftAlarmApp(rumps.App):
                 and get_shift_for_date(self.schedule, today + datetime.timedelta(days=1)) != "휴무"
             ),
             "weather": self.weather_str or None,
-            "reminders": get_today_reminders(self.schedule),
+            "reminders": [label for _key, label in today_reminder_items],
             "reminders_checked": self._checklist_state,
+            "reminders_detailed": build_reminders_detailed(
+                today_reminder_items, REMINDERS, self._checklist_state
+            ),
+            "reminder_schedule": build_reminder_schedule(REMINDERS),
+            "routine_date": self._current_routine_date().isoformat(),
+            "daily_routine": build_daily_routine(self._daily_routine_state),
             "reminder_notion_url": REMINDER_CHECKLIST_NOTION_URL,
             "storage_free_gb": self.storage_free_gb,
             "earnings_short": self._earnings_short_text(),
@@ -5456,20 +5590,24 @@ class ShiftAlarmApp(rumps.App):
         )
 
     def _sync_reminder_times_from_notion(self):
-        """⏰ 리마인더 시각표에서 시각을 읽어와 REMINDERS[key]["time"]에
-        반영한다. 네트워크 호출이라 타이머에서 직접 부르지 않고 스레드로
-        감싸서 부른다(_check_reminder_times_sync). Notion을 못 읽으면
-        기존 값을 그대로 둔다(조용히 실패)."""
+        """⏰ 리마인더 시각표에서 시각을 읽어와 REMINDERS[key]["time"](기본
+        칼럼)과 _REMINDER_CONTEXT_TIMES[key](Swing/Day/GY/S-D휴/D-G휴/G-S휴
+        컨텍스트별 칼럼)에 반영한다. 네트워크 호출이라 타이머에서 직접
+        부르지 않고 스레드로 감싸서 부른다(_check_reminder_times_sync).
+        Notion을 못 읽으면 기존 값을 그대로 둔다(조용히 실패)."""
         token = _notion_keychain_token()
         if not token:
             return
-        times_by_label = _fetch_reminder_times_from_notion(token)
-        if not times_by_label:
+        base_times, context_times = _fetch_reminder_times_from_notion(token)
+        if not base_times and not context_times:
             return
-        for info in REMINDERS.values():
-            t = times_by_label.get(info["label"])
+        for key, info in REMINDERS.items():
+            t = base_times.get(info["label"])
             if t:
                 info["time"] = t
+            contexts = context_times.get(info["label"])
+            if contexts:
+                _REMINDER_CONTEXT_TIMES[key] = contexts
 
     def _check_reminder_times_sync(self, _):
         threading.Thread(target=self._sync_reminder_times_from_notion, daemon=True).start()
@@ -5663,22 +5801,8 @@ class ShiftAlarmApp(rumps.App):
     # ── 리마인더 (헬스장/엄마 전화/카톡 정리 등) ────────────────
 
     def _todays_wake_alarm_time(self, d):
-        """d(휴무 포함) 근무 상태에 따른 기상 알람 시각을 {'hour','minute'}로
-        반환. 등록된 기상 알람이 없는 날(연속 휴무 사흘째 이상 등)은 None."""
-        shift = get_shift_for_date(self.schedule, d)
-        t = SHIFT_TIMES.get(shift)
-        if t:
-            return t
-        if shift == "휴무":
-            if _is_day_to_gy_off_day(self.schedule, d):
-                return DAY_TO_GY_OFF_ALARM_TIME
-            if _is_gy_to_swing_off_day(self.schedule, d):
-                return GY_TO_SWING_OFF_ALARM_TIME
-            if _is_gy_to_swing_off_day2(self.schedule, d):
-                return GY_TO_SWING_OFF_DAY2_ALARM_TIME
-            if _is_swing_to_day_off_day_last(self.schedule, d):
-                return SWING_TO_DAY_LAST_DAY_WAKE_ALARM_TIME
-        return None
+        """(기존 시그니처 유지 — 다른 모든 호출부는 그대로 self.schedule 기준으로 쓴다)"""
+        return _todays_wake_alarm_time_for_schedule(self.schedule, d)
 
     def _current_routine_date(self):
         """★ 2026-08-30: "일일 루틴 체크리스트는 기상알람 이후부터 체크안된
@@ -5716,12 +5840,14 @@ class ShiftAlarmApp(rumps.App):
         """1분마다 오늘 해당하는 리마인더 중 지금이 지정 시각인 항목을 찾아
         개별 알림 (★ 2026-09-07: "카톡정리, 빨래돌리기 등등의 리마인더에
         그것을 실행해야할 시간까지... 그시간에 맞춰서 해당 알람이울리게" 요청).
-        key별로 독립 dedup — outing처럼 라벨이 매달 바뀌는 항목도 key로
-        매칭하므로 문제없다."""
+        시각은 _resolve_reminder_time으로 오늘의 컨텍스트(Swing/Day/GY 근무일,
+        S-D휴/D-G휴/G-S휴 전환 휴무)별 오버라이드를 먼저 확인한다. key별로
+        독립 dedup — outing처럼 라벨이 매달 바뀌는 항목도 key로 매칭하므로
+        문제없다."""
         now = datetime.datetime.now()
         today = now.date()
         for key, label in _get_today_reminder_items(self.schedule, now=now):
-            t = REMINDERS[key].get("time")
+            t = _resolve_reminder_time(self.schedule, key, today)
             if not t or now.hour != t["hour"] or now.minute != t["minute"]:
                 continue
             if self._last_timed_reminder_notified.get(key) == today:
@@ -6511,8 +6637,9 @@ class ShiftAlarmApp(rumps.App):
         # 상태·콜백에 쓰이는 식별자(label)는 그대로, 화면 표시용
         # display_text에만 시각을 붙인다.
         today_reminders = []
+        today = datetime.date.today()
         for key, label in _get_today_reminder_items(self.schedule):
-            t = REMINDERS[key].get("time")
+            t = _resolve_reminder_time(self.schedule, key, today)
             display = f"{label} · {t['hour']:02d}:{t['minute']:02d}" if t else label
             today_reminders.append((label, display))
         reminder_callback = self.make_open_url_callback(REMINDER_CHECKLIST_NOTION_URL)
