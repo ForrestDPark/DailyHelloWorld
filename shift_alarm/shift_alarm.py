@@ -2037,9 +2037,11 @@ SONDONGJU_CYCLE_DAYS = 14
 SONDONGJU_OFF_DAY_OFFSETS = (5, 6, 12, 13)
 NOSE_HAIR_TRIM_ANCHOR = datetime.date(2026, 8, 3)
 NOSE_HAIR_TRIM_INTERVAL_DAYS = 4  # ★ 2026-08-07: 7일→14일→4일로 재조정(사용자 요청)
-NAIL_TRIM_ANCHOR = datetime.date(2026, 8, 18)
+NAIL_TRIM_ANCHOR = datetime.date(2026, 9, 8)
 # ★ 2026-08-18: 지난 알림(8/7)과 실제로 다시 깎은 오늘(8/18) 사이 실측 주기가
-# 14일이 아니라 11일이라(2주보다 짧게 자람) 그 주기로 재조정, 기준일도 오늘로.
+# 14일이 아니라 11일이라(2주보다 짧게 자람) 그 주기로 재조정.
+# ★ 2026-09-08: "오늘 4시 30분에 손톱깎았다" — 기준일을 실제로 깎은 오늘로
+# 재조정(주기 11일은 그대로 유지).
 NAIL_TRIM_INTERVAL_DAYS = 11
 EARPHONE_CHARGE_ANCHOR = datetime.date(2026, 8, 3)
 EARPHONE_CHARGE_INTERVAL_DAYS = 4
