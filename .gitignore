@@ -8,4 +8,5 @@
 !.claude/agents/
 !.claude/agents/*.md
 일본어자막추출/.venv-shazam/
+일본어자막추출/logs/
 nodeBackendDeveloper/chapter08/hello-nestjs/node_modules

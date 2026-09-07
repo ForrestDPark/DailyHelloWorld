@@ -72,6 +72,13 @@ fi
 
 echo "📋 발견된 영상 ${#VALID_FILES[@]}개: ${VALID_FILES[@]}"
 
+# ★ 2026-09-07: "코덱스랑 클로드 사용량 계산해서... 부족할거같으면 추출
+# 시작전에 경고" 요청 — AKDL-370/EBOD-952/MIDV-199 세 편의 학습카드가
+# codex/claude 둘 다 못 쓰는 상태에서 조용히 실패했던 사고 이후 추가. 실행을
+# 막지는 않고(요약이 실패해도 낭독판 EPUB 자체는 계속 만들어짐) 시작 전에
+# 눈에 띄게 경고만 한다.
+/opt/anaconda3/bin/python3 "${SCRIPT_DIR}/check_ai_quota.py" "${#VALID_FILES[@]}"
+
 ATTEMPTED_FILES=()
 COMPLETED_COUNT=0
 
@@ -141,6 +148,18 @@ except Exception:
             NEEDS_RETRY=1
         fi
         if (( NEEDS_RETRY == 0 )); then
+            continue
+        fi
+        # ★ 2026-09-07: AKDL-370이 part2 추출을 마치기 전에 이 복구 단계가
+        # part1만으로 요약·낭독판을 만들어 "완성"으로 잘못 배포할 뻔했다 —
+        # 원본 영상이 아직 작업 폴더 루트에 그대로 있으면(=메인 while 루프가
+        # 아직 이 회차를 한 번도 끝까지 처리하지 못했다는 뜻) part 수와 무관하게
+        # 이 복구 단계를 건너뛰고 메인 루프가 처음부터 완전히 처리하게 둔다.
+        # 원본이 없는(과거에 성공해서 이미 최종 폴더로 옮겨진) 회차만 이 복구
+        # 대상이다.
+        ORIGINAL_STILL_PENDING=("${WORKING_DIR}/${BOOK_CANDIDATE:t}".(mp4|webm|mkv|mov)(N))
+        if [[ ${#ORIGINAL_STILL_PENDING[@]} -gt 0 ]]; then
+            echo "⏭️  원본 영상이 아직 처리 대기 중 — 이 복구 단계는 건너뛰고 메인 루프가 처음부터 완전히 처리함: ${BOOK_CANDIDATE:t}"
             continue
         fi
         echo "🩹 학습카드 없음 — 재시도: ${BOOK_CANDIDATE:t}"
@@ -217,6 +236,26 @@ while true; do
     echo "\033[1;33m🎬 영상 처리 시작: $FILENAME (시도 ${#ATTEMPTED_FILES[@]}번째)\033[0m"
     echo "\033[1;33m========================================\033[0m"
 
+    # ★ 2026-09-07: "용량이 중간에 부족해지지 않게" 요청 — 여러 원본을 연달아
+    # 처리하다 디스크가 바닥나면 어느 단계든 조용히 실패하고(예: Whisper 출력
+    # 파일이 안 만들어짐) 다음 파일까지 줄줄이 실패로 이어질 수 있었다. 새
+    # 파일을 시작하기 전마다 여유 공간을 확인해서, 이 파일 처리에 필요할 만한
+    # 여유(원본 크기의 1.5배 또는 최소 8GB, 둘 중 큰 값)가 없으면 여기서 멈추고
+    # 사용자가 공간을 확보한 뒤 재실행하게 한다 — 이미 완료된 파일까지 잃지
+    # 않고, 뒷 파일들이 알 수 없는 이유로 줄줄이 실패하는 것도 막는다.
+    AVAIL_KB=$(df -k "$WORKING_DIR" | tail -1 | awk '{print $4}')
+    FILESIZE_BYTES=$(stat -f%z "$FILENAME" 2>/dev/null || echo 0)
+    FILESIZE_KB=$(( FILESIZE_BYTES / 1024 ))
+    REQUIRED_KB=$(( FILESIZE_KB * 3 / 2 ))
+    MIN_REQUIRED_KB=$(( 8 * 1024 * 1024 ))
+    (( REQUIRED_KB < MIN_REQUIRED_KB )) && REQUIRED_KB=$MIN_REQUIRED_KB
+    if [[ -n "$AVAIL_KB" ]] && (( AVAIL_KB < REQUIRED_KB )); then
+        echo "🛑 디스크 여유 공간 부족 — 새 파일 처리를 중단합니다."
+        echo "   현재 여유: $(( AVAIL_KB / 1024 / 1024 ))GB / 필요 추정: $(( REQUIRED_KB / 1024 / 1024 ))GB"
+        echo "   공간을 확보한 뒤 같은 폴더에서 다시 실행하면 남은 원본부터 이어서 처리합니다."
+        break
+    fi
+
     TOTAL_SECS_RAW=$(ffprobe -v error -show_entries format=duration \
         -of default=noprint_wrappers=1:nokey=1 "$FILENAME" 2>/dev/null)
     TOTAL_SECS=${TOTAL_SECS_RAW%.*}
@@ -289,6 +328,17 @@ while true; do
 
         PART_SRT_FILES+=("$PART_SRT")
         PART_OFFSETS+=("$START_SEC")
+
+        # ★ 2026-09-07: "용량이 중간에 부족해지지 않게... 완성되면 바로 지우고
+        # 다음으로" 요청 — 여러 파일을 연달아 처리하다 디스크가 부족해진 사고
+        # 이후 추가. 오디오 wav는 .srt가 만들어진 순간 더는 필요 없다(뒤 단계는
+        # 전부 .srt/원본 영상만 읽는다) — 그 파일 전체가 나중에 성공하든
+        # 실패하든 상관없이, 매 파트가 끝날 때마다 바로 지워서 여러 편을 연달아
+        # 처리할 때 임시 오디오가 계속 쌓이지 않게 한다.
+        if [[ -f "$TEMP_AUDIO" ]]; then
+            rm -f "$TEMP_AUDIO"
+            echo "🧹 임시 오디오 정리(자막 확보 완료): $TEMP_AUDIO"
+        fi
 
         PY_WORKER="${MYTMP}/worker_${FILENAME_NO_EXT}_${PART}.py"
 
@@ -438,8 +488,12 @@ except (OSError, ValueError):
 # 뿐이므로, 연속 실패가 쌓이면(Google이 지금 막고 있다는 신호) 이후
 # 문장들은 재시도 횟수를 크게 줄여 시간을 아낀다 — 최종 결과물 품질은
 # 그대로(같은 refine_translations.py 경로), 쓸데없이 오래 기다리는 것만 줄인다.
+# ★ 2026-09-07: "2회 시도하고 안되면 바로 넘어가는 거 아니었나?" 지적 —
+# 임계값이 5라 연속 4문장(문장당 6회×수십 초)이 통째로 실패해도 아직
+# 안 켜지는 걸 실제 로그로 확인했다. "빨리 감지해서 낭비를 줄인다"는
+# 원래 목적에 5는 너무 느슨했다 — 2문장 연속 실패로 낮춘다.
 _CONSECUTIVE_TRANSLATE_FAILURES = 0
-TRANSLATE_CIRCUIT_BREAKER_THRESHOLD = 5
+TRANSLATE_CIRCUIT_BREAKER_THRESHOLD = 2
 TRANSLATE_CIRCUIT_BREAKER_RETRIES = 2
 _translate_circuit_breaker_announced = False
 

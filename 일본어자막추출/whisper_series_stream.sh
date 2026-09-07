@@ -136,7 +136,15 @@ export SCRIPT_DIR='$SCRIPT_DIR'
 export BGM_DIR='$BGM_DIR'
 export TARGET_MINUTES='$TARGET_MINUTES'
 export HIGHLIGHT_PAD='$HIGHLIGHT_PAD'
-zsh "$TEMP_SCRIPT"
+# ★ 2026-09-07: "다시 안 일어나게" 요청 — 지금까지는 진행 로그가 새 iTerm
+# 창에만 찍히고 실행이 끝나면 사라져서, 이번처럼 여러 작품이 왜/어디서
+# 막혔는지 나중에 재구성하려면 파일 mtime을 일일이 추적해야 했다. 실행마다
+# 로그 폴더에 타임스탬프 파일로 전체 출력을 남긴다(최근 20개만 보존).
+LOG_DIR="\$SCRIPT_DIR/logs"
+mkdir -p "\$LOG_DIR"
+LOG_FILE="\$LOG_DIR/\$(date +%Y%m%d_%H%M%S)_\$(basename "\$WORKING_DIR").log"
+ls -t "\$LOG_DIR"/*.log 2>/dev/null | tail -n +21 | xargs -I{} rm -f {}
+zsh "$TEMP_SCRIPT" 2>&1 | tee "\$LOG_FILE"
 rm -f "$TEMP_SCRIPT"
 if [[ -n '$JP_SUBTITLE_RUN_ID' ]]; then
   echo done > "/tmp/_jp_subtitle_run_$JP_SUBTITLE_RUN_ID.done"

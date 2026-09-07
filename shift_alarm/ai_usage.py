@@ -190,6 +190,52 @@ def _claude_access_token():
     return creds.get("accessToken")
 
 
+def codex_primary_percent(quota):
+    """get_codex_quota()의 주요(primary) 윈도우 사용률(0~100)만 뽑는다.
+    못 구하면 None. shift_alarm.py의 _codex_primary_percent와 같은 규칙이지만,
+    GUI 의존성 없는 이 모듈에 둬서 CLI 파이프라인(일본어자막추출 등)에서도
+    shift_alarm.py 전체를 import하지 않고 바로 쓸 수 있게 했다."""
+    if not quota:
+        return None
+    primary = quota.get("primary") or {}
+    return primary.get("used_percent")
+
+
+def claude_shortest_window_percent(data):
+    """get_claude_live_quota()에서 이름에 "hour"가 들어간(보통 5시간) 가장
+    짧은 윈도우 사용률을 뽑는다. 못 찾으면 있는 윈도우 중 최댓값으로 보수적
+    대체. 못 구하면 None."""
+    if not data:
+        return None
+    for key, val in data.items():
+        if isinstance(val, dict) and "hour" in key.lower():
+            util = val.get("utilization")
+            if util is not None:
+                return util
+    values = [
+        val.get("utilization") for val in data.values()
+        if isinstance(val, dict) and val.get("utilization") is not None
+    ]
+    return max(values) if values else None
+
+
+def pick_less_used_engine(default="codex"):
+    """Codex/Claude 중 지금 사용률이 더 낮은(여유가 더 많은) 쪽 이름을
+    반환한다. ★ 2026-09-08: "코덱스랑 클로드 사용량 비교해서 더 가용사용량
+    많은 AI로 추출하도록" 요청 — ai_exec.run_ai_exec()가 매 호출마다 이 함수로
+    1순위 엔진을 정하게 했다(예전엔 항상 codex 고정 1순위). 둘 다 확인 불가면
+    default(기존 관례인 codex)로 안전하게 대체한다."""
+    codex_pct = codex_primary_percent(get_codex_quota())
+    claude_pct = claude_shortest_window_percent(get_claude_live_quota())
+    if codex_pct is None and claude_pct is None:
+        return default
+    if codex_pct is None:
+        return "claude"
+    if claude_pct is None:
+        return "codex"
+    return "codex" if codex_pct <= claude_pct else "claude"
+
+
 def get_claude_live_quota():
     """Claude Code 자신의 OAuth 토큰으로 비공개 사용량 엔드포인트를 조회해
     윈도우별 {"utilization": 0~100, "resets_at": ...} 딕셔너리를 반환.

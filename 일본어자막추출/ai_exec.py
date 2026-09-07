@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """Codex/Claude 비대화형 실행을 하나로 묶어, 한쪽이 실패하면 다른 쪽으로 자동 전환한다.
 
-기본 우선순위는 codex 1순위, claude 2순위 (2026-08-04 확정). codex가 토큰/쿼터
-소진(usage limit) 등으로 실패해도 요약·번역 보정 파이프라인이 멈추지 않도록,
-같은 프롬프트를 claude로 그대로 재시도한다. 실패 사유를 특정 문자열로 구분하지
-않고 "codex가 어떤 이유로든 실패하면 claude로" 방식을 쓴다 — usage limit 에러
-메시지가 버전에 따라 바뀔 수 있어서 문자열 매칭보다 안전하다.
+★ 2026-09-08: "코덱스랑 클로드 사용량 비교해서 더 가용사용량 많은 AI로 추출하도록
+파이프라인 수정해" 요청 — 예전엔 codex를 항상 1순위로 고정했는데(2026-08-04), 오늘
+Codex가 완전히 소진된 채로 계속 1순위 시도만 하다 claude 폴백까지 같이 걸려
+넘어진 사고가 있었다. 이제 매 호출마다 shift_alarm/ai_usage.py의 실시간 사용량
+조회로 "지금 더 여유 있는 쪽"을 1순위로 정한다(둘 다 확인 불가하면 기존 관례인
+codex로 안전하게 대체). codex든 claude든 실패하면(종료 코드 비정상, 빈 응답,
+시간 초과, 실행 파일 없음) 여전히 나머지 하나로 자동 전환한다 — 실패 사유를
+특정 문자열로 구분하지 않고 "어떤 이유로든 실패하면 다른 쪽으로" 방식을 쓴다.
 
 ★ 2026-08-22: 이 codex exec 호출마다 `~/.codex/config.toml`의 전역 `notify` 훅
 (Codex Computer Use용 turn-ended 알림)이 그대로 발동해서, 이 스크립트가
@@ -16,7 +19,14 @@
 대화형 codex 세션에는 영향 없음(전역 설정 파일은 안 건드림).
 """
 
+import os
 import subprocess
+import sys
+
+sys.path.insert(
+    0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "shift_alarm")
+)
+import ai_usage  # noqa: E402
 
 CODEX_BIN = "/opt/homebrew/bin/codex"
 CLAUDE_BIN = "/opt/homebrew/bin/claude"
@@ -39,11 +49,17 @@ def _run_one(engine, prompt, cwd, timeout):
     )
 
 
-def run_ai_exec(prompt, cwd, timeout=600, primary="codex"):
+def run_ai_exec(prompt, cwd, timeout=600, primary=None):
     """primary 엔진으로 먼저 시도하고, 실패하면(종료 코드 비정상 또는 빈 응답)
     나머지 하나로 자동 전환한다. 성공한 stdout 텍스트와 실제 사용된 엔진 이름을
     (stdout, engine) 튜플로 반환한다. 둘 다 실패하면 두 엔진의 에러를 합쳐
-    RuntimeError를 낸다."""
+    RuntimeError를 낸다.
+
+    primary를 안 주면(기본값) 매 호출마다 ai_usage.pick_less_used_engine()으로
+    지금 사용량이 더 낮은 쪽을 1순위로 고른다 — 호출 하나하나가 이전 호출들의
+    소진 상태를 반영해 적응적으로 움직인다."""
+    if primary is None:
+        primary = ai_usage.pick_less_used_engine(default="codex")
     order = ["codex", "claude"] if primary == "codex" else ["claude", "codex"]
     errors = []
     for i, engine in enumerate(order):

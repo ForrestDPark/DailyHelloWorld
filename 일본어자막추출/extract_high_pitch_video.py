@@ -788,6 +788,22 @@ def mix_background_audio(video_path, bgm_track_path, out_path, bgm_volume=DEFAUL
     return os.path.exists(out_path)
 
 
+def _delete_pitch_wav_if_exported(tmp_wav):
+    """★ 2026-09-07: "용량이 중간에 부족해지지 않게" 요청 — 음높이 분석용
+    오디오 캐시(temp_<파일명>_pitch.wav, 보통 200~400MB)는 avMusic 복사가
+    끝나면 더 볼 일이 없는데도 예전엔 무기한 남아 있었다. 여러 작품을
+    연달아 처리할 때 이 캐시가 편수만큼 쌓여 디스크를 잡아먹던 것 중 하나라
+    avMusic 복사 확인 직후 바로 지운다."""
+    if not tmp_wav or not os.path.isfile(tmp_wav):
+        return
+    try:
+        size_mb = os.path.getsize(tmp_wav) / (1024 * 1024)
+        os.remove(tmp_wav)
+        print(f"🧹 avMusic 복사 완료 — 음높이 분석 캐시 삭제: {tmp_wav} ({size_mb:.1f}MB)")
+    except OSError as exc:
+        print(f"⚠️ 음높이 분석 캐시 삭제 실패: {exc}")
+
+
 def _delete_plain_highlight_if_bgm_exists(plain_path, bgm_path):
     """★ "BGM 씌우기 전 영상 추출본은 BGM 파일 생기면 바로 삭제해달라" 요청
     (2026-08-29) — 예전엔 파이프라인 맨 끝(EPUB·avMusic 확인까지 끝난 뒤)에야
@@ -982,6 +998,7 @@ def _process_video(video_path, args):
         if exported:
             history["avmusic_export"] = exported
             save_extraction_history(history_path, history)
+            _delete_pitch_wav_if_exported(tmp_wav)
         _delete_plain_highlight_if_bgm_exists(out_path, cached_bgm)
         return
 
@@ -1002,6 +1019,7 @@ def _process_video(video_path, args):
         if exported:
             history["avmusic_export"] = exported
             save_extraction_history(history_path, history)
+            _delete_pitch_wav_if_exported(tmp_wav)
         print(f"⏱️ BGM 생성·합성·복사: {format_elapsed(time.perf_counter() - stage_start)}")
         _delete_plain_highlight_if_bgm_exists(out_path, bgm_out)
     else:

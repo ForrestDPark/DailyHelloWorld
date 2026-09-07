@@ -25,7 +25,11 @@ cat > "$LAUNCHER" <<LAUNCHEREOF
 export WORKING_DIR='$TARGET_PATH'
 export SCRIPT_DIR='$SCRIPT_DIR'
 export WORKOUT_EXTRACTION_ENABLED=0
-zsh "${SCRIPT_DIR}/subtitle_pipeline_body.sh"
+LOG_DIR="\$SCRIPT_DIR/logs"
+mkdir -p "\$LOG_DIR"
+LOG_FILE="\$LOG_DIR/\$(date +%Y%m%d_%H%M%S)_\$(basename "\$WORKING_DIR").log"
+ls -t "\$LOG_DIR"/*.log 2>/dev/null | tail -n +21 | xargs -I{} rm -f {}
+zsh "${SCRIPT_DIR}/subtitle_pipeline_body.sh" 2>&1 | tee "\$LOG_FILE"
 if [[ -n '$JP_SUBTITLE_RUN_ID' ]]; then
   echo done > "/tmp/_jp_subtitle_run_$JP_SUBTITLE_RUN_ID.done"
 fi
