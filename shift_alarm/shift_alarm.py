@@ -1221,6 +1221,9 @@ REMINDERS = {
 # 고치면 코드를 손대지 않고도 알람 시각이 바뀐다(라벨 텍스트는 체크리스트 기록과
 # 연결된 식별자라 표에서도 바꾸면 안 된다고 페이지 안내문에 명시해뒀다).
 REMINDER_TIMES_SOURCE_PAGE_ID = "3d432a1e-ae80-8171-b8e1-e0d3c545a707"
+REMINDER_TIMES_SOURCE_PAGE_URL = (
+    f"https://www.notion.so/{REMINDER_TIMES_SOURCE_PAGE_ID.replace('-', '')}"
+)
 REMINDER_TIMES_SYNC_INTERVAL_SECONDS = 900
 
 
@@ -6518,6 +6521,12 @@ class ShiftAlarmApp(rumps.App):
             checklist_state=self._checklist_state,
         ):
             self.menu.add(reminder_item)
+        # ★ 2026-09-07: "shift alarm 에 리마인더 시각표 노션페이지 바로가기
+        # 항목 만들어줘" 요청 — 시각을 고치고 싶을 때 메뉴에서 바로 열 수 있게.
+        self.menu.add(rumps.MenuItem(
+            "⏰ 리마인더 시각표 열기",
+            callback=self.make_open_url_callback(REMINDER_TIMES_SOURCE_PAGE_URL),
+        ))
         # ★ 2026-08-30: "전부체크하기는 화살표 들어가는게 아니라 항목 밑에서
         # 바로 클릭할수있게 해줘" 요청 — 예전엔 "🌅 일일 루틴 체크리스트" 하위
         # 메뉴(화살표) 안에 들어가야만 "전부 체크"를 누를 수 있었다. 이제
