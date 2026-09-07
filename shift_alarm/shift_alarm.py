@@ -911,6 +911,13 @@ GY_TO_SWING_DAY2_MELATONIN_REMINDER_TIME = {"hour": 2, "minute": 0}
 # 그 다음날 새벽 3시에 멜라토닌 알림만 추가.
 GY_TO_SWING_DAY1_MELATONIN_REMINDER_TIME = {"hour": 3, "minute": 0}
 
+# ── Swing → Day 전환 사이 휴무일 멜라토닌 알림 ─────────────────────
+# ★ 2026-09-07: "swing 에서 day 로 넘어가는 휴일에는 오후 8시에 멜라토닌
+# 먹기 알람 리마인드해줘" 요청 — GY→Swing 전환처럼 첫날/둘째날을 나눠
+# 다르게 다뤄달라는 말은 없었으므로, 블록에 속하는 휴무일이면 매일
+# 20:00에 똑같이 알린다(블록 길이와 무관하게 적용).
+SWING_TO_DAY_MELATONIN_REMINDER_TIME = {"hour": 20, "minute": 0}
+
 # ★ "8.15일을 음력으로 계산하면 몇월몇일이야? 엄마생일인데 일주일전에
 # 미리 리마인더 해주고 당일에 리마인더 알람 생성해줘" → "어 필요해 매년
 # 알람 해줘" 요청(2026-09-02) — 2026년 음력 8월 15일(추석)이 양력 9월
@@ -1819,6 +1826,24 @@ def _is_gy_to_swing_off_day2(schedule, d):
         cursor += datetime.timedelta(days=1)
     next_shift = get_shift_for_date(schedule, cursor)
     return prev_shift == "GY" and next_shift == "Swing"
+
+
+def _is_swing_to_day_off_day(schedule, d):
+    """d가 Swing→Day 전환 사이 휴무 블록에 속하는 날인지 반환. ★ 2026-09-07:
+    "swing 에서 day 로 넘어가는 휴일에는 오후 8시에 멜라토닌 먹기 알람
+    리마인드해줘" 요청 — GY→Swing과 달리 첫날/둘째날 구분 요청이 없어서
+    블록 안 며칠이든 상관없이 매일 해당한다."""
+    if get_shift_for_date(schedule, d) != "휴무":
+        return False
+    cursor = d - datetime.timedelta(days=1)
+    while get_shift_for_date(schedule, cursor) == "휴무":
+        cursor -= datetime.timedelta(days=1)
+    prev_shift = get_shift_for_date(schedule, cursor)
+    cursor = d + datetime.timedelta(days=1)
+    while get_shift_for_date(schedule, cursor) == "휴무":
+        cursor += datetime.timedelta(days=1)
+    next_shift = get_shift_for_date(schedule, cursor)
+    return prev_shift == "Swing" and next_shift == "Day"
 
 
 # ── 헬스장 운영 시간 ─────────────────────────────────────────
@@ -4633,6 +4658,13 @@ class ShiftAlarmApp(rumps.App):
         self.day1_melatonin_reminder_timer = rumps.Timer(self._check_gy_to_swing_day1_melatonin_reminder, 60)
         self.day1_melatonin_reminder_timer.start()
 
+        # Swing→Day 휴무일 20:00 멜라토닌 알림 (1분마다 시각 체크)
+        self._last_swing_to_day_melatonin_reminder_notified = None
+        self.swing_to_day_melatonin_reminder_timer = rumps.Timer(
+            self._check_swing_to_day_melatonin_reminder, 60
+        )
+        self.swing_to_day_melatonin_reminder_timer.start()
+
         # 엄마 생신(음력 8/15 → 2026년 양력 9/25) 일주일 전 리마인더 + 당일 알람
         # (1분마다 시각 체크)
         self._last_mom_birthday_advance_notified = None
@@ -5314,6 +5346,26 @@ class ShiftAlarmApp(rumps.App):
             "💊 멜라토닌 + 운기조식",
             "GY→Swing 전환 휴무 첫째날 다음날",
             "멜라토닌 먹고 운기조식 하세요."
+        )
+
+    def _check_swing_to_day_melatonin_reminder(self, _):
+        """1분마다 'Swing→Day 전환 휴무일' 20:00인지 확인, 하루 한 번만 알림
+        (★ 2026-09-07: "swing 에서 day 로 넘어가는 휴일에는 오후 8시에
+        멜라토닌 먹기 알람 리마인드해줘" 요청)."""
+        now = datetime.datetime.now()
+        t = SWING_TO_DAY_MELATONIN_REMINDER_TIME
+        if now.hour != t["hour"] or now.minute != t["minute"]:
+            return
+        today = now.date()
+        if self._last_swing_to_day_melatonin_reminder_notified == today:
+            return
+        if not _is_swing_to_day_off_day(self.schedule, today):
+            return
+        self._last_swing_to_day_melatonin_reminder_notified = today
+        notify_spoken(
+            "💊 멜라토닌",
+            "Swing→Day 전환 휴무일",
+            "멜라토닌 드세요."
         )
 
     def _check_mom_birthday_advance_reminder(self, _):
