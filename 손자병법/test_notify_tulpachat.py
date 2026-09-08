@@ -22,6 +22,15 @@ class NotifyTulpaChatTest(unittest.TestCase):
         self.assertIn("| [[red]]變[[/red]] | 변할 | 변 |", lesson)
         self.assertIn("| [[red]]察[[/red]] | 살필 | 찰 |", lesson)
 
+    def test_verse_26_hanja_dictionary_is_complete(self):
+        page = Path(__file__).with_name("jiudi26_full_page.md")
+        number, original, subtitle = notify.read_page(page)
+        self.assertEqual(number, 26)
+        lesson = notify.build_hanja_lesson(page.read_text(encoding="utf-8"), original, subtitle)
+        self.assertIn("| [[red]]凡[[/red]] | 무릇 | 범 |", lesson)
+        self.assertIn("| [[red]]絶[[/red]] | 끊을 | 절 |", lesson)
+        self.assertIn("| [[red]]衢[[/red]] | 네거리 | 구 |", lesson)
+
     def test_discussion_key_changes_only_for_explicit_republish(self):
         stable = notify.discussion_dedupe_key(24, "format-v1", False)
         self.assertEqual(stable, notify.discussion_dedupe_key(24, "format-v2", False))
