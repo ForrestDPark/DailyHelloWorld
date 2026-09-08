@@ -3964,11 +3964,18 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
         (dedupe_key, message_id, now),
     )
     if body.analysis_mode == "light":
-        notified = [name for name in traditional_commentator_order if name in targets]
-        missing = [name for name in traditional_commentator_order if name not in notified]
-        if missing:
+        # 아홉 명을 모두 발언시키지 않는다. 구절마다 순환하는 네 명을 후보로 세우고,
+        # 워커가 앞선 대화와 겹치면 NONE으로 조용히 건너뛴다. 카너먼은 사용자의
+        # 명시 요청에 따라 마지막 후보로 유지한다.
+        available = [name for name in traditional_commentator_order if name in targets]
+        digest_offset = int.from_bytes(digest[4:8], "big") % len(available)
+        rotated = available[digest_offset:] + available[:digest_offset]
+        notified = rotated[:4]
+        if len(available) != len(traditional_commentator_order):
             conn.close()
-            raise HTTPException(status_code=409, detail="라이트 토론 주석가 누락: " + ", ".join(missing))
+            raise HTTPException(status_code=409, detail="라이트 토론 주석가 후보군 누락: " + ", ".join(
+                name for name in traditional_commentator_order if name not in available
+            ))
         if kahneman_name in targets:
             notified.append(kahneman_name)
         else:
@@ -4198,7 +4205,24 @@ def worker_complete(result: WorkerResult, authorization: Optional[str] = Header(
         conn.close()
         raise HTTPException(status_code=404, detail="해당 turn_id 없음")
     now = _now()
+    reply = (result.reply or "").strip()
+    skipped_as_redundant = reply == "NONE"
     if result.reply:
+        if skipped_as_redundant:
+            conn.execute(
+                "UPDATE pending_turns SET status = 'done', reply = ?, completed_at = ? WHERE id = ?",
+                ("NONE", now, result.turn_id),
+            )
+            if row["source_message_id"]:
+                conn.execute(
+                    "UPDATE automation_discussion_queue SET status = 'skipped', completed_at = ? "
+                    "WHERE pending_turn_id = ?",
+                    (now, result.turn_id),
+                )
+                _enqueue_next_automation_discussion_turn(conn, row["source_message_id"], now)
+            conn.commit()
+            conn.close()
+            return {"ok": True, "skipped": True}
         conn.execute(
             "INSERT INTO messages (room_id, sender, content, created_at) VALUES (?, ?, ?, ?)",
             (row["room_id"], row["persona_name"], result.reply, now),
