@@ -3822,7 +3822,7 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
         (room_id, hanja_teacher_name, _now()),
     )
     kahneman_name = "데니얼 카너먼"
-    if body.analysis_mode == "full":
+    if body.analysis_mode in {"light", "full"}:
         kahneman = conn.execute("SELECT name FROM personas WHERE name = ?", (kahneman_name,)).fetchone()
         if not kahneman:
             kahneman_prompt = (
@@ -3969,6 +3969,11 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
         if missing:
             conn.close()
             raise HTTPException(status_code=409, detail="라이트 토론 주석가 누락: " + ", ".join(missing))
+        if kahneman_name in targets:
+            notified.append(kahneman_name)
+        else:
+            conn.close()
+            raise HTTPException(status_code=409, detail="라이트 토론의 카너먼 페르소나가 없습니다")
     else:
         priority = ["데니얼 카너먼", "손무", "조조", "두목", "두우", "매요신", "클라우제비츠", "한니발", "한신"]
         notified = [name for name in priority if name in targets and name not in commander_names][:6]
