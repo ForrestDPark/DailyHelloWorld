@@ -34,7 +34,10 @@ import os
 import re
 import secrets
 import sqlite3
+import subprocess
+import urllib.error
 import urllib.parse
+import urllib.request
 import uuid
 from pathlib import Path
 from typing import Optional
@@ -54,6 +57,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = BASE_DIR.parent.parent
 CAREER_WEB_DIR = REPO_ROOT / "이직시스템" / "web_dashboard"
 CAREER_DATA_DIR = REPO_ROOT / "이직시스템" / "data"
+SHIFT_ALARM_DASHBOARD_DIR = BASE_DIR / "shift_alarm_dashboard"
+SHIFT_ALARM_STATUS_FILE = Path(os.path.expanduser(
+    "~/Library/Mobile Documents/com~apple~CloudDocs/ShiftAlarmStatus/status.json"
+))
+# Shift Alarm은 위 iCloud 파일을 복사하기 직전에 이 기존 스테이징 파일에 같은
+# JSON을 쓴다. launchd 서버는 macOS TCC 때문에 Mobile Documents 읽기가 거부될
+# 수 있으므로, 그때만 동일 바이트인 이 파일을 사용한다(새 파이프라인이 아님).
+SHIFT_ALARM_STATUS_FALLBACK_FILE = Path(os.path.expanduser(
+    "~/.shift_alarm_icloud_sync/status.json"
+))
+SHIFT_ALARM_DISMISSED_FILE = Path(os.path.expanduser("~/.tulpachat/shift_alarm_dismissed.json"))
+SHIFT_ALARM_NOTION_PAGE_ID = "3b532a1e-ae80-8034-90af-fd8c9b658711"
+SHIFT_ALARM_REMINDER_TIMES_PAGE_ID = "3d432a1e-ae80-8171-b8e1-e0d3c545a707"
+SUNZI_DISCUSSION_ROOM_ID = "custom_16ea779e1f"
+SUNZI_LIGHT_PIPELINE_REQUEST = "📜 ShiftAlarm에서 오늘의 병법 구절 라이트 분석을 요청했습니다."
+SUNZI_PIPELINE_LOCK_DIR = Path("/private/tmp/com.forrest.codex-sunzi-nightly.lock")
+NOTION_VERSION = "2022-06-28"
 # ★ "업데이트할 때마다 페이지를 재시작(새로고침)해야 하는 게 맞냐" 요청
 # (2026-08-28) — 서버 프로세스(app.py 등 백엔드 코드)가 바뀌면 재시작 시
 # 이 값이 새로 생성돼서 바뀐다. static/*(프론트 HTML·JS·CSS)는 서버를
@@ -232,7 +252,7 @@ class NoCacheStaticMiddleware(BaseHTTPMiddleware):
     아니라 "쓰기 전에 항상 물어보라"는 지시라 대역폭 낭비는 크지 않다."""
     async def dispatch(self, request, call_next):
         response = await call_next(request)
-        if request.url.path.startswith("/static/") or request.url.path.startswith("/uploads/"):
+        if request.url.path.startswith(("/static/", "/uploads/", "/shift-alarm/static/")):
             response.headers["Cache-Control"] = "no-cache"
         return response
 
@@ -434,6 +454,327 @@ def career_static(filename: str, request: Request):
     if filename not in allowed:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(CAREER_WEB_DIR / filename))
+
+
+@app.get("/shift-alarm")
+def shift_alarm_redirect():
+    return RedirectResponse("/shift-alarm/", status_code=307)
+
+
+@app.get("/shift-alarm/")
+def shift_alarm_dashboard(request: Request):
+    _require_owner(request)
+    return FileResponse(str(SHIFT_ALARM_DASHBOARD_DIR / "index.html"))
+
+
+@app.get("/shift-alarm/static/{filename}")
+def shift_alarm_static(filename: str, request: Request):
+    _require_owner(request)
+    if filename not in {"style.css", "enhancements.css", "app.js"}:
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
+    return FileResponse(str(SHIFT_ALARM_DASHBOARD_DIR / filename))
+
+
+def _read_shift_alarm_status():
+    saw_file = False
+    for status_file in (SHIFT_ALARM_STATUS_FILE, SHIFT_ALARM_STATUS_FALLBACK_FILE):
+        try:
+            payload = json.loads(status_file.read_text(encoding="utf-8"))
+            saw_file = True
+        except FileNotFoundError:
+            continue
+        except (OSError, json.JSONDecodeError):
+            saw_file = True
+            continue
+        if isinstance(payload, dict):
+            return payload
+    detail = "Shift Alarm 상태 파일을 읽을 수 없습니다" if saw_file else "Shift Alarm 상태 파일이 아직 없습니다"
+    raise HTTPException(status_code=503, detail=detail)
+
+
+def _shift_alarm_notion_token():
+    try:
+        result = subprocess.run(
+            ["security", "find-generic-password", "-a", os.environ.get("USER", ""),
+             "-s", "jp_subtitle_notion_token", "-w"],
+            capture_output=True, text=True, timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise HTTPException(status_code=503, detail="Notion 연결 정보를 불러올 수 없습니다") from exc
+    if result.returncode != 0 or not result.stdout.strip():
+        raise HTTPException(status_code=503, detail="Notion 연결 정보를 불러올 수 없습니다")
+    return result.stdout.strip()
+
+
+def _notion_request(token, path, method="GET", payload=None):
+    request = urllib.request.Request(
+        f"https://api.notion.com/v1/{path}", method=method,
+        data=json.dumps(payload).encode("utf-8") if payload is not None else None,
+        headers={
+            "Authorization": f"Bearer {token}", "Notion-Version": NOTION_VERSION,
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return json.load(response)
+    except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=502, detail="Notion에 변경을 반영하지 못했습니다") from exc
+
+
+def _notion_text(block):
+    block_type = block.get("type", "")
+    return "".join(
+        item.get("plain_text", "")
+        for item in block.get(block_type, {}).get("rich_text", [])
+    ).strip()
+
+
+def _notion_plain_text_cell(cell):
+    """Notion GET rich_text에서 쓰기 가능한 필드와 기존 서식만 보존한다."""
+    normalized = []
+    for part in cell:
+        part_type = part.get("type")
+        value = part.get(part_type, {}) if part_type else {}
+        if part_type == "text":
+            value = {"content": value.get("content", part.get("plain_text", ""))}
+            if part.get("text", {}).get("link"):
+                value["link"] = part["text"]["link"]
+        elif part_type not in {"mention", "equation"}:
+            part_type = "text"
+            value = {"content": part.get("plain_text", "")}
+        item = {"type": part_type, part_type: value}
+        if part.get("annotations"):
+            item["annotations"] = part["annotations"]
+        normalized.append(item)
+    return normalized
+
+
+class ReminderTimeUpdate(BaseModel):
+    label: str
+    time: Optional[str] = None
+    profile: str = "시각"
+
+
+class ReminderCheckUpdate(BaseModel):
+    label: str
+    checked: bool
+
+
+SHIFT_ALARM_TIME_PROFILES = {"시각", "Swing", "Day", "GY", "S-D휴", "D-G휴", "G-S휴"}
+
+
+@app.get("/api/shift-alarm/status")
+def shift_alarm_status(request: Request):
+    _require_owner(request)
+    status = _read_shift_alarm_status()
+    try:
+        dismissed = json.loads(SHIFT_ALARM_DISMISSED_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        dismissed = {}
+    hidden = set(dismissed.get(status.get("date"), []))
+    if hidden:
+        status["reminders"] = [label for label in status.get("reminders", []) if label not in hidden]
+        status["reminders_checked"] = {
+            label: checked for label, checked in status.get("reminders_checked", {}).items()
+            if label not in hidden
+        }
+        status["reminders_detailed"] = [
+            item for item in status.get("reminders_detailed", []) if item.get("label") not in hidden
+        ]
+    return status
+
+
+@app.put("/api/shift-alarm/reminder-time")
+def update_shift_alarm_reminder_time(body: ReminderTimeUpdate, request: Request):
+    _require_owner(request)
+    if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", body.time or ""):
+        raise HTTPException(status_code=422, detail="시각은 HH:MM 형식이어야 합니다")
+    status = _read_shift_alarm_status()
+    allowed_labels = {
+        item.get("label") for item in status.get("reminder_schedule", [])
+        if isinstance(item, dict) and item.get("label")
+    }
+    if body.label not in allowed_labels:
+        raise HTTPException(status_code=409, detail="Shift Alarm이 내보낸 리마인더만 수정할 수 있습니다")
+    if body.profile not in SHIFT_ALARM_TIME_PROFILES:
+        raise HTTPException(status_code=422, detail="알 수 없는 근무 유형입니다")
+
+    token = _shift_alarm_notion_token()
+    page = _notion_request(token, f"blocks/{SHIFT_ALARM_REMINDER_TIMES_PAGE_ID}/children?page_size=100")
+    table = next((item for item in page.get("results", []) if item.get("type") == "table"), None)
+    if not table:
+        raise HTTPException(status_code=409, detail="Notion 리마인더 시각표를 찾지 못했습니다")
+    rows = _notion_request(token, f"blocks/{table['id']}/children?page_size=100")
+    table_rows = rows.get("results", [])
+    if not table_rows:
+        raise HTTPException(status_code=409, detail="Notion 시각표가 비어 있습니다")
+    headers = ["".join(part.get("plain_text", "") for part in cell).strip()
+               for cell in table_rows[0].get("table_row", {}).get("cells", [])]
+    if body.profile not in headers:
+        raise HTTPException(status_code=409, detail="Notion 시각표의 근무 유형 열을 찾지 못했습니다")
+    column_index = headers.index(body.profile)
+    target = next((row for row in table_rows[1:]
+                   if row.get("type") == "table_row"
+                   and row.get("table_row", {}).get("cells")
+                   and "".join(part.get("plain_text", "") for part in row["table_row"]["cells"][0]).strip() == body.label), None)
+    if not target:
+        raise HTTPException(status_code=409, detail="Notion 시각표에서 리마인더를 찾지 못했습니다")
+    cells = [_notion_plain_text_cell(cell) for cell in target["table_row"]["cells"]]
+    while len(cells) <= column_index:
+        cells.append([])
+    cells[column_index] = [{"type": "text", "text": {"content": body.time}}]
+    _notion_request(token, f"blocks/{target['id']}", "PATCH", {"table_row": {"cells": cells}})
+    return {"ok": True, "label": body.label, "profile": body.profile, "time": body.time}
+
+
+def _today_reminder_block(token, status, label):
+    allowed = {item.get("label") for item in status.get("reminders_detailed", [])
+               if isinstance(item, dict) and item.get("label")}
+    if label not in allowed:
+        raise HTTPException(status_code=409, detail="오늘의 리마인더만 변경할 수 있습니다")
+    date_str = status.get("date")
+    page = _notion_request(token, f"blocks/{SHIFT_ALARM_NOTION_PAGE_ID}/children?page_size=100")
+    toggle = next((item for item in page.get("results", [])
+                   if item.get("type") == "toggle" and _notion_text(item) == date_str), None)
+    if not toggle:
+        raise HTTPException(status_code=409, detail="Notion에서 오늘의 리마인더를 찾지 못했습니다")
+    children = _notion_request(token, f"blocks/{toggle['id']}/children?page_size=100")
+    target = next((item for item in children.get("results", [])
+                   if item.get("type") == "to_do" and _notion_text(item) == label), None)
+    if not target:
+        raise HTTPException(status_code=409, detail="Notion에서 해당 리마인더를 찾지 못했습니다")
+    return target
+
+
+@app.put("/api/shift-alarm/reminder-check")
+def update_shift_alarm_reminder_check(body: ReminderCheckUpdate, request: Request):
+    _require_owner(request)
+    status = _read_shift_alarm_status()
+    token = _shift_alarm_notion_token()
+    target = _today_reminder_block(token, status, body.label)
+    _notion_request(token, f"blocks/{target['id']}", "PATCH", {"to_do": {
+        "rich_text": target.get("to_do", {}).get("rich_text", []), "checked": body.checked,
+    }})
+    return {"ok": True, "label": body.label, "checked": body.checked}
+
+
+@app.delete("/api/shift-alarm/reminder")
+def delete_shift_alarm_reminder(label: str, request: Request):
+    _require_owner(request)
+    status = _read_shift_alarm_status()
+    token = _shift_alarm_notion_token()
+    target = _today_reminder_block(token, status, label)
+    _notion_request(token, f"blocks/{target['id']}", "PATCH", {"archived": True})
+    try:
+        dismissed = json.loads(SHIFT_ALARM_DISMISSED_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        dismissed = {}
+    date_str = status.get("date")
+    dismissed = {date_str: sorted(set(dismissed.get(date_str, [])) | {label})}
+    SHIFT_ALARM_DISMISSED_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = SHIFT_ALARM_DISMISSED_FILE.with_suffix(".tmp")
+    temporary.write_text(json.dumps(dismissed, ensure_ascii=False), encoding="utf-8")
+    temporary.replace(SHIFT_ALARM_DISMISSED_FILE)
+    return {"ok": True, "label": label}
+
+
+@app.post("/api/shift-alarm/routine/check-all")
+def check_all_shift_alarm_routine(request: Request):
+    _require_owner(request)
+    status = _read_shift_alarm_status()
+    routine_date = status.get("routine_date")
+    routine = status.get("daily_routine") or []
+    labels = [item.get("label") for item in routine
+              if isinstance(item, dict) and item.get("label") and not item.get("checked")]
+    if not routine_date or not routine:
+        raise HTTPException(status_code=409, detail="Shift Alarm이 오늘의 루틴을 아직 내보내지 않았습니다")
+    if not labels:
+        return {"ok": True, "updated": 0}
+    token = _shift_alarm_notion_token()
+    page = _notion_request(token, f"blocks/{SHIFT_ALARM_NOTION_PAGE_ID}/children?page_size=100")
+    title = f"🌅 오늘의 일일 루틴 — {routine_date}"
+    toggle = next((item for item in page.get("results", [])
+                   if item.get("type") == "toggle" and _notion_text(item) == title), None)
+    if not toggle:
+        raise HTTPException(status_code=409, detail="Notion에서 오늘의 일일 루틴을 찾지 못했습니다")
+    children = _notion_request(token, f"blocks/{toggle['id']}/children?page_size=100").get("results", [])
+    by_label = {_notion_text(item): item for item in children if item.get("type") == "to_do"}
+    missing = [label for label in labels if label not in by_label]
+    if missing:
+        raise HTTPException(status_code=409, detail="일일 루틴 항목 구성이 Shift Alarm과 다릅니다")
+    targets = [by_label[label] for label in labels
+               if not by_label[label].get("to_do", {}).get("checked")]
+    updated = []
+    try:
+        for item in targets:
+            _notion_request(token, f"blocks/{item['id']}", "PATCH", {"to_do": {
+                "rich_text": item.get("to_do", {}).get("rich_text", []), "checked": True,
+            }})
+            updated.append(item)
+    except HTTPException as exc:
+        rollback_failed = False
+        for item in reversed(updated):
+            try:
+                _notion_request(token, f"blocks/{item['id']}", "PATCH", {"to_do": {
+                    "rich_text": item.get("to_do", {}).get("rich_text", []), "checked": False,
+                }})
+            except HTTPException:
+                rollback_failed = True
+        detail = "일일 루틴 변경에 실패해 적용된 항목을 되돌렸습니다"
+        if rollback_failed:
+            detail = "일일 루틴이 일부만 반영됐을 수 있습니다. Notion에서 확인해주세요"
+        raise HTTPException(status_code=502, detail=detail) from exc
+    return {"ok": True, "updated": len(targets)}
+
+
+def _sunzi_light_pipeline_state(conn):
+    queued = conn.execute(
+        """SELECT COUNT(*) AS n FROM pending_turns
+             WHERE persona_name=? AND status IN ('pending','processing')""",
+        ("손무",),
+    ).fetchone()["n"]
+    running = SUNZI_PIPELINE_LOCK_DIR.exists()
+    return {"busy": bool(queued or running), "queued": bool(queued and not running),
+            "running": running, "mode": "light"}
+
+
+@app.get("/api/shift-alarm/sunzi-analysis")
+def shift_alarm_sunzi_analysis_status(request: Request):
+    _require_owner(request)
+    conn = get_conn()
+    try:
+        return _sunzi_light_pipeline_state(conn)
+    finally:
+        conn.close()
+
+
+@app.post("/api/shift-alarm/sunzi-analysis")
+def start_shift_alarm_sunzi_analysis(request: Request):
+    """소유자 버튼 한 번을 손무의 고정 라이트 파이프라인 한 건으로 변환한다."""
+    _require_owner(request)
+    conn = get_conn()
+    try:
+        if _sunzi_light_pipeline_state(conn)["busy"]:
+            raise HTTPException(status_code=409, detail="병법 구절 분석이 이미 대기 중이거나 실행 중입니다")
+        if not conn.execute("SELECT 1 FROM personas WHERE name=?", ("손무",)).fetchone():
+            raise HTTPException(status_code=409, detail="손무 페르소나를 찾지 못했습니다")
+        now = _now()
+        cursor = conn.execute(
+            """INSERT INTO messages (room_id, sender, content, created_at, is_system)
+               VALUES (?, 'system', ?, ?, 1)""",
+            (SUNZI_DISCUSSION_ROOM_ID, SUNZI_LIGHT_PIPELINE_REQUEST, now),
+        )
+        conn.execute(
+            """INSERT INTO pending_turns
+               (persona_name, room_id, status, created_at, source_message_id)
+               VALUES (?, ?, 'pending', ?, ?)""",
+            ("손무", SUNZI_DISCUSSION_ROOM_ID, now, cursor.lastrowid),
+        )
+        conn.commit()
+        return {"ok": True, "busy": True, "queued": True, "running": False, "mode": "light"}
+    finally:
+        conn.close()
 
 
 def _read_career_card(filename: str):

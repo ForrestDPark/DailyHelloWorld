@@ -1250,6 +1250,7 @@ SUNZI_PIPELINE_SCRIPT = SUNZI_DIR / "run_nightly_codex.sh"
 SUNZI_README_PATH = SUNZI_DIR / "README.md"
 SUNZI_CHAPTER_SOURCE_PATH = SUNZI_DIR / "site/app/content/notion-chapters.ts"
 SUNZI_PIPELINE_LOCK_DIR = Path("/private/tmp/com.forrest.codex-sunzi-nightly.lock")
+SUNZI_LIGHT_PIPELINE_REQUEST = "📜 ShiftAlarm에서 오늘의 병법 구절 라이트 분석을 요청했습니다."
 SUNZI_LAST_MESSAGE_PATH = Path.home() / "Library/Logs/CodexSunzi/latest-message.txt"
 _sunzi_pipeline_start_lock = Lock()
 _sunzi_pipeline_process = None
@@ -1322,8 +1323,12 @@ def _maybe_start_sunzi_pipeline(turn):
     if turn.get("persona_name") != SUNZI_PIPELINE_PERSONA_NAME or not context:
         return False
     latest = context[-1]
-    if latest.get("sender") != OWNER_USERNAME or not _is_sunzi_pipeline_command(latest.get("content", "")):
+    content = latest.get("content", "")
+    from_shift_alarm = latest.get("sender") == "system" and content == SUNZI_LIGHT_PIPELINE_REQUEST
+    from_owner = latest.get("sender") == OWNER_USERNAME and _is_sunzi_pipeline_command(content)
+    if not (from_shift_alarm or from_owner):
         return False
+    light_mode = from_shift_alarm or bool(re.search(r"라이트\s*모드", content))
     try:
         with _sunzi_pipeline_start_lock:
             if (
@@ -1340,6 +1345,7 @@ def _maybe_start_sunzi_pipeline(turn):
                 raise FileNotFoundError(f"파이프라인 스크립트 없음: {SUNZI_PIPELINE_SCRIPT}")
             env = os.environ.copy()
             env["SUNZI_TARGET_VERSE"] = str(verse_number)
+            env["SUNZI_ANALYSIS_MODE"] = "light" if light_mode else "full"
             started_at = time.time()
             process = subprocess.Popen(
                 ["/bin/zsh", str(SUNZI_PIPELINE_SCRIPT)],
@@ -1359,8 +1365,11 @@ def _maybe_start_sunzi_pipeline(turn):
         "reply": (
             f"다음은 九地篇 {verse_number}구절 「{original}」\n"
             f"독음: {reading}\n\n"
-            "소유자 명령을 승인으로 확인했습니다. 정본 검수부터 이미지 제작, Notion 재조회, "
-            "병법 사이트 배포와 토론방 보고까지 기존 전체 파이프라인을 시작합니다."
+            + ("ShiftAlarm 버튼 요청을 확인했습니다. 4번 역사적 실증 사례를 제외한 라이트 모드로 "
+               "본문 작성·검증, GitHub·Notion 반영과 토론방 보고를 시작합니다."
+               if light_mode else
+               "소유자 명령을 승인으로 확인했습니다. 정본 검수부터 이미지 제작, Notion 재조회, "
+               "병법 사이트 배포와 토론방 보고까지 기존 전체 파이프라인을 시작합니다.")
         ),
     })
     Thread(
@@ -1369,7 +1378,7 @@ def _maybe_start_sunzi_pipeline(turn):
         daemon=True,
         name=f"sunzi-verse-{verse_number}",
     ).start()
-    print(f"📜 九地篇 {verse_number}구절 파이프라인 시작", flush=True)
+    print(f"📜 九地篇 {verse_number}구절 {'라이트' if light_mode else '전체'} 파이프라인 시작", flush=True)
     return True
 
 # ★ "채팅 → Notion도 자동으로 동기화되면 좋겠다"는 요청(2026-08-24) — 대화가
