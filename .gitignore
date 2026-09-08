@@ -10,3 +10,10 @@
 일본어자막추출/.venv-shazam/
 일본어자막추출/logs/
 nodeBackendDeveloper/chapter08/hello-nestjs/node_modules
+
+# 자동 분석 중 Python이 만드는 재생성 가능한 캐시
+shift_alarm/__pycache__/
+손자병법/__pycache__/
+툴파챗/chatapp/server/__pycache__/
+툴파챗/chatapp/worker/__pycache__/
+*.pyc

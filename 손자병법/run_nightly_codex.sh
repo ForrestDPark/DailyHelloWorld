@@ -32,6 +32,8 @@ finalize_run() {
         retry_at=$(/usr/bin/sed -nE 's/.*try again at ([^.]+)\..*/\1/p' "$LOG_FILE" | /usr/bin/tail -1)
         failure_stage="Codex 사용량 제한"
         [[ -n "$retry_at" ]] && failure_stage="Codex 사용량 제한 · ${retry_at} 이후 다시 시도"
+      elif [[ -f "$LOG_FILE" ]] && /usr/bin/grep -q "이전 실행의 미완료 변경" "$LOG_FILE"; then
+        failure_stage="작업 트리에 미완료 변경이 남아 있어 안전 중단"
       fi
       /usr/bin/python3 "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress "$failure_progress" --stage "$failure_stage" --state failed --pid "$$" || true
     fi
