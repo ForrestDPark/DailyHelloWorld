@@ -225,7 +225,14 @@ def pick_less_used_engine(default="codex"):
     많은 AI로 추출하도록" 요청 — ai_exec.run_ai_exec()가 매 호출마다 이 함수로
     1순위 엔진을 정하게 했다(예전엔 항상 codex 고정 1순위). 둘 다 확인 불가면
     default(기존 관례인 codex)로 안전하게 대체한다."""
-    codex_pct = codex_primary_percent(get_codex_quota())
+    codex_quota = get_codex_quota()
+    codex_windows = [
+        window.get("used_percent") for window in (codex_quota or {}).values()
+        if isinstance(window, dict) and window.get("used_percent") is not None
+    ]
+    # 5시간 창이 남아 있어도 주간 창이 소진되면 실제 호출은 실패하므로,
+    # Codex는 두 창 중 사용률이 높은 쪽을 가용량 기준으로 삼는다.
+    codex_pct = max(codex_windows) if codex_windows else None
     claude_pct = claude_shortest_window_percent(get_claude_live_quota())
     if codex_pct is None and claude_pct is None:
         return default

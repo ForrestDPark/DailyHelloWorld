@@ -1261,6 +1261,7 @@ SUNZI_CHAPTER_SOURCE_PATH = Path(os.environ.get(
 SUNZI_PIPELINE_LOCK_DIR = Path("/private/tmp/com.forrest.codex-sunzi-nightly.lock")
 SUNZI_LIGHT_PIPELINE_REQUEST = "📜 ShiftAlarm에서 오늘의 병법 구절 라이트 분석을 요청했습니다."
 SUNZI_LAST_MESSAGE_PATH = Path.home() / "Library/Logs/CodexSunzi/latest-message.txt"
+SUNZI_PIPELINE_STATUS_PATH = Path.home() / "Library/Logs/CodexSunzi/status.json"
 _sunzi_pipeline_start_lock = Lock()
 _sunzi_pipeline_process = None
 
@@ -1309,7 +1310,17 @@ def _report_sunzi_pipeline_result(process, room_id, verse_number, started_at):
     if return_code == 0:
         content = f"九地篇 {verse_number}구절 해석 파이프라인 실행을 마쳤습니다. 아래 최종 보고에서 Notion·병법 사이트 반영과 검증 결과를 확인해주세요."
     else:
-        content = f"九地篇 {verse_number}구절 해석 파이프라인이 중단되었습니다(종료 코드 {return_code}). 기존 파일을 강제로 덮지 않았습니다."
+        reason = ""
+        try:
+            status = json.loads(SUNZI_PIPELINE_STATUS_PATH.read_text(encoding="utf-8"))
+            if status.get("verse") == verse_number and status.get("state") == "failed":
+                reason = status.get("stage", "")
+        except (OSError, json.JSONDecodeError):
+            pass
+        content = f"九地篇 {verse_number}구절 해석 파이프라인이 중단되었습니다(종료 코드 {return_code})."
+        if reason:
+            content += f"\n원인: {reason}"
+        content += "\n기존 파일을 강제로 덮지 않았습니다."
     if detail:
         content += "\n\n" + detail[-2500:]
     try:
