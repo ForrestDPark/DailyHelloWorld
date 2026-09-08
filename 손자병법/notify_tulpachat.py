@@ -289,6 +289,11 @@ def main() -> None:
     parser.add_argument("--notion-url", required=True)
     parser.add_argument("--site-url", required=True)
     parser.add_argument(
+        "--light",
+        action="store_true",
+        help="4번 역사 사례가 없는 라이트 분석 공지",
+    )
+    parser.add_argument(
         "--discussion-run",
         default="commanders-v1",
         help="--republish와 함께 쓸 때만 적용되는 명시적 재발행 실행명",
@@ -304,7 +309,8 @@ def main() -> None:
 
     number, original, subtitle = read_page(args.page)
     markdown = args.page.read_text(encoding="utf-8")
-    commanders = victorious_commanders(markdown, original)
+    is_light = args.light or "<!-- sunzi-analysis-mode: light -->" in markdown
+    commanders = [] if is_light else victorious_commanders(markdown, original)
     hanja_lesson = build_hanja_lesson(markdown, original, subtitle)
     content = (
         f"📜 손자병법 새 구절 분석이 완료되었습니다 — 구지편 {number}구절\n\n"
@@ -312,10 +318,15 @@ def main() -> None:
         f"핵심 해석: {subtitle}\n\n"
         f"Notion 정본: {args.notion_url}\n"
         f"사이트 분석: {args.site_url}\n\n"
-        "병법가들은 각자의 주석 관점에서 이 구절의 뜻, 역사 사례에서 놓치기 쉬운 조건, "
-        "현대에 옮길 때의 오용 위험 가운데 가장 중요하다고 보는 한 가지를 논합니다."
-        " 역사 사례의 전투 도판은 빠짐없이 공유하며, 장수들은 각 도판의 지형·배치·기동·기만 "
-        "신호를 설명하고 카너먼은 그 신호가 판단 편향에 미친 영향을 분석합니다."
+        + (
+            "병법가들은 한자선생님의 풀이를 들은 뒤, 각자의 주석 관점에서 이 구절의 뜻과 "
+            "다른 병법과의 연결, 현대에 옮길 때의 오용 위험 가운데 가장 중요한 쟁점을 논합니다."
+            if is_light else
+            "병법가들은 각자의 주석 관점에서 이 구절의 뜻, 역사 사례에서 놓치기 쉬운 조건, "
+            "현대에 옮길 때의 오용 위험 가운데 가장 중요하다고 보는 한 가지를 논합니다."
+            " 역사 사례의 전투 도판은 빠짐없이 공유하며, 장수들은 각 도판의 지형·배치·기동·기만 "
+            "신호를 설명하고 카너먼은 그 신호가 판단 편향에 미친 영향을 분석합니다."
+        )
     )
     payload = json.dumps(
         {
@@ -324,6 +335,7 @@ def main() -> None:
             "dedupe_key": discussion_dedupe_key(number, args.discussion_run, args.republish),
             "hanja_lesson": hanja_lesson,
             "victory_commanders": commanders,
+            "analysis_mode": "light" if is_light else "full",
         },
         ensure_ascii=False,
     ).encode("utf-8")

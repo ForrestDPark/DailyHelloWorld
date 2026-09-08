@@ -10,6 +10,10 @@ SPEC.loader.exec_module(notify)
 
 
 class NotifyTulpaChatTest(unittest.TestCase):
+    def test_light_page_has_no_commanders(self):
+        markdown = "<!-- sunzi-analysis-mode: light -->\n## 1. 원문\n## 2. 주석\n## 3. 교차\n## 5. 적용\n"
+        self.assertEqual(notify.victorious_commanders(markdown, "九地之變"), [])
+
     def test_discussion_key_changes_only_for_explicit_republish(self):
         stable = notify.discussion_dedupe_key(24, "format-v1", False)
         self.assertEqual(stable, notify.discussion_dedupe_key(24, "format-v2", False))
