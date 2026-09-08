@@ -14,6 +14,14 @@ class NotifyTulpaChatTest(unittest.TestCase):
         markdown = "<!-- sunzi-analysis-mode: light -->\n## 1. 원문\n## 2. 주석\n## 3. 교차\n## 5. 적용\n"
         self.assertEqual(notify.victorious_commanders(markdown, "九地之變"), [])
 
+    def test_verse_25_hanja_dictionary_is_complete(self):
+        page = Path(__file__).with_name("jiudi25_full_page.md")
+        number, original, subtitle = notify.read_page(page)
+        self.assertEqual(number, 25)
+        lesson = notify.build_hanja_lesson(page.read_text(encoding="utf-8"), original, subtitle)
+        self.assertIn("| [[red]]變[[/red]] | 변할 | 변 |", lesson)
+        self.assertIn("| [[red]]察[[/red]] | 살필 | 찰 |", lesson)
+
     def test_discussion_key_changes_only_for_explicit_republish(self):
         stable = notify.discussion_dedupe_key(24, "format-v1", False)
         self.assertEqual(stable, notify.discussion_dedupe_key(24, "format-v2", False))
