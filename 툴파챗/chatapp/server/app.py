@@ -74,6 +74,7 @@ SUNZI_DISCUSSION_ROOM_ID = "custom_16ea779e1f"
 SUNZI_LIGHT_PIPELINE_REQUEST = "📜 ShiftAlarm에서 오늘의 병법 구절 라이트 분석을 요청했습니다."
 SUNZI_PIPELINE_LOCK_DIR = Path("/private/tmp/com.forrest.codex-sunzi-nightly.lock")
 SUNZI_PIPELINE_STATUS_FILE = Path(os.path.expanduser("~/Library/Logs/CodexSunzi/status.json"))
+SUNZI_AUTOMATION_README = Path("/Users/forrestdpark/.codex-worktrees/sunzi-nightly/손자병법/README.md")
 NOTION_VERSION = "2022-06-28"
 # ★ "업데이트할 때마다 페이지를 재시작(새로고침)해야 하는 게 맞냐" 요청
 # (2026-08-28) — 서버 프로세스(app.py 등 백엔드 코드)가 바뀌면 재시작 시
@@ -752,13 +753,24 @@ def _sunzi_light_pipeline_state(conn):
         elapsed_seconds = max(0, int((datetime.datetime.now(datetime.timezone.utc) - started).total_seconds()))
     except (KeyError, TypeError, ValueError):
         pass
+    next_verse = None
+    try:
+        readme = SUNZI_AUTOMATION_README.read_text(encoding="utf-8")
+        completed = re.search(
+            r"마지막으로 순차 (?:최신화|분석)한 구절.*?九地篇\s*(\d+)구절", readme
+        )
+        if completed:
+            next_verse = int(completed.group(1)) + 1
+    except OSError:
+        pass
     return {
         "busy": bool(queued or running), "queued": bool(queued and not running),
         "running": running, "mode": pipeline.get("mode", "light"),
         "state": pipeline.get("state", "idle") if running or pipeline.get("state") != "running" else "interrupted",
         "verse": pipeline.get("verse"), "progress": pipeline.get("progress", 0),
         "stage": pipeline.get("stage", "분석 대기"), "elapsed_seconds": elapsed_seconds,
-        "updated_at": pipeline.get("updated_at"),
+        "updated_at": pipeline.get("updated_at"), "next_chapter": "구지편",
+        "next_verse": next_verse,
     }
 
 
