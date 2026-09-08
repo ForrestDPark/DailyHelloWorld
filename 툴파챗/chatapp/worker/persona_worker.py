@@ -1245,10 +1245,19 @@ SUNZI_PIPELINE_PERSONA_NAME = "손무"
 SUNZI_PIPELINE_COMMAND_RE = re.compile(
     r"손자병법.{0,20}다음\s*구절.{0,20}(?:해석|분석|최신화)(?:해|해줘|해주세요|하라|진행)?"
 )
-SUNZI_DIR = REPO_ROOT / "손자병법"
+SUNZI_AUTOMATION_REPO_DIR = Path(os.environ.get(
+    "SUNZI_AUTOMATION_REPO_DIR", "/Users/forrestdpark/.codex-worktrees/sunzi-nightly"
+))
+SUNZI_DIR = SUNZI_AUTOMATION_REPO_DIR / "손자병법"
 SUNZI_PIPELINE_SCRIPT = SUNZI_DIR / "run_nightly_codex.sh"
 SUNZI_README_PATH = SUNZI_DIR / "README.md"
-SUNZI_CHAPTER_SOURCE_PATH = SUNZI_DIR / "site/app/content/notion-chapters.ts"
+# 사이트 소스는 아직 메인 작업 폴더의 비추적 배포 소스이므로 원문 정본만
+# 그곳에서 읽는다. 진행 번호는 반드시 Git으로 동기화되는 전용 작업 트리의
+# README를 사용해야 오래된 번호로 되돌아가지 않는다.
+SUNZI_CHAPTER_SOURCE_PATH = Path(os.environ.get(
+    "SUNZI_CHAPTER_SOURCE_PATH",
+    "/Users/forrestdpark/Desktop/PDG/DailyHelloWorld_/손자병법/site/app/content/notion-chapters.ts",
+))
 SUNZI_PIPELINE_LOCK_DIR = Path("/private/tmp/com.forrest.codex-sunzi-nightly.lock")
 SUNZI_LIGHT_PIPELINE_REQUEST = "📜 ShiftAlarm에서 오늘의 병법 구절 라이트 분석을 요청했습니다."
 SUNZI_LAST_MESSAGE_PATH = Path.home() / "Library/Logs/CodexSunzi/latest-message.txt"
@@ -1268,7 +1277,7 @@ def _next_sunzi_verse():
     """README의 마지막 순차 완료 번호와 구지편 정본 원문을 대조해 다음
     번호·원문·독음을 반환한다. AI 추측이나 파일명 유무로 순서를 정하지 않는다."""
     readme = SUNZI_README_PATH.read_text(encoding="utf-8")
-    completed = re.search(r"마지막으로 순차 최신화한 구절.*?九地篇\s*(\d+)구절", readme)
+    completed = re.search(r"마지막으로 순차 (?:최신화|분석)한 구절.*?九地篇\s*(\d+)구절", readme)
     if not completed:
         raise ValueError("README에서 마지막 순차 완료 구절을 찾지 못했습니다")
     current_number = int(completed.group(1))
@@ -1349,7 +1358,7 @@ def _maybe_start_sunzi_pipeline(turn):
             started_at = time.time()
             process = subprocess.Popen(
                 ["/bin/zsh", str(SUNZI_PIPELINE_SCRIPT)],
-                cwd=str(REPO_ROOT), env=env,
+                cwd=str(SUNZI_AUTOMATION_REPO_DIR), env=env,
                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 start_new_session=True,
             )

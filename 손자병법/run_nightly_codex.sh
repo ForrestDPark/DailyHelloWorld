@@ -56,13 +56,13 @@ if [[ -n "$TARGET_VERSE" ]]; then
     /bin/cat "$SOURCE_PROMPT"
   } | /usr/bin/caffeinate -i "$CODEX_BIN" --ask-for-approval never --search exec \
     --cd "$REPO_DIR" \
-    --sandbox workspace-write \
+    --sandbox danger-full-access \
     --output-last-message "$LOG_DIR/latest-message.txt" \
     - >> "$LOG_FILE" 2>&1
 else
   /usr/bin/caffeinate -i "$CODEX_BIN" --ask-for-approval never --search exec \
     --cd "$REPO_DIR" \
-    --sandbox workspace-write \
+    --sandbox danger-full-access \
     --output-last-message "$LOG_DIR/latest-message.txt" \
     - < "$SOURCE_PROMPT" >> "$LOG_FILE" 2>&1
 fi
