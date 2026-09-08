@@ -3743,6 +3743,7 @@ class WorkerAnnouncement(BaseModel):
     dedupe_key: str
     hanja_lesson: str
     victory_commanders: list[VictoryCommander] = []
+    analysis_mode: str = "full"
 
 
 def _build_battle_commander_prompt(name, battle, profile):
@@ -3794,6 +3795,8 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
     dedupe_key = body.dedupe_key.strip()
     if not room_id or not content or not dedupe_key or not body.hanja_lesson.strip():
         raise HTTPException(status_code=400, detail="방·내용·중복 방지 키·한자 풀이가 필요합니다")
+    if body.analysis_mode not in {"light", "full"}:
+        raise HTTPException(status_code=400, detail="analysis_mode는 light 또는 full이어야 합니다")
 
     conn = get_conn()
     commander_results = []
@@ -3819,9 +3822,10 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
         (room_id, hanja_teacher_name, _now()),
     )
     kahneman_name = "데니얼 카너먼"
-    kahneman = conn.execute("SELECT name FROM personas WHERE name = ?", (kahneman_name,)).fetchone()
-    if not kahneman:
-        kahneman_prompt = (
+    if body.analysis_mode == "full":
+        kahneman = conn.execute("SELECT name FROM personas WHERE name = ?", (kahneman_name,)).fetchone()
+        if not kahneman:
+            kahneman_prompt = (
             "당신은 행동경제학자 데니얼 카너먼의 연구 관점을 재현한 가상 토론 페르소나입니다. "
             "전장 서사에서 누가 누구를 속였는지, 거짓 신호와 사실이지만 오해를 유도한 신호를 "
             "구분하고, 가용성 편향·확증 편향·기준율 무시·과신·손실회피·매몰비용·대표성 휴리스틱 "
@@ -3831,16 +3835,16 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
             "구분하며, 노션 분석의 속임수 일곱 질문을 반복 나열하지 말고 핵심 인과를 대화체로 "
             "풀이하세요. 현대 적용에서는 신뢰·동의·안전을 해치는 조작을 권하지 마세요."
         )
+            conn.execute(
+                "INSERT INTO personas (name, notion_page_id, system_prompt, group_name, owner_username, description, synced_at) "
+                "VALUES (?, '', ?, NULL, ?, ?, ?)",
+                (kahneman_name, kahneman_prompt, APP_USERNAME or "automation",
+                 "전쟁의 속임수와 판단 편향을 분석하는 행동경제학 관점", _now()),
+            )
         conn.execute(
-            "INSERT INTO personas (name, notion_page_id, system_prompt, group_name, owner_username, description, synced_at) "
-            "VALUES (?, '', ?, NULL, ?, ?, ?)",
-            (kahneman_name, kahneman_prompt, APP_USERNAME or "automation",
-             "전쟁의 속임수와 판단 편향을 분석하는 행동경제학 관점", _now()),
+            "INSERT OR IGNORE INTO room_invites (room_id, persona_name, invited_at) VALUES (?, ?, ?)",
+            (room_id, kahneman_name, _now()),
         )
-    conn.execute(
-        "INSERT OR IGNORE INTO room_invites (room_id, persona_name, invited_at) VALUES (?, ?, ?)",
-        (room_id, kahneman_name, _now()),
-    )
     for commander in body.victory_commanders:
         name = commander.name.strip()
         if not PERSONA_NAME_RE.match(name):
@@ -3880,9 +3884,10 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
                created_at TEXT NOT NULL
            )"""
     )
-    traditional_commentators = {
+    traditional_commentator_order = [
         "조조", "이전", "두목", "매요신", "장예", "왕석", "가림", "두우", "진호"
-    }
+    ]
+    traditional_commentators = set(traditional_commentator_order)
     commander_names = [item["name"] for item in commander_results]
     commentators = [name for name in targets if name in traditional_commentators]
     if not commentators:
@@ -3958,8 +3963,15 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
         "INSERT INTO automation_announcements (dedupe_key, message_id, created_at) VALUES (?, ?, ?)",
         (dedupe_key, message_id, now),
     )
-    priority = ["데니얼 카너먼", "손무", "조조", "두목", "두우", "매요신", "클라우제비츠", "한니발", "한신"]
-    notified = [name for name in priority if name in targets and name not in commander_names][:6]
+    if body.analysis_mode == "light":
+        notified = [name for name in traditional_commentator_order if name in targets]
+        missing = [name for name in traditional_commentator_order if name not in notified]
+        if missing:
+            conn.close()
+            raise HTTPException(status_code=409, detail="라이트 토론 주석가 누락: " + ", ".join(missing))
+    else:
+        priority = ["데니얼 카너먼", "손무", "조조", "두목", "두우", "매요신", "클라우제비츠", "한니발", "한신"]
+        notified = [name for name in priority if name in targets and name not in commander_names][:6]
     if not notified:
         notified = [name for name in targets if name not in commander_names][:5]
     conn.execute(

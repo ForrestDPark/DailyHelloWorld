@@ -44,6 +44,7 @@ BATTLE_COMMANDER_PREFERENCES = {
     "요크타운": "조지 워싱턴",
     "거록": "항우",
 }
+TRADITIONAL_COMMENTATORS = ["조조", "이전", "두목", "매요신", "장예", "왕석", "가림", "두우", "진호"]
 
 
 def plain(value: str) -> str:
@@ -369,6 +370,11 @@ def main() -> None:
         raise RuntimeError(
             "Tulpa Chat 전투 도판 게시 수 불일치: "
             f"원고 {expected_image_count}장, 게시 {result.get('posted_image_count')}장"
+        )
+    if is_light and not result.get("duplicate") and result.get("notified") != TRADITIONAL_COMMENTATORS:
+        raise RuntimeError(
+            "Tulpa Chat 라이트 토론 주석가 큐 불일치: "
+            f"기대 {TRADITIONAL_COMMENTATORS}, 실제 {result.get('notified')}"
         )
     print(json.dumps(result, ensure_ascii=False))
 
