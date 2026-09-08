@@ -1215,6 +1215,17 @@ REMINDERS = {
     "beef_bbq":        {"label": "🥩 소고기 구워먹는 날(월 1회·휴무일)", "enabled": True, "time": {"hour": 18, "minute": 0}},
     "day_shift_last_day_routine": {"label": "☕ 점심 먹고 아아 한잔·헬스장 갔다 오후 9시 이후 취침(주간 마지막날)", "enabled": True, "time": {"hour": 14, "minute": 30}},
     "engine_oil_change": {"label": "🛢️ 엔진오일 가는 날(5개월에 1회)", "enabled": True, "time": {"hour": 12, "minute": 0}},
+    # ★ 2026-09-09: "Day,swing, gy 각각에도 멜라토닌 먹는 시각 리마인더
+    # 만들어줘" 요청 — 지금까지 멜라토닌 알림은 S-D휴/G-S휴 "전환 휴무일"에만
+    # 있었고 평소 근무일(Day/Swing/GY)엔 없었다. 근무일은 매일 반복이라
+    # _get_today_reminder_items에서 조건만 걸고, 실제 시각은 이 항목의
+    # "time"(기본값, 이 표엔 안 쓰임)이 아니라 ⏰ 리마인더 시각표 Notion 표의
+    # Swing/Day/GY 컨텍스트 칼럼으로 관리한다(_resolve_reminder_time) — 기존
+    # S-D휴 마지막날 멜라토닌(20:00, 기상 06:00 기준 10시간 전)과 같은 규칙으로
+    # Day=16:55(기상 02:55 기준)·Swing=22:30(기상 08:30 기준)·GY=06:30(기상
+    # 16:30 기준)를 Notion 표에 채웠다. S-D휴/D-G휴/G-S휴는 비워서 기존
+    # 전환 휴무 전용 멜라토닌 알림과 안 겹치게 했다.
+    "melatonin_shift": {"label": "💊 멜라토닌 먹을 시각(근무일)", "enabled": True, "time": {"hour": 20, "minute": 0}},
 }
 
 # "⏰ 리마인더 시각표" Notion 페이지 — REMINDERS 위 "time" 값은 코드 기본값(안전망)이고,
@@ -2204,6 +2215,9 @@ def _get_today_reminder_items(schedule, now=None):
     - 주간 마지막날 루틴(점심·아아·헬스장·취침): 오늘이 주간(Day) 근무 블록의 마지막날
       (내일은 주간이 아님, 휴무든 다른 근무든 상관없음). (2026-08-20 추가)
     - 엔진오일 교체: 근무표와 무관하게 2026-08-20부터 5개월마다 한 번. (2026-08-20 추가)
+    - 멜라토닌 먹을 시각(근무일): 오늘이 Day/Swing/GY 근무일이면 매번. 시각은 컨텍스트별로
+      다르며(⏰ 리마인더 시각표 Notion 표), S-D휴/D-G휴/G-S휴 전환 휴무는 기존 전용
+      멜라토닌 알림이 따로 있어 여기 포함하지 않는다. (2026-09-09 추가)
     """
     now = now or datetime.datetime.now()
     today = now.date()
@@ -2277,6 +2291,9 @@ def _get_today_reminder_items(schedule, now=None):
 
     if REMINDERS["engine_oil_change"]["enabled"] and _is_engine_oil_change_day(today):
         items.append(("engine_oil_change", REMINDERS["engine_oil_change"]["label"]))
+
+    if REMINDERS["melatonin_shift"]["enabled"] and get_shift_for_date(schedule, today) in ("Day", "Swing", "GY"):
+        items.append(("melatonin_shift", REMINDERS["melatonin_shift"]["label"]))
 
     return filter_dismissed_reminder_items(items, today)
 
