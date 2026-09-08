@@ -287,7 +287,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("page", type=Path)
     parser.add_argument("--notion-url", required=True)
-    parser.add_argument("--site-url", required=True)
+    parser.add_argument("--site-url")
     parser.add_argument(
         "--light",
         action="store_true",
@@ -310,6 +310,8 @@ def main() -> None:
     number, original, subtitle = read_page(args.page)
     markdown = args.page.read_text(encoding="utf-8")
     is_light = args.light or "<!-- sunzi-analysis-mode: light -->" in markdown
+    if not is_light and not args.site_url:
+        parser.error("풀 모드에는 --site-url이 필요합니다")
     commanders = [] if is_light else victorious_commanders(markdown, original)
     hanja_lesson = build_hanja_lesson(markdown, original, subtitle)
     content = (
@@ -317,7 +319,8 @@ def main() -> None:
         f"원문: {original}\n"
         f"핵심 해석: {subtitle}\n\n"
         f"Notion 정본: {args.notion_url}\n"
-        f"사이트 분석: {args.site_url}\n\n"
+        + (f"사이트 분석: {args.site_url}\n" if args.site_url else "")
+        + "\n"
         + (
             "병법가들은 한자선생님의 풀이를 들은 뒤, 각자의 주석 관점에서 이 구절의 뜻과 "
             "다른 병법과의 연결, 현대에 옮길 때의 오용 위험 가운데 가장 중요한 쟁점을 논합니다."
