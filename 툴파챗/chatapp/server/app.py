@@ -73,6 +73,7 @@ SHIFT_ALARM_REMINDER_TIMES_PAGE_ID = "3d432a1e-ae80-8171-b8e1-e0d3c545a707"
 SUNZI_DISCUSSION_ROOM_ID = "custom_16ea779e1f"
 SUNZI_LIGHT_PIPELINE_REQUEST = "📜 ShiftAlarm에서 오늘의 병법 구절 라이트 분석을 요청했습니다."
 SUNZI_PIPELINE_LOCK_DIR = Path("/private/tmp/com.forrest.codex-sunzi-nightly.lock")
+SUNZI_PIPELINE_STATUS_FILE = Path(os.path.expanduser("~/Library/Logs/CodexSunzi/status.json"))
 NOTION_VERSION = "2022-06-28"
 # ★ "업데이트할 때마다 페이지를 재시작(새로고침)해야 하는 게 맞냐" 요청
 # (2026-08-28) — 서버 프로세스(app.py 등 백엔드 코드)가 바뀌면 재시작 시
@@ -734,9 +735,31 @@ def _sunzi_light_pipeline_state(conn):
              WHERE persona_name=? AND status IN ('pending','processing')""",
         ("손무",),
     ).fetchone()["n"]
-    running = SUNZI_PIPELINE_LOCK_DIR.exists()
-    return {"busy": bool(queued or running), "queued": bool(queued and not running),
-            "running": running, "mode": "light"}
+    try:
+        pipeline = json.loads(SUNZI_PIPELINE_STATUS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        pipeline = {}
+    pid = pipeline.get("pid")
+    running = pipeline.get("state") == "running" and isinstance(pid, int) and pid > 0
+    if running:
+        try:
+            os.kill(pid, 0)
+        except OSError:
+            running = False
+    elapsed_seconds = None
+    try:
+        started = datetime.datetime.fromisoformat(pipeline["started_at"])
+        elapsed_seconds = max(0, int((datetime.datetime.now(datetime.timezone.utc) - started).total_seconds()))
+    except (KeyError, TypeError, ValueError):
+        pass
+    return {
+        "busy": bool(queued or running), "queued": bool(queued and not running),
+        "running": running, "mode": pipeline.get("mode", "light"),
+        "state": pipeline.get("state", "idle") if running or pipeline.get("state") != "running" else "interrupted",
+        "verse": pipeline.get("verse"), "progress": pipeline.get("progress", 0),
+        "stage": pipeline.get("stage", "분석 대기"), "elapsed_seconds": elapsed_seconds,
+        "updated_at": pipeline.get("updated_at"),
+    }
 
 
 @app.get("/api/shift-alarm/sunzi-analysis")

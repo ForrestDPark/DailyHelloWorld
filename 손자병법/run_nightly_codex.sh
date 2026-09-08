@@ -8,6 +8,7 @@ ANALYSIS_MODE="${SUNZI_ANALYSIS_MODE:-full}"
 LOG_DIR="/Users/forrestdpark/Library/Logs/CodexSunzi"
 LOCK_DIR="/private/tmp/com.forrest.codex-sunzi-nightly.lock"
 CODEX_BIN="/opt/homebrew/bin/codex"
+PROGRESS_SCRIPT="$REPO_DIR/손자병법/pipeline_progress.py"
 
 mkdir -p "$LOG_DIR"
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
@@ -20,6 +21,13 @@ LAST_LOG="$LOG_DIR/latest.log"
 
 finalize_run() {
   local exit_code=$?
+  if [[ -n "$TARGET_VERSE" && -f "$PROGRESS_SCRIPT" ]]; then
+    if (( exit_code == 0 )); then
+      /usr/bin/python3 "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress 100 --stage "분석 완료" --state complete --pid "$$" || true
+    else
+      /usr/bin/python3 "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress 100 --stage "분석 중단 · 로그 확인 필요" --state failed --pid "$$" || true
+    fi
+  fi
   rmdir "$LOCK_DIR" 2>/dev/null || true
   if [[ -f "$LOG_FILE" ]]; then
     cp "$LOG_FILE" "$LAST_LOG"
@@ -38,6 +46,9 @@ if [[ ! -d "$REPO_DIR/.git" ]]; then
 fi
 
 cd "$REPO_DIR"
+if [[ -n "$TARGET_VERSE" && -f "$PROGRESS_SCRIPT" ]]; then
+  /usr/bin/python3 "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress 5 --stage "분석 환경 준비" --state running --pid "$$"
+fi
 if [[ -n "$(git status --porcelain)" ]]; then
   print -r -- "이전 실행의 미완료 변경이 남아 있어 안전하게 중단합니다." > "$LOG_FILE"
   git status --short >> "$LOG_FILE"
@@ -53,6 +64,7 @@ if [[ -n "$TARGET_VERSE" ]]; then
     if [[ "$ANALYSIS_MODE" == "light" ]]; then
       print -r -- "이번 실행은 라이트 모드입니다. 최신 README의 라이트 모드 계약대로 4번 역사적 실증 사례와 그 전용 이미지·지휘관 토론만 제외하고, 나머지 본문과 검증·GitHub·Notion·Tulpa Chat 단계를 수행하세요. 병법 사이트 생성·배포는 하지 마세요. validate_light_analysis.py를 반드시 통과해야 합니다."
     fi
+    print -r -- "ShiftAlarm 진행률을 위해 각 단계가 끝날 때 /usr/bin/python3 손자병법/pipeline_progress.py --verse ${TARGET_VERSE} --mode ${ANALYSIS_MODE} --progress 숫자 --stage '현재 단계'를 실행하세요. 정본·자료 확인 20, 본문 초안 45, 검증 65, GitHub 반영 78, Notion 저장·재조회 90, Tulpa Chat 보고 97을 사용하고 실제로 끝나기 전에 다음 단계 수치를 기록하지 마세요."
     /bin/cat "$SOURCE_PROMPT"
   } | /usr/bin/caffeinate -i "$CODEX_BIN" --ask-for-approval never --search exec \
     --cd "$REPO_DIR" \
