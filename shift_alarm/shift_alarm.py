@@ -2749,6 +2749,38 @@ def _get_tulpachat_credentials():
     return None, None
 
 
+def _get_tulpachat_worker_token():
+    """로컬 서버 plist의 내부 호출 토큰을 값 노출 없이 읽는다."""
+    try:
+        with open(TULPACHAT_SERVER_PLIST, "rb") as f:
+            plist = plistlib.load(f)
+        return (plist.get("EnvironmentVariables", {}) or {}).get("WORKER_TOKEN")
+    except Exception:
+        return None
+
+
+def _forward_mobile_notification(title, subtitle, message, url=None):
+    """macOS 알림과 같은 내용을 등록된 툴파챗 PWA로 비동기 전달한다."""
+    token = _get_tulpachat_worker_token()
+    if not token:
+        return
+    body = " · ".join(str(part).strip() for part in (subtitle, message) if str(part).strip())
+    payload = json.dumps({
+        "title": str(title), "body": body or str(title),
+        "url": url or "/shift-alarm/",
+    }, ensure_ascii=False).encode("utf-8")
+    request = urllib.request.Request(
+        f"{TULPACHAT_LOCAL_URL}/api/worker/mobile_notification",
+        data=payload, method="POST",
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10):
+            pass
+    except Exception as exc:
+        print(f"⚠️ 휴대폰 웹 푸시 전달 실패: {exc}")
+
+
 def sync_scriptable_widget_file():
     """저장소의 위젯 스크립트를 Scriptable iCloud Documents에 자동 배포한다.
     실제 복사는 iCloudSync.app에 위임한다(★ 2026-08-18, 위 설명 참고) — 비동기라
@@ -4769,6 +4801,10 @@ def notify_spoken(title, subtitle, message, speak_text=None, url=None):
     되면 좋겠다" 요청(2026-08-27). rumps의 data 페이로드로 실어보내고,
     ShiftAlarmApp의 @rumps.notifications 핸들러가 열어준다."""
     rumps.notification(title, subtitle, message, data={"url": url} if url else None)
+    threading.Thread(
+        target=_forward_mobile_notification,
+        args=(title, subtitle, message, url), daemon=True,
+    ).start()
     _speak_text(
         speak_text if speak_text is not None
         else " ".join(part for part in (title, subtitle, message) if part)

@@ -35,6 +35,7 @@ import re
 import secrets
 import sqlite3
 import subprocess
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -2685,6 +2686,7 @@ def push_subscribe(body: PushSubscribeRequest, request: Request):
                p256dh = excluded.p256dh, auth = excluded.auth""",
         (user["username"], body.endpoint, p256dh, auth_key, _now()),
     )
+    _deliver_system_update_pushes(conn, user["username"])
     conn.commit()
     conn.close()
     return {"ok": True}
@@ -2726,6 +2728,44 @@ def _send_web_push_to_user(conn, username, title, body_text, url):
                 conn.execute("DELETE FROM push_subscriptions WHERE id = ?", (row["id"],))
             else:
                 print(f"⚠️ 웹 푸시 실패({username}): {exc}")
+
+
+def _deliver_system_update_pushes(conn, username):
+    """아직 보내지 않은 시스템 업데이트를 계정·항목별 한 번만 푸시한다."""
+    delivered = {
+        row["notification_id"] for row in conn.execute(
+            "SELECT notification_id FROM notification_push_deliveries WHERE username=?",
+            (username,),
+        ).fetchall()
+    }
+    for item in reversed(SYSTEM_UPDATE_NOTIFICATIONS):
+        if item["id"] in delivered:
+            continue
+        _send_web_push_to_user(conn, username, item["title"], item["body"], item["url"])
+        conn.execute(
+            "INSERT OR IGNORE INTO notification_push_deliveries(username,notification_id,delivered_at) VALUES(?,?,?)",
+            (username, item["id"], _now()),
+        )
+
+
+def _deliver_system_updates_on_startup():
+    conn = get_conn()
+    try:
+        usernames = [
+            row["username"] for row in conn.execute(
+                "SELECT DISTINCT username FROM push_subscriptions"
+            ).fetchall()
+        ]
+        for username in usernames:
+            _deliver_system_update_pushes(conn, username)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+@app.on_event("startup")
+def start_system_update_push_delivery():
+    threading.Thread(target=_deliver_system_updates_on_startup, daemon=True).start()
 
 
 def _send_kakao_alert_to_user(conn, username, title, body_text, url):
@@ -4465,6 +4505,34 @@ class WorkerPostMessage(BaseModel):
     persona_name: str
     room_id: str
     content: str
+
+
+class WorkerMobileNotification(BaseModel):
+    title: str
+    body: str
+    url: str = "/shift-alarm/"
+
+
+@app.post("/api/worker/mobile_notification")
+def worker_mobile_notification(
+    body: WorkerMobileNotification, authorization: Optional[str] = Header(None)
+):
+    """Shift Alarm 등 로컬 신뢰 프로세스의 알림을 소유자 웹 푸시로 전달한다."""
+    _check_worker_auth(authorization)
+    title = body.title.strip()[:120]
+    body_text = body.body.strip()[:500]
+    url = body.url.strip()
+    if not title or not body_text:
+        raise HTTPException(status_code=422, detail="알림 제목과 내용이 필요합니다")
+    if not url.startswith(("/", "https://chat.tulpa-chat.site/")):
+        raise HTTPException(status_code=422, detail="허용되지 않은 알림 주소입니다")
+    if not APP_USERNAME:
+        raise HTTPException(status_code=503, detail="소유자 계정이 설정되지 않았습니다")
+    conn = get_conn()
+    _send_web_push_to_user(conn, APP_USERNAME, title, body_text, url)
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 @app.post("/api/worker/post_message")

@@ -138,6 +138,12 @@ def init_db():
             read_at TEXT NOT NULL,
             PRIMARY KEY (username, notification_id)
         );
+        CREATE TABLE IF NOT EXISTS notification_push_deliveries (
+            username TEXT NOT NULL,
+            notification_id TEXT NOT NULL,
+            delivered_at TEXT NOT NULL,
+            PRIMARY KEY (username, notification_id)
+        );
         CREATE TABLE IF NOT EXISTS user_room_backgrounds (
             username TEXT NOT NULL,
             room_id TEXT NOT NULL,
