@@ -7381,6 +7381,19 @@ class ShiftAlarmApp(rumps.App):
             self.config["job_collector_last_run"] = datetime.datetime.now().isoformat(timespec="seconds")
             save_config(self.config)
 
+            # ★ 2026-09-09: "사용 안하는 데이터는 알아서 정리하면 좋겠어" 요청 —
+            # collect가 매번 수십~백여 건씩 쌓는데 실제로 보는 건 하루 category당
+            # 1건뿐이라 마감 지난 공고가 DB에 무한히 쌓였다. collect 직후 마감
+            # 지났거나 오래 방치된 행을 조용히 정리한다(실패해도 collect 결과
+            # 자체엔 영향 없게 별도 try).
+            try:
+                subprocess.run(
+                    [sys.executable, JOB_COLLECTOR_SCRIPT, "cleanup"],
+                    cwd=JOB_COLLECTOR_DIR, capture_output=True, text=True, timeout=60,
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                print(f"⚠️ 이직시스템 데이터 정리 실패: {exc}")
+
             match = re.search(r"신규 (\d+)건 / 기존 갱신 (\d+)건", result.stdout)
             if match:
                 inserted, updated = int(match.group(1)), int(match.group(2))
@@ -7449,6 +7462,16 @@ class ShiftAlarmApp(rumps.App):
             if collect_result.returncode != 0:
                 print(f"⚠️ 경진대회 수집 실패: {collect_result.stderr.strip()[:300]}")
                 return
+
+            # ★ 2026-09-09: job_collector와 같은 이유 — collect 직후 마감 지났거나
+            # 오래 방치된 공모전을 조용히 정리한다.
+            try:
+                subprocess.run(
+                    [sys.executable, CONTEST_COLLECTOR_SCRIPT, "cleanup"],
+                    cwd=JOB_COLLECTOR_DIR, capture_output=True, text=True, timeout=60,
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                print(f"⚠️ 경진대회 데이터 정리 실패: {exc}")
 
             for category, cat_label in CONTEST_CATEGORIES.items():
                 analyze_result = subprocess.run(

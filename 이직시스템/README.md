@@ -268,3 +268,17 @@ python3 company_profile.py analyze "(주)회사명" --url "https://회사홈페�
 **원인**: `ai_exec.py`의 `_run_one()`이 매번 `codex exec`를 서브프로세스로 부르는데, `~/.codex/config.toml`에 걸린 전역 `notify` 훅(원래 Codex Computer Use 앱의 대화형 세션용)이 스코프 구분 없이 **모든** codex 실행(이 헤드리스 1회성 호출 포함)에서 turn 종료 시마다 발동해 `osascript display notification`을 쐈다. `job_collector.py`(공고·경진대회·기업 분석)와 `일본어자막추출`의 자막 보정 파이프라인이 하루에도 수십 번씩 `codex exec`를 배경에서 호출하다 보니 알림이 끊임없이 떴다.
 - 확인 경로: `~/.codex/config.toml`의 `notify = [...]` → `~/.codex/notify_turn_complete.py`가 정확히 이 문구로 `display notification`을 실행.
 - 수정: 두 `ai_exec.py`(이직시스템·일본어자막추출)의 codex 커맨드에 `-c notify=[]`를 추가해 이 헤드리스 호출에서만 훅을 끈다. 전역 `~/.codex/config.toml`은 건드리지 않으므로 사용자가 터미널에서 직접 여는 대화형 codex 세션의 알림은 그대로 유지된다.
+
+## 추천 재알림 방지 + 오래된 데이터 자동 정리 (★ 2026-09-09 추가)
+
+**사용자 지적**: "K-인공지능(AI) 제조데이터 분석 경진대회 재알림 — 새 대회 아니고 그거 재알림이야, 아까 AI 카테고리 노코드 챌린지 재알림 떴던 거랑 똑같은 패턴. 이거 재알람이 왜 계속 발생하는거지? 신규 모집공고 114건 수집했다는데 왜 관련 챗은 하나도 없어? 사용 안하는 데이터는 알아서 정리하면 좋겠어."
+
+**원인 1 — 재알림**: `analyze_top_job`/`analyze_top_contest`의 `_apply_no_repeat_rotation`은 후보 풀이 작은 카테고리(특히 경진대회 AI/일반 둘 다)에서는 한두 번 순환하고 나면 즉시 소진→리셋되고, 리셋 직후엔 여전히 점수 1위인 그 공고/공모전을 다시 뽑는다. 뽑을 때마다 Notion 페이지를 다시 쓰고 `"Notion 페이지 갱신 완료"` 문자열이 찍히는데, shift_alarm.py는 그 문자열만 보고 "새 추천"으로 알림·채팅 트리거(경진이 페르소나)를 또 쐈다 — 실제로는 어제와 완전히 같은 건이었다.
+- 수정: `analyze_top_job`/`analyze_top_contest`가 Notion을 다시 쓰기 직전, 직전 상태 파일(`top_job_notion_<category>.json`/`top_contest_notion_<category>.json`, 아직 덮어쓰기 전)의 URL과 이번에 고른 후보의 URL을 비교한다. 완전히 같으면 Notion도 다시 안 쓰고 `"Notion 페이지 갱신 완료"` 문구도 안 찍어서 shift_alarm.py의 알림·채팅 트리거가 자연히 안 켜진다.
+
+**원인 2 — "114건 수집했는데 챗이 없다"**: collect(원시 수집, 하루 수십~백여 건)와 analyze-top(카테고리당 1건만 추천·채팅 트리거)은 완전히 분리된 단계다. collect의 macOS 알림("💼 이직시스템 새 공고")은 단순 참고용이고, 실제로 채팅에서 소개되는 건 그중 category당 1건뿐이다. 이건 설계 의도(전부를 채팅에 쏟아부으면 소음)이지 버그는 아니라 이번엔 건드리지 않았다 — 나머지는 아래 자동 정리로 눈에 안 띄게 쌓이지 않게만 했다.
+
+**원인 3 — 사용 안 하는 데이터 누적**: `collect`가 매번 쌓기만 하고 지우는 로직이 없어서, 실측 시점 `contests.db` 401행 중 214행(53%)이 마감이 지난 상태였고 `jobs.db` 2933행 중 456행이 마감 지났거나 30일 넘게 방치된 상태였다.
+- `job_collector.py cleanup`/`contest_collector.py cleanup` 서브커맨드를 새로 추가했다. 공모전은 마감이 파싱되면 마감 기준, 못 파싱하면(콘테스트코리아 등 자유 텍스트) `first_seen_at` 60일 기준으로 지운다. 공고는 출처별 마감 표기가 더 제각각이라(사람인 "상시채용" 등) `YYYY-MM-DD`로 깔끔히 파싱되는 것만 마감 기준, 나머지는 `first_seen_at` 30일 기준으로 지운다 — 마감·나이 둘 다 불확실한 애매한 행은 잘못 지우느니 남겨둔다.
+- shift_alarm.py가 매일 `collect` 직후 이 `cleanup`도 자동 호출한다(실패해도 collect 자체 결과엔 영향 없게 별도 try/except). 실제 실행으로 `contests.db` 401→187행, `jobs.db` 2933→2477행까지 정리되는 것을 확인했다.
+- 한 번이라도 analyze-top에 뽑혔던 행이 나중에 정리 대상이 되어 DB에서 지워져도 문제없다 — 그 결과는 이미 Notion 페이지(`top_job_notion_*.json`/`top_contest_notion_*.json`에 기록된 `page_id`)에 영구 저장돼 있고, 그 뒤로 DB 행을 다시 조회하는 코드가 없다.

@@ -25,7 +25,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -593,6 +593,41 @@ def collect(args: argparse.Namespace) -> None:
     print(f"\n완료: 신규 {inserted}건 / 기존 갱신 {updated}건")
 
 
+# ★ 2026-09-09: "사용 안하는 데이터는 알아서 정리하면 좋겠어" 요청 — 매일
+# collect가 수십~백여 건씩 쌓는데 실제로 사람이 보는 건 analyze-top이 고르는
+# 카테고리당 1건뿐이라, 마감이 지나 다시는 추천될 수 없는 행이 DB에 계속
+# 쌓이기만 했다. 마감이 확실히 지난 행과, 마감을 못 읽었지만 오래 방치된
+# 행을 지운다 — 한 번이라도 analyze-top에 뽑혔던 행이라도 예외 없이 지운다
+# (그 결과는 Notion 페이지에 이미 영구 저장돼 있어 DB 행이 없어져도 안 깨짐).
+CONTEST_STALE_NO_DEADLINE_DAYS = 60
+
+
+def cmd_cleanup(args: argparse.Namespace) -> None:
+    conn = connect(args.db)
+    today = datetime.now().date()
+    rows = conn.execute("SELECT id, deadline, first_seen_at FROM contests").fetchall()
+    stale_cutoff = datetime.now() - timedelta(days=CONTEST_STALE_NO_DEADLINE_DAYS)
+    to_delete = []
+    for row in rows:
+        if row["deadline"] and _is_deadline_expired(row["deadline"], today):
+            to_delete.append(row["id"])
+            continue
+        if not row["deadline"]:
+            try:
+                first_seen = datetime.fromisoformat(row["first_seen_at"]).replace(tzinfo=None)
+            except (TypeError, ValueError):
+                continue
+            if first_seen < stale_cutoff:
+                to_delete.append(row["id"])
+    if not to_delete:
+        print("정리 대상 없음 — 마감 지난/오래된 공모전이 없습니다.")
+        return
+    placeholders = ",".join("?" for _ in to_delete)
+    conn.execute(f"DELETE FROM contests WHERE id IN ({placeholders})", to_delete)
+    conn.commit()
+    print(f"정리 완료: 마감 지났거나 {CONTEST_STALE_NO_DEADLINE_DAYS}일 넘게 마감 미상인 공모전 {len(to_delete)}건 삭제")
+
+
 def list_contests(args: argparse.Namespace) -> None:
     conn = connect(args.db)
     rows = conn.execute("""
@@ -1033,6 +1068,25 @@ def analyze_top_contest(args: argparse.Namespace) -> None:
     used.add(f"{row['source']}:{row['source_id']}")
     _save_top_contest_history(category, used)
 
+    # ★ 2026-09-09: "이거 재알람이 왜 계속 발생하는거지?" 지적 — 후보 풀이
+    # 작은 카테고리는 _apply_no_repeat_rotation이 매번 소진→리셋되면서 같은
+    # 1위 공모전을 또 고르는데, 그때마다 여기서 Notion을 다시 쓰고 shift_alarm.py가
+    # "Notion 페이지 갱신 완료" 문자열만 보고 "새 추천"으로 알림·채팅 트리거를
+    # 또 쏴서, 실제로는 어제와 똑같은 공모전인데 "새로 나왔어요"로 반복 통지됐다.
+    # 발행 직전에 직전 상태 파일(덮어쓰기 전)과 URL을 비교해 완전히 같으면
+    # Notion도 다시 쓰지 않고, "Notion 페이지 갱신 완료" 문구도 안 찍어서
+    # shift_alarm.py의 알림·채팅 트리거가 자연히 발동하지 않게 한다.
+    prev_state_path = top_contest_state_path(category)
+    prev_state = {}
+    if prev_state_path.exists():
+        try:
+            prev_state = json.loads(prev_state_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            prev_state = {}
+    if prev_state.get("contest_url") == row["url"]:
+        print(f"ℹ️  1위 공모전이 직전과 동일합니다({row['organizer']} — {row['title']}) — Notion 갱신·알림을 생략합니다.")
+        return
+
     token = _notion_token()
     if not token:
         print("⚠️  Notion 토큰이 키체인에 없어 Notion 페이지 갱신을 건너뜁니다.")
@@ -1101,6 +1155,9 @@ def parser() -> argparse.ArgumentParser:
         help="ai=AI 특화 경진대회, general=일반 공모전 (2026-08-08 추가)",
     )
     at.set_defaults(func=analyze_top_contest)
+    sub.add_parser(
+        "cleanup", help="마감 지났거나 오래 방치된 공모전을 DB에서 삭제(shift_alarm 자동 호출용)",
+    ).set_defaults(func=cmd_cleanup)
     sub.add_parser("doctor", help="실행 환경 점검").set_defaults(func=doctor)
     return p
 

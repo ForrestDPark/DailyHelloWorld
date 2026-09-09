@@ -1073,3 +1073,11 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
   나눴다 — 이제 5개 전환 휴무 기상 행(S→D, D→G, G→S 첫날/둘째날) 모두 자기
   프로필에서 항상 보인다. `build_sleep_schedule()` 출력으로 6개 기상 행(근무일
   1개 + 전환 휴무 4개) 전부 올바른 시각을 담고 있는지 직접 확인했다.
+
+## 85. 🧹 이직시스템·경진대회 자동 수집 후 오래된 데이터 정리 연결 (★ 2026-09-09 추가)
+
+`_run_job_collector_thread`/`_run_contest_collector_and_analysis`가 `collect` 직후
+`job_collector.py cleanup`/`contest_collector.py cleanup`(이직시스템 README #참고,
+2026-09-09 신설)을 자동 호출하도록 연결했다. 실패해도 원래 collect 결과·알림
+로직에는 영향 없게 별도 try/except로 감쌌다. 자세한 배경(재알림 방지 포함)은
+`이직시스템/README.md`의 "추천 재알림 방지 + 오래된 데이터 자동 정리" 항목 참고.

@@ -26,7 +26,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -1480,6 +1480,47 @@ def collect(args: argparse.Namespace) -> None:
     print(f"\n완료: 신규 {inserted}건 / 기존 갱신 {updated}건 / 중복 제거 후 {len(collected)}건")
 
 
+# ★ 2026-09-09: "신규 모집공고 114건 수집했다는데 관련 챗이 하나도 없다.
+# 사용 안하는 데이터는 알아서 정리하면 좋겠어" 지적 — collect가 매일
+# 수십~백여 건씩 쌓지만 실제로 사람이 보는 건 analyze-top이 category당 고르는
+# 1건뿐이라, 마감 지난 공고가 DB에 계속 쌓이기만 했다. 출처별 마감일 표기가
+# 제각각(콘테스트와 달리 "YYYY-MM-DD"가 아닌 상시채용·자유 텍스트도 흔함)이라
+# 깔끔히 파싱되는 것만 마감 기준으로, 나머지는 오래 방치된 것만 나이 기준으로
+# 지운다 — 마감·나이 둘 다 확실하지 않은 애매한 행은 잘못 지우느니 남겨둔다.
+JOB_STALE_DAYS = 30
+
+
+def cmd_cleanup(args: argparse.Namespace) -> None:
+    conn = connect(args.db)
+    today = datetime.now().date()
+    stale_cutoff = datetime.now() - timedelta(days=JOB_STALE_DAYS)
+    rows = conn.execute("SELECT id, deadline, first_seen_at FROM jobs").fetchall()
+    to_delete = []
+    for row in rows:
+        deadline_str = (row["deadline"] or "").strip()[:10]
+        parsed = None
+        try:
+            parsed = datetime.strptime(deadline_str, "%Y-%m-%d").date()
+        except ValueError:
+            parsed = None
+        if parsed and parsed < today:
+            to_delete.append(row["id"])
+            continue
+        try:
+            first_seen = datetime.fromisoformat(row["first_seen_at"]).replace(tzinfo=None)
+        except (TypeError, ValueError):
+            continue
+        if first_seen < stale_cutoff:
+            to_delete.append(row["id"])
+    if not to_delete:
+        print("정리 대상 없음 — 마감 지났거나 오래된 공고가 없습니다.")
+        return
+    placeholders = ",".join("?" for _ in to_delete)
+    conn.execute(f"DELETE FROM jobs WHERE id IN ({placeholders})", to_delete)
+    conn.commit()
+    print(f"정리 완료: 마감 지났거나 {JOB_STALE_DAYS}일 넘게 방치된 공고 {len(to_delete)}건 삭제")
+
+
 def list_jobs(args: argparse.Namespace) -> None:
     conn = connect(args.db)
     rows = conn.execute("""
@@ -2372,6 +2413,22 @@ def analyze_top_job(args: argparse.Namespace) -> None:
     used.add(f"{row['source']}:{row['source_id']}")
     _save_top_job_history(category, used)
 
+    # ★ 2026-09-09: contest_collector.py와 같은 이유(candidates 풀이 작으면
+    # no-repeat 로테이션이 매번 소진→리셋돼 같은 1위를 또 고르고, shift_alarm.py가
+    # "Notion 페이지 갱신 완료" 문구만 보고 "새 추천"으로 또 알림·채팅 트리거를
+    # 쏘는 문제) — 회사 경영 분석(DART·홈페이지 조회 등 비용이 큰 아래 단계) 전에
+    # 미리 걸러서, 어제와 같은 공고면 그 비용도 아끼고 알림도 반복하지 않는다.
+    prev_job_state_path = top_job_state_path(category)
+    prev_job_state = {}
+    if prev_job_state_path.exists():
+        try:
+            prev_job_state = json.loads(prev_job_state_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            prev_job_state = {}
+    if prev_job_state.get("job_url") == row["url"]:
+        print(f"ℹ️  1위 공고가 직전과 동일합니다({row['company']} — {row['title']}) — Notion 갱신·알림을 생략합니다.")
+        return
+
     token = _notion_token()
     if not token:
         print("⚠️  Notion 토큰(jp_subtitle_notion_token)이 키체인에 없어 Notion 페이지 갱신을 건너뜁니다.")
@@ -2545,6 +2602,9 @@ def parser() -> argparse.ArgumentParser:
         help="career=정규직 커리어 공고, parttime=알바·단기 공고 (2026-08-08 추가)",
     )
     at.set_defaults(func=analyze_top_job)
+    sub.add_parser(
+        "cleanup", help="마감 지났거나 오래 방치된 공고를 DB에서 삭제(shift_alarm 자동 호출용)",
+    ).set_defaults(func=cmd_cleanup)
     return p
 
 
