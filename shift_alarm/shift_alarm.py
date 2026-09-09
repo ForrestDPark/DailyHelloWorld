@@ -1236,7 +1236,8 @@ REMINDER_TIMES_SOURCE_PAGE_ID = "3d432a1e-ae80-8171-b8e1-e0d3c545a707"
 REMINDER_TIMES_SOURCE_PAGE_URL = (
     f"https://www.notion.so/{REMINDER_TIMES_SOURCE_PAGE_ID.replace('-', '')}"
 )
-REMINDER_TIMES_SYNC_INTERVAL_SECONDS = 900
+# 웹·Notion 시각표 수정이 실제 알람에 늦게 반영되지 않도록 1분마다 다시 읽는다.
+REMINDER_TIMES_SYNC_INTERVAL_SECONDS = 60
 
 # ★ 2026-09-07: "리마인더 시각표에 칼럼을 6개 더 만드는거야 각각 swing, day,
 # gy, s-d휴, d-g휴, g-s휴 일때의 시각이 달라야하는거지" 요청 — 표의 3번째
