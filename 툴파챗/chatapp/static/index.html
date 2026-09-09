@@ -20,7 +20,7 @@
 <meta name="twitter:title" content="툴파챗">
 <meta name="twitter:description" content="나만의 페르소나들과 이어가는 채팅">
 <meta name="twitter:image" content="/static/og-image.png">
-<link rel="stylesheet" href="/static/style.css?v=20260906-portal">
+<link rel="stylesheet" href="/static/style.css?v=20260909-notifications-v1">
 <!-- ★ "새 메시지 알림(웹 푸시)" 요청(2026-08-27) — iOS Safari는 PWA로
      "홈 화면에 추가"돼 있어야만 웹 푸시가 동작한다. manifest.json이 그
      설치 가능 상태를 만든다. -->
@@ -76,7 +76,8 @@
 
   <!-- 개인 시스템 전체의 시작점. 긴 친구/방 목록은 각각 별도 화면으로 분리한다. -->
   <div id="home-view" class="hidden">
-    <header class="portal-header"><a class="portal-brand" href="#home"><span>T</span><b>나의 작업실</b></a><button id="portal-account-btn" type="button" class="subtle-button">내 프로필</button></header>
+    <header class="portal-header"><a class="portal-brand" href="#home"><span>T</span><b>나의 작업실</b></a><div class="portal-header-actions"><button id="portal-notifications-btn" type="button" class="portal-notification-button" aria-label="알림 보기" aria-expanded="false"><svg aria-hidden="true"><use href="#icon-bell"/></svg><span id="portal-notification-badge" class="notification-count hidden"></span></button><button id="portal-account-btn" type="button" class="subtle-button">내 프로필</button></div></header>
+    <aside id="portal-notification-center" class="notification-center hidden" aria-label="알림"><div class="notification-center-head"><div><small>NOTIFICATIONS</small><h2>알림</h2></div><button id="portal-notification-close" type="button" aria-label="알림 닫기"><svg aria-hidden="true"><use href="#icon-close"/></svg></button></div><div id="portal-notification-list" class="notification-list"></div></aside>
     <main class="portal-main">
       <section class="portal-hero"><p class="portal-kicker">PERSONAL AI WORKSPACE</p><h1><span id="portal-greeting-name">오늘도</span>, 어디서 이어갈까요?</h1><p>대화와 공부, 구직 기록을 한곳에서 이어보세요.</p></section>
       <section class="portal-services" aria-label="시스템 바로가기">
@@ -288,6 +289,6 @@
     </div>
   </div>
 
-  <script src="/static/chat.js?v=20260906-portal"></script>
+  <script src="/static/chat.js?v=20260909-notifications-v1"></script>
 </body>
 </html>

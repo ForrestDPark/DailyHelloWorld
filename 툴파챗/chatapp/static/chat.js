@@ -1908,6 +1908,53 @@ document.addEventListener("click", (event) => {
 // 사람 목록은 실패해도(권한 없음 등) 조용히 빈 배열로 두고 방 목록은 그대로
 // 보여준다.
 let usersCache = [];
+let notificationCache = [];
+
+function renderPortalNotifications(data) {
+  notificationCache = data.items || [];
+  const badge = document.getElementById("portal-notification-badge");
+  const count = Number(data.unread_count || 0);
+  badge.textContent = count > 99 ? "99+" : String(count);
+  badge.classList.toggle("hidden", count === 0);
+  const list = document.getElementById("portal-notification-list");
+  list.replaceChildren();
+  if (!notificationCache.length) {
+    const empty = document.createElement("div");
+    empty.className = "notification-empty";
+    empty.textContent = "새로운 알림이 없습니다.";
+    list.append(empty);
+    return;
+  }
+  notificationCache.forEach((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `notification-item${item.unread ? " unread" : ""}`;
+    const dot = document.createElement("span"); dot.className = "notification-dot";
+    const copy = document.createElement("span"); copy.className = "notification-copy";
+    const title = document.createElement("b"); title.textContent = item.title;
+    const body = document.createElement("span"); body.textContent = item.body;
+    const kind = document.createElement("span"); kind.className = "notification-kind";
+    kind.textContent = item.type === "chat" ? "채팅" : "업데이트";
+    copy.append(title, body); button.append(dot, copy, kind);
+    button.addEventListener("click", async () => {
+      if (item.type === "system" && item.unread) {
+        await apiFetch("/api/notifications/read", {
+          method: "PUT", headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({notification_id: item.id}),
+        }).catch(() => null);
+      }
+      location.href = item.url;
+    });
+    list.append(button);
+  });
+}
+
+async function loadPortalNotifications() {
+  try {
+    const response = await apiFetch("/api/notifications");
+    renderPortalNotifications(await response.json());
+  } catch (error) { console.error(error); }
+}
 
 async function loadDirectoryData() {
   const rooms = await (await apiFetch("/api/rooms")).json();
@@ -1935,10 +1982,25 @@ async function showPortalHome(focusSystems = false) {
     const unread = rooms.reduce((sum, room) => sum + (Number(room.last_message_id || 0) > getLastRead(room.room_id) ? 1 : 0), 0);
     document.getElementById("portal-unread").textContent = unread;
   } catch (error) { console.error(error); }
+  loadPortalNotifications();
   if (focusSystems) document.querySelector(".portal-services")?.scrollIntoView({behavior:"smooth", block:"start"});
 }
 
 document.getElementById("portal-account-btn").addEventListener("click", () => document.getElementById("account-name-btn").click());
+document.getElementById("portal-notifications-btn").addEventListener("click", async () => {
+  const center = document.getElementById("portal-notification-center");
+  const opening = center.classList.contains("hidden");
+  center.classList.toggle("hidden", !opening);
+  document.getElementById("portal-notifications-btn").setAttribute("aria-expanded", String(opening));
+  if (opening) await loadPortalNotifications();
+});
+document.getElementById("portal-notification-close").addEventListener("click", () => {
+  document.getElementById("portal-notification-center").classList.add("hidden");
+  document.getElementById("portal-notifications-btn").setAttribute("aria-expanded", "false");
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") document.getElementById("portal-notification-close").click();
+});
 
 async function showRoomList() {
   currentRoom = null;

@@ -111,6 +111,30 @@ def push_enabled():
 APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
 MAX_CONTEXT_MESSAGES = 20
 
+# 홈·Shift Alarm이 함께 쓰는 시스템 업데이트 알림. ID는 한 번 배포한 뒤
+# 바꾸지 않아야 계정별 읽음 상태가 유지된다. 새 기능을 공개할 때 항목을
+# 위에 추가하면 별도의 외부 서비스 없이 알림 센터에 나타난다.
+SYSTEM_UPDATE_NOTIFICATIONS = (
+    {
+        "id": "system:2026-09-09:notification-center",
+        "title": "통합 알림 센터가 생겼습니다",
+        "body": "시스템 업데이트와 읽지 않은 툴파챗 메시지를 한곳에서 확인할 수 있습니다.",
+        "url": "/#home", "created_at": "2026-09-09T00:00:00+09:00",
+    },
+    {
+        "id": "system:2026-09-07:shift-alarm-schedule",
+        "title": "Shift Alarm 시각표가 개선됐습니다",
+        "body": "기상·멜라토닌 일정과 오늘 근무 유형 자동 선택이 추가됐습니다.",
+        "url": "/shift-alarm/", "created_at": "2026-09-07T20:11:00+09:00",
+    },
+    {
+        "id": "system:2026-09-07:epub-reader",
+        "title": "일본어 EPUB 읽기가 편해졌습니다",
+        "body": "세로 스크롤·자동 읽기·현재 구절 강조와 후리가나 표시를 개선했습니다.",
+        "url": "/epub/", "created_at": "2026-09-07T18:00:00+09:00",
+    },
+)
+
 SESSION_COOKIE_NAME = "tulpa_session"
 SESSION_COOKIE_MAX_AGE = auth.SESSION_MAX_AGE_SECONDS  # 180일
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_가-힣]{2,20}$")
@@ -2895,6 +2919,73 @@ def list_rooms(request: Request):
         room["last_read_id"] = read["last_message_id"] if read else 0
     conn.close()
     return rooms
+
+
+class NotificationReadUpdate(BaseModel):
+    notification_id: str
+
+
+@app.get("/api/notifications")
+def get_notifications(request: Request):
+    """계정별 시스템 업데이트와 읽지 않은 채팅방을 하나의 알림함으로 반환한다."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    username = user["username"]
+    rooms = list_rooms(request)
+    conn = get_conn()
+    read_system_ids = {
+        row["notification_id"] for row in conn.execute(
+            "SELECT notification_id FROM notification_reads WHERE username=?", (username,)
+        ).fetchall()
+    }
+    items = []
+    for update in SYSTEM_UPDATE_NOTIFICATIONS:
+        items.append({
+            **update, "type": "system", "unread": update["id"] not in read_system_ids,
+        })
+    for room in rooms:
+        last_id = int(room.get("last_message_id") or 0)
+        last_read = int(room.get("last_read_id") or 0)
+        if last_id <= last_read:
+            continue
+        count = conn.execute(
+            "SELECT COUNT(*) AS n FROM messages WHERE room_id=? AND id>?",
+            (room["room_id"], last_read),
+        ).fetchone()["n"]
+        if not count:
+            continue
+        items.append({
+            "id": f"chat:{room['room_id']}:{last_id}",
+            "type": "chat", "title": room["label"],
+            "body": f"읽지 않은 메시지 {count}개" + (
+                f" · {room['last_message']}" if room.get("last_message") else ""
+            ),
+            "url": f"/#room={urllib.parse.quote(room['room_id'], safe='')}",
+            "created_at": room.get("last_message_at") or "", "unread": True,
+        })
+    conn.close()
+    items.sort(key=lambda item: item.get("created_at") or "", reverse=True)
+    return {"items": items, "unread_count": sum(bool(item["unread"]) for item in items)}
+
+
+@app.put("/api/notifications/read")
+def mark_notification_read(body: NotificationReadUpdate, request: Request):
+    """시스템 업데이트 읽음을 계정별로 저장한다. 채팅 읽음은 방 진입 시 처리한다."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    known_ids = {item["id"] for item in SYSTEM_UPDATE_NOTIFICATIONS}
+    if body.notification_id not in known_ids:
+        raise HTTPException(status_code=404, detail="알림을 찾을 수 없습니다")
+    conn = get_conn()
+    conn.execute(
+        "INSERT OR REPLACE INTO notification_reads(username,notification_id,read_at) VALUES(?,?,?)",
+        (user["username"], body.notification_id, _now()),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
 
 
 @app.get("/api/messages")

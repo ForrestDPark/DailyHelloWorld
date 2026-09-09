@@ -15,6 +15,12 @@ def owner_request():
     return SimpleNamespace(state=SimpleNamespace(user=None, can_write=True, share_guest=False))
 
 
+def signed_in_request(username="tester"):
+    return SimpleNamespace(state=SimpleNamespace(
+        user={"username": username, "is_owner": False}, can_write=True, share_guest=False
+    ))
+
+
 class ShiftAlarmApiTests(unittest.TestCase):
     def pipeline_conn(self, path=":memory:"):
         conn = sqlite3.connect(path)
@@ -100,6 +106,63 @@ class ShiftAlarmApiTests(unittest.TestCase):
              self.assertRaises(HTTPException) as raised:
             module.start_shift_alarm_sunzi_analysis(owner_request())
         self.assertEqual(raised.exception.status_code, 409)
+
+    def test_notifications_combine_system_updates_and_unread_chat(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "notifications.db"
+            conn = sqlite3.connect(db_path)
+            conn.executescript("""
+                CREATE TABLE notification_reads (
+                    username TEXT, notification_id TEXT, read_at TEXT,
+                    PRIMARY KEY (username, notification_id)
+                );
+                CREATE TABLE messages (
+                    id INTEGER PRIMARY KEY, room_id TEXT, sender TEXT,
+                    content TEXT, created_at TEXT
+                );
+                INSERT INTO messages VALUES (2, 'room-a', '친구', '새 소식', '2026-09-09T10:00:00+09:00');
+            """)
+            conn.commit()
+            conn.close()
+
+            def connection():
+                opened = sqlite3.connect(db_path)
+                opened.row_factory = sqlite3.Row
+                return opened
+
+            room = {"room_id": "room-a", "label": "테스트 방", "last_message_id": 2,
+                    "last_read_id": 0, "last_message": "새 소식",
+                    "last_message_at": "2026-09-09T10:00:00+09:00"}
+            with patch.object(module, "get_conn", side_effect=connection), \
+                 patch.object(module, "list_rooms", return_value=[room]):
+                result = module.get_notifications(signed_in_request())
+        self.assertEqual(result["items"][0]["type"], "chat")
+        self.assertEqual(result["items"][0]["url"], "/#room=room-a")
+        self.assertEqual(result["unread_count"], len(module.SYSTEM_UPDATE_NOTIFICATIONS) + 1)
+
+    def test_system_notification_read_is_account_specific(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "notification-read.db"
+            conn = sqlite3.connect(db_path)
+            conn.execute("CREATE TABLE notification_reads (username TEXT, notification_id TEXT, read_at TEXT, PRIMARY KEY (username, notification_id))")
+            conn.commit()
+            conn.close()
+
+            def connection():
+                opened = sqlite3.connect(db_path)
+                opened.row_factory = sqlite3.Row
+                return opened
+
+            notification_id = module.SYSTEM_UPDATE_NOTIFICATIONS[0]["id"]
+            with patch.object(module, "get_conn", side_effect=connection):
+                module.mark_notification_read(
+                    module.NotificationReadUpdate(notification_id=notification_id),
+                    signed_in_request("alice"),
+                )
+            check = sqlite3.connect(db_path)
+            rows = check.execute("SELECT username, notification_id FROM notification_reads").fetchall()
+            check.close()
+        self.assertEqual(rows, [("alice", notification_id)])
 
 
 if __name__ == "__main__":

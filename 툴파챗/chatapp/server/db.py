@@ -132,6 +132,12 @@ def init_db():
             updated_at TEXT NOT NULL,
             PRIMARY KEY (username, room_id)
         );
+        CREATE TABLE IF NOT EXISTS notification_reads (
+            username TEXT NOT NULL,
+            notification_id TEXT NOT NULL,
+            read_at TEXT NOT NULL,
+            PRIMARY KEY (username, notification_id)
+        );
         CREATE TABLE IF NOT EXISTS user_room_backgrounds (
             username TEXT NOT NULL,
             room_id TEXT NOT NULL,
