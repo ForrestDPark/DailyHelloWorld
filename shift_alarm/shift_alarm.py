@@ -2392,8 +2392,15 @@ def build_sleep_schedule():
             "Swing": SHIFT_TIMES["Swing"], "Day": SHIFT_TIMES["Day"],
             "GY": SHIFT_TIMES["GY"],
         }),
-        row("wake_transition", "⏰ 기상 알람 (전환 휴무)", {
+        # ★ 2026-09-09: "휴무일 기상알람이 G-S 때밖에 없다" 지적 — S-D휴·D-G휴를
+        # 한 행("전환 휴무")에 같이 넣어뒀더니, 값 자체는 있어도 웹 표가 프로필
+        # 하나만 골라 그 칼럼 값만 보여주는 구조라 G-S휴 프로필로 볼 때는 이
+        # 행이 통째로 빈칸으로 보였다(반대도 마찬가지). G-S휴처럼 전환마다
+        # 별도 행으로 쪼개서 어떤 프로필을 보든 항상 자기 값이 보이게 한다.
+        row("wake_swing_to_day", "⏰ 기상 알람 (S→D 휴무 마지막날)", {
             "S-D휴": SWING_TO_DAY_LAST_DAY_WAKE_ALARM_TIME,
+        }),
+        row("wake_day_to_gy", "⏰ 기상 알람 (D→G 휴무)", {
             "D-G휴": DAY_TO_GY_OFF_ALARM_TIME,
         }),
         row("wake_gy_swing_day1", "⏰ 기상 알람 (G→S 휴무 첫날)", {
