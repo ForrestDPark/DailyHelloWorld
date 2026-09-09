@@ -1357,6 +1357,15 @@ drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese 
         FINAL_BOOKS_EPUB="${COMPLETED_EPUB_DIR}/${READALOUD_EPUB:t}"
         if cp "$READALOUD_EPUB" "$FINAL_BOOKS_EPUB"; then
             echo "📖 낭독판 EPUB 완성작 폴더 복사 완료"
+            # ★ 2026-09-10: "가장 최신에 한 AKDL-370이 왜 완성작 폴더에 없지?"
+            # 문의로 확인한 원인 — 웹 리더(com.tulpachat.epub-reader)는 서버
+            # 시작 시 한 번만 av완성작을 스캔하고 이후 자동 재스캔이 없어서,
+            # 서버를 껐다 켜지 않는 한 새로 완성된 책이 안 보였다(재스캔
+            # API는 소유자 로그인 세션이 필요해 파이프라인에서 바로 못 부름).
+            # 새 낭독판을 복사할 때마다 서비스를 재시작해 다음 스캔 때
+            # 곧바로 목록에 뜨게 한다 — 실패해도 EPUB 자체는 이미 복사됐으니
+            # 파이프라인 성공 여부와 무관하게 조용히 넘어간다.
+            launchctl kickstart -k "gui/$(id -u)/com.tulpachat.epub-reader" >/dev/null 2>&1
             # 작업 폴더와 배포 위치에는 낭독판 EPUB 하나만 남긴다.
             # library 안의 일반 EPUB은 재빌드용 내부 자료로 보존한다.
             rm -f "$OUTPUT_EPUB"
@@ -1387,7 +1396,8 @@ drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese 
     # 낭독판 EPUB이 실패했을 때만 일반 EPUB을 비상 결과물로 배포한다.
     if (( READALOUD_SUCCESS == 0 )) && [[ -f "$OUTPUT_EPUB" ]]; then
         cp "$OUTPUT_EPUB" "$COMPLETED_EPUB_DIR/" \
-            && echo "📚 낭독판 실패로 일반 EPUB을 비상 보존"
+            && echo "📚 낭독판 실패로 일반 EPUB을 비상 보존" \
+            && launchctl kickstart -k "gui/$(id -u)/com.tulpachat.epub-reader" >/dev/null 2>&1
     fi
 
     echo "\033[1;32m[$FILENAME_NO_EXT] 전체 완료!\033[0m"
