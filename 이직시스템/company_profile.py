@@ -726,7 +726,7 @@ def _notion_request(method: str, path: str, token: str, payload: dict[str, Any] 
         raise RuntimeError(f"Notion API {method} {path} HTTP {exc.code}: {detail}") from exc
 
 
-def _notion_publish(token: str, title: str, blocks: list[dict[str, Any]], state_path: Path) -> str:
+def _notion_publish(token: str, title: str, blocks: list[dict[str, Any]], state_path: Path, analysis_text: str | None = None) -> str:
     """회사별로 별도 상태 파일(company_profiles/<회사명>.json)에 page_id를 저장해서,
     같은 회사를 다시 분석하면 새 페이지 대신 기존 페이지를 갱신한다."""
     state = {}
@@ -763,7 +763,7 @@ def _notion_publish(token: str, title: str, blocks: list[dict[str, Any]], state_
 
     url = f"https://www.notion.so/{page_id.replace('-', '')}"
     state_path.parent.mkdir(parents=True, exist_ok=True)
-    state_path.write_text(json.dumps({"page_id": page_id, "url": url}, ensure_ascii=False, indent=2), encoding="utf-8")
+    state_path.write_text(json.dumps({"page_id": page_id, "url": url, "analysis_text": analysis_text or state.get("analysis_text", "")}, ensure_ascii=False, indent=2), encoding="utf-8")
     return url
 
 
@@ -843,7 +843,7 @@ def analyze_company(args: argparse.Namespace) -> None:
     safe_name = re.sub(r"[^\w가-힣-]+", "_", company_name)
     state_path = COMPANY_PROFILE_STATE_DIR / f"{safe_name}.json"
     try:
-        url = _notion_publish(token, title, blocks, state_path)
+        url = _notion_publish(token, title, blocks, state_path, text)
     except RuntimeError as exc:
         print(f"⚠️  Notion 페이지 갱신 실패: {exc}")
         print(text)

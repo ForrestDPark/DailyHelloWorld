@@ -1043,6 +1043,30 @@ def career_contests(request: Request, q: str = "", source: str = "", sort: str =
     finally: conn.close()
 
 
+@app.get("/api/career-company-analysis")
+def career_company_analysis(request: Request, company: str):
+    _require_owner(request)
+    company = company.strip()
+    if not company or len(company) > 160: raise HTTPException(status_code=400, detail="회사명이 올바르지 않습니다")
+    conn = sqlite3.connect(str(CAREER_DATA_DIR / "jobs.db")); conn.row_factory = sqlite3.Row
+    try:
+        rows = conn.execute("SELECT title,skills,location,employment_type,score,last_seen_at,url FROM jobs WHERE company=? ORDER BY last_seen_at DESC LIMIT 30", (company,)).fetchall()
+    finally: conn.close()
+    skill_counts = {}
+    for row in rows:
+        for skill in re.split(r"[,/|·]+", row["skills"] or ""):
+            skill = skill.strip()
+            if skill: skill_counts[skill] = skill_counts.get(skill, 0) + 1
+    state_url, analysis_text = _company_profile_url(company), ""
+    safe_name = re.sub(r"[^\w가-힣-]+", "_", company)
+    state_path = CAREER_DATA_DIR / "company_profiles" / f"{safe_name}.json"
+    try: analysis_text = json.loads(state_path.read_text(encoding="utf-8")).get("analysis_text", "")
+    except (OSError, json.JSONDecodeError): pass
+    return {"company": company, "posting_count": len(rows), "latest": rows[0]["last_seen_at"] if rows else None,
+            "roles": [dict(row) for row in rows[:10]], "top_skills": sorted(skill_counts.items(), key=lambda x: (-x[1], x[0]))[:10],
+            "analysis_text": analysis_text, "legacy_notion_url": state_url}
+
+
 class SignupRequest(BaseModel):
     username: str
     password: str

@@ -1277,7 +1277,7 @@ def _generate_company_profile_url(token: str, company: str, cwd: Path) -> str | 
         safe_name = re.sub(r"[^\w가-힣-]+", "_", company)
         state_path = COMPANY_PROFILE_STATE_DIR / f"{safe_name}.json"
         is_new_company = not state_path.exists()
-        company_url = company_publish(token, company_title, company_blocks(company_text), state_path)
+        company_url = company_publish(token, company_title, company_blocks(company_text), state_path, company_text)
         if is_new_company:
             try:
                 record_top_index_entry(token, "company", company_title, company_url)
@@ -2488,7 +2488,7 @@ def analyze_top_job(args: argparse.Namespace) -> None:
         safe_name = re.sub(r"[^\w가-힣-]+", "_", row["company"])
         state_path = COMPANY_PROFILE_STATE_DIR / f"{safe_name}.json"
         is_new_company = not state_path.exists()  # ★ 2026-08-09: 처음 보는 회사일 때만 최상단 인덱스에 기록(재갱신은 중복 방지)
-        company_notion_url = company_publish(token, company_title, company_blocks(company_text), state_path)
+        company_notion_url = company_publish(token, company_title, company_blocks(company_text), state_path, company_text)
         print(f"✅ 기업 경영 분석 페이지도 갱신: {company_notion_url}")
         if is_new_company:
             try:
