@@ -29,6 +29,7 @@ worker/persona_worker.py가 이 서버를 폴링해서 처리한다(자세한 �
 import base64
 import datetime
 import hashlib
+import html
 import json
 import os
 import re
@@ -872,6 +873,64 @@ def _career_preparation(text: str, contest: bool = False):
     return {"study": list(dict.fromkeys(study))[:5], "certificates": list(dict.fromkeys(certs))[:4], "notice": "자격증은 필수요건이 아니라 직무 연관성을 확인할 후보입니다."}
 
 
+def _source_grounded_preparation(text: str):
+    normalized = re.sub(r"[ \t]+", " ", text or "")
+    markers = [(m.start(), m.group(1)) for m in re.finditer(r"(?im)^(주요업무|담당업무|직무내용|자격요건|지원자격|필수사항|우대사항|공모내용|참가자격|평가기준)\s*[:：]?", normalized)]
+    sections = {}
+    for i, (start, name) in enumerate(markers):
+        end = markers[i + 1][0] if i + 1 < len(markers) else min(len(normalized), start + 2200)
+        body = normalized[start:end].strip()
+        if body: sections.setdefault(name, body[:1800])
+    evidence = "\n".join(sections.values()) or normalized[:5000]
+    topics = [
+        ("Python", ("python",)), ("SQL·데이터베이스", ("sql", "database", "데이터베이스")),
+        ("REST API 설계", ("rest", "api")), ("클라우드·배포", ("aws", "gcp", "azure", "docker", "kubernetes")),
+        ("머신러닝 모델링", ("머신러닝", "machine learning", "딥러닝", "pytorch", "tensorflow")),
+        ("데이터 분석·통계", ("데이터 분석", "통계", "pandas")), ("반도체 공정", ("반도체", "공정", "tcad")),
+        ("품질관리", ("품질", "six sigma", "6시그마")), ("프로젝트·발표 준비", ("평가기준", "발표", "포트폴리오")),
+    ]
+    lowered = evidence.lower()
+    study = [{"topic": label, "evidence": next(key for key in keys if key in lowered)} for label, keys in topics if any(key in lowered for key in keys)]
+    cert_names = ("정보처리기사", "SQLD", "SQLP", "ADsP", "ADP", "빅데이터분석기사", "품질경영기사", "산업안전기사", "전기기사", "전자기사", "토익", "TOEIC", "OPIc")
+    certificates = [name for name in cert_names if name.lower() in lowered]
+    return {"sections": sections, "study": study[:8], "certificates": certificates, "grounded": bool(markers), "notice": "공부 항목과 자격증은 아래 원문에서 실제 확인된 내용만 표시합니다."}
+
+
+@app.get("/api/career-source-analysis")
+def career_source_analysis(request: Request, kind: str, source: str, source_id: str):
+    _require_owner(request)
+    table, db_name = ("contests", "contests.db") if kind == "contest" else ("jobs", "jobs.db")
+    db_path = CAREER_DATA_DIR / db_name
+    conn = sqlite3.connect(str(db_path)); conn.row_factory = sqlite3.Row
+    try:
+        row = conn.execute(f"SELECT url,title FROM {table} WHERE source=? AND source_id=?", (source, source_id)).fetchone()
+    finally: conn.close()
+    if not row: raise HTTPException(status_code=404, detail="수집된 항목을 찾지 못했습니다")
+    cache_dir = CAREER_DATA_DIR / "web_source_cache"; cache_dir.mkdir(exist_ok=True)
+    cache_path = cache_dir / (hashlib.sha256(f"{kind}:{source}:{source_id}".encode()).hexdigest() + ".json")
+    if cache_path.exists():
+        try: return json.loads(cache_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError): pass
+    url = row["url"]
+    if "사람인" in source and source_id.isdigit():
+        url = f"https://www.saramin.co.kr/zf_user/jobs/view?rec_idx={source_id}"
+    if not re.match(r"^https://", url or ""): raise HTTPException(status_code=400, detail="안전한 원문 주소가 아닙니다")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 CareerDashboard/1.0"})
+        with urllib.request.urlopen(req, timeout=15) as response:
+            raw = response.read(2_000_000).decode(response.headers.get_content_charset() or "utf-8", errors="replace")
+        raw = re.sub(r"(?is)<(script|style|svg).*?</\1>", " ", raw)
+        text = html.unescape(re.sub(r"(?s)<[^>]+>", "\n", raw))
+        text = re.sub(r"\n{3,}", "\n\n", text).strip()
+        result = {"ok": True, "title": row["title"], "preparation": _source_grounded_preparation(text), "fetched_at": _now()}
+    except Exception as exc:
+        result = {"ok": False, "detail": "원문 본문을 가져오지 못했습니다. 원문 링크에서 직접 확인해 주세요.", "error_type": type(exc).__name__}
+    if result.get("ok"):
+        try: cache_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        except OSError: pass
+    return result
+
+
 def _company_profile_url(company: str):
     safe_name = re.sub(r"[^\w가-힣-]+", "_", company or "")
     path = CAREER_DATA_DIR / "company_profiles" / f"{safe_name}.json"
@@ -947,7 +1006,7 @@ def career_jobs(request: Request, q: str = "", source: str = "", sort: str = "re
         jobs = []
         for row in rows:
             item = dict(row)
-            item["preparation"] = _career_preparation(" ".join(str(item.get(k) or "") for k in ("title", "skills", "matched_query")))
+            item["preparation"] = None
             item["company_analysis_url"] = _company_profile_url(item.get("company", ""))
             item["analysis_url"] = _published_analysis_url("job", item.get("title", ""), item.get("company", ""))
             jobs.append(item)
@@ -977,7 +1036,7 @@ def career_contests(request: Request, q: str = "", source: str = "", sort: str =
         sources = [r[0] for r in conn.execute("SELECT DISTINCT source FROM contests ORDER BY source")]
         items = []
         for row in rows:
-            item = dict(row); item["kind"] = "contest"; item["preparation"] = _career_preparation(f"{item['title']} {item['matched_query']}", True); item["analysis_url"] = _published_analysis_url("contest", item["title"], item.get("company", "")); items.append(item)
+            item = dict(row); item["kind"] = "contest"; item["preparation"] = None; item["analysis_url"] = _published_analysis_url("contest", item["title"], item.get("company", "")); items.append(item)
         return {"jobs": items, "total": total, "stats": stats, "sources": sources, "limit": limit, "offset": offset}
     finally: conn.close()
 
