@@ -865,6 +865,46 @@ def career_summary(request: Request):
     }
 
 
+@app.get("/api/career-jobs")
+def career_jobs(request: Request, q: str = "", source: str = "", sort: str = "recent", limit: int = 40, offset: int = 0):
+    """소유자에게 수집 DB의 공고를 웹앱용으로 페이지 단위 제공한다."""
+    _require_owner(request)
+    db_path = CAREER_DATA_DIR / "jobs.db"
+    if not db_path.exists():
+        return {"jobs": [], "total": 0, "stats": {}, "sources": []}
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+    where, params = [], []
+    if q.strip():
+        needle = f"%{q.strip()}%"
+        where.append("(title LIKE ? OR company LIKE ? OR location LIKE ? OR skills LIKE ? OR matched_query LIKE ?)")
+        params.extend([needle] * 5)
+    if source.strip():
+        where.append("source = ?")
+        params.append(source.strip())
+    clause = " WHERE " + " AND ".join(where) if where else ""
+    order = {"score": "score DESC, last_seen_at DESC", "deadline": "CASE WHEN deadline='' THEN 1 ELSE 0 END, deadline ASC", "new": "first_seen_at DESC"}.get(sort, "last_seen_at DESC")
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        total = conn.execute(f"SELECT COUNT(*) FROM jobs{clause}", params).fetchone()[0]
+        rows = conn.execute(
+            f"""SELECT source, source_id, title, company, url, location, experience,
+                       education, employment_type, salary, posted_at, deadline, skills,
+                       score, matched_query, status, first_seen_at, last_seen_at
+                FROM jobs{clause} ORDER BY {order} LIMIT ? OFFSET ?""",
+            [*params, limit, offset],
+        ).fetchall()
+        stats = dict(conn.execute("""SELECT COUNT(*) AS total,
+            SUM(date(first_seen_at)=date('now','localtime')) AS today_new,
+            SUM(date(last_seen_at)=date('now','localtime')) AS today_seen,
+            MAX(last_seen_at) AS latest FROM jobs""").fetchone())
+        sources = [row[0] for row in conn.execute("SELECT DISTINCT source FROM jobs ORDER BY source")]
+        return {"jobs": [dict(row) for row in rows], "total": total, "stats": stats, "sources": sources, "limit": limit, "offset": offset}
+    finally:
+        conn.close()
+
+
 class SignupRequest(BaseModel):
     username: str
     password: str
