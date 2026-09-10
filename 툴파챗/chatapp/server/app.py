@@ -851,6 +851,37 @@ def _read_career_card(filename: str):
     return result
 
 
+def _career_preparation(text: str, contest: bool = False):
+    """AI 호출 없이 제목·기술 신호로 안전한 학습/자격 후보를 제시한다."""
+    haystack = (text or "").lower()
+    rules = [
+        (("python", "백엔드", "개발자"), ["Python 실전 프로젝트", "API·데이터베이스 설계", "테스트·배포 자동화"], ["정보처리기사", "SQLD"]),
+        (("ai", "인공지능", "데이터", "머신러닝"), ["데이터 전처리와 검증", "모델 평가·오류 분석", "작은 결과물 포트폴리오"], ["ADsP", "SQLD"]),
+        (("반도체", "공정", "tcad", "품질"), ["반도체 공정 기초", "통계적 품질관리", "공정 데이터 분석"], ["품질경영기사", "산업안전기사"]),
+        (("전기", "설비", "시설"), ["전기 회로·설비 기초", "안전 규정과 점검", "설비 이력 데이터화"], ["전기기사", "산업안전기사"]),
+        (("마케팅", "기획", "사업"), ["시장·고객 문제 정의", "성과지표 설계", "제안서 사례 만들기"], ["사회조사분석사"]),
+    ]
+    study, certs = [], []
+    for keys, topics, licenses in rules:
+        if any(key in haystack for key in keys):
+            study.extend(topics); certs.extend(licenses)
+    if contest:
+        study.extend(["평가기준 역산", "베이스라인 구현", "실험 기록과 발표 자료"])
+    if not study:
+        study = ["공고 원문의 필수요건 분해", "관련 미니 프로젝트", "성과 중심 사례 정리"]
+    return {"study": list(dict.fromkeys(study))[:5], "certificates": list(dict.fromkeys(certs))[:4], "notice": "자격증은 필수요건이 아니라 직무 연관성을 확인할 후보입니다."}
+
+
+def _company_profile_url(company: str):
+    safe_name = re.sub(r"[^\w가-힣-]+", "_", company or "")
+    path = CAREER_DATA_DIR / "company_profiles" / f"{safe_name}.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+    except (OSError, json.JSONDecodeError):
+        data = None
+    return data.get("url") if isinstance(data, dict) else None
+
+
 @app.get("/api/career-summary")
 def career_summary(request: Request):
     """소유자에게만 최신 추천 요약을 제공한다.
@@ -900,9 +931,41 @@ def career_jobs(request: Request, q: str = "", source: str = "", sort: str = "re
             SUM(date(last_seen_at)=date('now','localtime')) AS today_seen,
             MAX(last_seen_at) AS latest FROM jobs""").fetchone())
         sources = [row[0] for row in conn.execute("SELECT DISTINCT source FROM jobs ORDER BY source")]
-        return {"jobs": [dict(row) for row in rows], "total": total, "stats": stats, "sources": sources, "limit": limit, "offset": offset}
+        jobs = []
+        for row in rows:
+            item = dict(row)
+            item["preparation"] = _career_preparation(" ".join(str(item.get(k) or "") for k in ("title", "skills", "matched_query")))
+            item["company_analysis_url"] = _company_profile_url(item.get("company", ""))
+            jobs.append(item)
+        return {"jobs": jobs, "total": total, "stats": stats, "sources": sources, "limit": limit, "offset": offset}
     finally:
         conn.close()
+
+
+@app.get("/api/career-contests")
+def career_contests(request: Request, q: str = "", source: str = "", sort: str = "recent", limit: int = 40, offset: int = 0):
+    _require_owner(request)
+    db_path = CAREER_DATA_DIR / "contests.db"
+    if not db_path.exists():
+        return {"jobs": [], "total": 0, "stats": {}, "sources": []}
+    limit, offset = max(1, min(limit, 100)), max(0, offset)
+    where, params = [], []
+    if q.strip():
+        needle = f"%{q.strip()}%"; where.append("(title LIKE ? OR organizer LIKE ? OR matched_query LIKE ?)"); params.extend([needle] * 3)
+    if source.strip(): where.append("source = ?"); params.append(source.strip())
+    clause = " WHERE " + " AND ".join(where) if where else ""
+    order = {"score": "score DESC, last_seen_at DESC", "deadline": "CASE WHEN deadline='' THEN 1 ELSE 0 END, deadline ASC", "new": "first_seen_at DESC"}.get(sort, "last_seen_at DESC")
+    conn = sqlite3.connect(str(db_path)); conn.row_factory = sqlite3.Row
+    try:
+        total = conn.execute(f"SELECT COUNT(*) FROM contests{clause}", params).fetchone()[0]
+        rows = conn.execute(f"SELECT source,source_id,title,organizer AS company,url,deadline,score,matched_query,first_seen_at,last_seen_at FROM contests{clause} ORDER BY {order} LIMIT ? OFFSET ?", [*params, limit, offset]).fetchall()
+        stats = dict(conn.execute("SELECT COUNT(*) total,SUM(date(first_seen_at)=date('now','localtime')) today_new,SUM(date(last_seen_at)=date('now','localtime')) today_seen,MAX(last_seen_at) latest FROM contests").fetchone())
+        sources = [r[0] for r in conn.execute("SELECT DISTINCT source FROM contests ORDER BY source")]
+        items = []
+        for row in rows:
+            item = dict(row); item["kind"] = "contest"; item["preparation"] = _career_preparation(f"{item['title']} {item['matched_query']}", True); items.append(item)
+        return {"jobs": items, "total": total, "stats": stats, "sources": sources, "limit": limit, "offset": offset}
+    finally: conn.close()
 
 
 class SignupRequest(BaseModel):
