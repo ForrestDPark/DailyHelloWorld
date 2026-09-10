@@ -875,13 +875,15 @@ def _career_preparation(text: str, contest: bool = False):
 
 def _source_grounded_preparation(text: str):
     normalized = re.sub(r"[ \t]+", " ", text or "")
-    markers = [(m.start(), m.group(1)) for m in re.finditer(r"(?im)^(주요업무|담당업무|직무내용|자격요건|지원자격|필수사항|우대사항|공모내용|참가자격|평가기준)\s*[:：]?", normalized)]
+    markers = [(m.start(), m.group(1)) for m in re.finditer(r"(?im)(?:^|\n)\s*(주요업무|담당업무|직무내용|자격요건|지원자격(?:\s*및\s*우대사항)?|필수사항|우대사항|공모내용|참가자격|평가기준)\s*[:：]?", normalized)]
     sections = {}
     for i, (start, name) in enumerate(markers):
         end = markers[i + 1][0] if i + 1 < len(markers) else min(len(normalized), start + 2200)
         body = normalized[start:end].strip()
         if body: sections.setdefault(name, body[:1800])
-    evidence = "\n".join(sections.values()) or normalized[:5000]
+    evidence = "\n".join(sections.values())
+    if not evidence:
+        return {"sections": {}, "study": [], "certificates": [], "grounded": False, "notice": "원문에서 자격요건·우대사항 구획을 확인하지 못해 준비 항목을 만들지 않았습니다."}
     topics = [
         ("Python", ("python",)), ("SQL·데이터베이스", ("sql", "database", "데이터베이스")),
         ("REST API 설계", ("rest", "api")), ("클라우드·배포", ("aws", "gcp", "azure", "docker", "kubernetes")),
@@ -907,7 +909,7 @@ def career_source_analysis(request: Request, kind: str, source: str, source_id: 
     finally: conn.close()
     if not row: raise HTTPException(status_code=404, detail="수집된 항목을 찾지 못했습니다")
     cache_dir = CAREER_DATA_DIR / "web_source_cache"; cache_dir.mkdir(exist_ok=True)
-    cache_path = cache_dir / (hashlib.sha256(f"{kind}:{source}:{source_id}".encode()).hexdigest() + ".json")
+    cache_path = cache_dir / (hashlib.sha256(f"v2:{kind}:{source}:{source_id}".encode()).hexdigest() + ".json")
     if cache_path.exists():
         try: return json.loads(cache_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError): pass
