@@ -1996,7 +1996,7 @@ function showSunziView() {
   authView.classList.add("hidden"); homeView.classList.add("hidden"); roomListView.classList.add("hidden"); chatView.classList.add("hidden");
   sunziView.classList.remove("hidden");
   const frame = document.getElementById("sunzi-frame");
-  if (!frame.src) frame.src = frame.dataset.src;
+  if (!frame.getAttribute("src")) frame.setAttribute("src", frame.dataset.src);
 }
 
 document.getElementById("sunzi-back-btn").addEventListener("click", () => { location.hash = "#home"; });
