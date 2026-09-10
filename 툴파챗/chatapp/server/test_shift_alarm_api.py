@@ -2,6 +2,7 @@ import json
 import sqlite3
 import tempfile
 import unittest
+import urllib.error
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -163,6 +164,23 @@ class ShiftAlarmApiTests(unittest.TestCase):
             rows = check.execute("SELECT username, notification_id FROM notification_reads").fetchall()
             check.close()
         self.assertEqual(rows, [("alice", notification_id)])
+
+    def test_career_source_analysis_uses_visual_fallback_after_html_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            data_dir = Path(directory)
+            conn = sqlite3.connect(data_dir / "jobs.db")
+            conn.execute("CREATE TABLE jobs (source TEXT, source_id TEXT, title TEXT, url TEXT)")
+            conn.execute("INSERT INTO jobs VALUES ('테스트','1','백엔드 개발자','https://example.com/job')")
+            conn.commit(); conn.close()
+            visual = "주요업무\nPython API 개발\n자격요건\nSQL 경험\n우대사항\nDocker 경험"
+            fake_collector = SimpleNamespace(fetch_job_detail_via_screenshot=lambda *_: visual)
+            with patch.object(module, "CAREER_DATA_DIR", data_dir), \
+                 patch.dict("sys.modules", {"job_collector": fake_collector}), \
+                 patch("urllib.request.urlopen", side_effect=urllib.error.URLError("blocked")):
+                result = module.career_source_analysis(owner_request(), "job", "테스트", "1")
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["extraction"], "visual")
+        self.assertIn("자격요건", result["preparation"]["sections"])
 
 
 if __name__ == "__main__":

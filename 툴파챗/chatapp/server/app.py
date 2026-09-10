@@ -36,6 +36,7 @@ import re
 import secrets
 import sqlite3
 import subprocess
+import sys
 import threading
 import urllib.error
 import urllib.parse
@@ -59,6 +60,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = BASE_DIR.parent.parent
 CAREER_WEB_DIR = REPO_ROOT / "이직시스템" / "web_dashboard"
 CAREER_DATA_DIR = REPO_ROOT / "이직시스템" / "data"
+CAREER_SYSTEM_DIR = REPO_ROOT / "이직시스템"
 SHIFT_ALARM_DASHBOARD_DIR = BASE_DIR / "shift_alarm_dashboard"
 SHIFT_ALARM_STATUS_FILE = Path(os.path.expanduser(
     "~/Library/Mobile Documents/com~apple~CloudDocs/ShiftAlarmStatus/status.json"
@@ -909,7 +911,7 @@ def career_source_analysis(request: Request, kind: str, source: str, source_id: 
     finally: conn.close()
     if not row: raise HTTPException(status_code=404, detail="수집된 항목을 찾지 못했습니다")
     cache_dir = CAREER_DATA_DIR / "web_source_cache"; cache_dir.mkdir(exist_ok=True)
-    cache_path = cache_dir / (hashlib.sha256(f"v2:{kind}:{source}:{source_id}".encode()).hexdigest() + ".json")
+    cache_path = cache_dir / (hashlib.sha256(f"v3:{kind}:{source}:{source_id}".encode()).hexdigest() + ".json")
     if cache_path.exists():
         try: return json.loads(cache_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError): pass
@@ -917,6 +919,8 @@ def career_source_analysis(request: Request, kind: str, source: str, source_id: 
     if "사람인" in source and source_id.isdigit():
         url = f"https://www.saramin.co.kr/zf_user/jobs/view?rec_idx={source_id}"
     if not re.match(r"^https://", url or ""): raise HTTPException(status_code=400, detail="안전한 원문 주소가 아닙니다")
+    text = ""
+    fetch_error = None
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 CareerDashboard/1.0"})
         with urllib.request.urlopen(req, timeout=15) as response:
@@ -924,10 +928,33 @@ def career_source_analysis(request: Request, kind: str, source: str, source_id: 
         raw = re.sub(r"(?is)<(script|style|svg).*?</\1>", " ", raw)
         text = html.unescape(re.sub(r"(?s)<[^>]+>", "\n", raw))
         text = re.sub(r"\n{3,}", "\n\n", text).strip()
-        result = {"ok": True, "title": row["title"], "preparation": _source_grounded_preparation(text), "fetched_at": _now()}
     except Exception as exc:
-        result = {"ok": False, "detail": "원문 본문을 가져오지 못했습니다. 원문 링크에서 직접 확인해 주세요.", "error_type": type(exc).__name__}
-    if result.get("ok"):
+        fetch_error = type(exc).__name__
+
+    preparation = _source_grounded_preparation(text)
+    extraction = "html"
+    # 정적 요청 자체가 실패했거나 실제 공고 구획이 없으면 JS 렌더링/이미지형
+    # 공고일 수 있다. 이때만 Playwright → 화면 캡처 → 비전 판독으로 재시도한다.
+    if kind == "job" and not preparation["grounded"]:
+        try:
+            if str(CAREER_SYSTEM_DIR) not in sys.path:
+                sys.path.insert(0, str(CAREER_SYSTEM_DIR))
+            from job_collector import fetch_job_detail_via_screenshot
+            visual_text = fetch_job_detail_via_screenshot(url, CAREER_SYSTEM_DIR)
+            if visual_text:
+                preparation = _source_grounded_preparation(visual_text)
+                if preparation["grounded"]:
+                    extraction = "visual"
+        except Exception as exc:
+            fetch_error = type(exc).__name__
+
+    if preparation["grounded"]:
+        result = {"ok": True, "title": row["title"], "preparation": preparation,
+                  "extraction": extraction,
+                  "fetched_at": _now()}
+    else:
+        result = {"ok": False, "detail": "HTML·브라우저 렌더링·화면 OCR에서도 주요업무·자격요건·우대사항을 확인하지 못했습니다. 로그인이나 접근 제한이 있는 원문은 직접 확인해 주세요.", "error_type": fetch_error or "ContentUnavailable"}
+    if result.get("ok") and preparation["grounded"]:
         try: cache_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         except OSError: pass
     return result
