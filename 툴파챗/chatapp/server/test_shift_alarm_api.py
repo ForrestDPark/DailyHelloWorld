@@ -182,6 +182,18 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertEqual(result["extraction"], "visual")
         self.assertIn("자격요건", result["preparation"]["sections"])
 
+    def test_source_study_plan_is_specific_without_exposing_match_evidence(self):
+        result = module._source_grounded_preparation(
+            "주요업무\nPython REST API 개발\n자격요건\nSQL 데이터베이스 경험\n우대사항\nDocker AWS 경험"
+        )
+        self.assertTrue(result["grounded"])
+        self.assertGreaterEqual(len(result["study"]), 3)
+        for item in result["study"]:
+            self.assertIn("how", item)
+            self.assertIn("practice", item)
+            self.assertNotIn("evidence", item)
+            self.assertGreater(len(item["how"]), 25)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -887,17 +887,30 @@ def _source_grounded_preparation(text: str):
     if not evidence:
         return {"sections": {}, "study": [], "certificates": [], "grounded": False, "notice": "원문에서 자격요건·우대사항 구획을 확인하지 못해 준비 항목을 만들지 않았습니다."}
     topics = [
-        ("Python", ("python",)), ("SQL·데이터베이스", ("sql", "database", "데이터베이스")),
-        ("REST API 설계", ("rest", "api")), ("클라우드·배포", ("aws", "gcp", "azure", "docker", "kubernetes")),
-        ("머신러닝 모델링", ("머신러닝", "machine learning", "딥러닝", "pytorch", "tensorflow")),
-        ("데이터 분석·통계", ("데이터 분석", "통계", "pandas")), ("반도체 공정", ("반도체", "공정", "tcad")),
-        ("품질관리", ("품질", "six sigma", "6시그마")), ("프로젝트·발표 준비", ("평가기준", "발표", "포트폴리오")),
+        ("Python", ("python",), "문법 복습보다 함수·클래스·예외 처리와 타입 힌트를 실제 코드에 적용하고, pytest로 핵심 로직을 검증하세요.", "공고 업무를 축소한 CLI 또는 자동화 도구 1개를 만들고 README에 실행법·테스트 결과를 남기세요."),
+        ("SQL·데이터베이스", ("sql", "database", "데이터베이스"), "SELECT·JOIN·집계·서브쿼리부터 인덱스와 실행계획까지 순서대로 익히고, 트랜잭션과 정규화 기준을 설명할 수 있게 연습하세요.", "샘플 업무 데이터를 직접 설계해 조회 API를 만들고, 느린 쿼리 전후 실행계획과 개선 수치를 기록하세요."),
+        ("REST API 설계", ("rest", "api"), "HTTP 메서드·상태 코드·인증·검증·페이지네이션·오류 응답 규칙을 정한 뒤 OpenAPI 문서와 테스트를 함께 작성하세요.", "CRUD API 하나를 구현하고 정상·권한 없음·잘못된 입력·중복 요청 테스트를 자동화하세요."),
+        ("클라우드·배포", ("aws", "gcp", "azure", "docker", "kubernetes"), "Docker 이미지 작성, 환경변수·비밀값 분리, 로그·헬스체크를 먼저 익힌 뒤 클라우드 배포와 CI/CD로 확장하세요.", "작은 서비스를 컨테이너로 배포하고 장애 재시작, 배포 롤백, 모니터링 화면을 증빙으로 남기세요."),
+        ("머신러닝 모델링", ("머신러닝", "machine learning", "딥러닝", "pytorch", "tensorflow"), "문제 정의→데이터 분할→베이스라인→평가지표→오류 분석 순으로 반복하고 데이터 누수와 과적합을 점검하세요.", "공개 데이터로 베이스라인과 개선 모델을 비교해 실험표·오류 사례·재현 명령을 정리하세요."),
+        ("데이터 분석·통계", ("데이터 분석", "통계", "pandas"), "결측·이상치 처리, 탐색적 분석, 가설과 지표 설정, 시각화 해석을 실제 데이터로 반복하세요.", "업무 질문 3개를 정하고 pandas 분석 노트북과 의사결정 요약 한 페이지를 완성하세요."),
+        ("반도체 공정", ("반도체", "공정", "tcad"), "공정 흐름과 핵심 파라미터를 정리한 뒤 TCAD 입력 조건·경계조건·메시 설정이 결과에 미치는 영향을 실험하세요.", "한 공정 변수의 변화에 따른 전기적 특성을 비교하고 가정·그래프·해석을 보고서로 남기세요."),
+        ("품질관리", ("품질", "six sigma", "6시그마"), "공정능력·관리도·측정시스템·원인분석을 익히고 DMAIC 단계마다 어떤 데이터를 확인하는지 연습하세요.", "불량 데이터 예제로 파레토·관리도·원인 가설·개선 전후 지표를 포함한 품질 보고서를 만드세요."),
+        ("프로젝트·발표 준비", ("평가기준", "발표", "포트폴리오"), "평가기준을 점수 항목으로 바꾸고 각 항목에 필요한 증거·실험·설명을 역산해 일정표를 만드세요.", "문제·선택 이유·실험 결과·한계를 5분 발표와 1페이지 요약으로 만들고 예상 질문에 답해보세요."),
     ]
     lowered = evidence.lower()
-    study = [{"topic": label, "evidence": next(key for key in keys if key in lowered)} for label, keys in topics if any(key in lowered for key in keys)]
+    study = [
+        {"topic": label, "how": how, "practice": practice}
+        for label, keys, how, practice in topics if any(key in lowered for key in keys)
+    ]
+    if not study:
+        study = [{
+            "topic": "공고 핵심요건 실전 준비",
+            "how": "원문의 주요업무와 자격요건을 한 문장씩 분리해 ‘알고 있음·해본 적 있음·결과로 증명 가능’ 세 단계로 표시하고, 부족한 항목부터 작은 실습으로 보완하세요.",
+            "practice": "주요업무 하나를 축소 재현한 결과물과 문제·선택·실행·결과를 설명하는 1페이지 사례 문서를 완성하세요.",
+        }]
     cert_names = ("정보처리기사", "SQLD", "SQLP", "ADsP", "ADP", "빅데이터분석기사", "품질경영기사", "산업안전기사", "전기기사", "전자기사", "토익", "TOEIC", "OPIc")
     certificates = [name for name in cert_names if name.lower() in lowered]
-    return {"sections": sections, "study": study[:8], "certificates": certificates, "grounded": bool(markers), "notice": "공부 항목과 자격증은 아래 원문에서 실제 확인된 내용만 표시합니다."}
+    return {"sections": sections, "study": study[:8], "certificates": certificates, "grounded": bool(markers), "notice": "공부 항목은 원문에서 확인된 기술만 골라 실행 순서와 결과물 중심으로 정리했습니다."}
 
 
 @app.get("/api/career-source-analysis")
@@ -911,7 +924,7 @@ def career_source_analysis(request: Request, kind: str, source: str, source_id: 
     finally: conn.close()
     if not row: raise HTTPException(status_code=404, detail="수집된 항목을 찾지 못했습니다")
     cache_dir = CAREER_DATA_DIR / "web_source_cache"; cache_dir.mkdir(exist_ok=True)
-    cache_path = cache_dir / (hashlib.sha256(f"v3:{kind}:{source}:{source_id}".encode()).hexdigest() + ".json")
+    cache_path = cache_dir / (hashlib.sha256(f"v4:{kind}:{source}:{source_id}".encode()).hexdigest() + ".json")
     if cache_path.exists():
         try: return json.loads(cache_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError): pass
