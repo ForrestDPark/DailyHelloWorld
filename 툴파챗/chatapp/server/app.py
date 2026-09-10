@@ -882,6 +882,19 @@ def _company_profile_url(company: str):
     return data.get("url") if isinstance(data, dict) else None
 
 
+def _published_analysis_url(kind: str, title: str, company: str):
+    pattern = "top_contest_notion*.json" if kind == "contest" else "top_job_notion*.json"
+    for path in CAREER_DATA_DIR.glob(pattern):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        subject = data.get("organizer") if kind == "contest" else data.get("company")
+        if data.get("title") == title and (not subject or subject == company):
+            return data.get("url")
+    return None
+
+
 @app.get("/api/career-summary")
 def career_summary(request: Request):
     """소유자에게만 최신 추천 요약을 제공한다.
@@ -936,6 +949,7 @@ def career_jobs(request: Request, q: str = "", source: str = "", sort: str = "re
             item = dict(row)
             item["preparation"] = _career_preparation(" ".join(str(item.get(k) or "") for k in ("title", "skills", "matched_query")))
             item["company_analysis_url"] = _company_profile_url(item.get("company", ""))
+            item["analysis_url"] = _published_analysis_url("job", item.get("title", ""), item.get("company", ""))
             jobs.append(item)
         return {"jobs": jobs, "total": total, "stats": stats, "sources": sources, "limit": limit, "offset": offset}
     finally:
@@ -963,7 +977,7 @@ def career_contests(request: Request, q: str = "", source: str = "", sort: str =
         sources = [r[0] for r in conn.execute("SELECT DISTINCT source FROM contests ORDER BY source")]
         items = []
         for row in rows:
-            item = dict(row); item["kind"] = "contest"; item["preparation"] = _career_preparation(f"{item['title']} {item['matched_query']}", True); items.append(item)
+            item = dict(row); item["kind"] = "contest"; item["preparation"] = _career_preparation(f"{item['title']} {item['matched_query']}", True); item["analysis_url"] = _published_analysis_url("contest", item["title"], item.get("company", "")); items.append(item)
         return {"jobs": items, "total": total, "stats": stats, "sources": sources, "limit": limit, "offset": offset}
     finally: conn.close()
 
