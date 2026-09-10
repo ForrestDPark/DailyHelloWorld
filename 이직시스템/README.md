@@ -301,6 +301,6 @@ python3 company_profile.py analyze "(주)회사명" --url "https://회사홈페�
 **원인 2 — "114건 수집했는데 챗이 없다"**: collect(원시 수집, 하루 수십~백여 건)와 analyze-top(카테고리당 1건만 추천·채팅 트리거)은 완전히 분리된 단계다. collect의 macOS 알림("💼 이직시스템 새 공고")은 단순 참고용이고, 실제로 채팅에서 소개되는 건 그중 category당 1건뿐이다. 이건 설계 의도(전부를 채팅에 쏟아부으면 소음)이지 버그는 아니라 이번엔 건드리지 않았다 — 나머지는 아래 자동 정리로 눈에 안 띄게 쌓이지 않게만 했다.
 
 **원인 3 — 사용 안 하는 데이터 누적**: `collect`가 매번 쌓기만 하고 지우는 로직이 없어서, 실측 시점 `contests.db` 401행 중 214행(53%)이 마감이 지난 상태였고 `jobs.db` 2933행 중 456행이 마감 지났거나 30일 넘게 방치된 상태였다.
-- `job_collector.py cleanup`/`contest_collector.py cleanup` 서브커맨드를 새로 추가했다. 공모전은 마감이 파싱되면 마감 기준, 못 파싱하면(콘테스트코리아 등 자유 텍스트) `first_seen_at` 60일 기준으로 지운다. 공고는 출처별 마감 표기가 더 제각각이라(사람인 "상시채용" 등) `YYYY-MM-DD`로 깔끔히 파싱되는 것만 마감 기준, 나머지는 `first_seen_at` 30일 기준으로 지운다 — 마감·나이 둘 다 불확실한 애매한 행은 잘못 지우느니 남겨둔다.
-- shift_alarm.py가 매일 `collect` 직후 이 `cleanup`도 자동 호출한다(실패해도 collect 자체 결과엔 영향 없게 별도 try/except). 실제 실행으로 `contests.db` 401→187행, `jobs.db` 2933→2477행까지 정리되는 것을 확인했다.
+- `job_collector.py cleanup`/`contest_collector.py cleanup`을 매일 수집 직후 자동 호출한다. `YYYY-MM-DD`, `YYYY.MM.DD`, `MM/DD`, `오늘마감`, `내일마감` 등으로 종료일을 확실히 판정할 수 있고 마감 뒤 7일 유예 기간까지 지난 데이터만 정리한다. 빈 날짜·`채용시`·`상시채용`처럼 종료일이 불명확한 항목은 오래됐다는 이유만으로 삭제하지 않는다.
+- 실제 삭제 전 원본 행 전체를 `data/archive/expired_items.db`에 보관하므로 오판 시 복구할 수 있다. `cleanup --dry-run`으로 삭제 없이 대상 건수만 확인할 수 있고, 필요하면 `--grace-days N`, `--archive-db PATH`로 유예 기간과 보관 위치를 바꿀 수 있다.
 - 한 번이라도 analyze-top에 뽑혔던 행이 나중에 정리 대상이 되어 DB에서 지워져도 문제없다 — 그 결과는 이미 Notion 페이지(`top_job_notion_*.json`/`top_contest_notion_*.json`에 기록된 `page_id`)에 영구 저장돼 있고, 그 뒤로 DB 행을 다시 조회하는 코드가 없다.

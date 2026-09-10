@@ -1,4 +1,6 @@
 import json
+import argparse
+import sqlite3
 import tempfile
 import unittest
 from datetime import datetime
@@ -37,6 +39,36 @@ class JobCollectorTest(unittest.TestCase):
         self.assertIn("Python", job.skills)
         self.assertIn("SQL", job.skills)
         self.assertEqual(job.score, 30)
+
+    def test_job_cleanup_archives_only_definitely_expired_rows(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        root = Path(directory.name)
+        conn = jc.connect(root / "jobs.db")
+        self.addCleanup(conn.close)
+        common = dict(company="회사", url="https://example.com", source="테스트", location="",
+                      experience="", education="", employment_type="", salary="", posted_at="",
+                      keywords="", skills="", matched_query="")
+        jc.upsert_jobs(conn, [
+            jc.Job(source_id="expired", title="만료", deadline="2020-01-01", **common),
+            jc.Job(source_id="rolling", title="상시", deadline="채용시", **common),
+            jc.Job(source_id="unknown", title="미상", deadline="", **common),
+        ])
+        archive = root / "archive.db"
+        jc.cmd_cleanup(argparse.Namespace(db=root / "jobs.db", grace_days=7,
+                                          archive_db=archive, dry_run=False))
+        left = {row[0] for row in conn.execute("SELECT source_id FROM jobs")}
+        self.assertEqual(left, {"rolling", "unknown"})
+        archived = sqlite3.connect(archive).execute(
+            "SELECT source_id FROM expired_items WHERE kind='job'"
+        ).fetchall()
+        self.assertEqual(archived, [("expired",)])
+
+    def test_job_deadline_parser_supports_common_korean_formats(self):
+        reference = datetime(2026, 9, 10, 12, 0)
+        self.assertEqual(str(jc._parse_job_deadline_end("~ 09/30(수)", reference)), "2026-09-30")
+        self.assertEqual(str(jc._parse_job_deadline_end("내일마감", reference)), "2026-09-11")
+        self.assertIsNone(jc._parse_job_deadline_end("상시채용", reference))
 
     def _job_row(self, **overrides):
         directory = tempfile.TemporaryDirectory()

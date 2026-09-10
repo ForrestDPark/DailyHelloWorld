@@ -7424,10 +7424,14 @@ class ShiftAlarmApp(rumps.App):
             # 지났거나 오래 방치된 행을 조용히 정리한다(실패해도 collect 결과
             # 자체엔 영향 없게 별도 try).
             try:
-                subprocess.run(
+                cleanup_result = subprocess.run(
                     [sys.executable, JOB_COLLECTOR_SCRIPT, "cleanup"],
                     cwd=JOB_COLLECTOR_DIR, capture_output=True, text=True, timeout=60,
                 )
+                if cleanup_result.returncode != 0:
+                    print(f"⚠️ 이직시스템 데이터 정리 실패: {cleanup_result.stderr.strip()[:300]}")
+                elif cleanup_result.stdout.strip():
+                    print(f"🧹 이직시스템: {cleanup_result.stdout.strip()}")
             except (OSError, subprocess.TimeoutExpired) as exc:
                 print(f"⚠️ 이직시스템 데이터 정리 실패: {exc}")
 
@@ -7503,10 +7507,14 @@ class ShiftAlarmApp(rumps.App):
             # ★ 2026-09-09: job_collector와 같은 이유 — collect 직후 마감 지났거나
             # 오래 방치된 공모전을 조용히 정리한다.
             try:
-                subprocess.run(
+                cleanup_result = subprocess.run(
                     [sys.executable, CONTEST_COLLECTOR_SCRIPT, "cleanup"],
                     cwd=JOB_COLLECTOR_DIR, capture_output=True, text=True, timeout=60,
                 )
+                if cleanup_result.returncode != 0:
+                    print(f"⚠️ 경진대회 데이터 정리 실패: {cleanup_result.stderr.strip()[:300]}")
+                elif cleanup_result.stdout.strip():
+                    print(f"🧹 경진대회: {cleanup_result.stdout.strip()}")
             except (OSError, subprocess.TimeoutExpired) as exc:
                 print(f"⚠️ 경진대회 데이터 정리 실패: {exc}")
 

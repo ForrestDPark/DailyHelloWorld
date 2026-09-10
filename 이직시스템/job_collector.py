@@ -30,6 +30,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+from expired_archive import archive_rows
+
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG = BASE_DIR / "config.json"
@@ -1484,41 +1486,73 @@ def collect(args: argparse.Namespace) -> None:
 # 사용 안하는 데이터는 알아서 정리하면 좋겠어" 지적 — collect가 매일
 # 수십~백여 건씩 쌓지만 실제로 사람이 보는 건 analyze-top이 category당 고르는
 # 1건뿐이라, 마감 지난 공고가 DB에 계속 쌓이기만 했다. 출처별 마감일 표기가
-# 제각각(콘테스트와 달리 "YYYY-MM-DD"가 아닌 상시채용·자유 텍스트도 흔함)이라
-# 깔끔히 파싱되는 것만 마감 기준으로, 나머지는 오래 방치된 것만 나이 기준으로
-# 지운다 — 마감·나이 둘 다 확실하지 않은 애매한 행은 잘못 지우느니 남겨둔다.
-JOB_STALE_DAYS = 30
+# 제각각이라 흔한 날짜 형식은 보수적으로 해석하되, 상시채용·빈 날짜처럼
+# 종료일이 불명확한 행은 삭제하지 않는다. 확실한 만료 행도 7일 유예하고,
+# 삭제 전 별도 SQLite 보관 DB로 옮겨 오판 시 복구할 수 있게 한다.
+DEFAULT_CLEANUP_GRACE_DAYS = 7
+DEFAULT_EXPIRED_ARCHIVE = BASE_DIR / "data" / "archive" / "expired_items.db"
+
+
+_JOB_DEADLINE_YMD_RE = re.compile(r"(20\d{2})[.\-/](\d{1,2})[.\-/](\d{1,2})")
+_JOB_DEADLINE_MD_RE = re.compile(r"(?<!\d)(\d{1,2})[.\-/](\d{1,2})(?!\d)")
+
+
+def _parse_job_deadline_end(deadline: str, reference: datetime) -> "datetime.date | None":
+    text = (deadline or "").strip()
+    if not text or any(marker in text for marker in ("상시", "채용시", "수시")):
+        return None
+    matches = _JOB_DEADLINE_YMD_RE.findall(text)
+    if matches:
+        year, month, day = matches[-1]
+        try:
+            return datetime(int(year), int(month), int(day)).date()
+        except ValueError:
+            return None
+    matches = _JOB_DEADLINE_MD_RE.findall(text)
+    if matches:
+        month, day = matches[-1]
+        try:
+            candidate = datetime(reference.year, int(month), int(day)).date()
+            # 연도 없는 공고가 연말에 수집되어 다음 해 초 마감되는 경우를 보정한다.
+            if candidate < reference.date() - timedelta(days=180):
+                candidate = datetime(reference.year + 1, int(month), int(day)).date()
+            return candidate
+        except ValueError:
+            return None
+    if "오늘마감" in text:
+        return reference.date()
+    if "내일마감" in text:
+        return reference.date() + timedelta(days=1)
+    return None
 
 
 def cmd_cleanup(args: argparse.Namespace) -> None:
     conn = connect(args.db)
     today = datetime.now().date()
-    stale_cutoff = datetime.now() - timedelta(days=JOB_STALE_DAYS)
-    rows = conn.execute("SELECT id, deadline, first_seen_at FROM jobs").fetchall()
-    to_delete = []
+    cutoff = today - timedelta(days=args.grace_days)
+    rows = conn.execute("SELECT * FROM jobs").fetchall()
+    expired = []
     for row in rows:
-        deadline_str = (row["deadline"] or "").strip()[:10]
-        parsed = None
+        reference = datetime.now()
         try:
-            parsed = datetime.strptime(deadline_str, "%Y-%m-%d").date()
-        except ValueError:
-            parsed = None
-        if parsed and parsed < today:
-            to_delete.append(row["id"])
-            continue
-        try:
-            first_seen = datetime.fromisoformat(row["first_seen_at"]).replace(tzinfo=None)
+            reference = datetime.fromisoformat(row["last_seen_at"]).replace(tzinfo=None)
         except (TypeError, ValueError):
-            continue
-        if first_seen < stale_cutoff:
-            to_delete.append(row["id"])
-    if not to_delete:
-        print("정리 대상 없음 — 마감 지났거나 오래된 공고가 없습니다.")
+            pass
+        deadline = _parse_job_deadline_end(row["deadline"], reference)
+        if deadline and deadline < cutoff:
+            expired.append(row)
+    if not expired:
+        print("정리 대상 없음 — 확실한 마감일이 유예 기간보다 오래 지난 공고가 없습니다.")
         return
-    placeholders = ",".join("?" for _ in to_delete)
-    conn.execute(f"DELETE FROM jobs WHERE id IN ({placeholders})", to_delete)
+    if args.dry_run:
+        print(f"시험 실행: 만료 공고 {len(expired)}건 (삭제·보관하지 않음)")
+        return
+    archive_rows(args.archive_db, "job", expired, f"deadline_before_{cutoff.isoformat()}")
+    ids = [row["id"] for row in expired]
+    placeholders = ",".join("?" for _ in ids)
+    conn.execute(f"DELETE FROM jobs WHERE id IN ({placeholders})", ids)
     conn.commit()
-    print(f"정리 완료: 마감 지났거나 {JOB_STALE_DAYS}일 넘게 방치된 공고 {len(to_delete)}건 삭제")
+    print(f"정리 완료: 만료 공고 {len(ids)}건을 {args.archive_db}에 보관 후 삭제")
 
 
 def list_jobs(args: argparse.Namespace) -> None:
@@ -2602,9 +2636,13 @@ def parser() -> argparse.ArgumentParser:
         help="career=정규직 커리어 공고, parttime=알바·단기 공고 (2026-08-08 추가)",
     )
     at.set_defaults(func=analyze_top_job)
-    sub.add_parser(
-        "cleanup", help="마감 지났거나 오래 방치된 공고를 DB에서 삭제(shift_alarm 자동 호출용)",
-    ).set_defaults(func=cmd_cleanup)
+    cleanup = sub.add_parser(
+        "cleanup", help="마감일이 확실히 지난 공고를 보관 후 삭제(shift_alarm 자동 호출용)",
+    )
+    cleanup.add_argument("--grace-days", type=int, default=DEFAULT_CLEANUP_GRACE_DAYS)
+    cleanup.add_argument("--archive-db", type=Path, default=DEFAULT_EXPIRED_ARCHIVE)
+    cleanup.add_argument("--dry-run", action="store_true")
+    cleanup.set_defaults(func=cmd_cleanup)
     return p
 
 

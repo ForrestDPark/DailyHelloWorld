@@ -29,6 +29,8 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
+from expired_archive import archive_rows
+
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG = BASE_DIR / "config.json"
@@ -596,36 +598,35 @@ def collect(args: argparse.Namespace) -> None:
 # ★ 2026-09-09: "사용 안하는 데이터는 알아서 정리하면 좋겠어" 요청 — 매일
 # collect가 수십~백여 건씩 쌓는데 실제로 사람이 보는 건 analyze-top이 고르는
 # 카테고리당 1건뿐이라, 마감이 지나 다시는 추천될 수 없는 행이 DB에 계속
-# 쌓이기만 했다. 마감이 확실히 지난 행과, 마감을 못 읽었지만 오래 방치된
-# 행을 지운다 — 한 번이라도 analyze-top에 뽑혔던 행이라도 예외 없이 지운다
+# 쌓이기만 했다. 마감이 확실히 지난 행만 7일 유예 뒤 보관하고 지운다.
+# 마감을 못 읽은 행은 오래됐다는 이유만으로 지우지 않는다. 한 번이라도
+# analyze-top에 뽑혔던 행이라도 예외 없이 지운다
 # (그 결과는 Notion 페이지에 이미 영구 저장돼 있어 DB 행이 없어져도 안 깨짐).
-CONTEST_STALE_NO_DEADLINE_DAYS = 60
+DEFAULT_CLEANUP_GRACE_DAYS = 7
+DEFAULT_EXPIRED_ARCHIVE = BASE_DIR / "data" / "archive" / "expired_items.db"
 
 
 def cmd_cleanup(args: argparse.Namespace) -> None:
     conn = connect(args.db)
     today = datetime.now().date()
-    rows = conn.execute("SELECT id, deadline, first_seen_at FROM contests").fetchall()
-    stale_cutoff = datetime.now() - timedelta(days=CONTEST_STALE_NO_DEADLINE_DAYS)
-    to_delete = []
+    cutoff = today - timedelta(days=args.grace_days)
+    rows = conn.execute("SELECT * FROM contests").fetchall()
+    expired = []
     for row in rows:
-        if row["deadline"] and _is_deadline_expired(row["deadline"], today):
-            to_delete.append(row["id"])
-            continue
-        if not row["deadline"]:
-            try:
-                first_seen = datetime.fromisoformat(row["first_seen_at"]).replace(tzinfo=None)
-            except (TypeError, ValueError):
-                continue
-            if first_seen < stale_cutoff:
-                to_delete.append(row["id"])
-    if not to_delete:
-        print("정리 대상 없음 — 마감 지난/오래된 공모전이 없습니다.")
+        if row["deadline"] and _is_deadline_expired(row["deadline"], cutoff):
+            expired.append(row)
+    if not expired:
+        print("정리 대상 없음 — 확실한 마감일이 유예 기간보다 오래 지난 공모전이 없습니다.")
         return
-    placeholders = ",".join("?" for _ in to_delete)
-    conn.execute(f"DELETE FROM contests WHERE id IN ({placeholders})", to_delete)
+    if args.dry_run:
+        print(f"시험 실행: 만료 공모전 {len(expired)}건 (삭제·보관하지 않음)")
+        return
+    archive_rows(args.archive_db, "contest", expired, f"deadline_before_{cutoff.isoformat()}")
+    ids = [row["id"] for row in expired]
+    placeholders = ",".join("?" for _ in ids)
+    conn.execute(f"DELETE FROM contests WHERE id IN ({placeholders})", ids)
     conn.commit()
-    print(f"정리 완료: 마감 지났거나 {CONTEST_STALE_NO_DEADLINE_DAYS}일 넘게 마감 미상인 공모전 {len(to_delete)}건 삭제")
+    print(f"정리 완료: 만료 공모전 {len(ids)}건을 {args.archive_db}에 보관 후 삭제")
 
 
 def list_contests(args: argparse.Namespace) -> None:
@@ -1155,9 +1156,13 @@ def parser() -> argparse.ArgumentParser:
         help="ai=AI 특화 경진대회, general=일반 공모전 (2026-08-08 추가)",
     )
     at.set_defaults(func=analyze_top_contest)
-    sub.add_parser(
-        "cleanup", help="마감 지났거나 오래 방치된 공모전을 DB에서 삭제(shift_alarm 자동 호출용)",
-    ).set_defaults(func=cmd_cleanup)
+    cleanup = sub.add_parser(
+        "cleanup", help="마감일이 확실히 지난 공모전을 보관 후 삭제(shift_alarm 자동 호출용)",
+    )
+    cleanup.add_argument("--grace-days", type=int, default=DEFAULT_CLEANUP_GRACE_DAYS)
+    cleanup.add_argument("--archive-db", type=Path, default=DEFAULT_EXPIRED_ARCHIVE)
+    cleanup.add_argument("--dry-run", action="store_true")
+    cleanup.set_defaults(func=cmd_cleanup)
     sub.add_parser("doctor", help="실행 환경 점검").set_defaults(func=doctor)
     return p
 
