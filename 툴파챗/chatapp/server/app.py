@@ -885,7 +885,7 @@ def _source_grounded_preparation(text: str):
         if body: sections.setdefault(name, body[:1800])
     evidence = "\n".join(sections.values())
     if not evidence:
-        return {"sections": {}, "study": [], "certificates": [], "grounded": False, "notice": "원문에서 자격요건·우대사항 구획을 확인하지 못해 준비 항목을 만들지 않았습니다."}
+        return {"sections": {}, "study": [], "certificates": [], "recommended_certificates": [], "grounded": False, "notice": "원문에서 자격요건·우대사항 구획을 확인하지 못해 준비 항목을 만들지 않았습니다."}
     topics = [
         ("Python", ("python",), "문법 복습보다 함수·클래스·예외 처리와 타입 힌트를 실제 코드에 적용하고, pytest로 핵심 로직을 검증하세요.", "공고 업무를 축소한 CLI 또는 자동화 도구 1개를 만들고 README에 실행법·테스트 결과를 남기세요."),
         ("SQL·데이터베이스", ("sql", "database", "데이터베이스"), "SELECT·JOIN·집계·서브쿼리부터 인덱스와 실행계획까지 순서대로 익히고, 트랜잭션과 정규화 기준을 설명할 수 있게 연습하세요.", "샘플 업무 데이터를 직접 설계해 조회 API를 만들고, 느린 쿼리 전후 실행계획과 개선 수치를 기록하세요."),
@@ -910,7 +910,25 @@ def _source_grounded_preparation(text: str):
         }]
     cert_names = ("정보처리기사", "SQLD", "SQLP", "ADsP", "ADP", "빅데이터분석기사", "품질경영기사", "산업안전기사", "전기기사", "전자기사", "토익", "TOEIC", "OPIc")
     certificates = [name for name in cert_names if name.lower() in lowered]
-    return {"sections": sections, "study": study[:8], "certificates": certificates, "grounded": bool(markers), "notice": "공부 항목은 원문에서 확인된 기술만 골라 실행 순서와 결과물 중심으로 정리했습니다."}
+    certificate_rules = [
+        (("python", "java", "javascript", "typescript", "개발", "api", "백엔드"), "정보처리기사", "소프트웨어 개발·데이터베이스·운영 전반의 기본기를 직무 범위와 함께 증명하기 좋습니다."),
+        (("sql", "database", "데이터베이스", "db"), "SQLD", "SQL 작성과 데이터 모델링 역량이 필요한 업무에 직접 연결됩니다."),
+        (("데이터 분석", "통계", "pandas", "분석"), "ADsP", "데이터 이해·분석 기획·기초 통계 역량을 체계적으로 정리하는 데 적합합니다."),
+        (("빅데이터", "머신러닝", "machine learning", "딥러닝", "pytorch", "tensorflow"), "빅데이터분석기사", "데이터 전처리부터 모델링·평가까지 실무형 분석 과정을 폭넓게 다룹니다."),
+        (("품질", "six sigma", "6시그마", "공정관리"), "품질경영기사", "공정 품질·통계적 관리·개선 업무와 가장 직접적으로 연결됩니다."),
+        (("안전", "산업안전", "설비", "현장"), "산업안전기사", "현장 위험관리와 안전 규정 이해가 필요한 업무의 직무 연관성이 높습니다."),
+        (("전기", "전력", "전기설비"), "전기기사", "전기 설비의 설계·운영·안전 업무에 요구되는 전문성을 증명합니다."),
+        (("전자", "반도체", "회로", "tcad"), "전자기사", "전자회로·소자·계측 기초가 필요한 반도체·전자 직무와 연결됩니다."),
+        (("영어", "global", "글로벌", "해외", "영문"), "OPIc", "업무상 영어 의사소통 능력을 말하기 중심으로 증명하기 좋습니다."),
+    ]
+    recommended_certificates = []
+    explicit_folded = {name.casefold() for name in certificates}
+    for keys, name, reason in certificate_rules:
+        if name.casefold() not in explicit_folded and any(key in lowered for key in keys):
+            recommended_certificates.append({"name": name, "reason": reason, "required": False})
+    return {"sections": sections, "study": study[:8], "certificates": certificates,
+            "recommended_certificates": recommended_certificates[:3], "grounded": bool(markers),
+            "notice": "추천 자격증은 원문에 명시된 필수조건이 아니라, 확인된 업무·기술과의 연관성을 기준으로 고른 준비 후보입니다."}
 
 
 @app.get("/api/career-source-analysis")
@@ -924,7 +942,7 @@ def career_source_analysis(request: Request, kind: str, source: str, source_id: 
     finally: conn.close()
     if not row: raise HTTPException(status_code=404, detail="수집된 항목을 찾지 못했습니다")
     cache_dir = CAREER_DATA_DIR / "web_source_cache"; cache_dir.mkdir(exist_ok=True)
-    cache_path = cache_dir / (hashlib.sha256(f"v4:{kind}:{source}:{source_id}".encode()).hexdigest() + ".json")
+    cache_path = cache_dir / (hashlib.sha256(f"v5:{kind}:{source}:{source_id}".encode()).hexdigest() + ".json")
     if cache_path.exists():
         try: return json.loads(cache_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError): pass

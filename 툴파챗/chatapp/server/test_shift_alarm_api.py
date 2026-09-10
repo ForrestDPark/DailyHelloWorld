@@ -194,6 +194,22 @@ class ShiftAlarmApiTests(unittest.TestCase):
             self.assertNotIn("evidence", item)
             self.assertGreater(len(item["how"]), 25)
 
+    def test_certificates_are_recommended_from_job_signals_and_not_called_required(self):
+        result = module._source_grounded_preparation(
+            "주요업무\nPython REST API 개발\n자격요건\nSQL 데이터베이스 설계\n우대사항\n데이터 분석 경험"
+        )
+        names = [item["name"] for item in result["recommended_certificates"]]
+        self.assertIn("정보처리기사", names)
+        self.assertIn("SQLD", names)
+        self.assertTrue(all(item["required"] is False for item in result["recommended_certificates"]))
+
+    def test_explicit_certificate_is_not_repeated_as_recommendation(self):
+        result = module._source_grounded_preparation(
+            "주요업무\nSQL 데이터베이스 운영\n자격요건\nSQLD 보유자\n우대사항\n데이터 분석"
+        )
+        self.assertIn("SQLD", result["certificates"])
+        self.assertNotIn("SQLD", [item["name"] for item in result["recommended_certificates"]])
+
 
 if __name__ == "__main__":
     unittest.main()
