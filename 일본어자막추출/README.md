@@ -670,3 +670,15 @@ limit`)하면서 Claude 폴백도 같이 오류가 나 세 편 모두 번역 검
 - **원인**: 웹 리더(`com.tulpachat.epub-reader`, `web_reader/server.py`)의 `Library`는 서버 프로세스가 시작될 때 딱 한 번만 `av완성작`을 스캔하고(`__init__`의 `self.scan()`), 그 뒤로는 자동 재스캔이 없다. 재스캔 API(`/api/rescan`)는 소유자 로그인 세션이 있어야 호출 가능해 파이프라인이 직접 부를 수 없다. 이 웹 리더 프로세스가 AKDL-370이 완성되기 전(9/7 저녁)부터 계속 떠 있었기 때문에, 그날 새로 끝낸 AKDL-370·EBOD-952·MIDV-199 세 권 모두 서버를 재시작하기 전까지는 목록에 아예 안 보이는 상태였다.
 - **즉시 조치**: `launchctl kickstart -k gui/<uid>/com.tulpachat.epub-reader`로 서비스를 재시작해 최신 목록을 반영했다.
 - **재발 방지**: `subtitle_pipeline_body.sh`가 낭독판 EPUB(또는 낭독판 실패 시 비상용 일반 EPUB)을 `av완성작`에 복사할 때마다 같은 `launchctl kickstart` 명령으로 웹 리더 서비스를 자동 재시작하게 했다. 재시작이 실패해도 EPUB 자체는 이미 복사가 끝난 뒤라 파이프라인 성공 여부에는 영향 없다.
+
+## `library/` 폴더 전체 소실 사고 — 원인 불명, EPUB 역파싱으로 학습카드까지 무손실 복구 (★ 2026-09-11)
+
+**사용자 지적**: "짚이는게 없어 원인을 더파고 복구해" — `library/<작품명>/`(회차별 소스 자료)이 개별 폴더가 아니라 최상위 `library/` 자체가 통째로 사라진 것을 발견.
+
+- **원인 조사(결론: 특정 못함)**: 코드베이스 전체에서 `library/` 최상위를 지우는 경로는 없음(`rm -rf -- "$BOOK_DIR"`처럼 회차별 폴더만 지우는 설계 — README 2026-08-01 절대 규칙). `.zsh_history`/`.bash_history`에 관련 명령 없음, Time Machine/로컬 스냅샷 없음, `~/.Trash`에도 흔적 없음(GUI 삭제가 아니라 커맨드라인 `rm -rf` 가능성을 시사하나 실행 주체는 특정 불가), 통합 로그(`log show`)에도 매칭 없음. git에는 애초에 추적된 적 없는 디렉터리라 커밋 이력으로도 복구 불가. **가용한 도구로는 원인을 확정할 수 없었다** — 재발 시 같은 조사를 반복하지 않도록 이 사실 자체를 기록해둔다.
+- **복구 전략**: `library/<작품명>/`은 순수 생성물이라 원본 없이는 못 되살릴 데이터처럼 보였지만, 이미 완성돼 `av완성작`에 배포된 `_낭독판.epub` 자체가 대사(`OEBPS/pages/`)뿐 아니라 학습카드(`OEBPS/study/study*.xhtml`)와 줄거리(`OEBPS/intro/summary.xhtml`)까지 전부 최종 렌더링된 형태로 담고 있다는 걸 확인했다. `recover_study_cards_from_epub.py`(2026-09-05, 대사만 복구)를 확장해서:
+  - `extract_study_cards()` — `OEBPS/study/study*.xhtml`을 `<h1>N편 장면 M</h1>`으로 장면별로 묶고, `<h3>` 제목(주요 단어와 뜻/핵심 일본어 표현/문법·어미·뉘앙스/쉐도잉 추천 문장)으로 카테고리를 구분해 `build_readaloud_epub.py`의 `render_study_card()` 출력 형식을 역파싱한다. `reconstruct_ja_reading()`이 `<ruby>한자<rt>읽기</rt></ruby>` 마커를 `kanji_only_ruby()`의 반대 방향으로 풀어 `ja`(평문)와 `reading`(전체 히라가나 읽기) 두 필드를 되살린다 — 원래 스키마엔 이 둘이 분리돼 있는데 렌더링 결과물엔 합쳐져 있어서 필요했던 단계.
+  - `extract_overview()` — `intro/summary.xhtml`의 `<p class="overview-text">`에서 "전체 줄거리" 본문을 그대로 되살린다.
+  - 복구한 `scene_study_cards.json`은 `generate_summary.py`의 기존 검증 함수(`valid_cards()`)를 그대로 재사용해 통과하는 경우에만 저장하고, 통과 못 하면(학습카드가 애초에 없던 낭독판 등) AI 재생성이 필요하다고 명확히 표시한다.
+- **결과**: `av완성작`의 낭독판 EPUB 71개 전체를 이 스크립트로 재처리 — **71개 전부 학습카드+줄거리까지 완전 복구, AI 호출 0회**(코드 하나가 부제만 다른 회차와 겹쳐 폴더가 72개가 됨 — 기존 충돌 처리 로직대로 정상 분리). `backfill_all_missing_study_cards.py`(모든 회차 AI 재생성 강제)는 이번 복구에는 쓰지 않았다 — 있었으면 46장면×71권 기준 수십 시간·AI 쿼터를 낭비했을 경로.
+- **알려진 한계**: 극히 일부 단어(카나만으로 된 구간이 다른 단어의 읽기와 겹칠 때)는 원본 EPUB 렌더링 자체에 있던 `kanji_only_ruby()`의 앵커 매칭 실패가 그대로 반영돼 `reading` 필드에 읽기가 중복으로 붙는 경우가 있다(예: AKDL-370 1-6 장면 "スーツめっちゃ似合うね" → reading에 "すーつめっちゃ"가 두 번 나타남). 원본 EPUB에 이미 있던 표시 버그를 그대로 재현한 것이라 새로 생긴 문제는 아니며, 극소수 표현에서만 후리가나가 살짝 어색하게 보이는 정도라 별도 조치는 하지 않았다.

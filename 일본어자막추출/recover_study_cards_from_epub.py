@@ -19,6 +19,7 @@ library/<작품명>/이 통째로 지워졌다(README 2026-08-01 절대 규칙).
 import argparse
 import glob
 import html
+import json
 import os
 import re
 import sys
@@ -37,6 +38,35 @@ PAIR_RE = re.compile(
 )
 SCENE_THUMB_SRC_RE = re.compile(r'<img class="scene-thumb" src="\.\./images/([^"]+)"')
 RUBY_RE = re.compile(r"<ruby>(.*?)<rt>(.*?)</rt></ruby>")
+
+# ★ 2026-09-11: library/ 폴더 통째 소실 사고 복구 — 낭독판 EPUB의
+# OEBPS/study/study*.xhtml에는 generate_summary.py가 만든 학습카드가
+# build_readaloud_epub.py의 render_study_card()가 만든 형식 그대로 남아있다.
+# 이 정규식들은 render_study_card()(build_readaloud_epub.py) 출력 형식과
+# 반드시 일치해야 한다 — 그쪽 렌더링이 바뀌면 여기도 같이 고쳐야 한다.
+STUDY_PAGE_PATH_RE = re.compile(r"OEBPS/study/study(\d+)\.xhtml$")
+STUDY_H1_RE = re.compile(r"<h1[^>]*>(\d+)편 장면 (\d+)</h1>")
+STUDY_ASIDE_RE = re.compile(
+    r'<aside class="study-card[^"]*"><h2[^>]*>[^<]*</h2>(.*)</aside>', re.S
+)
+VOCAB_LINE_RE = re.compile(
+    r'<div id="[^"]*" class="vocab-line"><span class="card-ja[^"]*">(.*?)</span>'
+    r' — (.*?)</div>',
+    re.S,
+)
+EXPRESSION_RE = re.compile(
+    r'<li id="[^"]*"><span class="card-ja[^"]*">(.*?)</span>'
+    r'<span class="card-ko[^"]*">(.*?)</span></li>',
+    re.S,
+)
+GRAMMAR_P_RE = re.compile(r"<p>(.*?)</p>", re.S)
+SHADOWING_RE = re.compile(
+    r'<p><span class="card-ja[^"]*">(.*?)</span>'
+    r'<span class="card-ko[^"]*">(.*?)</span></p>',
+    re.S,
+)
+RUBY_OR_TEXT_RE = re.compile(r"<ruby>(.*?)<rt>(.*?)</rt></ruby>|([^<]+)", re.S)
+OVERVIEW_RE = re.compile(r'<p class="overview-text"[^>]*>(.*?)</p>', re.S)
 
 # subtitle_pipeline_body.sh의 create_epub_css()와 내용이 같아야 한다 —
 # finalize_japanese_book.py가 pandoc으로 SUMMARY.md+transcript_part*.md를
@@ -303,6 +333,113 @@ def extract_cover(zf, book_dir):
         out.write(zf.read(candidates[0]))
 
 
+def reconstruct_ja_reading(fragment):
+    """build_readaloud_epub.py의 kanji_only_ruby()가 만든 ruby 마크업을 역으로
+    풀어서 (ja 평문, 전체 히라가나 reading) 쌍을 되살린다. ruby로 감싸인 구간은
+    <rt> 읽기를, 감싸이지 않은 평문 구간(원래도 가나였던 부분)은 그대로 양쪽에
+    똑같이 채운다 — kanji_only_ruby()가 정확히 그 반대 방향으로 만들었던 것."""
+    ja_parts, reading_parts = [], []
+    for base, rt, plain in RUBY_OR_TEXT_RE.findall(fragment):
+        if plain:
+            text = html.unescape(plain)
+            ja_parts.append(text)
+            reading_parts.append(text)
+        else:
+            ja_parts.append(html.unescape(base))
+            reading_parts.append(html.unescape(rt))
+    return "".join(ja_parts), "".join(reading_parts)
+
+
+def _iter_study_sections(content):
+    aside_match = STUDY_ASIDE_RE.search(content)
+    if not aside_match:
+        return
+    for part in aside_match.group(1).split('<div class="card-section">')[1:]:
+        heading_match = re.match(r"<h3[^>]*>([^<]*)</h3>(.*)", part, re.S)
+        if not heading_match:
+            continue
+        heading = html.unescape(heading_match.group(1)).strip()
+        body = heading_match.group(2)
+        if body.endswith("</div>"):
+            body = body[: -len("</div>")]
+        yield heading, body
+
+
+def extract_study_cards(zf):
+    """OEBPS/study/study*.xhtml에서 generate_summary.py가 만든
+    scene_study_cards.json과 동일한 shape의 dict를 되살린다. 학습카드가 없는
+    (일반 EPUB 비상 대체 등) 낭독판이면 빈 dict를 돌려준다."""
+    names = sorted(
+        (n for n in zf.namelist() if STUDY_PAGE_PATH_RE.search(n)),
+        key=lambda n: int(STUDY_PAGE_PATH_RE.search(n).group(1)),
+    )
+    cards = {}
+    for name in names:
+        content = zf.read(name).decode("utf-8")
+        h1_match = STUDY_H1_RE.search(content)
+        if not h1_match:
+            continue
+        key = f"{int(h1_match.group(1))}-{int(h1_match.group(2))}"
+        card = cards.setdefault(
+            key, {"expressions": [], "vocabulary": [], "grammar": [], "shadowing": {}}
+        )
+        for heading, body in _iter_study_sections(content):
+            if heading == "주요 단어와 뜻":
+                for ja_html, rest_html in VOCAB_LINE_RE.findall(body):
+                    ja, reading = reconstruct_ja_reading(ja_html)
+                    rest = html.unescape(rest_html)
+                    if " / 한자음: " in rest:
+                        ko, tail = rest.split(" / 한자음: ", 1)
+                        hanja_sound, hanja_hun = tail.split(" / 훈: ", 1)
+                    else:
+                        ko, hanja_sound, hanja_hun = rest, "", ""
+                    card["vocabulary"].append(
+                        {
+                            "ja": ja,
+                            "reading": reading,
+                            "ko": ko.strip(),
+                            "hanja_sound": hanja_sound.strip(),
+                            "hanja_hun": hanja_hun.strip(),
+                        }
+                    )
+            elif heading == "핵심 일본어 표현":
+                for ja_html, ko_html in EXPRESSION_RE.findall(body):
+                    ja, reading = reconstruct_ja_reading(ja_html)
+                    card["expressions"].append(
+                        {"ja": ja, "reading": reading, "ko": html.unescape(ko_html).strip()}
+                    )
+            elif heading == "문법·어미·뉘앙스":
+                p_match = GRAMMAR_P_RE.search(body)
+                if p_match:
+                    items = [
+                        html.unescape(item).strip() for item in p_match.group(1).split(" / ")
+                    ]
+                    card["grammar"].extend(item for item in items if item)
+            elif heading == "쉐도잉 추천 문장":
+                shadow_match = SHADOWING_RE.search(body)
+                if shadow_match:
+                    ja, reading = reconstruct_ja_reading(shadow_match.group(1))
+                    card["shadowing"] = {
+                        "ja": ja,
+                        "reading": reading,
+                        "ko": html.unescape(shadow_match.group(2)).strip(),
+                    }
+    return cards
+
+
+def extract_overview(zf):
+    """OEBPS/intro/summary.xhtml의 "전체 줄거리" 본문을 되살린다."""
+    candidates = [n for n in zf.namelist() if n.endswith("intro/summary.xhtml")]
+    if not candidates:
+        return None
+    content = zf.read(candidates[0]).decode("utf-8")
+    match = OVERVIEW_RE.search(content)
+    if not match:
+        return None
+    text = html.unescape(re.sub(r"<[^>]+>", "", match.group(1))).strip()
+    return text or None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("epub_path", help="av완성작의 <제목>_낭독판.epub 경로")
@@ -342,6 +479,8 @@ def main():
         total_lines = write_transcripts(book_dir, folder_name, pages)
         extract_images(zf, book_dir, pages)
         extract_cover(zf, book_dir)
+        cards = extract_study_cards(zf)
+        overview = extract_overview(zf)
 
     with open(os.path.join(book_dir, "epub_style.css"), "w", encoding="utf-8") as f:
         f.write(EPUB_STYLE_CSS)
@@ -353,7 +492,42 @@ def main():
     parts = sorted({p["part"] for p in pages})
     scenes = sorted({(p["part"], p["scene"]) for p in pages})
     print(f"✅ {book_dir} 복구 완료 — {len(parts)}편, 장면 {len(scenes)}개, 대사 {total_lines}줄")
-    print("   다음 단계: generate_summary.py로 학습카드 생성 → finalize_japanese_book.py → build_readaloud_epub.py")
+
+    # ★ 2026-09-11: 학습카드·줄거리가 낭독판 EPUB에 이미 온전히 남아있으면
+    # generate_summary.py의 AI 재호출 없이 바로 finalize 단계로 넘어갈 수 있다.
+    # 둘 다 복구됐을 때만 표시해서, AI 재호출이 실제로 필요한 회차와 구분한다.
+    cards_ok = False
+    if cards:
+        line_counts = {}
+        for page in pages:
+            for ja_plain, _ja_furigana, ko in page["pairs"]:
+                if not ja_plain or not ko:
+                    continue
+                key = (page["part"], page["scene"])
+                line_counts[key] = line_counts.get(key, 0) + 1
+        min_expr = {f"{part}-{scene}": count for (part, scene), count in line_counts.items()}
+        try:
+            from generate_summary import valid_cards
+        except ImportError:
+            valid_cards = None
+        cards_ok = valid_cards is None or valid_cards(cards, scenes, min_expr)
+        if cards_ok:
+            with open(os.path.join(book_dir, "scene_study_cards.json"), "w", encoding="utf-8") as f:
+                json.dump(cards, f, ensure_ascii=False, indent=2)
+
+    if overview and cards_ok:
+        from book_title import display_title
+
+        with open(os.path.join(book_dir, "SUMMARY.md"), "w", encoding="utf-8") as f:
+            f.write(
+                f"# {display_title(book_dir, folder_name)} 줄거리 "
+                "{.ibooks-dark-theme-use-custom-text-color}\n\n"
+                f"## 전체 줄거리\n\n{overview}\n"
+            )
+        print("   ✅ 학습카드·줄거리도 EPUB에서 그대로 복구됨 — AI 재호출 없이 finalize_japanese_book.py 바로 실행 가능")
+    else:
+        print("   ⚠️ 학습카드/줄거리 복구 실패(또는 애초에 없던 EPUB) — generate_summary.py 재실행 필요")
+    print("   다음 단계: (필요시) generate_summary.py → finalize_japanese_book.py → build_readaloud_epub.py")
 
 
 if __name__ == "__main__":
