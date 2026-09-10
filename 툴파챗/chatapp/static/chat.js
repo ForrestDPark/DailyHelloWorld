@@ -21,6 +21,7 @@ let currentChatBackgroundUrl = null;
 
 const authView = document.getElementById("auth-view");
 const homeView = document.getElementById("home-view");
+const sunziView = document.getElementById("sunzi-view");
 const roomListView = document.getElementById("room-list-view");
 const chatView = document.getElementById("chat-view");
 const roomListEl = document.getElementById("room-list");
@@ -256,6 +257,7 @@ document.querySelectorAll(".auth-tab").forEach((el) => {
 
 function showAuthView(message) {
   homeView.classList.add("hidden");
+  sunziView.classList.add("hidden");
   authView.classList.remove("hidden");
   roomListView.classList.add("hidden");
   chatView.classList.add("hidden");
@@ -1973,7 +1975,7 @@ async function showPortalHome(focusSystems = false) {
   pollGeneration += 1;
   if (activePollController) activePollController.abort();
   if (pollTimer) clearTimeout(pollTimer);
-  authView.classList.add("hidden"); chatView.classList.add("hidden"); roomListView.classList.add("hidden"); homeView.classList.remove("hidden");
+  authView.classList.add("hidden"); chatView.classList.add("hidden"); roomListView.classList.add("hidden"); sunziView.classList.add("hidden"); homeView.classList.remove("hidden");
   document.getElementById("portal-greeting-name").textContent = myDisplayName || myUsername || "오늘도";
   try {
     const rooms = await loadDirectoryData();
@@ -1985,6 +1987,19 @@ async function showPortalHome(focusSystems = false) {
   loadPortalNotifications();
   if (focusSystems) document.querySelector(".portal-services")?.scrollIntoView({behavior:"smooth", block:"start"});
 }
+
+function showSunziView() {
+  currentRoom = null;
+  pollGeneration += 1;
+  if (activePollController) activePollController.abort();
+  if (pollTimer) clearTimeout(pollTimer);
+  authView.classList.add("hidden"); homeView.classList.add("hidden"); roomListView.classList.add("hidden"); chatView.classList.add("hidden");
+  sunziView.classList.remove("hidden");
+  const frame = document.getElementById("sunzi-frame");
+  if (!frame.src) frame.src = frame.dataset.src;
+}
+
+document.getElementById("sunzi-back-btn").addEventListener("click", () => { location.hash = "#home"; });
 
 document.getElementById("portal-account-btn").addEventListener("click", () => document.getElementById("account-name-btn").click());
 document.getElementById("portal-notifications-btn").addEventListener("click", async () => {
@@ -2010,6 +2025,7 @@ async function showRoomList() {
   if (pollTimer) clearTimeout(pollTimer);
   authView.classList.add("hidden");
   homeView.classList.add("hidden");
+  sunziView.classList.add("hidden");
   chatView.classList.add("hidden");
   roomListView.classList.remove("hidden");
   try {
@@ -2128,6 +2144,7 @@ function appendRichText(container, text) {
 
 async function showChatView(roomId) {
   homeView.classList.add("hidden");
+  sunziView.classList.add("hidden");
   pollGeneration += 1;
   if (activePollController) activePollController.abort();
   if (readVisibilityFrame) cancelAnimationFrame(readVisibilityFrame);
@@ -3408,6 +3425,8 @@ async function route() {
   const room = parseRoomFromHash();
   if (room) {
     await showChatView(room);
+  } else if (location.hash === "#sunzi") {
+    showSunziView();
   } else if (location.hash === "#friends" || location.hash === "#chats") {
     setListMode(location.hash === "#chats" ? "chats" : "friends");
     await showRoomList();
