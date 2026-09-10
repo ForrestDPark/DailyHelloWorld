@@ -35,6 +35,8 @@ from expired_archive import archive_rows
 
 BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG = BASE_DIR / "config.json"
+DEFAULT_MAX_NEW_JOBS_PER_RUN = 20
+DEFAULT_MIN_COLLECTION_SCORE = 1
 DEFAULT_DB = BASE_DIR / "data" / "jobs.db"
 CANDIDATE_PROFILE_PATH = BASE_DIR / "candidate_profile.json"
 SARAMIN_API_URL = "https://oapi.saramin.co.kr/job-search"
@@ -163,6 +165,23 @@ def connect(db_path: Path) -> sqlite3.Connection:
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_score ON jobs(score DESC)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_deadline ON jobs(deadline)")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS collection_query_stats (
+            query TEXT PRIMARY KEY,
+            runs INTEGER NOT NULL DEFAULT 0,
+            candidates INTEGER NOT NULL DEFAULT 0,
+            selected INTEGER NOT NULL DEFAULT 0,
+            score_sum INTEGER NOT NULL DEFAULT 0,
+            last_run_at TEXT NOT NULL
+        )
+    """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS collection_daily_stats (
+            collection_date TEXT PRIMARY KEY,
+            new_selected INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL
+        )
+    """)
     conn.commit()
     return conn
 
@@ -889,6 +908,87 @@ def upsert_jobs(conn: sqlite3.Connection, jobs: Iterable[Job]) -> tuple[int, int
     return inserted, updated
 
 
+def _query_learning_bonus(conn: sqlite3.Connection, matched_query: str) -> float:
+    """과거에 높은 점수 공고를 만든 검색어를 소폭 우대한다.
+
+    기본 적합도보다 영향이 커져 편향이 고착되지 않도록 최대 8점으로 제한한다.
+    """
+    bonuses = []
+    for query in filter(None, (part.strip() for part in matched_query.split(","))):
+        row = conn.execute(
+            "SELECT candidates, selected, score_sum FROM collection_query_stats WHERE query=?", (query,)
+        ).fetchone()
+        if row and row["candidates"]:
+            average = row["score_sum"] / row["candidates"]
+            selection_rate = row["selected"] / row["candidates"]
+            bonuses.append(min(8.0, average * 0.2 + selection_rate * 4))
+    return max(bonuses, default=0.0)
+
+
+def select_jobs_for_storage(
+    conn: sqlite3.Connection,
+    jobs: Iterable[Job],
+    max_new: int = DEFAULT_MAX_NEW_JOBS_PER_RUN,
+    min_score: int = DEFAULT_MIN_COLLECTION_SCORE,
+) -> list[Job]:
+    """기존의 적합 공고는 갱신하고 신규는 학습 점수 상위 ``max_new``건만 고른다."""
+    jobs = list(jobs)
+    collection_date = datetime.now().astimezone().date().isoformat()
+    daily_row = conn.execute(
+        "SELECT new_selected FROM collection_daily_stats WHERE collection_date=?", (collection_date,)
+    ).fetchone()
+    remaining_new = max(0, max_new - (daily_row["new_selected"] if daily_row else 0))
+    existing_keys = {
+        (row["source"], row["source_id"])
+        for row in conn.execute("SELECT source, source_id FROM jobs")
+    }
+    existing = [job for job in jobs if (job.source, job.source_id) in existing_keys and job.score >= min_score]
+    new_jobs = [job for job in jobs if (job.source, job.source_id) not in existing_keys and job.score >= min_score]
+    candidate_skills = _candidate_skill_names()
+
+    def rank(job: Job) -> tuple[float, str, str]:
+        overlap = len(candidate_skills.intersection(detect_skills(" ".join((job.title, job.skills, job.keywords)))))
+        learned = _query_learning_bonus(conn, job.matched_query)
+        return (job.score + min(12, overlap * 3) + learned, job.posted_at, job.deadline)
+
+    ranked = sorted(new_jobs, key=rank, reverse=True)
+    selected: list[Job] = []
+    company_counts: dict[str, int] = {}
+    for job in ranked:
+        if len(selected) >= remaining_new:
+            break
+        company_key = re.sub(r"\s+", "", job.company).casefold()
+        if company_counts.get(company_key, 0) >= 2:
+            continue
+        selected.append(job)
+        company_counts[company_key] = company_counts.get(company_key, 0) + 1
+
+    selected_keys = {(job.source, job.source_id) for job in selected}
+    stamp = now_iso()
+    query_candidates: dict[str, list[Job]] = {}
+    for job in new_jobs:
+        for query in filter(None, (part.strip() for part in job.matched_query.split(","))):
+            query_candidates.setdefault(query, []).append(job)
+    for query, candidates in query_candidates.items():
+        chosen = sum((job.source, job.source_id) in selected_keys for job in candidates)
+        conn.execute("""
+            INSERT INTO collection_query_stats(query,runs,candidates,selected,score_sum,last_run_at)
+            VALUES (?,1,?,?,?,?)
+            ON CONFLICT(query) DO UPDATE SET
+              runs=runs+1, candidates=candidates+excluded.candidates,
+              selected=selected+excluded.selected, score_sum=score_sum+excluded.score_sum,
+              last_run_at=excluded.last_run_at
+        """, (query, len(candidates), chosen, sum(job.score for job in candidates), stamp))
+    conn.execute("""
+        INSERT INTO collection_daily_stats(collection_date,new_selected,updated_at)
+        VALUES (?,?,?)
+        ON CONFLICT(collection_date) DO UPDATE SET
+          new_selected=new_selected+excluded.new_selected, updated_at=excluded.updated_at
+    """, (collection_date, len(selected), stamp))
+    conn.commit()
+    return existing + selected
+
+
 _SARAMIN_MAIL_BRIDGE_URL_RE = re.compile(r'href=["\'](https://api-mail\.saramin\.co\.kr/mail-bridge\?[^"\']+)["\']')
 
 
@@ -1478,8 +1578,11 @@ def collect(args: argparse.Namespace) -> None:
         print(f"  알바천국(크롤링) {len(jobs)}건 수신")
         merge(jobs, ALBA_MATCHED_QUERY_LABEL)
 
-    inserted, updated = upsert_jobs(conn, collected.values())
-    print(f"\n완료: 신규 {inserted}건 / 기존 갱신 {updated}건 / 중복 제거 후 {len(collected)}건")
+    max_new = max(0, int(config.get("max_new_jobs_per_run", DEFAULT_MAX_NEW_JOBS_PER_RUN)))
+    min_score = max(0, int(config.get("min_collection_score", DEFAULT_MIN_COLLECTION_SCORE)))
+    selected = select_jobs_for_storage(conn, collected.values(), max_new=max_new, min_score=min_score)
+    inserted, updated = upsert_jobs(conn, selected)
+    print(f"\n완료: 신규 {inserted}건(상한 {max_new}) / 기존 적합 공고 갱신 {updated}건 / 전체 후보 {len(collected)}건")
 
 
 # ★ 2026-09-09: "신규 모집공고 114건 수집했다는데 관련 챗이 하나도 없다.
@@ -1532,7 +1635,11 @@ def cmd_cleanup(args: argparse.Namespace) -> None:
     cutoff = today - timedelta(days=args.grace_days)
     rows = conn.execute("SELECT * FROM jobs").fetchall()
     expired = []
+    irrelevant = []
     for row in rows:
+        if row["score"] < args.min_score:
+            irrelevant.append(row)
+            continue
         reference = datetime.now()
         try:
             reference = datetime.fromisoformat(row["last_seen_at"]).replace(tzinfo=None)
@@ -1541,18 +1648,19 @@ def cmd_cleanup(args: argparse.Namespace) -> None:
         deadline = _parse_job_deadline_end(row["deadline"], reference)
         if deadline and deadline < cutoff:
             expired.append(row)
-    if not expired:
+    if not expired and not irrelevant:
         print("정리 대상 없음 — 확실한 마감일이 유예 기간보다 오래 지난 공고가 없습니다.")
         return
     if args.dry_run:
-        print(f"시험 실행: 만료 공고 {len(expired)}건 (삭제·보관하지 않음)")
+        print(f"시험 실행: 만료 {len(expired)}건 / 적합도 미달 {len(irrelevant)}건 (삭제·보관하지 않음)")
         return
     archive_rows(args.archive_db, "job", expired, f"deadline_before_{cutoff.isoformat()}")
-    ids = [row["id"] for row in expired]
+    archive_rows(args.archive_db, "job", irrelevant, f"score_below_{args.min_score}")
+    ids = [row["id"] for row in expired + irrelevant]
     placeholders = ",".join("?" for _ in ids)
     conn.execute(f"DELETE FROM jobs WHERE id IN ({placeholders})", ids)
     conn.commit()
-    print(f"정리 완료: 만료 공고 {len(ids)}건을 {args.archive_db}에 보관 후 삭제")
+    print(f"정리 완료: 만료 {len(expired)}건 / 적합도 미달 {len(irrelevant)}건을 {args.archive_db}에 보관 후 삭제")
 
 
 def list_jobs(args: argparse.Namespace) -> None:
@@ -2659,6 +2767,7 @@ def parser() -> argparse.ArgumentParser:
     )
     cleanup.add_argument("--grace-days", type=int, default=DEFAULT_CLEANUP_GRACE_DAYS)
     cleanup.add_argument("--archive-db", type=Path, default=DEFAULT_EXPIRED_ARCHIVE)
+    cleanup.add_argument("--min-score", type=int, default=DEFAULT_MIN_COLLECTION_SCORE)
     cleanup.add_argument("--dry-run", action="store_true")
     cleanup.set_defaults(func=cmd_cleanup)
     return p

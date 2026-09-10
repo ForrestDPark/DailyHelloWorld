@@ -56,7 +56,7 @@ class JobCollectorTest(unittest.TestCase):
         ])
         archive = root / "archive.db"
         jc.cmd_cleanup(argparse.Namespace(db=root / "jobs.db", grace_days=7,
-                                          archive_db=archive, dry_run=False))
+                                          archive_db=archive, dry_run=False, min_score=0))
         left = {row[0] for row in conn.execute("SELECT source_id FROM jobs")}
         self.assertEqual(left, {"rolling", "unknown"})
         archived = sqlite3.connect(archive).execute(
@@ -69,6 +69,42 @@ class JobCollectorTest(unittest.TestCase):
         self.assertEqual(str(jc._parse_job_deadline_end("~ 09/30(수)", reference)), "2026-09-30")
         self.assertEqual(str(jc._parse_job_deadline_end("내일마감", reference)), "2026-09-11")
         self.assertIsNone(jc._parse_job_deadline_end("상시채용", reference))
+
+    def test_collection_stores_at_most_twenty_new_relevant_jobs_and_learns_queries(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        conn = jc.connect(Path(directory.name) / "jobs.db")
+        self.addCleanup(conn.close)
+        jobs = [jc.Job(
+            source_id=str(i), title=f"Python 데이터 개발자 {i}", company=f"회사{i}",
+            url=f"https://example.com/{i}", score=10 + i, skills="Python SQL",
+            matched_query="Python 백엔드",
+        ) for i in range(30)]
+        jobs.append(jc.Job(source_id="irrelevant", title="매장 직원", company="무관",
+                           url="https://example.com/no", score=0,
+                           matched_query="알바천국 최신 공고(사이트맵)"))
+        selected = jc.select_jobs_for_storage(conn, jobs, max_new=20, min_score=1)
+        self.assertEqual(len(selected), 20)
+        self.assertNotIn("irrelevant", {job.source_id for job in selected})
+        stats = conn.execute(
+            "SELECT candidates,selected FROM collection_query_stats WHERE query='Python 백엔드'"
+        ).fetchone()
+        self.assertEqual(tuple(stats), (30, 20))
+        more = [jc.Job(source_id=f"next-{i}", title=f"Python 개발 {i}", company=f"다른{i}",
+                       url=f"https://example.com/next/{i}", score=30,
+                       matched_query="Python 백엔드") for i in range(5)]
+        self.assertEqual(jc.select_jobs_for_storage(conn, more, max_new=20, min_score=1), [])
+
+    def test_collection_limits_same_company_to_two_new_jobs(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        conn = jc.connect(Path(directory.name) / "jobs.db")
+        self.addCleanup(conn.close)
+        jobs = [jc.Job(source_id=str(i), title=f"Python 개발 {i}", company="한회사",
+                       url=f"https://example.com/{i}", score=30 - i,
+                       matched_query="Python 백엔드") for i in range(8)]
+        selected = jc.select_jobs_for_storage(conn, jobs, max_new=20, min_score=1)
+        self.assertEqual(len(selected), 2)
 
     def _job_row(self, **overrides):
         directory = tempfile.TemporaryDirectory()

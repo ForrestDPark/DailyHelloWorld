@@ -753,6 +753,17 @@ JOB_SEEKER_PERSONA_NAME = "구직지기"
 CAREER_COACH_PERSONA_NAME = "커리어코치"
 STUDY_COACH_PERSONA_NAME = "스터디코치"
 JOB_SYSTEM_PERSONA_NAMES = {JOB_SEEKER_PERSONA_NAME, CAREER_COACH_PERSONA_NAME, STUDY_COACH_PERSONA_NAME}
+JOB_STUDY_SKILL_MARKERS = (
+    "Python", "FastAPI", "Django", "Java", "Spring", "JavaScript", "TypeScript",
+    "React", "SQL", "데이터베이스", "REST API", "AWS", "GCP", "Azure", "Docker",
+    "Kubernetes", "Linux", "Git", "AI", "LLM", "머신러닝", "딥러닝", "PyTorch",
+    "TensorFlow", "데이터 분석", "통계", "반도체", "TCAD", "신뢰성", "공정", "품질",
+)
+
+
+def _job_study_skills(text):
+    folded = (text or "").casefold()
+    return [name for name in JOB_STUDY_SKILL_MARKERS if name.casefold() in folded]
 
 
 def load_job_system_state():
@@ -795,11 +806,36 @@ def load_job_system_state():
             pass
     try:
         conn = sqlite3.connect(str(JOB_SYSTEM_DATA_DIR / "jobs.db"))
+        conn.row_factory = sqlite3.Row
         row = conn.execute("SELECT COUNT(*), MAX(score) FROM jobs").fetchone()
-        conn.close()
         if row and row[0]:
             lines.append(f"수집된 전체 공고: {row[0]}건 (수집 시점 키워드 점수 최고 {row[1]}점 — "
                          f"이건 오늘의 추천 점수와 다른, 수집 단계의 간이 점수)")
+        # 스터디코치가 단일 추천 공고가 아니라 활성 공고 전체의 반복 수요를 보고
+        # 계획을 세우도록, AI에게 DB 권한을 주지 않고 결정론적으로 집계한 값만 주입한다.
+        active = conn.execute(
+            "SELECT title,skills,keywords,matched_query,deadline,score FROM jobs "
+            "WHERE score > 0 ORDER BY score DESC LIMIT 500"
+        ).fetchall()
+        skill_counts: dict[str, int] = {}
+        query_counts: dict[str, int] = {}
+        for posting in active:
+            for skill in _job_study_skills(" ".join((posting["title"] or "", posting["skills"] or "", posting["keywords"] or ""))):
+                skill_counts[skill] = skill_counts.get(skill, 0) + 1
+            for query in filter(None, (part.strip() for part in (posting["matched_query"] or "").split(","))):
+                query_counts[query] = query_counts.get(query, 0) + 1
+        top_skills = sorted(skill_counts.items(), key=lambda item: (-item[1], item[0]))[:10]
+        top_queries = sorted(query_counts.items(), key=lambda item: (-item[1], item[0]))[:8]
+        if top_skills:
+            lines.append("전체 공고 반복 기술: " + ", ".join(f"{name} {count}건" for name, count in top_skills))
+        if top_queries:
+            lines.append("전체 공고 주요 직무 검색축: " + ", ".join(f"{name} {count}건" for name, count in top_queries))
+        urgent = [p for p in active if p["deadline"]][:8]
+        if urgent:
+            lines.append("마감일이 명시된 상위 공고: " + "; ".join(
+                f"{p['title']}({p['deadline']})" for p in urgent
+            ))
+        conn.close()
     except sqlite3.Error:
         pass
     profile = _read_json_file(JOB_SYSTEM_DIR / "candidate_profile.json")
@@ -900,6 +936,17 @@ JOB_SYSTEM_ADDENDUM = (
     "회사는'/'그건' 같은 지시어만으로 넘어가지 말고 회사명(또는 최소 회사명+직무)을 문장에 다시 "
     "넣어서 어떤 공고를 말하는지 항상 명확히 한다 — 특히 여러 공고를 비교하거나 언급이 여러 번 "
     "나올 때."
+)
+
+STUDY_COACH_ADDENDUM = (
+    "\n\n스터디코치는 이직 준비방에서 수집 공고 전체의 반복 기술을 학습 일정으로 바꾸는 담당자다. "
+    "시스템이 '전체 공고 기반 스터디 계획'을 요청하면 매 턴 주입된 전체 공고 반복 기술·직무 검색축·"
+    "마감 정보를 근거로 4주 목표와 이번 주 일정을 제안한다. 단일 공고 하나에 끌려가지 말고 여러 "
+    "공고에서 반복되는 기술을 우선한다. 일정은 하루 1~2개 과제로 제한하고 각 과제에 학습 내용, "
+    "직접 만들 결과물, 완료 기준을 붙인다. 자격증은 채용 필수라고 단정하지 말고 직무 연관 준비 "
+    "후보로만 제시한다. 확인되지 않은 경력이나 공부 가능 시간을 지어내지 말며, 시간이 불명확하면 "
+    "평일 60분·휴일 120분 기준의 조정 가능한 초안이라고 명시한다. 실제 캘린더·파일·Notion을 "
+    "수정하지 않고 채팅으로 계획만 보고한다.\n"
 )
 
 # ★ "일본어 자막추출도 비슷한 방식으로 플랜 만들어줘" → "일본어 스터디방으로
@@ -2204,6 +2251,8 @@ def sync_personas():
             system_prompt += ROUTINE_KEEPER_ADDENDUM
         elif persona["title"] in JOB_SYSTEM_PERSONA_NAMES:
             system_prompt += JOB_SYSTEM_ADDENDUM
+            if persona["title"] == STUDY_COACH_PERSONA_NAME:
+                system_prompt += STUDY_COACH_ADDENDUM
         elif persona["title"] == JP_TEACHER_PERSONA_NAME:
             system_prompt += JP_SUBTITLE_ADDENDUM
         elif persona["title"] == PIPELINE_EXPERT_PERSONA_NAME:
@@ -2685,7 +2734,7 @@ def _process_turn_inner(turn, persona_cache):
         live_state = load_shift_alarm_state(shift_alarm_state_key)
     elif persona_name in EBOOK_DISCUSSION_PERSONA_NAMES:
         live_state = load_ebook_reader_state()
-    elif persona_name == JOB_SEEKER_PERSONA_NAME:
+    elif persona_name in JOB_SYSTEM_PERSONA_NAMES:
         live_state = load_job_system_state()
     elif persona_name == CONTEST_PERSONA_NAME:
         live_state = load_contest_system_state()

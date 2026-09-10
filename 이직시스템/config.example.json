@@ -21,7 +21,8 @@
   ],
   "locations": [],
   "results_per_query": 30,
+  "max_new_jobs_per_run": 20,
+  "min_collection_score": 1,
   "sort": "pd",
   "enable_saramin_crawl": false
 }
-

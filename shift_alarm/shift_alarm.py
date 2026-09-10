@@ -3198,6 +3198,7 @@ def _notify_jp_subtitle_study_room(content):
 # 근거로 직접 자연스러운 채팅 메시지로 만든다.
 JOB_PREP_ROOM_ID = "custom_0e5dc0b026"
 CONTEST_PERSONA_NAME = "경진"
+STUDY_COACH_PERSONA_NAME = "스터디코치"
 
 
 def _notify_job_prep_room(content, target_persona=None):
@@ -7449,6 +7450,12 @@ class ShiftAlarmApp(rumps.App):
 
             self._run_job_analysis_top()
             self._run_contest_collector_and_analysis()
+            threading.Thread(
+                target=_notify_job_prep_room,
+                args=("📚 오늘 수집·정리된 전체 공고를 종합해 반복 요구 역량을 우선순위로 정리하고, 4주 목표와 이번 주 일별 스터디 계획을 제안해주세요.",),
+                kwargs={"target_persona": STUDY_COACH_PERSONA_NAME},
+                daemon=True,
+            ).start()
         except (OSError, subprocess.TimeoutExpired) as exc:
             print(f"⚠️ 이직시스템 수집 실행 오류: {exc}")
         finally:
