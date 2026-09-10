@@ -162,6 +162,12 @@ messagesEl.addEventListener("scroll", () => {
   // getBoundingClientRect 같은 레이아웃 작업은 관성이 멈춘 뒤 한 번만 한다.
   settleChatUiAfterScroll();
 }, { passive: true });
+messagesEl.addEventListener("pointerdown", (event) => {
+  if (!chatView.classList.contains("chat-chrome-collapsed")) return;
+  if (event.target.closest("a,button,input,textarea,select,.message-actions,.reaction-chip")) return;
+  setChatChromeCollapsed(false);
+  chatChromePendingState = null;
+});
 scrollBottomBtn.addEventListener("click", () => {
   messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: "smooth" });
 });
