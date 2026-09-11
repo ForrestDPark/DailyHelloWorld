@@ -12,23 +12,44 @@ CODEX_BIN="/opt/homebrew/bin/codex"
 PROGRESS_SCRIPT="$REPO_DIR/손자병법/pipeline_progress.py"
 
 mkdir -p "$LOG_DIR"
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-  exit 0
+acquire_lock() {
+  if mkdir "$LOCK_DIR" 2>/dev/null; then
+    print -r -- "$$" > "$LOCK_DIR/owner_pid"
+    return 0
+  fi
+  local owner_pid=""
+  [[ -f "$LOCK_DIR/owner_pid" ]] && owner_pid=$(<"$LOCK_DIR/owner_pid")
+  if [[ "$owner_pid" == <-> ]] && kill -0 "$owner_pid" 2>/dev/null; then
+    return 1
+  fi
+  # 구버전의 빈 잠금 또는 죽은 PID의 잠금만 정확한 경로에서 회수한다.
+  rm -f "$LOCK_DIR/owner_pid"
+  rmdir "$LOCK_DIR" 2>/dev/null || return 1
+  mkdir "$LOCK_DIR" || return 1
+  print -r -- "$$" > "$LOCK_DIR/owner_pid"
+}
+
+if ! acquire_lock; then
+  exit 75
 fi
 
 STAMP=$(date '+%Y-%m-%d_%H-%M-%S')
 LOG_FILE="$LOG_DIR/$STAMP.log"
 LAST_LOG="$LOG_DIR/latest.log"
+PROMPT_FILE=""
 
 finalize_run() {
   local exit_code=$?
+  [[ -n "${PROMPT_FILE:-}" ]] && rm -f "$PROMPT_FILE"
   if [[ -n "$TARGET_VERSE" && -f "$PROGRESS_SCRIPT" ]]; then
     if (( exit_code == 0 )); then
       /usr/bin/python3 "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress 100 --stage "분석 완료" --state complete --pid "$$" || true
     else
       local failure_stage="분석 중단 · 로그 확인 필요"
       local failure_progress=5
-      if [[ -f "$LOG_FILE" ]] && /usr/bin/grep -q "You've hit your usage limit" "$LOG_FILE"; then
+      if [[ -n "${FAILURE_STAGE:-}" ]]; then
+        failure_stage="$FAILURE_STAGE"
+      elif [[ -f "$LOG_FILE" ]] && /usr/bin/grep -Eq "You've hit your (usage|session) limit|rate limit" "$LOG_FILE"; then
         local retry_at
         retry_at=$(/usr/bin/sed -nE 's/.*try again at ([^.]+)\..*/\1/p' "$LOG_FILE" | /usr/bin/tail -1)
         failure_stage="Codex 사용량 제한"
@@ -39,6 +60,7 @@ finalize_run() {
       /usr/bin/python3 "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress "$failure_progress" --stage "$failure_stage" --state failed --pid "$$" || true
     fi
   fi
+  rm -f "$LOCK_DIR/owner_pid"
   rmdir "$LOCK_DIR" 2>/dev/null || true
   if [[ -f "$LOG_FILE" ]]; then
     cp "$LOG_FILE" "$LAST_LOG"
@@ -70,21 +92,17 @@ git fetch origin >> "$LOG_FILE" 2>&1
 git merge --ff-only origin/main >> "$LOG_FILE" 2>&1
 
 choose_engine() {
-  if [[ -f "$LAST_LOG" ]] && (( $(date +%s) - $(stat -f %m "$LAST_LOG") < 21600 )) &&
-     /usr/bin/grep -q "ERROR: You've hit your usage limit" "$LAST_LOG"; then
-    print -r -- "claude"
-    return
-  fi
   PYTHONPATH="/Users/forrestdpark/Desktop/PDG/DailyHelloWorld_/shift_alarm" \
     /opt/anaconda3/bin/python3 -c 'import ai_usage; print(ai_usage.pick_less_used_engine())' 2>/dev/null || print -r -- "codex"
 }
 
 ENGINE=$(choose_engine)
 run_selected_engine() {
+  local selected_engine="${1:-$ENGINE}"
   if [[ -n "$TARGET_VERSE" && -f "$PROGRESS_SCRIPT" ]]; then
-    /usr/bin/python3 "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress 8 --stage "${ENGINE} 선택 · 분석 시작" --state running --pid "$$"
+    /usr/bin/python3 "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress 8 --stage "${selected_engine} 선택 · 분석 시작" --state running --pid "$$"
   fi
-  if [[ "$ENGINE" == "claude" ]]; then
+  if [[ "$selected_engine" == "claude" ]]; then
     /usr/bin/caffeinate -i /opt/homebrew/bin/claude -p --output-format text \
       --no-session-persistence --dangerously-skip-permissions --add-dir "$REPO_DIR" --
   else
@@ -94,6 +112,7 @@ run_selected_engine() {
   fi
 }
 
+PROMPT_FILE=$(mktemp "/private/tmp/sunzi-prompt.XXXXXX")
 if [[ -n "$TARGET_VERSE" ]]; then
   {
     if [[ "$PIPELINE_TASK" == "historical_case_backfill" ]]; then
@@ -106,7 +125,36 @@ if [[ -n "$TARGET_VERSE" ]]; then
     fi
     print -r -- "ShiftAlarm 진행률을 위해 각 단계가 끝날 때 /usr/bin/python3 손자병법/pipeline_progress.py --verse ${TARGET_VERSE} --mode ${ANALYSIS_MODE} --progress 숫자 --stage '현재 단계'를 실행하세요. 정본·자료 확인 20, 본문 초안 45, 검증 65, GitHub 반영 78, Notion 저장·재조회 90, Tulpa Chat 보고 97을 사용하고 실제로 끝나기 전에 다음 단계 수치를 기록하지 마세요."
     /bin/cat "$SOURCE_PROMPT"
-  } | run_selected_engine >> "$LOG_FILE" 2>&1
+  } > "$PROMPT_FILE"
 else
-  run_selected_engine < "$SOURCE_PROMPT" >> "$LOG_FILE" 2>&1
+  /bin/cat "$SOURCE_PROMPT" > "$PROMPT_FILE"
 fi
+
+set +e
+run_selected_engine "$ENGINE" < "$PROMPT_FILE" >> "$LOG_FILE" 2>&1
+ENGINE_EXIT=$?
+set -e
+
+if (( ENGINE_EXIT != 0 )) && /usr/bin/grep -Eq "You've hit your (usage|session) limit|rate limit" "$LOG_FILE"; then
+  FALLBACK_ENGINE="codex"
+  [[ "$ENGINE" == "codex" ]] && FALLBACK_ENGINE="claude"
+  print -r -- "\n[자동 전환] ${ENGINE} 사용량 제한을 감지해 ${FALLBACK_ENGINE}로 한 번 전환합니다." >> "$LOG_FILE"
+  FALLBACK_START_LINE=$(/usr/bin/wc -l < "$LOG_FILE")
+  if [[ -n "$TARGET_VERSE" && -f "$PROGRESS_SCRIPT" ]]; then
+    /usr/bin/python3 "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress 8 --stage "${ENGINE} 제한 · ${FALLBACK_ENGINE}로 전환" --state running --pid "$$" || true
+  fi
+  set +e
+  run_selected_engine "$FALLBACK_ENGINE" < "$PROMPT_FILE" >> "$LOG_FILE" 2>&1
+  ENGINE_EXIT=$?
+  set -e
+  if (( ENGINE_EXIT != 0 )); then
+    if /usr/bin/tail -n "+$((FALLBACK_START_LINE + 1))" "$LOG_FILE" | /usr/bin/grep -Eq "You've hit your (usage|session) limit|rate limit"; then
+      FAILURE_STAGE="Claude·Codex 사용량 제한 · 잠시 후 다시 시도"
+    else
+      FAILURE_STAGE="${ENGINE} 제한 후 ${FALLBACK_ENGINE} 실행도 실패 · 로그 확인 필요"
+    fi
+  fi
+fi
+rm -f "$PROMPT_FILE"
+PROMPT_FILE=""
+exit "$ENGINE_EXIT"

@@ -1317,6 +1317,41 @@ _sunzi_pipeline_start_lock = Lock()
 _sunzi_pipeline_process = None
 
 
+def _pid_is_alive(pid):
+    if not isinstance(pid, int) or pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def _sunzi_pipeline_lock_active():
+    """실행 주체가 없는 낡은 잠금은 회수하고 실제 실행 잠금만 보존한다."""
+    if not SUNZI_PIPELINE_LOCK_DIR.exists():
+        return False
+    owner_file = SUNZI_PIPELINE_LOCK_DIR / "owner_pid"
+    owner_pid = 0
+    try:
+        owner_pid = int(owner_file.read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        try:
+            owner_pid = int(json.loads(SUNZI_PIPELINE_STATUS_PATH.read_text(encoding="utf-8")).get("pid", 0))
+        except (OSError, ValueError, json.JSONDecodeError):
+            owner_pid = 0
+    if _pid_is_alive(owner_pid):
+        return True
+    try:
+        owner_file.unlink(missing_ok=True)
+        SUNZI_PIPELINE_LOCK_DIR.rmdir()
+        print(f"♻️ 종료된 손자병법 실행의 잠금을 회수했습니다(pid={owner_pid or '없음'}).", flush=True)
+    except OSError as exc:
+        print(f"⚠️ 손자병법의 낡은 잠금을 회수하지 못했습니다: {exc}", flush=True)
+        return True
+    return False
+
+
 def _is_sunzi_pipeline_command(content):
     normalized = content.replace("_", " ")
     return bool(SUNZI_PIPELINE_COMMAND_RE.search(normalized) or SUNZI_BACKFILL_COMMAND_RE.search(normalized))
@@ -1385,6 +1420,8 @@ def _report_sunzi_pipeline_result(process, room_id, verse_number, started_at):
         pass
     if return_code == 0:
         content = f"九地篇 {verse_number}구절 해석 파이프라인 실행을 마쳤습니다. 아래 최종 보고에서 Notion·병법 사이트 반영과 검증 결과를 확인해주세요."
+    elif return_code == 75:
+        content = f"九地篇 {verse_number}구절은 다른 분석 작업이 실제로 실행 중이라 중복 실행하지 않았습니다. 현재 작업이 끝나면 다시 시작할 수 있습니다."
     else:
         reason = ""
         try:
@@ -1431,7 +1468,7 @@ def _maybe_start_sunzi_pipeline(turn):
         with _sunzi_pipeline_start_lock:
             if (
                 (_sunzi_pipeline_process is not None and _sunzi_pipeline_process.poll() is None)
-                or SUNZI_PIPELINE_LOCK_DIR.exists()
+                or _sunzi_pipeline_lock_active()
             ):
                 _api("/api/worker/complete", "POST", {
                     "turn_id": turn["turn_id"],
