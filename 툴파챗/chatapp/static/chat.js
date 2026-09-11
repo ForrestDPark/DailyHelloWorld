@@ -56,42 +56,6 @@ messageSearch.addEventListener("input", () => {
 // 지난 대화를 읽고 있을 때만 의미가 있다.
 const scrollBottomBtn = document.getElementById("scroll-bottom-btn");
 const SCROLL_BOTTOM_THRESHOLD_PX = 120;
-const CHAT_CHROME_SCROLL_THRESHOLD_PX = 18;
-let chatChromeScrollAnchor = 0;
-let chatChromeScrollDirection = 0;
-let chatChromeLastScrollTop = 0;
-let chatChromeSettleTimer = null;
-let chatChromePendingState = null;
-
-function setChatChromeCollapsed(collapsed) {
-  chatView.classList.toggle("chat-chrome-collapsed", collapsed);
-}
-
-function resetChatChromeForRoom() {
-  if (chatChromeSettleTimer) clearTimeout(chatChromeSettleTimer);
-  chatChromeSettleTimer = null;
-  chatChromePendingState = null;
-  chatChromeScrollAnchor = 0;
-  chatChromeScrollDirection = 0;
-  chatChromeLastScrollTop = 0;
-  const compactLandscape = window.matchMedia("(orientation: landscape) and (max-height: 500px)").matches;
-  setChatChromeCollapsed(compactLandscape);
-}
-
-function settleChatUiAfterScroll() {
-  if (chatChromeSettleTimer) clearTimeout(chatChromeSettleTimer);
-  chatChromeSettleTimer = setTimeout(() => {
-    if (chatChromePendingState !== null) setChatChromeCollapsed(chatChromePendingState);
-    chatChromeSettleTimer = null;
-    // 접힘으로 flex 높이가 바뀐 다음 프레임에 한 번만 치수와 읽음 위치를
-    // 잰다. 스크롤 중에는 강제 레이아웃 계산을 전혀 하지 않는다.
-    readVisibilityFrame = requestAnimationFrame(() => {
-      updateScrollBottomVisibility();
-      markVisibleMessagesRead();
-      readVisibilityFrame = null;
-    });
-  }, 140);
-}
 
 function updateScrollBottomVisibility() {
   const distanceFromBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight;
@@ -144,30 +108,13 @@ function markVisibleMessagesRead() {
 }
 
 messagesEl.addEventListener("scroll", () => {
-  const currentScrollTop = Math.max(0, messagesEl.scrollTop);
-  const direction = Math.sign(currentScrollTop - chatChromeLastScrollTop);
-  if (currentScrollTop <= 8) {
-    chatChromePendingState = false;
-    chatChromeScrollAnchor = currentScrollTop;
-    chatChromeScrollDirection = 0;
-  } else if (direction && direction !== chatChromeScrollDirection) {
-    chatChromeScrollDirection = direction;
-    chatChromeScrollAnchor = chatChromeLastScrollTop;
-  } else if (Math.abs(currentScrollTop - chatChromeScrollAnchor) >= CHAT_CHROME_SCROLL_THRESHOLD_PX) {
-    chatChromePendingState = direction > 0;
-    chatChromeScrollAnchor = currentScrollTop;
-  }
-  chatChromeLastScrollTop = currentScrollTop;
-  // 스크롤 중 실행하는 작업은 여기까지다. DOM 클래스 변경, scrollHeight,
-  // getBoundingClientRect 같은 레이아웃 작업은 관성이 멈춘 뒤 한 번만 한다.
-  settleChatUiAfterScroll();
+  if (readVisibilityFrame !== null) return;
+  readVisibilityFrame = requestAnimationFrame(() => {
+    updateScrollBottomVisibility();
+    markVisibleMessagesRead();
+    readVisibilityFrame = null;
+  });
 }, { passive: true });
-messagesEl.addEventListener("pointerdown", (event) => {
-  if (!chatView.classList.contains("chat-chrome-collapsed")) return;
-  if (event.target.closest("a,button,input,textarea,select,.message-actions,.reaction-chip")) return;
-  setChatChromeCollapsed(false);
-  chatChromePendingState = null;
-});
 scrollBottomBtn.addEventListener("click", () => {
   messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: "smooth" });
 });
@@ -2186,7 +2133,6 @@ async function showChatView(roomId) {
   scrollBottomBtn.classList.add("hidden");
   roomListView.classList.add("hidden");
   chatView.classList.remove("hidden");
-  resetChatChromeForRoom();
   // ★ 새로고침·직접 URL 접속처럼 showRoomList()를 거치지 않고 바로 이
   // 방으로 들어온 경우 roomsCache가 비어 있어 그룹 회의방 여부(공지 배너,
   // 참여자 버튼, "(가상)" 라벨)를 전부 잘못 판단하는 버그가 있었다
