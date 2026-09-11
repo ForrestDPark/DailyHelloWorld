@@ -1895,10 +1895,15 @@ SUNZI_PIPELINE_PERSONA_NAME = "손무"
 SUNZI_PIPELINE_COMMAND_RE = re.compile(
     r"손자병법.{0,20}다음\s*구절.{0,20}(?:해석|분석|최신화)(?:해|해줘|해주세요|하라|진행)?"
 )
+SUNZI_BACKFILL_COMMAND_RE = re.compile(
+    r"손자병법\s*구지편\s*(\d{1,2})구절.{0,800}?(?:4번\s*)?역사적\s*실증\s*사례.{0,120}?(?:추가|보강)",
+    re.DOTALL,
+)
 
 
 def _is_sunzi_pipeline_command(content: str) -> bool:
-    return bool(SUNZI_PIPELINE_COMMAND_RE.search(content.replace("_", " ")))
+    normalized = content.replace("_", " ")
+    return bool(SUNZI_PIPELINE_COMMAND_RE.search(normalized) or SUNZI_BACKFILL_COMMAND_RE.search(normalized))
 
 # ★ 2026-08-26: "다른 사람들의 요구·요청사항·개선사항을 모아서 나한테
 # 보고하는 에이전틱 툴파" 요청 — worker/persona_worker.py의 ADMIN_PERSONA_NAME과

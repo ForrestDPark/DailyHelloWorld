@@ -5,6 +5,7 @@ REPO_DIR="/Users/forrestdpark/.codex-worktrees/sunzi-nightly"
 SOURCE_PROMPT="/Users/forrestdpark/Desktop/PDG/DailyHelloWorld_/손자병법/nightly_codex_prompt.md"
 TARGET_VERSE="${SUNZI_TARGET_VERSE:-}"
 ANALYSIS_MODE="${SUNZI_ANALYSIS_MODE:-full}"
+PIPELINE_TASK="${SUNZI_PIPELINE_TASK:-next_verse}"
 LOG_DIR="/Users/forrestdpark/Library/Logs/CodexSunzi"
 LOCK_DIR="/private/tmp/com.forrest.codex-sunzi-nightly.lock"
 CODEX_BIN="/opt/homebrew/bin/codex"
@@ -95,7 +96,11 @@ run_selected_engine() {
 
 if [[ -n "$TARGET_VERSE" ]]; then
   {
-    print -r -- "이번 실행은 채팅에서 소유자가 직접 승인한 九地篇 ${TARGET_VERSE}구절 전용 작업입니다. 다른 번호를 고르지 말고, Notion 원문에서 이 번호의 정확한 원문·독음을 재확인한 뒤 아래 전체 파이프라인을 수행하세요."
+    if [[ "$PIPELINE_TASK" == "historical_case_backfill" ]]; then
+      print -r -- "이번 실행은 채팅에서 소유자가 한 번 승인한 九地篇 ${TARGET_VERSE}구절의 역사적 실증 사례 보강 전용 작업입니다. 다음 미완료 구절을 고르지 마세요. 기존 ${TARGET_VERSE}구절의 1·2·3·5번과 원문·독음은 그대로 보존하고, 비어 있는 4번 역사적 실증 사례·필수 도판·토론만 완성하세요. 완료 번호를 증가시키지 말고 기존 Notion 페이지와 사이트 상세 페이지를 갱신한 뒤 같은 구절을 명시적 재게시하세요. 중간 승인을 다시 요구하지 마세요."
+    else
+      print -r -- "이번 실행은 채팅에서 소유자가 직접 승인한 九地篇 ${TARGET_VERSE}구절 전용 작업입니다. 다른 번호를 고르지 말고, Notion 원문에서 이 번호의 정확한 원문·독음을 재확인한 뒤 아래 전체 파이프라인을 수행하세요."
+    fi
     if [[ "$ANALYSIS_MODE" == "light" ]]; then
       print -r -- "이번 실행은 라이트 모드입니다. 최신 README의 라이트 모드 계약대로 4번 역사적 실증 사례와 그 전용 이미지·지휘관 토론만 제외하고, 나머지 본문과 검증·GitHub·Notion·Tulpa Chat 단계를 수행하세요. 병법 사이트 생성·배포는 하지 마세요. validate_light_analysis.py를 반드시 통과해야 합니다."
     fi

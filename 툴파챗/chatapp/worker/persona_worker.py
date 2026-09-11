@@ -1292,6 +1292,10 @@ SUNZI_PIPELINE_PERSONA_NAME = "손무"
 SUNZI_PIPELINE_COMMAND_RE = re.compile(
     r"손자병법.{0,20}다음\s*구절.{0,20}(?:해석|분석|최신화)(?:해|해줘|해주세요|하라|진행)?"
 )
+SUNZI_BACKFILL_COMMAND_RE = re.compile(
+    r"손자병법\s*구지편\s*(\d{1,2})구절.{0,800}?(?:4번\s*)?역사적\s*실증\s*사례.{0,120}?(?:추가|보강)",
+    re.DOTALL,
+)
 SUNZI_AUTOMATION_REPO_DIR = Path(os.environ.get(
     "SUNZI_AUTOMATION_REPO_DIR", "/Users/forrestdpark/.codex-worktrees/sunzi-nightly"
 ))
@@ -1314,7 +1318,13 @@ _sunzi_pipeline_process = None
 
 
 def _is_sunzi_pipeline_command(content):
-    return bool(SUNZI_PIPELINE_COMMAND_RE.search(content.replace("_", " ")))
+    normalized = content.replace("_", " ")
+    return bool(SUNZI_PIPELINE_COMMAND_RE.search(normalized) or SUNZI_BACKFILL_COMMAND_RE.search(normalized))
+
+
+def _sunzi_backfill_verse(content):
+    match = SUNZI_BACKFILL_COMMAND_RE.search(content.replace("_", " "))
+    return int(match.group(1)) if match else None
 
 
 def _plain_sunzi_text(value):
@@ -1343,6 +1353,25 @@ def _next_sunzi_verse():
         raise ValueError("구지편의 다음 구절이 없습니다")
     original, reading = verses[current_number]
     return current_number + 1, _plain_sunzi_text(original), _plain_sunzi_text(reading)
+
+
+def _sunzi_verse_at(verse_number):
+    """채팅이 지정한 번호를 명령이나 경로로 쓰지 않고 정본 배열 인덱스로만 조회한다."""
+    if not 1 <= verse_number <= 99:
+        raise ValueError("구절 번호가 허용 범위를 벗어났습니다")
+    source = SUNZI_CHAPTER_SOURCE_PATH.read_text(encoding="utf-8")
+    chapter_match = re.search(
+        r'^\s*"11":\s*("(?:\\.|[^"\\])*")\s*,\s*^\s*"12":',
+        source, re.MULTILINE | re.DOTALL,
+    )
+    if not chapter_match:
+        raise ValueError("사이트 정본에서 구지편 원문을 찾지 못했습니다")
+    chapter = json.loads(chapter_match.group(1))
+    verses = re.findall(r"<details>\s*<summary>(.*?)<br>(.*?)</summary>", chapter, re.DOTALL)
+    if verse_number > len(verses):
+        raise ValueError(f"구지편 {verse_number}구절이 정본에 없습니다")
+    original, reading = verses[verse_number - 1]
+    return verse_number, _plain_sunzi_text(original), _plain_sunzi_text(reading)
 
 
 def _report_sunzi_pipeline_result(process, room_id, verse_number, started_at):
@@ -1395,6 +1424,8 @@ def _maybe_start_sunzi_pipeline(turn):
     from_owner = latest.get("sender") == OWNER_USERNAME and _is_sunzi_pipeline_command(content)
     if not (from_shift_alarm or from_owner):
         return False
+    backfill_verse = _sunzi_backfill_verse(content) if from_owner else None
+    task_kind = "historical_case_backfill" if backfill_verse is not None else "next_verse"
     light_mode = from_shift_alarm or bool(re.search(r"라이트\s*모드", content))
     try:
         with _sunzi_pipeline_start_lock:
@@ -1407,12 +1438,13 @@ def _maybe_start_sunzi_pipeline(turn):
                     "reply": "손자병법 구절 해석 파이프라인이 이미 실행 중입니다. 현재 작업이 끝난 뒤 결과를 보고하겠습니다.",
                 })
                 return True
-            verse_number, original, reading = _next_sunzi_verse()
+            verse_number, original, reading = (_sunzi_verse_at(backfill_verse) if backfill_verse else _next_sunzi_verse())
             if not SUNZI_PIPELINE_SCRIPT.is_file():
                 raise FileNotFoundError(f"파이프라인 스크립트 없음: {SUNZI_PIPELINE_SCRIPT}")
             env = os.environ.copy()
             env["SUNZI_TARGET_VERSE"] = str(verse_number)
-            env["SUNZI_ANALYSIS_MODE"] = "light" if light_mode else "full"
+            env["SUNZI_ANALYSIS_MODE"] = "full" if task_kind == "historical_case_backfill" else ("light" if light_mode else "full")
+            env["SUNZI_PIPELINE_TASK"] = task_kind
             started_at = time.time()
             process = subprocess.Popen(
                 ["/bin/zsh", str(SUNZI_PIPELINE_SCRIPT)],
@@ -1432,7 +1464,9 @@ def _maybe_start_sunzi_pipeline(turn):
         "reply": (
             f"다음은 九地篇 {verse_number}구절 「{original}」\n"
             f"독음: {reading}\n\n"
-            + ("ShiftAlarm 버튼 요청을 확인했습니다. 4번 역사적 실증 사례를 제외한 라이트 모드로 "
+            + ("소유자 요청 한 건을 승인으로 확인했습니다. 기존 1·2·3·5번은 보존하고 4번 역사적 실증 사례와 도판만 보강한 뒤 검증·Notion·사이트·토론방까지 반영합니다. 추가 승인은 필요하지 않습니다."
+               if task_kind == "historical_case_backfill" else
+               "ShiftAlarm 버튼 요청을 확인했습니다. 4번 역사적 실증 사례를 제외한 라이트 모드로 "
                "본문 작성·검증, GitHub·Notion 반영과 토론방 보고를 시작합니다."
                if light_mode else
                "소유자 명령을 승인으로 확인했습니다. 정본 검수부터 이미지 제작, Notion 재조회, "
