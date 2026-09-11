@@ -1818,7 +1818,10 @@ document.getElementById("chats-tab").addEventListener("click", () => setListMode
 // "홈"은 기본 탭(친구)으로 리셋 + 목록 맨 위로 스크롤을 뜻한다. 열려있는
 // 패널도 같이 정리한다.
 document.getElementById("home-brand-btn").addEventListener("click", () => {
-  location.hash = "#home";
+  // ★ 2026-09-12: 다른 정적 경로 링크들과 같은 이유로 hashchange에만 맡기지
+  // 않고 직접 route()를 실행한다(해시가 이미 #home이면 hashchange가 안 뜬다).
+  if (location.hash !== "#home") history.pushState(null, "", "#home");
+  route();
   closeMainListPanels();
 });
 
@@ -1954,6 +1957,26 @@ async function showPortalHome(focusSystems = false) {
   if (focusSystems) document.querySelector(".portal-services")?.scrollIntoView({behavior:"smooth", block:"start"});
 }
 
+// ★ 2026-09-12: "손자병법 탭 뜨는 시간이 오래 걸린다" 개선 — 이 탭은 외부
+// (chatgpt.site) 사이트를 iframe으로 통째로 불러오는데, 예전엔 탭을 클릭한
+// 그 순간에야 DNS·TLS 연결과 페이지 로드를 처음 시작해서 지연이 고스란히
+// 체감됐다. 이제 앱 부팅이 끝나고 유휴 시간에 백그라운드로 미리 로드해두고
+// (index.html의 preconnect와 함께), 실제 탭 진입 시엔 대부분 이미 로드가
+// 끝나 있거나 거의 끝나가는 상태다. 아직 로딩 중이면 스피너를 보여준다.
+function warmSunziFrame() {
+  const frame = document.getElementById("sunzi-frame");
+  if (frame.getAttribute("src")) return;
+  frame.addEventListener("load", () => {
+    document.getElementById("sunzi-frame-loading").classList.add("hidden");
+  }, { once: true });
+  frame.setAttribute("src", frame.dataset.src);
+}
+if ("requestIdleCallback" in window) {
+  requestIdleCallback(warmSunziFrame, { timeout: 4000 });
+} else {
+  setTimeout(warmSunziFrame, 1500);
+}
+
 function showSunziView() {
   currentRoom = null;
   pollGeneration += 1;
@@ -1961,21 +1984,27 @@ function showSunziView() {
   if (pollTimer) clearTimeout(pollTimer);
   authView.classList.add("hidden"); homeView.classList.add("hidden"); roomListView.classList.add("hidden"); chatView.classList.add("hidden");
   sunziView.classList.remove("hidden");
-  const frame = document.getElementById("sunzi-frame");
-  if (!frame.getAttribute("src")) frame.setAttribute("src", frame.dataset.src);
+  warmSunziFrame();
 }
 
-document.getElementById("portal-sunzi-link").addEventListener("click", (event) => {
+// ★ 2026-09-12: 이전엔 홈 화면의 "툴파챗" 카드(#portal-chat-link)에만 이
+// 직접 실행 방식을 적용했는데, 하단 탭(홈/친구/채팅/시스템)과 "빠로 시작하기"
+// 카드에는 여전히 일반 <a href="#..."> + hashchange 방식이라 같은 버그가
+// 남아 있었다("홈에서 툴파챗 눌러도 안 들어가지는데 하단 탭 채팅도 마찬가지,
+// 알림에서 항목 클릭하면 들어가진다" 지적) — hashchange는 해시가 실제로
+// "바뀔 때"만 발동해서, 앱을 껐다 켰을 때 브라우저/PWA가 이전 해시(예: 이미
+// #chats)를 그대로 복원해두면 같은 탭을 눌러도 아무 일도 안 일어난다.
+// 알림 클릭은 서비스워커의 client.navigate()로 실제 재탐색을 일으켜 초기
+// route() 부팅 경로를 다시 타기 때문에 그때만 정상 작동했던 것. 특정 id
+// 몇 개가 아니라 문서 전체에서 이 다섯 개 정적 경로로 가는 링크를 위임
+// 방식으로 잡아, 위치·개수와 무관하게 항상 route()를 직접 실행한다.
+const STATIC_HASH_ROUTES = new Set(["#home", "#friends", "#chats", "#systems", "#sunzi"]);
+document.addEventListener("click", (event) => {
+  const link = event.target.closest("a");
+  if (!link || !STATIC_HASH_ROUTES.has(link.getAttribute("href"))) return;
   event.preventDefault();
-  history.pushState(null, "", "#sunzi");
-  route();
-});
-
-// 같은 #chats 주소가 이미 남아 있는 PWA에서도 탭이 무반응처럼 보이지 않게
-// 해시 변경 이벤트에만 의존하지 않고 화면 전환을 직접 실행한다.
-document.getElementById("portal-chat-link").addEventListener("click", (event) => {
-  event.preventDefault();
-  history.pushState(null, "", "#chats");
+  const hash = link.getAttribute("href");
+  if (location.hash !== hash) history.pushState(null, "", hash);
   route();
 });
 
@@ -3385,7 +3414,8 @@ document.getElementById("upload-cancel-btn").addEventListener("click", () => {
 });
 
 document.getElementById("back-btn").addEventListener("click", () => {
-  location.hash = "#chats";
+  if (location.hash !== "#chats") history.pushState(null, "", "#chats");
+  route();
 });
 
 // ★ "처음 사용하는 사람들도 기능을 알 수 있게 도움말이 있으면 좋겠다"

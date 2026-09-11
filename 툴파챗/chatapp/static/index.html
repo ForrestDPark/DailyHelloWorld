@@ -20,7 +20,14 @@
 <meta name="twitter:title" content="툴파챗">
 <meta name="twitter:description" content="나만의 페르소나들과 이어가는 채팅">
 <meta name="twitter:image" content="/static/og-image.png">
-<link rel="stylesheet" href="/static/style.css?v=20260911-sunzi-clean-frame-v1">
+<!-- ★ 2026-09-12: "손자병법 탭 누르면 화면 뜨는 시간이 오래 걸린다" 지적 —
+     이 탭은 외부(chatgpt.site) 사이트를 iframe으로 불러오는데, 클릭한
+     순간에야 DNS·TLS 연결을 새로 맺어서 그 왕복 지연이 그대로 체감됐다.
+     preconnect로 앱이 열리는 즉시 그 도메인 연결을 미리 데워둔다(실제
+     페이지 로드는 chat.js가 부팅 후 유휴 시간에 백그라운드로 미리 시작). -->
+<link rel="preconnect" href="https://sunzi-strategy-notes.pulpilisory.chatgpt.site" crossorigin>
+<link rel="dns-prefetch" href="https://sunzi-strategy-notes.pulpilisory.chatgpt.site">
+<link rel="stylesheet" href="/static/style.css?v=20260912-nav-sunzi-fix-v1">
 <!-- ★ "새 메시지 알림(웹 푸시)" 요청(2026-08-27) — iOS Safari는 PWA로
      "홈 화면에 추가"돼 있어야만 웹 푸시가 동작한다. manifest.json이 그
      설치 가능 상태를 만든다. -->
@@ -93,7 +100,8 @@
   </div>
 
   <div id="sunzi-view" class="system-app-view hidden">
-    <iframe id="sunzi-frame" title="손자병법 읽기" loading="lazy" data-src="https://sunzi-strategy-notes.pulpilisory.chatgpt.site/?embedded=1"></iframe>
+    <div id="sunzi-frame-loading" class="system-app-loading"><span class="spinner"></span>손자병법을 불러오는 중…</div>
+    <iframe id="sunzi-frame" title="손자병법 읽기" data-src="https://sunzi-strategy-notes.pulpilisory.chatgpt.site/?embedded=1"></iframe>
   </div>
 
   <!-- 방 목록 (카카오톡 채팅 목록처럼) -->
@@ -293,6 +301,6 @@
     </div>
   </div>
 
-  <script src="/static/chat.js?v=20260912-maintenance-fallback-v1"></script>
+  <script src="/static/chat.js?v=20260912-nav-sunzi-fix-v1"></script>
 </body>
 </html>
