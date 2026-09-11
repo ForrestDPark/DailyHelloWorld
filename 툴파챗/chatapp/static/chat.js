@@ -1952,21 +1952,10 @@ function showSunziView() {
   if (!frame.getAttribute("src")) frame.setAttribute("src", frame.dataset.src);
 }
 
-let sunziEnteredFromHome = false;
 document.getElementById("portal-sunzi-link").addEventListener("click", (event) => {
   event.preventDefault();
-  sunziEnteredFromHome = true;
   history.pushState(null, "", "#sunzi");
   route();
-});
-document.getElementById("sunzi-back-btn").addEventListener("click", () => {
-  if (sunziEnteredFromHome) {
-    sunziEnteredFromHome = false;
-    history.back();
-  } else {
-    history.replaceState(null, "", "#home");
-    route();
-  }
 });
 
 document.getElementById("portal-account-btn").addEventListener("click", () => document.getElementById("account-name-btn").click());
