@@ -148,6 +148,7 @@ USERNAME_RE = re.compile(r"^[A-Za-z0-9_가-힣]{2,20}$")
 # 여부를 프론트가 확인하는 용도라 항상 응답한다(그 자체로 정보 노출 없음).
 PUBLIC_PATHS = {
     "/", "/api/whoami", "/api/auth/signup", "/api/auth/login", "/api/auth/logout", "/api/version",
+    "/api/public/sunzi-analysis",
     # ★ 2026-08-26: 구글/카카오 로그인 — 이 네 경로는 아직 세션이 없는 상태에서
     # 오는 요청(로그인 시작·프로바이더가 돌려보내는 콜백)이라 공개로 열어둔다.
     "/api/auth/google/login", "/api/auth/google/callback",
@@ -763,6 +764,13 @@ def check_all_shift_alarm_routine(request: Request):
 
 
 def _sunzi_light_pipeline_state(conn):
+    queued_row = conn.execute(
+        """SELECT m.content FROM pending_turns AS p
+             JOIN messages AS m ON m.id=p.source_message_id
+             WHERE p.persona_name=? AND p.status IN ('pending','processing')
+             ORDER BY p.id DESC LIMIT 1""",
+        ("손무",),
+    ).fetchone()
     queued = conn.execute(
         """SELECT COUNT(*) AS n FROM pending_turns
              WHERE persona_name=? AND status IN ('pending','processing')""",
@@ -795,11 +803,17 @@ def _sunzi_light_pipeline_state(conn):
             next_verse = int(completed.group(1)) + 1
     except OSError:
         pass
+    queued_verse = None
+    if queued_row:
+        queued_match = SUNZI_BACKFILL_COMMAND_RE.search(queued_row["content"].replace("_", " "))
+        if queued_match:
+            queued_verse = int(queued_match.group(1))
     return {
         "busy": bool(queued or running), "queued": bool(queued and not running),
         "running": running, "mode": pipeline.get("mode", "light"),
         "state": pipeline.get("state", "idle") if running or pipeline.get("state") != "running" else "interrupted",
-        "verse": pipeline.get("verse"), "progress": pipeline.get("progress", 0),
+        "verse": pipeline.get("verse"), "queued_verse": queued_verse,
+        "progress": pipeline.get("progress", 0),
         "stage": pipeline.get("stage", "분석 대기"), "elapsed_seconds": elapsed_seconds,
         "updated_at": pipeline.get("updated_at"), "next_chapter": "구지편",
         "next_verse": next_verse,
@@ -814,6 +828,36 @@ def shift_alarm_sunzi_analysis_status(request: Request):
         return _sunzi_light_pipeline_state(conn)
     finally:
         conn.close()
+
+
+@app.get("/api/public/sunzi-analysis")
+def public_sunzi_analysis_status(verse: int):
+    """손자병법 공개 앱에는 비밀값 없이 요청 구절의 진행 상태만 제공한다."""
+    if not 1 <= verse <= 99:
+        raise HTTPException(status_code=400, detail="구절 번호가 허용 범위를 벗어났습니다")
+    conn = get_conn()
+    try:
+        state = _sunzi_light_pipeline_state(conn)
+    finally:
+        conn.close()
+    active_verse = state["verse"] if state["running"] else state.get("queued_verse")
+    relevant = active_verse == verse or (state["state"] in ("complete", "failed") and state["verse"] == verse)
+    payload = {
+        "relevant": relevant,
+        "busy": state["busy"] if relevant else False,
+        "queued": state["queued"] if relevant else False,
+        "running": state["running"] if relevant else False,
+        "state": state["state"] if relevant else "idle",
+        "verse": verse,
+        "progress": state["progress"] if relevant else 0,
+        "stage": ("작업 시작 대기" if relevant and state["queued"] else state["stage"] if relevant else "요청 확인 중"),
+        "elapsed_seconds": state["elapsed_seconds"] if relevant else None,
+        "updated_at": state["updated_at"] if relevant else None,
+    }
+    return JSONResponse(payload, headers={
+        "Access-Control-Allow-Origin": "https://sunzi-strategy-notes.pulpilisory.chatgpt.site",
+        "Cache-Control": "no-store",
+    })
 
 
 @app.post("/api/shift-alarm/sunzi-analysis")
