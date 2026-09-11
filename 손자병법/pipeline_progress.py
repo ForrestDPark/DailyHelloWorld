@@ -6,7 +6,10 @@ import json
 import os
 from pathlib import Path
 
-STATUS_PATH = Path.home() / "Library/Logs/CodexSunzi/status.json"
+STATUS_PATH = Path(os.environ.get(
+    "SUNZI_PIPELINE_STATUS_PATH",
+    str(Path.home() / "Library/Logs/CodexSunzi/status.json"),
+))
 
 
 def main():
@@ -25,6 +28,15 @@ def main():
         previous = json.loads(STATUS_PATH.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         pass
+    # 새 구절이 이전 실행의 시작 시각을 물려받아 며칠째 실행 중으로 보이지
+    # 않게 한다. 같은 실행에서 단계만 전진할 때에만 시작 시각을 보존한다.
+    same_run = (
+        previous.get("verse") == args.verse
+        and previous.get("mode") == args.mode
+        and previous.get("state") == "running"
+        and args.progress > 5
+    )
+    started_at = args.started_at or (previous.get("started_at") if same_run else now)
     payload = {
         "verse": args.verse,
         "mode": args.mode,
@@ -32,7 +44,7 @@ def main():
         "stage": args.stage[:120],
         "state": args.state,
         "pid": args.pid or previous.get("pid", 0),
-        "started_at": args.started_at or previous.get("started_at") or now,
+        "started_at": started_at,
         "updated_at": now,
     }
     STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
