@@ -259,6 +259,10 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
         allowed = _resolve_auth(request)
         is_public = path in PUBLIC_PATHS or path.startswith("/static/")
         if not (allowed or is_public):
+            if path == "/api/sunzi/historical-case/start":
+                verse = request.query_params.get("verse", "")
+                if verse.isdigit() and 1 <= int(verse) <= 99:
+                    return RedirectResponse(f"/?sunzi_backfill={int(verse)}", status_code=303)
             return JSONResponse(status_code=401, content={"detail": "로그인이 필요합니다"})
         response = await call_next(request)
         share_param = request.query_params.get("share")

@@ -195,6 +195,19 @@ async function apiFetch(url, opts) {
 // 흐름은 팝업으로는 만들 수 없어서 필수적인 변경).
 let authMode = "login";
 
+function resumeSunziBackfillAfterLogin() {
+  const raw = new URLSearchParams(location.search).get("sunzi_backfill");
+  if (!raw || !/^\d{1,2}$/.test(raw)) return false;
+  const verse = Number(raw);
+  if (verse < 1 || verse > 99) return false;
+  if (!amOwner) {
+    showAuthView("이 작업은 관리자 계정으로만 시작할 수 있습니다.");
+    return true;
+  }
+  location.replace(`/api/sunzi/historical-case/start?verse=${verse}`);
+  return true;
+}
+
 function setAuthMode(mode) {
   authMode = mode;
   document.querySelectorAll(".auth-tab").forEach((el) => {
@@ -248,7 +261,7 @@ document.getElementById("auth-form").addEventListener("submit", async (e) => {
     canWrite = true;
     authView.classList.add("hidden");
     initAccountChip();
-    route();
+    if (!resumeSunziBackfillAfterLogin()) route();
   } catch (err) {
     errorEl.textContent = "네트워크 오류입니다";
     errorEl.classList.remove("hidden");
@@ -3393,7 +3406,7 @@ async function route() {
 
 window.addEventListener("hashchange", route);
 initAuth().then((ok) => {
-  if (ok) route();
+  if (ok && !resumeSunziBackfillAfterLogin()) route();
 });
 
 // ★ "업데이트할 때마다 페이지 재시작해야 하는 게 맞냐, 자연스럽게 바뀔 수
