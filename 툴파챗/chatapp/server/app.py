@@ -3826,6 +3826,40 @@ def post_message(msg: NewMessage, request: Request):
     return {"ok": True, "notified": targets}
 
 
+@app.get("/api/sunzi/historical-case/start")
+def start_sunzi_historical_case(verse: int, request: Request):
+    """손자병법 앱의 한 번 클릭을 소유자 승인으로 받아 고정 작업을 큐에 넣는다.
+
+    외부 사이트가 세션 쿠키를 읽는 방식이 아니라 브라우저가 툴파챗으로 직접
+    이동하므로, 서버가 기존 tulpa_session과 is_owner를 직접 재검증한다.
+    """
+    _require_owner(request)
+    if not 1 <= verse <= 99:
+        raise HTTPException(status_code=400, detail="구절 번호가 허용 범위를 벗어났습니다")
+    fetch_mode = request.headers.get("sec-fetch-mode", "")
+    if fetch_mode and fetch_mode != "navigate":
+        raise HTTPException(status_code=403, detail="브라우저 화면에서 직접 시작해야 합니다")
+    referer = request.headers.get("referer", "")
+    allowed_referers = (
+        "https://sunzi-strategy-notes.pulpilisory.chatgpt.site/",
+        "https://chat.tulpa-chat.site/",
+    )
+    if referer and not referer.startswith(allowed_referers):
+        raise HTTPException(status_code=403, detail="허용된 손자병법 앱에서 시작해야 합니다")
+    content = (
+        f"손자병법 구지편 {verse}구절의 LIGHT 분석에 4번 역사적 실증 사례를 추가해줘. "
+        "기존 1·2·3·5번은 보존하고, 이 앱 버튼 요청 자체를 소유자 승인으로 처리해서 "
+        "기존 손자병법 분석 파이프라인으로 조사·검증·Notion·사이트 업데이트까지 진행해줘."
+    )
+    result = post_message(NewMessage(content=content, room_id=SUNZI_DISCUSSION_ROOM_ID), request)
+    if not result.get("ok") or SUNZI_PIPELINE_PERSONA_NAME not in result.get("notified", []):
+        raise HTTPException(status_code=503, detail="손무 작업을 대기열에 넣지 못했습니다")
+    return RedirectResponse(
+        f"https://sunzi-strategy-notes.pulpilisory.chatgpt.site/verses/{verse}?pipeline=started",
+        status_code=303,
+    )
+
+
 @app.get("/api/admin/users")
 def admin_list_users(request: Request):
     """소유자 전용 — 계정 목록과 각자의 유이(UI 개발자) 권한 부여 여부, 가입
