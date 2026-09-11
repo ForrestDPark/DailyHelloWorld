@@ -1215,6 +1215,7 @@ REMINDERS = {
     "beef_bbq":        {"label": "🥩 소고기 구워먹는 날(월 1회·휴무일)", "enabled": True, "time": {"hour": 18, "minute": 0}},
     "day_shift_last_day_routine": {"label": "☕ 점심 먹고 아아 한잔·헬스장 갔다 오후 9시 이후 취침(주간 마지막날)", "enabled": True, "time": {"hour": 14, "minute": 30}},
     "engine_oil_change": {"label": "🛢️ 엔진오일 가는 날(5개월에 1회)", "enabled": True, "time": {"hour": 12, "minute": 0}},
+    "coconut_oil":     {"label": "🥥 코코넛오일 사는 날(2개월에 1회)", "enabled": True, "time": {"hour": 12, "minute": 15}},
     # ★ 2026-09-09: "Day,swing, gy 각각에도 멜라토닌 먹는 시각 리마인더
     # 만들어줘" 요청 — 지금까지 멜라토닌 알림은 S-D휴/G-S휴 "전환 휴무일"에만
     # 있었고 평소 근무일(Day/Swing/GY)엔 없었다. 근무일은 매일 반복이라
@@ -2066,6 +2067,8 @@ WALK_20K_CYCLE_DAYS = 7
 WALK_20K_OFFSETS = (0, 3)
 ENGINE_OIL_CHANGE_ANCHOR = datetime.date(2026, 8, 20)
 ENGINE_OIL_CHANGE_INTERVAL_MONTHS = 5
+COCONUT_OIL_ANCHOR = datetime.date(2026, 9, 12)
+COCONUT_OIL_INTERVAL_MONTHS = 2
 
 
 def _is_dongchan_call_day(d):
@@ -2148,6 +2151,17 @@ def _is_engine_oil_change_day(d):
         return False
     months_diff = (d.year - ENGINE_OIL_CHANGE_ANCHOR.year) * 12 + (d.month - ENGINE_OIL_CHANGE_ANCHOR.month)
     return months_diff % ENGINE_OIL_CHANGE_INTERVAL_MONTHS == 0
+
+
+def _is_coconut_oil_day(d):
+    """기준일(2026-09-12)부터 2개월마다 돌아오는 코코넛오일 구매일인지 반환.
+    엔진오일 리마인더와 같은 달 단위 주기 계산 방식을 그대로 쓴다."""
+    if d < COCONUT_OIL_ANCHOR:
+        return False
+    if d.day != COCONUT_OIL_ANCHOR.day:
+        return False
+    months_diff = (d.year - COCONUT_OIL_ANCHOR.year) * 12 + (d.month - COCONUT_OIL_ANCHOR.month)
+    return months_diff % COCONUT_OIL_INTERVAL_MONTHS == 0
 
 
 def _is_first_off_block_start_of_month(schedule, d):
@@ -2292,6 +2306,9 @@ def _get_today_reminder_items(schedule, now=None):
 
     if REMINDERS["engine_oil_change"]["enabled"] and _is_engine_oil_change_day(today):
         items.append(("engine_oil_change", REMINDERS["engine_oil_change"]["label"]))
+
+    if REMINDERS["coconut_oil"]["enabled"] and _is_coconut_oil_day(today):
+        items.append(("coconut_oil", REMINDERS["coconut_oil"]["label"]))
 
     if REMINDERS["melatonin_shift"]["enabled"] and get_shift_for_date(schedule, today) in ("Day", "Swing", "GY"):
         items.append(("melatonin_shift", REMINDERS["melatonin_shift"]["label"]))
