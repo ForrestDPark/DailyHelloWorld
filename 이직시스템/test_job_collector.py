@@ -70,6 +70,40 @@ class JobCollectorTest(unittest.TestCase):
         self.assertEqual(str(jc._parse_job_deadline_end("내일마감", reference)), "2026-09-11")
         self.assertIsNone(jc._parse_job_deadline_end("상시채용", reference))
 
+    def test_job_deadline_parser_supports_2digit_year_dot_and_korean_particle_formats(self):
+        """★ 2026-09-12: 콘테스트코리아류 "'26. 3. 26.(목) ~ 4. 24.(금)" 2자리
+        연도 점 표기와 "2026년 6월 17일(수) ~ 7월 12일(일)" 한글 년월일 표기가
+        전혀 파싱되지 않아 이미 지난 항목이 정리되지 않고 계속 남아있었다."""
+        reference = datetime(2026, 9, 12, 12, 0)
+        self.assertEqual(
+            str(jc._parse_job_deadline_end("'26. 3. 26.(목) ~ 4. 24.(금), 30일간", reference)),
+            "2026-04-24",
+        )
+        self.assertEqual(
+            str(jc._parse_job_deadline_end("2026년 6월 17일(수) ~ 7월 12일(일)", reference)),
+            "2026-07-12",
+        )
+        self.assertEqual(
+            str(jc._parse_job_deadline_end("6월 15일 ~ 8월 10일", reference)),
+            "2026-08-10",
+        )
+        # 정확한 날짜를 가늠할 수 없는 표기는 여전히 배제하지 않는다.
+        self.assertIsNone(jc._parse_job_deadline_end("'26년 4월 중", reference))
+        self.assertIsNone(jc._parse_job_deadline_end("5/26 ~", reference))
+
+    def test_contest_deadline_parser_supports_2digit_year_dot_and_korean_particle_formats(self):
+        today = datetime(2026, 9, 12).date()
+        self.assertEqual(
+            str(cc._parse_deadline_end("'26. 6. 1.(월) ~ 8. 28.(금) 18:00", today)),
+            "2026-08-28",
+        )
+        self.assertEqual(
+            str(cc._parse_deadline_end("2026년 6월 17일(수) ~ 7월 12일(일)", today)),
+            "2026-07-12",
+        )
+        self.assertTrue(cc._is_deadline_expired("2026년 6월 17일(수) ~ 7월 12일(일)", today))
+        self.assertIsNone(cc._parse_deadline_end("'26년 4월 중", today))
+
     def test_collection_stores_at_most_twenty_new_relevant_jobs_and_learns_queries(self):
         directory = tempfile.TemporaryDirectory()
         self.addCleanup(directory.cleanup)

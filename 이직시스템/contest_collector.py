@@ -675,32 +675,60 @@ def _looks_organization_only(detail_text: str) -> bool:
     return any(pattern.search(detail_text) for pattern in _ORGANIZATION_ONLY_PATTERNS)
 
 
-_DEADLINE_YMD_RE = re.compile(r"(20\d{2})[.\-](\d{1,2})[.\-](\d{1,2})")
-_DEADLINE_MD_RE = re.compile(r"(?<!\d)(\d{1,2})[.\-](\d{1,2})(?!\d)")
+_DEADLINE_YMD_RE = re.compile(r"(20\d{2})[.\-]\s*(\d{1,2})[.\-]\s*(\d{1,2})")
+_DEADLINE_Y2MD_RE = re.compile(r"(?<!\d)'?(\d{2})[.\-]\s*(\d{1,2})[.\-]\s*(\d{1,2})\s*\.")
+_DEADLINE_YMD_KO_RE = re.compile(r"(20\d{2})년\s*(\d{1,2})월\s*(\d{1,2})일")
+_DEADLINE_MD_RE = re.compile(r"(?<!\d)(\d{1,2})[.\-]\s*(\d{1,2})(?!\d)")
+_DEADLINE_MD_KO_RE = re.compile(r"(?<!\d)(\d{1,2})월\s*(\d{1,2})일")
 
 
 def _parse_deadline_end(deadline_str: str, today: "date") -> "date | None":
     """마감일 문자열에서 접수 종료일을 최대한 뽑아낸다. "YYYY.MM.DD~YYYY.MM.DD",
     "YYYY-MM-DD", 연도 없는 "MM.DD~MM.DD"(콘테스트코리아 등에서 흔함, ★
     2026-08-09 발견 — 이 경우 연도가 없어 이미 지난 공모전도 걸러지지 않고
-    추천됐다) 형식을 모두 시도해 가장 마지막에 나오는 날짜를 종료일로 본다.
-    형식을 전혀 못 알아보면 None(모르면 걸러내지 않는다)."""
+    추천됐다), "'26. 3. 26.(목)"류 2자리 연도 점 표기, "2026년 6월 17일(수)"류
+    한글 년월일 표기(★ 2026-09-12 추가 — 실측 결과 이 두 형식 때문에 이미 몇
+    달 전에 마감된 공모전 44건 중 20건이 영구히 정리되지 않고 있었다)까지
+    모두 시도한다. "A ~ B" 범위는 뒷부분(B)을 종료일로 보되, B에 연도가 없으면
+    문자열 전체에서 찾은 연도(4자리든 2자리든)를 이어받는다. 형식을 전혀
+    못 알아보면 None(모르면 걸러내지 않는다)."""
     if not deadline_str:
         return None
-    ymd_matches = _DEADLINE_YMD_RE.findall(deadline_str)
-    if ymd_matches:
-        y, m, d = ymd_matches[-1]
-        try:
-            return date(int(y), int(m), int(d))
-        except ValueError:
-            return None
-    md_matches = _DEADLINE_MD_RE.findall(deadline_str)
-    if md_matches:
-        m, d = md_matches[-1]
-        try:
-            return date(today.year, int(m), int(d))
-        except ValueError:
-            return None
+    text = deadline_str.strip()
+    year = None
+    for pattern, to_year in (
+        (_DEADLINE_YMD_RE, lambda g: int(g[0])),
+        (_DEADLINE_Y2MD_RE, lambda g: 2000 + int(g[0])),
+        (_DEADLINE_YMD_KO_RE, lambda g: int(g[0])),
+    ):
+        matches = pattern.findall(text)
+        if matches:
+            year = to_year(matches[-1])
+    tail = text.rsplit("~", 1)[-1] if "~" in text else text
+    for pattern, build in (
+        (_DEADLINE_YMD_RE, lambda g: (int(g[0]), int(g[1]), int(g[2]))),
+        (_DEADLINE_Y2MD_RE, lambda g: (2000 + int(g[0]), int(g[1]), int(g[2]))),
+        (_DEADLINE_YMD_KO_RE, lambda g: (int(g[0]), int(g[1]), int(g[2]))),
+    ):
+        matches = pattern.findall(tail)
+        if matches:
+            y, m, d = build(matches[-1])
+            try:
+                return date(y, m, d)
+            except ValueError:
+                return None
+    for pattern in (_DEADLINE_MD_RE, _DEADLINE_MD_KO_RE):
+        matches = pattern.findall(tail)
+        if matches:
+            m, d = matches[-1]
+            use_year = year if year is not None else today.year
+            try:
+                candidate = date(use_year, int(m), int(d))
+            except ValueError:
+                return None
+            if year is None and candidate < today - timedelta(days=180):
+                candidate = date(use_year + 1, int(m), int(d))
+            return candidate
     return None
 
 

@@ -1062,6 +1062,64 @@ def _published_analysis_url(kind: str, title: str, company: str):
     return None
 
 
+_CAREER_DEADLINE_YMD_RE = re.compile(r"(20\d{2})[.\-/]\s*(\d{1,2})[.\-/]\s*(\d{1,2})")
+_CAREER_DEADLINE_Y2MD_RE = re.compile(r"(?<!\d)'?(\d{2})[.\-]\s*(\d{1,2})[.\-]\s*(\d{1,2})\s*\.")
+_CAREER_DEADLINE_YMD_KO_RE = re.compile(r"(20\d{2})년\s*(\d{1,2})월\s*(\d{1,2})일")
+_CAREER_DEADLINE_MD_RE = re.compile(r"(?<!\d)(\d{1,2})[.\-/]\s*(\d{1,2})(?!\d)")
+_CAREER_DEADLINE_MD_KO_RE = re.compile(r"(?<!\d)(\d{1,2})월\s*(\d{1,2})일")
+
+
+def _career_deadline_end(deadline: str, today: "datetime.date"):
+    """마감일 문자열에서 접수 종료일을 최대한 뽑아낸다(이직시스템의
+    job_collector/contest_collector 정리 배치와 같은 방식 — ★ 2026-09-12,
+    "왜 마감 지난 공고·대회가 아직도 뜨나" 요청으로 웹 화면에도 적용).
+    "A ~ B" 범위는 뒷부분을, 연도 없는 표기는 문자열 전체에서 찾은 연도를
+    이어받는다. 형식을 못 알아보면 None(모르면 걸러내지 않는다)."""
+    text = (deadline or "").strip()
+    if not text or any(marker in text for marker in ("상시", "채용시", "수시")):
+        return None
+    year = None
+    for pattern, to_year in (
+        (_CAREER_DEADLINE_YMD_RE, lambda g: int(g[0])),
+        (_CAREER_DEADLINE_Y2MD_RE, lambda g: 2000 + int(g[0])),
+        (_CAREER_DEADLINE_YMD_KO_RE, lambda g: int(g[0])),
+    ):
+        matches = pattern.findall(text)
+        if matches:
+            year = to_year(matches[-1])
+    tail = text.rsplit("~", 1)[-1] if "~" in text else text
+    for pattern, build in (
+        (_CAREER_DEADLINE_YMD_RE, lambda g: (int(g[0]), int(g[1]), int(g[2]))),
+        (_CAREER_DEADLINE_Y2MD_RE, lambda g: (2000 + int(g[0]), int(g[1]), int(g[2]))),
+        (_CAREER_DEADLINE_YMD_KO_RE, lambda g: (int(g[0]), int(g[1]), int(g[2]))),
+    ):
+        matches = pattern.findall(tail)
+        if matches:
+            y, m, d = build(matches[-1])
+            try:
+                return datetime.date(y, m, d)
+            except ValueError:
+                return None
+    for pattern in (_CAREER_DEADLINE_MD_RE, _CAREER_DEADLINE_MD_KO_RE):
+        matches = pattern.findall(tail)
+        if matches:
+            m, d = matches[-1]
+            use_year = year if year is not None else today.year
+            try:
+                candidate = datetime.date(use_year, int(m), int(d))
+            except ValueError:
+                return None
+            if year is None and candidate < today - datetime.timedelta(days=180):
+                candidate = datetime.date(use_year + 1, int(m), int(d))
+            return candidate
+    return None
+
+
+def _career_deadline_expired(deadline: str, today: "datetime.date") -> bool:
+    end = _career_deadline_end(deadline, today)
+    return end is not None and end < today
+
+
 @app.get("/api/career-summary")
 def career_summary(request: Request):
     """소유자에게만 최신 추천 요약을 제공한다.
@@ -1076,9 +1134,24 @@ def career_summary(request: Request):
     }
 
 
+_CAREER_SORT_ORDER = {
+    "recommended": "score DESC, last_seen_at DESC",
+    "score": "score DESC, last_seen_at DESC",
+    "deadline": "CASE WHEN deadline='' THEN 1 ELSE 0 END, deadline ASC",
+    "new": "first_seen_at DESC",
+    "recent": "last_seen_at DESC",
+}
+
+
 @app.get("/api/career-jobs")
-def career_jobs(request: Request, q: str = "", source: str = "", sort: str = "recent", limit: int = 40, offset: int = 0):
-    """소유자에게 수집 DB의 공고를 웹앱용으로 페이지 단위 제공한다."""
+def career_jobs(request: Request, q: str = "", source: str = "", sort: str = "recommended", limit: int = 40, offset: int = 0):
+    """소유자에게 수집 DB의 공고를 웹앱용으로 페이지 단위 제공한다.
+
+    ★ 2026-09-12: 마감이 확실히 지난 공고는 정리 배치(하루 1회, 7일 유예)가
+    돌기 전까지 화면에 계속 보이던 문제 — 여기서도 같은 마감 판정을 적용해
+    만료된 행은 즉시 화면에서 숨긴다(DB 삭제는 기존 정리 배치가 그대로 담당,
+    유예 기간을 건드리지 않아 실수로 지운 데이터를 복구할 여유는 유지된다).
+    """
     _require_owner(request)
     db_path = CAREER_DATA_DIR / "jobs.db"
     if not db_path.exists():
@@ -1094,25 +1167,27 @@ def career_jobs(request: Request, q: str = "", source: str = "", sort: str = "re
         where.append("source = ?")
         params.append(source.strip())
     clause = " WHERE " + " AND ".join(where) if where else ""
-    order = {"score": "score DESC, last_seen_at DESC", "deadline": "CASE WHEN deadline='' THEN 1 ELSE 0 END, deadline ASC", "new": "first_seen_at DESC"}.get(sort, "last_seen_at DESC")
+    order = _CAREER_SORT_ORDER.get(sort, _CAREER_SORT_ORDER["recommended"])
+    today = datetime.datetime.now().date()
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
     try:
-        total = conn.execute(f"SELECT COUNT(*) FROM jobs{clause}", params).fetchone()[0]
         rows = conn.execute(
             f"""SELECT source, source_id, title, company, url, location, experience,
                        education, employment_type, salary, posted_at, deadline, skills,
                        score, matched_query, status, first_seen_at, last_seen_at
-                FROM jobs{clause} ORDER BY {order} LIMIT ? OFFSET ?""",
-            [*params, limit, offset],
+                FROM jobs{clause} ORDER BY {order}""",
+            params,
         ).fetchall()
+        visible = [row for row in rows if not _career_deadline_expired(row["deadline"], today)]
+        total = len(visible)
         stats = dict(conn.execute("""SELECT COUNT(*) AS total,
             SUM(date(first_seen_at)=date('now','localtime')) AS today_new,
             SUM(date(last_seen_at)=date('now','localtime')) AS today_seen,
             MAX(last_seen_at) AS latest FROM jobs""").fetchone())
         sources = [row[0] for row in conn.execute("SELECT DISTINCT source FROM jobs ORDER BY source")]
         jobs = []
-        for row in rows:
+        for row in visible[offset:offset + limit]:
             item = dict(row)
             item["preparation"] = None
             item["company_analysis_url"] = _company_profile_url(item.get("company", ""))
@@ -1124,7 +1199,8 @@ def career_jobs(request: Request, q: str = "", source: str = "", sort: str = "re
 
 
 @app.get("/api/career-contests")
-def career_contests(request: Request, q: str = "", source: str = "", sort: str = "recent", limit: int = 40, offset: int = 0):
+def career_contests(request: Request, q: str = "", source: str = "", sort: str = "recommended", limit: int = 40, offset: int = 0):
+    """★ 2026-09-12: career_jobs와 같은 이유로 마감 지난 대회를 화면에서 즉시 숨긴다."""
     _require_owner(request)
     db_path = CAREER_DATA_DIR / "contests.db"
     if not db_path.exists():
@@ -1135,15 +1211,17 @@ def career_contests(request: Request, q: str = "", source: str = "", sort: str =
         needle = f"%{q.strip()}%"; where.append("(title LIKE ? OR organizer LIKE ? OR matched_query LIKE ?)"); params.extend([needle] * 3)
     if source.strip(): where.append("source = ?"); params.append(source.strip())
     clause = " WHERE " + " AND ".join(where) if where else ""
-    order = {"score": "score DESC, last_seen_at DESC", "deadline": "CASE WHEN deadline='' THEN 1 ELSE 0 END, deadline ASC", "new": "first_seen_at DESC"}.get(sort, "last_seen_at DESC")
+    order = _CAREER_SORT_ORDER.get(sort, _CAREER_SORT_ORDER["recommended"])
+    today = datetime.datetime.now().date()
     conn = sqlite3.connect(str(db_path)); conn.row_factory = sqlite3.Row
     try:
-        total = conn.execute(f"SELECT COUNT(*) FROM contests{clause}", params).fetchone()[0]
-        rows = conn.execute(f"SELECT source,source_id,title,organizer AS company,url,deadline,score,matched_query,first_seen_at,last_seen_at FROM contests{clause} ORDER BY {order} LIMIT ? OFFSET ?", [*params, limit, offset]).fetchall()
+        rows = conn.execute(f"SELECT source,source_id,title,organizer AS company,url,deadline,score,matched_query,first_seen_at,last_seen_at FROM contests{clause} ORDER BY {order}", params).fetchall()
+        visible = [row for row in rows if not _career_deadline_expired(row["deadline"], today)]
+        total = len(visible)
         stats = dict(conn.execute("SELECT COUNT(*) total,SUM(date(first_seen_at)=date('now','localtime')) today_new,SUM(date(last_seen_at)=date('now','localtime')) today_seen,MAX(last_seen_at) latest FROM contests").fetchone())
         sources = [r[0] for r in conn.execute("SELECT DISTINCT source FROM contests ORDER BY source")]
         items = []
-        for row in rows:
+        for row in visible[offset:offset + limit]:
             item = dict(row); item["kind"] = "contest"; item["preparation"] = None; item["analysis_url"] = _published_analysis_url("contest", item["title"], item.get("company", "")); items.append(item)
         return {"jobs": items, "total": total, "stats": stats, "sources": sources, "limit": limit, "offset": offset}
     finally: conn.close()

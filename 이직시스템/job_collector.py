@@ -1596,32 +1596,55 @@ DEFAULT_CLEANUP_GRACE_DAYS = 7
 DEFAULT_EXPIRED_ARCHIVE = BASE_DIR / "data" / "archive" / "expired_items.db"
 
 
-_JOB_DEADLINE_YMD_RE = re.compile(r"(20\d{2})[.\-/](\d{1,2})[.\-/](\d{1,2})")
-_JOB_DEADLINE_MD_RE = re.compile(r"(?<!\d)(\d{1,2})[.\-/](\d{1,2})(?!\d)")
+_JOB_DEADLINE_YMD_RE = re.compile(r"(20\d{2})[.\-/]\s*(\d{1,2})[.\-/]\s*(\d{1,2})")
+_JOB_DEADLINE_Y2MD_RE = re.compile(r"(?<!\d)'?(\d{2})[.\-]\s*(\d{1,2})[.\-]\s*(\d{1,2})\s*\.")
+_JOB_DEADLINE_YMD_KO_RE = re.compile(r"(20\d{2})년\s*(\d{1,2})월\s*(\d{1,2})일")
+_JOB_DEADLINE_MD_RE = re.compile(r"(?<!\d)(\d{1,2})[.\-/]\s*(\d{1,2})(?!\d)")
+_JOB_DEADLINE_MD_KO_RE = re.compile(r"(?<!\d)(\d{1,2})월\s*(\d{1,2})일")
 
 
 def _parse_job_deadline_end(deadline: str, reference: datetime) -> "datetime.date | None":
+    """공고 마감일 문자열에서 접수 종료일을 최대한 뽑아낸다. contest_collector의
+    `_parse_deadline_end`(★ 2026-09-12)와 같은 방식으로 2자리 연도 점 표기·한글
+    년월일 표기·"A ~ B" 범위의 연도 이어받기까지 처리한다."""
     text = (deadline or "").strip()
     if not text or any(marker in text for marker in ("상시", "채용시", "수시")):
         return None
-    matches = _JOB_DEADLINE_YMD_RE.findall(text)
-    if matches:
-        year, month, day = matches[-1]
-        try:
-            return datetime(int(year), int(month), int(day)).date()
-        except ValueError:
-            return None
-    matches = _JOB_DEADLINE_MD_RE.findall(text)
-    if matches:
-        month, day = matches[-1]
-        try:
-            candidate = datetime(reference.year, int(month), int(day)).date()
+    year = None
+    for pattern, to_year in (
+        (_JOB_DEADLINE_YMD_RE, lambda g: int(g[0])),
+        (_JOB_DEADLINE_Y2MD_RE, lambda g: 2000 + int(g[0])),
+        (_JOB_DEADLINE_YMD_KO_RE, lambda g: int(g[0])),
+    ):
+        matches = pattern.findall(text)
+        if matches:
+            year = to_year(matches[-1])
+    tail = text.rsplit("~", 1)[-1] if "~" in text else text
+    for pattern, build in (
+        (_JOB_DEADLINE_YMD_RE, lambda g: (int(g[0]), int(g[1]), int(g[2]))),
+        (_JOB_DEADLINE_Y2MD_RE, lambda g: (2000 + int(g[0]), int(g[1]), int(g[2]))),
+        (_JOB_DEADLINE_YMD_KO_RE, lambda g: (int(g[0]), int(g[1]), int(g[2]))),
+    ):
+        matches = pattern.findall(tail)
+        if matches:
+            y, m, d = build(matches[-1])
+            try:
+                return datetime(y, m, d).date()
+            except ValueError:
+                return None
+    for pattern in (_JOB_DEADLINE_MD_RE, _JOB_DEADLINE_MD_KO_RE):
+        matches = pattern.findall(tail)
+        if matches:
+            month, day = matches[-1]
+            use_year = year if year is not None else reference.year
+            try:
+                candidate = datetime(use_year, int(month), int(day)).date()
+            except ValueError:
+                return None
             # 연도 없는 공고가 연말에 수집되어 다음 해 초 마감되는 경우를 보정한다.
-            if candidate < reference.date() - timedelta(days=180):
-                candidate = datetime(reference.year + 1, int(month), int(day)).date()
+            if year is None and candidate < reference.date() - timedelta(days=180):
+                candidate = datetime(use_year + 1, int(month), int(day)).date()
             return candidate
-        except ValueError:
-            return None
     if "오늘마감" in text:
         return reference.date()
     if "내일마감" in text:
