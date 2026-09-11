@@ -1971,6 +1971,14 @@ document.getElementById("portal-sunzi-link").addEventListener("click", (event) =
   route();
 });
 
+// 같은 #chats 주소가 이미 남아 있는 PWA에서도 탭이 무반응처럼 보이지 않게
+// 해시 변경 이벤트에만 의존하지 않고 화면 전환을 직접 실행한다.
+document.getElementById("portal-chat-link").addEventListener("click", (event) => {
+  event.preventDefault();
+  history.pushState(null, "", "#chats");
+  route();
+});
+
 document.getElementById("portal-account-btn").addEventListener("click", () => document.getElementById("account-name-btn").click());
 document.getElementById("portal-notifications-btn").addEventListener("click", async () => {
   const center = document.getElementById("portal-notification-center");
@@ -3405,8 +3413,18 @@ async function route() {
 }
 
 window.addEventListener("hashchange", route);
+
+// 알림 허용 여부와 관계없이 서비스 워커를 설치한다. 그래야 서버 재시작 중
+// PWA를 다시 열어도 흰 화면 대신 정비 안내를 표시할 수 있다.
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/static/sw.js").catch((error) => console.error("service worker", error));
+}
+
 initAuth().then((ok) => {
   if (ok && !resumeSunziBackfillAfterLogin()) route();
+}).catch((error) => {
+  console.error(error);
+  showAuthView("서버에 연결하지 못했습니다. 잠시 후 다시 시도해주세요.");
 });
 
 // ★ "업데이트할 때마다 페이지 재시작해야 하는 게 맞냐, 자연스럽게 바뀔 수

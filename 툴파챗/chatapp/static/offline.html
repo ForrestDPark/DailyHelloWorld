@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#17141f">
+  <title>서버 정비 중 · 나의 작업실</title>
+  <style>
+    :root{color-scheme:light dark;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;background:#f6f2ff;color:#241c35}*{box-sizing:border-box}body{min-height:100dvh;margin:0;padding:24px;display:grid;place-items:center;background:radial-gradient(circle at 20% 10%,#dbcfff 0,transparent 38%),#f6f2ff}.card{width:min(440px,100%);padding:34px 26px;text-align:center;border:1px solid #d9cfee;border-radius:28px;background:#fffffff0;box-shadow:0 25px 70px #49387826}.mark{width:62px;height:62px;margin:auto;display:grid;place-items:center;border-radius:20px;background:linear-gradient(145deg,#8468db,#6546bf);color:white;font-size:28px;font-weight:850}small{display:block;margin-top:24px;color:#765bd0;font-weight:850;letter-spacing:.14em}h1{margin:10px 0 12px;font-size:28px}p{margin:0;color:#766d82;line-height:1.7;font-size:14px}button{width:100%;min-height:50px;margin-top:24px;border:0;border-radius:15px;background:#6d50c5;color:white;font-size:15px;font-weight:800}.state{margin-top:14px;font-size:12px;color:#91899b}@media(prefers-color-scheme:dark){:root{background:#15121b;color:#f5f0ff}body{background:radial-gradient(circle at 20% 10%,#392d59 0,transparent 38%),#15121b}.card{background:#211c2aee;border-color:#403650}.state,p{color:#aaa1b5}}
+  </style>
+</head>
+<body>
+  <main class="card">
+    <div class="mark">T</div>
+    <small>SERVER MAINTENANCE</small>
+    <h1>서버를 정비하고 있어요</h1>
+    <p>잠시 서버가 재시작 중이거나 네트워크 연결이 끊겼습니다.<br>대화 내용은 사라지지 않습니다.</p>
+    <button type="button" onclick="location.reload()">지금 다시 연결</button>
+    <div id="state" class="state">10초마다 자동으로 다시 연결합니다.</div>
+  </main>
+  <script>
+    let seconds=10;
+    setInterval(()=>{seconds-=1;document.getElementById("state").textContent=`${seconds}초 뒤 자동으로 다시 연결합니다.`;if(seconds<=0)location.reload()},1000);
+  </script>
+</body>
+</html>
