@@ -265,44 +265,8 @@ button { font-family: inherit; }
   position: relative;
 }
 
-/* 모바일 채팅 집중 모드(2026-09-04) — 메시지를 아래로 읽을 때 상단
-   헤더와 공지를 실제 레이아웃 높이까지 접어 본문 공간을 돌려준다.
-   위로 스크롤하면 JS가 클래스를 제거해 다시 나타난다. */
-#chat-view .chat-header,
-#chat-view #room-notice,
-#chat-view #reply-banner,
-#chat-view #ai-response-status,
-#chat-view form#composer,
-#chat-view #upload-preview {
-  overflow: hidden;
-  /* 높이·여백을 애니메이션하면 스와이프 도중 flex 영역이 여러 프레임에
-     걸쳐 변하면서 모바일 브라우저의 스크롤 앵커 보정과 충돌한다.
-     레이아웃은 즉시 접고 시각 효과는 opacity에만 제한한다. */
-  transition: opacity .1s ease;
-}
-#chat-view .chat-header { max-height: 88px; }
-#chat-view #room-notice { max-height: 40vh; }
-#chat-view #reply-banner,
-#chat-view #ai-response-status,
-#chat-view form#composer,
-#chat-view #upload-preview { max-height: 220px; }
-#chat-view.chat-chrome-collapsed .chat-header,
-#chat-view.chat-chrome-collapsed #room-notice,
-#chat-view.chat-chrome-collapsed #reply-banner,
-#chat-view.chat-chrome-collapsed #ai-response-status,
-#chat-view.chat-chrome-collapsed form#composer,
-#chat-view.chat-chrome-collapsed #upload-preview {
-  min-height: 0;
-  max-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  margin-top: 0;
-  margin-bottom: 0;
-  border-width: 0;
-  opacity: 0;
-  pointer-events: none;
-}
-#chat-view.chat-chrome-collapsed #scroll-bottom-btn { bottom: 16px; }
+/* 채팅 헤더·공지·입력창은 스크롤 방향에 따라 접지 않는다. flex 자식의
+   높이가 바뀌면 iOS가 스크롤 앵커를 다시 계산해 대화가 위아래로 튄다. */
 
 @media (hover: none), (pointer: coarse) {
   /* 손가락 관성 스크롤은 운영체제에 맡긴다. 전역 smooth 설정은 버튼으로
