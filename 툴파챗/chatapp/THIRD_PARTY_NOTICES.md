@@ -21,3 +21,15 @@
 - 공식 소스: https://github.com/google/fonts/tree/main/ofl/notosansjp
 - 라이선스 원문: https://github.com/google/fonts/blob/main/ofl/notosansjp/OFL.txt
 - 포함 파일: `static/fonts/NotoSansJP-wght.woff2`
+
+## KANJIDIC2
+
+일본어 메시지의 한자를 눌렀을 때 표시하는 음독·훈독 데이터는 Electronic
+Dictionary Research and Development Group(EDRDG)의 KANJIDIC2를 가공해
+사용합니다.
+
+- 저작자·출처: Electronic Dictionary Research and Development Group
+- 라이선스: Creative Commons Attribution-ShareAlike 4.0 International
+- 공식 프로젝트: https://www.edrdg.org/wiki/KANJIDIC_Project.html
+- 라이선스: https://creativecommons.org/licenses/by-sa/4.0/
+- 가공 파일: `static/data/kanjidic-readings.json`

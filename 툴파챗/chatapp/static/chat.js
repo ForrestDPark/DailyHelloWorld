@@ -2683,6 +2683,106 @@ function appendMessageMedia(container, content) {
   return media;
 }
 
+let japaneseKanjiDictionaryPromise = null;
+let japaneseKanjiPopover = null;
+
+function loadJapaneseKanjiDictionary() {
+  if (!japaneseKanjiDictionaryPromise) {
+    japaneseKanjiDictionaryPromise = fetch("/static/data/kanjidic-readings.json", {cache: "force-cache"})
+      .then((response) => {
+        if (!response.ok) throw new Error(`KANJIDIC2 HTTP ${response.status}`);
+        return response.json();
+      })
+      .then((data) => data.entries || {})
+      .catch((error) => {
+        japaneseKanjiDictionaryPromise = null;
+        console.error("일본어 한자 독음 사전을 불러오지 못했습니다.", error);
+        return {};
+      });
+  }
+  return japaneseKanjiDictionaryPromise;
+}
+
+function closeJapaneseKanjiPopover() {
+  japaneseKanjiPopover?.remove();
+  japaneseKanjiPopover = null;
+}
+
+function showJapaneseKanjiPopover(character, reading, anchor) {
+  closeJapaneseKanjiPopover();
+  const popover = document.createElement("section");
+  popover.className = "japanese-kanji-popover";
+  popover.setAttribute("role", "dialog");
+  popover.setAttribute("aria-label", `${character} 일본어 독음`);
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "japanese-kanji-popover-close";
+  close.textContent = "×";
+  close.setAttribute("aria-label", "독음 닫기");
+  close.addEventListener("click", closeJapaneseKanjiPopover);
+  const glyph = document.createElement("strong");
+  glyph.className = "japanese-kanji-popover-glyph";
+  glyph.lang = "ja";
+  glyph.textContent = character;
+  const readings = document.createElement("div");
+  readings.className = "japanese-kanji-popover-readings";
+  for (const [label, values] of [["음독", reading.on], ["훈독", reading.kun]]) {
+    const row = document.createElement("div");
+    const heading = document.createElement("span");
+    heading.textContent = label;
+    const value = document.createElement("b");
+    value.lang = "ja";
+    value.textContent = values.length ? values.join("・") : "—";
+    row.append(heading, value);
+    readings.appendChild(row);
+  }
+  popover.append(close, glyph, readings);
+  document.body.appendChild(popover);
+  japaneseKanjiPopover = popover;
+  const rect = anchor.getBoundingClientRect();
+  const width = popover.offsetWidth;
+  popover.style.left = `${Math.max(12, Math.min(rect.left + rect.width / 2 - width / 2, innerWidth - width - 12))}px`;
+  const desiredTop = rect.bottom + 10;
+  popover.style.top = `${Math.max(12, Math.min(desiredTop, innerHeight - popover.offsetHeight - 12))}px`;
+}
+
+async function decorateJapaneseKanji(container) {
+  const dictionary = await loadJapaneseKanjiDictionary();
+  if (!container.isConnected || container.dataset.kanjiDecorated === "true") return;
+  container.dataset.kanjiDecorated = "true";
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u.test(node.nodeValue || "")) return NodeFilter.FILTER_REJECT;
+      if (node.parentElement?.closest("a, button, .message-reply-quote")) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    const fragment = document.createDocumentFragment();
+    for (const part of Array.from(node.nodeValue || "")) {
+      const reading = dictionary[part];
+      if (!reading) {
+        fragment.appendChild(document.createTextNode(part));
+        continue;
+      }
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "japanese-kanji-char";
+      button.lang = "ja";
+      button.textContent = part;
+      button.setAttribute("aria-label", `${part} 음독과 훈독 보기`);
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        showJapaneseKanjiPopover(part, reading, button);
+      });
+      fragment.appendChild(button);
+    }
+    node.replaceWith(fragment);
+  }
+}
+
 // ★ "한명한테 답장하는 기능" 요청(2026-08-25) — 그룹/회의방에서 페르소나
 // 메시지의 이름을 탭하면 그 사람에게만 답장하는 모드로 들어간다. @멘션을
 // 직접 타이핑할 필요 없이 서버에 reply_to로 실어 보낸다.
@@ -3069,6 +3169,12 @@ function openMessageMenu(message, hostEl, x, y) {
 }
 
 document.addEventListener("pointerdown", (event) => { if (messageMenu && !messageMenu.contains(event.target)) closeMessageMenu(); });
+document.addEventListener("pointerdown", (event) => {
+  if (japaneseKanjiPopover && !japaneseKanjiPopover.contains(event.target) && !event.target.closest(".japanese-kanji-char")) {
+    closeJapaneseKanjiPopover();
+  }
+});
+document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeJapaneseKanjiPopover(); });
 
 function openSelectiveCopy(content) {
   const overlay = document.createElement("div");
@@ -3240,6 +3346,7 @@ function appendMessage(m, forceScroll = false, suppressScroll = false) {
     body.appendChild(quote);
   }
   appendMessageMedia(body, m.content);
+  if (body.classList.contains("message-japanese")) decorateJapaneseKanji(body);
   const time = document.createElement("div");
   time.className = "msg-time";
   time.textContent = formatTime(m.created_at);
@@ -3251,6 +3358,7 @@ function appendMessage(m, forceScroll = false, suppressScroll = false) {
   let longPressStart = null;
   const cancelLongPress = () => { if (longPressTimer) clearTimeout(longPressTimer); longPressTimer = null; };
   body.addEventListener("pointerdown", (event) => {
+    if (event.target.closest(".japanese-kanji-char")) return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
     const x = event.clientX, y = event.clientY;
     longPressStart = {x, y};
@@ -3261,7 +3369,10 @@ function appendMessage(m, forceScroll = false, suppressScroll = false) {
   body.addEventListener("pointermove", (event) => {
     if (longPressStart && Math.hypot(event.clientX - longPressStart.x, event.clientY - longPressStart.y) > 10) cancelLongPress();
   });
-  body.addEventListener("contextmenu", (event) => { event.preventDefault(); cancelLongPress(); openMessageMenu(m, el, event.clientX, event.clientY); });
+  body.addEventListener("contextmenu", (event) => {
+    if (event.target.closest(".japanese-kanji-char")) return;
+    event.preventDefault(); cancelLongPress(); openMessageMenu(m, el, event.clientX, event.clientY);
+  });
   messagesEl.appendChild(el);
   if (messageSearch.value.trim() && !el.textContent.toLocaleLowerCase("ko-KR").includes(messageSearch.value.trim().toLocaleLowerCase("ko-KR"))) {
     el.classList.add("hidden");
