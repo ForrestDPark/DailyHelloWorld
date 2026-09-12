@@ -2074,15 +2074,24 @@ function appendLinkifiedText(container, text) {
   if (cursor < text.length) container.appendChild(document.createTextNode(text.slice(cursor)));
 }
 
-const MESSAGE_ACCENT_PATTERN = /\[\[(red|blue|green|orange|purple)\]\]([\s\S]*?)\[\[\/\1\]\]/g;
+const MESSAGE_RICH_INLINE_PATTERN = /\[\[(red|blue|green|orange|purple)\]\]([\s\S]*?)\[\[\/\1\]\]|\*\*([^*\n]+)\*\*/g;
+
+function messageBoldTone(text) {
+  if (/(피해야|격차|주의|위험|불확실|부족)/.test(text)) return "red";
+  if (/(적합도|자소서 연결|강점|추천)/.test(text)) return "green";
+  if (/(면접 질문|주요업무|자격요건|우대사항)/.test(text)) return "blue";
+  return "purple";
+}
 
 function appendRichInline(container, text) {
   let cursor = 0;
-  for (const match of text.matchAll(MESSAGE_ACCENT_PATTERN)) {
+  for (const match of text.matchAll(MESSAGE_RICH_INLINE_PATTERN)) {
     if (match.index > cursor) appendLinkifiedText(container, text.slice(cursor, match.index));
     const accent = document.createElement("span");
-    accent.className = `message-accent message-accent-${match[1]}`;
-    appendLinkifiedText(accent, match[2]);
+    const value = match[1] ? match[2] : match[3];
+    const tone = match[1] || messageBoldTone(value);
+    accent.className = `message-accent message-accent-${tone}`;
+    appendLinkifiedText(accent, value);
     container.appendChild(accent);
     cursor = match.index + match[0].length;
   }

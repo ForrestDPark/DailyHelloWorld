@@ -1155,6 +1155,13 @@ main#messages.has-custom-background {
 .message-accent-green { color: #16845b; }
 .message-accent-orange { color: #c65c12; }
 .message-accent-purple { color: #7950b8; }
+@media (prefers-color-scheme: dark) {
+  .message-accent-red { color: #ff929a; }
+  .message-accent-blue { color: #8dbdff; }
+  .message-accent-green { color: #75d9ad; }
+  .message-accent-orange { color: #ffc078; }
+  .message-accent-purple { color: #c5a9ff; }
+}
 .message-table-wrap { margin: 8px 0; overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
 .message-table { width: 100%; min-width: 260px; border-collapse: collapse; white-space: normal; font-size: 14px; }
 .message-table th, .message-table td { padding: 8px 10px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
