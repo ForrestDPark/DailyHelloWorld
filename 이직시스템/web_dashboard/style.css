@@ -11,3 +11,4 @@
 @media(prefers-color-scheme:dark){.evidence mark{color:#b9f5e3;background:#185847}.evidence mark.condition{color:#ffe0a3;background:#674414}}
 @media(max-width:720px){.kind-tabs{margin:0 0 14px;display:grid;grid-template-columns:1fr 1fr}.kind-tabs button{padding:11px 8px}}
 .company-analysis h5{margin:18px 0 8px}.company-analysis small{color:var(--muted)}.full-analysis{margin-top:18px}.full-analysis summary{cursor:pointer;color:var(--green);font-weight:800}.full-analysis pre{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;line-height:1.75;color:var(--ink)}
+.consult{display:block;width:100%;min-height:50px;margin-top:24px;border:0;border-radius:13px;background:#287760;color:white;text-align:center;font:800 15px inherit}.consult:disabled{opacity:.58}

@@ -752,7 +752,9 @@ JOB_SYSTEM_DATA_DIR = JOB_SYSTEM_DIR / "data"
 JOB_SEEKER_PERSONA_NAME = "구직지기"
 CAREER_COACH_PERSONA_NAME = "커리어코치"
 STUDY_COACH_PERSONA_NAME = "스터디코치"
-JOB_SYSTEM_PERSONA_NAMES = {JOB_SEEKER_PERSONA_NAME, CAREER_COACH_PERSONA_NAME, STUDY_COACH_PERSONA_NAME}
+CAREER_HR_PERSONA_NAME = "인사담당자"
+CAREER_HR_SYSTEM_PROMPT = """당신은 이직 준비방의 인사담당자 페르소나입니다. 사이트에서 전달된 특정 채용공고를 기준으로 회사·직무·주요업무·자격요건·우대사항을 구분해 설명하세요. 후보자에게 맞는 점과 부족한 점, 예상 직무·경험 면접 질문과 답변 준비법, 자소서에 연결할 경험과 피해야 할 과장을 구체적으로 알려주세요. 공고에 없거나 확인하지 못한 조건과 후보자 경험은 지어내지 말고, 외부 지원이나 파일 수정 없이 상담과 초안 제안만 합니다."""
+JOB_SYSTEM_PERSONA_NAMES = {JOB_SEEKER_PERSONA_NAME, CAREER_COACH_PERSONA_NAME, STUDY_COACH_PERSONA_NAME, CAREER_HR_PERSONA_NAME}
 JOB_STUDY_SKILL_MARKERS = (
     "Python", "FastAPI", "Django", "Java", "Spring", "JavaScript", "TypeScript",
     "React", "SQL", "데이터베이스", "REST API", "AWS", "GCP", "Azure", "Docker",
@@ -2385,6 +2387,12 @@ def sync_user_personas(cache):
         return
     for row in rows:
         cache[row["name"]] = {"system_prompt": row["system_prompt"], "page_id": None}
+    # Notion 동기화 전에 웹 버튼으로 처음 생성돼도 즉시 응답할 수 있는 내장
+    # 상담 역할이다. 이후 같은 이름의 정식 Notion 페르소나가 생기면 그 설정이 우선한다.
+    cache.setdefault(CAREER_HR_PERSONA_NAME, {
+        "system_prompt": CAREER_HR_SYSTEM_PROMPT + JOB_SYSTEM_ADDENDUM,
+        "page_id": None,
+    })
 
 
 def _speaker_label(sender, persona_names):

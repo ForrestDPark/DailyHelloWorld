@@ -972,7 +972,10 @@ def _career_preparation(text: str, contest: bool = False):
 
 def _source_grounded_preparation(text: str):
     normalized = re.sub(r"[ \t]+", " ", text or "")
-    markers = [(m.start(), m.group(1)) for m in re.finditer(r"(?im)(?:^|\n)\s*(주요업무|담당업무|직무내용|자격요건|지원자격(?:\s*및\s*우대사항)?|필수사항|우대사항|공모내용|참가자격|평가기준)\s*[:：]?", normalized)]
+    # 사람인 템플릿은 `📋 주요업무`처럼 제목 앞에 아이콘을 붙인다. 예전
+    # 정규식은 줄 첫 글자가 곧 제목일 때만 인정해 본문이 있어도 추출 실패로
+    # 오판했다. 줄 앞의 짧은 장식 문자열을 허용하되 제목 목록은 고정한다.
+    markers = [(m.start(), m.group(1)) for m in re.finditer(r"(?im)(?:^|\n)\s*(?:[^\w가-힣\n]{0,12})\s*(모집분야|주요업무|담당업무|직무내용|자격요건|지원자격(?:\s*및\s*우대사항)?|필수사항|우대사항|공모내용|참가자격|평가기준)\s*[:：]?", normalized)]
     sections = {}
     for i, (start, name) in enumerate(markers):
         end = markers[i + 1][0] if i + 1 < len(markers) else min(len(normalized), start + 2200)
@@ -1084,6 +1087,93 @@ def career_source_analysis(request: Request, kind: str, source: str, source_id: 
         try: cache_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
         except OSError: pass
     return result
+
+
+CAREER_CONSULT_ROOM_ID = "custom_0e5dc0b026"
+CAREER_HR_PERSONA_NAME = "인사담당자"
+CAREER_HR_SYSTEM_PROMPT = """당신은 이직 준비방의 인사담당자 페르소나입니다. 사이트의 '담당자와 상담하기'에서 전달된 특정 공고를 기준으로 상담합니다. 먼저 회사와 직무, 실제 주요업무·자격요건·우대사항을 구분해 설명하고, 후보자에게 맞는 점과 부족한 점을 근거와 함께 말하세요. 이어서 이 공고에서 나올 가능성이 높은 직무·경험 면접 질문과 답변 준비법, 자소서에 연결할 경험과 피해야 할 과장을 구체적으로 알려주세요. 공고에 없는 조건이나 후보자의 경험을 지어내지 말고, 불확실한 정보는 불확실하다고 밝히세요. 외부 지원·문서 수정은 하지 않고 상담과 초안 제안만 합니다."""
+
+
+class CareerConsultRequest(BaseModel):
+    kind: str = "job"
+    source: str
+    source_id: str
+
+
+@app.post("/api/career-consult")
+def start_career_consult(body: CareerConsultRequest, request: Request):
+    """소유자가 고른 공고 한 건만 인사담당자에게 전달해 상담 턴을 만든다."""
+    _require_owner(request)
+    if body.kind != "job":
+        raise HTTPException(status_code=400, detail="채용공고만 인사담당자와 상담할 수 있습니다")
+    source, source_id = body.source.strip(), body.source_id.strip()
+    if not source or len(source) > 100 or not source_id or len(source_id) > 200:
+        raise HTTPException(status_code=400, detail="공고 식별값이 올바르지 않습니다")
+    jobs = sqlite3.connect(str(CAREER_DATA_DIR / "jobs.db")); jobs.row_factory = sqlite3.Row
+    try:
+        row = jobs.execute(
+            """SELECT source,source_id,title,company,url,location,experience,education,
+                      employment_type,salary,deadline,skills,keywords,matched_query
+                 FROM jobs WHERE source=? AND source_id=? LIMIT 1""",
+            (source, source_id),
+        ).fetchone()
+    finally:
+        jobs.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="수집된 공고를 찾지 못했습니다")
+
+    cache_path = CAREER_DATA_DIR / "web_source_cache" / (
+        hashlib.sha256(f"v5:job:{source}:{source_id}".encode()).hexdigest() + ".json"
+    )
+    grounded = ""
+    try:
+        cached = json.loads(cache_path.read_text(encoding="utf-8"))
+        if cached.get("ok"):
+            grounded = json.dumps(cached.get("preparation") or {}, ensure_ascii=False)[:7000]
+    except (OSError, json.JSONDecodeError):
+        pass
+    fields = [
+        f"회사: {row['company']}", f"공고명: {row['title']}", f"출처: {row['source']}",
+        f"원문: {row['url']}", f"지역: {row['location'] or '미기재'}",
+        f"경력: {row['experience'] or '미기재'}", f"학력: {row['education'] or '미기재'}",
+        f"고용형태: {row['employment_type'] or '미기재'}", f"급여: {row['salary'] or '미기재'}",
+        f"마감: {row['deadline'] or '미기재'}", f"수집 기술: {row['skills'] or row['keywords'] or '미기재'}",
+    ]
+    if grounded:
+        fields.append("원문 추출 결과: " + grounded)
+    content = "📋 공고 상담 요청\n" + "\n".join(fields) + (
+        "\n\n이 공고의 실제 업무와 지원 적합도를 설명하고, 예상 면접 질문·답변 준비법과 "
+        "이 공고에 맞춘 자소서 작성 포인트를 상담해주세요."
+    )
+
+    conn = get_conn()
+    try:
+        now = _now()
+        conn.execute(
+            """INSERT OR IGNORE INTO personas
+               (name,notion_page_id,system_prompt,group_name,owner_username,description,synced_at)
+               VALUES (?, '', ?, '이직시스템', NULL, ?, ?)""",
+            (CAREER_HR_PERSONA_NAME, CAREER_HR_SYSTEM_PROMPT,
+             "채용공고 설명, 면접 준비, 자기소개서 상담을 담당합니다.", now),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO room_invites(room_id,persona_name,invited_at) VALUES (?,?,?)",
+            (CAREER_CONSULT_ROOM_ID, CAREER_HR_PERSONA_NAME, now),
+        )
+        cursor = conn.execute(
+            "INSERT INTO messages(room_id,sender,content,created_at,is_system) VALUES (?,'system',?,?,1)",
+            (CAREER_CONSULT_ROOM_ID, content, now),
+        )
+        conn.execute(
+            """INSERT INTO pending_turns(persona_name,room_id,status,created_at,source_message_id)
+               VALUES (?,?,'pending',?,?)""",
+            (CAREER_HR_PERSONA_NAME, CAREER_CONSULT_ROOM_ID, now, cursor.lastrowid),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True, "room_id": CAREER_CONSULT_ROOM_ID,
+            "url": f"/#room={urllib.parse.quote(CAREER_CONSULT_ROOM_ID, safe='')}"}
 
 
 def _company_profile_url(company: str):
