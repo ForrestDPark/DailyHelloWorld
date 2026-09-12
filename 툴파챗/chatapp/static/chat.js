@@ -2026,7 +2026,6 @@ document.addEventListener("keydown", (event) => {
 
 async function showRoomList() {
   currentRoom = null;
-  setChatChromeCollapsed(false);
   pollGeneration += 1;
   if (activePollController) activePollController.abort();
   if (pollTimer) clearTimeout(pollTimer);
