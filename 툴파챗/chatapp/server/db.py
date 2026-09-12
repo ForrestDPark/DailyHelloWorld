@@ -339,6 +339,30 @@ def init_db():
             PRIMARY KEY (persona_name, username)
         )
     """)
+    # ★ "👍 누른 메시지는 좋은 말을 한 거니 첨언하고, 앞으로 그런 말을 더 하도록
+    # 학습·강화해달라. 🫤로 별로인 말도 표시해서 비슷하게 말하지 않게 해달라"
+    # 요청(2026-09-12) — 사용자가 페르소나 메시지에 👍/🫤 반응을 남기면 그
+    # 발췌를 여기 쌓아두고, build_prompt가 매 턴 이 페르소나의 최근 기록을
+    # "이런 식으로 말했을 때 좋았다/별로였다" 노트로 프롬프트에 넣는다.
+    # 파인튜닝이 아니라 이 프로젝트 전체가 쓰는 "텍스트 기록 누적" 방식의
+    # 학습이다([[손자병법 프로젝트]]의 README 학습 정의와 같은 철학).
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS persona_feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            persona_name TEXT NOT NULL,
+            room_id TEXT NOT NULL,
+            message_id INTEGER NOT NULL,
+            emoji TEXT NOT NULL,
+            excerpt TEXT NOT NULL,
+            reacted_by TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE (message_id, emoji, reacted_by)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_persona_feedback_persona ON persona_feedback (persona_name, emoji, created_at)")
+    # 반응이 달린 턴은 일반 대화 흐름을 그대로 타지 않고 짧은 감상만 답하므로,
+    # 워커가 이 값의 유무로 두 경로를 구분한다(비어있으면 평소와 동일).
+    _ensure_column(conn, "pending_turns", "reaction_emoji", "TEXT")
     conn.commit()
     conn.close()
 

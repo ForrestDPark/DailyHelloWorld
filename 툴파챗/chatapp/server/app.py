@@ -441,7 +441,12 @@ def _insert_system_notice(conn, room_id, content):
     )
 
 
-REACTION_EMOJIS = {"❤️", "👍", "✅", "😄", "😮", "😢"}
+REACTION_EMOJIS = {"❤️", "👍", "✅", "😄", "😮", "😢", "🫤"}
+# ★ 2026-09-12: 이 두 반응은 장식용이 아니라 페르소나에게 실제로 전달된다 —
+# 👍는 "그 말이 아주 좋았다"는 뜻으로 짧은 첨언을 유도하고 앞으로 비슷한
+# 말을 더 하도록, 🫤는 "그 말은 별로였다"는 뜻으로 비슷한 말을 피하도록
+# persona_feedback에 쌓인다(_maybe_queue_reaction_feedback).
+LEARNED_REACTION_EMOJIS = {"👍", "🫤"}
 
 
 def _message_reactions(conn, message_ids, username):
@@ -464,6 +469,48 @@ def _message_reactions(conn, message_ids, username):
             {"emoji": row["emoji"], "count": row["reaction_count"], "mine": bool(row["mine"])}
         )
     return result
+
+
+def _maybe_queue_reaction_feedback(conn, message_id, room_id, emoji, reacted_by):
+    """👍/🫤가 페르소나 메시지에 새로 달렸을 때만 발동한다(★ 2026-09-12).
+
+    ①persona_feedback에 발췌를 남겨 이 페르소나의 향후 모든 턴(build_prompt)에
+    "이런 식으로 말했을 때 좋았다/별로였다" 노트로 누적 반영되게 하고,
+    ②지금 이 메시지에 짧게 반응하는 전용 pending_turn 하나를 큐에 넣는다
+    (워커가 reaction_emoji 유무로 일반 대화와 구분해 처리 — persona_worker.py
+    참고). 페르소나가 아닌 사람 메시지에는 아무 일도 하지 않는다."""
+    if emoji not in LEARNED_REACTION_EMOJIS:
+        return
+    message = conn.execute(
+        "SELECT sender, content FROM messages WHERE id = ?", (message_id,)
+    ).fetchone()
+    if not message:
+        return
+    sender = message["sender"]
+    is_persona = conn.execute("SELECT 1 FROM personas WHERE name = ?", (sender,)).fetchone()
+    if not is_persona:
+        return
+    now = _now()
+    excerpt = (message["content"] or "")[:300]
+    conn.execute(
+        """INSERT OR IGNORE INTO persona_feedback
+               (persona_name, room_id, message_id, emoji, excerpt, reacted_by, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (sender, room_id, message_id, emoji, excerpt, reacted_by, now),
+    )
+    already_queued = conn.execute(
+        """SELECT 1 FROM pending_turns
+            WHERE source_message_id = ? AND persona_name = ? AND reaction_emoji = ?
+              AND status IN ('pending', 'processing')""",
+        (message_id, sender, emoji),
+    ).fetchone()
+    if already_queued:
+        return
+    conn.execute(
+        """INSERT INTO pending_turns (persona_name, room_id, status, created_at, source_message_id, reaction_emoji)
+           VALUES (?, ?, 'pending', ?, ?, ?)""",
+        (sender, room_id, now, message_id, emoji),
+    )
 
 
 @app.get("/")
@@ -3800,6 +3847,7 @@ def toggle_message_reaction(message_id: int, body: MessageReactionRequest, reque
             "INSERT INTO message_reactions (message_id, username, emoji, created_at) VALUES (?, ?, ?, ?)",
             (message_id, username, body.emoji, _now()),
         )
+        _maybe_queue_reaction_feedback(conn, message_id, room_id, body.emoji, username)
     conn.commit()
     reactions = _message_reactions(conn, [message_id], username).get(message_id, [])
     conn.close()
@@ -4055,7 +4103,7 @@ def worker_pending(authorization: Optional[str] = Header(None)):
         (stale_before,),
     )
     row = conn.execute(
-        "SELECT id, persona_name, room_id, rerouted, created_at, restart_notice_sent, source_message_id, use_personal_ai "
+        "SELECT id, persona_name, room_id, rerouted, created_at, restart_notice_sent, source_message_id, use_personal_ai, reaction_emoji "
         "FROM pending_turns WHERE status = 'pending' ORDER BY id LIMIT 1"
     ).fetchone()
     if not row:
@@ -4076,9 +4124,10 @@ def worker_pending(authorization: Optional[str] = Header(None)):
     source_username = None
     source_is_owner = False
     source_ui_dev_granted = False
+    source_message_content = None
     if row["source_message_id"] is not None:
         source = conn.execute(
-            """SELECT messages.sender, COALESCE(users.is_owner, 0) AS is_owner,
+            """SELECT messages.sender, messages.content, COALESCE(users.is_owner, 0) AS is_owner,
                       users.username IS NOT NULL AS is_user,
                       EXISTS(SELECT 1 FROM ui_dev_grants g
                              WHERE g.username=messages.sender) AS ui_dev_granted
@@ -4090,6 +4139,7 @@ def worker_pending(authorization: Optional[str] = Header(None)):
             source_username = source["sender"] if source["is_user"] else None
             source_is_owner = bool(source["is_owner"])
             source_ui_dev_granted = bool(source["ui_dev_granted"])
+            source_message_content = source["content"]
     # ★ "메시지 인물마다 다 띄우니까 정신없다, 방에 있는 툴파 중 대표로
     # 한 사람만 알려주자" 요청(2026-08-28) — 페르소나별(pending_turns)이
     # 아니라 방 단위로 이미 안내를 보냈는지를 본다.
@@ -4131,6 +4181,10 @@ def worker_pending(authorization: Optional[str] = Header(None)):
         "room_restart_notice_active": notice_row is not None,
         "room_restart_notice_persona": notice_row["persona_name"] if notice_row else None,
         "context": [dict(r) for r in reversed(context_rows)],
+        # ★ 2026-09-12: 👍/🫤 반응으로 생긴 턴이면 채워진다 — 워커가 이 값의
+        # 유무로 일반 대화 흐름과 "반응 첨언" 전용 흐름을 구분한다.
+        "reaction_emoji": row["reaction_emoji"],
+        "reaction_source_content": source_message_content if row["reaction_emoji"] else None,
     }
 
 
@@ -4901,6 +4955,30 @@ def worker_persona_prompt(name: str, authorization: Optional[str] = Header(None)
     if not row:
         raise HTTPException(status_code=404, detail="존재하지 않는 페르소나입니다")
     return {"system_prompt": row["system_prompt"]}
+
+
+@app.get("/api/worker/persona_feedback")
+def worker_persona_feedback(name: str, authorization: Optional[str] = Header(None)):
+    """★ 2026-09-12: 👍/🫤로 쌓인 이 페르소나의 최근 반응 발췌를 워커에 준다.
+    build_prompt가 매 턴 이 값을 "이런 식으로 말했을 때 좋았다/별로였다" 노트로
+    붙여서, 파인튜닝 없이 텍스트 누적만으로 앞으로의 말투를 서서히 조정한다."""
+    _check_worker_auth(authorization)
+    conn = get_conn()
+    liked = conn.execute(
+        """SELECT excerpt FROM persona_feedback WHERE persona_name = ? AND emoji = '👍'
+           ORDER BY id DESC LIMIT 6""",
+        (name,),
+    ).fetchall()
+    disliked = conn.execute(
+        """SELECT excerpt FROM persona_feedback WHERE persona_name = ? AND emoji = '🫤'
+           ORDER BY id DESC LIMIT 6""",
+        (name,),
+    ).fetchall()
+    conn.close()
+    return {
+        "liked": [row["excerpt"] for row in liked],
+        "disliked": [row["excerpt"] for row in disliked],
+    }
 
 
 class AdminReportPost(BaseModel):

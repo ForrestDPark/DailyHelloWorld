@@ -2430,7 +2430,30 @@ def _sunzi_example_history(context, persona_name, current_start):
     )
 
 
-def build_prompt(persona_name, system_prompt, context, persona_names, has_images=False, notion_reference="", live_state="", api_mode=False):
+# ★ "👍 누른 말은 좋은 말이니 앞으로 그런 류의 말을 더 하도록 학습·강화하고,
+# 🫤로 별로인 말도 표시해서 비슷한 말을 피하게 해달라" 요청(2026-09-12) —
+# 파인튜닝이 아니라 이 프로젝트 전체가 쓰는 "텍스트 기록 누적" 방식으로
+# 학습한다(README의 학습 정의와 같은 철학). 매 턴 이 페르소나가 과거에
+# 👍/🫤 받은 발언 발췌를 서버에서 받아와 build_prompt에 노트로 얹는다.
+def load_persona_feedback_notes(persona_name):
+    try:
+        data = _api(f"/api/worker/persona_feedback?name={urllib.parse.quote(persona_name, safe='')}") or {}
+    except (urllib.error.URLError, urllib.error.HTTPError):
+        return ""
+    liked, disliked = data.get("liked") or [], data.get("disliked") or []
+    if not liked and not disliked:
+        return ""
+    lines = ["\n(사용자 반응 학습 노트 — 지어내지 말고 실제 있었던 자기 발언 경향으로만 참고하세요.)"]
+    if liked:
+        lines.append("👍 사용자가 아주 좋아했던 예전 발언(비슷한 결로 더 말해도 좋습니다):")
+        lines.extend(f"- {text[:200]}" for text in liked)
+    if disliked:
+        lines.append("🫤 사용자가 별로라고 반응했던 예전 발언(비슷한 표현·논지를 피하세요):")
+        lines.extend(f"- {text[:200]}" for text in disliked)
+    return "\n".join(lines)
+
+
+def build_prompt(persona_name, system_prompt, context, persona_names, has_images=False, notion_reference="", live_state="", api_mode=False, feedback_notes=""):
     # 자동 손자병법 토론은 가장 최근 완료 공지부터가 하나의 독립 세션이다.
     # 그 이전의 시·일상 대화가 새 구절 답변에 섞이지 않도록 문맥을 잘라낸다.
     original_context = context
@@ -2473,6 +2496,8 @@ def build_prompt(persona_name, system_prompt, context, persona_names, has_images
         # persona_cache의 system_prompt와 달리 이건 매 턴 새로 읽은 실시간
         # 값이라 build_prompt() 인자로만 전달하고 캐시에는 저장하지 않는다.
         lines.append(f"\n(지금 이 순간의 실제 상태 — 반드시 이 값을 근거로 답하세요. 지어내지 마세요.)\n{live_state}")
+    if feedback_notes:
+        lines.append(feedback_notes)
     if any("📜 손자병법 새 구절 분석이 완료되었습니다" in msg["content"] for msg in context):
         history_guard = _sunzi_example_history(original_context, persona_name, latest_sunzi_start)
         if history_guard:
@@ -2696,6 +2721,47 @@ def _maybe_clear_restart_gap(room_id):
         print(f"⚠️ 완료 안내 전송 실패(무시하고 계속): {exc}", flush=True)
 
 
+def _process_reaction_turn(turn, entry, reaction_emoji):
+    """👍/🫤가 이 페르소나의 메시지에 달렸을 때 짧게 첨언만 하는 전용 흐름
+    (★ 2026-09-12). 일반 대화 맥락(build_prompt)을 통째로 태우지 않고, 반응이
+    달린 그 발언 하나만 근거로 짧게 반응한다 — 학습 강화 자체는 persona_feedback
+    누적 + build_prompt의 feedback_notes가 이후 모든 턴에서 담당한다."""
+    persona_name = turn["persona_name"]
+    excerpt = _display_content(turn.get("reaction_source_content") or "")[:400]
+    if reaction_emoji == "👍":
+        instruction = (
+            f'방금 당신이 한 말 "{excerpt}"에 대해 사용자가 👍(아주 좋았다는 뜻) 반응을 남겼습니다. '
+            "그 반응을 알아챘다는 걸 자연스럽게 드러내며 한두 문장으로만 짧게 반응하세요. "
+            "왜 그 말이 좋았을지 스스로 짚어보고, 앞으로도 비슷한 결로 말하겠다는 취지를 은근히 담되 "
+            "장황한 설명이나 과장된 감사 표현을 반복하지 마세요."
+        )
+    else:
+        instruction = (
+            f'방금 당신이 한 말 "{excerpt}"에 대해 사용자가 🫤(별로였다는 뜻) 반응을 남겼습니다. '
+            "그 반응을 알아챘다는 걸 자연스럽게 드러내며 한두 문장으로만 짧게 반응하세요. "
+            "방어적으로 변명하지 말고, 앞으로 비슷한 표현이나 논지를 피하겠다는 취지를 은근히 담되 "
+            "과하게 사과하거나 자책하지 마세요."
+        )
+    prompt = (
+        f"{entry['system_prompt']}\n\n{instruction}\n"
+        f'"{persona_name}:" 같은 이름표는 붙이지 말고 대사만 쓰세요. '
+        "정말로 덧붙일 말이 없으면 정확히 NONE만 답하세요."
+    )
+    try:
+        reply, engine = run_ai_exec(prompt, WORK_DIR, timeout=AI_TIMEOUT_SECONDS)
+        reply = reply.strip()
+        if reply.upper() == "NONE":
+            reply = ""
+        _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": reply})
+        if reply:
+            print(f"{reaction_emoji} {persona_name} ({engine}) 반응 첨언: {reply[:60]}", flush=True)
+        else:
+            print(f"{reaction_emoji} {persona_name} ({engine}): 조용히 넘어감", flush=True)
+    except Exception as exc:  # noqa: BLE001 — 이 턴만 실패 처리하고 워커는 계속 돈다
+        print(f"⚠️ {persona_name} 반응 첨언 생성 실패: {exc}", flush=True)
+        _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": ""})
+
+
 def process_turn(turn, persona_cache):
     """이 턴을 처리하고, 무슨 경로로 끝나든(정상 완료·재배정·캐시 미준비·
     예외) 마지막에 항상 _maybe_clear_restart_gap을 확인한다 — 그래야 이
@@ -2735,6 +2801,10 @@ def _process_turn_inner(turn, persona_cache):
             entry = dict(entry, system_prompt=fresh["system_prompt"])
     except (urllib.error.URLError, urllib.error.HTTPError) as exc:
         print(f"⚠️ {persona_name} 최신 설정 조회 실패, 캐시된 값 사용: {exc}", flush=True)
+    reaction_emoji = turn.get("reaction_emoji")
+    if reaction_emoji:
+        _process_reaction_turn(turn, entry, reaction_emoji)
+        return
     _maybe_notify_restart_gap(turn, persona_name, room_id)
     is_organizer = persona_name == FILE_ORGANIZER_PERSONA_NAME
     is_ui_dev = persona_name == UI_DEV_PERSONA_NAME
@@ -2826,10 +2896,11 @@ def _process_turn_inner(turn, persona_cache):
     # 평소에는 관리자 공용 Claude→Codex를 사용한다. 개인 키는 공용 엔진이
     # 실패한 뒤 사용자가 비용 안내 팝업에서 승인해 재개한 턴에만 사용한다.
     use_byok = bool(turn.get("use_personal_ai") and credentials and credentials.get("configured"))
+    feedback_notes = load_persona_feedback_notes(persona_name)
     prompt = build_prompt(
         persona_name, entry["system_prompt"], turn["context"], persona_cache.keys(),
         has_images=bool(image_paths), notion_reference=notion_reference, live_state=live_state,
-        api_mode=use_byok,
+        api_mode=use_byok, feedback_notes=feedback_notes,
     )
     # ★ "그냥 검색해서 링크 보내주면 될 텐데, 권한이 없어서 그런가?" 질문
     # 끝에 "웹 검색 열어줘"(2026-08-29), 이어서 "WebFetch도 열어줘"

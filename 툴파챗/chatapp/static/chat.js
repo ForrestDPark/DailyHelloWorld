@@ -2664,7 +2664,11 @@ function setReplyTarget(name, message = null) {
 
 document.getElementById("reply-cancel-btn").addEventListener("click", () => setReplyTarget(null));
 
-const QUICK_REACTIONS = ["❤️", "👍", "✅", "😄", "😮", "😢"];
+// ★ 2026-09-12: 👍/🫤는 장식용 반응이 아니라 페르소나 메시지에 달면 그
+// 페르소나가 실제로 알아채고 짧게 첨언한다 — 👍는 "아주 좋은 말"로 앞으로
+// 비슷하게 말하도록, 🫤는 "별로인 말"로 비슷한 말을 피하도록 학습·강화된다
+// (서버 persona_feedback + 워커 build_prompt의 학습 노트 참고).
+const QUICK_REACTIONS = ["❤️", "👍", "🫤", "✅", "😄", "😮", "😢"];
 let messageMenu = null;
 let personaProfilesCache = null;
 
