@@ -3087,7 +3087,8 @@ function scrollToMessage(messageId) {
 // 스타일로 그린다(양옆에 선, 가운데 문구 — CSS ::before/::after).
 function renderSystemMessage(m, shouldScroll = false) {
   const el = document.createElement("div");
-  el.className = "msg-system";
+  const isCareerConsult = m.content.startsWith("📋 공고 상담 요청");
+  el.className = "msg-system" + (isCareerConsult ? " msg-system-career" : "");
   el.dataset.messageId = String(m.id);
   // ★ "이직준비방에서... 링크를 클릭할수있게 하면 좋겠어" 요청(2026-09-03) —
   // 시스템 메시지(경진대회·독서 세션 완료 등 트리거 알림)는 지금까지
@@ -3095,13 +3096,23 @@ function renderSystemMessage(m, shouldScroll = false) {
   // 같은 링크화 함수를 재사용.
   const content = document.createElement("span");
   content.className = "msg-system-content";
-  appendLinkifiedText(content, m.content);
+  if (isCareerConsult) {
+    const company = m.content.match(/^회사:\s*(.+)$/m)?.[1]?.trim() || "선택한 기업";
+    const title = m.content.match(/^공고명:\s*(.+)$/m)?.[1]?.trim() || "채용공고";
+    const heading = document.createElement("strong");
+    heading.textContent = `${company} · ${title}`;
+    const status = document.createElement("small");
+    status.textContent = "인사담당자에게 공고 분석과 상담을 요청했습니다.";
+    content.append(heading, status);
+  } else {
+    appendLinkifiedText(content, m.content);
+  }
   el.appendChild(content);
   messagesEl.appendChild(el);
   // 커리어 보드에서 방으로 막 이동한 경우에도 일반 메시지 전송 때처럼
   // 인사담당자가 답변을 만드는 중임을 보여준다. 뒤이어 페르소나 답변이
   // 렌더링되면 appendMessage가 기존 상태 표시를 자동으로 닫는다.
-  if (m.content.startsWith("📋 공고 상담 요청")) setAiResponseStatus(true);
+  if (isCareerConsult) setAiResponseStatus(true);
   while (messagesEl.children.length > 500) messagesEl.firstElementChild.remove();
   if (shouldScroll) el.scrollIntoView({behavior: "smooth", block: "end"});
 }
