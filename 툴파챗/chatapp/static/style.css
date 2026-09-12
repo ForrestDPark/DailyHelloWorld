@@ -1547,6 +1547,12 @@ form#composer button[type="submit"] { min-height: 42px; padding: 9px 16px; backg
 .system-app-view{position:relative;height:100%;background:var(--bg)}.system-app-view.hidden{display:none}.system-app-view iframe{display:block;width:100%;height:100%;border:0;background:var(--bg)}
 .system-app-loading{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--muted);font-size:14px;background:var(--bg);z-index:1;transition:opacity .2s ease}.system-app-loading.hidden{display:none}.system-app-loading .spinner{width:28px;height:28px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--accent);animation:system-app-spin .8s linear infinite}
 @keyframes system-app-spin{to{transform:rotate(360deg)}}
+/* ★ 2026-09-12: "손자병법 누르면 불러오는중만 뜨고 안넘어가" — 로드가
+   한 번 실패/지연되면 재시도 없이 영원히 스피너만 도는 문제를 고쳐, 일정
+   시간이 지나도 안 끝나면 스피너 대신 재시도 버튼을 보여준다. */
+.system-app-loading.load-error .spinner{display:none}
+.system-app-loading #sunzi-frame-retry-btn.hidden{display:none}
+.system-app-loading #sunzi-frame-retry-btn{padding:9px 18px;border:0;border-radius:12px;background:var(--accent);color:var(--accent-fg);font-size:14px;font-weight:700}
 /* ★ 2026-09-12: 손자병법 탭을 미리 보이지 않는 곳에서 백그라운드로 로드해두기
    위한 예외 — 일부 구형 WebKit은 display:none인 iframe의 로드를 미뤄버려서,
    화면에 없는 동안에도 실제로 로드되도록 자리는 차지하되 화면 밖으로

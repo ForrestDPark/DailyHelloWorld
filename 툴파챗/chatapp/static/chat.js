@@ -1963,14 +1963,48 @@ async function showPortalHome(focusSystems = false) {
 // 체감됐다. 이제 앱 부팅이 끝나고 유휴 시간에 백그라운드로 미리 로드해두고
 // (index.html의 preconnect와 함께), 실제 탭 진입 시엔 대부분 이미 로드가
 // 끝나 있거나 거의 끝나가는 상태다. 아직 로딩 중이면 스피너를 보여준다.
+// ★ 2026-09-12: "손자병법 누르면 불러오는중만 뜨고 안넘어가" 지적 — 처음
+// 만든 버전은 iframe의 load 이벤트가 단 한 번이라도 안 뜨면(네트워크 순간
+// 끊김 등, 외부 사이트 자체는 멀쩡해도 생길 수 있음) src가 이미 채워져
+// 있다는 이유로 다시는 재시도하지 않고 스피너만 영원히 도는 상태로 굳었다.
+// 이제 SUNZI_LOAD_TIMEOUT_MS 안에 load가 안 뜨면 스피너를 "다시 시도"
+// 버튼으로 바꾸고, 버튼을 누르면 src를 초기화한 뒤 다시 로드를 건다.
+const SUNZI_LOAD_TIMEOUT_MS = 12000;
+let sunziLoadTimer = null;
+
+function loadSunziFrame() {
+  const frame = document.getElementById("sunzi-frame");
+  const overlay = document.getElementById("sunzi-frame-loading");
+  overlay.classList.remove("hidden", "load-error");
+  document.getElementById("sunzi-frame-loading-text").textContent = "손자병법을 불러오는 중…";
+  document.getElementById("sunzi-frame-retry-btn").classList.add("hidden");
+  clearTimeout(sunziLoadTimer);
+  const onLoad = () => {
+    clearTimeout(sunziLoadTimer);
+    overlay.classList.add("hidden");
+  };
+  frame.addEventListener("load", onLoad, { once: true });
+  sunziLoadTimer = setTimeout(() => {
+    frame.removeEventListener("load", onLoad);
+    overlay.classList.add("load-error");
+    document.getElementById("sunzi-frame-loading-text").textContent = "불러오지 못했습니다. 네트워크를 확인해주세요.";
+    document.getElementById("sunzi-frame-retry-btn").classList.remove("hidden");
+  }, SUNZI_LOAD_TIMEOUT_MS);
+  // 캐시된 실패 응답을 다시 물지 않도록 매 시도마다 쿼리에 타임스탬프를 붙인다.
+  const sep = frame.dataset.src.includes("?") ? "&" : "?";
+  frame.setAttribute("src", `${frame.dataset.src}${sep}_retry=${Date.now()}`);
+}
+
 function warmSunziFrame() {
   const frame = document.getElementById("sunzi-frame");
-  if (frame.getAttribute("src")) return;
-  frame.addEventListener("load", () => {
-    document.getElementById("sunzi-frame-loading").classList.add("hidden");
-  }, { once: true });
-  frame.setAttribute("src", frame.dataset.src);
+  const overlay = document.getElementById("sunzi-frame-loading");
+  // src가 이미 있어도 지난 시도가 실패로 끝난 상태(load-error)면, 이 탭에
+  // 다시 들어올 때마다 손으로 "다시 시도"를 누르게 하지 않고 자동으로
+  // 재시도한다. 아직 로딩 "중"인 시도는 방해하지 않는다.
+  if (frame.getAttribute("src") && !overlay.classList.contains("load-error")) return;
+  loadSunziFrame();
 }
+document.getElementById("sunzi-frame-retry-btn").addEventListener("click", loadSunziFrame);
 if ("requestIdleCallback" in window) {
   requestIdleCallback(warmSunziFrame, { timeout: 4000 });
 } else {
