@@ -1713,7 +1713,9 @@ def admin_update_persona(name: str, body: AdminPersonaUpdate, request: Request):
     if not description or len(description) > USER_PERSONA_DESC_MAX_CHARS:
         raise HTTPException(status_code=400, detail=f"설정은 1~{USER_PERSONA_DESC_MAX_CHARS}자로 입력하세요")
     conn = get_conn()
-    row = conn.execute("SELECT system_prompt FROM personas WHERE name = ?", (name,)).fetchone()
+    row = conn.execute(
+        "SELECT system_prompt, group_name, owner_username FROM personas WHERE name = ?", (name,)
+    ).fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="존재하지 않는 페르소나입니다")
@@ -5064,6 +5066,14 @@ def worker_persona_prompt(name: str, authorization: Optional[str] = Header(None)
     conn.close()
     if not row:
         raise HTTPException(status_code=404, detail="존재하지 않는 페르소나입니다")
+    if (
+        name == CAREER_HR_PERSONA_NAME
+        and row["group_name"] == "이직시스템"
+        and row["owner_username"] is None
+    ):
+        # 배포 전에 DB에 생성된 내장 인사담당자도 다음 공고 버튼 클릭을
+        # 기다리지 않고 기존 상담방의 바로 다음 질문부터 최신 지침을 쓴다.
+        return {"system_prompt": CAREER_HR_SYSTEM_PROMPT}
     return {"system_prompt": row["system_prompt"]}
 
 
