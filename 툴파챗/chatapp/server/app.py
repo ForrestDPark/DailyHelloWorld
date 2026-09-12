@@ -289,6 +289,10 @@ class NoCacheStaticMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
         if request.url.path.startswith(("/static/", "/uploads/", "/shift-alarm/static/")):
             response.headers["Cache-Control"] = "no-cache"
+        if request.url.path == "/career/" or request.url.path.startswith("/career/static/"):
+            # iOS 홈 화면 웹앱은 일반 탭보다 HTML/JS를 오래 보존하는 경우가 있다.
+            # 커리어 보드는 소유자 전용이고 파일도 작으므로 매번 최신본을 받는다.
+            response.headers["Cache-Control"] = "no-store, max-age=0"
         return response
 
 
@@ -1326,6 +1330,7 @@ def career_jobs(request: Request, q: str = "", source: str = "", sort: str = "re
         jobs = []
         for row in visible[offset:offset + limit]:
             item = dict(row)
+            item["kind"] = "job"
             item["preparation"] = None
             item["company_analysis_url"] = _company_profile_url(item.get("company", ""))
             item["analysis_url"] = _published_analysis_url("job", item.get("title", ""), item.get("company", ""))
