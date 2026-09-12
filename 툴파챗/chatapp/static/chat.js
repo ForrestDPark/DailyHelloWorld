@@ -3084,8 +3084,15 @@ function renderSystemMessage(m, shouldScroll = false) {
   // 시스템 메시지(경진대회·독서 세션 완료 등 트리거 알림)는 지금까지
   // textContent로만 넣어서 URL이 그냥 텍스트로 보였다. 페르소나 메시지와
   // 같은 링크화 함수를 재사용.
-  appendLinkifiedText(el, m.content);
+  const content = document.createElement("span");
+  content.className = "msg-system-content";
+  appendLinkifiedText(content, m.content);
+  el.appendChild(content);
   messagesEl.appendChild(el);
+  // 커리어 보드에서 방으로 막 이동한 경우에도 일반 메시지 전송 때처럼
+  // 인사담당자가 답변을 만드는 중임을 보여준다. 뒤이어 페르소나 답변이
+  // 렌더링되면 appendMessage가 기존 상태 표시를 자동으로 닫는다.
+  if (m.content.startsWith("📋 공고 상담 요청")) setAiResponseStatus(true);
   while (messagesEl.children.length > 500) messagesEl.firstElementChild.remove();
   if (shouldScroll) el.scrollIntoView({behavior: "smooth", block: "end"});
 }

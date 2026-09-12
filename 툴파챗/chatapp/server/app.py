@@ -1138,7 +1138,9 @@ def start_career_consult(body: CareerConsultRequest, request: Request):
         pass
     fields = [
         f"회사: {row['company']}", f"공고명: {row['title']}", f"출처: {row['source']}",
-        f"원문: {row['url']}", f"지역: {row['location'] or '미기재'}",
+        # 긴 추적 쿼리 URL은 모바일 시스템 메시지 폭을 깨뜨리고 상담 생성에는
+        # 필요하지 않다. 원문 열기는 공고 상세 화면의 전용 버튼이 담당한다.
+        f"지역: {row['location'] or '미기재'}",
         f"경력: {row['experience'] or '미기재'}", f"학력: {row['education'] or '미기재'}",
         f"고용형태: {row['employment_type'] or '미기재'}", f"급여: {row['salary'] or '미기재'}",
         f"마감: {row['deadline'] or '미기재'}", f"수집 기술: {row['skills'] or row['keywords'] or '미기재'}",
