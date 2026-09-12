@@ -1,0 +1,8 @@
+{
+  "name": "tulpachat-static-validate",
+  "private": true,
+  "description": "정적 프론트 파일(index.html/chat.js/style.css) 검증용 ESLint만 둔다. 앱 자체는 빌드 도구 없이 순정 HTML/JS/CSS로 서빙된다.",
+  "devDependencies": {
+    "eslint": "8.57.1"
+  }
+}

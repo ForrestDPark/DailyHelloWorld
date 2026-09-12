@@ -24,6 +24,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -1592,6 +1593,85 @@ UI_ALLOWED_FILES = {"index.html", "chat.js", "style.css"}
 UI_BACKUP_DIR = Path(os.path.expanduser("~/.tulpachat/ui_backups"))
 UI_PLAN_RE = re.compile(r"```uiplan\s*\n(.*?)\n```", re.DOTALL)
 UI_DEV_TIMEOUT_SECONDS = 180
+
+# ★ 2026-09-12: "같은 문제가 앞으로 일어나지 않게 파이프라인 검증 개선해줘"
+# 요청 — chat.js가 이미 삭제된 함수 setChatChromeCollapsed를 계속 호출해서
+# 하단 채팅 탭이 완전히 빈 화면으로 죽는 사고가 있었다. 원인은 이 파일 전체를
+# 통째로 다시 쓰는 유이(AI)가 함수 정의는 지우면서 호출부 하나를 놓쳤는데,
+# _execute_ui_plan은 그 결과를 검증 없이 그대로 실서비스 static/에 덮어썼다.
+# 실제 브라우저로 재현해보니 ESLint의 no-undef 규칙이 이 정확한 버그를
+# 줄 번호까지 잡아냈다 — 그래서 파일을 쓰기 "직전"에 같은 검사를 강제한다.
+# node/eslint는 launchd 워커의 PATH 누락 전례(★ 2026-08-26, README #참고)가
+# 있어 `env node`류 셔뱅에 기대지 않고 절대경로로 직접 호출한다.
+NODE_BIN = shutil.which("node") or "/opt/homebrew/opt/node@22/bin/node"
+ESLINT_ENTRY = STATIC_DIR.parent / "node_modules" / "eslint" / "bin" / "eslint.js"
+UI_VALIDATE_TIMEOUT_SECONDS = 30
+_GET_ELEMENT_BY_ID_RE = re.compile(r"""getElementById\(\s*["']([^"']+)["']\s*\)""")
+_HTML_ID_ATTR_RE = re.compile(r"""\bid=["']([^"']+)["']""")
+
+
+def _validate_ui_plan(actions):
+    """적용 직전 프론트 3파일(index.html/chat.js/style.css)을 검증한다.
+    문제가 하나라도 있으면 이 목록을 반환하고(비어있으면 통과), 호출부는
+    파일을 단 하나도 쓰지 않는다 — 부분 적용으로 인한 불일치를 막기 위해
+    전부 통과해야만 실행한다."""
+    problems = []
+    planned = {a["file"]: a["content"] for a in actions if isinstance(a, dict) and a.get("file") in UI_ALLOWED_FILES}
+    prospective = {}
+    for filename in UI_ALLOWED_FILES:
+        if filename in planned:
+            prospective[filename] = planned[filename]
+        else:
+            path = STATIC_DIR / filename
+            prospective[filename] = path.read_text(encoding="utf-8") if path.exists() else ""
+
+    js_content = prospective.get("chat.js", "")
+    if "chat.js" in planned and js_content.strip():
+        with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as tmp:
+            tmp.write(js_content)
+            tmp_path = tmp.name
+        try:
+            syntax = subprocess.run(
+                [NODE_BIN, "--check", tmp_path], capture_output=True, text=True,
+                timeout=UI_VALIDATE_TIMEOUT_SECONDS,
+            )
+            if syntax.returncode != 0:
+                problems.append(f"chat.js 문법 오류:\n{syntax.stderr.strip()[:500]}")
+            elif ESLINT_ENTRY.exists():
+                lint = subprocess.run(
+                    [NODE_BIN, str(ESLINT_ENTRY), "--no-eslintrc", "--env", "browser,es2021",
+                     "--parser-options=ecmaVersion:2021", "--rule", '{"no-undef":"error"}', tmp_path],
+                    capture_output=True, text=True, timeout=UI_VALIDATE_TIMEOUT_SECONDS,
+                )
+                if lint.returncode != 0 and lint.stdout.strip():
+                    problems.append(f"chat.js 정의되지 않은 참조:\n{lint.stdout.strip()[:800]}")
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            problems.append(f"chat.js 검증 실행 실패(node/eslint 확인 필요): {exc}")
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+    css_content = prospective.get("style.css", "")
+    if "style.css" in planned and css_content.strip():
+        if css_content.count("{") != css_content.count("}"):
+            problems.append(
+                f"style.css 중괄호 개수 불일치: {{ {css_content.count('{')}개, }} {css_content.count('}')}개"
+            )
+
+    # chat.js가 document.getElementById로 찾는 요소가 (변경 후) index.html에
+    # 실제로 있는지 교차 검증한다 — 아이디를 바꾸거나 지웠는데 반대쪽을 안
+    # 고치는 것도 같은 계열의 "런타임에만 드러나는" 사고이기 때문이다.
+    if js_content.strip() and prospective.get("index.html", "").strip():
+        html_ids = set(_HTML_ID_ATTR_RE.findall(prospective["index.html"]))
+        referenced_ids = set(_GET_ELEMENT_BY_ID_RE.findall(js_content))
+        missing = sorted(referenced_ids - html_ids)
+        if missing:
+            problems.append(
+                "chat.js가 찾는 요소 id가 index.html에 없음: " + ", ".join(missing[:10])
+            )
+    return problems
 IMAGE_PROVIDER = os.environ.get("CHATAPP_IMAGE_PROVIDER", "local").strip().lower()
 IMAGE_MODEL = os.environ.get("CHATAPP_IMAGE_MODEL", "gpt-image-2")
 LOCAL_IMAGE_MODEL = os.environ.get(
@@ -2164,6 +2244,18 @@ def _maybe_apply_image_results(room_id, context):
 
 def _execute_ui_plan(actions):
     results = []
+    valid_actions = [
+        a for a in actions
+        if isinstance(a, dict) and a.get("file") in UI_ALLOWED_FILES and (a.get("content") or "").strip()
+    ]
+    # ★ 2026-09-12: 전부 통과해야만 실행 — 파일 하나만 검증하고 나머지는
+    # 그냥 쓰면, 검증 안 한 파일이 검증한 파일과 서로 어긋난 채로(예: chat.js는
+    # 새 요소를 찾는데 index.html은 옛 버전) 반쯤 적용되는 상태가 생긴다.
+    problems = _validate_ui_plan(valid_actions)
+    if problems:
+        results.append("❌ 검증 실패로 아무 파일도 적용하지 않았습니다:")
+        results.extend(f"  - {p}" for p in problems)
+        return results
     UI_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
     for action in actions:
         filename = action.get("file") if isinstance(action, dict) else None
@@ -2209,7 +2301,8 @@ def _maybe_execute_pending_ui_plan(room_id, context):
     if not any(k in context[-1]["content"] for k in ORGANIZE_APPROVE_KEYWORDS):
         return None
     results = _execute_ui_plan(plan)
-    return "UI 변경을 적용했습니다(새로고침하면 바로 보입니다).\n" + "\n".join(results)
+    header = "검증에 걸려 적용하지 않았습니다:" if results and results[0].startswith("❌ 검증 실패") else "UI 변경을 적용했습니다(새로고침하면 바로 보입니다)."
+    return f"{header}\n" + "\n".join(results)
 
 
 def _execute_persona_proposal(proposal):
