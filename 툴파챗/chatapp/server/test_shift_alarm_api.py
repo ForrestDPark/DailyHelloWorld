@@ -194,6 +194,64 @@ class ShiftAlarmApiTests(unittest.TestCase):
             self.assertNotIn("evidence", item)
             self.assertGreater(len(item["how"]), 25)
 
+    def test_source_sections_allow_saramin_icon_prefixes(self):
+        result = module._source_grounded_preparation(
+            "모집분야\nAI 자동화 개발자\n📋 주요업무\nPython FastAPI 개발\n"
+            "📋 자격요건\n경력 3년 이상\n✅ 우대사항\nReact 경험"
+        )
+        self.assertTrue(result["grounded"])
+        self.assertIn("주요업무", result["sections"])
+        self.assertIn("자격요건", result["sections"])
+        self.assertIn("우대사항", result["sections"])
+
+    def test_career_consult_queues_only_hr_persona(self):
+        with tempfile.TemporaryDirectory() as directory:
+            data_dir = Path(directory) / "career"
+            data_dir.mkdir()
+            jobs = sqlite3.connect(data_dir / "jobs.db")
+            jobs.execute("""CREATE TABLE jobs (
+                source TEXT, source_id TEXT, title TEXT, company TEXT, url TEXT,
+                location TEXT, experience TEXT, education TEXT, employment_type TEXT,
+                salary TEXT, deadline TEXT, skills TEXT, keywords TEXT, matched_query TEXT
+            )""")
+            jobs.execute("INSERT INTO jobs VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (
+                "사람인(크롤링)", "7", "AI 자동화 개발자", "테스트회사", "https://example.com/job",
+                "서울", "3년", "무관", "정규직", "", "", "Python", "AI", "자동화",
+            ))
+            jobs.commit(); jobs.close()
+
+            chat_path = Path(directory) / "chat.db"
+            chat = sqlite3.connect(chat_path)
+            chat.executescript("""
+                CREATE TABLE personas (name TEXT PRIMARY KEY, notion_page_id TEXT, system_prompt TEXT,
+                    group_name TEXT, owner_username TEXT, description TEXT, synced_at TEXT);
+                CREATE TABLE room_invites (room_id TEXT, persona_name TEXT, invited_at TEXT,
+                    PRIMARY KEY(room_id,persona_name));
+                CREATE TABLE messages (id INTEGER PRIMARY KEY AUTOINCREMENT, room_id TEXT,
+                    sender TEXT, content TEXT, created_at TEXT, is_system INTEGER);
+                CREATE TABLE pending_turns (id INTEGER PRIMARY KEY AUTOINCREMENT, persona_name TEXT,
+                    room_id TEXT, status TEXT, created_at TEXT, source_message_id INTEGER);
+            """)
+            chat.commit(); chat.close()
+
+            def connection():
+                opened = sqlite3.connect(chat_path)
+                opened.row_factory = sqlite3.Row
+                return opened
+
+            body = module.CareerConsultRequest(source="사람인(크롤링)", source_id="7")
+            with patch.object(module, "CAREER_DATA_DIR", data_dir), patch.object(
+                module, "get_conn", side_effect=connection
+            ):
+                result = module.start_career_consult(body, owner_request())
+            check = sqlite3.connect(chat_path)
+            turn = check.execute("SELECT persona_name,room_id,status FROM pending_turns").fetchone()
+            invite = check.execute("SELECT persona_name FROM room_invites").fetchone()
+            check.close()
+        self.assertEqual(result["room_id"], module.CAREER_CONSULT_ROOM_ID)
+        self.assertEqual(turn, (module.CAREER_HR_PERSONA_NAME, module.CAREER_CONSULT_ROOM_ID, "pending"))
+        self.assertEqual(invite, (module.CAREER_HR_PERSONA_NAME,))
+
     def test_certificates_are_recommended_from_job_signals_and_not_called_required(self):
         result = module._source_grounded_preparation(
             "주요업무\nPython REST API 개발\n자격요건\nSQL 데이터베이스 설계\n우대사항\n데이터 분석 경험"
