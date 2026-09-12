@@ -3213,6 +3213,13 @@ function appendMessage(m, forceScroll = false, suppressScroll = false) {
   }
   const body = document.createElement("div");
   body.className = "body";
+  // 일본어 선생님 메시지와 가나가 포함된 일반 메시지는 일본어 CJK 자형을
+  // 사용한다. Noto Sans JP에는 한글 자형이 없으므로 같은 말풍선 안의 한글
+  // 설명은 다음 한국어 시스템 글꼴로 자연스럽게 폴백된다.
+  if (m.sender === "일본어 선생님" || /[\u3040-\u30ff]/.test(m.content)) {
+    body.classList.add("message-japanese");
+    body.lang = "ja";
+  }
   if (m.reply_message_id && m.reply_sender) {
     const quote = document.createElement("div");
     quote.className = "message-reply-quote";

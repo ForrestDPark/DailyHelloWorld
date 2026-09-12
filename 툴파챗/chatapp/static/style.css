@@ -1139,6 +1139,17 @@ main#messages.has-custom-background {
   unicode-range: U+3005, U+3007, U+3021-3029, U+3400-4DBF, U+4E00-9FFF, U+F900-FAFF;
   font-display: swap;
 }
+@font-face {
+  font-family: "ChatJapanese";
+  src: url("/static/fonts/NotoSansJP-wght.woff2") format("woff2-variations");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+.msg .body.message-japanese {
+  font-family: "ChatJapanese", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
+  font-feature-settings: "palt" 0;
+}
 .msg-user .body { background: var(--bubble-user); color: var(--bubble-user-fg); }
 .msg-persona .body { background: var(--bubble-persona); color: var(--bubble-persona-fg); }
 /* ★ 다른 로그인 사용자 메시지(2026-08-26) — 내 말풍선(파랑)·페르소나
