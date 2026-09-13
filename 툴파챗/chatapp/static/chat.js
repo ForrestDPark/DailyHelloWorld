@@ -2780,11 +2780,12 @@ function showJapaneseKanjiPopover(character, reading, anchor, japaneseContext = 
   glyph.textContent = character;
   const readings = document.createElement("div");
   readings.className = "japanese-kanji-popover-readings";
-  const rows = [["한자음", reading.sound || "—"], ["한글 뜻", reading.meaning || "—"]];
-  if (japaneseContext) {
-    rows.push(["음독", (reading.on || []).join("・") || "—"]);
-    rows.push(["훈독", (reading.kun || []).join("・") || "—"]);
-  }
+  const rows = [
+    ["한자음", reading.sound || "해당 없음"],
+    ["한글 뜻", reading.meaning || "해당 없음"],
+    ["음독", (reading.on || []).join("・") || "해당 없음"],
+    ["훈독", (reading.kun || []).join("・") || "해당 없음"],
+  ];
   for (const [label, displayValue] of rows) {
     const row = document.createElement("div");
     const heading = document.createElement("span");
@@ -2826,11 +2827,12 @@ async function openJapaneseKanjiVocabulary() {
     const glyph = document.createElement("strong");
     glyph.lang = "ja"; glyph.textContent = item.character;
     const detail = document.createElement("div");
-    const rows = [["한자음", reading.sound || "—", "ko"], ["뜻", reading.meaning || "—", "ko"]];
-    if (reading.on.length || reading.kun.length) {
-      rows.push(["음독", reading.on.join("・") || "—", "ja"]);
-      rows.push(["훈독", reading.kun.join("・") || "—", "ja"]);
-    }
+    const rows = [
+      ["한자음", reading.sound || "해당 없음", "ko"],
+      ["뜻", reading.meaning || "해당 없음", "ko"],
+      ["음독", reading.on.join("・") || "해당 없음", "ja"],
+      ["훈독", reading.kun.join("・") || "해당 없음", "ja"],
+    ];
     for (const [label, displayValue, lang] of rows) {
       const row = document.createElement("p");
       row.innerHTML = `<span>${label}</span><b lang="${lang}">${escapeHtml(displayValue)}</b>`;
@@ -2879,7 +2881,7 @@ async function decorateJapaneseKanji(container, japaneseContext = false) {
       button.className = "japanese-kanji-char";
       button.lang = "ja";
       button.textContent = part;
-      button.setAttribute("aria-label", japaneseContext ? `${part} 한국 한자음과 일본어 음독·훈독 보기` : `${part} 한자 뜻과 음 보기`);
+      button.setAttribute("aria-label", `${part} 한국 한자음·뜻과 일본어 음독·훈독 보기`);
       button.addEventListener("click", (event) => {
         event.stopPropagation();
         showJapaneseKanjiPopover(part, reading, button, japaneseContext);
