@@ -149,6 +149,171 @@ SHIFT_ALARM_PERSONA_STATE_KEY = {
     "곳간지기": "storage",
 }
 
+# ★ 2026-09-14: "shift alarm 메뉴바에서 클릭해서 하는 맥북 음량조절·좋아요/
+# 클래식 음악 재생을 채팅에서도 하고 싶다" 요청 — shift_alarm.py는 rumps
+# 메뉴바 앱이라 HTTP도 IPC도 없어 워커가 그 프로세스에 직접 명령을 보낼 수
+# 없다. 대신 이 두 재생 기능이 실제로 하는 일(Elmedia 종료→큐 비우기→
+# 폴더 안 음원을 open -a 인자로 나열해 다시 열기, osascript 볼륨 설정)은
+# 전부 macOS 명령이라 워커가 shift_alarm.py의 로직을 그대로 옮겨와 직접
+# 실행해도 결과가 동일하다. shift_alarm.py의 list_audio_tracks·
+# reset_elmedia_playlist·play_folder_in_elmedia와 반드시 같은 폴더·DB
+# 경로·종료 재시도 로직을 유지할 것 — 한쪽만 고치면 두 경로가 다르게
+# 동작하게 된다.
+ALARM_KEEPER_PERSONA_NAME = "알람지기"
+SHIFT_ALARM_CLASSIC_FOLDER = "/Users/forrestdpark/Desktop/BlogImage/Coffee and Meditation"
+SHIFT_ALARM_FAVORITES_FOLDER = "/Users/forrestdpark/Desktop/BlogImage/좋아요플레이"
+SHIFT_ALARM_ELMEDIA_PLAYLIST_DB = os.path.expanduser(
+    "~/Library/Containers/com.eltima.elmedia6.mas/Data/Library/Application Support/"
+    "Elmedia Video Player/Playlist.db"
+)
+SHIFT_ALARM_ELMEDIA_AUDIO_EXTENSIONS = {
+    ".aac", ".aif", ".aiff", ".alac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav", ".wma",
+}
+ALARM_ACTION_RE = re.compile(r"```alarmaction\s*\n(.*?)\n```", re.DOTALL)
+
+
+def _shift_alarm_list_audio_tracks(folder):
+    tracks = []
+    for root, _dirs, files in os.walk(folder):
+        for name in files:
+            if os.path.splitext(name)[1].lower() in SHIFT_ALARM_ELMEDIA_AUDIO_EXTENSIONS:
+                tracks.append(os.path.abspath(os.path.join(root, name)))
+    tracks.sort(key=lambda path: path.casefold())
+    return tracks
+
+
+def _shift_alarm_elmedia_running():
+    result = subprocess.run(
+        ["/usr/bin/pgrep", "-x", "Elmedia Video Player"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    return result.returncode == 0
+
+
+def _shift_alarm_reset_elmedia_playlist():
+    """shift_alarm.py의 reset_elmedia_playlist()와 동일 — SIGTERM 5초, 안 죽으면
+    SIGKILL, 그래도 살아있으면 False(호출부가 "섞였을 수 있다"고 판단하게)."""
+    subprocess.run(
+        ["/usr/bin/killall", "Elmedia Video Player"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    for _ in range(20):
+        if not _shift_alarm_elmedia_running():
+            break
+        time.sleep(0.25)
+    else:
+        subprocess.run(
+            ["/usr/bin/killall", "-9", "Elmedia Video Player"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+        )
+        for _ in range(8):
+            if not _shift_alarm_elmedia_running():
+                break
+            time.sleep(0.25)
+    if _shift_alarm_elmedia_running():
+        return False
+    if os.path.exists(SHIFT_ALARM_ELMEDIA_PLAYLIST_DB):
+        with sqlite3.connect(SHIFT_ALARM_ELMEDIA_PLAYLIST_DB, timeout=5) as conn:
+            conn.execute("DELETE FROM item_order")
+            conn.execute("DELETE FROM playlist_items")
+            conn.commit()
+    return True
+
+
+def _shift_alarm_play_folder(folder):
+    if not os.path.isdir(folder):
+        return False, "폴더를 찾을 수 없습니다."
+    try:
+        tracks = _shift_alarm_list_audio_tracks(folder)
+        if not tracks:
+            return False, "재생 가능한 음원 파일이 없습니다."
+        reset_ok = _shift_alarm_reset_elmedia_playlist()
+        subprocess.Popen(["open", "-a", "Elmedia Video Player", *tracks])
+        if not reset_ok:
+            return False, "Elmedia가 응답이 없어 기존 재생목록을 비우지 못했습니다 — 새 음원이 기존 큐와 섞여 재생될 수 있습니다."
+        return True, f"{len(tracks)}곡을 새로 열었습니다."
+    except OSError as exc:
+        return False, str(exc)
+
+
+def _shift_alarm_get_volume():
+    result = subprocess.run(
+        ["/usr/bin/osascript", "-e", "output volume of (get volume settings)"],
+        capture_output=True, text=True, timeout=10, check=False,
+    )
+    try:
+        return int(result.stdout.strip())
+    except ValueError:
+        return None
+
+
+def _shift_alarm_set_volume(percent):
+    percent = max(0, min(100, int(percent)))
+    subprocess.run(
+        ["/usr/bin/osascript", "-e", f"set volume output volume {percent}"],
+        timeout=10, check=False,
+    )
+    return percent
+
+
+def _handle_alarm_action_signal(reply_text):
+    """알람지기 답변의 ```alarmaction 블록을 찾아 즉시 실행한다(승인 절차
+    없음 — 루틴지기와 같은 이유: 소유자의 그 요청 메시지 자체가 명확한
+    명령이고, 음량·재생은 즉시 되돌릴 수 있는 저위험 동작이라 두 단계
+    승인이 오히려 번거롭다). 호출부가 이미 source_is_owner를 확인했다는
+    전제 — 이 함수 자체는 소유자 여부를 모른다."""
+    m = ALARM_ACTION_RE.search(reply_text)
+    if not m:
+        return None
+    try:
+        action = json.loads(m.group(1))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(action, dict):
+        return None
+    kind = action.get("action")
+    if kind == "set_volume":
+        try:
+            percent = int(action.get("percent"))
+        except (TypeError, ValueError):
+            return "❌ 음량 값을 이해하지 못해 건너뜀"
+        applied = _shift_alarm_set_volume(percent)
+        return f"✅ 시스템 음량을 {applied}%로 맞췄습니다."
+    if kind in ("volume_up", "volume_down"):
+        current = _shift_alarm_get_volume()
+        if current is None:
+            return "❌ 현재 음량을 확인하지 못했습니다."
+        try:
+            step = int(action.get("step") or 10)
+        except (TypeError, ValueError):
+            step = 10
+        target = current + step if kind == "volume_up" else current - step
+        applied = _shift_alarm_set_volume(target)
+        return f"✅ 음량을 {current}%에서 {applied}%로 조절했습니다."
+    if kind == "play_favorites":
+        ok, msg = _shift_alarm_play_folder(SHIFT_ALARM_FAVORITES_FOLDER)
+        return f"{'✅' if ok else '❌'} 좋아요 플레이 — {msg}"
+    if kind == "play_classical":
+        ok, msg = _shift_alarm_play_folder(SHIFT_ALARM_CLASSIC_FOLDER)
+        return f"{'✅' if ok else '❌'} 클래식(Coffee and Meditation) 플레이 — {msg}"
+    return None
+
+
+ALARM_KEEPER_ADDENDUM = (
+    "\n\n---\n"
+    f'"{ALARM_KEEPER_PERSONA_NAME}"은(는) 소유자의 요청으로 이 Mac의 시스템 음량을 조절하거나 '
+    "Elmedia로 음악(좋아요 플레이/클래식)을 재생할 수 있다 — shift_alarm 메뉴바에서 클릭하는 것과 "
+    "완전히 같은 동작이다. 이 기능은 오직 소유자 본인의 요청에만 실행되며(다른 로그인 사용자의 "
+    "요청은 절대 실행하지 않는다 — 시스템이 별도로도 막는다), 승인을 기다리지 말고 요청이 명확하면 "
+    "그 자리에서 바로 아래 블록 중 하나를 답변에 붙인다(실행은 결정론적 코드가 담당).\n"
+    '- 음량을 특정 값으로: ```alarmaction\\n{"action":"set_volume","percent":숫자(0~100)}\\n```\n'
+    '- 음량을 올리거나 내려달라는 상대적 요청(예: "좀 줄여줘", "크게 해줘"): '
+    '```alarmaction\\n{"action":"volume_up 또는 volume_down","step":숫자(생략 시 10)}\\n```\n'
+    '- "좋아요 (음악) 틀어줘": ```alarmaction\\n{"action":"play_favorites"}\\n```\n'
+    '- "클래식 (음악) 틀어줘": ```alarmaction\\n{"action":"play_classical"}\\n```\n'
+    "요청이 애매하면(예: 몇 %로 할지 안 정함) 억지로 실행하지 말고 되물어본다."
+)
+
 
 def _read_json_file(path):
     try:
@@ -2419,6 +2584,8 @@ def sync_personas():
             system_prompt += PERSONA_MANAGER_ADDENDUM
         elif persona["title"] == ROUTINE_KEEPER_PERSONA_NAME:
             system_prompt += ROUTINE_KEEPER_ADDENDUM
+        elif persona["title"] == ALARM_KEEPER_PERSONA_NAME:
+            system_prompt += ALARM_KEEPER_ADDENDUM
         elif persona["title"] in JOB_SYSTEM_PERSONA_NAMES:
             system_prompt += JOB_SYSTEM_ADDENDUM
             if persona["title"] == STUDY_COACH_PERSONA_NAME:
@@ -2930,6 +3097,7 @@ def _process_turn_inner(turn, persona_cache):
     is_pipeline_expert = persona_name == PIPELINE_EXPERT_PERSONA_NAME
     is_persona_manager = persona_name == PERSONA_MANAGER_PERSONA_NAME
     is_routine_keeper = persona_name == ROUTINE_KEEPER_PERSONA_NAME
+    is_alarm_keeper = persona_name == ALARM_KEEPER_PERSONA_NAME
     if is_persona_manager:
         executed = _maybe_execute_pending_persona_proposal(room_id, turn["context"])
         if executed is not None:
@@ -3084,6 +3252,17 @@ def _process_turn_inner(turn, persona_cache):
             outcome = _handle_routine_check_signal(reply)
             if outcome:
                 reply = f"{reply}\n\n{outcome}"
+        elif is_alarm_keeper:
+            # ★ 2026-09-14: 이 Mac의 실제 음량·미디어를 바꾸는 동작이라 반드시
+            # 이 턴을 유발한 메시지가 소유자 본인일 때만 실행한다(다른 로그인
+            # 사용자가 알람지기에게 말을 걸어도 시스템 동작은 절대 안 바뀜).
+            # 소유자가 아니면 블록만 조용히 지우고 대사는 그대로 둔다.
+            if turn.get("source_is_owner"):
+                outcome = _handle_alarm_action_signal(reply)
+                if outcome:
+                    reply = f"{reply}\n\n{outcome}"
+            else:
+                reply = ALARM_ACTION_RE.sub("", reply).strip()
         # 자동 토론뿐 아니라 다른 페르소나도 명시적으로 침묵을 선택할 수 있다.
         # 빈 답은 서버가 메시지를 만들지 않고 턴만 정상 완료한다.
         if reply.strip().upper() == "NONE":
