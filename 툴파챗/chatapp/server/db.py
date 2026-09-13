@@ -159,6 +159,13 @@ def init_db():
             FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE,
             FOREIGN KEY (friend_username) REFERENCES users(username) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS japanese_kanji_favorites (
+            username TEXT NOT NULL,
+            character TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (username, character),
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        );
         CREATE TABLE IF NOT EXISTS user_ai_credentials (
             username TEXT NOT NULL,
             provider TEXT NOT NULL,

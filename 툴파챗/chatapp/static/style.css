@@ -1174,7 +1174,7 @@ main#messages.has-custom-background {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 14px;
   width: min(360px, calc(100vw - 24px));
-  padding: 18px 48px 18px 18px;
+  padding: 18px 88px 18px 18px;
   border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
   border-radius: 22px;
   background: color-mix(in srgb, var(--bg-elevated) 96%, transparent);
@@ -1213,6 +1213,58 @@ main#messages.has-custom-background {
   font-size: 24px;
   line-height: 1;
 }
+.japanese-kanji-favorite {
+  position: absolute;
+  top: 10px;
+  right: 50px;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--muted);
+  font-size: 23px;
+  line-height: 1;
+}
+.japanese-kanji-favorite.active, .kanji-vocab-remove { color: #d49a16; }
+.kanji-vocab-overlay {
+  position: fixed;
+  z-index: 1400;
+  inset: 0;
+  display: grid;
+  align-items: end;
+  padding: 20px;
+  background: rgba(12, 10, 20, .48);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.kanji-vocab-panel {
+  width: min(620px, 100%);
+  max-height: min(78dvh, 720px);
+  margin: 0 auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: 26px;
+  background: var(--bg-elevated);
+  color: var(--fg);
+  box-shadow: 0 24px 70px rgba(10, 8, 20, .35);
+}
+.kanji-vocab-panel > header { display: flex; align-items: center; justify-content: space-between; padding: 20px 20px 10px; }
+.kanji-vocab-panel > header small { color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: .14em; }
+.kanji-vocab-panel > header h2 { margin: 3px 0 0; font-size: 20px; }
+.kanji-vocab-panel > header button { width: 40px; height: 40px; border: 0; border-radius: 13px; background: var(--accent-soft); color: var(--accent); }
+.kanji-vocab-help { margin: 0; padding: 0 20px 14px; color: var(--muted); font-size: 13px; }
+.kanji-vocab-list { min-height: 150px; overflow-y: auto; overscroll-behavior: contain; padding: 0 14px max(18px, env(safe-area-inset-bottom)); -webkit-overflow-scrolling: touch; }
+.kanji-vocab-card { display: grid; grid-template-columns: 58px minmax(0, 1fr) 38px; gap: 12px; align-items: center; padding: 14px 8px; border-top: 1px solid var(--border); }
+.kanji-vocab-card > strong { font-family: "ChatJapanese", sans-serif; font-size: 38px; color: var(--accent); text-align: center; }
+.kanji-vocab-card p { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 7px; margin: 2px 0; align-items: baseline; }
+.kanji-vocab-card p span { color: var(--muted); font-size: 11px; }
+.kanji-vocab-card p b { overflow-wrap: anywhere; font-family: "ChatJapanese", sans-serif; font-size: 14px; line-height: 1.45; }
+.kanji-vocab-remove { width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: var(--accent-soft); font-size: 21px; }
+@media (min-width: 700px) { .kanji-vocab-overlay { align-items: center; } }
 .msg-user .body { background: var(--bubble-user); color: var(--bubble-user-fg); }
 .msg-persona .body { background: var(--bubble-persona); color: var(--bubble-persona-fg); }
 /* ★ 다른 로그인 사용자 메시지(2026-08-26) — 내 말풍선(파랑)·페르소나

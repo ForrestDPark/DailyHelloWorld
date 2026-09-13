@@ -2350,6 +2350,59 @@ def remove_friend_favorite(friend_username: str, request: Request):
     return {"ok": True, "is_favorite": False}
 
 
+JAPANESE_KANJI_RE = re.compile(r"^[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]$")
+
+
+@app.get("/api/me/japanese-kanji-favorites")
+def list_japanese_kanji_favorites(request: Request):
+    """로그인 계정에 저장된 일본어 한자 단어장을 최신 저장 순으로 돌려준다."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT character, created_at FROM japanese_kanji_favorites "
+        "WHERE username = ? ORDER BY created_at DESC, character",
+        (user["username"],),
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+@app.put("/api/me/japanese-kanji-favorites/{character}")
+def add_japanese_kanji_favorite(character: str, request: Request):
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    if not JAPANESE_KANJI_RE.fullmatch(character):
+        raise HTTPException(status_code=400, detail="한 글자의 한자만 저장할 수 있습니다")
+    conn = get_conn()
+    conn.execute(
+        "INSERT OR IGNORE INTO japanese_kanji_favorites (username, character, created_at) VALUES (?, ?, ?)",
+        (user["username"], character, _now()),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True, "character": character, "is_favorite": True}
+
+
+@app.delete("/api/me/japanese-kanji-favorites/{character}")
+def remove_japanese_kanji_favorite(character: str, request: Request):
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    if not JAPANESE_KANJI_RE.fullmatch(character):
+        raise HTTPException(status_code=400, detail="한 글자의 한자만 삭제할 수 있습니다")
+    conn = get_conn()
+    conn.execute(
+        "DELETE FROM japanese_kanji_favorites WHERE username = ? AND character = ?",
+        (user["username"], character),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True, "character": character, "is_favorite": False}
+
+
 class MyProfileUpdate(BaseModel):
     display_name: str
 

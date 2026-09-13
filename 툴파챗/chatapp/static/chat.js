@@ -2685,6 +2685,8 @@ function appendMessageMedia(container, content) {
 
 let japaneseKanjiDictionaryPromise = null;
 let japaneseKanjiPopover = null;
+let japaneseKanjiFavoritesPromise = null;
+let japaneseKanjiFavorites = new Set();
 
 function loadJapaneseKanjiDictionary() {
   if (!japaneseKanjiDictionaryPromise) {
@@ -2708,6 +2710,44 @@ function closeJapaneseKanjiPopover() {
   japaneseKanjiPopover = null;
 }
 
+function loadJapaneseKanjiFavorites(force = false) {
+  if (force) japaneseKanjiFavoritesPromise = null;
+  if (!japaneseKanjiFavoritesPromise) {
+    japaneseKanjiFavoritesPromise = apiFetch("/api/me/japanese-kanji-favorites")
+      .then((response) => response.ok ? response.json() : [])
+      .then((items) => {
+        japaneseKanjiFavorites = new Set(items.map((item) => item.character));
+        return items;
+      })
+      .catch((error) => {
+        if (error.message !== "unauthorized") console.error("한자 단어장을 불러오지 못했습니다.", error);
+        return [];
+      });
+  }
+  return japaneseKanjiFavoritesPromise;
+}
+
+async function toggleJapaneseKanjiFavorite(character, button) {
+  await loadJapaneseKanjiFavorites();
+  const removing = japaneseKanjiFavorites.has(character);
+  button.disabled = true;
+  try {
+    const response = await apiFetch(`/api/me/japanese-kanji-favorites/${encodeURIComponent(character)}`, {
+      method: removing ? "DELETE" : "PUT",
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (removing) japaneseKanjiFavorites.delete(character);
+    else japaneseKanjiFavorites.add(character);
+    button.classList.toggle("active", !removing);
+    button.textContent = removing ? "☆" : "★";
+    button.setAttribute("aria-label", removing ? `${character} 단어장에 저장` : `${character} 단어장에서 제거`);
+  } catch (error) {
+    if (error.message !== "unauthorized") alert("한자를 저장하지 못했습니다.");
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function showJapaneseKanjiPopover(character, reading, anchor) {
   closeJapaneseKanjiPopover();
   const popover = document.createElement("section");
@@ -2720,6 +2760,19 @@ function showJapaneseKanjiPopover(character, reading, anchor) {
   close.textContent = "×";
   close.setAttribute("aria-label", "독음 닫기");
   close.addEventListener("click", closeJapaneseKanjiPopover);
+  const favorite = document.createElement("button");
+  favorite.type = "button";
+  favorite.className = "japanese-kanji-favorite";
+  favorite.textContent = "☆";
+  favorite.setAttribute("aria-label", `${character} 단어장에 저장`);
+  loadJapaneseKanjiFavorites().then(() => {
+    if (!favorite.isConnected) return;
+    const active = japaneseKanjiFavorites.has(character);
+    favorite.classList.toggle("active", active);
+    favorite.textContent = active ? "★" : "☆";
+    favorite.setAttribute("aria-label", active ? `${character} 단어장에서 제거` : `${character} 단어장에 저장`);
+  });
+  favorite.addEventListener("click", () => toggleJapaneseKanjiFavorite(character, favorite));
   const glyph = document.createElement("strong");
   glyph.className = "japanese-kanji-popover-glyph";
   glyph.lang = "ja";
@@ -2736,7 +2789,7 @@ function showJapaneseKanjiPopover(character, reading, anchor) {
     row.append(heading, value);
     readings.appendChild(row);
   }
-  popover.append(close, glyph, readings);
+  popover.append(close, favorite, glyph, readings);
   document.body.appendChild(popover);
   japaneseKanjiPopover = popover;
   const rect = anchor.getBoundingClientRect();
@@ -2745,6 +2798,49 @@ function showJapaneseKanjiPopover(character, reading, anchor) {
   const desiredTop = rect.bottom + 10;
   popover.style.top = `${Math.max(12, Math.min(desiredTop, innerHeight - popover.offsetHeight - 12))}px`;
 }
+
+const kanjiVocabOverlay = document.getElementById("kanji-vocab-overlay");
+const kanjiVocabList = document.getElementById("kanji-vocab-list");
+
+async function openJapaneseKanjiVocabulary() {
+  closeJapaneseKanjiPopover();
+  kanjiVocabList.innerHTML = '<div class="empty-hint">단어장을 불러오는 중…</div>';
+  kanjiVocabOverlay.classList.remove("hidden");
+  const [items, dictionary] = await Promise.all([loadJapaneseKanjiFavorites(true), loadJapaneseKanjiDictionary()]);
+  if (kanjiVocabOverlay.classList.contains("hidden")) return;
+  kanjiVocabList.innerHTML = "";
+  if (!items.length) {
+    kanjiVocabList.innerHTML = '<div class="empty-hint">아직 저장한 한자가 없어요.<br>채팅의 일본어 한자를 누르고 ☆를 탭해보세요.</div>';
+    return;
+  }
+  for (const item of items) {
+    const reading = dictionary[item.character] || {on: [], kun: []};
+    const card = document.createElement("article");
+    card.className = "kanji-vocab-card";
+    const glyph = document.createElement("strong");
+    glyph.lang = "ja"; glyph.textContent = item.character;
+    const detail = document.createElement("div");
+    const on = document.createElement("p");
+    on.innerHTML = `<span>음독</span><b lang="ja">${escapeHtml(reading.on.join("・") || "—")}</b>`;
+    const kun = document.createElement("p");
+    kun.innerHTML = `<span>훈독</span><b lang="ja">${escapeHtml(reading.kun.join("・") || "—")}</b>`;
+    detail.append(on, kun);
+    const remove = document.createElement("button");
+    remove.type = "button"; remove.textContent = "★"; remove.className = "kanji-vocab-remove";
+    remove.setAttribute("aria-label", `${item.character} 단어장에서 제거`);
+    remove.addEventListener("click", async () => {
+      await toggleJapaneseKanjiFavorite(item.character, remove);
+      if (!japaneseKanjiFavorites.has(item.character)) card.remove();
+      if (!kanjiVocabList.querySelector(".kanji-vocab-card")) openJapaneseKanjiVocabulary();
+    });
+    card.append(glyph, detail, remove);
+    kanjiVocabList.appendChild(card);
+  }
+}
+
+document.getElementById("kanji-vocab-btn").addEventListener("click", openJapaneseKanjiVocabulary);
+document.getElementById("kanji-vocab-close").addEventListener("click", () => kanjiVocabOverlay.classList.add("hidden"));
+kanjiVocabOverlay.addEventListener("click", (event) => { if (event.target === kanjiVocabOverlay) kanjiVocabOverlay.classList.add("hidden"); });
 
 async function decorateJapaneseKanji(container) {
   const dictionary = await loadJapaneseKanjiDictionary();
@@ -3174,7 +3270,11 @@ document.addEventListener("pointerdown", (event) => {
     closeJapaneseKanjiPopover();
   }
 });
-document.addEventListener("keydown", (event) => { if (event.key === "Escape") closeJapaneseKanjiPopover(); });
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  closeJapaneseKanjiPopover();
+  kanjiVocabOverlay.classList.add("hidden");
+});
 
 function openSelectiveCopy(content) {
   const overlay = document.createElement("div");

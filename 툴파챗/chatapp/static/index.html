@@ -27,7 +27,7 @@
      페이지 로드는 chat.js가 부팅 후 유휴 시간에 백그라운드로 미리 시작). -->
 <link rel="preconnect" href="https://sunzi-strategy-notes.pulpilisory.chatgpt.site" crossorigin>
 <link rel="dns-prefetch" href="https://sunzi-strategy-notes.pulpilisory.chatgpt.site">
-<link rel="stylesheet" href="/static/style.css?v=20260913-japanese-kanji-v1">
+<link rel="stylesheet" href="/static/style.css?v=20260914-kanji-vocab-v1">
 <!-- ★ "새 메시지 알림(웹 푸시)" 요청(2026-08-27) — iOS Safari는 PWA로
      "홈 화면에 추가"돼 있어야만 웹 푸시가 동작한다. manifest.json이 그
      설치 가능 상태를 만든다. -->
@@ -56,6 +56,7 @@
     <symbol id="icon-chat" viewBox="0 0 24 24"><path d="M20 15a3 3 0 0 1-3 3H9l-5 3v-6a3 3 0 0 1-1-2.2V7a3 3 0 0 1 3-3h11a3 3 0 0 1 3 3v8Z"/><path d="M7 9h10M7 13h6"/></symbol>
     <symbol id="icon-bell" viewBox="0 0 24 24"><path d="M18 16v-5a6 6 0 1 0-12 0v5l-2 3h16l-2-3Z"/><path d="M9.5 21a2.5 2.5 0 0 0 5 0"/></symbol>
     <symbol id="icon-arrow-down" viewBox="0 0 24 24"><path d="M5 9.5 12 16.5 19 9.5"/></symbol>
+    <symbol id="icon-bookmark-star" viewBox="0 0 24 24"><path d="M5 3h14v18l-7-4-7 4V3Z"/><path d="m12 6.2 1.1 2.2 2.4.4-1.7 1.7.4 2.4-2.2-1.1-2.2 1.1.4-2.4-1.7-1.7 2.4-.4L12 6.2Z"/></symbol>
   </svg>
   <!-- 로그인/가입 화면 -->
   <div id="auth-view" class="hidden">
@@ -166,6 +167,7 @@
       <button id="thumbnail-btn" type="button" aria-label="대표사진 변경" class="icon-button hidden"><svg><use href="#icon-image"/></svg></button>
       <input id="thumbnail-input" type="file" accept="image/*" class="hidden">
       <button id="chat-bg-btn" type="button" aria-label="내 채팅 배경 변경" class="icon-button hidden"><svg><use href="#icon-wallpaper"/></svg></button>
+      <button id="kanji-vocab-btn" type="button" aria-label="일본어 한자 단어장" class="icon-button"><svg><use href="#icon-bookmark-star"/></svg></button>
       <button id="auto-read-btn" type="button" aria-label="자동 읽어주기 켜기" class="icon-button"><svg><use href="#icon-speaker"/></svg></button>
       <button id="invite-btn" type="button" aria-label="참여자 보기 및 초대" class="icon-button hidden"><svg><use href="#icon-users"/></svg></button>
     </header>
@@ -240,6 +242,14 @@
     </div>
   </div>
 
+  <div id="kanji-vocab-overlay" class="kanji-vocab-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="kanji-vocab-title">
+    <section class="kanji-vocab-panel">
+      <header><div><small>MY KANJI</small><h2 id="kanji-vocab-title">일본어 한자 단어장</h2></div><button id="kanji-vocab-close" type="button" aria-label="단어장 닫기" class="icon-button"><svg><use href="#icon-close"/></svg></button></header>
+      <p class="kanji-vocab-help">채팅에서 별표를 누른 한자와 음독·훈독을 모아봅니다.</p>
+      <div id="kanji-vocab-list" class="kanji-vocab-list"></div>
+    </section>
+  </div>
+
   <!-- "업데이트할 때마다 페이지 재시작해야 하는게 맞냐" 요청(2026-08-28) —
        새 배포가 감지되면(GET /api/version 폴링) 여기 배너로 알려서 사용자가
        스스로 새로고침할 수 있게 한다. 타이핑 중일 수 있어 강제 새로고침은 안 함. -->
@@ -301,6 +311,6 @@
     </div>
   </div>
 
-  <script src="/static/chat.js?v=20260913-japanese-kanji-v1"></script>
+  <script src="/static/chat.js?v=20260914-kanji-vocab-v1"></script>
 </body>
 </html>
