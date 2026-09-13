@@ -588,7 +588,7 @@ async function subscribeToPush() {
     alert("서버에 웹 푸시가 아직 설정되지 않았습니다.");
     return;
   }
-  const reg = await navigator.serviceWorker.register("/static/sw.js");
+  const reg = await navigator.serviceWorker.register("/static/sw.js?v=20260914-hanja-v3", { updateViaCache: "none" });
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: _urlBase64ToUint8Array(public_key),
@@ -2690,7 +2690,7 @@ let japaneseKanjiFavorites = new Set();
 
 function loadJapaneseKanjiDictionary() {
   if (!japaneseKanjiDictionaryPromise) {
-    japaneseKanjiDictionaryPromise = fetch("/static/data/kanjidic-readings.json", {cache: "force-cache"})
+    japaneseKanjiDictionaryPromise = fetch("/static/data/kanjidic-readings.json?v=20260914-hanja-v3", {cache: "no-cache"})
       .then((response) => {
         if (!response.ok) throw new Error(`KANJIDIC2 HTTP ${response.status}`);
         return response.json();
@@ -2739,7 +2739,7 @@ async function toggleJapaneseKanjiFavorite(character, button) {
     if (removing) japaneseKanjiFavorites.delete(character);
     else japaneseKanjiFavorites.add(character);
     button.classList.toggle("active", !removing);
-    button.textContent = removing ? "☆" : "★";
+    button.textContent = removing ? "☆ 저장" : "★ 저장됨";
     button.setAttribute("aria-label", removing ? `${character} 단어장에 저장` : `${character} 단어장에서 제거`);
   } catch (error) {
     if (error.message !== "unauthorized") alert("한자를 저장하지 못했습니다.");
@@ -2764,13 +2764,13 @@ function showJapaneseKanjiPopover(character, reading, anchor, japaneseContext = 
   const favorite = document.createElement("button");
   favorite.type = "button";
   favorite.className = "japanese-kanji-favorite";
-  favorite.textContent = "☆";
+  favorite.textContent = "☆ 저장";
   favorite.setAttribute("aria-label", `${character} 단어장에 저장`);
   loadJapaneseKanjiFavorites().then(() => {
     if (!favorite.isConnected) return;
     const active = japaneseKanjiFavorites.has(character);
     favorite.classList.toggle("active", active);
-    favorite.textContent = active ? "★" : "☆";
+    favorite.textContent = active ? "★ 저장됨" : "☆ 저장";
     favorite.setAttribute("aria-label", active ? `${character} 단어장에서 제거` : `${character} 단어장에 저장`);
   });
   favorite.addEventListener("click", () => toggleJapaneseKanjiFavorite(character, favorite));
@@ -3742,7 +3742,7 @@ window.addEventListener("hashchange", route);
 // 알림 허용 여부와 관계없이 서비스 워커를 설치한다. 그래야 서버 재시작 중
 // PWA를 다시 열어도 흰 화면 대신 정비 안내를 표시할 수 있다.
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/static/sw.js").catch((error) => console.error("service worker", error));
+  navigator.serviceWorker.register("/static/sw.js?v=20260914-hanja-v3", { updateViaCache: "none" }).catch((error) => console.error("service worker", error));
 }
 
 initAuth().then((ok) => {

@@ -1174,7 +1174,7 @@ main#messages.has-custom-background {
   grid-template-columns: auto minmax(0, 1fr);
   gap: 14px;
   width: min(360px, calc(100vw - 24px));
-  padding: 18px 88px 18px 18px;
+  padding: 58px 18px 18px;
   border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
   border-radius: 22px;
   background: color-mix(in srgb, var(--bg-elevated) 96%, transparent);
@@ -1219,15 +1219,18 @@ main#messages.has-custom-background {
 .japanese-kanji-favorite {
   position: absolute;
   top: 10px;
-  right: 50px;
-  width: 34px;
+  left: 18px;
+  right: auto;
+  width: auto;
+  min-width: 82px;
   height: 34px;
   padding: 0;
   border: 0;
-  border-radius: 50%;
+  border-radius: 999px;
   background: var(--accent-soft);
   color: var(--muted);
-  font-size: 23px;
+  font-size: 13px;
+  font-weight: 750;
   line-height: 1;
 }
 .japanese-kanji-favorite.active, .kanji-vocab-remove { color: #d49a16; }

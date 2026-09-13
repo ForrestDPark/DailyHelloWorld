@@ -1,4 +1,4 @@
-const CACHE_NAME = "tulpachat-shell-20260912-v1";
+const CACHE_NAME = "tulpachat-shell-20260914-hanja-v3";
 const OFFLINE_URL = "/static/offline.html";
 
 // 서버 재시작 중에도 설치된 웹앱이 흰 화면만 보이지 않도록 정비 안내 화면은
