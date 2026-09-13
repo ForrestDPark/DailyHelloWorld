@@ -1953,6 +1953,9 @@ async function showPortalHome(focusSystems = false) {
     const unread = rooms.reduce((sum, room) => sum + (Number(room.last_message_id || 0) > getLastRead(room.room_id) ? 1 : 0), 0);
     document.getElementById("portal-unread").textContent = unread;
   } catch (error) { console.error(error); }
+  loadJapaneseKanjiFavorites(true).then((items) => {
+    document.getElementById("portal-vocab-count").textContent = String(items.length);
+  });
   loadPortalNotifications();
   if (focusSystems) document.querySelector(".portal-services")?.scrollIntoView({behavior:"smooth", block:"start"});
 }
@@ -2861,6 +2864,7 @@ async function openJapaneseKanjiVocabulary() {
 }
 
 document.getElementById("kanji-vocab-btn").addEventListener("click", openJapaneseKanjiVocabulary);
+document.getElementById("portal-vocab-btn").addEventListener("click", openJapaneseKanjiVocabulary);
 document.getElementById("kanji-vocab-close").addEventListener("click", () => kanjiVocabOverlay.classList.add("hidden"));
 kanjiVocabOverlay.addEventListener("click", (event) => { if (event.target === kanjiVocabOverlay) kanjiVocabOverlay.classList.add("hidden"); });
 
