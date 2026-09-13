@@ -38,6 +38,7 @@ import sqlite3
 import subprocess
 import sys
 import threading
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -561,6 +562,108 @@ def shift_alarm_static(filename: str, request: Request):
     return FileResponse(str(SHIFT_ALARM_DASHBOARD_DIR / filename))
 
 
+# ★ 2026-09-14: "채팅창에서 하는게아니라 shift alarm시스템 내부에 버튼만들어줘"
+# 요청 — 처음엔 알람지기 페르소나가 채팅으로 실행하게 만들었는데(worker/
+# persona_worker.py), 대시보드에서 바로 누르는 버튼을 원해서 이 서버에도
+# 같은 동작을 추가한다. 서버도 이 Mac에서 직접 돈다("왜 이런 구조인가"
+# 참고)는 이 프로젝트가 이미 전제하고 있으므로 여기서 osascript/Elmedia를
+# 직접 실행해도 워커를 거칠 때보다 빠르고(폴링 지연 없음) 구조가 단순하다.
+# shift_alarm.py(list_audio_tracks/reset_elmedia_playlist/play_folder_in_elmedia)
+# ·worker/persona_worker.py(_shift_alarm_*)와 완전히 같은 로직 — 하나를
+# 고치면 세 곳 다 맞춰야 한다.
+SHIFT_ALARM_CLASSIC_FOLDER = "/Users/forrestdpark/Desktop/BlogImage/Coffee and Meditation"
+SHIFT_ALARM_FAVORITES_FOLDER = "/Users/forrestdpark/Desktop/BlogImage/좋아요플레이"
+SHIFT_ALARM_ELMEDIA_PLAYLIST_DB = os.path.expanduser(
+    "~/Library/Containers/com.eltima.elmedia6.mas/Data/Library/Application Support/"
+    "Elmedia Video Player/Playlist.db"
+)
+SHIFT_ALARM_ELMEDIA_AUDIO_EXTENSIONS = {
+    ".aac", ".aif", ".aiff", ".alac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav", ".wma",
+}
+
+
+def _shift_alarm_list_audio_tracks(folder):
+    tracks = []
+    for root, _dirs, files in os.walk(folder):
+        for name in files:
+            if os.path.splitext(name)[1].lower() in SHIFT_ALARM_ELMEDIA_AUDIO_EXTENSIONS:
+                tracks.append(os.path.abspath(os.path.join(root, name)))
+    tracks.sort(key=lambda path: path.casefold())
+    return tracks
+
+
+def _shift_alarm_elmedia_running():
+    result = subprocess.run(
+        ["/usr/bin/pgrep", "-x", "Elmedia Video Player"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    return result.returncode == 0
+
+
+def _shift_alarm_reset_elmedia_playlist():
+    subprocess.run(
+        ["/usr/bin/killall", "Elmedia Video Player"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+    )
+    for _ in range(20):
+        if not _shift_alarm_elmedia_running():
+            break
+        time.sleep(0.25)
+    else:
+        subprocess.run(
+            ["/usr/bin/killall", "-9", "Elmedia Video Player"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False,
+        )
+        for _ in range(8):
+            if not _shift_alarm_elmedia_running():
+                break
+            time.sleep(0.25)
+    if _shift_alarm_elmedia_running():
+        return False
+    if os.path.exists(SHIFT_ALARM_ELMEDIA_PLAYLIST_DB):
+        with sqlite3.connect(SHIFT_ALARM_ELMEDIA_PLAYLIST_DB, timeout=5) as conn:
+            conn.execute("DELETE FROM item_order")
+            conn.execute("DELETE FROM playlist_items")
+            conn.commit()
+    return True
+
+
+def _shift_alarm_play_folder(folder):
+    if not os.path.isdir(folder):
+        return False, "폴더를 찾을 수 없습니다."
+    try:
+        tracks = _shift_alarm_list_audio_tracks(folder)
+        if not tracks:
+            return False, "재생 가능한 음원 파일이 없습니다."
+        reset_ok = _shift_alarm_reset_elmedia_playlist()
+        subprocess.Popen(["open", "-a", "Elmedia Video Player", *tracks])
+        if not reset_ok:
+            return False, "Elmedia가 응답이 없어 기존 재생목록을 비우지 못했습니다 — 새 음원이 기존 큐와 섞여 재생될 수 있습니다."
+        return True, f"{len(tracks)}곡을 새로 열었습니다."
+    except OSError as exc:
+        return False, str(exc)
+
+
+def _shift_alarm_get_volume():
+    result = subprocess.run(
+        ["/usr/bin/osascript", "-e", "output volume of (get volume settings)"],
+        capture_output=True, text=True, timeout=10, check=False,
+    )
+    try:
+        return int(result.stdout.strip())
+    except ValueError:
+        return None
+
+
+def _shift_alarm_set_volume(percent):
+    percent = max(0, min(100, int(percent)))
+    subprocess.run(
+        ["/usr/bin/osascript", "-e", f"set volume output volume {percent}"],
+        timeout=10, check=False,
+    )
+    return percent
+
+
 def _read_shift_alarm_status():
     saw_file = False
     for status_file in (SHIFT_ALARM_STATUS_FILE, SHIFT_ALARM_STATUS_FALLBACK_FILE):
@@ -937,6 +1040,55 @@ def start_shift_alarm_sunzi_analysis(request: Request):
         return {"ok": True, "busy": True, "queued": True, "running": False, "mode": "light"}
     finally:
         conn.close()
+
+
+@app.get("/api/shift-alarm/media/volume")
+def get_shift_alarm_volume(request: Request):
+    _require_owner(request)
+    percent = _shift_alarm_get_volume()
+    if percent is None:
+        raise HTTPException(status_code=503, detail="시스템 음량을 확인하지 못했습니다")
+    return {"percent": percent}
+
+
+class ShiftAlarmVolumeRequest(BaseModel):
+    percent: Optional[int] = None
+    delta: Optional[int] = None
+
+
+@app.post("/api/shift-alarm/media/volume")
+def set_shift_alarm_volume(body: ShiftAlarmVolumeRequest, request: Request):
+    """대시보드 버튼 전용 — percent(절대값) 또는 delta(상대 증감) 중 하나만 받는다."""
+    _require_owner(request)
+    if body.percent is not None:
+        target = body.percent
+    elif body.delta is not None:
+        current = _shift_alarm_get_volume()
+        if current is None:
+            raise HTTPException(status_code=503, detail="현재 음량을 확인하지 못해 조절할 수 없습니다")
+        target = current + body.delta
+    else:
+        raise HTTPException(status_code=400, detail="percent 또는 delta 중 하나가 필요합니다")
+    return {"ok": True, "percent": _shift_alarm_set_volume(target)}
+
+
+class ShiftAlarmPlayRequest(BaseModel):
+    playlist: str
+
+
+@app.post("/api/shift-alarm/media/play")
+def play_shift_alarm_media(body: ShiftAlarmPlayRequest, request: Request):
+    _require_owner(request)
+    folder = {
+        "favorites": SHIFT_ALARM_FAVORITES_FOLDER,
+        "classical": SHIFT_ALARM_CLASSIC_FOLDER,
+    }.get(body.playlist)
+    if not folder:
+        raise HTTPException(status_code=400, detail="지원하지 않는 재생목록입니다")
+    ok, message = _shift_alarm_play_folder(folder)
+    if not ok:
+        raise HTTPException(status_code=409, detail=message)
+    return {"ok": True, "message": message}
 
 
 def _read_career_card(filename: str):

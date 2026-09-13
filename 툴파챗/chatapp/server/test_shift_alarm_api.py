@@ -268,6 +268,81 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertIn("SQLD", result["certificates"])
         self.assertNotIn("SQLD", [item["name"] for item in result["recommended_certificates"]])
 
+    # ── ★ 2026-09-14: 대시보드 음량·미디어 버튼 (채팅 대신 직접 클릭) ──────
+
+    def test_get_volume_returns_current_percent(self):
+        with patch.object(module, "_shift_alarm_get_volume", return_value=42):
+            self.assertEqual(module.get_shift_alarm_volume(owner_request()), {"percent": 42})
+
+    def test_get_volume_503_when_unreadable(self):
+        with patch.object(module, "_shift_alarm_get_volume", return_value=None):
+            with self.assertRaises(HTTPException) as raised:
+                module.get_shift_alarm_volume(owner_request())
+        self.assertEqual(raised.exception.status_code, 503)
+
+    def test_set_volume_by_absolute_percent(self):
+        with patch.object(module, "_shift_alarm_set_volume", return_value=70) as mock_set:
+            result = module.set_shift_alarm_volume(
+                module.ShiftAlarmVolumeRequest(percent=70), owner_request()
+            )
+        mock_set.assert_called_once_with(70)
+        self.assertEqual(result, {"ok": True, "percent": 70})
+
+    def test_set_volume_by_delta_reads_current_first(self):
+        with patch.object(module, "_shift_alarm_get_volume", return_value=40), \
+             patch.object(module, "_shift_alarm_set_volume", return_value=55) as mock_set:
+            result = module.set_shift_alarm_volume(
+                module.ShiftAlarmVolumeRequest(delta=15), owner_request()
+            )
+        mock_set.assert_called_once_with(55)
+        self.assertEqual(result["percent"], 55)
+
+    def test_set_volume_requires_percent_or_delta(self):
+        with self.assertRaises(HTTPException) as raised:
+            module.set_shift_alarm_volume(module.ShiftAlarmVolumeRequest(), owner_request())
+        self.assertEqual(raised.exception.status_code, 400)
+
+    def test_set_volume_delta_503_when_current_unknown(self):
+        with patch.object(module, "_shift_alarm_get_volume", return_value=None):
+            with self.assertRaises(HTTPException) as raised:
+                module.set_shift_alarm_volume(module.ShiftAlarmVolumeRequest(delta=10), owner_request())
+        self.assertEqual(raised.exception.status_code, 503)
+
+    def test_play_favorites_uses_favorites_folder(self):
+        with patch.object(module, "_shift_alarm_play_folder", return_value=(True, "3곡을 새로 열었습니다.")) as mock_play:
+            result = module.play_shift_alarm_media(
+                module.ShiftAlarmPlayRequest(playlist="favorites"), owner_request()
+            )
+        mock_play.assert_called_once_with(module.SHIFT_ALARM_FAVORITES_FOLDER)
+        self.assertTrue(result["ok"])
+
+    def test_play_classical_uses_classic_folder(self):
+        with patch.object(module, "_shift_alarm_play_folder", return_value=(True, "5곡을 새로 열었습니다.")) as mock_play:
+            module.play_shift_alarm_media(module.ShiftAlarmPlayRequest(playlist="classical"), owner_request())
+        mock_play.assert_called_once_with(module.SHIFT_ALARM_CLASSIC_FOLDER)
+
+    def test_play_rejects_unknown_playlist(self):
+        with self.assertRaises(HTTPException) as raised:
+            module.play_shift_alarm_media(module.ShiftAlarmPlayRequest(playlist="podcast"), owner_request())
+        self.assertEqual(raised.exception.status_code, 400)
+
+    def test_play_failure_becomes_409(self):
+        with patch.object(module, "_shift_alarm_play_folder", return_value=(False, "재생 가능한 음원 파일이 없습니다.")):
+            with self.assertRaises(HTTPException) as raised:
+                module.play_shift_alarm_media(module.ShiftAlarmPlayRequest(playlist="favorites"), owner_request())
+        self.assertEqual(raised.exception.status_code, 409)
+
+    def test_non_owner_cannot_control_volume_or_playback(self):
+        with self.assertRaises(HTTPException) as raised:
+            module.get_shift_alarm_volume(signed_in_request())
+        self.assertEqual(raised.exception.status_code, 403)
+        with self.assertRaises(HTTPException) as raised:
+            module.set_shift_alarm_volume(module.ShiftAlarmVolumeRequest(percent=50), signed_in_request())
+        self.assertEqual(raised.exception.status_code, 403)
+        with self.assertRaises(HTTPException) as raised:
+            module.play_shift_alarm_media(module.ShiftAlarmPlayRequest(playlist="favorites"), signed_in_request())
+        self.assertEqual(raised.exception.status_code, 403)
+
 
 if __name__ == "__main__":
     unittest.main()
