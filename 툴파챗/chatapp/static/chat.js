@@ -2748,12 +2748,13 @@ async function toggleJapaneseKanjiFavorite(character, button) {
   }
 }
 
-function showJapaneseKanjiPopover(character, reading, anchor) {
+function showJapaneseKanjiPopover(character, reading, anchor, japaneseContext = false) {
   closeJapaneseKanjiPopover();
   const popover = document.createElement("section");
   popover.className = "japanese-kanji-popover";
+  popover.classList.toggle("japanese-context", japaneseContext);
   popover.setAttribute("role", "dialog");
-  popover.setAttribute("aria-label", `${character} 일본어 독음`);
+  popover.setAttribute("aria-label", `${character} 한자 뜻과 음`);
   const close = document.createElement("button");
   close.type = "button";
   close.className = "japanese-kanji-popover-close";
@@ -2775,17 +2776,22 @@ function showJapaneseKanjiPopover(character, reading, anchor) {
   favorite.addEventListener("click", () => toggleJapaneseKanjiFavorite(character, favorite));
   const glyph = document.createElement("strong");
   glyph.className = "japanese-kanji-popover-glyph";
-  glyph.lang = "ja";
+  glyph.lang = japaneseContext ? "ja" : "ko";
   glyph.textContent = character;
   const readings = document.createElement("div");
   readings.className = "japanese-kanji-popover-readings";
-  for (const [label, values] of [["음독", reading.on], ["훈독", reading.kun]]) {
+  const rows = [["한자음", reading.sound || "—"], ["한글 뜻", reading.meaning || "—"]];
+  if (japaneseContext) {
+    rows.push(["음독", (reading.on || []).join("・") || "—"]);
+    rows.push(["훈독", (reading.kun || []).join("・") || "—"]);
+  }
+  for (const [label, displayValue] of rows) {
     const row = document.createElement("div");
     const heading = document.createElement("span");
     heading.textContent = label;
     const value = document.createElement("b");
-    value.lang = "ja";
-    value.textContent = values.length ? values.join("・") : "—";
+    if (label === "음독" || label === "훈독") value.lang = "ja";
+    value.textContent = displayValue;
     row.append(heading, value);
     readings.appendChild(row);
   }
@@ -2810,21 +2816,26 @@ async function openJapaneseKanjiVocabulary() {
   if (kanjiVocabOverlay.classList.contains("hidden")) return;
   kanjiVocabList.innerHTML = "";
   if (!items.length) {
-    kanjiVocabList.innerHTML = '<div class="empty-hint">아직 저장한 한자가 없어요.<br>채팅의 일본어 한자를 누르고 ☆를 탭해보세요.</div>';
+    kanjiVocabList.innerHTML = '<div class="empty-hint">아직 저장한 한자가 없어요.<br>채팅의 한자를 누르고 ☆를 탭해보세요.</div>';
     return;
   }
   for (const item of items) {
-    const reading = dictionary[item.character] || {on: [], kun: []};
+    const reading = dictionary[item.character] || {on: [], kun: [], sound: "", meaning: ""};
     const card = document.createElement("article");
     card.className = "kanji-vocab-card";
     const glyph = document.createElement("strong");
     glyph.lang = "ja"; glyph.textContent = item.character;
     const detail = document.createElement("div");
-    const on = document.createElement("p");
-    on.innerHTML = `<span>음독</span><b lang="ja">${escapeHtml(reading.on.join("・") || "—")}</b>`;
-    const kun = document.createElement("p");
-    kun.innerHTML = `<span>훈독</span><b lang="ja">${escapeHtml(reading.kun.join("・") || "—")}</b>`;
-    detail.append(on, kun);
+    const rows = [["한자음", reading.sound || "—", "ko"], ["뜻", reading.meaning || "—", "ko"]];
+    if (reading.on.length || reading.kun.length) {
+      rows.push(["음독", reading.on.join("・") || "—", "ja"]);
+      rows.push(["훈독", reading.kun.join("・") || "—", "ja"]);
+    }
+    for (const [label, displayValue, lang] of rows) {
+      const row = document.createElement("p");
+      row.innerHTML = `<span>${label}</span><b lang="${lang}">${escapeHtml(displayValue)}</b>`;
+      detail.appendChild(row);
+    }
     const remove = document.createElement("button");
     remove.type = "button"; remove.textContent = "★"; remove.className = "kanji-vocab-remove";
     remove.setAttribute("aria-label", `${item.character} 단어장에서 제거`);
@@ -2842,7 +2853,7 @@ document.getElementById("kanji-vocab-btn").addEventListener("click", openJapanes
 document.getElementById("kanji-vocab-close").addEventListener("click", () => kanjiVocabOverlay.classList.add("hidden"));
 kanjiVocabOverlay.addEventListener("click", (event) => { if (event.target === kanjiVocabOverlay) kanjiVocabOverlay.classList.add("hidden"); });
 
-async function decorateJapaneseKanji(container) {
+async function decorateJapaneseKanji(container, japaneseContext = false) {
   const dictionary = await loadJapaneseKanjiDictionary();
   if (!container.isConnected || container.dataset.kanjiDecorated === "true") return;
   container.dataset.kanjiDecorated = "true";
@@ -2868,10 +2879,10 @@ async function decorateJapaneseKanji(container) {
       button.className = "japanese-kanji-char";
       button.lang = "ja";
       button.textContent = part;
-      button.setAttribute("aria-label", `${part} 음독과 훈독 보기`);
+      button.setAttribute("aria-label", japaneseContext ? `${part} 한국 한자음과 일본어 음독·훈독 보기` : `${part} 한자 뜻과 음 보기`);
       button.addEventListener("click", (event) => {
         event.stopPropagation();
-        showJapaneseKanjiPopover(part, reading, button);
+        showJapaneseKanjiPopover(part, reading, button, japaneseContext);
       });
       fragment.appendChild(button);
     }
@@ -3446,7 +3457,7 @@ function appendMessage(m, forceScroll = false, suppressScroll = false) {
     body.appendChild(quote);
   }
   appendMessageMedia(body, m.content);
-  if (body.classList.contains("message-japanese")) decorateJapaneseKanji(body);
+  decorateJapaneseKanji(body, body.classList.contains("message-japanese"));
   const time = document.createElement("div");
   time.className = "msg-time";
   time.textContent = formatTime(m.created_at);

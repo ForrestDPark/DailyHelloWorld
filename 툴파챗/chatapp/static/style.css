@@ -1185,13 +1185,16 @@ main#messages.has-custom-background {
 }
 .japanese-kanji-popover-glyph {
   align-self: center;
-  font-family: "ChatJapanese", "Hiragino Kaku Gothic ProN", sans-serif;
+  font-family: "ChatHanjaKaiti", "STKaiti", serif;
   font-size: 48px;
   line-height: 1;
   color: var(--accent);
 }
+.japanese-kanji-popover.japanese-context .japanese-kanji-popover-glyph {
+  font-family: "ChatJapanese", "Hiragino Kaku Gothic ProN", sans-serif;
+}
 .japanese-kanji-popover-readings { display: grid; gap: 8px; min-width: 0; }
-.japanese-kanji-popover-readings > div { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.japanese-kanji-popover-readings > div { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 8px; align-items: baseline; }
 .japanese-kanji-popover-readings span { color: var(--muted); font-size: 12px; }
 .japanese-kanji-popover-readings b {
   overflow-wrap: anywhere;
@@ -1260,7 +1263,7 @@ main#messages.has-custom-background {
 .kanji-vocab-list { min-height: 150px; overflow-y: auto; overscroll-behavior: contain; padding: 0 14px max(18px, env(safe-area-inset-bottom)); -webkit-overflow-scrolling: touch; }
 .kanji-vocab-card { display: grid; grid-template-columns: 58px minmax(0, 1fr) 38px; gap: 12px; align-items: center; padding: 14px 8px; border-top: 1px solid var(--border); }
 .kanji-vocab-card > strong { font-family: "ChatJapanese", sans-serif; font-size: 38px; color: var(--accent); text-align: center; }
-.kanji-vocab-card p { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 7px; margin: 2px 0; align-items: baseline; }
+.kanji-vocab-card p { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 7px; margin: 2px 0; align-items: baseline; }
 .kanji-vocab-card p span { color: var(--muted); font-size: 11px; }
 .kanji-vocab-card p b { overflow-wrap: anywhere; font-family: "ChatJapanese", sans-serif; font-size: 14px; line-height: 1.45; }
 .kanji-vocab-remove { width: 36px; height: 36px; padding: 0; border: 0; border-radius: 50%; background: var(--accent-soft); font-size: 21px; }
