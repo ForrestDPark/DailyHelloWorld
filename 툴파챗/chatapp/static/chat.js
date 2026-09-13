@@ -2710,6 +2710,17 @@ function closeJapaneseKanjiPopover() {
   japaneseKanjiPopover = null;
 }
 
+function formatKoreanHanjaGloss(reading) {
+  const meaning = String(reading.meaning || "").trim();
+  const sound = String(reading.sound || "").trim();
+  if (meaning === "불러오는 중…" || sound === "불러오는 중…") return "불러오는 중…";
+  if (!meaning && !sound) return "해당 없음";
+  if (!meaning) return sound;
+  if (!sound) return meaning;
+  const alreadyEndsWithSound = sound.split("·").some((item) => item && meaning.endsWith(` ${item}`));
+  return alreadyEndsWithSound ? meaning : `${meaning} ${sound}`;
+}
+
 function loadJapaneseKanjiFavorites(force = false) {
   if (force) japaneseKanjiFavoritesPromise = null;
   if (!japaneseKanjiFavoritesPromise) {
@@ -2781,10 +2792,9 @@ function showJapaneseKanjiPopover(character, reading, anchor, japaneseContext = 
   const readings = document.createElement("div");
   readings.className = "japanese-kanji-popover-readings";
   const rows = [
-    ["한자음", reading.sound || "해당 없음"],
-    ["한글 뜻", reading.meaning || "해당 없음"],
-    ["음독", (reading.on || []).join("・") || "해당 없음"],
+    ["뜻·음", formatKoreanHanjaGloss(reading)],
     ["훈독", (reading.kun || []).join("・") || "해당 없음"],
+    ["음독", (reading.on || []).join("・") || "해당 없음"],
   ];
   for (const [label, displayValue] of rows) {
     const row = document.createElement("div");
@@ -2828,10 +2838,9 @@ async function openJapaneseKanjiVocabulary() {
     glyph.lang = "ja"; glyph.textContent = item.character;
     const detail = document.createElement("div");
     const rows = [
-      ["한자음", reading.sound || "해당 없음", "ko"],
-      ["뜻", reading.meaning || "해당 없음", "ko"],
-      ["음독", reading.on.join("・") || "해당 없음", "ja"],
+      ["뜻·음", formatKoreanHanjaGloss(reading), "ko"],
       ["훈독", reading.kun.join("・") || "해당 없음", "ja"],
+      ["음독", reading.on.join("・") || "해당 없음", "ja"],
     ];
     for (const [label, displayValue, lang] of rows) {
       const row = document.createElement("p");
