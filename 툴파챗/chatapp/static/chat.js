@@ -2855,9 +2855,8 @@ document.getElementById("kanji-vocab-btn").addEventListener("click", openJapanes
 document.getElementById("kanji-vocab-close").addEventListener("click", () => kanjiVocabOverlay.classList.add("hidden"));
 kanjiVocabOverlay.addEventListener("click", (event) => { if (event.target === kanjiVocabOverlay) kanjiVocabOverlay.classList.add("hidden"); });
 
-async function decorateJapaneseKanji(container, japaneseContext = false) {
-  const dictionary = await loadJapaneseKanjiDictionary();
-  if (!container.isConnected || container.dataset.kanjiDecorated === "true") return;
+function decorateJapaneseKanji(container, japaneseContext = false) {
+  if (container.dataset.kanjiDecorated === "true") return;
   container.dataset.kanjiDecorated = "true";
   const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
     acceptNode(node) {
@@ -2871,8 +2870,7 @@ async function decorateJapaneseKanji(container, japaneseContext = false) {
   for (const node of nodes) {
     const fragment = document.createDocumentFragment();
     for (const part of Array.from(node.nodeValue || "")) {
-      const reading = dictionary[part];
-      if (!reading) {
+      if (!/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u.test(part)) {
         fragment.appendChild(document.createTextNode(part));
         continue;
       }
@@ -2882,8 +2880,14 @@ async function decorateJapaneseKanji(container, japaneseContext = false) {
       button.lang = "ja";
       button.textContent = part;
       button.setAttribute("aria-label", `${part} 한국 한자음·뜻과 일본어 음독·훈독 보기`);
-      button.addEventListener("click", (event) => {
+      button.addEventListener("click", async (event) => {
         event.stopPropagation();
+        showJapaneseKanjiPopover(part, {
+          sound: "불러오는 중…", meaning: "불러오는 중…", on: [], kun: [],
+        }, button, japaneseContext);
+        const dictionary = await loadJapaneseKanjiDictionary();
+        if (!button.isConnected) return;
+        const reading = dictionary[part] || {sound: "", meaning: "", on: [], kun: []};
         showJapaneseKanjiPopover(part, reading, button, japaneseContext);
       });
       fragment.appendChild(button);
