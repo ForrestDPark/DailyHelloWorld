@@ -27,7 +27,7 @@
      페이지 로드는 chat.js가 부팅 후 유휴 시간에 백그라운드로 미리 시작). -->
 <link rel="preconnect" href="https://sunzi-strategy-notes.pulpilisory.chatgpt.site" crossorigin>
 <link rel="dns-prefetch" href="https://sunzi-strategy-notes.pulpilisory.chatgpt.site">
-<link rel="stylesheet" href="/static/style.css?v=20260914-hanja-order-v6">
+<link rel="stylesheet" href="/static/style.css?v=20260914-sunzi-vocab-v7">
 <!-- ★ "새 메시지 알림(웹 푸시)" 요청(2026-08-27) — iOS Safari는 PWA로
      "홈 화면에 추가"돼 있어야만 웹 푸시가 동작한다. manifest.json이 그
      설치 가능 상태를 만든다. -->
@@ -167,7 +167,7 @@
       <button id="thumbnail-btn" type="button" aria-label="대표사진 변경" class="icon-button hidden"><svg><use href="#icon-image"/></svg></button>
       <input id="thumbnail-input" type="file" accept="image/*" class="hidden">
       <button id="chat-bg-btn" type="button" aria-label="내 채팅 배경 변경" class="icon-button hidden"><svg><use href="#icon-wallpaper"/></svg></button>
-      <button id="kanji-vocab-btn" type="button" aria-label="한자 단어장" class="icon-button"><svg><use href="#icon-bookmark-star"/></svg></button>
+      <button id="kanji-vocab-btn" type="button" aria-label="저장한 한자 단어장 보기" title="한자 단어장" class="icon-button"><svg><use href="#icon-bookmark-star"/></svg></button>
       <button id="auto-read-btn" type="button" aria-label="자동 읽어주기 켜기" class="icon-button"><svg><use href="#icon-speaker"/></svg></button>
       <button id="invite-btn" type="button" aria-label="참여자 보기 및 초대" class="icon-button hidden"><svg><use href="#icon-users"/></svg></button>
     </header>
@@ -311,6 +311,6 @@
     </div>
   </div>
 
-  <script src="/static/chat.js?v=20260914-hanja-order-v6"></script>
+  <script src="/static/chat.js?v=20260914-sunzi-vocab-v7"></script>
 </body>
 </html>

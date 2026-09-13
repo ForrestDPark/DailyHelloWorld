@@ -2864,6 +2864,41 @@ document.getElementById("kanji-vocab-btn").addEventListener("click", openJapanes
 document.getElementById("kanji-vocab-close").addEventListener("click", () => kanjiVocabOverlay.classList.add("hidden"));
 kanjiVocabOverlay.addEventListener("click", (event) => { if (event.target === kanjiVocabOverlay) kanjiVocabOverlay.classList.add("hidden"); });
 
+const SUNZI_SITE_ORIGIN = "https://sunzi-strategy-notes.pulpilisory.chatgpt.site";
+
+function replyToSunziFavorite(frame, character, favorite, ok = true) {
+  frame.contentWindow?.postMessage({type: "sunzi:hanja-favorite:state", character, favorite, ok}, SUNZI_SITE_ORIGIN);
+}
+
+window.addEventListener("message", async (event) => {
+  const frame = document.getElementById("sunzi-frame");
+  if (event.origin !== SUNZI_SITE_ORIGIN || event.source !== frame.contentWindow) return;
+  const type = event.data?.type;
+  if (type === "sunzi:hanja-vocab:open") {
+    openJapaneseKanjiVocabulary();
+    return;
+  }
+  if (!/^sunzi:hanja-favorite:(get|set)$/.test(type || "")) return;
+  const character = String(event.data?.character || "");
+  if (!/^[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]$/u.test(character)) return;
+  await loadJapaneseKanjiFavorites();
+  if (type.endsWith(":get")) {
+    replyToSunziFavorite(frame, character, japaneseKanjiFavorites.has(character));
+    return;
+  }
+  const favorite = event.data?.favorite === true;
+  try {
+    const response = await apiFetch(`/api/me/japanese-kanji-favorites/${encodeURIComponent(character)}`, {method: favorite ? "PUT" : "DELETE"});
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (favorite) japaneseKanjiFavorites.add(character); else japaneseKanjiFavorites.delete(character);
+    japaneseKanjiFavoritesPromise = null;
+    replyToSunziFavorite(frame, character, favorite);
+  } catch (error) {
+    if (error.message !== "unauthorized") console.error("손자병법 한자를 단어장에 저장하지 못했습니다.", error);
+    replyToSunziFavorite(frame, character, japaneseKanjiFavorites.has(character), false);
+  }
+});
+
 function decorateJapaneseKanji(container, japaneseContext = false) {
   if (container.dataset.kanjiDecorated === "true") return;
   container.dataset.kanjiDecorated = "true";
