@@ -2863,7 +2863,6 @@ async function openJapaneseKanjiVocabulary() {
   }
 }
 
-document.getElementById("kanji-vocab-btn").addEventListener("click", openJapaneseKanjiVocabulary);
 document.getElementById("portal-vocab-btn").addEventListener("click", openJapaneseKanjiVocabulary);
 document.getElementById("kanji-vocab-close").addEventListener("click", () => kanjiVocabOverlay.classList.add("hidden"));
 kanjiVocabOverlay.addEventListener("click", (event) => { if (event.target === kanjiVocabOverlay) kanjiVocabOverlay.classList.add("hidden"); });
