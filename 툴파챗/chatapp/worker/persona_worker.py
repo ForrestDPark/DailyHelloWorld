@@ -169,12 +169,13 @@ SHIFT_ALARM_ELMEDIA_PLAYLIST_DB = os.path.expanduser(
 SHIFT_ALARM_ELMEDIA_AUDIO_EXTENSIONS = {
     ".aac", ".aif", ".aiff", ".alac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav", ".wma",
 }
-# ★ 2026-09-14: "좋아요 재생하기 누르면 'bin' would like to access data from
-# other apps가 계속 뜬다" — Elmedia가 샌드박스(MAS) 빌드라 파일 인자를 건네는
-# open -a 자체가 Automation 승인을 요구하는데, launchd 프로세스는 신원이
-# 불안정해서("bin") 매번 다시 뜬다. shift_alarm.py와 완전히 같은 전용
-# helper(open -na, 고정 경로/서명)로 그 한 단계만 위임한다.
-SHIFT_ALARM_ELMEDIA_OPEN_HELPER = str(Path(__file__).resolve().parents[3] / "shift_alarm" / "ElmediaOpenHelper.app")
+# ★ 2026-09-14 도입 → 같은 날 되돌림: "bin would like to access data from
+# other apps" 팝업을 "open -a 자체가 Automation 승인을 요구한다"고 잘못
+# 진단해 ElmediaOpenHelper.app(open -na --args)으로 위임했었다. 실측 결과
+# 그 helper의 on run 핸들러가 아예 트리거되지 않아(Elmedia가 전혀 안 뜸)
+# 재생 기능 자체가 완전히 죽었다 — 반면 open -a 직접 호출은 터미널에서
+# 항상 정상 동작했다. 자세한 진단은 shift_alarm.py의 같은 위치 주석 참고.
+# 원래 있던 open -a 직접 호출로 되돌린다.
 ALARM_ACTION_RE = re.compile(r"```alarmaction\s*\n(.*?)\n```", re.DOTALL)
 
 
@@ -219,10 +220,22 @@ def _shift_alarm_reset_elmedia_playlist():
     if _shift_alarm_elmedia_running():
         return False
     if os.path.exists(SHIFT_ALARM_ELMEDIA_PLAYLIST_DB):
-        with sqlite3.connect(SHIFT_ALARM_ELMEDIA_PLAYLIST_DB, timeout=5) as conn:
-            conn.execute("DELETE FROM item_order")
-            conn.execute("DELETE FROM playlist_items")
-            conn.commit()
+        # ★ 2026-09-14: "재생 버튼을 눌러도 실행이 안 된다" 재신고 — sample
+        # 프로파일러로 실제 요청을 잡아보니 in-process sqlite3.connect()가
+        # SQLite 락 대기가 아니라 그 아래 open() 시스템 콜 자체에서 멈춰
+        # 있었다(Elmedia 샌드박스 컨테이너에 대한 TCC 동의를 GUI 세션 없는
+        # launchd 프로세스에선 아무도 응답할 수 없어서로 추정). server/app.py의
+        # 같은 위치 주석에 상세 진단 기록. sqlite3.connect(timeout=N)은 이
+        # open() 단계를 전혀 못 막으므로, 서브프로세스로 빼고
+        # subprocess.run(timeout=...)으로 강제 종료 가능하게 한다.
+        try:
+            subprocess.run(
+                ["/usr/bin/sqlite3", SHIFT_ALARM_ELMEDIA_PLAYLIST_DB,
+                 "DELETE FROM item_order; DELETE FROM playlist_items;"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5, check=False,
+            )
+        except subprocess.TimeoutExpired:
+            pass
     return True
 
 
@@ -234,7 +247,7 @@ def _shift_alarm_play_folder(folder):
         if not tracks:
             return False, "재생 가능한 음원 파일이 없습니다."
         reset_ok = _shift_alarm_reset_elmedia_playlist()
-        subprocess.Popen(["open", "-na", SHIFT_ALARM_ELMEDIA_OPEN_HELPER, "--args", *tracks])
+        subprocess.Popen(["open", "-a", "Elmedia Video Player", *tracks])
         if not reset_ok:
             return False, "Elmedia가 응답이 없어 기존 재생목록을 비우지 못했습니다 — 새 음원이 기존 큐와 섞여 재생될 수 있습니다."
         return True, f"{len(tracks)}곡을 새로 열었습니다."

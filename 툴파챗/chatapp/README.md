@@ -11,7 +11,7 @@
 
 ## 음량 슬라이더 + 추천 사이트 열기 + Elmedia Automation 팝업 수정 (2026-09-14)
 
-- **좋아요 재생하기 Automation 팝업 수정**: `open -a "Elmedia Video Player" <트랙>`이 샌드박스 앱에 파일을 건네는 과정에서 Automation 승인을 요구하는데, launchd 프로세스는 신원이 불안정해("bin") 매번 다시 떴다. `shift_alarm/ElmediaOpenHelper.app`(고정 경로·서명, `open -na`)로 그 한 단계만 위임 — `worker/persona_worker.py`·`server/app.py`·`shift_alarm.py` 세 곳 모두 같은 helper를 쓰도록 고쳤다. 자세한 원인·재빌드 방법은 `shift_alarm/README.md` 87번 항목 참고.
+- **좋아요/클래식 재생 버튼이 아예 안 먹히는 회귀 수정(★ 2026-09-14, 87번 항목의 되돌림)**: `open -a "Elmedia Video Player" <트랙>`을 Automation 팝업 원인으로 오진하고 `shift_alarm/ElmediaOpenHelper.app`(`on run argv`, `open -na --args`)로 위임했던 "수정"이 실은 재생을 완전히 죽이는 회귀였다 — `open -na App --args`로 실행하면 `on run argv` 핸들러 자체가 트리거되지 않는다(실측 확인). 세 파일(`worker/persona_worker.py`·`server/app.py`·`shift_alarm.py`) 모두 원래의 `open -a` 직접 호출로 되돌렸다. 진짜 원인은 `reset_elmedia_playlist()`가 Elmedia 샌드박스 컨테이너의 `Playlist.db`를 in-process `sqlite3.connect()`로 여는 부분이었다 — launchd 백그라운드 프로세스에서 이 `open()` 시스템 콜이 TCC 동의를 아무도 응답 못 해 무한 대기하는 것으로 추정(`sample` 프로파일러로 실측). 세 파일 모두 이 SQLite 쓰기를 `/usr/bin/sqlite3` 서브프로세스 + `subprocess.run(timeout=5)`로 바꿔 최소한 요청이 무한정 걸리지는 않게 했다(단, 타임아웃 발동 시 큐 비우기 자체는 조용히 실패할 수 있음 — 근본 원인 아님, 완화책). 자세한 진단·재발 방지 원칙은 `shift_alarm/README.md` 87·89번 항목 참고.
 - **음량 슬라이더**: "숫자 버튼 말고 손으로 미는 아날로그바로 해줘" 요청으로 `-10/30%/50%/70%/+10` 버튼을 실제 `<input type="range">` 슬라이더로 바꿨다. 드래그 중에는 화면 표시만 갱신하고 손을 뗄 때만 서버에 반영한다.
 - **추천 사이트 열기**: shift_alarm 메뉴바의 `🎲 추천 사이트 열기`(Chrome 북마크 `天` 폴더에서 무작위 3개)와 완전히 같은 로직을 서버에 복제하고 같은 히스토리 파일을 공유한다. Chrome은 샌드박스 빌드가 아니라 helper 앱 없이 직접 `open -a`로 연다.
 - 테스트 4건 추가(helper 경로 검증 2건 + 추천 사이트 API 2건), 전체 28건 통과.

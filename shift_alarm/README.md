@@ -1090,14 +1090,23 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - `get_today_reminders()`의 다른 월 단위 조건들과 같은 자리에 추가해서 메뉴 표시·음성 낭독·토글·Notion 일일 체크리스트 동기화·웹 리마인더 시각표(`build_reminder_schedule`는 `REMINDERS` 딕셔너리를 그대로 순회하므로 별도 등록 불필요) 등 기존 인프라를 그대로 탄다.
 - 실행 시각은 12:15로 지정(엔진오일 12:00 바로 뒤).
 
-## 87. 🔓 "좋아요 재생하기" Automation 팝업 — ElmediaOpenHelper.app 도입 (★ 2026-09-14 추가)
+## 87. 🔓 "좋아요 재생하기" Automation 팝업 — ElmediaOpenHelper.app 도입 → 같은 날 되돌림, 진짜 원인은 따로 있었다 (★ 2026-09-14 추가/정정)
 
 **사용자 요청**: "이 거 좋아요 재생하기 클릭하면 계속 떠 shiftalarm 꺼졌다 켜지면 항상 allow 가 뜨는데 왜이렇지" (스크린샷: `"bin" would like to access data from other apps`).
 
-- **원인**: `play_folder_in_elmedia()`가 마지막에 `open -a "Elmedia Video Player" <트랙 경로들>`을 직접 호출하는데, Elmedia는 Mac App Store 샌드박스 빌드라 파일 인자를 건네는 이 호출 자체가 대상 앱에 파일 접근을 넘기는 과정에서 macOS Automation(`kTCCServiceAppleEvents`) 승인을 요구한다. launchd로 뜬 이 프로세스는 신원이 안정적으로 잡히지 않아("bin") 한 번 허용해도 저장되지 않고 앱을 껐다 켤 때마다(그리고 재생 버튼을 누를 때마다) 다시 뜬다 — 60번 항목(`ElmediaStatusHelper.app`)과 같은 근본 원인이지만, 그때는 `tell application "System Events"` 호출만 고쳤을 뿐 `play_folder_in_elmedia()`의 `open -a` 자체는 손대지 않아서 남아 있던 사각지대였다.
-- **수정**: 같은 해법 재사용 — `open -a` 딱 그 한 단계만 전용 컴파일 앱 `ElmediaOpenHelper.app`(`com.shiftalarm.elmediaopen`, `osacompile` → `plutil -insert CFBundleIdentifier` → `plutil -insert LSUIElement -bool true` → `codesign --force --deep -s -`)에 위임한다. `open -na ElmediaOpenHelper.app --args <트랙 경로들>`로 열면 Launch Services를 거쳐 신원이 이 앱(고정 경로·서명)으로 안정되어, 최초 1회만 허용하면 그 뒤로는 팝업이 다시 안 뜬다.
-- 이 로직은 `shift_alarm.py`(원본)·`툴파챗/chatapp/worker/persona_worker.py`(채팅 명령)·`툴파챗/chatapp/server/app.py`(대시보드 버튼) 세 곳에 복제돼 있어 세 곳 모두 같은 helper를 가리키게 고쳤다. 재빌드하려면: `osacompile -o ElmediaOpenHelper.app <script>.applescript` → `plutil -insert CFBundleIdentifier -string com.shiftalarm.elmediaopen Contents/Info.plist` → `plutil -insert LSUIElement -bool true Contents/Info.plist` → `codesign --force --deep -s - ElmediaOpenHelper.app`.
-- 테스트(`worker/test_alarm_action_signal.py`, `server/test_shift_alarm_api.py`)에 `open -na`+helper 경로를 쓰는지, `"Elmedia Video Player"`가 인자에 직접 나타나지 않는지 검증하는 케이스를 추가했다.
+- **1차 진단(오진)**: `play_folder_in_elmedia()`의 `open -a "Elmedia Video Player" <트랙 경로들>` 호출 자체가 Automation 승인을 요구한다고 보고, 그 한 단계만 전용 컴파일 앱 `ElmediaOpenHelper.app`(`on run argv` 핸들러, `open -na ElmediaOpenHelper.app --args <트랙 경로들>`로 호출)에 위임하도록 세 파일(`shift_alarm.py`·`worker/persona_worker.py`·`server/app.py`)을 모두 고쳐서 커밋·배포했다.
+- **재신고**: "좋아요 클래식 버튼 눌러도 실행안되는데... 맥에서 실행해도 안되는데" — 이 "수정"이 재생을 아예 죽이는 회귀를 냈다.
+- **재진단(실측)**: 터미널에서 `open -a "Elmedia Video Player" <파일>`을 직접 실행하면 항상 정상 동작했다. `osascript <컴파일된 scpt> <인자>`도 정상 동작했다. 그런데 `open -na Helper.app --args <인자>`(Launch Services 경유 실행)는 `on run argv` 핸들러 자체가 전혀 트리거되지 않았다 — 자체 로깅 디버그 helper 앱을 만들어 인자 유무와 무관하게 로그 파일이 한 번도 안 써지는 것으로 확인. 기존에 실제로 동작 중이던 `ElmediaStatusHelper.app`(60번 항목)을 `osadecompile`로 열어 보니 애초에 `on run` 래퍼 없이 최상위 스크립트만 쓰고 인자 대신 공유 파일로 입출력하는 패턴이었다 — 이게 진짜 동작하는 패턴이고, 87번에서 새로 만든 `on run argv` 방식은 처음부터 성립하지 않는 접근이었다.
+- **진짜 원인**: Elmedia 재생 버튼을 누르면 `open -a` 전에 `reset_elmedia_playlist()`가 먼저 실행되는데, 이 함수가 Elmedia의 샌드박스 컨테이너 안 `Playlist.db`를 `sqlite3.connect()`로 직접 여는 부분이 원인이었다(자세한 진단은 89번 항목 참조). "bin would like to access" 팝업도 이 DB 오픈 단계에서 뜬 것으로 보인다.
+- **수정**: `ElmediaOpenHelper.app` 도입을 세 파일 모두에서 되돌리고 원래의 `open -a "Elmedia Video Player" <트랙 경로들>` 직접 호출로 복구했다(이 호출 자체는 문제가 없었음). 깨진 `ElmediaOpenHelper.app` 번들은 삭제했다. `worker/test_alarm_action_signal.py`·`server/test_shift_alarm_api.py`의 관련 테스트도 `open -a` 직접 호출을 검증하도록 되돌렸다.
+- **교훈**: `osacompile` 헬퍼 앱을 새로 만들 때는 `on run argv` + `open -na --args` 조합을 쓰지 말 것 — Launch Services 경유 실행에서 안 먹힌다. 인자를 넘겨야 하면 `osascript <컴파일된 스크립트 경로> <인자...>`로 직접 호출하거나, 기존 `ElmediaStatusHelper.app`처럼 인자 없는 최상위 스크립트 + 공유 파일 입출력 패턴을 쓴다.
+
+## 89. 🕳️ reset_elmedia_playlist()가 launchd 프로세스에서 무한 대기 — sqlite3.connect()를 서브프로세스+타임아웃으로 교체 (★ 2026-09-14 추가)
+
+- 87번 재신고를 따라가다 실제 운영 중인 서버 프로세스를 macOS `sample` 프로파일러로 떠 보니, 스레드가 `pysqlite_connection_init → ... → unixOpen → posixOpen → open()`에 2313/2313 샘플 전부 멈춰 있었다 — SQLite 락 대기가 아니라 raw POSIX `open()` 시스템 콜 자체가 안 끝나는 것이었다(`sqlite3.connect(timeout=N)`은 락 대기만 막지 이 단계는 전혀 못 막는다). Elmedia의 샌드박스 컨테이너 경로에 대한 TCC 동의를 GUI 세션이 없는(또는 응답할 사람이 없는) launchd 백그라운드 프로세스에서 아무도 눌러줄 수 없어서 영원히 걸려 있는 것으로 추정된다. 같은 코드를 Bash 도구/터미널에서 대화형으로 실행하면 재현되지 않아(항상 0.1초 안에 끝남) 로컬 재현이 안 되고, 실제 운영 중인 launchd 서비스에 HTTP로 요청을 던져야만 재현됐다.
+- `shift_alarm.py`(메뉴바 앱)도 launchd LaunchAgent로 떠 있어 원칙적으로 같은 증상을 겪을 수 있다 — 사용자가 "맥에서 실행해도 안 되는데"라고 보고한 것과 일치한다.
+- **수정**: `reset_elmedia_playlist()`(및 `persona_worker.py`·`server/app.py`의 복제본) 안에서 큐를 비우는 SQLite 쓰기를 in-process `sqlite3.connect()` 대신 `/usr/bin/sqlite3` CLI를 `subprocess.run(..., timeout=5)`로 호출하도록 바꿨다. 여전히 같은 지점에서 멈추더라도 OS 차원에서 5초 뒤 자식 프로세스를 강제 종료해 요청 자체는 넘어가게 한다.
+- **한계(중요)**: 이건 증상 완화이지 근본 수정이 아니다. TCC 동의 게이트 자체를 프로그래밍적으로 해결할 방법이 없어서, 타임아웃이 실제로 발동하는 상황에서는 큐 비우기가 조용히 실패할 수 있다 — 이 경우 87/88번이 원래 막으려던 "좋아요 큐와 클래식이 섞여 재생"되는 문제가 간헐적으로 재발할 수 있다. 다만 재생 자체(`open -a` 호출)는 큐 비우기 성패와 무관하게 항상 시도되므로, "버튼을 눌러도 아무 반응이 없다"는 이번 회귀의 핵심 증상은 해결된다.
 
 ## 88. 🎚️ Shift Alarm 대시보드 음량 슬라이더 + 추천 사이트 열기 (★ 2026-09-14 추가)
 

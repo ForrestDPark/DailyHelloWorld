@@ -581,11 +581,12 @@ SHIFT_ALARM_ELMEDIA_PLAYLIST_DB = os.path.expanduser(
 SHIFT_ALARM_ELMEDIA_AUDIO_EXTENSIONS = {
     ".aac", ".aif", ".aiff", ".alac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav", ".wma",
 }
-# ★ 2026-09-14: "좋아요 재생하기 누르면 'bin' would like to access data from
-# other apps가 계속 뜬다" — shift_alarm.py/persona_worker.py와 완전히 같은
-# 이유(Elmedia 샌드박스 빌드에 파일 인자를 건네는 open -a가 Automation 승인을
-# 요구하는데 launchd 프로세스 신원이 불안정)로 전용 helper에 그 한 단계만 위임.
-SHIFT_ALARM_ELMEDIA_OPEN_HELPER = str(REPO_ROOT / "shift_alarm" / "ElmediaOpenHelper.app")
+# ★ 2026-09-14 도입 → 같은 날 되돌림: "bin would like to access data from
+# other apps" 팝업 원인을 "open -a 자체가 Automation 승인을 요구한다"고
+# 잘못 진단해 ElmediaOpenHelper.app(open -na --args)으로 위임했었다. 실측
+# 결과 그 helper의 on run 핸들러가 아예 트리거되지 않아 재생이 완전히
+# 죽었다(shift_alarm.py의 같은 위치 주석에 상세 진단 기록). open -a 직접
+# 호출은 터미널에서 항상 정상 동작해 원래대로 되돌린다.
 
 # ★ 2026-09-14: "추천사이트 열기 기능도 있으면 좋겠어" — shift_alarm.py의
 # 🎲 추천 사이트 열기(pick_random_bookmarks/open_random_bookmarks)와 완전히
@@ -729,6 +730,9 @@ def _shift_alarm_send_media_key(action):
     )
 
 
+SHIFT_ALARM_ELMEDIA_DB_RESET_TIMEOUT_SECONDS = 5
+
+
 def _shift_alarm_reset_elmedia_playlist():
     subprocess.run(
         ["/usr/bin/killall", "Elmedia Video Player"],
@@ -750,10 +754,31 @@ def _shift_alarm_reset_elmedia_playlist():
     if _shift_alarm_elmedia_running():
         return False
     if os.path.exists(SHIFT_ALARM_ELMEDIA_PLAYLIST_DB):
-        with sqlite3.connect(SHIFT_ALARM_ELMEDIA_PLAYLIST_DB, timeout=5) as conn:
-            conn.execute("DELETE FROM item_order")
-            conn.execute("DELETE FROM playlist_items")
-            conn.commit()
+        # ★ 2026-09-14: "좋아요/클래식 재생 버튼을 눌러도 실행이 안 된다"는
+        # 재신고 — `sample` 프로파일러로 실제 요청을 떠 있는 채로 잡아보니
+        # 프로세스 내(in-process) `sqlite3.connect(...)`가 SQLite의 락 대기가
+        # 아니라 그보다 훨씬 아래, 순수 `open()` 시스템 콜 자체에서 수천
+        # 샘플째 멈춰 있었다 — Elmedia의 샌드박스 컨테이너
+        # (~/Library/Containers/com.eltima.elmedia6.mas/...)에 대한 TCC
+        # 동의 절차가 GUI 세션이 없는 launchd 백그라운드 프로세스에서는 응답
+        # 받을 사용자가 없어 영원히 멈춰버린 것으로 보인다(Python의
+        # sqlite3.connect(timeout=N)은 SQLite 자체 락-재시도 시간만 제한할
+        # 뿐, 그 아래 open() 콜 자체가 멈추는 건 절대 못 막는다). 같은
+        # 인터프리터로 인터랙티브 셸에서 직접 실행하면 항상 즉시 성공해
+        # 재현이 어려웠다 — 오직 실제 launchd 서버 프로세스에서만 걸렸다.
+        # 근본 원인(그 TCC 동의 자체)은 고치지 못했지만, 최소한 요청이
+        # 영원히 멈추지 않도록 이 단계를 별도 서브프로세스로 빼고
+        # subprocess.run(timeout=...)으로 강제 종료 가능하게 만들었다 —
+        # 큐 정리에 실패해도(타임아웃) 재생 자체는 계속 진행한다.
+        try:
+            subprocess.run(
+                ["/usr/bin/sqlite3", SHIFT_ALARM_ELMEDIA_PLAYLIST_DB,
+                 "DELETE FROM item_order; DELETE FROM playlist_items;"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=SHIFT_ALARM_ELMEDIA_DB_RESET_TIMEOUT_SECONDS, check=False,
+            )
+        except subprocess.TimeoutExpired:
+            pass
     return True
 
 
@@ -765,7 +790,7 @@ def _shift_alarm_play_folder(folder):
         if not tracks:
             return False, "재생 가능한 음원 파일이 없습니다."
         reset_ok = _shift_alarm_reset_elmedia_playlist()
-        subprocess.Popen(["open", "-na", SHIFT_ALARM_ELMEDIA_OPEN_HELPER, "--args", *tracks])
+        subprocess.Popen(["open", "-a", "Elmedia Video Player", *tracks])
         if not reset_ok:
             return False, "Elmedia가 응답이 없어 기존 재생목록을 비우지 못했습니다 — 새 음원이 기존 큐와 섞여 재생될 수 있습니다."
         return True, f"{len(tracks)}곡을 새로 열었습니다."

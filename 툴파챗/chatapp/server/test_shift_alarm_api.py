@@ -316,19 +316,18 @@ class ShiftAlarmApiTests(unittest.TestCase):
         mock_play.assert_called_once_with(module.SHIFT_ALARM_FAVORITES_FOLDER)
         self.assertTrue(result["ok"])
 
-    def test_play_folder_opens_via_stable_identity_helper_app(self):
-        """★ 2026-09-14: "좋아요 재생하기 누르면 'bin' would like to access
-        data from other apps가 계속 뜬다" 사고 재발 방지 — 샌드박스 Elmedia에
-        파일을 직접 open -a로 건네지 않고 반드시 고정 경로·서명된
-        ElmediaOpenHelper.app을 open -na로 거쳐야 한다."""
+    def test_play_folder_opens_elmedia_directly(self):
+        """★ 2026-09-14 도입 → 같은 날 되돌림: ElmediaOpenHelper.app(open -na
+        --args) 경유는 on run 핸들러 자체가 트리거되지 않아 재생이 완전히
+        죽는 실제 회귀를 냈다(실측 확인). 원래대로 open -a 직접 호출이어야
+        한다 — 이 호출 자체는 터미널에서 항상 정상 동작함을 확인했다."""
         with patch.object(module, "_shift_alarm_list_audio_tracks", return_value=["/a.mp3"]), \
              patch.object(module, "_shift_alarm_reset_elmedia_playlist", return_value=True), \
              patch.object(module, "subprocess") as mock_subprocess, \
              patch("os.path.isdir", return_value=True):
             module._shift_alarm_play_folder(module.SHIFT_ALARM_FAVORITES_FOLDER)
         args = mock_subprocess.Popen.call_args.args[0]
-        self.assertEqual(args[:3], ["open", "-na", module.SHIFT_ALARM_ELMEDIA_OPEN_HELPER])
-        self.assertNotIn("Elmedia Video Player", args)
+        self.assertEqual(args, ["open", "-a", "Elmedia Video Player", "/a.mp3"])
 
     def test_play_classical_uses_classic_folder(self):
         with patch.object(module, "_shift_alarm_play_folder", return_value=(True, "5곡을 새로 열었습니다.")) as mock_play:

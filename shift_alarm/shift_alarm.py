@@ -1467,14 +1467,21 @@ NX_KEYTYPE_PLAY = 16
 # 쓸 수 있도록 앱이 로컬 상태 파일에 쓰고 파이썬이 짧게 폴링한다.
 ELMEDIA_STATUS_HELPER_APP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ElmediaStatusHelper.app")
 ELMEDIA_STATUS_FILE = os.path.expanduser("~/.shift_alarm_elmedia_status.txt")
-# ★ 2026-09-14: "좋아요 재생하기 누르면 'bin' would like to access data from
-# other apps가 계속 뜬다" 신고 — Elmedia가 샌드박스(MAS) 빌드라 파일 인자를
-# 건네는 open -a 자체가 대상 앱에 파일 접근 권한을 넘기는 과정에서 Automation
-# 승인을 요구하는데, launchd로 뜨는 이 프로세스는 신원이 안정적이지 않아
-# ("bin") 한 번 허용해도 저장되지 않고 계속 다시 뜬다(위 ElmediaStatusHelper와
-# 같은 근본 원인, 8-1/26/60번과 동일 패턴). play_folder_in_elmedia()의 open -a
-# 호출만 이 전용 helper(open -na, 고정 경로/서명)로 위임한다.
-ELMEDIA_OPEN_HELPER_APP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ElmediaOpenHelper.app")
+# ★ 2026-09-14 도입 → 같은 날 되돌림: "좋아요 재생하기 누르면 'bin' would
+# like to access data from other apps가 뜬다"는 신고를 "open -a 자체가
+# Automation 승인을 요구한다"고 잘못 진단해 이 open -a 호출을 전용
+# ElmediaOpenHelper.app(open -na --args)으로 위임했었다. 실측 결과
+# `open -na App.app --args <트랙들>`은 osacompile 앱의 on run 핸들러
+# 자체를 아예 트리거하지 못했다(디버그 로그 한 줄도 안 찍힘 — Elmedia가
+# 전혀 안 뜬 이유). 반면 그냥 `open -a "Elmedia Video Player" <트랙들>`을
+# 터미널에서 직접 실행하면 항상 정상적으로 Elmedia가 열렸다 — 즉 open -a
+# 자체는 원래도 문제가 없었다. "bin" 팝업의 실제 원인은 이 함수 바로 위
+# reset_elmedia_playlist()가 Elmedia의 샌드박스 컨테이너
+# (~/Library/Containers/com.eltima.elmedia6.mas/...)의 Playlist.db를
+# sqlite3로 직접 열어 쓰는 부분일 가능성이 높다(다른 앱의 보호된 데이터
+# 접근 — Apple Events Automation과는 다른 TCC 서비스라 ElmediaStatusHelper와
+# 같은 "helper.app으로 신원만 고정" 해법이 통하지 않는다). ElmediaOpenHelper.app은
+# 삭제했다 — 원래 있던 open -a 직접 호출로 되돌린다.
 
 
 def _is_elmedia_playing():
@@ -2588,10 +2595,22 @@ def reset_elmedia_playlist():
         return False  # 강제 종료도 실패 — 호출부가 "새로 연 게 아니라 섞였을 수 있다"고 판단할 수 있게 알림
 
     if os.path.exists(ELMEDIA_PLAYLIST_DB):
-        with sqlite3.connect(ELMEDIA_PLAYLIST_DB, timeout=5) as conn:
-            conn.execute("DELETE FROM item_order")
-            conn.execute("DELETE FROM playlist_items")
-            conn.commit()
+        # ★ 2026-09-14: "재생 버튼을 눌러도 실행이 안 된다" 재신고 — sample
+        # 프로파일러로 실제 요청을 잡아보니 in-process sqlite3.connect()가
+        # SQLite 락 대기가 아니라 그 아래 open() 시스템 콜 자체에서 멈춰
+        # 있었다(Elmedia 샌드박스 컨테이너에 대한 TCC 동의를 GUI 세션 없는
+        # launchd 프로세스에선 아무도 응답할 수 없어서로 추정 — 메뉴바 앱도
+        # LaunchAgent로 떠 있어 동일 증상). sqlite3.connect(timeout=N)은 이
+        # open() 단계를 전혀 못 막으므로, 서브프로세스로 빼고
+        # subprocess.run(timeout=...)으로 강제 종료 가능하게 한다.
+        try:
+            subprocess.run(
+                ["/usr/bin/sqlite3", ELMEDIA_PLAYLIST_DB,
+                 "DELETE FROM item_order; DELETE FROM playlist_items;"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5, check=False,
+            )
+        except subprocess.TimeoutExpired:
+            pass
     return True
 
 
@@ -2619,7 +2638,7 @@ def play_folder_in_elmedia(folder=PLAYLIST_FOLDER):
         if not tracks:
             return False, "재생 가능한 음원 파일이 없습니다."
         reset_ok = reset_elmedia_playlist()
-        subprocess.Popen(["open", "-na", ELMEDIA_OPEN_HELPER_APP, "--args", *tracks])
+        subprocess.Popen(["open", "-a", "Elmedia Video Player", *tracks])
         if not reset_ok:
             # ★ 2026-08-12: 기존 프로세스를 강제 종료도 못 시켰다는 뜻 — 새로 여는
             # 트랙이 "교체"가 아니라 이미 떠 있던 큐(예: 좋아요 플레이)에 "추가"돼
