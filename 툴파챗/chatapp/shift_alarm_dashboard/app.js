@@ -26,15 +26,17 @@ $("start-sunzi-analysis").addEventListener("click",async()=>{if(!confirm("다음
 // — shift_alarm 메뉴바의 Elmedia 좋아요/클래식 재생, 그리고 메뉴에는 아예
 // 없던 음량 조절을 이 대시보드에서 바로 누르게 한다(서버가 이 Mac에서
 // 직접 osascript/Elmedia를 실행 — server/app.py 참고).
-async function loadVolume(){try{const data=await api("/api/shift-alarm/media/volume");$("volume-display").textContent=`${data.percent}%`}catch(e){$("volume-display").textContent="--%"}}
-async function setVolume(body){try{const data=await api("/api/shift-alarm/media/volume",{method:"POST",body:JSON.stringify(body)});$("volume-display").textContent=`${data.percent}%`}catch(e){notice(e.message,true)}}
+async function loadVolume(){try{const data=await api("/api/shift-alarm/media/volume");$("volume-display").textContent=`${data.percent}%`;$("volume-slider").value=data.percent}catch(e){$("volume-display").textContent="--%"}}
+async function setVolume(body){try{const data=await api("/api/shift-alarm/media/volume",{method:"POST",body:JSON.stringify(body)});$("volume-display").textContent=`${data.percent}%`;$("volume-slider").value=data.percent}catch(e){notice(e.message,true);await loadVolume()}}
 async function playMedia(playlist,button){const original=button.textContent;button.disabled=true;button.textContent="재생 중…";try{const data=await api("/api/shift-alarm/media/play",{method:"POST",body:JSON.stringify({playlist})});notice(data.message)}catch(e){notice(e.message,true)}finally{button.disabled=false;button.textContent=original}}
+async function openRecommendedSites(button){const original=button.textContent;button.disabled=true;button.textContent="여는 중…";try{const data=await api("/api/shift-alarm/media/open-sites",{method:"POST"});notice(data.message)}catch(e){notice(e.message,true)}finally{button.disabled=false;button.textContent=original}}
 $("play-favorites").addEventListener("click",e=>playMedia("favorites",e.currentTarget));
 $("play-classical").addEventListener("click",e=>playMedia("classical",e.currentTarget));
-$("volume-down").addEventListener("click",()=>setVolume({delta:-10}));
-$("volume-up").addEventListener("click",()=>setVolume({delta:10}));
-$("volume-30").addEventListener("click",()=>setVolume({percent:30}));
-$("volume-50").addEventListener("click",()=>setVolume({percent:50}));
-$("volume-70").addEventListener("click",()=>setVolume({percent:70}));
+$("open-sites").addEventListener("click",e=>openRecommendedSites(e.currentTarget));
+// ★ 2026-09-14: "음량은 숫자로 말고 손으로 미는 아날로그바로 해줘" — 드래그
+// 중(input)에는 화면 표시만 바꾸고, 손을 뗄 때(change)만 서버에 실제로 반영한다
+// (드래그 한 번에 API를 수십 번 부르지 않도록).
+$("volume-slider").addEventListener("input",()=>{$("volume-display").textContent=`${$("volume-slider").value}%`});
+$("volume-slider").addEventListener("change",()=>setVolume({percent:Number($("volume-slider").value)}));
 loadVolume();
 $("notifications").addEventListener("click",async()=>{const center=$("notification-center"),opening=center.classList.contains("hidden");center.classList.toggle("hidden",!opening);$("notifications").setAttribute("aria-expanded",String(opening));if(opening)await loadNotifications()});$("notification-close").addEventListener("click",()=>{$("notification-center").classList.add("hidden");$("notifications").setAttribute("aria-expanded","false")});document.addEventListener("keydown",event=>{if(event.key==="Escape")$("notification-close").click()});$("refresh").addEventListener("click",()=>{load();loadSunziStatus();loadNotifications()});$("time-profile").addEventListener("change",()=>currentStatus&&render(currentStatus));$("check-all").addEventListener("click",async()=>{if(!currentStatus?.daily_routine?.length||!confirm("남아 있는 오늘의 일일 루틴을 모두 체크할까요?"))return;$("check-all").disabled=true;try{const result=await api("/api/shift-alarm/routine/check-all",{method:"POST"});currentStatus.daily_routine.forEach(item=>item.checked=true);render(currentStatus);notice(`${result.updated}개 루틴을 체크했습니다.`)}catch(e){notice(e.message,true);$("check-all").disabled=false}});load();loadSunziStatus();loadNotifications();setInterval(loadSunziStatus,5000);setInterval(loadNotifications,30000);

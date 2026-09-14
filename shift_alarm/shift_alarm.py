@@ -1467,6 +1467,14 @@ NX_KEYTYPE_PLAY = 16
 # 쓸 수 있도록 앱이 로컬 상태 파일에 쓰고 파이썬이 짧게 폴링한다.
 ELMEDIA_STATUS_HELPER_APP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ElmediaStatusHelper.app")
 ELMEDIA_STATUS_FILE = os.path.expanduser("~/.shift_alarm_elmedia_status.txt")
+# ★ 2026-09-14: "좋아요 재생하기 누르면 'bin' would like to access data from
+# other apps가 계속 뜬다" 신고 — Elmedia가 샌드박스(MAS) 빌드라 파일 인자를
+# 건네는 open -a 자체가 대상 앱에 파일 접근 권한을 넘기는 과정에서 Automation
+# 승인을 요구하는데, launchd로 뜨는 이 프로세스는 신원이 안정적이지 않아
+# ("bin") 한 번 허용해도 저장되지 않고 계속 다시 뜬다(위 ElmediaStatusHelper와
+# 같은 근본 원인, 8-1/26/60번과 동일 패턴). play_folder_in_elmedia()의 open -a
+# 호출만 이 전용 helper(open -na, 고정 경로/서명)로 위임한다.
+ELMEDIA_OPEN_HELPER_APP = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ElmediaOpenHelper.app")
 
 
 def _is_elmedia_playing():
@@ -2611,7 +2619,7 @@ def play_folder_in_elmedia(folder=PLAYLIST_FOLDER):
         if not tracks:
             return False, "재생 가능한 음원 파일이 없습니다."
         reset_ok = reset_elmedia_playlist()
-        subprocess.Popen(["open", "-a", "Elmedia Video Player", *tracks])
+        subprocess.Popen(["open", "-na", ELMEDIA_OPEN_HELPER_APP, "--args", *tracks])
         if not reset_ok:
             # ★ 2026-08-12: 기존 프로세스를 강제 종료도 못 시켰다는 뜻 — 새로 여는
             # 트랙이 "교체"가 아니라 이미 떠 있던 큐(예: 좋아요 플레이)에 "추가"돼

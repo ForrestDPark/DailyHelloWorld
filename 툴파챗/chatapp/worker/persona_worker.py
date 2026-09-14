@@ -169,6 +169,12 @@ SHIFT_ALARM_ELMEDIA_PLAYLIST_DB = os.path.expanduser(
 SHIFT_ALARM_ELMEDIA_AUDIO_EXTENSIONS = {
     ".aac", ".aif", ".aiff", ".alac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav", ".wma",
 }
+# ★ 2026-09-14: "좋아요 재생하기 누르면 'bin' would like to access data from
+# other apps가 계속 뜬다" — Elmedia가 샌드박스(MAS) 빌드라 파일 인자를 건네는
+# open -a 자체가 Automation 승인을 요구하는데, launchd 프로세스는 신원이
+# 불안정해서("bin") 매번 다시 뜬다. shift_alarm.py와 완전히 같은 전용
+# helper(open -na, 고정 경로/서명)로 그 한 단계만 위임한다.
+SHIFT_ALARM_ELMEDIA_OPEN_HELPER = str(Path(__file__).resolve().parents[3] / "shift_alarm" / "ElmediaOpenHelper.app")
 ALARM_ACTION_RE = re.compile(r"```alarmaction\s*\n(.*?)\n```", re.DOTALL)
 
 
@@ -228,7 +234,7 @@ def _shift_alarm_play_folder(folder):
         if not tracks:
             return False, "재생 가능한 음원 파일이 없습니다."
         reset_ok = _shift_alarm_reset_elmedia_playlist()
-        subprocess.Popen(["open", "-a", "Elmedia Video Player", *tracks])
+        subprocess.Popen(["open", "-na", SHIFT_ALARM_ELMEDIA_OPEN_HELPER, "--args", *tracks])
         if not reset_ok:
             return False, "Elmedia가 응답이 없어 기존 재생목록을 비우지 못했습니다 — 새 음원이 기존 큐와 섞여 재생될 수 있습니다."
         return True, f"{len(tracks)}곡을 새로 열었습니다."

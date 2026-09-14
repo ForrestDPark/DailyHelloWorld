@@ -12,6 +12,23 @@ class AlarmActionSignalTest(unittest.TestCase):
     def test_no_block_returns_none(self):
         self.assertIsNone(pw._handle_alarm_action_signal("그냥 대화입니다."))
 
+    def test_play_folder_opens_via_stable_identity_helper_app(self):
+        """★ 2026-09-14: "좋아요 재생하기 누르면 'bin' would like to access
+        data from other apps가 계속 뜬다" 사고 재발 방지 — Elmedia(샌드박스
+        빌드)에 파일을 직접 open -a로 건네면 launchd 프로세스의 불안정한
+        신원 때문에 Automation 승인이 매번 다시 뜬다. 반드시 고정 경로·
+        서명된 ElmediaOpenHelper.app을 open -na로 거쳐야 한다."""
+        with patch.object(pw, "_shift_alarm_list_audio_tracks", return_value=["/a.mp3", "/b.mp3"]), \
+             patch.object(pw, "_shift_alarm_reset_elmedia_playlist", return_value=True), \
+             patch("persona_worker.subprocess") as mock_subprocess, \
+             patch("os.path.isdir", return_value=True):
+            pw._shift_alarm_play_folder(pw.SHIFT_ALARM_FAVORITES_FOLDER)
+        args = mock_subprocess.Popen.call_args.args[0]
+        self.assertEqual(args[0], "open")
+        self.assertEqual(args[1], "-na")
+        self.assertEqual(args[2], pw.SHIFT_ALARM_ELMEDIA_OPEN_HELPER)
+        self.assertNotIn("Elmedia Video Player", args)
+
     def test_malformed_json_returns_none(self):
         text = "```alarmaction\n{not json}\n```"
         self.assertIsNone(pw._handle_alarm_action_signal(text))

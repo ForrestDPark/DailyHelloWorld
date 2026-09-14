@@ -5,7 +5,7 @@ import unittest
 import urllib.error
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import mock_open, patch
 
 from fastapi import HTTPException
 
@@ -316,6 +316,20 @@ class ShiftAlarmApiTests(unittest.TestCase):
         mock_play.assert_called_once_with(module.SHIFT_ALARM_FAVORITES_FOLDER)
         self.assertTrue(result["ok"])
 
+    def test_play_folder_opens_via_stable_identity_helper_app(self):
+        """★ 2026-09-14: "좋아요 재생하기 누르면 'bin' would like to access
+        data from other apps가 계속 뜬다" 사고 재발 방지 — 샌드박스 Elmedia에
+        파일을 직접 open -a로 건네지 않고 반드시 고정 경로·서명된
+        ElmediaOpenHelper.app을 open -na로 거쳐야 한다."""
+        with patch.object(module, "_shift_alarm_list_audio_tracks", return_value=["/a.mp3"]), \
+             patch.object(module, "_shift_alarm_reset_elmedia_playlist", return_value=True), \
+             patch.object(module, "subprocess") as mock_subprocess, \
+             patch("os.path.isdir", return_value=True):
+            module._shift_alarm_play_folder(module.SHIFT_ALARM_FAVORITES_FOLDER)
+        args = mock_subprocess.Popen.call_args.args[0]
+        self.assertEqual(args[:3], ["open", "-na", module.SHIFT_ALARM_ELMEDIA_OPEN_HELPER])
+        self.assertNotIn("Elmedia Video Player", args)
+
     def test_play_classical_uses_classic_folder(self):
         with patch.object(module, "_shift_alarm_play_folder", return_value=(True, "5곡을 새로 열었습니다.")) as mock_play:
             module.play_shift_alarm_media(module.ShiftAlarmPlayRequest(playlist="classical"), owner_request())
@@ -331,6 +345,31 @@ class ShiftAlarmApiTests(unittest.TestCase):
             with self.assertRaises(HTTPException) as raised:
                 module.play_shift_alarm_media(module.ShiftAlarmPlayRequest(playlist="favorites"), owner_request())
         self.assertEqual(raised.exception.status_code, 409)
+
+    def test_open_random_sites_returns_urls(self):
+        with patch.object(module, "_shift_alarm_open_random_bookmarks", return_value=["https://a.example", "https://b.example"]):
+            result = module.open_shift_alarm_random_sites(owner_request())
+        self.assertEqual(result["urls"], ["https://a.example", "https://b.example"])
+        self.assertIn("2개", result["message"])
+
+    def test_open_random_sites_409_when_no_bookmarks(self):
+        with patch.object(module, "_shift_alarm_open_random_bookmarks", return_value=[]):
+            with self.assertRaises(HTTPException) as raised:
+                module.open_shift_alarm_random_sites(owner_request())
+        self.assertEqual(raised.exception.status_code, 409)
+
+    def test_open_random_sites_opens_chrome_directly_without_helper(self):
+        """Chrome은 샌드박스 빌드가 아니라 Elmedia와 달리 helper 없이 open -a로 바로 열어도 안전하다."""
+        bookmarks_payload = {"roots": {"bookmark_bar": {"type": "folder", "name": "天", "children": [
+            {"type": "url", "url": "https://example.com/1"},
+        ]}}}
+        with patch("builtins.open", mock_open(read_data=json.dumps(bookmarks_payload))), \
+             patch.object(module, "_shift_alarm_load_random_bookmark_history", return_value=[]), \
+             patch.object(module, "_shift_alarm_save_random_bookmark_history"), \
+             patch.object(module, "subprocess") as mock_subprocess:
+            urls = module._shift_alarm_open_random_bookmarks(3)
+        self.assertEqual(urls, ["https://example.com/1"])
+        mock_subprocess.Popen.assert_called_once_with(["open", "-a", "Google Chrome", "https://example.com/1"])
 
     def test_non_owner_cannot_control_volume_or_playback(self):
         with self.assertRaises(HTTPException) as raised:

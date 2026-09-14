@@ -1,5 +1,12 @@
 # 툴파챗
 
+## 음량 슬라이더 + 추천 사이트 열기 + Elmedia Automation 팝업 수정 (2026-09-14)
+
+- **좋아요 재생하기 Automation 팝업 수정**: `open -a "Elmedia Video Player" <트랙>`이 샌드박스 앱에 파일을 건네는 과정에서 Automation 승인을 요구하는데, launchd 프로세스는 신원이 불안정해("bin") 매번 다시 떴다. `shift_alarm/ElmediaOpenHelper.app`(고정 경로·서명, `open -na`)로 그 한 단계만 위임 — `worker/persona_worker.py`·`server/app.py`·`shift_alarm.py` 세 곳 모두 같은 helper를 쓰도록 고쳤다. 자세한 원인·재빌드 방법은 `shift_alarm/README.md` 87번 항목 참고.
+- **음량 슬라이더**: "숫자 버튼 말고 손으로 미는 아날로그바로 해줘" 요청으로 `-10/30%/50%/70%/+10` 버튼을 실제 `<input type="range">` 슬라이더로 바꿨다. 드래그 중에는 화면 표시만 갱신하고 손을 뗄 때만 서버에 반영한다.
+- **추천 사이트 열기**: shift_alarm 메뉴바의 `🎲 추천 사이트 열기`(Chrome 북마크 `天` 폴더에서 무작위 3개)와 완전히 같은 로직을 서버에 복제하고 같은 히스토리 파일을 공유한다. Chrome은 샌드박스 빌드가 아니라 helper 앱 없이 직접 `open -a`로 연다.
+- 테스트 4건 추가(helper 경로 검증 2건 + 추천 사이트 API 2건), 전체 28건 통과.
+
 ## Shift Alarm 대시보드에 음량·미디어 버튼 추가 (2026-09-14)
 
 **사용자 정정**: "채팅창에서 하는게아니라 shift alarm시스템 내부에 버튼만들어줘" (바로 앞 알람지기 채팅 명령 대신).

@@ -32,6 +32,7 @@ import hashlib
 import html
 import json
 import os
+import random
 import re
 import secrets
 import sqlite3
@@ -580,6 +581,112 @@ SHIFT_ALARM_ELMEDIA_PLAYLIST_DB = os.path.expanduser(
 SHIFT_ALARM_ELMEDIA_AUDIO_EXTENSIONS = {
     ".aac", ".aif", ".aiff", ".alac", ".flac", ".m4a", ".mp3", ".ogg", ".opus", ".wav", ".wma",
 }
+# ★ 2026-09-14: "좋아요 재생하기 누르면 'bin' would like to access data from
+# other apps가 계속 뜬다" — shift_alarm.py/persona_worker.py와 완전히 같은
+# 이유(Elmedia 샌드박스 빌드에 파일 인자를 건네는 open -a가 Automation 승인을
+# 요구하는데 launchd 프로세스 신원이 불안정)로 전용 helper에 그 한 단계만 위임.
+SHIFT_ALARM_ELMEDIA_OPEN_HELPER = str(REPO_ROOT / "shift_alarm" / "ElmediaOpenHelper.app")
+
+# ★ 2026-09-14: "추천사이트 열기 기능도 있으면 좋겠어" — shift_alarm.py의
+# 🎲 추천 사이트 열기(pick_random_bookmarks/open_random_bookmarks)와 완전히
+# 같은 로직. 같은 히스토리 파일을 공유하므로 메뉴바에서 이미 추천된 URL은
+# 여기서도 다시 추천되지 않는다(반대 방향도 마찬가지). Chrome은 샌드박스
+# 빌드가 아니라 위 Elmedia와 달리 open -a에 Automation 승인이 필요 없다
+# (이직시스템 등 이 저장소의 다른 open -a Chrome 호출과 동일하게 안전).
+SHIFT_ALARM_CHROME_BOOKMARKS_PATH = os.path.expanduser(
+    "~/Library/Application Support/Google/Chrome/Default/Bookmarks"
+)
+SHIFT_ALARM_RANDOM_BOOKMARK_FOLDER = "天"
+SHIFT_ALARM_RANDOM_BOOKMARK_HISTORY_FILE = os.path.expanduser(
+    "~/.shift_alarm_random_bookmark_history.json"
+)
+
+
+def _shift_alarm_collect_all_bookmark_urls(node):
+    urls = []
+    if node.get("type") == "url":
+        u = node.get("url")
+        if u:
+            urls.append(u)
+    for child in node.get("children", []):
+        urls.extend(_shift_alarm_collect_all_bookmark_urls(child))
+    return urls
+
+
+def _shift_alarm_find_bookmark_folder(node, target_name):
+    if node.get("type") == "folder":
+        if node.get("name") == target_name:
+            return node
+        for child in node.get("children", []):
+            found = _shift_alarm_find_bookmark_folder(child, target_name)
+            if found:
+                return found
+    return None
+
+
+def _shift_alarm_load_random_bookmark_history(folder_name):
+    try:
+        with open(SHIFT_ALARM_RANDOM_BOOKMARK_HISTORY_FILE, encoding="utf-8") as file:
+            data = json.load(file)
+        history = data.get(folder_name, [])
+        return history if isinstance(history, list) else []
+    except (OSError, ValueError, TypeError):
+        return []
+
+
+def _shift_alarm_save_random_bookmark_history(folder_name, visited_urls):
+    data = {}
+    try:
+        with open(SHIFT_ALARM_RANDOM_BOOKMARK_HISTORY_FILE, encoding="utf-8") as file:
+            loaded = json.load(file)
+        if isinstance(loaded, dict):
+            data = loaded
+    except (OSError, ValueError, TypeError):
+        pass
+    data[folder_name] = visited_urls
+    temp_path = f"{SHIFT_ALARM_RANDOM_BOOKMARK_HISTORY_FILE}.tmp"
+    with open(temp_path, "w", encoding="utf-8") as file:
+        json.dump(data, file, ensure_ascii=False, indent=2)
+    os.replace(temp_path, SHIFT_ALARM_RANDOM_BOOKMARK_HISTORY_FILE)
+
+
+def _shift_alarm_pick_random_bookmarks(n=3, folder_name=SHIFT_ALARM_RANDOM_BOOKMARK_FOLDER):
+    try:
+        with open(SHIFT_ALARM_CHROME_BOOKMARKS_PATH, encoding="utf-8") as file:
+            data = json.load(file)
+        roots = data.get("roots", {})
+        folder = None
+        for key in ("bookmark_bar", "other", "synced"):
+            if key in roots:
+                folder = _shift_alarm_find_bookmark_folder(roots[key], folder_name)
+                if folder:
+                    break
+        if not folder:
+            return []
+        urls = list(dict.fromkeys(_shift_alarm_collect_all_bookmark_urls(folder)))
+        if not urls:
+            return []
+        current_urls = set(urls)
+        visited = [
+            url for url in dict.fromkeys(_shift_alarm_load_random_bookmark_history(folder_name))
+            if url in current_urls
+        ]
+        unvisited = [url for url in urls if url not in set(visited)]
+        if not unvisited:
+            visited = []
+            unvisited = urls
+        selected = random.sample(unvisited, min(n, len(unvisited)))
+        _shift_alarm_save_random_bookmark_history(folder_name, visited + selected)
+        return selected
+    except (OSError, ValueError, TypeError):
+        return []
+
+
+def _shift_alarm_open_random_bookmarks(n=3):
+    urls = _shift_alarm_pick_random_bookmarks(n)
+    for url in urls:
+        subprocess.Popen(["open", "-a", "Google Chrome", url])
+    return urls
 
 
 def _shift_alarm_list_audio_tracks(folder):
@@ -636,7 +743,7 @@ def _shift_alarm_play_folder(folder):
         if not tracks:
             return False, "재생 가능한 음원 파일이 없습니다."
         reset_ok = _shift_alarm_reset_elmedia_playlist()
-        subprocess.Popen(["open", "-a", "Elmedia Video Player", *tracks])
+        subprocess.Popen(["open", "-na", SHIFT_ALARM_ELMEDIA_OPEN_HELPER, "--args", *tracks])
         if not reset_ok:
             return False, "Elmedia가 응답이 없어 기존 재생목록을 비우지 못했습니다 — 새 음원이 기존 큐와 섞여 재생될 수 있습니다."
         return True, f"{len(tracks)}곡을 새로 열었습니다."
@@ -1089,6 +1196,15 @@ def play_shift_alarm_media(body: ShiftAlarmPlayRequest, request: Request):
     if not ok:
         raise HTTPException(status_code=409, detail=message)
     return {"ok": True, "message": message}
+
+
+@app.post("/api/shift-alarm/media/open-sites")
+def open_shift_alarm_random_sites(request: Request):
+    _require_owner(request)
+    urls = _shift_alarm_open_random_bookmarks(3)
+    if not urls:
+        raise HTTPException(status_code=409, detail="북마크를 불러올 수 없습니다")
+    return {"ok": True, "message": f"{len(urls)}개 열었습니다", "urls": urls}
 
 
 def _read_career_card(filename: str):

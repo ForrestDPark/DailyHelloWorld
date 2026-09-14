@@ -1089,3 +1089,19 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - `REMINDERS`에 `coconut_oil` 항목을 추가하고, 새 헬퍼 `_is_coconut_oil_day(d)`로 판정한다. 기준일(2026-09-12)부터 "달(month)" 단위로 주기를 세는 방식이 `engine_oil_change`(5개월 주기)와 완전히 같아 그 구현을 그대로 재사용했다 — `(year*12+month) 차이 % 2개월 == 0`이고 `day`가 기준일(12일)과 같은지 확인한다. 기준일이 12일이라 모든 달에 존재하므로 말일 보정은 불필요.
 - `get_today_reminders()`의 다른 월 단위 조건들과 같은 자리에 추가해서 메뉴 표시·음성 낭독·토글·Notion 일일 체크리스트 동기화·웹 리마인더 시각표(`build_reminder_schedule`는 `REMINDERS` 딕셔너리를 그대로 순회하므로 별도 등록 불필요) 등 기존 인프라를 그대로 탄다.
 - 실행 시각은 12:15로 지정(엔진오일 12:00 바로 뒤).
+
+## 87. 🔓 "좋아요 재생하기" Automation 팝업 — ElmediaOpenHelper.app 도입 (★ 2026-09-14 추가)
+
+**사용자 요청**: "이 거 좋아요 재생하기 클릭하면 계속 떠 shiftalarm 꺼졌다 켜지면 항상 allow 가 뜨는데 왜이렇지" (스크린샷: `"bin" would like to access data from other apps`).
+
+- **원인**: `play_folder_in_elmedia()`가 마지막에 `open -a "Elmedia Video Player" <트랙 경로들>`을 직접 호출하는데, Elmedia는 Mac App Store 샌드박스 빌드라 파일 인자를 건네는 이 호출 자체가 대상 앱에 파일 접근을 넘기는 과정에서 macOS Automation(`kTCCServiceAppleEvents`) 승인을 요구한다. launchd로 뜬 이 프로세스는 신원이 안정적으로 잡히지 않아("bin") 한 번 허용해도 저장되지 않고 앱을 껐다 켤 때마다(그리고 재생 버튼을 누를 때마다) 다시 뜬다 — 60번 항목(`ElmediaStatusHelper.app`)과 같은 근본 원인이지만, 그때는 `tell application "System Events"` 호출만 고쳤을 뿐 `play_folder_in_elmedia()`의 `open -a` 자체는 손대지 않아서 남아 있던 사각지대였다.
+- **수정**: 같은 해법 재사용 — `open -a` 딱 그 한 단계만 전용 컴파일 앱 `ElmediaOpenHelper.app`(`com.shiftalarm.elmediaopen`, `osacompile` → `plutil -insert CFBundleIdentifier` → `plutil -insert LSUIElement -bool true` → `codesign --force --deep -s -`)에 위임한다. `open -na ElmediaOpenHelper.app --args <트랙 경로들>`로 열면 Launch Services를 거쳐 신원이 이 앱(고정 경로·서명)으로 안정되어, 최초 1회만 허용하면 그 뒤로는 팝업이 다시 안 뜬다.
+- 이 로직은 `shift_alarm.py`(원본)·`툴파챗/chatapp/worker/persona_worker.py`(채팅 명령)·`툴파챗/chatapp/server/app.py`(대시보드 버튼) 세 곳에 복제돼 있어 세 곳 모두 같은 helper를 가리키게 고쳤다. 재빌드하려면: `osacompile -o ElmediaOpenHelper.app <script>.applescript` → `plutil -insert CFBundleIdentifier -string com.shiftalarm.elmediaopen Contents/Info.plist` → `plutil -insert LSUIElement -bool true Contents/Info.plist` → `codesign --force --deep -s - ElmediaOpenHelper.app`.
+- 테스트(`worker/test_alarm_action_signal.py`, `server/test_shift_alarm_api.py`)에 `open -na`+helper 경로를 쓰는지, `"Elmedia Video Player"`가 인자에 직접 나타나지 않는지 검증하는 케이스를 추가했다.
+
+## 88. 🎚️ Shift Alarm 대시보드 음량 슬라이더 + 추천 사이트 열기 (★ 2026-09-14 추가)
+
+**사용자 요청**: "음량은 숫자로 말고 음량 아날로그바... 손으로 밀어서 하는거 그걸로 해줘" + "앱에서 추천사이트 열기 기능도 있으면 좋겠어".
+
+- 툴파챗 Shift Alarm 대시보드의 음량 컨트롤을 −10/30%/50%/70%/+10 버튼에서 실제 슬라이더(`<input type="range">`)로 바꿨다. 드래그 중(`input` 이벤트)에는 화면 숫자만 갱신하고, 손을 뗄 때(`change` 이벤트)만 서버에 실제 반영해 드래그 한 번에 API가 여러 번 불리지 않게 했다.
+- `🎲 추천 사이트 열기` 버튼을 추가했다 — 메뉴바의 `🎲 추천 사이트 열기(天 폴더 랜덤 3개)`와 완전히 같은 로직(`pick_random_bookmarks`/`open_random_bookmarks`)을 `chatapp/server/app.py`에 복제하고, **같은 히스토리 파일**(`~/.shift_alarm_random_bookmark_history.json`)을 공유해 메뉴바에서 이미 추천된 URL이 대시보드에서 또 나오지 않는다(반대 방향도 마찬가지). Chrome은 샌드박스 빌드가 아니라 위 Elmedia 항목과 달리 `open -a`에 Automation 승인이 필요 없어 helper 없이 직접 연다.
