@@ -3682,8 +3682,11 @@ def run_youtube_mp3_download(url, folder_path):
                 pieces.append(shlex.quote(arg))
         return " ".join(pieces)
 
-    safari_command = quoted_command("web_safari")
-    embedded_command = quoted_command("web_embedded")
+    # web_safari 단독으로는 YouTube가 스토리보드(이미지)만 반환하는
+    # 경우가 있다. 전체 재생목록을 실패한 뒤 다음 클라이언트로 넘어가지
+    # 않도록, 첫 요청부터 세 클라이언트의 포맷을 함께 병합한다.
+    primary_command = quoted_command("web,web_embedded,web_safari")
+    fallback_command = quoted_command("web_embedded,web_safari")
     video_args = [
         # MP4를 받은 뒤 MP3 변환까지 성공해야 완료 기록을 남겨야 하므로
         # 이 단계에는 --download-archive를 넣지 않는다.
@@ -3691,7 +3694,7 @@ def run_youtube_mp3_download(url, folder_path):
         "--format", "bestvideo+bestaudio/best",
         "--merge-output-format", "mp4",
         "--write-thumbnail", "--convert-thumbnails", "jpg",
-        "--extractor-args", "youtube:player_client=web",
+        "--extractor-args", "youtube:player_client=web,web_embedded,web_safari",
         "--yes-playlist", "--newline", "--sleep-requests", "1",
         "--retries", "10",
         "--fragment-retries", "10",
@@ -3772,13 +3775,13 @@ def run_youtube_mp3_download(url, folder_path):
         f"echo '📁 저장 폴더: {folder_path.replace(chr(39), chr(39) + chr(92) + chr(39) + chr(39))}'\n"
         f"{snapshot_block}"
         f"{loop_open}"
-        "echo '🌐 web_safari 방식으로 시도합니다.'\n"
-        f"{safari_command}\n"
+        "echo '🌐 YouTube 통합 클라이언트(web → embedded → safari)로 시도합니다.'\n"
+        f"{primary_command}\n"
         "job_status=$?\n"
         "if [[ $job_status -ne 0 ]]; then\n"
         "  echo\n"
-        "  echo '↻ 첫 시도 실패 — web_embedded 방식으로 한 번 더 시도합니다.'\n"
-        f"  {embedded_command}\n"
+        "  echo '↻ 첫 시도 실패 — embedded+safari 포맷으로 한 번 더 시도합니다.'\n"
+        f"  {fallback_command}\n"
         "  job_status=$?\n"
         "fi\n"
         "if [[ $job_status -ne 0 ]]; then\n"
