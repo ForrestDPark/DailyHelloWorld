@@ -12,7 +12,7 @@
     <section class="panel media-panel"><div class="panel-head"><div><small>MEDIA</small><h2>음악·음량</h2></div><span id="volume-display" class="volume-display">--%</span></div>
       <div class="media-buttons"><button id="play-favorites" type="button">⭐ 좋아요 재생</button><button id="play-classical" type="button">🎻 클래식 재생</button><button id="open-sites" type="button">🎲 추천 사이트 열기</button></div>
       <div class="transport-buttons"><button id="transport-previous" type="button" aria-label="이전곡">⏮️</button><button id="transport-playpause" type="button" aria-label="재생·일시정지">⏯️</button><button id="transport-next" type="button" aria-label="다음곡">⏭️</button></div>
-      <div class="volume-slider-row"><input id="volume-slider" type="range" min="0" max="100" value="50" aria-label="시스템 음량"></div>
+      <div class="volume-slider-row"><span class="volume-icon" aria-hidden="true">🔈</span><input id="volume-slider" type="range" min="0" max="100" value="50" aria-label="시스템 음량" style="--val:50%"><span class="volume-icon" aria-hidden="true">🔊</span></div>
     </section>
     <section class="panel"><div class="panel-head"><div><small>TODAY</small><h2>오늘의 리마인더</h2></div><a id="notion-link" target="_blank" rel="noopener">Notion에서 보기 ↗</a></div><div id="today-reminders" class="check-list"></div></section>
     <details class="panel"><summary><div><small>DAILY ROUTINE</small><h2>일일 루틴 체크리스트 <span id="routine-count"></span></h2></div><span class="summary-arrow">⌄</span></summary><div class="panel-head action-head"><p>목록을 펼쳐 오늘의 루틴을 확인하세요.</p><button id="check-all" type="button" disabled>전부 체크하기</button></div><div id="routine" class="check-list"></div></details>

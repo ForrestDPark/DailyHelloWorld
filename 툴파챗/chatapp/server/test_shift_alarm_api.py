@@ -346,19 +346,24 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 409)
 
     def test_open_random_sites_returns_urls(self):
-        with patch.object(module, "_shift_alarm_open_random_bookmarks", return_value=["https://a.example", "https://b.example"]):
+        """★ 2026-09-14: 서버(Mac)에서 직접 여는 대신 URL만 돌려주고, 여는
+        동작은 요청을 보낸 브라우저(app.js) 쪽에서 하게 바꿨다 — 대시보드를
+        폰으로 보고 있으면 폰 크롬에서 열려야 하는데, Mac에서 열어봐야 그
+        화면을 보고 있지 않으니 무의미했다."""
+        with patch.object(module, "_shift_alarm_pick_random_bookmarks", return_value=["https://a.example", "https://b.example"]):
             result = module.open_shift_alarm_random_sites(owner_request())
         self.assertEqual(result["urls"], ["https://a.example", "https://b.example"])
         self.assertIn("2개", result["message"])
 
     def test_open_random_sites_409_when_no_bookmarks(self):
-        with patch.object(module, "_shift_alarm_open_random_bookmarks", return_value=[]):
+        with patch.object(module, "_shift_alarm_pick_random_bookmarks", return_value=[]):
             with self.assertRaises(HTTPException) as raised:
                 module.open_shift_alarm_random_sites(owner_request())
         self.assertEqual(raised.exception.status_code, 409)
 
-    def test_open_random_sites_opens_chrome_directly_without_helper(self):
-        """Chrome은 샌드박스 빌드가 아니라 Elmedia와 달리 helper 없이 open -a로 바로 열어도 안전하다."""
+    def test_open_random_sites_does_not_open_chrome_on_server(self):
+        """서버 프로세스가 subprocess로 Chrome을 여는 부작용이 없어야 한다 — URL 선택은
+        _shift_alarm_pick_random_bookmarks만 호출하고, 여는 건 클라이언트 몫이다."""
         bookmarks_payload = {"roots": {"bookmark_bar": {"type": "folder", "name": "天", "children": [
             {"type": "url", "url": "https://example.com/1"},
         ]}}}
@@ -366,9 +371,9 @@ class ShiftAlarmApiTests(unittest.TestCase):
              patch.object(module, "_shift_alarm_load_random_bookmark_history", return_value=[]), \
              patch.object(module, "_shift_alarm_save_random_bookmark_history"), \
              patch.object(module, "subprocess") as mock_subprocess:
-            urls = module._shift_alarm_open_random_bookmarks(3)
-        self.assertEqual(urls, ["https://example.com/1"])
-        mock_subprocess.Popen.assert_called_once_with(["open", "-a", "Google Chrome", "https://example.com/1"])
+            result = module.open_shift_alarm_random_sites(owner_request())
+        self.assertEqual(result["urls"], ["https://example.com/1"])
+        mock_subprocess.Popen.assert_not_called()
 
     def test_transport_sends_media_key_when_elmedia_running(self):
         with patch.object(module, "_shift_alarm_elmedia_running", return_value=True), \

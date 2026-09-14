@@ -26,10 +26,16 @@ $("start-sunzi-analysis").addEventListener("click",async()=>{if(!confirm("다음
 // — shift_alarm 메뉴바의 Elmedia 좋아요/클래식 재생, 그리고 메뉴에는 아예
 // 없던 음량 조절을 이 대시보드에서 바로 누르게 한다(서버가 이 Mac에서
 // 직접 osascript/Elmedia를 실행 — server/app.py 참고).
-async function loadVolume(){try{const data=await api("/api/shift-alarm/media/volume");$("volume-display").textContent=`${data.percent}%`;$("volume-slider").value=data.percent}catch(e){$("volume-display").textContent="--%"}}
-async function setVolume(body){try{const data=await api("/api/shift-alarm/media/volume",{method:"POST",body:JSON.stringify(body)});$("volume-display").textContent=`${data.percent}%`;$("volume-slider").value=data.percent}catch(e){notice(e.message,true);await loadVolume()}}
+function setVolumeUI(percent){$("volume-display").textContent=`${percent}%`;$("volume-slider").value=percent;$("volume-slider").style.setProperty("--val",`${percent}%`)}
+async function loadVolume(){try{const data=await api("/api/shift-alarm/media/volume");setVolumeUI(data.percent)}catch(e){$("volume-display").textContent="--%"}}
+async function setVolume(body){try{const data=await api("/api/shift-alarm/media/volume",{method:"POST",body:JSON.stringify(body)});setVolumeUI(data.percent)}catch(e){notice(e.message,true);await loadVolume()}}
 async function playMedia(playlist,button){const original=button.textContent;button.disabled=true;button.textContent="재생 중…";try{const data=await api("/api/shift-alarm/media/play",{method:"POST",body:JSON.stringify({playlist})});notice(data.message)}catch(e){notice(e.message,true)}finally{button.disabled=false;button.textContent=original}}
-async function openRecommendedSites(button){const original=button.textContent;button.disabled=true;button.textContent="여는 중…";try{const data=await api("/api/shift-alarm/media/open-sites",{method:"POST"});notice(data.message)}catch(e){notice(e.message,true)}finally{button.disabled=false;button.textContent=original}}
+// ★ 2026-09-14: "휴대폰 크롬에서 열리게 해줄 수 없나" — 서버는 URL만 골라
+// 돌려주고, 여는 건 이 클릭 핸들러에서 한다. await 뒤에 window.open을 부르면
+// 모바일 브라우저가 "사용자 동작 없이 뜬 팝업"으로 보고 막아버리므로, 클릭
+// 직후(아직 fetch 전, 동기 실행 중) 빈 탭을 먼저 열어두고 URL이 오면
+// 그 탭의 location만 바꾼다.
+async function openRecommendedSites(button){const original=button.textContent;button.disabled=true;button.textContent="여는 중…";const slots=[window.open("about:blank","_blank"),window.open("about:blank","_blank"),window.open("about:blank","_blank")];try{const data=await api("/api/shift-alarm/media/open-sites",{method:"POST"});const urls=data.urls||[];urls.forEach((url,i)=>{const win=slots[i];if(win)win.location=url;else window.open(url,"_blank")});slots.slice(urls.length).forEach(win=>win&&win.close());notice(data.message)}catch(e){slots.forEach(win=>win&&win.close());notice(e.message,true)}finally{button.disabled=false;button.textContent=original}}
 async function sendTransport(action,button){button.disabled=true;try{await api("/api/shift-alarm/media/transport",{method:"POST",body:JSON.stringify({action})})}catch(e){notice(e.message,true)}finally{button.disabled=false}}
 $("play-favorites").addEventListener("click",e=>playMedia("favorites",e.currentTarget));
 $("play-classical").addEventListener("click",e=>playMedia("classical",e.currentTarget));

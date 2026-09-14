@@ -683,11 +683,6 @@ def _shift_alarm_pick_random_bookmarks(n=3, folder_name=SHIFT_ALARM_RANDOM_BOOKM
         return []
 
 
-def _shift_alarm_open_random_bookmarks(n=3):
-    urls = _shift_alarm_pick_random_bookmarks(n)
-    for url in urls:
-        subprocess.Popen(["open", "-a", "Google Chrome", url])
-    return urls
 
 
 def _shift_alarm_list_audio_tracks(folder):
@@ -1247,11 +1242,15 @@ def play_shift_alarm_media(body: ShiftAlarmPlayRequest, request: Request):
 
 @app.post("/api/shift-alarm/media/open-sites")
 def open_shift_alarm_random_sites(request: Request):
+    # ★ 2026-09-14: "휴대폰 크롬에서 열리게 해줄 수 없나" — 예전엔 서버(Mac)에서
+    # open -a "Google Chrome"으로 직접 열었는데, 대시보드를 폰으로 보는 사람에게는
+    # 정작 Mac 화면에서 창이 뜨는 셈이라 무의미했다. URL만 골라 돌려주고, 여는
+    # 동작은 이 요청을 보낸 브라우저(app.js) 쪽에서 하게 바꿨다.
     _require_owner(request)
-    urls = _shift_alarm_open_random_bookmarks(3)
+    urls = _shift_alarm_pick_random_bookmarks(3)
     if not urls:
         raise HTTPException(status_code=409, detail="북마크를 불러올 수 없습니다")
-    return {"ok": True, "message": f"{len(urls)}개 열었습니다", "urls": urls}
+    return {"ok": True, "message": f"{len(urls)}개 찾았습니다", "urls": urls}
 
 
 class ShiftAlarmTransportRequest(BaseModel):
