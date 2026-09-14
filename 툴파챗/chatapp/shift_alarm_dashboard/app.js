@@ -30,9 +30,17 @@ async function loadVolume(){try{const data=await api("/api/shift-alarm/media/vol
 async function setVolume(body){try{const data=await api("/api/shift-alarm/media/volume",{method:"POST",body:JSON.stringify(body)});$("volume-display").textContent=`${data.percent}%`;$("volume-slider").value=data.percent}catch(e){notice(e.message,true);await loadVolume()}}
 async function playMedia(playlist,button){const original=button.textContent;button.disabled=true;button.textContent="재생 중…";try{const data=await api("/api/shift-alarm/media/play",{method:"POST",body:JSON.stringify({playlist})});notice(data.message)}catch(e){notice(e.message,true)}finally{button.disabled=false;button.textContent=original}}
 async function openRecommendedSites(button){const original=button.textContent;button.disabled=true;button.textContent="여는 중…";try{const data=await api("/api/shift-alarm/media/open-sites",{method:"POST"});notice(data.message)}catch(e){notice(e.message,true)}finally{button.disabled=false;button.textContent=original}}
+async function sendTransport(action,button){button.disabled=true;try{await api("/api/shift-alarm/media/transport",{method:"POST",body:JSON.stringify({action})})}catch(e){notice(e.message,true)}finally{button.disabled=false}}
 $("play-favorites").addEventListener("click",e=>playMedia("favorites",e.currentTarget));
 $("play-classical").addEventListener("click",e=>playMedia("classical",e.currentTarget));
 $("open-sites").addEventListener("click",e=>openRecommendedSites(e.currentTarget));
+// ★ 2026-09-14: "재생중일때 일시정지랑 다음곡 이전곡 넘어가는 버튼도있으면
+// 좋겠어" — 시스템 미디어 키를 눌러 Elmedia를 제어한다(서버가 shift_alarm.py와
+// 같은 인터프리터 신원으로 실행 — server/app.py 참고). Elmedia가 안 떠 있으면
+// 서버가 409를 주므로 notice로 그대로 보여준다.
+$("transport-previous").addEventListener("click",e=>sendTransport("previous",e.currentTarget));
+$("transport-playpause").addEventListener("click",e=>sendTransport("playpause",e.currentTarget));
+$("transport-next").addEventListener("click",e=>sendTransport("next",e.currentTarget));
 // ★ 2026-09-14: "음량은 숫자로 말고 손으로 미는 아날로그바로 해줘" — 드래그
 // 중(input)에는 화면 표시만 바꾸고, 손을 뗄 때(change)만 서버에 실제로 반영한다
 // (드래그 한 번에 API를 수십 번 부르지 않도록).

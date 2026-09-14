@@ -707,6 +707,28 @@ def _shift_alarm_elmedia_running():
     return result.returncode == 0
 
 
+# ★ 2026-09-14: "재생중일때 일시정지랑 다음곡 이전곡 넘어가는 버튼도있으면
+# 좋겠어" — Elmedia는 샌드박스 빌드라 표준 AppleScript pause 동사가 없어서
+# (shift_alarm.py의 ★2026-08-29 항목과 같은 제약) 시스템 전체 미디어 키
+# (NX_KEYTYPE_PLAY/NEXT/PREVIOUS)를 눌러야 한다. 이 키 전송(Quartz.
+# CGEventPost)은 호출 프로세스에 macOS Accessibility 권한이 필요한데, 그
+# 권한은 이 서버의 venv 인터프리터가 아니라 shift_alarm.py가 쓰는
+# `/opt/anaconda3/bin/python3` 신원에 이미 걸려 있을 가능성이 높다. 그래서
+# 이 서버 프로세스가 직접 Quartz를 호출하지 않고, 그 인터프리터로 별도
+# 스크립트(`shift_alarm/send_media_key.py`)를 서브프로세스 실행해 신원을
+# 빌려 쓴다 — 서버 venv에 pyobjc를 새로 설치해 별도 Accessibility 승인을
+# 또 요구하지 않기 위해서다.
+SHIFT_ALARM_MEDIA_KEY_PYTHON = "/opt/anaconda3/bin/python3"
+SHIFT_ALARM_MEDIA_KEY_SCRIPT = str(REPO_ROOT / "shift_alarm" / "send_media_key.py")
+
+
+def _shift_alarm_send_media_key(action):
+    subprocess.run(
+        [SHIFT_ALARM_MEDIA_KEY_PYTHON, SHIFT_ALARM_MEDIA_KEY_SCRIPT, action],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10, check=False,
+    )
+
+
 def _shift_alarm_reset_elmedia_playlist():
     subprocess.run(
         ["/usr/bin/killall", "Elmedia Video Player"],
@@ -1205,6 +1227,21 @@ def open_shift_alarm_random_sites(request: Request):
     if not urls:
         raise HTTPException(status_code=409, detail="북마크를 불러올 수 없습니다")
     return {"ok": True, "message": f"{len(urls)}개 열었습니다", "urls": urls}
+
+
+class ShiftAlarmTransportRequest(BaseModel):
+    action: str  # playpause | next | previous
+
+
+@app.post("/api/shift-alarm/media/transport")
+def shift_alarm_media_transport(body: ShiftAlarmTransportRequest, request: Request):
+    _require_owner(request)
+    if body.action not in ("playpause", "next", "previous"):
+        raise HTTPException(status_code=400, detail="지원하지 않는 동작입니다")
+    if not _shift_alarm_elmedia_running():
+        raise HTTPException(status_code=409, detail="Elmedia가 실행되고 있지 않습니다")
+    _shift_alarm_send_media_key(body.action)
+    return {"ok": True}
 
 
 def _read_career_card(filename: str):

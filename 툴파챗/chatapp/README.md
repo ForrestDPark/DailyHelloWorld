@@ -1,5 +1,14 @@
 # 툴파챗
 
+## Shift Alarm 대시보드에 Elmedia 재생/일시정지·다음곡·이전곡 버튼 (2026-09-14)
+
+**사용자 요청**: "엘엠미디어 재생중일때 일시정지랑 다음곡 이전곡 넘어가는 버튼도있으면 좋겠어".
+
+- Elmedia는 샌드박스 빌드라 앱별 pause/next 제어가 안 돼 시스템 미디어 키(`NX_KEYTYPE_PLAY`/`NEXT`/`PREVIOUS`)를 posts한다. 이 키 전송(`Quartz.CGEventPost`)은 호출 프로세스에 macOS Accessibility 권한이 필요한데, 서버의 venv 인터프리터에 pyobjc를 새로 설치해 직접 호출하면 또 다른 신원의 권한 승인 문제가 생길 수 있어, 새 독립 스크립트 `shift_alarm/send_media_key.py`를 만들고 서버가 `/opt/anaconda3/bin/python3`(shift_alarm.py와 같은 인터프리터)로 서브프로세스 실행해 이미 있을 권한을 재사용한다.
+- 새 엔드포인트 `POST /api/shift-alarm/media/transport`(`{"action":"playpause"|"next"|"previous"}`, 소유자 전용). Elmedia가 실행 중이 아니면 409로 거부해 엉뚱한 앱의 재생 상태를 건드리지 않는다.
+- 대시보드에 ⏮️/⏯️/⏭️ 버튼 추가. 자세한 배경·검증 내용은 `shift_alarm/README.md` 89번 항목 참고.
+- 테스트 4건 추가, 서버 전체 32건 통과.
+
 ## 음량 슬라이더 + 추천 사이트 열기 + Elmedia Automation 팝업 수정 (2026-09-14)
 
 - **좋아요 재생하기 Automation 팝업 수정**: `open -a "Elmedia Video Player" <트랙>`이 샌드박스 앱에 파일을 건네는 과정에서 Automation 승인을 요구하는데, launchd 프로세스는 신원이 불안정해("bin") 매번 다시 떴다. `shift_alarm/ElmediaOpenHelper.app`(고정 경로·서명, `open -na`)로 그 한 단계만 위임 — `worker/persona_worker.py`·`server/app.py`·`shift_alarm.py` 세 곳 모두 같은 helper를 쓰도록 고쳤다. 자세한 원인·재빌드 방법은 `shift_alarm/README.md` 87번 항목 참고.

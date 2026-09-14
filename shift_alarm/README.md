@@ -1105,3 +1105,13 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 
 - 툴파챗 Shift Alarm 대시보드의 음량 컨트롤을 −10/30%/50%/70%/+10 버튼에서 실제 슬라이더(`<input type="range">`)로 바꿨다. 드래그 중(`input` 이벤트)에는 화면 숫자만 갱신하고, 손을 뗄 때(`change` 이벤트)만 서버에 실제 반영해 드래그 한 번에 API가 여러 번 불리지 않게 했다.
 - `🎲 추천 사이트 열기` 버튼을 추가했다 — 메뉴바의 `🎲 추천 사이트 열기(天 폴더 랜덤 3개)`와 완전히 같은 로직(`pick_random_bookmarks`/`open_random_bookmarks`)을 `chatapp/server/app.py`에 복제하고, **같은 히스토리 파일**(`~/.shift_alarm_random_bookmark_history.json`)을 공유해 메뉴바에서 이미 추천된 URL이 대시보드에서 또 나오지 않는다(반대 방향도 마찬가지). Chrome은 샌드박스 빌드가 아니라 위 Elmedia 항목과 달리 `open -a`에 Automation 승인이 필요 없어 helper 없이 직접 연다.
+
+## 89. ⏯️ Shift Alarm 대시보드에 Elmedia 재생/일시정지·다음곡·이전곡 버튼 (★ 2026-09-14 추가)
+
+**사용자 요청**: "엘엠미디어 재생중일때 일시정지랑 다음곡 이전곡 넘어가는 버튼도있으면 좋겠어".
+
+- Elmedia는 샌드박스 빌드라 표준 AppleScript `pause`/`next track` 동사가 없다(★2026-08-29 항목과 같은 제약) — 대신 시스템 전체 미디어 키(`NX_KEYTYPE_PLAY`=16·`NX_KEYTYPE_NEXT`=17·`NX_KEYTYPE_PREVIOUS`=18)를 `Quartz.CGEventPost`로 posts한다.
+- **왜 별도 스크립트로 뺐나**: 이 키 전송은 호출 프로세스에 macOS Accessibility 권한이 필요하다. 툴파챗 서버(`chatapp/server/.venv`)에 pyobjc를 새로 설치해 그 venv 인터프리터가 직접 호출하면, 이 프로젝트가 이미 여러 번 겪은 것과 같은 "새 신원마다 새 권한 승인 필요" 문제가 또 생길 수 있다. 대신 새 독립 스크립트 `shift_alarm/send_media_key.py`를 만들고, 서버가 `subprocess.run(["/opt/anaconda3/bin/python3", "send_media_key.py", action])`로 **shift_alarm.py와 같은 인터프리터 신원을 빌려 써서** 이미 걸려 있(었)을 권한을 재사용한다. 서버 venv에는 pyobjc를 설치하지 않았다.
+- Elmedia가 실행되고 있지 않으면(`pgrep`) 아예 키를 보내지 않고 409를 돌려준다 — 미디어 키는 시스템 전체에 영향을 주는 토글이라, 엉뚱하게 다른 앱의 재생 상태를 건드리지 않기 위해서다.
+- 대시보드에 ⏮️(이전곡)·⏯️(재생/일시정지)·⏭️(다음곡) 세 버튼을 추가했다. 실제로 Elmedia가 켜져 있는 상태에서 재생/일시정지 토글 API 호출이 200으로 성공하는 것까지 확인했다(음악이 실제로 멈췄다 다시 재생됐는지는 사용자 확인 필요 — TCC.db에서 kTCCServiceAccessibility 항목을 직접 조회할 수 없어 권한이 실제로 걸려 있는지는 코드로 재확인 불가).
+- 테스트 4건 추가 — 미디어 키가 shift_alarm.py와 같은 인터프리터·스크립트 경로로 호출되는지, Elmedia 미실행 시 409, 잘못된 동작 400, 비소유자 403.

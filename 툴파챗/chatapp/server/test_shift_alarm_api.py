@@ -371,6 +371,37 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertEqual(urls, ["https://example.com/1"])
         mock_subprocess.Popen.assert_called_once_with(["open", "-a", "Google Chrome", "https://example.com/1"])
 
+    def test_transport_sends_media_key_when_elmedia_running(self):
+        with patch.object(module, "_shift_alarm_elmedia_running", return_value=True), \
+             patch.object(module, "_shift_alarm_send_media_key") as mock_send:
+            result = module.shift_alarm_media_transport(
+                module.ShiftAlarmTransportRequest(action="next"), owner_request()
+            )
+        mock_send.assert_called_once_with("next")
+        self.assertEqual(result, {"ok": True})
+
+    def test_transport_uses_shift_alarm_python_identity_not_server_venv(self):
+        """★ 2026-09-14: Quartz.CGEventPost는 Accessibility 권한이 필요한데,
+        서버 venv가 아니라 shift_alarm.py와 같은 /opt/anaconda3/bin/python3
+        신원을 빌려 써야 새 권한 승인을 또 요구하지 않는다."""
+        with patch.object(module, "subprocess") as mock_subprocess:
+            module._shift_alarm_send_media_key("playpause")
+        args = mock_subprocess.run.call_args.args[0]
+        self.assertEqual(args[0], module.SHIFT_ALARM_MEDIA_KEY_PYTHON)
+        self.assertEqual(args[1], module.SHIFT_ALARM_MEDIA_KEY_SCRIPT)
+        self.assertEqual(args[2], "playpause")
+
+    def test_transport_409_when_elmedia_not_running(self):
+        with patch.object(module, "_shift_alarm_elmedia_running", return_value=False):
+            with self.assertRaises(HTTPException) as raised:
+                module.shift_alarm_media_transport(module.ShiftAlarmTransportRequest(action="next"), owner_request())
+        self.assertEqual(raised.exception.status_code, 409)
+
+    def test_transport_rejects_unknown_action(self):
+        with self.assertRaises(HTTPException) as raised:
+            module.shift_alarm_media_transport(module.ShiftAlarmTransportRequest(action="shuffle"), owner_request())
+        self.assertEqual(raised.exception.status_code, 400)
+
     def test_non_owner_cannot_control_volume_or_playback(self):
         with self.assertRaises(HTTPException) as raised:
             module.get_shift_alarm_volume(signed_in_request())
@@ -380,6 +411,9 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 403)
         with self.assertRaises(HTTPException) as raised:
             module.play_shift_alarm_media(module.ShiftAlarmPlayRequest(playlist="favorites"), signed_in_request())
+        self.assertEqual(raised.exception.status_code, 403)
+        with self.assertRaises(HTTPException) as raised:
+            module.shift_alarm_media_transport(module.ShiftAlarmTransportRequest(action="next"), signed_in_request())
         self.assertEqual(raised.exception.status_code, 403)
 
 
