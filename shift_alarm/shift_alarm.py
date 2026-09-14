@@ -3606,16 +3606,18 @@ def run_youtube_mp3_download(url, folder_path):
         return False, f"yt-dlp를 찾을 수 없습니다: {yt_dlp}"
 
     download_url, source_label, is_liked_playlist = _normalize_youtube_mp3_url(url)
+    download_query = parse_qs(urlparse(download_url).query)
+    is_playlist = bool((download_query.get("list") or [""])[0])
 
     # 기존에 정상 동작하던 Automator 명령과 동일하게 로그인된 Chrome에서
     # 쿠키를 직접 읽는다. 수동 export 파일은 좋아요 목록용 로그인 쿠키가
     # 일부 빠져 있어 공개 영상 한 개는 되지만 list=LL 전체 조회에는 실패했다.
-    # 좋아요 목록은 주소만 먼저 스냅샷한 뒤 영상마다 yt-dlp를 새로 실행한다.
+    # 재생목록은 주소만 먼저 스냅샷한 뒤 영상마다 yt-dlp를 새로 실행한다.
     # 매 실행마다 Chrome의 최신 쿠키를 다시 읽어 장시간 배치 중 세션 회전을 피한다.
     cookie_args = ["--cookies-from-browser", "chrome"]
     target_args = (
         ["$item_url"]
-        if is_liked_playlist else [download_url]
+        if is_playlist else [download_url]
     )
     # 저장 폴더에 영구 기록을 둬 앱을 재실행해도 이미 받은 영상은 다시 받지 않는다.
     # 이전 버전으로 내려받은 MP3도 파일명의 [YouTube ID]를 읽어 기록에 편입한다.
@@ -3646,7 +3648,7 @@ def run_youtube_mp3_download(url, folder_path):
     launcher = "/tmp/_youtube_mp3_download.command"
     filename_template = (
         "$sequence_number - %(title)s [%(id)s].%(ext)s"
-        if is_liked_playlist else
+        if is_playlist else
         "%(playlist_index&{} - |)s%(title)s [%(id)s].%(ext)s"
     )
     output_template = os.path.join(folder_path, filename_template)
@@ -3711,30 +3713,32 @@ def run_youtube_mp3_download(url, folder_path):
             video_pieces.append(shlex.quote(arg))
     video_command = " ".join(video_pieces)
     quoted_target = shlex.quote(os.path.abspath(folder_path))
-    if is_liked_playlist:
+    if is_playlist:
         snapshot_command = " ".join(shlex.quote(arg) for arg in [
             yt_dlp, "--cookies-from-browser", "chrome", "--flat-playlist",
             "--print", "%(webpage_url)s", download_url,
         ])
+        collection_name = "좋아요 목록" if is_liked_playlist else "재생목록"
         snapshot_block = (
-            "echo '📋 로그인 쿠키로 좋아요 목록 주소를 한 번만 가져옵니다.'\n"
-            f"{snapshot_command} > \"$job_tmp/liked_urls.txt\"\n"
-            "if [[ $? -ne 0 || ! -s \"$job_tmp/liked_urls.txt\" ]]; then\n"
-            "  echo '❌ 좋아요 목록을 읽지 못했습니다. Chrome에서 YouTube에 다시 로그인하세요.'\n"
+            f"echo '📋 로그인 쿠키로 {collection_name} 주소만 먼저 가져옵니다.'\n"
+            f"{snapshot_command} > \"$job_tmp/playlist_urls.txt\"\n"
+            "if [[ $? -ne 0 || ! -s \"$job_tmp/playlist_urls.txt\" ]]; then\n"
+            f"  echo '❌ {collection_name}을 읽지 못했습니다. Chrome의 YouTube 로그인 상태를 확인하세요.'\n"
             "  exit 1\n"
             "fi\n"
-            "discovered_total=$(wc -l < \"$job_tmp/liked_urls.txt\" | tr -d ' ')\n"
-            "echo \"📚 YouTube 좋아요 전체 목록: ${discovered_total}개\"\n"
+            "discovered_total=$(wc -l < \"$job_tmp/playlist_urls.txt\" | tr -d ' ')\n"
+            f"echo \"📚 {collection_name}: ${{discovered_total}}개\"\n"
             "while IFS= read -r saved_url; do\n"
             "  saved_id=${saved_url#*v=}; saved_id=${saved_id%%&*}\n"
             f"  if ! grep -Fqx \"youtube $saved_id\" {shlex.quote(archive_path)}; then\n"
             "    echo \"$saved_url\" >> \"$job_tmp/pending_urls.txt\"\n"
             "  fi\n"
-            "done < \"$job_tmp/liked_urls.txt\"\n"
-            "mv \"$job_tmp/pending_urls.txt\" \"$job_tmp/liked_urls.txt\" 2>/dev/null || : > \"$job_tmp/liked_urls.txt\"\n"
-            "total_urls=$(wc -l < \"$job_tmp/liked_urls.txt\" | tr -d ' ')\n"
+            "done < \"$job_tmp/playlist_urls.txt\"\n"
+            "mv \"$job_tmp/pending_urls.txt\" \"$job_tmp/playlist_urls.txt\" 2>/dev/null || : > \"$job_tmp/playlist_urls.txt\"\n"
+            "total_urls=$(wc -l < \"$job_tmp/playlist_urls.txt\" | tr -d ' ')\n"
             "echo \"✅ 기존 MP3 제외 완료 — 새로 받을 영상 ${total_urls}개\"\n"
             "if [[ $total_urls -eq 0 ]]; then echo '🎉 이미 전부 다운로드되어 있습니다.'; exit 0; fi\n"
+            "echo '⏹ 원할 때 Ctrl+C를 누르면 완료된 MP3는 남고 즉시 멈춥니다.'\n"
         )
     else:
         snapshot_block = ""
@@ -3746,7 +3750,7 @@ def run_youtube_mp3_download(url, folder_path):
         f"  sequence_number=$(({highest_sequence} + success_count + 1))\n"
         "  echo\n"
         "  echo \"══════════ [${item_index}/${total_urls}] 새 쿠키로 개별 다운로드 ══════════\"\n"
-        if is_liked_playlist else ""
+        if is_playlist else ""
     )
     loop_close = (
         "  if [[ $job_status -eq 0 ]]; then\n"
@@ -3757,10 +3761,10 @@ def run_youtube_mp3_download(url, folder_path):
         "    ((failed_count++))\n"
         "  fi\n"
         "  sleep 1\n"
-        "done < \"$job_tmp/liked_urls.txt\"\n"
+        "done < \"$job_tmp/playlist_urls.txt\"\n"
         "echo \"📊 개별 처리 결과: 성공 ${success_count}개 · 실패 ${failed_count}개\"\n"
         "(( success_count > 0 )) && job_status=0\n"
-        if is_liked_playlist else ""
+        if is_playlist else ""
     )
     command = (
         "#!/bin/zsh\n"
