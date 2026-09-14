@@ -1518,7 +1518,7 @@ class ShiftAlarmVideoDownloadRequest(BaseModel):
 
 
 class ShiftAlarmVideoActionRequest(BaseModel):
-    action: str  # reveal_airdrop | icloud | delete
+    action: str  # reveal_airdrop | icloud | delete | cancel_transfer
 
 
 @app.post("/api/shift-alarm/media/transport")
@@ -1645,6 +1645,20 @@ def act_on_shift_alarm_library_video(file_id: str, body: ShiftAlarmVideoActionRe
                                      request: Request):
     _require_owner(request)
     path = _shift_alarm_av4_file(file_id)
+    if body.action == "cancel_transfer":
+        # ★ 2026-09-14: "전송중에서 멈춰있는데 어떻게하지" — 터널이 전송 도중
+        # 연결을 끊어버리면 스트리밍 제너레이터의 finally 블록이 아예 실행되지
+        # 않아 video_transfers 행이 영원히 "downloading" 상태로 남는다. 그
+        # 상태면 프런트엔드가 재생버튼을 계속 비활성화해 사용자가 다시
+        # 시도할 방법이 없었다. 이 상태를 "interrupted"로 강제 전환해 버튼을
+        # 다시 누를 수 있게 한다 — 원본 파일은 건드리지 않는다.
+        with _shift_alarm_video_db() as conn:
+            conn.execute(
+                "UPDATE video_transfers SET state='interrupted', updated_at=?, completed_at=? "
+                "WHERE file_id=? AND state='downloading'",
+                (_now(), _now(), file_id),
+            )
+        return {"ok": True, "message": "전송을 중지했습니다. 버튼을 다시 눌러 받아보세요"}
     if body.action == "delete":
         path.unlink(missing_ok=True)
         with _shift_alarm_video_db() as conn:

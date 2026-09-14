@@ -299,6 +299,34 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertEqual(state["sent_bytes"], 6)
         self.assertEqual(state["total_bytes"], 10)
 
+    def test_cancel_transfer_unsticks_a_stalled_downloading_row(self):
+        """★ 2026-09-14: "전송중에서 멈춰있는데 어떻게하지" — 터널이 전송 도중
+        연결을 끊으면 스트리밍 제너레이터의 finally가 실행되지 않아
+        video_transfers 행이 영원히 "downloading"으로 남고, 프런트엔드는 그
+        상태를 보고 재생버튼을 계속 비활성화해서 사용자가 재시도할 방법이
+        없었다. cancel_transfer 액션으로 강제로 "interrupted"로 돌려
+        버튼을 다시 누를 수 있게 한다."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            files = root / "av4"
+            files.mkdir()
+            video = files / "완성.mp4"
+            video.write_bytes(b"1234")
+            db = root / "downloads.db"
+            with patch.object(module, "SHIFT_ALARM_VIDEO_DIR", root), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_FILES", files), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_DB", db):
+                file_id = module._shift_alarm_av4_id(video)
+                module._shift_alarm_transfer_start(file_id, video, 0, 1_000_000)
+                result = module.act_on_shift_alarm_library_video(
+                    file_id, module.ShiftAlarmVideoActionRequest(action="cancel_transfer"), owner_request()
+                )
+                state = module._shift_alarm_transfer_states()[file_id]
+                file_still_exists = video.exists()
+        self.assertTrue(result["ok"])
+        self.assertEqual(state["state"], "interrupted")
+        self.assertTrue(file_still_exists, "원본 영상 파일은 건드리지 않아야 한다")
+
     def test_notifications_combine_system_updates_and_unread_chat(self):
         with tempfile.TemporaryDirectory() as directory:
             db_path = Path(directory) / "notifications.db"
