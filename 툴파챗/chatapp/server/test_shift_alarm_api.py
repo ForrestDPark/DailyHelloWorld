@@ -156,6 +156,23 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertEqual(saved["owner_username"], "local-owner")
         self.assertEqual(popen.call_args.args[0][1], str(worker))
 
+    def test_running_video_reports_real_staging_bytes_for_legacy_worker(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            job_dir = root / "staging" / "job"
+            job_dir.mkdir(parents=True)
+            (job_dir / "video.mp4").write_bytes(b"1234567")
+            status_file = root / "status.json"
+            status_file.write_text(json.dumps({
+                "job_id": "job", "state": "running", "stage": "영상 정보를 확인하는 중",
+                "progress": 1, "pid": 123,
+            }), encoding="utf-8")
+            with patch.object(module, "SHIFT_ALARM_VIDEO_DIR", root), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_STATUS_FILE", status_file), \
+                 patch("os.kill", return_value=None):
+                status = module._shift_alarm_video_status()
+        self.assertEqual(status["downloaded_bytes"], 7)
+
     def test_video_file_supports_authenticated_range_download(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

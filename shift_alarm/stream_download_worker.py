@@ -148,9 +148,11 @@ def run(request_path: Path) -> int:
         write_state(job_id=job_id, state="running", stage="영상 정보를 확인하는 중", progress=1, error=None)
         command = [
             YTDLP, "--no-playlist", "--no-part", "--no-overwrites", "--newline",
+            "--progress", "--progress-delta", "1",
             "--max-filesize", MAX_FILESIZE, "--merge-output-format", "mp4",
             "--output", str(job_dir / "%(title).120B [%(id)s].%(ext)s"),
-            "--progress-template", "download:PROGRESS:%(progress._percent_str)s",
+            "--print", "before_dl:TOTAL:%(filesize,filesize_approx)s",
+            "--progress-template", "download:PROGRESS:%(progress._percent_str)s:%(progress.downloaded_bytes)s:%(progress.total_bytes_estimate)s",
             "--print", "after_move:RESULT:%(filepath)s", url,
         ]
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
@@ -159,12 +161,22 @@ def run(request_path: Path) -> int:
         for line in process.stdout:
             line = line.strip()
             if line.startswith("PROGRESS:"):
-                match = re.search(r"([0-9]+(?:\.[0-9]+)?)%", line)
+                fields = line.split(":", 3)
+                match = re.search(r"([0-9]+(?:\.[0-9]+)?)%", fields[1] if len(fields) > 1 else "")
                 if match:
                     if sum(path.stat().st_size for path in job_dir.iterdir() if path.is_file()) > 5 * 1024 ** 3:
                         process.terminate()
                         raise RuntimeError("다운로드가 5GB 제한을 넘었습니다")
-                    write_state(state="running", stage="영상을 다운로드하는 중", progress=min(94, float(match.group(1)) * .93))
+                    downloaded = int(float(fields[2])) if len(fields) > 2 and fields[2] not in {"NA", "None"} else None
+                    total = int(float(fields[3])) if len(fields) > 3 and fields[3] not in {"NA", "None"} else None
+                    write_state(state="running", stage="영상을 다운로드하는 중",
+                                progress=min(94, float(match.group(1)) * .93),
+                                downloaded_bytes=downloaded, total_bytes=total)
+            elif line.startswith("TOTAL:"):
+                value = line[6:].strip()
+                if value not in {"NA", "None"}:
+                    write_state(state="running", stage="영상을 다운로드하는 중",
+                                total_bytes=int(float(value)))
             elif line.startswith("RESULT:"):
                 result_path = Path(line[7:])
         return_code = process.wait()

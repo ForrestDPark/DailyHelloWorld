@@ -658,9 +658,17 @@ def _shift_alarm_video_status():
             os.kill(int(status.get("pid", 0)), 0)
         except (OSError, TypeError, ValueError):
             status.update(state="failed", stage="서버 재시작 또는 작업 중단으로 다운로드가 끝나지 않았습니다", progress=0)
+    if status.get("state") == "running" and not status.get("downloaded_bytes"):
+        job_dir = SHIFT_ALARM_VIDEO_DIR / "staging" / str(status.get("job_id") or "")
+        try:
+            status["downloaded_bytes"] = sum(
+                path.stat().st_size for path in job_dir.iterdir() if path.is_file()
+            )
+        except OSError:
+            pass
     return {key: status.get(key) for key in (
         "job_id", "state", "stage", "progress", "filename", "destination",
-        "created_at", "updated_at", "completed_at",
+        "created_at", "updated_at", "completed_at", "downloaded_bytes", "total_bytes",
     )}
 
 
