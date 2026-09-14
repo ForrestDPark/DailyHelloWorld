@@ -50,7 +50,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, File, Header, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -612,6 +612,8 @@ SHIFT_ALARM_VIDEO_DIR = Path(os.path.expanduser("~/.tulpachat/video_downloads"))
 SHIFT_ALARM_VIDEO_STATUS_FILE = SHIFT_ALARM_VIDEO_DIR / "status.json"
 SHIFT_ALARM_VIDEO_WORKER = REPO_ROOT / "shift_alarm" / "stream_download_worker.py"
 SHIFT_ALARM_VIDEO_PYTHON = sys.executable
+SHIFT_ALARM_VIDEO_DB = SHIFT_ALARM_VIDEO_DIR / "downloads.db"
+SHIFT_ALARM_VIDEO_FILES = SHIFT_ALARM_VIDEO_DIR / "files"
 
 
 def _shift_alarm_save_now_playing(playlist):
@@ -660,6 +662,50 @@ def _shift_alarm_video_status():
         "job_id", "state", "stage", "progress", "filename", "destination",
         "created_at", "updated_at", "completed_at",
     )}
+
+
+def _shift_alarm_video_db():
+    SHIFT_ALARM_VIDEO_DIR.mkdir(parents=True, exist_ok=True)
+    os.chmod(SHIFT_ALARM_VIDEO_DIR, 0o700)
+    conn = sqlite3.connect(SHIFT_ALARM_VIDEO_DB)
+    os.chmod(SHIFT_ALARM_VIDEO_DB, 0o600)
+    conn.row_factory = sqlite3.Row
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS video_downloads (
+            job_id TEXT PRIMARY KEY, owner_username TEXT NOT NULL,
+            filename TEXT NOT NULL, file_path TEXT NOT NULL, size_bytes INTEGER NOT NULL,
+            created_at TEXT NOT NULL, completed_at TEXT NOT NULL, expires_at TEXT NOT NULL,
+            downloaded_at TEXT, icloud_sent_at TEXT
+        )
+    """)
+    return conn
+
+
+def _shift_alarm_cleanup_videos(conn):
+    rows = conn.execute(
+        "SELECT job_id, file_path FROM video_downloads WHERE expires_at <= ?", (_now(),)
+    ).fetchall()
+    for row in rows:
+        path = Path(row["file_path"])
+        if path.parent == SHIFT_ALARM_VIDEO_FILES:
+            path.unlink(missing_ok=True)
+    conn.execute("DELETE FROM video_downloads WHERE expires_at <= ?", (_now(),))
+    conn.commit()
+
+
+def _shift_alarm_owned_video(job_id, username):
+    conn = _shift_alarm_video_db()
+    _shift_alarm_cleanup_videos(conn)
+    row = conn.execute(
+        "SELECT * FROM video_downloads WHERE job_id=? AND owner_username=?", (job_id, username)
+    ).fetchone()
+    conn.close()
+    if not row:
+        raise HTTPException(status_code=404, detail="영상이 없거나 보관 기간이 끝났습니다")
+    path = Path(row["file_path"])
+    if path.parent != SHIFT_ALARM_VIDEO_FILES or not path.is_file():
+        raise HTTPException(status_code=404, detail="영상 파일을 찾을 수 없습니다")
+    return row, path
 
 
 def _shift_alarm_collect_all_bookmark_urls(node):
@@ -1334,6 +1380,10 @@ class ShiftAlarmVideoDownloadRequest(BaseModel):
     approved: bool = False
 
 
+class ShiftAlarmVideoActionRequest(BaseModel):
+    action: str  # reveal_airdrop | icloud | delete
+
+
 @app.post("/api/shift-alarm/media/transport")
 def shift_alarm_media_transport(body: ShiftAlarmTransportRequest, request: Request):
     _require_owner(request)
@@ -1348,7 +1398,31 @@ def shift_alarm_media_transport(body: ShiftAlarmTransportRequest, request: Reque
 @app.get("/api/shift-alarm/video-download")
 def shift_alarm_video_download_status(request: Request):
     _require_owner(request)
-    return _shift_alarm_video_status()
+    status = _shift_alarm_video_status()
+    username = _request_username(request)
+    conn = _shift_alarm_video_db()
+    _shift_alarm_cleanup_videos(conn)
+    rows = conn.execute(
+        "SELECT job_id,filename,size_bytes,completed_at,expires_at FROM video_downloads "
+        "WHERE owner_username=? ORDER BY completed_at DESC", (username,)
+    ).fetchall()
+    conn.close()
+    status["downloads"] = [{
+        "job_id": row["job_id"], "filename": row["filename"],
+        "size_bytes": row["size_bytes"], "completed_at": row["completed_at"],
+        "expires_at": row["expires_at"],
+        "download_url": f"/api/shift-alarm/video-download/{row['job_id']}/file",
+    } for row in rows]
+    if status.get("state") == "complete" and status.get("job_id"):
+        try:
+            row, _path = _shift_alarm_owned_video(status["job_id"], username)
+            status.update(
+                available=True, size_bytes=row["size_bytes"], expires_at=row["expires_at"],
+                download_url=f"/api/shift-alarm/video-download/{row['job_id']}/file",
+            )
+        except HTTPException:
+            status.update(available=False, stage="보관 기간이 끝났거나 파일이 삭제됐습니다")
+    return status
 
 
 @app.post("/api/shift-alarm/video-download")
@@ -1366,7 +1440,10 @@ def start_shift_alarm_video_download(body: ShiftAlarmVideoDownloadRequest, reque
     SHIFT_ALARM_VIDEO_DIR.mkdir(parents=True, exist_ok=True)
     job_id = uuid.uuid4().hex
     request_file = SHIFT_ALARM_VIDEO_DIR / f"request_{job_id}.json"
-    request_file.write_text(json.dumps({"job_id": job_id, "url": url}), encoding="utf-8")
+    request_file.write_text(json.dumps({
+        "job_id": job_id, "url": url, "owner_username": _request_username(request),
+        "created_at": _now(),
+    }), encoding="utf-8")
     os.chmod(request_file, 0o600)
     queued = {
         "job_id": job_id, "state": "queued", "stage": "Mac 다운로드 작업 시작 대기",
@@ -1388,6 +1465,84 @@ def start_shift_alarm_video_download(body: ShiftAlarmVideoDownloadRequest, reque
         SHIFT_ALARM_VIDEO_STATUS_FILE.write_text(json.dumps(queued, ensure_ascii=False, indent=2), encoding="utf-8")
         raise HTTPException(status_code=503, detail=queued["stage"]) from exc
     return {"ok": True, **queued}
+
+
+@app.get("/api/shift-alarm/video-download/{job_id}/file")
+def download_shift_alarm_video(job_id: str, request: Request,
+                               range_header: Optional[str] = Header(None, alias="Range")):
+    _require_owner(request)
+    row, path = _shift_alarm_owned_video(job_id, _request_username(request))
+    with _shift_alarm_video_db() as conn:
+        conn.execute("UPDATE video_downloads SET downloaded_at=? WHERE job_id=?", (_now(), job_id))
+    size = path.stat().st_size
+    start, end, status_code = 0, size - 1, 200
+    if range_header:
+        match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header.strip())
+        if not match or (not match.group(1) and not match.group(2)):
+            raise HTTPException(status_code=416, detail="지원하지 않는 구간 요청입니다")
+        if match.group(1):
+            start = int(match.group(1))
+            end = int(match.group(2) or end)
+        else:
+            length = int(match.group(2))
+            start = max(0, size - length)
+        end = min(end, size - 1)
+        if start > end or start >= size:
+            raise HTTPException(status_code=416, detail="파일 범위를 벗어났습니다")
+        status_code = 206
+    length = end - start + 1
+
+    def chunks():
+        with path.open("rb") as source:
+            source.seek(start)
+            remaining = length
+            while remaining:
+                data = source.read(min(1024 * 1024, remaining))
+                if not data:
+                    break
+                remaining -= len(data)
+                yield data
+
+    headers = {
+        "Accept-Ranges": "bytes", "Content-Length": str(length),
+        "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(row['filename'])}",
+    }
+    if status_code == 206:
+        headers["Content-Range"] = f"bytes {start}-{end}/{size}"
+    return StreamingResponse(chunks(), status_code=status_code, media_type="video/mp4", headers=headers)
+
+
+@app.post("/api/shift-alarm/video-download/{job_id}/action")
+def act_on_shift_alarm_video(job_id: str, body: ShiftAlarmVideoActionRequest, request: Request):
+    _require_owner(request)
+    row, path = _shift_alarm_owned_video(job_id, _request_username(request))
+    if body.action == "delete":
+        path.unlink(missing_ok=True)
+        with _shift_alarm_video_db() as conn:
+            conn.execute("DELETE FROM video_downloads WHERE job_id=?", (job_id,))
+        return {"ok": True, "message": "Mac 보관 파일을 삭제했습니다"}
+    if body.action == "reveal_airdrop":
+        subprocess.Popen(["/usr/bin/open", "-R", str(path)], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["/usr/bin/open", "airdrop://"], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return {"ok": True, "message": "Mac에서 파일과 AirDrop 창을 열었습니다"}
+    if body.action == "icloud":
+        destination = Path(os.path.expanduser(
+            "~/Library/Mobile Documents/com~apple~CloudDocs/Shift Alarm Downloads"
+        )) / row["filename"]
+        manifest_dir = Path(os.path.expanduser("~/.shift_alarm_icloud_sync"))
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        manifest = manifest_dir / f"manifest_{uuid.uuid4().hex}.txt"
+        manifest.write_text(f"{path}\t{destination}\n", encoding="utf-8")
+        os.chmod(manifest, 0o600)
+        helper = REPO_ROOT / "shift_alarm" / "iCloudSync.app"
+        if not helper.is_dir():
+            raise HTTPException(status_code=503, detail="iCloud 전송 도우미를 찾을 수 없습니다")
+        subprocess.Popen(["/usr/bin/open", "-na", str(helper)], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return {"ok": True, "message": "iCloud Drive 전송을 요청했습니다"}
+    raise HTTPException(status_code=400, detail="지원하지 않는 파일 동작입니다")
 
 
 def _read_career_card(filename: str):
@@ -2678,6 +2833,11 @@ def _require_owner(request):
         )
     if not is_owner_request:
         raise HTTPException(status_code=403, detail="소유자만 할 수 있습니다")
+
+
+def _request_username(request):
+    user = getattr(request.state, "user", None)
+    return str(user["username"] if user else APP_USERNAME or "local-owner")
 
 
 @app.get("/api/version")

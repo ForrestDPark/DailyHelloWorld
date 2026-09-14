@@ -153,7 +153,37 @@ class ShiftAlarmApiTests(unittest.TestCase):
             saved = json.loads(request_path.read_text(encoding="utf-8"))
         self.assertTrue(result["ok"])
         self.assertEqual(saved["url"], "https://example.com/video.m3u8")
+        self.assertEqual(saved["owner_username"], "local-owner")
         self.assertEqual(popen.call_args.args[0][1], str(worker))
+
+    def test_video_file_supports_authenticated_range_download(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            files = root / "files"
+            files.mkdir()
+            video = files / "job_video.mp4"
+            video.write_bytes(b"0123456789")
+            db = root / "downloads.db"
+            with patch.object(module, "SHIFT_ALARM_VIDEO_DIR", root), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_FILES", files), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_DB", db):
+                with module._shift_alarm_video_db() as conn:
+                    conn.execute(
+                        "INSERT INTO video_downloads "
+                        "(job_id,owner_username,filename,file_path,size_bytes,created_at,completed_at,expires_at) "
+                        "VALUES (?,?,?,?,?,?,?,?)",
+                        ("job", "local-owner", "영상.mp4", str(video), 10, module._now(),
+                         module._now(), "2999-01-01T00:00:00+00:00"),
+                    )
+                response = module.download_shift_alarm_video("job", owner_request(), "bytes=2-5")
+        self.assertEqual(response.status_code, 206)
+        self.assertEqual(response.headers["content-range"], "bytes 2-5/10")
+        self.assertEqual(response.headers["content-length"], "4")
+
+    def test_video_file_is_owner_only(self):
+        with self.assertRaises(HTTPException) as raised:
+            module.download_shift_alarm_video("job", signed_in_request("other-user"), None)
+        self.assertEqual(raised.exception.status_code, 403)
 
     def test_notifications_combine_system_updates_and_unread_chat(self):
         with tempfile.TemporaryDirectory() as directory:
