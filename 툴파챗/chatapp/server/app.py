@@ -1481,7 +1481,7 @@ def shift_alarm_video_download_status(request: Request):
     conn = _shift_alarm_video_db()
     _shift_alarm_cleanup_videos(conn)
     rows = conn.execute(
-        "SELECT job_id,filename,size_bytes,completed_at,expires_at FROM video_downloads "
+        "SELECT job_id,filename,file_path,size_bytes,completed_at,expires_at FROM video_downloads "
         "WHERE owner_username=? ORDER BY completed_at DESC", (username,)
     ).fetchall()
     conn.close()

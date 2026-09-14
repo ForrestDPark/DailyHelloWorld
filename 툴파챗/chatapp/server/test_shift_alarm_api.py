@@ -225,6 +225,33 @@ class ShiftAlarmApiTests(unittest.TestCase):
             )
         self.assertEqual(raised.exception.status_code, 403)
 
+    def test_video_status_matches_managed_db_row_to_av4_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            files = root / "av4"
+            files.mkdir()
+            video = files / "완성.mp4"
+            video.write_bytes(b"1234")
+            db = root / "downloads.db"
+            status_file = root / "status.json"
+            status_file.write_text(json.dumps({"state": "idle", "progress": 0}), encoding="utf-8")
+            with patch.object(module, "SHIFT_ALARM_VIDEO_DIR", root), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_FILES", files), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_DB", db), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_STATUS_FILE", status_file):
+                with module._shift_alarm_video_db() as conn:
+                    conn.execute(
+                        "INSERT INTO video_downloads "
+                        "(job_id,owner_username,filename,file_path,size_bytes,created_at,completed_at,expires_at) "
+                        "VALUES (?,?,?,?,?,?,?,?)",
+                        ("job", "local-owner", video.name, str(video), 4, module._now(),
+                         module._now(), "2999-01-01T00:00:00+00:00"),
+                    )
+                result = module.shift_alarm_video_download_status(owner_request())
+        self.assertEqual(len(result["downloads"]), 1)
+        self.assertTrue(result["downloads"][0]["temporary"])
+        self.assertEqual(result["downloads"][0]["filename"], "완성.mp4")
+
     def test_notifications_combine_system_updates_and_unread_chat(self):
         with tempfile.TemporaryDirectory() as directory:
             db_path = Path(directory) / "notifications.db"
