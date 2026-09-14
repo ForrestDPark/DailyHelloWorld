@@ -40,11 +40,16 @@ async function playMedia(playlist,button){const original=button.textContent;butt
 // 모바일 브라우저가 "사용자 동작 없이 뜬 팝업"으로 보고 막아버리므로, 클릭
 // 직후(아직 fetch 전, 동기 실행 중) 빈 탭을 먼저 열어두고 URL이 오면
 // 그 탭의 location만 바꾼다.
-async function openRecommendedSites(button){const original=button.textContent;button.disabled=true;button.textContent="여는 중…";const slots=[window.open("about:blank","_blank"),window.open("about:blank","_blank"),window.open("about:blank","_blank")];try{const data=await api("/api/shift-alarm/media/open-sites",{method:"POST"});const urls=data.urls||[];urls.forEach((url,i)=>{const win=slots[i];if(win)win.location=url;else window.open(url,"_blank")});slots.slice(urls.length).forEach(win=>win&&win.close());notice(data.message)}catch(e){slots.forEach(win=>win&&win.close());notice(e.message,true)}finally{button.disabled=false;button.textContent=original}}
+let recommendedSiteUrls=[];
+function renderRecommendedSites(urls){recommendedSiteUrls=urls;const panel=$("recommended-sites"),list=$("recommended-sites-list");list.replaceChildren();urls.forEach((url,index)=>{const link=document.createElement("a"),number=document.createElement("span"),copy=document.createElement("span"),host=document.createElement("b"),path=document.createElement("span"),arrow=document.createElement("span"),parsed=new URL(url);link.className="recommended-site";link.href=url;link.target="_blank";link.rel="noopener noreferrer";number.className="recommended-site-index";number.textContent=index+1;copy.className="recommended-site-copy";host.textContent=parsed.hostname;path.textContent=`${parsed.pathname}${parsed.search}`;copy.append(host,path);arrow.className="recommended-site-arrow";arrow.textContent="›";link.append(number,copy,arrow);list.append(link)});panel.classList.remove("hidden");$("open-first-site").disabled=!urls.length}
+async function loadRecommendedSites(button){const original=button.textContent;button.disabled=true;button.textContent="고르는 중…";try{const data=await api("/api/shift-alarm/media/open-sites",{method:"POST"});renderRecommendedSites(data.urls||[]);notice(`${data.urls?.length||0}개 추천을 골랐습니다.`)}catch(e){notice(e.message,true)}finally{button.disabled=false;button.textContent=original}}
 async function sendTransport(action,button){button.disabled=true;try{await api("/api/shift-alarm/media/transport",{method:"POST",body:JSON.stringify({action})})}catch(e){notice(e.message,true)}finally{button.disabled=false}}
 $("play-favorites").addEventListener("click",e=>playMedia("favorites",e.currentTarget));
 $("play-classical").addEventListener("click",e=>playMedia("classical",e.currentTarget));
-$("open-sites").addEventListener("click",e=>openRecommendedSites(e.currentTarget));
+$("open-sites").addEventListener("click",e=>loadRecommendedSites(e.currentTarget));
+$("reroll-sites").addEventListener("click",e=>loadRecommendedSites(e.currentTarget));
+$("open-first-site").addEventListener("click",()=>{if(recommendedSiteUrls[0])window.open(recommendedSiteUrls[0],"_blank","noopener")});
+$("recommended-sites-close").addEventListener("click",()=>$("recommended-sites").classList.add("hidden"));
 // ★ 2026-09-14: "재생중일때 일시정지랑 다음곡 이전곡 넘어가는 버튼도있으면
 // 좋겠어" — 시스템 미디어 키를 눌러 Elmedia를 제어한다(서버가 shift_alarm.py와
 // 같은 인터프리터 신원으로 실행 — server/app.py 참고). Elmedia가 안 떠 있으면

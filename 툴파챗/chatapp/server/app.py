@@ -843,7 +843,11 @@ def _shift_alarm_pick_random_bookmarks(n=3, folder_name=SHIFT_ALARM_RANDOM_BOOKM
                     break
         if not folder:
             return []
-        urls = list(dict.fromkeys(_shift_alarm_collect_all_bookmark_urls(folder)))
+        urls = []
+        for url in dict.fromkeys(_shift_alarm_collect_all_bookmark_urls(folder)):
+            parsed = urllib.parse.urlsplit(url)
+            if parsed.scheme in {"http", "https"} and parsed.hostname:
+                urls.append(url)
         if not urls:
             return []
         current_urls = set(urls)

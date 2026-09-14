@@ -518,6 +518,18 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertEqual(result["urls"], ["https://example.com/1"])
         mock_subprocess.Popen.assert_not_called()
 
+    def test_random_sites_exclude_non_web_bookmarks(self):
+        bookmarks_payload = {"roots": {"bookmark_bar": {"type": "folder", "name": "天", "children": [
+            {"type": "url", "url": "javascript:alert(1)"},
+            {"type": "url", "url": "file:///private/tmp/example"},
+            {"type": "url", "url": "https://safe.example/video"},
+        ]}}}
+        with patch("builtins.open", mock_open(read_data=json.dumps(bookmarks_payload))), \
+             patch.object(module, "_shift_alarm_load_random_bookmark_history", return_value=[]), \
+             patch.object(module, "_shift_alarm_save_random_bookmark_history"):
+            result = module._shift_alarm_pick_random_bookmarks(3)
+        self.assertEqual(result, ["https://safe.example/video"])
+
     def test_transport_sends_media_key_when_elmedia_running(self):
         with patch.object(module, "_shift_alarm_elmedia_running", return_value=True), \
              patch.object(module, "_shift_alarm_send_media_key") as mock_send:
