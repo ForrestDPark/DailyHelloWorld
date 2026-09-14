@@ -108,6 +108,53 @@ class ShiftAlarmApiTests(unittest.TestCase):
             module.start_shift_alarm_sunzi_analysis(owner_request())
         self.assertEqual(raised.exception.status_code, 409)
 
+    def test_video_download_requires_explicit_owner_approval(self):
+        with self.assertRaises(HTTPException) as raised:
+            module.start_shift_alarm_video_download(
+                module.ShiftAlarmVideoDownloadRequest(url="https://example.com/video.m3u8"),
+                owner_request(),
+            )
+        self.assertEqual(raised.exception.status_code, 422)
+
+    def test_video_download_is_owner_only(self):
+        with self.assertRaises(HTTPException) as raised:
+            module.start_shift_alarm_video_download(
+                module.ShiftAlarmVideoDownloadRequest(
+                    url="https://example.com/video.m3u8", approved=True,
+                ), signed_in_request("other-user"),
+            )
+        self.assertEqual(raised.exception.status_code, 403)
+
+    def test_video_download_rejects_private_network_targets(self):
+        private_dns = [(2, 1, 6, "", ("127.0.0.1", 443))]
+        with patch("socket.getaddrinfo", return_value=private_dns), \
+             self.assertRaises(HTTPException) as raised:
+            module._validate_stream_download_url("https://example.test/video.m3u8")
+        self.assertEqual(raised.exception.status_code, 422)
+
+    def test_video_download_starts_only_the_fixed_worker(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state_dir = Path(directory)
+            worker = state_dir / "worker.py"
+            worker.write_text("pass", encoding="utf-8")
+            public_dns = [(2, 1, 6, "", ("93.184.216.34", 443))]
+            with patch.object(module, "SHIFT_ALARM_VIDEO_DIR", state_dir), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_STATUS_FILE", state_dir / "status.json"), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_WORKER", worker), \
+                 patch.object(module, "_shift_alarm_video_status", return_value={"state": "idle"}), \
+                 patch("socket.getaddrinfo", return_value=public_dns), \
+                 patch("subprocess.Popen") as popen:
+                result = module.start_shift_alarm_video_download(
+                    module.ShiftAlarmVideoDownloadRequest(
+                        url="https://example.com/video.m3u8", approved=True,
+                    ), owner_request(),
+                )
+            request_path = Path(popen.call_args.args[0][-1])
+            saved = json.loads(request_path.read_text(encoding="utf-8"))
+        self.assertTrue(result["ok"])
+        self.assertEqual(saved["url"], "https://example.com/video.m3u8")
+        self.assertEqual(popen.call_args.args[0][1], str(worker))
+
     def test_notifications_combine_system_updates_and_unread_chat(self):
         with tempfile.TemporaryDirectory() as directory:
             db_path = Path(directory) / "notifications.db"

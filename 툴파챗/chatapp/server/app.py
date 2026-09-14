@@ -30,11 +30,13 @@ import base64
 import datetime
 import hashlib
 import html
+import ipaddress
 import json
 import os
 import random
 import re
 import secrets
+import socket
 import sqlite3
 import subprocess
 import sys
@@ -606,6 +608,10 @@ SHIFT_ALARM_RANDOM_BOOKMARK_HISTORY_FILE = os.path.expanduser(
 # shift_alarm.py·worker/persona_worker.py와 같은 경로를 공유(같은 Mac)해서
 # 메뉴바·채팅·대시보드 중 어디서 재생을 시작했든 대시보드가 반영한다.
 SHIFT_ALARM_NOW_PLAYING_FILE = os.path.expanduser("~/.shift_alarm_now_playing.json")
+SHIFT_ALARM_VIDEO_DIR = Path(os.path.expanduser("~/.tulpachat/video_downloads"))
+SHIFT_ALARM_VIDEO_STATUS_FILE = SHIFT_ALARM_VIDEO_DIR / "status.json"
+SHIFT_ALARM_VIDEO_WORKER = REPO_ROOT / "shift_alarm" / "stream_download_worker.py"
+SHIFT_ALARM_VIDEO_PYTHON = sys.executable
 
 
 def _shift_alarm_save_now_playing(playlist):
@@ -622,6 +628,38 @@ def _shift_alarm_load_now_playing():
             return json.load(f).get("playlist")
     except (OSError, ValueError, TypeError, AttributeError):
         return None
+
+
+def _validate_stream_download_url(value):
+    value = str(value or "").strip()
+    if len(value) > 2048 or any(char in value for char in "\r\n\t"):
+        raise HTTPException(status_code=422, detail="주소 형식이 올바르지 않습니다")
+    parsed = urllib.parse.urlsplit(value)
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+        raise HTTPException(status_code=422, detail="공개 HTTPS 영상 주소만 사용할 수 있습니다")
+    try:
+        addresses = {item[4][0] for item in socket.getaddrinfo(parsed.hostname, parsed.port or 443)}
+    except socket.gaierror as exc:
+        raise HTTPException(status_code=422, detail="사이트 주소를 찾을 수 없습니다") from exc
+    if any(not ipaddress.ip_address(address).is_global for address in addresses):
+        raise HTTPException(status_code=422, detail="내부망 또는 로컬 주소는 사용할 수 없습니다")
+    return value
+
+
+def _shift_alarm_video_status():
+    try:
+        status = json.loads(SHIFT_ALARM_VIDEO_STATUS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"state": "idle", "stage": "다운로드할 영상 주소를 입력해주세요", "progress": 0}
+    if status.get("state") in {"running", "syncing"}:
+        try:
+            os.kill(int(status.get("pid", 0)), 0)
+        except (OSError, TypeError, ValueError):
+            status.update(state="failed", stage="서버 재시작 또는 작업 중단으로 다운로드가 끝나지 않았습니다", progress=0)
+    return {key: status.get(key) for key in (
+        "job_id", "state", "stage", "progress", "filename", "destination",
+        "created_at", "updated_at", "completed_at",
+    )}
 
 
 def _shift_alarm_collect_all_bookmark_urls(node):
@@ -1291,6 +1329,11 @@ class ShiftAlarmTransportRequest(BaseModel):
     action: str  # playpause | next | previous
 
 
+class ShiftAlarmVideoDownloadRequest(BaseModel):
+    url: str
+    approved: bool = False
+
+
 @app.post("/api/shift-alarm/media/transport")
 def shift_alarm_media_transport(body: ShiftAlarmTransportRequest, request: Request):
     _require_owner(request)
@@ -1300,6 +1343,51 @@ def shift_alarm_media_transport(body: ShiftAlarmTransportRequest, request: Reque
         raise HTTPException(status_code=409, detail="Elmedia가 실행되고 있지 않습니다")
     _shift_alarm_send_media_key(body.action)
     return {"ok": True}
+
+
+@app.get("/api/shift-alarm/video-download")
+def shift_alarm_video_download_status(request: Request):
+    _require_owner(request)
+    return _shift_alarm_video_status()
+
+
+@app.post("/api/shift-alarm/video-download")
+def start_shift_alarm_video_download(body: ShiftAlarmVideoDownloadRequest, request: Request):
+    """소유자가 화면에서 확인한 URL 한 건만 고정 다운로드 작업기에 전달한다."""
+    _require_owner(request)
+    if not body.approved:
+        raise HTTPException(status_code=422, detail="다운로드 승인 확인이 필요합니다")
+    url = _validate_stream_download_url(body.url)
+    current = _shift_alarm_video_status()
+    if current.get("state") in {"queued", "running", "syncing"}:
+        raise HTTPException(status_code=409, detail="다른 영상 다운로드가 진행 중입니다")
+    if not SHIFT_ALARM_VIDEO_WORKER.is_file() or not Path("/opt/homebrew/bin/yt-dlp").is_file():
+        raise HTTPException(status_code=503, detail="Mac 영상 다운로드 작업기를 찾을 수 없습니다")
+    SHIFT_ALARM_VIDEO_DIR.mkdir(parents=True, exist_ok=True)
+    job_id = uuid.uuid4().hex
+    request_file = SHIFT_ALARM_VIDEO_DIR / f"request_{job_id}.json"
+    request_file.write_text(json.dumps({"job_id": job_id, "url": url}), encoding="utf-8")
+    os.chmod(request_file, 0o600)
+    queued = {
+        "job_id": job_id, "state": "queued", "stage": "Mac 다운로드 작업 시작 대기",
+        "progress": 0, "created_at": _now(), "updated_at": _now(),
+    }
+    temporary = SHIFT_ALARM_VIDEO_STATUS_FILE.with_suffix(".tmp")
+    temporary.write_text(json.dumps(queued, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.chmod(temporary, 0o600)
+    temporary.replace(SHIFT_ALARM_VIDEO_STATUS_FILE)
+    try:
+        subprocess.Popen(
+            [SHIFT_ALARM_VIDEO_PYTHON, str(SHIFT_ALARM_VIDEO_WORKER), "--request", str(request_file)],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    except OSError as exc:
+        request_file.unlink(missing_ok=True)
+        queued.update(state="failed", stage="Mac 다운로드 작업을 시작하지 못했습니다", progress=0)
+        SHIFT_ALARM_VIDEO_STATUS_FILE.write_text(json.dumps(queued, ensure_ascii=False, indent=2), encoding="utf-8")
+        raise HTTPException(status_code=503, detail=queued["stage"]) from exc
+    return {"ok": True, **queued}
 
 
 def _read_career_card(filename: str):
