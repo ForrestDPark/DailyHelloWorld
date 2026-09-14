@@ -1,3 +1,4 @@
+import asyncio
 import json
 import sqlite3
 import tempfile
@@ -193,11 +194,15 @@ class ShiftAlarmApiTests(unittest.TestCase):
                          module._now(), "2999-01-01T00:00:00+00:00"),
                     )
                 response = module.download_shift_alarm_video("job", owner_request(), "bytes=2-5")
+                async def consume():
+                    return b"".join([chunk async for chunk in response.body_iterator])
+                body = asyncio.run(consume())
         self.assertEqual(response.status_code, 206)
         self.assertEqual(response.headers["content-range"], "bytes 2-5/10")
         self.assertEqual(response.headers["content-length"], "4")
         self.assertEqual(response.media_type, "application/octet-stream")
         self.assertIn("attachment; filename=video.mp4", response.headers["content-disposition"])
+        self.assertEqual(body, b"2345")
 
     def test_video_file_is_owner_only(self):
         with self.assertRaises(HTTPException) as raised:
@@ -251,6 +256,21 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertEqual(len(result["downloads"]), 1)
         self.assertTrue(result["downloads"][0]["temporary"])
         self.assertEqual(result["downloads"][0]["filename"], "완성.mp4")
+
+    def test_iphone_transfer_progress_is_persisted_per_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            db = root / "downloads.db"
+            video = root / "video.mp4"
+            video.write_bytes(b"0" * 10)
+            with patch.object(module, "SHIFT_ALARM_VIDEO_DIR", root), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_DB", db):
+                transfer_id = module._shift_alarm_transfer_start("a" * 24, video, 0, 10)
+                module._shift_alarm_transfer_update("a" * 24, transfer_id, "downloading", 6)
+                state = module._shift_alarm_transfer_states()["a" * 24]
+        self.assertEqual(state["state"], "downloading")
+        self.assertEqual(state["sent_bytes"], 6)
+        self.assertEqual(state["total_bytes"], 10)
 
     def test_notifications_combine_system_updates_and_unread_chat(self):
         with tempfile.TemporaryDirectory() as directory:

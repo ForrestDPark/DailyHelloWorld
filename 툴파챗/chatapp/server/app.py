@@ -686,6 +686,13 @@ def _shift_alarm_video_db():
             downloaded_at TEXT, icloud_sent_at TEXT
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS video_transfers (
+            file_id TEXT PRIMARY KEY, transfer_id TEXT NOT NULL, filename TEXT NOT NULL,
+            state TEXT NOT NULL, sent_bytes INTEGER NOT NULL, total_bytes INTEGER NOT NULL,
+            started_at TEXT NOT NULL, updated_at TEXT NOT NULL, completed_at TEXT
+        )
+    """)
     return conn
 
 
@@ -738,7 +745,39 @@ def _shift_alarm_av4_file(file_id):
     raise HTTPException(status_code=404, detail="영상 파일을 찾을 수 없습니다")
 
 
-def _shift_alarm_stream_file(path, range_header):
+def _shift_alarm_transfer_start(file_id, path, start, total):
+    transfer_id = uuid.uuid4().hex
+    timestamp = _now()
+    with _shift_alarm_video_db() as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO video_transfers "
+            "(file_id,transfer_id,filename,state,sent_bytes,total_bytes,started_at,updated_at,completed_at) "
+            "VALUES (?,?,?,?,?,?,?,?,NULL)",
+            (file_id, transfer_id, path.name, "downloading", start, total, timestamp, timestamp),
+        )
+    return transfer_id
+
+
+def _shift_alarm_transfer_update(file_id, transfer_id, state, sent_bytes, completed=False):
+    timestamp = _now()
+    with _shift_alarm_video_db() as conn:
+        conn.execute(
+            "UPDATE video_transfers SET state=?,sent_bytes=?,updated_at=?,completed_at=? "
+            "WHERE file_id=? AND transfer_id=?",
+            (state, sent_bytes, timestamp, timestamp if completed else None, file_id, transfer_id),
+        )
+
+
+def _shift_alarm_transfer_states():
+    with _shift_alarm_video_db() as conn:
+        rows = conn.execute(
+            "SELECT file_id,state,sent_bytes,total_bytes,started_at,updated_at,completed_at "
+            "FROM video_transfers"
+        ).fetchall()
+    return {row["file_id"]: dict(row) for row in rows}
+
+
+def _shift_alarm_stream_file(path, range_header, file_id=None):
     size = path.stat().st_size
     start, end, status_code = 0, size - 1, 200
     if range_header:
@@ -756,17 +795,32 @@ def _shift_alarm_stream_file(path, range_header):
             raise HTTPException(status_code=416, detail="파일 범위를 벗어났습니다")
         status_code = 206
     length = end - start + 1
+    file_id = file_id or _shift_alarm_av4_id(path)
+    transfer_id = _shift_alarm_transfer_start(file_id, path, start, size)
 
     def chunks():
-        with path.open("rb") as source:
-            source.seek(start)
-            remaining = length
-            while remaining:
-                data = source.read(min(1024 * 1024, remaining))
-                if not data:
-                    break
-                remaining -= len(data)
-                yield data
+        sent = start
+        completed = False
+        last_report = start
+        try:
+            with path.open("rb") as source:
+                source.seek(start)
+                remaining = length
+                while remaining:
+                    data = source.read(min(1024 * 1024, remaining))
+                    if not data:
+                        break
+                    remaining -= len(data)
+                    sent += len(data)
+                    if sent - last_report >= 8 * 1024 * 1024:
+                        _shift_alarm_transfer_update(file_id, transfer_id, "downloading", sent)
+                        last_report = sent
+                    yield data
+                completed = remaining == 0 and end == size - 1
+        finally:
+            _shift_alarm_transfer_update(
+                file_id, transfer_id, "complete" if completed else "interrupted", sent, completed
+            )
 
     headers = {
         "Accept-Ranges": "bytes", "Content-Length": str(length),
@@ -1486,11 +1540,12 @@ def shift_alarm_video_download_status(request: Request):
     ).fetchall()
     conn.close()
     managed_paths = {row["file_path"]: row for row in rows}
+    transfers = _shift_alarm_transfer_states()
     status["downloads"] = []
     for path in _shift_alarm_av4_files():
         file_id = _shift_alarm_av4_id(path)
         managed = managed_paths.get(str(path))
-        status["downloads"].append({
+        item = {
             "file_id": file_id, "filename": path.name, "size_bytes": path.stat().st_size,
             "completed_at": managed["completed_at"] if managed else datetime.datetime.fromtimestamp(
                 path.stat().st_mtime, datetime.timezone.utc
@@ -1499,7 +1554,15 @@ def shift_alarm_video_download_status(request: Request):
             "temporary": bool(managed),
             "download_url": f"/api/shift-alarm/video-library/{file_id}/file",
             "action_url": f"/api/shift-alarm/video-library/{file_id}/action",
-        })
+        }
+        transfer = transfers.get(file_id)
+        if transfer:
+            item.update(
+                transfer_state=transfer["state"], transfer_sent_bytes=transfer["sent_bytes"],
+                transfer_total_bytes=transfer["total_bytes"],
+                transfer_updated_at=transfer["updated_at"],
+            )
+        status["downloads"].append(item)
     if status.get("state") == "complete" and status.get("job_id"):
         try:
             row, _path = _shift_alarm_owned_video(status["job_id"], username)
@@ -1561,14 +1624,14 @@ def download_shift_alarm_video(job_id: str, request: Request,
     row, path = _shift_alarm_owned_video(job_id, _request_username(request))
     with _shift_alarm_video_db() as conn:
         conn.execute("UPDATE video_downloads SET downloaded_at=? WHERE job_id=?", (_now(), job_id))
-    return _shift_alarm_stream_file(path, range_header)
+    return _shift_alarm_stream_file(path, range_header, _shift_alarm_av4_id(path))
 
 
 @app.get("/api/shift-alarm/video-library/{file_id}/file")
 def download_shift_alarm_library_video(file_id: str, request: Request,
                                        range_header: Optional[str] = Header(None, alias="Range")):
     _require_owner(request)
-    return _shift_alarm_stream_file(_shift_alarm_av4_file(file_id), range_header)
+    return _shift_alarm_stream_file(_shift_alarm_av4_file(file_id), range_header, file_id)
 
 
 @app.post("/api/shift-alarm/video-library/{file_id}/action")
