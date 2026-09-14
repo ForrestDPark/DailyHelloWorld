@@ -196,6 +196,8 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 206)
         self.assertEqual(response.headers["content-range"], "bytes 2-5/10")
         self.assertEqual(response.headers["content-length"], "4")
+        self.assertEqual(response.media_type, "application/octet-stream")
+        self.assertIn("attachment; filename=video.mp4", response.headers["content-disposition"])
 
     def test_video_file_is_owner_only(self):
         with self.assertRaises(HTTPException) as raised:

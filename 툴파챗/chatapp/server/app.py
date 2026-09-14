@@ -1513,11 +1513,16 @@ def download_shift_alarm_video(job_id: str, request: Request,
 
     headers = {
         "Accept-Ranges": "bytes", "Content-Length": str(length),
-        "Content-Disposition": f"attachment; filename*=UTF-8''{urllib.parse.quote(row['filename'])}",
+        "Content-Disposition": (
+            f"attachment; filename=video.mp4; filename*=UTF-8''{urllib.parse.quote(row['filename'])}"
+        ),
+        "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",
     }
     if status_code == 206:
         headers["Content-Range"] = f"bytes {start}-{end}/{size}"
-    return StreamingResponse(chunks(), status_code=status_code, media_type="video/mp4", headers=headers)
+    return StreamingResponse(
+        chunks(), status_code=status_code, media_type="application/octet-stream", headers=headers
+    )
 
 
 @app.post("/api/shift-alarm/video-download/{job_id}/action")
