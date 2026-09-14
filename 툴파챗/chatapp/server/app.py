@@ -613,7 +613,7 @@ SHIFT_ALARM_VIDEO_STATUS_FILE = SHIFT_ALARM_VIDEO_DIR / "status.json"
 SHIFT_ALARM_VIDEO_WORKER = REPO_ROOT / "shift_alarm" / "stream_download_worker.py"
 SHIFT_ALARM_VIDEO_PYTHON = sys.executable
 SHIFT_ALARM_VIDEO_DB = SHIFT_ALARM_VIDEO_DIR / "downloads.db"
-SHIFT_ALARM_VIDEO_FILES = SHIFT_ALARM_VIDEO_DIR / "files"
+SHIFT_ALARM_VIDEO_FILES = Path("/Users/forrestdpark/Desktop/BlogImage/av4")
 
 
 def _shift_alarm_save_now_playing(playlist):

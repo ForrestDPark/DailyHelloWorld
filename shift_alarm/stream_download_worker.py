@@ -28,7 +28,7 @@ STATE_DIR = Path(os.path.expanduser("~/.tulpachat/video_downloads"))
 STATE_FILE = STATE_DIR / "status.json"
 LOCK_FILE = STATE_DIR / "active.lock"
 STAGING_DIR = STATE_DIR / "staging"
-FILES_DIR = STATE_DIR / "files"
+FILES_DIR = Path("/Users/forrestdpark/Desktop/BlogImage/av4")
 DB_FILE = STATE_DIR / "downloads.db"
 YTDLP = "/opt/homebrew/bin/yt-dlp"
 MAX_FILESIZE = "5G"
@@ -128,7 +128,6 @@ def run(request_path: Path) -> int:
     FILES_DIR.mkdir(parents=True, exist_ok=True)
     os.chmod(STATE_DIR, 0o700)
     os.chmod(STAGING_DIR, 0o700)
-    os.chmod(FILES_DIR, 0o700)
     lock_fd = None
     try:
         lock_fd = os.open(LOCK_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
@@ -175,7 +174,9 @@ def run(request_path: Path) -> int:
             raise RuntimeError("완성된 파일이 5GB 제한을 넘었습니다")
         original_name = safe_filename(result_path)
         write_state(state="syncing", stage="Mac 비공개 보관함에 저장하는 중", progress=96, filename=original_name)
-        destination = FILES_DIR / f"{job_id}_{original_name}"
+        destination = FILES_DIR / original_name
+        if destination.exists():
+            destination = FILES_DIR / f"{Path(original_name).stem}_{job_id[:8]}{Path(original_name).suffix}"
         result_path.replace(destination)
         os.chmod(destination, 0o600)
         completed = dt.datetime.now(dt.timezone.utc)
@@ -185,7 +186,7 @@ def run(request_path: Path) -> int:
                 "INSERT OR REPLACE INTO video_downloads "
                 "(job_id, owner_username, filename, file_path, size_bytes, created_at, completed_at, expires_at) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (job_id, owner_username, original_name, str(destination), destination.stat().st_size,
+                (job_id, owner_username, destination.name, str(destination), destination.stat().st_size,
                  str(request.get("created_at") or now()), completed.isoformat(timespec="seconds"),
                  expires.isoformat(timespec="seconds")),
             )
@@ -195,10 +196,10 @@ def run(request_path: Path) -> int:
             pass
         write_state(
             state="complete", stage="Mac 저장 완료 · iPhone에서 직접 받을 수 있습니다", progress=100,
-            filename=original_name, destination="Mac 비공개 보관함 · 24시간",
+            filename=destination.name, destination="BlogImage/av4 · 24시간",
             completed_at=now(),
         )
-        notify_owner(original_name)
+        notify_owner(destination.name)
         return 0
     except Exception as exc:
         if "job_dir" in locals():
