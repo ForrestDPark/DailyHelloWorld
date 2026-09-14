@@ -809,7 +809,21 @@ def _shift_alarm_transfer_states():
     return {row["file_id"]: dict(row) for row in rows}
 
 
-def _shift_alarm_stream_file(path, range_header, request, file_id=None):
+def _shift_alarm_notify_transfer_complete(username, filename):
+    """Safari 전송 완료를 소유자의 모든 유효한 웹푸시 구독에 알린다."""
+    conn = get_conn()
+    try:
+        _send_web_push_to_user(
+            conn, username, "iPhone 영상 다운로드 완료",
+            f"{_shift_alarm_ios_filename(Path(filename))} 전송이 완료됐습니다. Safari 다운로드 목록을 확인하세요.",
+            "/shift-alarm/",
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _shift_alarm_stream_file(path, range_header, request, file_id=None, username=None):
     size = path.stat().st_size
     start, end, status_code = 0, size - 1, 200
     if range_header:
@@ -863,6 +877,11 @@ def _shift_alarm_stream_file(path, range_header, request, file_id=None):
             _shift_alarm_transfer_update(
                 file_id, transfer_id, "complete" if completed else "interrupted", sent, completed
             )
+            if completed and username:
+                threading.Thread(
+                    target=_shift_alarm_notify_transfer_complete,
+                    args=(username, path.name), daemon=True,
+                ).start()
 
     headers = {
         "Accept-Ranges": "bytes", "Content-Length": str(length),
@@ -1666,14 +1685,18 @@ def download_shift_alarm_video(job_id: str, request: Request,
     row, path = _shift_alarm_owned_video(job_id, _request_username(request))
     with _shift_alarm_video_db() as conn:
         conn.execute("UPDATE video_downloads SET downloaded_at=? WHERE job_id=?", (_now(), job_id))
-    return _shift_alarm_stream_file(path, range_header, request, _shift_alarm_av4_id(path))
+    return _shift_alarm_stream_file(
+        path, range_header, request, _shift_alarm_av4_id(path), _request_username(request)
+    )
 
 
 @app.get("/api/shift-alarm/video-library/{file_id}/file")
 def download_shift_alarm_library_video(file_id: str, request: Request,
                                        range_header: Optional[str] = Header(None, alias="Range")):
     _require_owner(request)
-    return _shift_alarm_stream_file(_shift_alarm_av4_file(file_id), range_header, request, file_id)
+    return _shift_alarm_stream_file(
+        _shift_alarm_av4_file(file_id), range_header, request, file_id, _request_username(request)
+    )
 
 
 @app.post("/api/shift-alarm/video-library/{file_id}/action")
@@ -4133,7 +4156,8 @@ def push_unsubscribe(body: PushUnsubscribeRequest):
 
 def _send_web_push_to_user(conn, username, title, body_text, url):
     if not push_enabled():
-        return
+        return 0
+    sent = 0
     rows = conn.execute(
         "SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE username = ?", (username,)
     ).fetchall()
@@ -4148,12 +4172,44 @@ def _send_web_push_to_user(conn, username, title, body_text, url):
                 vapid_private_key=VAPID_PRIVATE_KEY_FILE,
                 vapid_claims={"sub": VAPID_CLAIM_EMAIL},
             )
+            sent += 1
         except WebPushException as exc:
             status = getattr(getattr(exc, "response", None), "status_code", None)
             if status in (404, 410):
                 conn.execute("DELETE FROM push_subscriptions WHERE id = ?", (row["id"],))
             else:
                 print(f"⚠️ 웹 푸시 실패({username}): {exc}")
+    return sent
+
+
+@app.post("/api/shift-alarm/push-test")
+def test_shift_alarm_push(request: Request):
+    """소유자가 현재 기기의 완료 알림 구독을 실제 전송으로 점검한다."""
+    _require_owner(request)
+    if not push_enabled():
+        raise HTTPException(status_code=503, detail="서버 웹푸시 키가 설정되지 않았습니다")
+    username = _request_username(request)
+    conn = get_conn()
+    try:
+        subscribed = conn.execute(
+            "SELECT COUNT(*) AS count FROM push_subscriptions WHERE username=?", (username,)
+        ).fetchone()["count"]
+        if not subscribed:
+            raise HTTPException(
+                status_code=409,
+                detail="이 계정에 등록된 웹푸시 기기가 없습니다. 내 프로필에서 알림을 먼저 켜주세요",
+            )
+        sent = _send_web_push_to_user(
+            conn, username, "Shift Alarm 완료 알림 테스트",
+            "웹푸시가 정상입니다. 실제 영상 전송 완료 시에도 알려드립니다.",
+            "/shift-alarm/",
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    if not sent:
+        raise HTTPException(status_code=502, detail="유효한 구독으로 테스트 알림을 보내지 못했습니다")
+    return {"ok": True, "sent": sent}
 
 
 def _deliver_system_update_pushes(conn, username):

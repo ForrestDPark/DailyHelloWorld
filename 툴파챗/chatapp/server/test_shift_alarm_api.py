@@ -360,6 +360,41 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertEqual(state["sent_bytes"], 6)
         self.assertEqual(state["total_bytes"], 10)
 
+    def test_completed_iphone_transfer_schedules_owner_web_push(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            db = root / "downloads.db"
+            video = root / "HODV-21738.mp4"
+            video.write_bytes(b"0123456789")
+            with patch.object(module, "SHIFT_ALARM_VIDEO_DIR", root), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_DB", db), \
+                 patch("threading.Thread") as thread:
+                response = module._shift_alarm_stream_file(
+                    video, None, owner_request(), "a" * 24, "local-owner"
+                )
+
+                async def consume():
+                    return b"".join([chunk async for chunk in response.body_iterator])
+
+                body = asyncio.run(consume())
+        self.assertEqual(body, b"0123456789")
+        self.assertEqual(thread.call_args.kwargs["target"], module._shift_alarm_notify_transfer_complete)
+        self.assertEqual(thread.call_args.kwargs["args"], ("local-owner", video.name))
+        thread.return_value.start.assert_called_once()
+
+    def test_owner_can_send_a_realistic_download_push_test(self):
+        conn = sqlite3.connect(":memory:")
+        conn.row_factory = sqlite3.Row
+        conn.execute("CREATE TABLE push_subscriptions (username TEXT)")
+        conn.execute("INSERT INTO push_subscriptions(username) VALUES ('local-owner')")
+        with patch.object(module, "get_conn", return_value=conn), \
+             patch.object(module, "push_enabled", return_value=True), \
+             patch.object(module, "_send_web_push_to_user", return_value=1) as send:
+            result = module.test_shift_alarm_push(owner_request())
+        self.assertEqual(result, {"ok": True, "sent": 1})
+        self.assertEqual(send.call_args.args[1], "local-owner")
+        self.assertEqual(send.call_args.args[2], "Shift Alarm 완료 알림 테스트")
+
     def test_cancel_transfer_unsticks_a_stalled_downloading_row(self):
         """★ 2026-09-14: "전송중에서 멈춰있는데 어떻게하지" — 터널이 전송 도중
         연결을 끊으면 스트리밍 제너레이터의 finally가 실행되지 않아
