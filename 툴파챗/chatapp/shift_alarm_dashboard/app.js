@@ -43,21 +43,18 @@ async function playMedia(playlist,button){const original=button.textContent;butt
 let recommendedSiteUrls=[];
 // ★ 2026-09-14: "링크 클릭하면 사파리 말고 크롬 앱에서 열리게 해줘" — iOS는
 // googlechrome(s):// 커스텀 URL 스킴으로 열면 크롬 앱이 설치돼 있을 때 그
-// 앱으로 바로 넘어간다. Chrome 미설치 시엔 아무 반응이 없을 수 있다.
-// ★ 2026-09-14: "크롬으로 열리게 해줘"로 googlechrome(s):// 스킴 변환을
-// 시도했지만, 대상 사이트(Cloudflare 보호)가 외부에서 바로 들어오는 딥링크를
-// 홈 화면으로 되돌려버려 무의미했다(curl로 TLS 단계에서 연결이 끊기는 걸
-// 확인 — 리퍼러/봇 차단으로 추정). 링크로 직접 들어가는 대신 URL을
-// 클립보드에 복사하고 크롬 앱만 열어서, 사용자가 크롬 안에서 직접
-// 붙여넣거나 검색하게 한다.
+// 앱으로 바로 넘어간다(Chrome 미설치 시엔 반응 없음). 예전엔 天 북마크가
+// 죽은 kr46 미러를 가리키고 있어서 딥링크가 전부 홈 화면으로 튕겨
+// 나갔는데, 북마크를 살아있는 kr47로 갱신한 뒤로는 정상 동작해서 클립보드
+// 복사와 함께 바로 이동하게 되돌렸다.
 async function copyLinkAndOpenChrome(url){
     try{
         await navigator.clipboard.writeText(url);
-        notice("링크를 복사했습니다. 크롬에서 주소창에 붙여넣으세요.");
+        notice("링크를 복사했습니다. 크롬으로 이동합니다.");
     }catch(e){
         notice(`링크 복사 실패 — 직접 복사하세요: ${url}`,true);
     }
-    window.location.href="googlechrome://";
+    window.location.href=url.replace(/^https:/,"googlechromes:").replace(/^http:/,"googlechrome:");
 }
 function renderRecommendedSites(urls){recommendedSiteUrls=urls;const panel=$("recommended-sites"),list=$("recommended-sites-list");list.replaceChildren();urls.forEach((url,index)=>{const link=document.createElement("a"),number=document.createElement("span"),copy=document.createElement("span"),host=document.createElement("b"),path=document.createElement("span"),arrow=document.createElement("span"),parsed=new URL(url);link.className="recommended-site";link.href=url;number.className="recommended-site-index";number.textContent=index+1;copy.className="recommended-site-copy";host.textContent=parsed.hostname;path.textContent=`${parsed.pathname}${parsed.search}`;copy.append(host,path);arrow.className="recommended-site-arrow";arrow.textContent="⧉";link.append(number,copy,arrow);link.addEventListener("click",event=>{event.preventDefault();copyLinkAndOpenChrome(url)});list.append(link)});panel.classList.remove("hidden");$("open-first-site").disabled=!urls.length}
 async function loadRecommendedSites(button){const original=button.textContent;button.disabled=true;button.textContent="고르는 중…";try{const data=await api("/api/shift-alarm/media/open-sites",{method:"POST"});renderRecommendedSites(data.urls||[]);notice(`${data.urls?.length||0}개 추천을 골랐습니다.`)}catch(e){notice(e.message,true)}finally{button.disabled=false;button.textContent=original}}
