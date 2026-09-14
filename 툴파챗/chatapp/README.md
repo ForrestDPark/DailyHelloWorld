@@ -3270,3 +3270,8 @@ JOB_SYSTEM_ADDENDUM 계열 페르소나(매 턴 정규직/알바 두 카테고�
 
 - `iPhone으로 받기` 요청은 서버에 정상 도착했지만 iOS PWA가 `video/mp4`를 현재 창에서 열 수 있는 미디어로 취급해 2GB 이상 파일에서 아무 반응이 없는 것처럼 보였습니다.
 - 다운로드 응답을 `application/octet-stream`과 호환용 ASCII 파일명을 포함한 `Content-Disposition: attachment`로 강화하고, 버튼은 별도 Safari 다운로드 화면을 엽니다. 누른 즉시 버튼과 알림에 시작 안내를 표시하며 Range 이어받기는 그대로 유지합니다.
+
+## av4 영상 선택 다운로드 목록 (2026-09-14)
+
+- Shift Alarm이 방금 만든 한 파일만 보여주지 않고 `/Users/forrestdpark/Desktop/BlogImage/av4` 바로 아래의 모든 MP4를 수정 시각 최신순으로 표시합니다. 파일명과 용량을 확인해 원하는 파일만 아이폰으로 받을 수 있습니다.
+- 브라우저에는 실제 Mac 경로를 보내지 않고 파일명 해시 식별자만 제공합니다. 서버는 요청마다 고정 `av4` 폴더를 다시 스캔해 식별자를 검증하므로 경로 조작으로 다른 파일을 읽을 수 없으며 모든 목록·다운로드·AirDrop·iCloud·삭제 API는 소유자 전용입니다.

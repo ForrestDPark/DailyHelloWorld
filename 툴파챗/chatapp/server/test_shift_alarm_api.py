@@ -204,6 +204,27 @@ class ShiftAlarmApiTests(unittest.TestCase):
             module.download_shift_alarm_video("job", signed_in_request("other-user"), None)
         self.assertEqual(raised.exception.status_code, 403)
 
+    def test_av4_library_lists_only_direct_mp4_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "첫째.mp4").write_bytes(b"123")
+            (root / "제외.mkv").write_bytes(b"456")
+            (root / "nested").mkdir()
+            (root / "nested" / "제외.mp4").write_bytes(b"789")
+            with patch.object(module, "SHIFT_ALARM_VIDEO_FILES", root):
+                files = module._shift_alarm_av4_files()
+                file_id = module._shift_alarm_av4_id(files[0])
+                resolved = module._shift_alarm_av4_file(file_id)
+        self.assertEqual([path.name for path in files], ["첫째.mp4"])
+        self.assertEqual(resolved.name, "첫째.mp4")
+
+    def test_av4_library_download_is_owner_only(self):
+        with self.assertRaises(HTTPException) as raised:
+            module.download_shift_alarm_library_video(
+                "a" * 24, signed_in_request("other-user"), None
+            )
+        self.assertEqual(raised.exception.status_code, 403)
+
     def test_notifications_combine_system_updates_and_unread_chat(self):
         with tempfile.TemporaryDirectory() as directory:
             db_path = Path(directory) / "notifications.db"

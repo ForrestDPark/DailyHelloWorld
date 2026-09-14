@@ -716,6 +716,72 @@ def _shift_alarm_owned_video(job_id, username):
     return row, path
 
 
+def _shift_alarm_av4_id(path):
+    return hashlib.sha256(path.name.encode("utf-8")).hexdigest()[:24]
+
+
+def _shift_alarm_av4_files():
+    try:
+        paths = [path for path in SHIFT_ALARM_VIDEO_FILES.iterdir()
+                 if path.is_file() and path.suffix.lower() == ".mp4"]
+    except OSError:
+        return []
+    return sorted(paths, key=lambda path: path.stat().st_mtime, reverse=True)
+
+
+def _shift_alarm_av4_file(file_id):
+    if not re.fullmatch(r"[a-f0-9]{24}", file_id):
+        raise HTTPException(status_code=404, detail="영상 파일을 찾을 수 없습니다")
+    for path in _shift_alarm_av4_files():
+        if secrets.compare_digest(_shift_alarm_av4_id(path), file_id):
+            return path
+    raise HTTPException(status_code=404, detail="영상 파일을 찾을 수 없습니다")
+
+
+def _shift_alarm_stream_file(path, range_header):
+    size = path.stat().st_size
+    start, end, status_code = 0, size - 1, 200
+    if range_header:
+        match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header.strip())
+        if not match or (not match.group(1) and not match.group(2)):
+            raise HTTPException(status_code=416, detail="지원하지 않는 구간 요청입니다")
+        if match.group(1):
+            start = int(match.group(1))
+            end = int(match.group(2) or end)
+        else:
+            length = int(match.group(2))
+            start = max(0, size - length)
+        end = min(end, size - 1)
+        if start > end or start >= size:
+            raise HTTPException(status_code=416, detail="파일 범위를 벗어났습니다")
+        status_code = 206
+    length = end - start + 1
+
+    def chunks():
+        with path.open("rb") as source:
+            source.seek(start)
+            remaining = length
+            while remaining:
+                data = source.read(min(1024 * 1024, remaining))
+                if not data:
+                    break
+                remaining -= len(data)
+                yield data
+
+    headers = {
+        "Accept-Ranges": "bytes", "Content-Length": str(length),
+        "Content-Disposition": (
+            f"attachment; filename=video.mp4; filename*=UTF-8''{urllib.parse.quote(path.name)}"
+        ),
+        "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",
+    }
+    if status_code == 206:
+        headers["Content-Range"] = f"bytes {start}-{end}/{size}"
+    return StreamingResponse(
+        chunks(), status_code=status_code, media_type="application/octet-stream", headers=headers
+    )
+
+
 def _shift_alarm_collect_all_bookmark_urls(node):
     urls = []
     if node.get("type") == "url":
@@ -1415,12 +1481,21 @@ def shift_alarm_video_download_status(request: Request):
         "WHERE owner_username=? ORDER BY completed_at DESC", (username,)
     ).fetchall()
     conn.close()
-    status["downloads"] = [{
-        "job_id": row["job_id"], "filename": row["filename"],
-        "size_bytes": row["size_bytes"], "completed_at": row["completed_at"],
-        "expires_at": row["expires_at"],
-        "download_url": f"/api/shift-alarm/video-download/{row['job_id']}/file",
-    } for row in rows]
+    managed_paths = {row["file_path"]: row for row in rows}
+    status["downloads"] = []
+    for path in _shift_alarm_av4_files():
+        file_id = _shift_alarm_av4_id(path)
+        managed = managed_paths.get(str(path))
+        status["downloads"].append({
+            "file_id": file_id, "filename": path.name, "size_bytes": path.stat().st_size,
+            "completed_at": managed["completed_at"] if managed else datetime.datetime.fromtimestamp(
+                path.stat().st_mtime, datetime.timezone.utc
+            ).isoformat(timespec="seconds"),
+            "expires_at": managed["expires_at"] if managed else None,
+            "temporary": bool(managed),
+            "download_url": f"/api/shift-alarm/video-library/{file_id}/file",
+            "action_url": f"/api/shift-alarm/video-library/{file_id}/action",
+        })
     if status.get("state") == "complete" and status.get("job_id"):
         try:
             row, _path = _shift_alarm_owned_video(status["job_id"], username)
@@ -1482,47 +1557,48 @@ def download_shift_alarm_video(job_id: str, request: Request,
     row, path = _shift_alarm_owned_video(job_id, _request_username(request))
     with _shift_alarm_video_db() as conn:
         conn.execute("UPDATE video_downloads SET downloaded_at=? WHERE job_id=?", (_now(), job_id))
-    size = path.stat().st_size
-    start, end, status_code = 0, size - 1, 200
-    if range_header:
-        match = re.fullmatch(r"bytes=(\d*)-(\d*)", range_header.strip())
-        if not match or (not match.group(1) and not match.group(2)):
-            raise HTTPException(status_code=416, detail="지원하지 않는 구간 요청입니다")
-        if match.group(1):
-            start = int(match.group(1))
-            end = int(match.group(2) or end)
-        else:
-            length = int(match.group(2))
-            start = max(0, size - length)
-        end = min(end, size - 1)
-        if start > end or start >= size:
-            raise HTTPException(status_code=416, detail="파일 범위를 벗어났습니다")
-        status_code = 206
-    length = end - start + 1
+    return _shift_alarm_stream_file(path, range_header)
 
-    def chunks():
-        with path.open("rb") as source:
-            source.seek(start)
-            remaining = length
-            while remaining:
-                data = source.read(min(1024 * 1024, remaining))
-                if not data:
-                    break
-                remaining -= len(data)
-                yield data
 
-    headers = {
-        "Accept-Ranges": "bytes", "Content-Length": str(length),
-        "Content-Disposition": (
-            f"attachment; filename=video.mp4; filename*=UTF-8''{urllib.parse.quote(row['filename'])}"
-        ),
-        "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",
-    }
-    if status_code == 206:
-        headers["Content-Range"] = f"bytes {start}-{end}/{size}"
-    return StreamingResponse(
-        chunks(), status_code=status_code, media_type="application/octet-stream", headers=headers
-    )
+@app.get("/api/shift-alarm/video-library/{file_id}/file")
+def download_shift_alarm_library_video(file_id: str, request: Request,
+                                       range_header: Optional[str] = Header(None, alias="Range")):
+    _require_owner(request)
+    return _shift_alarm_stream_file(_shift_alarm_av4_file(file_id), range_header)
+
+
+@app.post("/api/shift-alarm/video-library/{file_id}/action")
+def act_on_shift_alarm_library_video(file_id: str, body: ShiftAlarmVideoActionRequest,
+                                     request: Request):
+    _require_owner(request)
+    path = _shift_alarm_av4_file(file_id)
+    if body.action == "delete":
+        path.unlink(missing_ok=True)
+        with _shift_alarm_video_db() as conn:
+            conn.execute("DELETE FROM video_downloads WHERE file_path=?", (str(path),))
+        return {"ok": True, "message": "av4 파일을 삭제했습니다"}
+    if body.action == "reveal_airdrop":
+        subprocess.Popen(["/usr/bin/open", "-R", str(path)], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["/usr/bin/open", "airdrop://"], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return {"ok": True, "message": "Mac에서 파일과 AirDrop 창을 열었습니다"}
+    if body.action == "icloud":
+        destination = Path(os.path.expanduser(
+            "~/Library/Mobile Documents/com~apple~CloudDocs/Shift Alarm Downloads"
+        )) / path.name
+        manifest_dir = Path(os.path.expanduser("~/.shift_alarm_icloud_sync"))
+        manifest_dir.mkdir(parents=True, exist_ok=True)
+        manifest = manifest_dir / f"manifest_{uuid.uuid4().hex}.txt"
+        manifest.write_text(f"{path}\t{destination}\n", encoding="utf-8")
+        os.chmod(manifest, 0o600)
+        helper = REPO_ROOT / "shift_alarm" / "iCloudSync.app"
+        if not helper.is_dir():
+            raise HTTPException(status_code=503, detail="iCloud 전송 도우미를 찾을 수 없습니다")
+        subprocess.Popen(["/usr/bin/open", "-na", str(helper)], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return {"ok": True, "message": "iCloud Drive 전송을 요청했습니다"}
+    raise HTTPException(status_code=400, detail="지원하지 않는 파일 동작입니다")
 
 
 @app.post("/api/shift-alarm/video-download/{job_id}/action")
