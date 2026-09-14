@@ -214,6 +214,19 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertIn('attachment; filename="video-', response.headers["content-disposition"])
         self.assertEqual(body, b"2345")
 
+    def test_safari_download_page_explains_the_external_handoff(self):
+        with tempfile.TemporaryDirectory() as directory:
+            files = Path(directory)
+            video = files / "KSBJ-108_긴제목.mp4"
+            video.write_bytes(b"video")
+            with patch.object(module, "SHIFT_ALARM_VIDEO_FILES", files):
+                file_id = module._shift_alarm_av4_id(video)
+                response = module.shift_alarm_safari_download_page(file_id, owner_request())
+        body = response.body.decode("utf-8")
+        self.assertIn("오른쪽 아래 나침반 아이콘", body)
+        self.assertIn(f'/api/shift-alarm/video-library/{file_id}/file', body)
+        self.assertIn("KSBJ-108.mp4", body)
+
     def test_disconnect_mid_stream_is_reported_as_interrupted_not_complete(self):
         """★ 2026-09-14: "백그라운드로 넘어가면 몇 분 뒤 다운로드 실패가
         뜨는데 앱에는 성공으로 뜬다" — 클라이언트가 이미 연결을 끊었는데도

@@ -565,6 +565,31 @@ def shift_alarm_static(filename: str, request: Request):
     return FileResponse(str(SHIFT_ALARM_DASHBOARD_DIR / filename))
 
 
+@app.get("/shift-alarm/download/{file_id}")
+def shift_alarm_safari_download_page(file_id: str, request: Request):
+    """iOS PWA의 빈 파일 미리보기 대신 Safari로 넘길 안내 화면을 제공한다."""
+    _require_owner(request)
+    path = _shift_alarm_av4_file(file_id)
+    save_name = _shift_alarm_ios_filename(path)
+    file_url = f"/api/shift-alarm/video-library/{file_id}/file"
+    page = f"""<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark"><title>Safari에서 영상 받기</title>
+<style>
+:root{{font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif;color-scheme:light dark}}
+*{{box-sizing:border-box}}body{{min-height:100dvh;margin:0;padding:calc(env(safe-area-inset-top) + 28px) 22px calc(env(safe-area-inset-bottom) + 28px);display:grid;place-items:center;background:#f6f3fb;color:#211b2d}}
+main{{width:min(440px,100%);padding:28px 22px;border:1px solid #ded5ef;border-radius:26px;background:#fff;box-shadow:0 24px 70px #39266520}}
+.step{{display:inline-grid;width:44px;height:44px;place-items:center;border-radius:15px;background:#7454cf;color:white;font-size:22px;font-weight:850}}h1{{margin:18px 0 10px;font-size:26px}}p{{margin:0;color:#71697d;line-height:1.65}}.guide{{margin:22px 0;padding:16px;border-radius:16px;background:#f0eafb;color:#3c2b67;line-height:1.6}}.guide b{{display:block;margin-bottom:4px}}a{{display:block;width:100%;min-height:54px;padding:16px;border-radius:16px;background:#6f4ccd;color:white;text-align:center;text-decoration:none;font-weight:850}}small{{display:block;margin-top:14px;color:#8b8494;line-height:1.5;overflow-wrap:anywhere}}
+@media(prefers-color-scheme:dark){{body{{background:#15121c;color:#f7f3ff}}main{{background:#211c2b;border-color:#413653}}p,small{{color:#aca3b8}}.guide{{background:#332746;color:#eadfff}}}}
+</style></head><body><main><span class="step">↓</span><h1>Safari에서 다운로드하세요</h1>
+<p>지금 화면이 작은 미리보기 창이라면 먼저 Safari 앱 본체로 전환해야 다운로드 목록과 실제 진행률을 볼 수 있습니다.</p>
+<div class="guide"><b>1. 오른쪽 아래 나침반 아이콘을 누르세요.</b>Safari 앱이 열리면 이 페이지의 아래 버튼을 다시 누르고, 주소창 옆 ↓ 아이콘에서 진행률을 확인하세요.</div>
+<a href="{html.escape(file_url, quote=True)}">실제 다운로드 시작</a>
+<small>저장 파일명: {html.escape(save_name)}<br>Safari가 기본 브라우저가 아니면 iPhone 설정 → 앱 → 기본 앱 → 브라우저 앱에서 Safari를 선택하세요.</small>
+</main></body></html>"""
+    return Response(page, media_type="text/html", headers={"Cache-Control": "private, no-store"})
+
+
 # ★ 2026-09-14: "채팅창에서 하는게아니라 shift alarm시스템 내부에 버튼만들어줘"
 # 요청 — 처음엔 알람지기 페르소나가 채팅으로 실행하게 만들었는데(worker/
 # persona_worker.py), 대시보드에서 바로 누르는 버튼을 원해서 이 서버에도
@@ -1569,6 +1594,7 @@ def shift_alarm_video_download_status(request: Request):
             "expires_at": managed["expires_at"] if managed else None,
             "temporary": bool(managed),
             "download_url": f"/api/shift-alarm/video-library/{file_id}/file",
+            "download_page_url": f"/shift-alarm/download/{file_id}",
             "action_url": f"/api/shift-alarm/video-library/{file_id}/action",
         }
         transfer = transfers.get(file_id)
