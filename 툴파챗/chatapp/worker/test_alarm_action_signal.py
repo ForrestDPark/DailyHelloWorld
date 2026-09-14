@@ -25,6 +25,18 @@ class AlarmActionSignalTest(unittest.TestCase):
         args = mock_subprocess.Popen.call_args.args[0]
         self.assertEqual(args, ["open", "-a", "Elmedia Video Player", "/a.mp3", "/b.mp3"])
 
+    def test_play_folder_records_which_playlist_for_now_playing(self):
+        with patch.object(pw, "_shift_alarm_list_audio_tracks", return_value=["/a.mp3"]), \
+             patch.object(pw, "_shift_alarm_reset_elmedia_playlist", return_value=True), \
+             patch("persona_worker.subprocess"), \
+             patch.object(pw, "_shift_alarm_save_now_playing") as mock_save, \
+             patch("os.path.isdir", return_value=True):
+            pw._shift_alarm_play_folder(pw.SHIFT_ALARM_CLASSIC_FOLDER)
+            mock_save.assert_called_once_with("classical")
+            mock_save.reset_mock()
+            pw._shift_alarm_play_folder(pw.SHIFT_ALARM_FAVORITES_FOLDER)
+            mock_save.assert_called_once_with("favorites")
+
     def test_malformed_json_returns_none(self):
         text = "```alarmaction\n{not json}\n```"
         self.assertIsNone(pw._handle_alarm_action_signal(text))

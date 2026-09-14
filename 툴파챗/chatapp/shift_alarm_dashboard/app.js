@@ -29,7 +29,12 @@ $("start-sunzi-analysis").addEventListener("click",async()=>{if(!confirm("다음
 function setVolumeUI(percent){$("volume-display").textContent=`${percent}%`;$("volume-slider").value=percent;$("volume-slider").style.setProperty("--val",`${percent}%`)}
 async function loadVolume(){try{const data=await api("/api/shift-alarm/media/volume");setVolumeUI(data.percent)}catch(e){$("volume-display").textContent="--%"}}
 async function setVolume(body){try{const data=await api("/api/shift-alarm/media/volume",{method:"POST",body:JSON.stringify(body)});setVolumeUI(data.percent)}catch(e){notice(e.message,true);await loadVolume()}}
-async function playMedia(playlist,button){const original=button.textContent;button.disabled=true;button.textContent="재생 중…";try{const data=await api("/api/shift-alarm/media/play",{method:"POST",body:JSON.stringify({playlist})});notice(data.message)}catch(e){notice(e.message,true)}finally{button.disabled=false;button.textContent=original}}
+// ★ 2026-09-14: "클래식/좋아요 재생 중일 때 대시보드에 어느 쪽인지 표시해줘"
+// — 메뉴바·채팅·대시보드 중 어디서 재생을 시작했든 서버가 같은 파일을 보고
+// 판단하므로(server/app.py 참고), 주기적으로 폴링해서 뱃지에 반영한다.
+const NOW_PLAYING_LABELS={favorites:"⭐ 좋아요 재생중",classical:"🎻 클래식 재생중"};
+async function loadNowPlaying(){try{const data=await api("/api/shift-alarm/media/now-playing");const label=data.running?NOW_PLAYING_LABELS[data.playlist]:null;$("now-playing-badge").classList.toggle("hidden",!label);if(label)$("now-playing-text").textContent=label}catch(e){$("now-playing-badge").classList.add("hidden")}}
+async function playMedia(playlist,button){const original=button.textContent;button.disabled=true;button.textContent="재생 중…";try{const data=await api("/api/shift-alarm/media/play",{method:"POST",body:JSON.stringify({playlist})});notice(data.message);await loadNowPlaying()}catch(e){notice(e.message,true)}finally{button.disabled=false;button.textContent=original}}
 // ★ 2026-09-14: "휴대폰 크롬에서 열리게 해줄 수 없나" — 서버는 URL만 골라
 // 돌려주고, 여는 건 이 클릭 핸들러에서 한다. await 뒤에 window.open을 부르면
 // 모바일 브라우저가 "사용자 동작 없이 뜬 팝업"으로 보고 막아버리므로, 클릭
@@ -53,4 +58,6 @@ $("transport-next").addEventListener("click",e=>sendTransport("next",e.currentTa
 $("volume-slider").addEventListener("input",()=>{$("volume-display").textContent=`${$("volume-slider").value}%`});
 $("volume-slider").addEventListener("change",()=>setVolume({percent:Number($("volume-slider").value)}));
 loadVolume();
+loadNowPlaying();
+setInterval(loadNowPlaying,5000);
 $("notifications").addEventListener("click",async()=>{const center=$("notification-center"),opening=center.classList.contains("hidden");center.classList.toggle("hidden",!opening);$("notifications").setAttribute("aria-expanded",String(opening));if(opening)await loadNotifications()});$("notification-close").addEventListener("click",()=>{$("notification-center").classList.add("hidden");$("notifications").setAttribute("aria-expanded","false")});document.addEventListener("keydown",event=>{if(event.key==="Escape")$("notification-close").click()});$("refresh").addEventListener("click",()=>{load();loadSunziStatus();loadNotifications()});$("time-profile").addEventListener("change",()=>currentStatus&&render(currentStatus));$("check-all").addEventListener("click",async()=>{if(!currentStatus?.daily_routine?.length||!confirm("남아 있는 오늘의 일일 루틴을 모두 체크할까요?"))return;$("check-all").disabled=true;try{const result=await api("/api/shift-alarm/routine/check-all",{method:"POST"});currentStatus.daily_routine.forEach(item=>item.checked=true);render(currentStatus);notice(`${result.updated}개 루틴을 체크했습니다.`)}catch(e){notice(e.message,true);$("check-all").disabled=false}});load();loadSunziStatus();loadNotifications();setInterval(loadSunziStatus,5000);setInterval(loadNotifications,30000);

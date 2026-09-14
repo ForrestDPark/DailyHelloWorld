@@ -176,6 +176,20 @@ SHIFT_ALARM_ELMEDIA_AUDIO_EXTENSIONS = {
 # 재생 기능 자체가 완전히 죽었다 — 반면 open -a 직접 호출은 터미널에서
 # 항상 정상 동작했다. 자세한 진단은 shift_alarm.py의 같은 위치 주석 참고.
 # 원래 있던 open -a 직접 호출로 되돌린다.
+# ★ 2026-09-14: "클래식/좋아요 재생 중일 때 대시보드에 어느 쪽인지 표시해줘" —
+# shift_alarm.py의 같은 위치 주석 참고. 세 경로(메뉴바·채팅·대시보드)가 모두
+# 같은 파일에 기록해 대시보드가 어디서 재생을 시작했든 알 수 있게 한다.
+SHIFT_ALARM_NOW_PLAYING_FILE = os.path.expanduser("~/.shift_alarm_now_playing.json")
+
+
+def _shift_alarm_save_now_playing(playlist):
+    try:
+        with open(SHIFT_ALARM_NOW_PLAYING_FILE, "w", encoding="utf-8") as f:
+            json.dump({"playlist": playlist}, f)
+    except OSError:
+        pass
+
+
 ALARM_ACTION_RE = re.compile(r"```alarmaction\s*\n(.*?)\n```", re.DOTALL)
 
 
@@ -248,6 +262,8 @@ def _shift_alarm_play_folder(folder):
             return False, "재생 가능한 음원 파일이 없습니다."
         reset_ok = _shift_alarm_reset_elmedia_playlist()
         subprocess.Popen(["open", "-a", "Elmedia Video Player", *tracks])
+        is_classic = os.path.abspath(folder) == os.path.abspath(SHIFT_ALARM_CLASSIC_FOLDER)
+        _shift_alarm_save_now_playing("classical" if is_classic else "favorites")
         if not reset_ok:
             return False, "Elmedia가 응답이 없어 기존 재생목록을 비우지 못했습니다 — 새 음원이 기존 큐와 섞여 재생될 수 있습니다."
         return True, f"{len(tracks)}곡을 새로 열었습니다."

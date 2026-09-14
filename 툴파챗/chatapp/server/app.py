@@ -602,6 +602,27 @@ SHIFT_ALARM_RANDOM_BOOKMARK_HISTORY_FILE = os.path.expanduser(
     "~/.shift_alarm_random_bookmark_history.json"
 )
 
+# ★ 2026-09-14: "클래식/좋아요 재생 중일 때 대시보드에 어느 쪽인지 표시해줘" —
+# shift_alarm.py·worker/persona_worker.py와 같은 경로를 공유(같은 Mac)해서
+# 메뉴바·채팅·대시보드 중 어디서 재생을 시작했든 대시보드가 반영한다.
+SHIFT_ALARM_NOW_PLAYING_FILE = os.path.expanduser("~/.shift_alarm_now_playing.json")
+
+
+def _shift_alarm_save_now_playing(playlist):
+    try:
+        with open(SHIFT_ALARM_NOW_PLAYING_FILE, "w", encoding="utf-8") as f:
+            json.dump({"playlist": playlist}, f)
+    except OSError:
+        pass
+
+
+def _shift_alarm_load_now_playing():
+    try:
+        with open(SHIFT_ALARM_NOW_PLAYING_FILE, encoding="utf-8") as f:
+            return json.load(f).get("playlist")
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+
 
 def _shift_alarm_collect_all_bookmark_urls(node):
     urls = []
@@ -786,6 +807,8 @@ def _shift_alarm_play_folder(folder):
             return False, "재생 가능한 음원 파일이 없습니다."
         reset_ok = _shift_alarm_reset_elmedia_playlist()
         subprocess.Popen(["open", "-a", "Elmedia Video Player", *tracks])
+        is_classic = os.path.abspath(folder) == os.path.abspath(SHIFT_ALARM_CLASSIC_FOLDER)
+        _shift_alarm_save_now_playing("classical" if is_classic else "favorites")
         if not reset_ok:
             return False, "Elmedia가 응답이 없어 기존 재생목록을 비우지 못했습니다 — 새 음원이 기존 큐와 섞여 재생될 수 있습니다."
         return True, f"{len(tracks)}곡을 새로 열었습니다."
@@ -1238,6 +1261,17 @@ def play_shift_alarm_media(body: ShiftAlarmPlayRequest, request: Request):
     if not ok:
         raise HTTPException(status_code=409, detail=message)
     return {"ok": True, "message": message}
+
+
+@app.get("/api/shift-alarm/media/now-playing")
+def shift_alarm_now_playing(request: Request):
+    # ★ 2026-09-14: "클래식/좋아요 재생 중일 때 대시보드에 어느 쪽인지 표시해줘" —
+    # Elmedia는 샌드박스 앱이라 "지금 재생 중인 목록이 뭔지" 직접 물어볼 방법이
+    # 없다. 실행 중 여부(pgrep)와 마지막으로 우리가 연 재생목록 기록을 합쳐
+    # 근사한다 — Elmedia가 떠 있지 않으면 재생목록도 의미 없으니 null.
+    _require_owner(request)
+    running = _shift_alarm_elmedia_running()
+    return {"running": running, "playlist": _shift_alarm_load_now_playing() if running else None}
 
 
 @app.post("/api/shift-alarm/media/open-sites")

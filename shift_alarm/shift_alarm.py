@@ -1361,6 +1361,20 @@ ELMEDIA_AUDIO_EXTENSIONS = {
     ".aac", ".aif", ".aiff", ".alac", ".flac", ".m4a", ".mp3", ".ogg",
     ".opus", ".wav", ".wma",
 }
+# ★ 2026-09-14: "클래식/좋아요 재생 중일 때 대시보드에 어느 쪽인지 표시해줘" —
+# 메뉴바·채팅·대시보드 세 경로 중 어디서 재생을 시작했든 대시보드가 알 수
+# 있게, 마지막으로 연 재생목록을 이 파일 하나에 기록한다(같은 Mac이라 세
+# 파일이 그대로 공유). worker/persona_worker.py·server/app.py에도 같은
+# 경로로 복제돼 있다.
+ELMEDIA_NOW_PLAYING_FILE = os.path.expanduser("~/.shift_alarm_now_playing.json")
+
+
+def _save_elmedia_now_playing(playlist):
+    try:
+        with open(ELMEDIA_NOW_PLAYING_FILE, "w", encoding="utf-8") as f:
+            json.dump({"playlist": playlist}, f)
+    except OSError:
+        pass
 HUE_COMMAND_PREFS = os.path.expanduser(
     "~/Library/Group Containers/group.com.leporati.huecommand.shared/Library/Preferences/"
     "group.com.leporati.huecommand.shared.plist"
@@ -2629,16 +2643,15 @@ def play_folder_in_elmedia(folder=PLAYLIST_FOLDER):
     if not os.path.isdir(folder):
         return False, "폴더를 찾을 수 없습니다."
     try:
-        playlist_path = (
-            CLASSIC_PLAYLIST_PATH if os.path.abspath(folder) == os.path.abspath(PLAYLIST_FOLDER)
-            else FAVORITES_PLAYLIST_PATH
-        )
+        is_classic = os.path.abspath(folder) == os.path.abspath(PLAYLIST_FOLDER)
+        playlist_path = CLASSIC_PLAYLIST_PATH if is_classic else FAVORITES_PLAYLIST_PATH
         write_elmedia_playlist(folder, playlist_path)  # 기록용(사람이 확인할 수 있는 트랙 목록)
         tracks = list_audio_tracks(folder)
         if not tracks:
             return False, "재생 가능한 음원 파일이 없습니다."
         reset_ok = reset_elmedia_playlist()
         subprocess.Popen(["open", "-a", "Elmedia Video Player", *tracks])
+        _save_elmedia_now_playing("classical" if is_classic else "favorites")
         if not reset_ok:
             # ★ 2026-08-12: 기존 프로세스를 강제 종료도 못 시켰다는 뜻 — 새로 여는
             # 트랙이 "교체"가 아니라 이미 떠 있던 큐(예: 좋아요 플레이)에 "추가"돼

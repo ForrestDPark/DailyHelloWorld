@@ -329,6 +329,18 @@ class ShiftAlarmApiTests(unittest.TestCase):
         args = mock_subprocess.Popen.call_args.args[0]
         self.assertEqual(args, ["open", "-a", "Elmedia Video Player", "/a.mp3"])
 
+    def test_play_folder_records_which_playlist_for_now_playing(self):
+        with patch.object(module, "_shift_alarm_list_audio_tracks", return_value=["/a.mp3"]), \
+             patch.object(module, "_shift_alarm_reset_elmedia_playlist", return_value=True), \
+             patch.object(module, "subprocess"), \
+             patch.object(module, "_shift_alarm_save_now_playing") as mock_save, \
+             patch("os.path.isdir", return_value=True):
+            module._shift_alarm_play_folder(module.SHIFT_ALARM_CLASSIC_FOLDER)
+            mock_save.assert_called_once_with("classical")
+            mock_save.reset_mock()
+            module._shift_alarm_play_folder(module.SHIFT_ALARM_FAVORITES_FOLDER)
+            mock_save.assert_called_once_with("favorites")
+
     def test_play_classical_uses_classic_folder(self):
         with patch.object(module, "_shift_alarm_play_folder", return_value=(True, "5곡을 새로 열었습니다.")) as mock_play:
             module.play_shift_alarm_media(module.ShiftAlarmPlayRequest(playlist="classical"), owner_request())
@@ -344,6 +356,20 @@ class ShiftAlarmApiTests(unittest.TestCase):
             with self.assertRaises(HTTPException) as raised:
                 module.play_shift_alarm_media(module.ShiftAlarmPlayRequest(playlist="favorites"), owner_request())
         self.assertEqual(raised.exception.status_code, 409)
+
+    def test_now_playing_reports_running_playlist(self):
+        with patch.object(module, "_shift_alarm_elmedia_running", return_value=True), \
+             patch.object(module, "_shift_alarm_load_now_playing", return_value="classical"):
+            result = module.shift_alarm_now_playing(owner_request())
+        self.assertEqual(result, {"running": True, "playlist": "classical"})
+
+    def test_now_playing_hides_playlist_when_not_running(self):
+        """Elmedia가 안 떠 있으면 예전에 재생했던 기록이 남아 있어도 무시한다 —
+        꺼진 뒤에도 "재생 중"으로 표시되는 걸 막기 위함."""
+        with patch.object(module, "_shift_alarm_elmedia_running", return_value=False), \
+             patch.object(module, "_shift_alarm_load_now_playing", return_value="favorites"):
+            result = module.shift_alarm_now_playing(owner_request())
+        self.assertEqual(result, {"running": False, "playlist": None})
 
     def test_open_random_sites_returns_urls(self):
         """★ 2026-09-14: 서버(Mac)에서 직접 여는 대신 URL만 돌려주고, 여는
