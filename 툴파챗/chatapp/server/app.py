@@ -784,7 +784,7 @@ def _shift_alarm_transfer_states():
     return {row["file_id"]: dict(row) for row in rows}
 
 
-def _shift_alarm_stream_file(path, range_header, file_id=None):
+def _shift_alarm_stream_file(path, range_header, request, file_id=None):
     size = path.stat().st_size
     start, end, status_code = 0, size - 1, 200
     if range_header:
@@ -805,7 +805,7 @@ def _shift_alarm_stream_file(path, range_header, file_id=None):
     file_id = file_id or _shift_alarm_av4_id(path)
     transfer_id = _shift_alarm_transfer_start(file_id, path, start, size)
 
-    def chunks():
+    async def chunks():
         sent = start
         completed = False
         last_report = start
@@ -814,6 +814,16 @@ def _shift_alarm_stream_file(path, range_header, file_id=None):
                 source.seek(start)
                 remaining = length
                 while remaining:
+                    # ★ 2026-09-14: "백그라운드로 넘어가면 몇 분 뒤 다운로드
+                    # 실패가 뜨는데 앱에는 성공으로 뜬다" — 클라이언트가 이미
+                    # 연결을 끊었어도 이 읽기 루프는 그걸 모르고 파일을 끝까지
+                    # 읽어 completed=True로 잘못 보고하고 있었다(서버 쪽
+                    # write는 OS 소켓 버퍼에 성공적으로 밀어넣어지는 것과
+                    # 실제로 클라이언트가 받는 것은 별개). 매 청크마다 연결
+                    # 상태를 확인해서 끊겼으면 즉시 멈추고 interrupted로
+                    # 정직하게 기록한다.
+                    if await request.is_disconnected():
+                        break
                     data = source.read(min(1024 * 1024, remaining))
                     if not data:
                         break
@@ -1630,14 +1640,14 @@ def download_shift_alarm_video(job_id: str, request: Request,
     row, path = _shift_alarm_owned_video(job_id, _request_username(request))
     with _shift_alarm_video_db() as conn:
         conn.execute("UPDATE video_downloads SET downloaded_at=? WHERE job_id=?", (_now(), job_id))
-    return _shift_alarm_stream_file(path, range_header, _shift_alarm_av4_id(path))
+    return _shift_alarm_stream_file(path, range_header, request, _shift_alarm_av4_id(path))
 
 
 @app.get("/api/shift-alarm/video-library/{file_id}/file")
 def download_shift_alarm_library_video(file_id: str, request: Request,
                                        range_header: Optional[str] = Header(None, alias="Range")):
     _require_owner(request)
-    return _shift_alarm_stream_file(_shift_alarm_av4_file(file_id), range_header, file_id)
+    return _shift_alarm_stream_file(_shift_alarm_av4_file(file_id), range_header, request, file_id)
 
 
 @app.post("/api/shift-alarm/video-library/{file_id}/action")

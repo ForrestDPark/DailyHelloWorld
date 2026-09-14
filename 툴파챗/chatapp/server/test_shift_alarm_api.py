@@ -13,14 +13,24 @@ from fastapi import HTTPException
 from server import app as module
 
 
+async def _never_disconnected():
+    return False
+
+
 def owner_request():
-    return SimpleNamespace(state=SimpleNamespace(user=None, can_write=True, share_guest=False))
+    return SimpleNamespace(
+        state=SimpleNamespace(user=None, can_write=True, share_guest=False),
+        is_disconnected=_never_disconnected,
+    )
 
 
 def signed_in_request(username="tester"):
-    return SimpleNamespace(state=SimpleNamespace(
-        user={"username": username, "is_owner": False}, can_write=True, share_guest=False
-    ))
+    return SimpleNamespace(
+        state=SimpleNamespace(
+            user={"username": username, "is_owner": False}, can_write=True, share_guest=False
+        ),
+        is_disconnected=_never_disconnected,
+    )
 
 
 class ShiftAlarmApiTests(unittest.TestCase):
@@ -203,6 +213,44 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertEqual(response.media_type, "application/octet-stream")
         self.assertIn('attachment; filename="video-', response.headers["content-disposition"])
         self.assertEqual(body, b"2345")
+
+    def test_disconnect_mid_stream_is_reported_as_interrupted_not_complete(self):
+        """★ 2026-09-14: "백그라운드로 넘어가면 몇 분 뒤 다운로드 실패가
+        뜨는데 앱에는 성공으로 뜬다" — 클라이언트가 이미 연결을 끊었는데도
+        읽기 루프가 그걸 모르고 파일을 끝까지 읽어 completed=True로 잘못
+        보고했다(서버가 OS 소켓 버퍼에 쓰는 것과 클라이언트가 실제로 받는
+        것은 별개). request.is_disconnected()를 매 청크마다 확인해서
+        끊기면 즉시 멈추고 interrupted로 정직하게 기록해야 한다."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            files = root / "av4"
+            files.mkdir()
+            video = files / "큰파일.mp4"
+            video.write_bytes(b"0" * (3 * 1024 * 1024))
+            db = root / "downloads.db"
+            with patch.object(module, "SHIFT_ALARM_VIDEO_DIR", root), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_FILES", files), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_DB", db):
+                file_id = module._shift_alarm_av4_id(video)
+                calls = {"n": 0}
+
+                async def is_disconnected():
+                    calls["n"] += 1
+                    return calls["n"] > 1
+
+                request = SimpleNamespace(
+                    state=SimpleNamespace(user=None, can_write=True, share_guest=False),
+                    is_disconnected=is_disconnected,
+                )
+                response = module.download_shift_alarm_library_video(file_id, request, None)
+
+                async def consume():
+                    return b"".join([chunk async for chunk in response.body_iterator])
+
+                body = asyncio.run(consume())
+                state = module._shift_alarm_transfer_states()[file_id]
+        self.assertLess(len(body), 3 * 1024 * 1024, "연결이 끊긴 뒤에는 더 읽으면 안 된다")
+        self.assertEqual(state["state"], "interrupted")
 
     def test_ios_download_filename_uses_short_title_code(self):
         path = Path("KSBJ-108-아주 긴 한글 제목과 출연자 이름.mp4")
