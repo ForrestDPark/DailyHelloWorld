@@ -201,8 +201,14 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertEqual(response.headers["content-range"], "bytes 2-5/10")
         self.assertEqual(response.headers["content-length"], "4")
         self.assertEqual(response.media_type, "application/octet-stream")
-        self.assertIn("attachment; filename=video.mp4", response.headers["content-disposition"])
+        self.assertIn('attachment; filename="video-', response.headers["content-disposition"])
         self.assertEqual(body, b"2345")
+
+    def test_ios_download_filename_uses_short_title_code(self):
+        path = Path("KSBJ-108-아주 긴 한글 제목과 출연자 이름.mp4")
+        self.assertEqual(module._shift_alarm_ios_filename(path), "KSBJ-108.mp4")
+        fallback = module._shift_alarm_ios_filename(Path("작품 코드 없는 긴 제목.mp4"))
+        self.assertRegex(fallback, r"^video-[a-f0-9]{10}\.mp4$")
 
     def test_video_file_is_owner_only(self):
         with self.assertRaises(HTTPException) as raised:

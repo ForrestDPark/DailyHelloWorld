@@ -727,6 +727,13 @@ def _shift_alarm_av4_id(path):
     return hashlib.sha256(path.name.encode("utf-8")).hexdigest()[:24]
 
 
+def _shift_alarm_ios_filename(path):
+    code = re.search(r"(?i)(?<![A-Z0-9])([A-Z]{2,12}-\d{2,8})(?![A-Z0-9])", path.stem)
+    if code:
+        return f"{code.group(1).upper()}.mp4"
+    return f"video-{_shift_alarm_av4_id(path)[:10]}.mp4"
+
+
 def _shift_alarm_av4_files():
     try:
         paths = [path for path in SHIFT_ALARM_VIDEO_FILES.iterdir()
@@ -824,9 +831,7 @@ def _shift_alarm_stream_file(path, range_header, file_id=None):
 
     headers = {
         "Accept-Ranges": "bytes", "Content-Length": str(length),
-        "Content-Disposition": (
-            f"attachment; filename=video.mp4; filename*=UTF-8''{urllib.parse.quote(path.name)}"
-        ),
+        "Content-Disposition": f'attachment; filename="{_shift_alarm_ios_filename(path)}"',
         "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",
     }
     if status_code == 206:
