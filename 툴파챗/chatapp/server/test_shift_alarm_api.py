@@ -236,6 +236,27 @@ class ShiftAlarmApiTests(unittest.TestCase):
             )
         self.assertEqual(raised.exception.status_code, 403)
 
+    def test_video_status_includes_ios_filename_for_finding_the_download_later(self):
+        """★ 2026-09-14: "폰에서 아무리 찾아도 파일이 없다"는 신고의 실제 원인 —
+        '파일명 복사' 버튼이 원래 긴 파일명(item.filename)을 복사했는데, 정작
+        Safari는 짧은 작품 코드(_shift_alarm_ios_filename)로 저장하니 그
+        이름으로는 Files 앱에서 절대 못 찾는다. 목록 응답에 실제 저장될
+        이름을 포함시켜 화면에 항상 보이게 하고, 복사 버튼도 이 값을 쓰도록
+        고쳤다(app.js)."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            files = root / "av4"
+            files.mkdir()
+            video = files / "KSBJ-108-아주 긴 한글 제목과 출연자 이름.mp4"
+            video.write_bytes(b"1234")
+            with patch.object(module, "SHIFT_ALARM_VIDEO_DIR", root), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_FILES", files), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_DB", root / "downloads.db"), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_STATUS_FILE", root / "status.json"):
+                (root / "status.json").write_text(json.dumps({"state": "idle", "progress": 0}), encoding="utf-8")
+                result = module.shift_alarm_video_download_status(owner_request())
+        self.assertEqual(result["downloads"][0]["ios_filename"], "KSBJ-108.mp4")
+
     def test_video_status_matches_managed_db_row_to_av4_file(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

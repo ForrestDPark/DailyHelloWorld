@@ -1551,7 +1551,8 @@ def shift_alarm_video_download_status(request: Request):
         file_id = _shift_alarm_av4_id(path)
         managed = managed_paths.get(str(path))
         item = {
-            "file_id": file_id, "filename": path.name, "size_bytes": path.stat().st_size,
+            "file_id": file_id, "filename": path.name, "ios_filename": _shift_alarm_ios_filename(path),
+            "size_bytes": path.stat().st_size,
             "completed_at": managed["completed_at"] if managed else datetime.datetime.fromtimestamp(
                 path.stat().st_mtime, datetime.timezone.utc
             ).isoformat(timespec="seconds"),
