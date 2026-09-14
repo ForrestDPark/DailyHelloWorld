@@ -3567,27 +3567,45 @@ def choose_youtube_mp3_folder():
         return None
 
 
+def _normalize_youtube_mp3_url(url):
+    """yt-dlp가 읽을 수 있는 YouTube 영상/재생목록 주소와 표시명을 만든다."""
+    parsed_url = urlparse(url)
+    query = parse_qs(parsed_url.query)
+    playlist_id = (query.get("list") or [""])[0]
+    video_id = (query.get("v") or [""])[0]
+
+    if playlist_id == "LL":
+        return "https://www.youtube.com/playlist?list=LL", "좋아요 표시한 동영상 전체", True
+
+    if playlist_id.startswith("RD"):
+        # RD 계열은 특정 영상을 기준으로 즉석 생성되는 YouTube Mix다.
+        # /playlist?list=RD...로 바꾸면 "playlist type is unviewable"이 되므로
+        # 반드시 기준 영상이 든 watch URL을 유지한다.
+        if not video_id:
+            embedded_video = re.fullmatch(r"RD([\w-]{11})", playlist_id)
+            if embedded_video:
+                video_id = embedded_video.group(1)
+        if video_id:
+            download_url = f"https://www.youtube.com/watch?v={video_id}&list={playlist_id}"
+            return download_url, f"YouTube 믹스 ({playlist_id})", False
+        return url, f"YouTube 믹스 ({playlist_id})", False
+
+    if playlist_id:
+        return (
+            f"https://www.youtube.com/playlist?list={playlist_id}",
+            f"재생목록 전체 ({playlist_id})",
+            False,
+        )
+    return url, "단일 영상", False
+
+
 def run_youtube_mp3_download(url, folder_path):
     """단일 영상 또는 재생목록을 최고 음질 MP3로 내려받는다."""
     yt_dlp = "/opt/homebrew/bin/yt-dlp"
     if not os.path.isfile(yt_dlp):
         return False, f"yt-dlp를 찾을 수 없습니다: {yt_dlp}"
 
-    parsed_url = urlparse(url)
-    playlist_ids = parse_qs(parsed_url.query).get("list", [])
-    playlist_id = playlist_ids[0] if playlist_ids else ""
-    is_liked_playlist = playlist_id == "LL"
-    if playlist_id == "LL":
-        # watch?v=...&list=LL은 재생 화면용 축약 목록(약 100개)만 돌려줄 수 있다.
-        # 전체 좋아요 보관함을 읽도록 반드시 playlist 전용 URL로 정규화한다.
-        download_url = "https://www.youtube.com/playlist?list=LL"
-        source_label = "좋아요 표시한 동영상 전체"
-    elif playlist_id:
-        download_url = f"https://www.youtube.com/playlist?list={playlist_id}"
-        source_label = f"재생목록 전체 ({playlist_id})"
-    else:
-        download_url = url
-        source_label = "단일 영상"
+    download_url, source_label, is_liked_playlist = _normalize_youtube_mp3_url(url)
 
     # 기존에 정상 동작하던 Automator 명령과 동일하게 로그인된 Chrome에서
     # 쿠키를 직접 읽는다. 수동 export 파일은 좋아요 목록용 로그인 쿠키가
@@ -7045,6 +7063,10 @@ class ShiftAlarmApp(rumps.App):
 
         self.menu.add(None)
         self.menu.add(rumps.MenuItem(f"💡 Hue {HUE_WAKE_ROOM_NAME} 켜기/끄기", callback=self.toggle_hue_now))
+        self.menu.add(rumps.MenuItem(
+            "🎵 YouTube → MP3 다운로드",
+            callback=self.download_youtube_mp3_now,
+        ))
 
         # build_menu() 때 기존 NSMenuItem을 다시 붙이면 AppKit 예외가 나므로 현재
         # 텍스트로 새 항목을 만든다. 새 객체에 원래 색도 다시 입혀 이후 사용량
@@ -7139,10 +7161,6 @@ class ShiftAlarmApp(rumps.App):
         media_menu.add(rumps.MenuItem(
             "🏷️ MP3 Shazam 제목 변경 (폴더 선택)",
             callback=self.run_mp3_shazam_rename_now,
-        ))
-        media_menu.add(rumps.MenuItem(
-            "🎵 YouTube → MP3 다운로드",
-            callback=self.download_youtube_mp3_now,
         ))
         more_menu.add(media_menu)
 

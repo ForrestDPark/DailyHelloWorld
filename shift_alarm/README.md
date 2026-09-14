@@ -20,6 +20,11 @@
   - **★ 2026-08-07 KeepAlive 추가**: 예전엔 `KeepAlive: false`라 앱이 정말로 죽으면(크래시 등) launchd가 자동으로 다시 안 띄워줘서, 수동으로 kickstart 해줄 때까지 메뉴바 아이콘이 계속 사라진 채로 남는 문제가 있었다. `KeepAlive: {SuccessfulExit: false}`로 바꿔서 **비정상 종료(크래시/kill)일 때만** 자동 재시작하고, 메뉴의 "종료"로 정상 종료(exit 0, `rumps.quit_application()`)했을 땐 재시작 안 함. `StandardOutPath`/`StandardErrorPath`를 `~/Library/Logs/shift_alarm.{out,err}.log`로 지정해서 다음에 또 죽으면 원인을 사후에 확인할 수 있게 했다. plist를 고친 뒤엔 `launchctl kickstart -k`만으로는 반영이 안 되고(플리스트 자체를 다시 안 읽음) `launchctl bootout gui/$(id -u)/com.shiftalarm.menubar && launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.shiftalarm.menubar.plist`로 재로드해야 한다.
 - 사용자는 3교대(Day/Swing/GY) + 휴무로 도는 D조 근무자.
 
+## YouTube Mix MP3 다운로드 수정 (2026-09-14)
+
+- `🎵 YouTube → MP3 다운로드`를 `기타 → 일본어·미디어 도구`에서 메인 메뉴로 옮겨 바로 실행할 수 있게 했다.
+- `RD...` 형태의 YouTube Mix는 일반 재생목록 URL(`playlist?list=RD...`)로 변환하면 yt-dlp가 `This playlist type is unviewable`로 거절한다. 기준 영상 ID가 포함된 `watch?v=...&list=RD...` 형태로 보존·복원해 Mix를 정상 조회하도록 수정했다.
+
 ## 0. 메뉴 구성 원칙 (2026-08-13 사용 빈도 기준 재설계)
 
 메인 메뉴 최상단은 매일 확인하는 `오늘 급여·휴무 → 오늘 리마인더 → 메일 → 날씨 → 추천 공고·경진대회 → 추천 사이트 → 손자병법 최신`, 그 아래는 자주 직접 실행하는 `일본어 자막 추출 → 전자책 이어하기 → 좋아요 Elmedia → Elmedia 지금 바로 재생 → Hue 거실 켜기/끄기 → Codex·Claude 사용량 → 저장공간 관리` 순서로 고정한다. 강수확률이 50% 이상이면 날씨 옆에 `(우산 준비하세요)`를 표시한다. Codex는 연보라, Claude는 주황으로 표시하고 각각 임계치를 넘으면 빨강으로 경고한다. 설정·상태·가끔 쓰는 보조 도구는 `기타` 하위 메뉴로 접고, `종료`는 하위 메뉴에 넣지 않고 메인 메뉴의 `기타` 바로 아래에 둔다. `기타` 안에서도 독서 보조 기능은 `독서 도구`, 일본어 후처리·음원 기능은 `일본어·미디어 도구`로 묶는다.
