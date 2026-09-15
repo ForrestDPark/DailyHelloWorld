@@ -297,6 +297,59 @@ class ShiftAlarmApiTests(unittest.TestCase):
             )
         self.assertEqual(raised.exception.status_code, 403)
 
+    def test_extract_subtitle_copies_only_the_selected_file_into_an_isolated_folder(self):
+        """subtitle_notion_epub_only.sh는 폴더 안 영상을 전부 처리하므로, av4에
+        다른 파일이 더 있어도 고른 영상 하나만 격리된 작업 폴더에 복사돼
+        넘어가야 한다(원본은 그대로 남아 iPhone 전송 기능과 안 부딪힘)."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            av4 = root / "av4"
+            av4.mkdir()
+            (av4 / "다른영상.mp4").write_bytes(b"other")
+            selected = av4 / "선택한영상.mp4"
+            selected.write_bytes(b"selected-bytes")
+            script = root / "subtitle_notion_epub_only.sh"
+            script.write_text("#!/bin/zsh\n", encoding="utf-8")
+            subtitle_dir = root / "subtitle_extract"
+            file_id = module._shift_alarm_av4_id(selected)
+            with patch.object(module, "SHIFT_ALARM_VIDEO_FILES", av4), \
+                 patch.object(module, "JP_SUBTITLE_STAGE2_SCRIPT", script), \
+                 patch.object(module, "SHIFT_ALARM_SUBTITLE_DIR", subtitle_dir), \
+                 patch.object(module, "SHIFT_ALARM_SUBTITLE_STATUS_FILE", subtitle_dir / "status.json"), \
+                 patch("subprocess.Popen") as popen:
+                result = module.act_on_shift_alarm_library_video(
+                    file_id, module.ShiftAlarmVideoActionRequest(action="extract_subtitle"),
+                    owner_request(),
+                )
+            popen_args = popen.call_args.args[0]
+            work_dir = Path(popen_args[-1])
+            work_dir_entries = [path.name for path in work_dir.iterdir()]
+            copied_bytes = (work_dir / "선택한영상.mp4").read_bytes()
+            original_survives = selected.is_file()
+            status = json.loads((subtitle_dir / "status.json").read_text(encoding="utf-8"))
+        self.assertTrue(result["ok"])
+        self.assertEqual(popen_args[:2], ["zsh", str(script)])
+        self.assertEqual(work_dir_entries, ["선택한영상.mp4"])
+        self.assertEqual(copied_bytes, b"selected-bytes")
+        self.assertTrue(original_survives, "원본 av4 파일은 그대로 남아 있어야 한다")
+        self.assertEqual(status["state"], "running")
+        self.assertEqual(status["filename"], "선택한영상.mp4")
+
+    def test_extract_subtitle_rejects_when_another_extraction_is_running(self):
+        with tempfile.TemporaryDirectory() as directory:
+            av4 = Path(directory)
+            video = av4 / "영상.mp4"
+            video.write_bytes(b"1234")
+            file_id = module._shift_alarm_av4_id(video)
+            with patch.object(module, "SHIFT_ALARM_VIDEO_FILES", av4), \
+                 patch.object(module, "_shift_alarm_subtitle_status", return_value={"state": "running"}), \
+                 self.assertRaises(HTTPException) as raised:
+                module.act_on_shift_alarm_library_video(
+                    file_id, module.ShiftAlarmVideoActionRequest(action="extract_subtitle"),
+                    owner_request(),
+                )
+        self.assertEqual(raised.exception.status_code, 409)
+
     def test_video_status_includes_ios_filename_for_finding_the_download_later(self):
         """★ 2026-09-14: "폰에서 아무리 찾아도 파일이 없다"는 신고의 실제 원인 —
         '파일명 복사' 버튼이 원래 긴 파일명(item.filename)을 복사했는데, 정작

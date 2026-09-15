@@ -36,6 +36,7 @@ import os
 import random
 import re
 import secrets
+import shutil
 import socket
 import sqlite3
 import subprocess
@@ -151,7 +152,7 @@ USERNAME_RE = re.compile(r"^[A-Za-z0-9_가-힣]{2,20}$")
 # 회원가입/로그인 API는 인증 이전에 열려 있어야 한다. /api/whoami는 로그인
 # 여부를 프론트가 확인하는 용도라 항상 응답한다(그 자체로 정보 노출 없음).
 PUBLIC_PATHS = {
-    "/", "/api/whoami", "/api/auth/signup", "/api/auth/login", "/api/auth/logout", "/api/version",
+    "/", "/manifest.json", "/api/whoami", "/api/auth/signup", "/api/auth/login", "/api/auth/logout", "/api/version",
     "/api/public/sunzi-analysis",
     # ★ 2026-08-26: 구글/카카오 로그인 — 이 네 경로는 아직 세션이 없는 상태에서
     # 오는 요청(로그인 시작·프로바이더가 돌려보내는 콜백)이라 공개로 열어둔다.
@@ -526,6 +527,16 @@ def index():
     return FileResponse(str(BASE_DIR / "static" / "index.html"))
 
 
+@app.get("/manifest.json")
+def pwa_manifest():
+    """브라우저의 PWA 설치 검사에서 사용하는 루트 manifest."""
+    return FileResponse(
+        str(BASE_DIR / "static" / "manifest.json"),
+        media_type="application/manifest+json",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
 @app.get("/career")
 def career_redirect():
     return RedirectResponse("/career/", status_code=307)
@@ -639,6 +650,75 @@ SHIFT_ALARM_VIDEO_WORKER = REPO_ROOT / "shift_alarm" / "stream_download_worker.p
 SHIFT_ALARM_VIDEO_PYTHON = sys.executable
 SHIFT_ALARM_VIDEO_DB = SHIFT_ALARM_VIDEO_DIR / "downloads.db"
 SHIFT_ALARM_VIDEO_FILES = Path("/Users/forrestdpark/Desktop/BlogImage/av4")
+
+# ★ 2026-09-15: "av4 폴더에있는 영상 선택해서 일본어자막 추출만 할수있는 버튼
+# 잇으면 좋겠어 ... 운동용영상추출은 제외하고 epub 만들고 일본어 스터디
+# 시스템에 작품이 올라오는것까지" 요청 — shift_alarm.py 메뉴바의
+# `📝 자막·노션·EPUB만 (폴더 선택)`(run_jp_subtitle_stage2_only)과 완전히 같은
+# subtitle_notion_epub_only.sh를 대시보드에서 av4 파일 하나를 골라 실행한다.
+# 그 스크립트는 폴더 안의 영상을 전부 처리하므로, av4에 다른 다운로드가 같이
+# 있어도 섞이지 않도록 선택한 파일만 격리된 작업 폴더로 복사해서 넘긴다(원본은
+# 그대로 두어 iPhone 전송 기능과 충돌하지 않음). WORKOUT_EXTRACTION_ENABLED=0은
+# 스크립트 자체가 이미 고정하므로 별도 처리가 필요 없다.
+JP_SUBTITLE_DIR = REPO_ROOT / "일본어자막추출"
+JP_SUBTITLE_STAGE2_SCRIPT = JP_SUBTITLE_DIR / "subtitle_notion_epub_only.sh"
+SHIFT_ALARM_SUBTITLE_DIR = Path(os.path.expanduser("~/.tulpachat/jp_subtitle_extract"))
+SHIFT_ALARM_SUBTITLE_STATUS_FILE = SHIFT_ALARM_SUBTITLE_DIR / "status.json"
+# shift_alarm.py의 JP_SUBTITLE_MARKER_TIMEOUT_SECONDS와 동일 — 영상 여러 개를
+# 이어붙여 처리하면 오래 걸릴 수 있어 넉넉히 3시간.
+SHIFT_ALARM_SUBTITLE_TIMEOUT_SECONDS = 3 * 60 * 60
+# shift_alarm.py의 JP_SUBTITLE_STUDY_ROOM_ID와 같은 방 — 완료되면 학습카드
+# 위주로 오늘 회차를 소개해달라는 트리거를 그대로 재사용한다.
+JP_SUBTITLE_STUDY_ROOM_ID = "custom_1fc73254c0"
+
+
+def _shift_alarm_subtitle_write_status(status):
+    SHIFT_ALARM_SUBTITLE_DIR.mkdir(parents=True, exist_ok=True)
+    temporary = SHIFT_ALARM_SUBTITLE_STATUS_FILE.with_suffix(".tmp")
+    temporary.write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.chmod(temporary, 0o600)
+    temporary.replace(SHIFT_ALARM_SUBTITLE_STATUS_FILE)
+
+
+def _shift_alarm_notify_jp_subtitle_study_room(content):
+    """shift_alarm.py의 _notify_jp_subtitle_study_room과 같은 트리거를 남긴다.
+    이 서버 자체가 그 엔드포인트를 갖고 있으므로 루프백 HTTP 대신 함수를 직접
+    호출한다(같은 프로세스 안에서 자기 자신에게 굳이 네트워크 왕복을 만들 필요가 없음)."""
+    try:
+        worker_reading_session_done(
+            ReadingSessionDone(room_id=JP_SUBTITLE_STUDY_ROOM_ID, content=content),
+            authorization=f"Bearer {WORKER_TOKEN}" if WORKER_TOKEN else None,
+        )
+    except HTTPException:
+        pass
+
+
+def _shift_alarm_subtitle_status():
+    try:
+        status = json.loads(SHIFT_ALARM_SUBTITLE_STATUS_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"state": "idle", "stage": "av4 폴더에서 영상을 선택해주세요"}
+    if status.get("state") == "running":
+        marker = Path(f"/tmp/_jp_subtitle_run_{status.get('run_id')}.done")
+        if marker.exists():
+            marker.unlink(missing_ok=True)
+            shutil.rmtree(status.get("work_dir") or "", ignore_errors=True)
+            status.update(state="complete", stage="자막·번역·후리가나·Notion·EPUB 반영 완료",
+                          progress=100, completed_at=_now(), updated_at=_now())
+            _shift_alarm_subtitle_write_status(status)
+            _shift_alarm_notify_jp_subtitle_study_room(
+                "🔔 오늘 새 회차 자막 추출이 끝났습니다. "
+                "오늘 새로 처리한 회차의 줄거리와 재미있는 표현을 학습카드 위주로 소개해주세요."
+            )
+        else:
+            try:
+                started = datetime.datetime.fromisoformat(status["created_at"])
+            except (KeyError, ValueError):
+                started = None
+            if started and (datetime.datetime.now(datetime.timezone.utc) - started).total_seconds() > SHIFT_ALARM_SUBTITLE_TIMEOUT_SECONDS:
+                status.update(state="failed", stage="시간이 오래 걸려 상태를 확인할 수 없습니다. Mac의 터미널 창을 직접 확인하세요")
+                _shift_alarm_subtitle_write_status(status)
+    return status
 
 
 def _shift_alarm_save_now_playing(playlist):
@@ -1572,7 +1652,7 @@ class ShiftAlarmVideoDownloadRequest(BaseModel):
 
 
 class ShiftAlarmVideoActionRequest(BaseModel):
-    action: str  # reveal_airdrop | icloud | delete | cancel_transfer
+    action: str  # reveal_airdrop | icloud | delete | cancel_transfer | extract_subtitle
 
 
 @app.post("/api/shift-alarm/media/transport")
@@ -1633,6 +1713,7 @@ def shift_alarm_video_download_status(request: Request):
             )
         except HTTPException:
             status.update(available=False, stage="보관 기간이 끝났거나 파일이 삭제됐습니다")
+    status["subtitle_extraction"] = _shift_alarm_subtitle_status()
     return status
 
 
@@ -1704,6 +1785,42 @@ def act_on_shift_alarm_library_video(file_id: str, body: ShiftAlarmVideoActionRe
                                      request: Request):
     _require_owner(request)
     path = _shift_alarm_av4_file(file_id)
+    if body.action == "extract_subtitle":
+        current = _shift_alarm_subtitle_status()
+        if current.get("state") == "running":
+            raise HTTPException(status_code=409, detail="다른 자막 추출 작업이 진행 중입니다")
+        if not JP_SUBTITLE_STAGE2_SCRIPT.is_file():
+            raise HTTPException(status_code=503, detail="자막 추출 스크립트를 찾을 수 없습니다")
+        job_id = uuid.uuid4().hex
+        run_id = uuid.uuid4().hex[:12]
+        work_dir = SHIFT_ALARM_SUBTITLE_DIR / "work" / job_id
+        work_dir.mkdir(parents=True, exist_ok=True)
+        # av4 폴더 전체가 아니라 이 파일 하나만 넘기기 위해 격리된 작업 폴더로
+        # 복사한다(subtitle_notion_epub_only.sh는 폴더 안 영상을 전부 처리함).
+        # move가 아니라 copy — 원본은 iPhone 전송 기능이 계속 쓸 수 있게 둔다.
+        try:
+            shutil.copy2(path, work_dir / path.name)
+        except OSError as exc:
+            shutil.rmtree(work_dir, ignore_errors=True)
+            raise HTTPException(status_code=503, detail="영상 파일을 작업 폴더로 복사하지 못했습니다") from exc
+        env = os.environ.copy()
+        env["JP_SUBTITLE_RUN_ID"] = run_id
+        try:
+            subprocess.Popen(
+                ["zsh", str(JP_SUBTITLE_STAGE2_SCRIPT), str(work_dir)], env=env,
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except OSError as exc:
+            shutil.rmtree(work_dir, ignore_errors=True)
+            raise HTTPException(status_code=503, detail="자막 추출 작업을 시작하지 못했습니다") from exc
+        _shift_alarm_subtitle_write_status({
+            "job_id": job_id, "run_id": run_id, "state": "running",
+            "stage": "새 터미널 창에서 자막·번역·후리가나·Notion·EPUB 생성 중", "progress": 5,
+            "filename": path.name, "work_dir": str(work_dir),
+            "created_at": _now(), "updated_at": _now(),
+        })
+        return {"ok": True, "message": f"{path.name} 자막 추출을 시작했습니다. Mac에서 새 터미널 창이 열립니다."}
     if body.action == "cancel_transfer":
         # ★ 2026-09-14: "전송중에서 멈춰있는데 어떻게하지" — 터널이 전송 도중
         # 연결을 끊어버리면 스트리밍 제너레이터의 finally 블록이 아예 실행되지
