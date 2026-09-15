@@ -590,13 +590,18 @@ def dating_sim_redirect():
 @app.get("/dating-sim/")
 def dating_sim_dashboard(request: Request):
     _require_signed_in_user(request)
+    if "book" not in request.query_params:
+        book_id = dating_sim_story.random_book_id()
+        if book_id:
+            return RedirectResponse(f"/dating-sim/?book={book_id}", status_code=307)
     return FileResponse(str(DATING_SIM_WEB_DIR / "index.html"))
 
 
 @app.get("/dating-sim/static/{filename}")
 def dating_sim_static(filename: str, request: Request):
     _require_signed_in_user(request)
-    if filename not in {"style.css", "app.js", "soi.png", "haru.png"}:
+    if filename not in {"style.css", "app.js", "soi.png", "soi-park.png", "soi-school.png",
+                        "haru.png", "haru-first.png", "haru-walk.png"}:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(DATING_SIM_WEB_DIR / filename))
 
@@ -616,6 +621,19 @@ class DatingSimRestartRequest(BaseModel):
 
 
 def _dating_story(story_id=None):
+    # ★ 2026-09-15: "스토리 시나리오전개쪽에서 데이터베이스 만들어줘" 요청 —
+    # 기본 캐릭터(소이)는 이제 DB(dating_sim_scenarios 등)에서 요일·장소별
+    # 여러 변형 중 하나를 무작위로 골라 읽는다. EPUB 영감 이야기(book:...)는
+    # 여전히 절대 DB에 안 담고 그때그때 안전한 템플릿으로 만든다(기존 방식).
+    if not story_id:
+        conn = get_conn()
+        try:
+            dating_sim_story.seed_dating_sim_content(conn)
+            story = dating_sim_story.load_story_from_db(conn, dating_sim_story.CHARACTER_ID)
+        finally:
+            conn.close()
+        if story:
+            return story
     try:
         return dating_sim_story.story_for(story_id)
     except ValueError as exc:
@@ -628,7 +646,16 @@ def _dating_sim_row(conn, username, story):
         (username, story["id"]),
     ).fetchone()
     if row:
-        return dict(row)
+        row = dict(row)
+        if row["completed"] and row["day"] <= story["total_days"]:
+            conn.execute(
+                "UPDATE dating_sim_progress SET completed=0,ending_id=NULL,pending_location=NULL,updated_at=? "
+                "WHERE username=? AND character_id=?",
+                (_now(), username, story["id"]),
+            )
+            conn.commit()
+            row.update(completed=0, ending_id=None, pending_location=None)
+        return row
     now = _now()
     conn.execute(
         "INSERT INTO dating_sim_progress "
@@ -656,9 +683,12 @@ def _dating_sim_state_payload(row, story):
         "completed": completed,
     }
     if row["pending_location"] and not completed:
-        scene = story["scenes"][row["day"]][row["pending_location"]]
+        selected_location = row["pending_location"]
+        scene = story["scenes"][row["day"]][selected_location]
         payload["scene"] = {
             "location": row["pending_location"],
+            "character_image": story.get("character_images", {}).get(
+                row["pending_location"], story.get("character_image")),
             "lines": scene["lines"],
             "choices": [{"text": choice["text"]} for choice in scene["choices"]],
         }
@@ -839,7 +869,8 @@ def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
         row = _dating_sim_row(conn, username, story)
         if row["completed"] or not row["pending_location"]:
             raise HTTPException(status_code=409, detail="지금은 선택할 수 있는 장면이 없습니다")
-        scene = story["scenes"][row["day"]][row["pending_location"]]
+        selected_location = row["pending_location"]
+        scene = story["scenes"][row["day"]][selected_location]
         if body.choice_index not in range(len(scene["choices"])):
             raise HTTPException(status_code=400, detail="올바르지 않은 선택지입니다")
         affection = max(0, min(100, row["affection"] + scene["choices"][body.choice_index]["affection"]))
@@ -859,13 +890,12 @@ def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
     payload = _dating_sim_state_payload(row, story)
     payload["choice_result"] = {
         "affection_delta": scene["choices"][body.choice_index]["affection"],
-        "line": (("嬉しいです。少し近くなれた気がします。\n기뻐요. 조금 더 가까워진 것 같아요."
-                  if scene["choices"][body.choice_index]["affection"] > 0
-                  else "大丈夫です。ゆっくり知っていきましょう。\n괜찮아요. 우리 천천히 알아가요.")
-                 if story.get("source_title") else
-                 ("기뻐요. 조금 더 가까워진 것 같아요."
-                  if scene["choices"][body.choice_index]["affection"] > 0
-                  else "괜찮아요. 우리 천천히 알아가요.")),
+        "location": selected_location,
+        "character_image": story.get("character_images", {}).get(
+            selected_location, story.get("character_image")),
+        "line": ("[嬉|うれ]しいです。[少|すこ]し[近|ちか]くなれた[気|き]がします。\n기뻐요. 조금 더 가까워진 것 같아요."
+                 if scene["choices"][body.choice_index]["affection"] > 0
+                 else "[大丈夫|だいじょうぶ]です。ゆっくり[知|し]っていきましょう。\n괜찮아요. 우리 천천히 알아가요."),
     }
     return payload
 

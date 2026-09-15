@@ -7,7 +7,10 @@ pending_turns(워커가 처리할 응답 대기열), story_sync(대화 내용을
 "함께 만든 이야기"에 어디까지 반영했는지 워터마크), users/sessions(로그인
 계정·세션 — 2026-08-26, 아래 참고), ui_dev_grants(소유자가 UI 개발자
 페르소나 "유이"에게 말 걸 권한을 선별 부여한 계정 목록 — 2026-08-26),
-dating_sim_progress(미연시 미니게임 — 사용자·캐릭터별 진행 상태, 2026-09-15)."""
+dating_sim_progress(미연시 미니게임 — 사용자·캐릭터별 진행 상태, 2026-09-15),
+dating_sim_characters/locations/scenarios/endings(미연시 시나리오 콘텐츠 —
+요일·장소별 여러 변형 대사를 저장해 재플레이마다 무작위로 다르게 보여줌,
+2026-09-15)."""
 import os
 import sqlite3
 
@@ -242,6 +245,47 @@ def init_db():
             updated_at TEXT NOT NULL,
             PRIMARY KEY (username, character_id)
         );
+        CREATE TABLE IF NOT EXISTS dating_sim_characters (
+            character_id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            title TEXT NOT NULL,
+            total_days INTEGER NOT NULL,
+            character_image TEXT,
+            created_at TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS dating_sim_locations (
+            character_id TEXT NOT NULL,
+            location_id TEXT NOT NULL,
+            label TEXT NOT NULL,
+            emoji TEXT NOT NULL,
+            character_image TEXT,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (character_id, location_id)
+        );
+        CREATE TABLE IF NOT EXISTS dating_sim_scenarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            character_id TEXT NOT NULL,
+            day INTEGER NOT NULL,
+            location_id TEXT NOT NULL,
+            variant INTEGER NOT NULL DEFAULT 1,
+            weight INTEGER NOT NULL DEFAULT 4,
+            intro_line TEXT NOT NULL,
+            activity_line TEXT NOT NULL,
+            outro_line TEXT NOT NULL,
+            choice_a_text TEXT NOT NULL,
+            choice_a_affection INTEGER NOT NULL,
+            choice_b_text TEXT NOT NULL,
+            choice_b_affection INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS dating_sim_endings (
+            character_id TEXT NOT NULL,
+            ending_id TEXT NOT NULL,
+            min_affection INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            line TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            PRIMARY KEY (character_id, ending_id)
+        );
         CREATE TABLE IF NOT EXISTS battle_sim_progress (
             username TEXT NOT NULL,
             battle_id TEXT NOT NULL,
@@ -282,6 +326,14 @@ def init_db():
     conn.execute(
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_rooms_direct_key "
         "ON custom_rooms(direct_key) WHERE direct_key IS NOT NULL"
+    )
+    # ★ 2026-09-15: "스토리 시나리오전개쪽에서 데이터베이스 만들어줘" 요청 —
+    # 미연시 장면(대사·선택지)을 Python 상수 대신 DB에 담아 캐릭터·요일·
+    # 장소 조합마다 여러 변형(variant)을 두고 무작위로 골라 재플레이 다양성을
+    # 준다. weight가 낮은 행은 히든 이벤트(가끔만 등장)로 쓴다.
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_dating_sim_scenarios_lookup "
+        "ON dating_sim_scenarios(character_id, day, location_id)"
     )
     # ★ 2026-08-26: "페르소나 프로필을 간단히 확인할 수 있는 페이지" 요청 —
     # Notion 페르소나는 워커가 "## 프로필" 섹션(유형·정체성/관계·성격·말투·

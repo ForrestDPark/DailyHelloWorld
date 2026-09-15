@@ -9,11 +9,17 @@
 한 차례 다듬은 결과다 — 의미·선택지 호감도 부호는 원안과 동일하고 말투만
 자연스럽게 손봤다.
 """
+import datetime
 import hashlib
+import random
 import re
 import zipfile
 from pathlib import Path
 from xml.etree import ElementTree as ET
+
+
+def _now():
+    return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
 
 CHARACTER_ID = "soi_cafe"
 CHARACTER_NAME = "소이"
@@ -143,12 +149,255 @@ ENDINGS = [
     },
 ]
 
+# 2026-09-15: 전체 세계관을 일본어 학습형 7일 데이트로 확장했다. 위의 초창기
+# 3일 원안은 변경 이력으로 남기고, 실제 엔진에는 아래 장편 데이터를 사용한다.
+CHARACTER_NAME = "ソイ"
+TOTAL_DAYS = 7
+DAY_BEATS = {
+    1: (["[今日|きょう][会|あ]えて、なんだか[嬉|うれ]しいです。\n오늘 만나서 왠지 기뻐요.",
+         "まだ[少|すこ]し[緊張|きんちょう]するけど、ゆっくり[話|はな]したいです。\n아직 조금 긴장되지만 천천히 이야기하고 싶어요."],
+        ["[好|す]きなものを[聞|き]いて、[話|はなし]を[広|ひろ]げる。\n좋아하는 것을 물으며 대화를 이어간다.",
+         "[短|みじか]く[挨拶|あいさつ]して、スマートフォンを[見|み]る。\n짧게 인사하고 휴대전화를 본다."]),
+    2: (["[昨日|きのう]より[自然|しぜん]に[話|はな]せるようになりましたね。\n어제보다 자연스럽게 이야기할 수 있게 됐네요.",
+         "あなたの[好|す]きなもの、もっと[教|おし]えてください。\n당신이 좋아하는 것을 더 알려주세요."],
+        ["[最近|さいきん][夢中|むちゅう]になっていることを[話|はな]す。\n요즘 빠져 있는 것을 이야기한다.",
+         "[特|とく]にないと[答|こた]えて[話題|わだい]を[変|か]える。\n특별히 없다고 답하고 화제를 바꾼다."]),
+    3: (["[急|きゅう]に[雨|あめ]が[降|ふ]ってきましたね。\n갑자기 비가 내리기 시작했네요.",
+         "こういう[予定外|よていがい]の[時間|じかん]も、[嫌|きら]いじゃないです。\n이런 예상 밖의 시간도 싫지는 않아요."],
+        ["[傘|かさ]を[一緒|いっしょ]に[使|つか]おうと[声|こえ]をかける。\n우산을 함께 쓰자고 말한다.",
+         "[雨|あめ]がやむまで[別々|べつべつ]に[待|ま]つ。\n비가 그칠 때까지 따로 기다린다."]),
+    4: (["[実|じつ]は、[将来|しょうらい]のことで[少|すこ]し[迷|まよ]っているんです。\n사실은 장래 문제로 조금 고민하고 있어요.",
+         "こんな[話|はなし]をしても、[困|こま]りませんか。\n이런 이야기를 해도 곤란하지 않아요?"],
+        ["[答|こた]えを[急|いそ]がず、ソイの[話|はなし]を[最後|さいご]まで[聞|き]く。\n답을 재촉하지 않고 소이의 이야기를 끝까지 듣는다.",
+         "すぐに[自分|じぶん]の[考|かんが]えが[正|ただ]しいと[説得|せっとく]する。\n곧바로 내 생각이 옳다고 설득한다."]),
+    5: (["[次|つぎ]の[休|やす]みも、また[会|あ]えたらいいですね。\n다음 휴일에도 다시 만나면 좋겠네요.",
+         "あなたといると、[時間|じかん]が[早|はや]く[過|す]ぎます。\n당신과 있으면 시간이 빨리 지나가요."],
+        ["[二人|ふたり]で[行|い]きたい[場所|ばしょ]を[一緒|いっしょ]に[決|き]める。\n둘이 가고 싶은 장소를 함께 정한다.",
+         "そのうちね、と[曖昧|あいまい]に[答|こた]える。\n언젠가 보자며 애매하게 답한다."]),
+    6: (["[昨日|きのう]、[返事|へんじ]がなくて[少|すこ]し[寂|さび]しかったです。\n어제 답장이 없어서 조금 서운했어요.",
+         "[責|せ]めたいんじゃなくて、[気持|きも]ちを[知|し]りたかったんです。\n책망하려는 게 아니라 마음을 알고 싶었어요."],
+        ["[遅|おそ]くなった[理由|りゆう]を[話|はな]し、[心配|しんぱい]させたことを[謝|あやま]る。\n늦어진 이유를 말하고 걱정하게 한 것을 사과한다.",
+         "[忙|いそが]しかったから[仕方|しかた]ないと[話|はなし]を[終|お]える。\n바빴으니 어쩔 수 없다며 이야기를 끝낸다."]),
+    7: (["この[七日間|なのかかん]、あなたに[会|あ]うのが[毎日|まいにち][楽|たの]しみでした。\n이 7일 동안 당신을 만나는 것이 매일 기대됐어요.",
+         "これからも、あなたの[隣|となり]にいてもいいですか。\n앞으로도 당신 곁에 있어도 될까요?"],
+        ["これからも[一緒|いっしょ]にいたいと[伝|つた]える。\n앞으로도 함께 있고 싶다고 말한다.",
+         "まだ[友達|ともだち]でいたいと[正直|しょうじき]に[伝|つた]える。\n아직은 친구로 있고 싶다고 솔직하게 말한다."]),
+}
+
+# ★ 2026-09-15: "미연시 시나리오를 웹에서 검색해서 좀 재밌게 만들수없을까"
+# 요청 — 장소별 대사가 요일과 무관하게 3줄 고정이라 카페/공원/학교 중 어디를
+# 골라도 그날의 이야기가 똑같이 느껴졌다(선택이 장식일 뿐 서사에 영향이
+# 없었음). 웹 검색으로 확인한 고전 미연시 구조(도키메키 메모리얼류의
+# 요일별 활동 배분 + 기승전결 — 만남→친밀감→이벤트→고민상담→약속→오해→
+# 고백)를 참고해, 요일마다 장소별로 다른 활동 대사를 붙여 21개 조합을 모두
+# 다르게 만들었다. 5일차에는 미연시 단골 클리셰인 "라이벌 잠깐 등장"(카페
+# 동료·소꿉친구·후배)을 새로 넣어 긴장감을 살짝 얹었다.
+LOCATION_LINES = {
+    "cafe": {
+        1: "[初|はじ]めて[頼|たの]むメニュー、[一緒|いっしょ]に[選|えら]んでもらえますか。\n처음 시키는 메뉴, 같이 골라줄 수 있어요?",
+        2: "この[豆|まめ]、[実|じつ]は[私|わたし]のお[気|き]に[入|い]りなんです。\n이 원두, 사실 제가 제일 좋아하는 거예요.",
+        3: "[軒下|のきした]で[雨宿|あまやど]りする[間|あいだ]、コーヒーでも[飲|の]みましょう。\n처마 밑에서 비 피하는 동안 커피라도 마셔요.",
+        4: "この[静|しず]かな[隅|すみ]の[席|せき]、[話|はな]しやすいですよね。\n이 조용한 구석 자리, 이야기하기 편하죠.",
+        5: "([同僚|どうりょう]が[冷|ひ]やかすように[笑|わら]う)\n(카페 동료가 짓궂게 웃으며 놀린다)\nもう、からかわないでよ...[今日|きょう]はどこ[行|い]きたいですか。\n아 진짜, 놀리지 좀 마요... 오늘은 어디 가고 싶어요?",
+        6: "レジの[向|む]こうから、[素|そ]っ[気|け]なく[注文|ちゅうもん]を[聞|き]く。\n계산대 너머로 무뚝뚝하게 주문을 받는다.",
+        7: "[閉店|へいてん]まぎわの[静|しず]かな[店内|てんない]、[二人|ふたり]きりです。\n마감 직전 조용한 가게 안, 우리 둘뿐이에요.",
+    },
+    "park": {
+        1: "この[時間|じかん]の[公園|こうえん]、[静|しず]かで[好|す]きです。\n이 시간의 공원, 조용해서 좋아해요.",
+        2: "あそこのベンチ、[二人|ふたり]の[定位置|ていいち]にしませんか。\n저기 벤치, 우리 자리로 정해볼래요?",
+        3: "あの[東屋|あずまや]まで[走|はし]りましょう、[濡|ぬ]れる[前|まえ]に。\n저 정자까지 뛰어가요, 젖기 전에.",
+        4: "[夜|よる]の[公園|こうえん]は、[本音|ほんね]が[話|はな]しやすい[気|き]がします。\n밤 공원은 왠지 속마음을 말하기 편한 것 같아요.",
+        5: "([幼馴染|おさななじみ]らしき[人|ひと]が[手|て]を[振|ふ]って[通|とお]り[過|す]ぎる)\n(소꿉친구인 듯한 사람이 손을 흔들며 지나간다)\n[昔|むかし]からの[知|し]り[合|あ]いなんです、[気|き]にしないでください。\n오래전부터 아는 사이예요, 신경 쓰지 마세요.",
+        6: "いつものベンチに、[少|すこ]し[距離|きょり]を[空|あ]けて[座|すわ]る。\n늘 앉던 벤치에 조금 거리를 두고 앉는다.",
+        7: "[街灯|がいとう]の[下|した]、いつもより[長|なが]く[立|た]ち[止|ど]まる。\n가로등 아래, 평소보다 오래 멈춰 선다.",
+    },
+    "school": {
+        1: "[校門|こうもん][前|まえ]で[待|ま]ち[合|あ]わせするの、なんだか[新鮮|しんせん]です。\n교문 앞에서 만나기로 하니까 왠지 새로워요.",
+        2: "[部活|ぶかつ][帰|がえ]りに[少|すこ]しだけ[話|はな]しませんか。\n동아리 끝나고 잠깐 이야기하지 않을래요?",
+        3: "[昇降口|しょうこうぐち]で[雨|あめ]がやむのを[待|ま]ちましょう。\n신발장 앞에서 비 그치는 거 기다려요.",
+        4: "[誰|だれ]もいない[教室|きょうしつ]、[少|すこ]しだけ[借|か]りましょう。\n아무도 없는 교실, 잠깐만 빌려요.",
+        5: "([後輩|こうはい]がソイに[話|はな]しかけようとして、あなたを[見|み]て[止|と]まる)\n(후배가 소이에게 말 걸려다 당신을 보고 멈칫한다)\nあの[子|こ]、いつも[話|はな]しかけてくるんですよね。\n저 애, 항상 말 걸더라고요.",
+        6: "[目|め]を[合|あ]わせずに、[短|みじか]く[挨拶|あいさつ]するだけ。\n눈을 마주치지 않고 짧게 인사만 한다.",
+        7: "[夕方|ゆうがた]の[教室棟|きょうしつとう]、[誰|だれ]もいない[静|しず]けさです。\n저녁 교실동, 아무도 없어서 고요해요.",
+    },
+}
+
+
+def _seven_day_scenes(location_lines, character_name_ko="소이"):
+    """location_lines는 {장소: 대사} 또는 {장소: {일차: 대사}} 둘 다 받는다 —
+    후자면 요일마다 다른 활동 대사가, 전자면(예: EPUB 영감 이야기의 임시
+    장소 대사) 모든 요일에 같은 대사가 붙는다."""
+    scenes = {}
+    for day, (lines, choices) in DAY_BEATS.items():
+        scenes[day] = {}
+        for location, day_lines in location_lines.items():
+            activity = day_lines[day] if isinstance(day_lines, dict) else day_lines
+            scenes[day][location] = {"lines": [lines[0], activity, lines[1]], "choices": [
+                {"text": choices[0].replace("소이", character_name_ko), "affection": 8},
+                {"text": choices[1].replace("소이", character_name_ko), "affection": -4},
+            ]}
+    return scenes
+
+
+SCENES = _seven_day_scenes(LOCATION_LINES)
+ENDINGS = [
+    {"id": "best", "min_affection": 98, "title": "ベストエンディング · 함께 쓰는 다음 장", "lines": ["これからは[二人|ふたり]で、この[物語|ものがたり]を[続|つづ]けましょう。\n이제 이 이야기는 우리 둘이 함께 이어가요."]},
+    {"id": "good", "min_affection": 74, "title": "グッドエンディング · 다음 약속", "lines": ["[今度|こんど]はもっとゆっくり[話|はな]しましょう。\n다음에는 더 오래 이야기해요."]},
+    {"id": "normal", "min_affection": 0, "title": "ノーマルエンディング · 남은 여운", "lines": ["[短|みじか]かったけれど、[温|あたた]かい[思|おも]い[出|で]になりました。\n짧았지만 따뜻한 기억으로 남았어요."]},
+]
+
 
 def resolve_ending(affection):
     for ending in ENDINGS:
         if affection >= ending["min_affection"]:
             return ending
     return ENDINGS[-1]
+
+
+# ★ 2026-09-15: "스토리 시나리오전개쪽에서 데이터베이스 만들어주고 웹검색해서
+# 재밌는 서사와 스토리 대화 등등 에피소드를 다양하게 만드는걸 주력으로"
+# 요청 — 요일×장소 조합마다 활동 대사가 하나뿐이라 어느 장소를 고르든
+# 그날의 이야기가 똑같이 느껴졌다. 웹 검색으로 확인한 고전 미연시 구조
+# (도키메키 메모리얼류의 요일별 이벤트 배분 + "히든 이벤트")를 참고해
+# 장면마다 여러 변형을 만들고, DB에서 무작위로 골라 재플레이 다양성을 준다.
+# variant 1·2는 매번 나오는 일반 변형(가중치 4:4), variant 3은 확률 낮은
+# "히든 이벤트"(가중치 1 — 대략 9번 중 1번)로 5일차(라이벌→깜짝 축제)와
+# 7일차(고백 직전→깜짝 선물)에만 넣었다.
+VARIANT_2_LOCATION_LINES = {
+    "cafe": {
+        1: "[手|て]が[少|すこ]し[触|ふ]れて、[二人|ふたり]とも[一瞬|いっしゅん][言葉|ことば]を[失|うしな]う。\n손이 살짝 스쳐서 둘 다 순간 말을 잃는다.",
+        2: "デザートを[分|わ]けようとして、フォークが[軽|かる]くぶつかる。\n디저트를 나누다가 포크가 살짝 부딪힌다.",
+        3: "[濡|ぬ]れた[肩|かた]に[気付|きづ]いて、タオルを[差|さ]し[出|だ]す。\n젖은 어깨를 보고 수건을 건네준다.",
+        4: "[昔|むかし]のことを[少|すこ]しだけ[話|はな]し、[表情|ひょうじょう]が[曇|くも]る。\n옛날 이야기를 살짝 꺼내며 표정이 흐려진다.",
+        5: "[店長|てんちょう]が[通|とお]りすがりに、からかうように[笑|わら]う。\n사장님이 지나가며 눈치 없이 웃으며 놀린다.",
+        6: "いつもより[口数|くちかず]が[少|すこ]なくて、[気|き]になる。\n평소보다 말수가 적어서 신경이 쓰인다.",
+        7: "[窓|まど][越|ご]しの[夕焼|ゆうや]けを[一緒|いっしょ]に[見|み]て、[言葉|ことば]がなくなる。\n창밖의 노을을 함께 보다가 말이 없어진다.",
+    },
+    "park": {
+        1: "[座|すわ]ろうとして[足|あし]を[滑|すべ]らせ、とっさに[手|て]を[取|と]ってくれる。\n앉으려다 발을 헛디뎌서, 순간 손을 잡아준다.",
+        2: "[好|す]きな[歌|うた]を[小声|こごえ]で[口|くち]ずさんでいたのを[聞|き]かれてしまう。\n좋아하는 노래를 작게 흥얼거리다 들켜버린다.",
+        3: "[傘|かさ]の[中|なか]で[肩|かた]がぶつかって、[気|き]まずく[笑|わら]う。\n우산 속에서 자꾸 어깨가 부딪혀 어색하게 웃는다.",
+        4: "[何|なに]かを[言|い]おうとして、[何度|なんど]もためらう。\n무언가 말하려다 몇 번이고 망설인다.",
+        5: "[通|とお]りかかったカップルが、うらやましそうに[見|み]てくる。\n지나가던 커플이 부럽다는 듯 쳐다본다.",
+        6: "[目|め]が[合|あ]っても、[先|さき]に[視線|しせん]をそらす。\n눈이 마주쳐도 먼저 시선을 돌린다.",
+        7: "[手|て]をつなぎそうで、つながない[時間|じかん]が[続|つづ]く。\n손을 잡을 듯 말 듯한 시간이 이어진다.",
+    },
+    "school": {
+        1: "[偶然|ぐうぜん][同|おな]じ[本|ほん]を[持|も]っていて、[思|おも]わず[笑|わら]ってしまう。\n우연히 같은 책을 들고 있어서 자기도 모르게 웃는다.",
+        2: "ペンを[貸|か]してもらうとき、[指先|ゆびさき]が[触|ふ]れる。\n펜을 빌리다가 손끝이 스친다.",
+        3: "[濡|ぬ]れたノートを[一緒|いっしょ]に[乾|かわ]かしながら[時間|じかん]を[過|す]ごす。\n비에 젖은 노트를 함께 말리며 시간을 보낸다.",
+        4: "[卒業|そつぎょう]アルバムを[見|み]ながら、[昔|むかし]の[話|はなし]をする。\n졸업 앨범을 보며 옛날이야기를 꺼낸다.",
+        5: "[友達|ともだち]がからかうメッセージを、こっそり[見|み]せてくる。\n친구가 놀리는 문자를 몰래 보여준다.",
+        6: "[挨拶|あいさつ]をするかどうか、[中途半端|ちゅうとはんぱ]なまま[通|とお]り[過|す]ぎる。\n인사를 할지 말지 애매하게 지나쳐 간다.",
+        7: "[教室|きょうしつ]の[窓|まど]から、[星|ほし]が[一|ひと]つ[二|ふた]つ[見|み]え[始|はじ]める。\n교실 창문 너머로 별이 하나둘 보이기 시작한다.",
+    },
+}
+
+HIDDEN_EVENTS = {
+    5: "[遠|とお]くから[小|ちい]さな[花火|はなび][大会|たいかい]の[音|おと]が[聞|き]こえてくる。\n멀리서 작은 불꽃놀이 축제 소리가 들려온다.",
+    7: "[恥|は]ずかしそうに、[小|ちい]さな[包|つつ]みを[差|さ]し[出|だ]す。\n부끄러운 듯 작은 선물 꾸러미를 건넨다.",
+}
+
+
+def seed_dating_sim_content(conn):
+    """CHARACTER_ID 콘텐츠를 DB에 한 번만 채운다(이미 있으면 아무것도
+    안 함) — 서버 시작 시 init_db() 직후 호출한다."""
+    exists = conn.execute(
+        "SELECT 1 FROM dating_sim_characters WHERE character_id=?", (CHARACTER_ID,)
+    ).fetchone()
+    if exists:
+        return
+    now = _now()
+    conn.execute(
+        "INSERT INTO dating_sim_characters (character_id,name,title,total_days,character_image,created_at) "
+        "VALUES (?,?,?,?,?,?)",
+        (CHARACTER_ID, CHARACTER_NAME, "미연시", TOTAL_DAYS, "/dating-sim/static/soi.png", now),
+    )
+    for order, (location_id, meta) in enumerate(LOCATIONS.items()):
+        conn.execute(
+            "INSERT INTO dating_sim_locations (character_id,location_id,label,emoji,character_image,sort_order) "
+            "VALUES (?,?,?,?,?,?)",
+            (CHARACTER_ID, location_id, meta["label"], meta["emoji"],
+             f"/dating-sim/static/soi-{location_id}.png" if location_id != "cafe" else "/dating-sim/static/soi.png",
+             order),
+        )
+    variants = [(LOCATION_LINES, 4), (VARIANT_2_LOCATION_LINES, 4)]
+    for day, (beat_lines, beat_choices) in DAY_BEATS.items():
+        for location_id in LOCATIONS:
+            for variant_number, (location_lines, weight) in enumerate(variants, start=1):
+                activity = location_lines[location_id][day]
+                conn.execute(
+                    "INSERT INTO dating_sim_scenarios "
+                    "(character_id,day,location_id,variant,weight,intro_line,activity_line,outro_line,"
+                    "choice_a_text,choice_a_affection,choice_b_text,choice_b_affection) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (CHARACTER_ID, day, location_id, variant_number,
+                     weight, beat_lines[0], activity, beat_lines[1],
+                     beat_choices[0], 8, beat_choices[1], -4),
+                )
+            if day in HIDDEN_EVENTS:
+                conn.execute(
+                    "INSERT INTO dating_sim_scenarios "
+                    "(character_id,day,location_id,variant,weight,intro_line,activity_line,outro_line,"
+                    "choice_a_text,choice_a_affection,choice_b_text,choice_b_affection) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (CHARACTER_ID, day, location_id, 3, 1, beat_lines[0], HIDDEN_EVENTS[day], beat_lines[1],
+                     beat_choices[0], 8, beat_choices[1], -4),
+                )
+    for order, ending in enumerate(ENDINGS):
+        conn.execute(
+            "INSERT INTO dating_sim_endings (character_id,ending_id,min_affection,title,line,sort_order) "
+            "VALUES (?,?,?,?,?,?)",
+            (CHARACTER_ID, ending["id"], ending["min_affection"], ending["title"],
+             ending["lines"][0], order),
+        )
+    conn.commit()
+
+
+def load_story_from_db(conn, character_id):
+    """DB에 시드된 캐릭터를 story_for()와 같은 모양의 dict로 만든다. 장면마다
+    variant 중 weight 비례로 하나를 무작위로 골라(재플레이 다양성) 반환한다."""
+    character = conn.execute(
+        "SELECT * FROM dating_sim_characters WHERE character_id=?", (character_id,)
+    ).fetchone()
+    if not character:
+        return None
+    location_rows = conn.execute(
+        "SELECT * FROM dating_sim_locations WHERE character_id=? ORDER BY sort_order", (character_id,)
+    ).fetchall()
+    locations = {row["location_id"]: {"label": row["label"], "emoji": row["emoji"]} for row in location_rows}
+    character_images = {
+        row["location_id"]: row["character_image"] for row in location_rows if row["character_image"]
+    }
+    scenario_rows = conn.execute(
+        "SELECT * FROM dating_sim_scenarios WHERE character_id=? ORDER BY day, location_id", (character_id,)
+    ).fetchall()
+    by_slot = {}
+    for row in scenario_rows:
+        by_slot.setdefault((row["day"], row["location_id"]), []).append(row)
+    scenes = {}
+    for (day, location_id), candidates in by_slot.items():
+        chosen = random.choices(candidates, weights=[row["weight"] for row in candidates], k=1)[0]
+        scenes.setdefault(day, {})[location_id] = {
+            "lines": [chosen["intro_line"], chosen["activity_line"], chosen["outro_line"]],
+            "choices": [
+                {"text": chosen["choice_a_text"], "affection": chosen["choice_a_affection"]},
+                {"text": chosen["choice_b_text"], "affection": chosen["choice_b_affection"]},
+            ],
+        }
+    ending_rows = conn.execute(
+        "SELECT * FROM dating_sim_endings WHERE character_id=? ORDER BY sort_order", (character_id,)
+    ).fetchall()
+    endings = [
+        {"id": row["ending_id"], "min_affection": row["min_affection"], "title": row["title"], "lines": [row["line"]]}
+        for row in ending_rows
+    ]
+    return {
+        "id": character["character_id"], "name": character["name"], "title": character["title"],
+        "character_image": character["character_image"], "character_images": character_images,
+        "source_title": None, "total_days": character["total_days"],
+        "locations": locations, "scenes": scenes, "endings": endings,
+    }
 
 
 JAPANESE_EPUB_ROOT = Path("/Users/forrestdpark/Desktop/BlogImage/av완성작")
@@ -180,6 +429,14 @@ def _find_book(book_id):
     return None
 
 
+def random_book_id():
+    """서재에 실제 존재하는 EPUB 하나의 공개 식별자를 무작위로 고른다."""
+    if not JAPANESE_EPUB_ROOT.is_dir():
+        return None
+    books = list(JAPANESE_EPUB_ROOT.rglob("*.epub"))
+    return _book_id(random.choice(books)) if books else None
+
+
 def story_for(story_id=None):
     """정적 소이 이야기 또는 EPUB 제목에서 만든 순화 로맨스를 돌려준다.
 
@@ -187,8 +444,11 @@ def story_for(story_id=None):
     작품 식별과 제목만 영감 출처로 쓰고 장면은 안전한 고정 템플릿으로 만든다.
     """
     if not story_id:
-        return {"id": CHARACTER_ID, "name": CHARACTER_NAME, "title": "소이와의 사흘",
+        return {"id": CHARACTER_ID, "name": CHARACTER_NAME, "title": "미연시",
                 "character_image": "/dating-sim/static/soi.png",
+                "character_images": {"cafe": "/dating-sim/static/soi.png",
+                                     "park": "/dating-sim/static/soi-park.png",
+                                     "school": "/dating-sim/static/soi-school.png"},
                 "source_title": None, "total_days": TOTAL_DAYS, "locations": LOCATIONS,
                 "scenes": SCENES, "endings": ENDINGS}
     match = BOOK_STORY_RE.fullmatch(story_id)
@@ -201,30 +461,19 @@ def story_for(story_id=None):
         "walk": {"label": "함께 걷는 길", "emoji": "🌙"},
         "quiet": {"label": "조용한 찻집", "emoji": "🍵"},
     }
-    daily_lines = {
-        1: ["今日ここで会えるとは思いませんでした。\n오늘 여기서 만날 줄은 몰랐어요.",
-            "これも縁だと思ってもいいですか。\n이것도 인연이라고 생각해도 될까요?"],
-        2: ["昨日話したことがずっと心に残っています。\n어제 나눈 이야기가 계속 마음에 남아 있어요.",
-            "あなたのことを、もう少し知りたいです。\n당신을 조금 더 알고 싶어요."],
-        3: ["短い時間なのに、ずっと覚えていそうです。\n짧은 시간이었는데도 오래 기억날 것 같아요.",
-            "私たちの話を、ここで終わらせずに続けませんか。\n우리 이야기를 여기서 끝내지 않고 이어가지 않을래요?"],
+    book_location_lines = {
+        "first": "[本屋|ほんや]の[前|まえ]で[同|おな]じ[本|ほん]を[手|て]に[取|と]るなんて、[偶然|ぐうぜん]ですね。\n서점 앞에서 같은 책을 집다니 우연이네요.",
+        "walk": "[月|つき]がきれいですね。[川沿|かわぞ]いをもう[少|すこ]し[歩|ある]きませんか。\n달이 예쁘네요. 강변을 조금 더 걷지 않을래요?",
+        "quiet": "このお[茶|ちゃ]、いい[香|かお]りです。[一緒|いっしょ]に[飲|の]みましょう。\n이 차 향이 좋아요. 함께 마셔요.",
     }
-    scenes = {}
-    for day in range(1, 4):
-        scenes[day] = {}
-        for location in locations:
-            scenes[day][location] = {"lines": daily_lines[day], "choices": [
-                {"text": "私も同じ気持ちだと素直に伝える。\n나도 같은 마음이라고 솔직하게 말한다.", "affection": 10},
-                {"text": "ゆっくり知っていこうと伝える。\n천천히 알아가자고 말한다.", "affection": -5},
-            ]}
-    endings = [
-        {"id": "best", "min_affection": 75, "title": "함께 쓰는 다음 장", "lines": ["これからは二人で、この物語を続けましょう。\n이제 이 이야기는 우리 둘이 함께 이어가요."]},
-        {"id": "good", "min_affection": 60, "title": "다음 만남의 약속", "lines": ["今度はもっとゆっくり話しましょう。\n다음에는 더 오래 이야기해요."]},
-        {"id": "normal", "min_affection": 0, "title": "기억에 남은 사흘", "lines": ["短かったけれど、温かい思い出になりました。\n짧았지만 따뜻한 기억으로 남았어요."]},
-    ]
+    scenes = _seven_day_scenes(book_location_lines, "하루")
+    endings = ENDINGS
     return {"id": story_id, "name": "하루", "title": f"{source_title}에서 영감받은 사흘",
             "character_image": "/dating-sim/static/haru.png",
-            "source_title": source_title, "total_days": 3, "locations": locations,
+            "character_images": {"first": "/dating-sim/static/haru-first.png",
+                                 "walk": "/dating-sim/static/haru-walk.png",
+                                 "quiet": "/dating-sim/static/haru.png"},
+            "source_title": source_title, "total_days": TOTAL_DAYS, "locations": locations,
             "scenes": scenes, "endings": endings}
 
 
