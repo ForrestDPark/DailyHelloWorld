@@ -298,6 +298,7 @@ class ReaderHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self._path()
         if path == "/api/session": return self._json(200, {"authenticated": self._authenticated()})
+        if path == "/api/config": return self._json(200, self.app.reader_config)
         if path == "/api/books" and self._need_auth():
             books = sorted(self.app.library.books.values(), key=lambda b: b.modified, reverse=True)
             return self._json(200, [b.public(self.app.store.get(b.id), self.app.base_path) for b in books])
@@ -364,6 +365,14 @@ class App:
         base = os.environ.get("JP_WEB_READER_BASE_PATH", "").strip("/")
         self.base_path = f"/{base}" if base else ""
         self.chatapp_db = Path(os.environ.get("JP_WEB_READER_CHATAPP_DB", "~/.tulpachat/chatapp.db")).expanduser()
+        self.reader_config = {
+            "kind": os.environ.get("WEB_READER_KIND", "japanese"),
+            "title": os.environ.get("WEB_READER_TITLE", "일본어 학습 서재"),
+            "eyebrow": os.environ.get("WEB_READER_EYEBROW", "MY STUDY ARCHIVE"),
+            "cover_glyph": os.environ.get("WEB_READER_COVER_GLYPH", "本"),
+            "dock_label": os.environ.get("WEB_READER_DOCK_LABEL", "서재"),
+            "speech_language": os.environ.get("WEB_READER_SPEECH_LANGUAGE", "ja-JP"),
+        }
         self.secret = load_secret(); self.library = Library(roots); self.store = Store(STATE_DIR / "reader.db")
 
     def valid_chat_owner_session(self, token: str) -> bool:
@@ -393,7 +402,12 @@ def main():
     parser.add_argument("--host", default=os.environ.get("JP_WEB_READER_HOST", "127.0.0.1")); parser.add_argument("--port", type=int, default=int(os.environ.get("JP_WEB_READER_PORT", "8766")))
     args = parser.parse_args(); password = os.environ.get("JP_WEB_READER_PASSWORD", "")
     if password and len(password) < 8: raise SystemExit("JP_WEB_READER_PASSWORD를 설정한다면 8자 이상이어야 합니다.")
-    roots = [Path(os.environ.get("JP_EPUB_LIBRARY_DIR", DEFAULT_FINAL_DIR)), DEFAULT_FALLBACK_DIR]
+    roots = [Path(os.environ.get("JP_EPUB_LIBRARY_DIR", DEFAULT_FINAL_DIR))]
+    fallback = os.environ.get("WEB_READER_FALLBACK_DIR")
+    if fallback is None:
+        roots.append(DEFAULT_FALLBACK_DIR)
+    elif fallback.strip():
+        roots.append(Path(fallback).expanduser())
     httpd = ThreadingHTTPServer((args.host, args.port), ReaderHandler); httpd.app = App(password, roots)  # type: ignore[attr-defined]
     print(f"일본어 EPUB 웹 서재: http://{args.host}:{args.port}{httpd.app.base_path}/ ({len(httpd.app.library.books)}권)")
     httpd.serve_forever()

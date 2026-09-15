@@ -1,5 +1,11 @@
 # 일본어 EPUB 웹 서재
 
+## 영어 학습 서재 (2026-09-15)
+
+같은 리더 엔진을 두 번 실행해 일본어 `/epub/`과 영어 `/english/`를 분리한다. 영어 인스턴스는 `com.tulpachat.english-reader.plist`로 8767 포트에서 실행하고 `/Users/forrestdpark/Desktop/BlogImage/pdf`의 EPUB만 스캔한다. 이어서 읽기 DB는 `~/.english_epub_web/reader.db`로 분리된다.
+
+Cloudflare Tunnel은 `/english/*` 경로를 `http://localhost:8767`로 연결한다. 영어 원서의 일반 문단은 iOS/macOS 기기의 `en-US` 음성으로 읽는다. PDF는 PDF.js 리더를 추가할 때까지 목록에서 제외한다.
+
 `av완성작`의 EPUB을 압축 해제하거나 복사하지 않고 브라우저에서 바로 읽는 개인용 서재다.
 외부 패키지가 필요 없으며 새 EPUB은 `↻` 버튼을 누르면 즉시 목록에 나타난다.
 

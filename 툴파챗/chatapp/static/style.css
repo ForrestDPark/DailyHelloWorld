@@ -1699,3 +1699,4 @@ form#composer button[type="submit"] { min-height: 42px; padding: 9px 16px; backg
 /* 홈에서도 바로 여는 계정 한자 단어장 카드 */
 button.portal-card{font:inherit;text-align:left;cursor:pointer}
 .portal-card.vocabulary .portal-card-mark{background:linear-gradient(145deg,#bd842c,#7d5519)}
+.portal-card.english .portal-card-mark{background:linear-gradient(145deg,#4b7fd0,#294f94)}
