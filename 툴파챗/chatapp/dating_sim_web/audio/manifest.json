@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "model": "gpt-4o-mini-tts",
+  "voice": "marin",
+  "ai_generated": true,
+  "generated_at": "2026-09-15T12:44:00+00:00",
+  "clips": {}
+}

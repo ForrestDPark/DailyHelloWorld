@@ -4,6 +4,8 @@ const storyId = bookId && /^[0-9a-f]{20}$/.test(bookId) ? `book:${bookId}` : nul
 let latestState = null;
 let listeningMode = false;
 let speechSequence = 0;
+let audioManifest = {};
+const recordedAudio = new Audio();
 
 function storyQuery() {
   return storyId ? `?story_id=${encodeURIComponent(storyId)}` : "";
@@ -89,7 +91,8 @@ function japaneseVoice() {
 }
 
 function updateListeningControls(status = listeningMode ? "듣는 중" : "꺼짐") {
-  const supported = "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+  const supported = Object.keys(audioManifest).length > 0 ||
+    ("speechSynthesis" in window && "SpeechSynthesisUtterance" in window);
   $("listening-toggle").disabled = !supported;
   $("listening-toggle").classList.toggle("active", listeningMode);
   $("listening-toggle").setAttribute("aria-pressed", String(listeningMode));
@@ -100,10 +103,51 @@ function updateListeningControls(status = listeningMode ? "듣는 중" : "꺼짐
 
 function stopListening({ turnOff = true } = {}) {
   speechSequence += 1;
+  recordedAudio.onplay = null;
+  recordedAudio.onended = null;
+  recordedAudio.onerror = null;
+  recordedAudio.pause();
+  recordedAudio.removeAttribute("src");
+  recordedAudio.load();
   window.speechSynthesis?.cancel();
   if (turnOff) listeningMode = false;
   updateListeningControls(turnOff ? "꺼짐" : "대기 중");
   $("portrait").classList.remove("speaking");
+}
+
+function finishSpokenLine(sequence) {
+  if (sequence !== speechSequence || !listeningMode) return;
+  $("portrait").classList.remove("speaking");
+  updateListeningControls(
+    sceneLineIndex < sceneLines.length - 1 ? "대사창을 눌러 계속" : "선택지를 골라주세요"
+  );
+}
+
+function speakWithDevice(text, line, sequence, fallback = false) {
+  if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
+    stopListening();
+    updateListeningControls("음성을 재생하지 못했어요");
+    return;
+  }
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "ja-JP";
+  utterance.rate = 0.88;
+  utterance.pitch = 1;
+  const voice = japaneseVoice();
+  if (voice) utterance.voice = voice;
+  utterance.onstart = () => {
+    if (sequence !== speechSequence) return;
+    updateListeningControls(fallback ? "기기 음성으로 재생 중" : "기기 음성 재생 중");
+    $("portrait").classList.toggle("speaking", line.speaker !== "narrator");
+  };
+  utterance.onend = () => finishSpokenLine(sequence);
+  utterance.onerror = () => {
+    if (sequence !== speechSequence) return;
+    stopListening();
+    updateListeningControls("음성을 재생하지 못했어요");
+  };
+  window.speechSynthesis.speak(utterance);
 }
 
 function speakCurrentLine() {
@@ -115,31 +159,44 @@ function speakCurrentLine() {
     return;
   }
   const sequence = ++speechSequence;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = "ja-JP";
-  utterance.rate = 0.88;
-  utterance.pitch = 1;
-  const voice = japaneseVoice();
-  if (voice) utterance.voice = voice;
-  utterance.onstart = () => {
+  const recordedUrl = audioManifest[text];
+  if (!recordedUrl) {
+    speakWithDevice(text, line, sequence);
+    return;
+  }
+  window.speechSynthesis?.cancel();
+  recordedAudio.src = recordedUrl;
+  recordedAudio.onplay = () => {
     if (sequence !== speechSequence) return;
-    updateListeningControls("읽는 중");
+    updateListeningControls("OpenAI 생성 음성 재생 중");
     $("portrait").classList.toggle("speaking", line.speaker !== "narrator");
   };
-  utterance.onend = () => {
+  recordedAudio.onended = () => finishSpokenLine(sequence);
+  recordedAudio.onerror = () => {
     if (sequence !== speechSequence || !listeningMode) return;
-    $("portrait").classList.remove("speaking");
-    updateListeningControls(
-      sceneLineIndex < sceneLines.length - 1 ? "대사창을 눌러 계속" : "선택지를 골라주세요"
-    );
+    recordedAudio.onerror = null;
+    speakWithDevice(text, line, sequence, true);
   };
-  utterance.onerror = () => {
-    if (sequence !== speechSequence) return;
-    stopListening();
-    updateListeningControls("음성을 재생하지 못했어요");
-  };
-  window.speechSynthesis.speak(utterance);
+  recordedAudio.play().catch(() => {
+    if (sequence === speechSequence && listeningMode && recordedAudio.onerror) {
+      recordedAudio.onerror = null;
+      speakWithDevice(text, line, sequence, true);
+    }
+  });
+}
+
+async function loadAudioManifest() {
+  try {
+    const response = await fetch("/dating-sim/audio/manifest.json", {
+      credentials: "same-origin", cache: "no-store",
+    });
+    if (!response.ok) return;
+    const manifest = await response.json();
+    audioManifest = manifest.clips || {};
+  } catch (_error) {
+    audioManifest = {};
+  }
+  updateListeningControls();
 }
 
 function renderAnnotatedText(element, text) {
@@ -207,7 +264,7 @@ function onLineFullyShown() {
 }
 
 function advanceLine() {
-  if (window.speechSynthesis?.speaking) stopListening({ turnOff: false });
+  if (!recordedAudio.paused || window.speechSynthesis?.speaking) stopListening({ turnOff: false });
   if (typewriterTimer) {
     // 타자기 도중 클릭하면 그 줄을 즉시 완성해서 보여준다.
     stopTypewriter();
@@ -303,7 +360,7 @@ async function visitLocation(locationId) {
 }
 
 async function chooseOption(choiceIndex) {
-  if (window.speechSynthesis?.speaking) stopListening({ turnOff: false });
+  if (!recordedAudio.paused || window.speechSynthesis?.speaking) stopListening({ turnOff: false });
   try {
     render(await api("/api/dating-sim/choose", { method: "POST", body: JSON.stringify({ choice_index: choiceIndex, story_id: storyId }) }));
   } catch (e) {
@@ -363,4 +420,4 @@ $("result-next").addEventListener("click", () => {
 });
 
 updateListeningControls();
-loadState();
+loadAudioManifest().finally(loadState);

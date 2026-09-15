@@ -69,6 +69,7 @@ CAREER_SYSTEM_DIR = REPO_ROOT / "이직시스템"
 SHIFT_ALARM_DASHBOARD_DIR = BASE_DIR / "shift_alarm_dashboard"
 VOCABULARY_WEB_DIR = BASE_DIR / "vocabulary_web"
 DATING_SIM_WEB_DIR = BASE_DIR / "dating_sim_web"
+DATING_SIM_AUDIO_DIR = DATING_SIM_WEB_DIR / "audio"
 BATTLE_SIM_WEB_DIR = BASE_DIR / "battle_sim_web"
 SHIFT_ALARM_STATUS_FILE = Path(os.path.expanduser(
     "~/Library/Mobile Documents/com~apple~CloudDocs/ShiftAlarmStatus/status.json"
@@ -604,6 +605,21 @@ def dating_sim_static(filename: str, request: Request):
                         "haru.png", "haru-first.png", "haru-walk.png"}:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(DATING_SIM_WEB_DIR / filename))
+
+
+@app.get("/dating-sim/audio/{filename}")
+def dating_sim_audio(filename: str, request: Request):
+    """로그인 사용자에게 생성된 미연시 음성과 매니페스트만 제공한다."""
+    _require_signed_in_user(request)
+    if filename == "manifest.json":
+        target = DATING_SIM_AUDIO_DIR / filename
+    elif re.fullmatch(r"[0-9a-f]{20}\.mp3", filename):
+        target = DATING_SIM_AUDIO_DIR / filename
+    else:
+        raise HTTPException(status_code=404, detail="음성 파일을 찾을 수 없습니다")
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="음성 파일을 찾을 수 없습니다")
+    return FileResponse(str(target))
 
 
 class DatingSimLocationRequest(BaseModel):
