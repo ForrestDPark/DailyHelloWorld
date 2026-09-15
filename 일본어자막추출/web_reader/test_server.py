@@ -53,25 +53,27 @@ class ReaderTests(unittest.TestCase):
 
     def test_progress_is_persisted(self):
         with tempfile.TemporaryDirectory() as td:
-            store = server.Store(Path(td) / "state.db"); store.save("book", 3, 42.5)
-            self.assertEqual(store.get("book")["spine_index"], 3)
+            store = server.Store(Path(td) / "state.db"); store.save("book", 3, 42.5, "alpha")
+            self.assertEqual(store.get("book", "alpha")["spine_index"], 3)
+            self.assertEqual(store.get("book", "beta")["spine_index"], 0)
 
     def test_signed_session_expires(self):
         secret = b"secret"; self.assertTrue(server.valid_session(secret, server.sign_session(secret)))
         with patch.object(server.time, "time", return_value=0): token = server.sign_session(secret)
         self.assertFalse(server.valid_session(secret, token))
 
-    def test_chatapp_session_allows_only_owner(self):
+    def test_chatapp_session_allows_any_signed_in_user(self):
         with tempfile.TemporaryDirectory() as td:
             db_path = Path(td) / "chat.db"
             with sqlite3.connect(db_path) as db:
-                db.executescript("CREATE TABLE users(id INTEGER PRIMARY KEY,is_owner INTEGER); CREATE TABLE sessions(token TEXT,user_id INTEGER,expires_at TEXT);")
+                db.executescript("CREATE TABLE users(id INTEGER PRIMARY KEY,is_owner INTEGER,username TEXT); CREATE TABLE sessions(token TEXT,user_id INTEGER,expires_at TEXT);")
                 future = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1)).isoformat()
-                db.execute("INSERT INTO users VALUES(1,1),(2,0)")
+                db.execute("INSERT INTO users VALUES(1,1,'owner'),(2,0,'reader')")
                 db.execute("INSERT INTO sessions VALUES('owner',1,?),('user',2,?)", (future, future))
             app = object.__new__(server.App); app.chatapp_db = db_path
-            self.assertTrue(app.valid_chat_owner_session("owner"))
-            self.assertFalse(app.valid_chat_owner_session("user"))
+            self.assertEqual(app.chat_session_username("owner"), "owner")
+            self.assertEqual(app.chat_session_username("user"), "reader")
+            self.assertIsNone(app.chat_session_username("missing"))
 
 
 if __name__ == "__main__": unittest.main()

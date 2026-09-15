@@ -34,6 +34,17 @@ def signed_in_request(username="tester"):
 
 
 class ShiftAlarmApiTests(unittest.TestCase):
+    def test_read_only_subapps_allow_signed_in_users(self):
+        module._require_signed_in_user(signed_in_request())
+        with self.assertRaises(HTTPException) as raised:
+            module._require_signed_in_user(SimpleNamespace(state=SimpleNamespace(user=None, can_write=False, share_guest=True)))
+        self.assertEqual(raised.exception.status_code, 401)
+
+    def test_owner_only_actions_stay_closed_to_regular_users(self):
+        with self.assertRaises(HTTPException) as raised:
+            module._require_owner(signed_in_request())
+        self.assertEqual(raised.exception.status_code, 403)
+
     def pipeline_conn(self, path=":memory:"):
         conn = sqlite3.connect(path)
         conn.row_factory = sqlite3.Row
@@ -289,6 +300,71 @@ class ShiftAlarmApiTests(unittest.TestCase):
                 resolved = module._shift_alarm_av4_file(file_id)
         self.assertEqual([path.name for path in files], ["첫째.mp4"])
         self.assertEqual(resolved.name, "첫째.mp4")
+
+    def test_video_processing_history_table_migrates_missing_columns(self):
+        """★ 2026-09-15: "영상가져오기가 다운로드 파일이 하나도 안보이는데
+        왜 그렇지" 신고의 실제 원인 — safari_completed_at 컬럼이 코드에
+        추가되기 전에 이미 video_processing_history 테이블이 있던 환경에서는
+        `CREATE TABLE IF NOT EXISTS`가 조용히 아무것도 안 해서 그 컬럼이
+        영원히 안 생기고, SELECT * 결과를 history["safari_completed_at"]로
+        읽던 상태 API가 KeyError로 통째로 500이 나 목록이 비어 보였다."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            db_path = root / "downloads.db"
+            # safari_completed_at 컬럼이 없는 옛 스키마를 그대로 재현한다.
+            legacy = sqlite3.connect(db_path)
+            legacy.execute("""
+                CREATE TABLE video_processing_history (
+                    file_id TEXT PRIMARY KEY, filename TEXT NOT NULL,
+                    subtitle_state TEXT, subtitle_progress REAL, subtitle_stage TEXT,
+                    subtitle_started_at TEXT, subtitle_completed_at TEXT,
+                    photo_shortcut_at TEXT, updated_at TEXT NOT NULL
+                )
+            """)
+            legacy.execute(
+                "INSERT INTO video_processing_history (file_id,filename,updated_at) VALUES (?,?,?)",
+                ("abc123", "영상.mp4", module._now()),
+            )
+            legacy.commit()
+            legacy.close()
+            with patch.object(module, "SHIFT_ALARM_VIDEO_DIR", root), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_DB", db_path):
+                history = module._shift_alarm_processing_history()
+        self.assertIn("abc123", history)
+        self.assertIsNone(history["abc123"]["safari_completed_at"])
+
+    def test_video_status_survives_legacy_processing_history_row(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            files = root / "av4"
+            files.mkdir()
+            video = files / "영상.mp4"
+            video.write_bytes(b"1234")
+            db_path = root / "downloads.db"
+            legacy = sqlite3.connect(db_path)
+            legacy.execute("""
+                CREATE TABLE video_processing_history (
+                    file_id TEXT PRIMARY KEY, filename TEXT NOT NULL,
+                    subtitle_state TEXT, subtitle_progress REAL, subtitle_stage TEXT,
+                    subtitle_started_at TEXT, subtitle_completed_at TEXT,
+                    photo_shortcut_at TEXT, updated_at TEXT NOT NULL
+                )
+            """)
+            file_id = module._shift_alarm_av4_id(video)
+            legacy.execute(
+                "INSERT INTO video_processing_history (file_id,filename,subtitle_state,updated_at) "
+                "VALUES (?,?,?,?)", (file_id, video.name, "running", module._now()),
+            )
+            legacy.commit()
+            legacy.close()
+            with patch.object(module, "SHIFT_ALARM_VIDEO_DIR", root), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_FILES", files), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_DB", db_path), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_STATUS_FILE", root / "status.json"):
+                result = module.shift_alarm_video_download_status(owner_request())
+        self.assertEqual(len(result["downloads"]), 1)
+        self.assertEqual(result["downloads"][0]["subtitle_state"], "running")
+        self.assertIsNone(result["downloads"][0]["safari_completed_at"])
 
     def test_av4_library_download_is_owner_only(self):
         with self.assertRaises(HTTPException) as raised:

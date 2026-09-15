@@ -181,19 +181,31 @@ class Store:
         self.path = path
         with self.connect() as db:
             db.execute("CREATE TABLE IF NOT EXISTS progress (book_id TEXT PRIMARY KEY, spine_index INTEGER NOT NULL DEFAULT 0, percent REAL NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL)")
+            db.execute("""CREATE TABLE IF NOT EXISTS user_progress (
+                username TEXT NOT NULL, book_id TEXT NOT NULL,
+                spine_index INTEGER NOT NULL DEFAULT 0,
+                percent REAL NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL,
+                PRIMARY KEY(username, book_id))""")
 
     def connect(self):
         return sqlite3.connect(self.path, timeout=10)
 
-    def get(self, book_id: str) -> dict:
+    def get(self, book_id: str, username: str = "reader-owner") -> dict:
         with self.connect() as db:
-            row = db.execute("SELECT spine_index, percent, updated_at FROM progress WHERE book_id=?", (book_id,)).fetchone()
+            row = db.execute(
+                "SELECT spine_index, percent, updated_at FROM user_progress WHERE username=? AND book_id=?",
+                (username, book_id),
+            ).fetchone()
+            # 기존 단일 사용자 서재의 읽기 기록은 자체 비밀번호 로그인에서만
+            # 이어받는다. 일반 툴파챗 계정끼리는 진행률을 절대 공유하지 않는다.
+            if row is None and username == "reader-owner":
+                row = db.execute("SELECT spine_index, percent, updated_at FROM progress WHERE book_id=?", (book_id,)).fetchone()
         return {"spine_index": row[0], "percent": row[1], "updated_at": row[2]} if row else {"spine_index": 0, "percent": 0}
 
-    def save(self, book_id: str, index: int, percent: float) -> dict:
+    def save(self, book_id: str, index: int, percent: float, username: str = "reader-owner") -> dict:
         now = int(time.time())
         with self.connect() as db:
-            db.execute("INSERT INTO progress(book_id,spine_index,percent,updated_at) VALUES(?,?,?,?) ON CONFLICT(book_id) DO UPDATE SET spine_index=excluded.spine_index,percent=excluded.percent,updated_at=excluded.updated_at", (book_id, index, percent, now))
+            db.execute("INSERT INTO user_progress(username,book_id,spine_index,percent,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(username,book_id) DO UPDATE SET spine_index=excluded.spine_index,percent=excluded.percent,updated_at=excluded.updated_at", (username, book_id, index, percent, now))
         return {"spine_index": index, "percent": percent, "updated_at": now}
 
 
@@ -248,13 +260,16 @@ class ReaderHandler(BaseHTTPRequestHandler):
         length = min(int(self.headers.get("Content-Length", "0")), MAX_JSON)
         return json.loads(self.rfile.read(length) or b"{}")
 
-    def _authenticated(self) -> bool:
+    def _identity(self) -> str | None:
         jar = cookies.SimpleCookie(self.headers.get("Cookie", ""))
         morsel = jar.get(SESSION_COOKIE)
         if morsel and valid_session(self.app.secret, morsel.value):
-            return True
+            return "reader-owner"
         chat_session = jar.get(CHAT_SESSION_COOKIE)
-        return bool(chat_session and self.app.valid_chat_owner_session(chat_session.value))
+        return self.app.chat_session_username(chat_session.value) if chat_session else None
+
+    def _authenticated(self) -> bool:
+        return self._identity() is not None
 
     def _path(self) -> str:
         path = urllib.parse.urlsplit(self.path).path
@@ -292,7 +307,7 @@ class ReaderHandler(BaseHTTPRequestHandler):
                 data = self._body(); index = int(data.get("spine_index", 0)); percent = float(data.get("percent", 0))
             except (json.JSONDecodeError, TypeError, ValueError): return self._json(400, {"detail": "진행 정보가 올바르지 않습니다"})
             index = max(0, min(index, max(0, len(book.spine) - 1))); percent = max(0, min(percent, 100))
-            return self._json(200, {"ok": True, **self.app.store.save(book.id, index, percent)})
+            return self._json(200, {"ok": True, **self.app.store.save(book.id, index, percent, self._identity() or "")})
         self._json(404, {"ok": False})
 
     def do_GET(self):
@@ -301,7 +316,8 @@ class ReaderHandler(BaseHTTPRequestHandler):
         if path == "/api/config": return self._json(200, self.app.reader_config)
         if path == "/api/books" and self._need_auth():
             books = sorted(self.app.library.books.values(), key=lambda b: b.modified, reverse=True)
-            return self._json(200, [b.public(self.app.store.get(b.id), self.app.base_path) for b in books])
+            username = self._identity() or ""
+            return self._json(200, [b.public(self.app.store.get(b.id, username), self.app.base_path) for b in books])
         if path.startswith("/api/books/") and self._need_auth(): return self._book_route(path)
         return self._static(path)
 
@@ -323,8 +339,8 @@ class ReaderHandler(BaseHTTPRequestHandler):
                     "begin": clip["begin"], "end": clip["end"], "target": clip["target"],
                 } for clip in book.audio[i]],
             } for i, href in enumerate(book.spine)]
-            return self._json(200, {**book.public(self.app.store.get(book.id), self.app.base_path), "chapters": chapters})
-        if action == "progress": return self._json(200, self.app.store.get(book.id))
+            return self._json(200, {**book.public(self.app.store.get(book.id, self._identity() or ""), self.app.base_path), "chapters": chapters})
+        if action == "progress": return self._json(200, self.app.store.get(book.id, self._identity() or ""))
         if action == "cover" and book.cover: return self._resource(book, book.cover)
         if action == "download":
             return self._send_bytes(book.path.read_bytes(), "application/epub+zip", f"attachment; filename*=UTF-8''{urllib.parse.quote(book.path.name)}")
@@ -375,26 +391,26 @@ class App:
         }
         self.secret = load_secret(); self.library = Library(roots); self.store = Store(STATE_DIR / "reader.db")
 
-    def valid_chat_owner_session(self, token: str) -> bool:
-        """같은 호스트의 툴파챗 로그인 쿠키를 읽되 관리자 계정만 허용한다."""
+    def chat_session_username(self, token: str) -> str | None:
+        """같은 호스트의 유효한 툴파챗 로그인 계정을 서재 사용자로 인정한다."""
         if not token or not self.chatapp_db.is_file():
-            return False
+            return None
         try:
             with sqlite3.connect(f"file:{self.chatapp_db}?mode=ro", uri=True, timeout=2) as db:
                 row = db.execute(
-                    "SELECT sessions.expires_at, users.is_owner FROM sessions "
+                    "SELECT sessions.expires_at, users.username FROM sessions "
                     "JOIN users ON users.id=sessions.user_id WHERE sessions.token=?",
                     (token,),
                 ).fetchone()
-            if not row or not bool(row[1]):
-                return False
+            if not row or not row[1]:
+                return None
             expires = datetime.datetime.fromisoformat(row[0])
             now = datetime.datetime.now(datetime.timezone.utc)
             if expires.tzinfo is None:
                 expires = expires.replace(tzinfo=datetime.timezone.utc)
-            return expires >= now
+            return str(row[1]) if expires >= now else None
         except (OSError, sqlite3.Error, TypeError, ValueError):
-            return False
+            return None
 
 
 def main():

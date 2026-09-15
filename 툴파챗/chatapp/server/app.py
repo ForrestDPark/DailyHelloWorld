@@ -544,13 +544,13 @@ def career_redirect():
 
 @app.get("/career/")
 def career_dashboard(request: Request):
-    _require_owner(request)
+    _require_signed_in_user(request)
     return FileResponse(str(CAREER_WEB_DIR / "index.html"))
 
 
 @app.get("/career/static/{filename}")
 def career_static(filename: str, request: Request):
-    _require_owner(request)
+    _require_signed_in_user(request)
     allowed = {"style.css", "app.js", "manifest.webmanifest"}
     if filename not in allowed:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
@@ -874,6 +874,17 @@ def _shift_alarm_video_db():
             safari_completed_at TEXT, photo_shortcut_at TEXT, updated_at TEXT NOT NULL
         )
     """)
+    # ★ 2026-09-15: "영상가져오기가 다운로드 파일이 하나도 안보이는데 왜
+    # 그렇지" 신고의 실제 원인 — safari_completed_at 컬럼이 CREATE TABLE에
+    # 추가되기 전에 이미 video_processing_history 테이블이 만들어져 있던
+    # 환경에서는 `IF NOT EXISTS`가 조용히 아무것도 안 해서 그 컬럼이
+    # 영원히 안 생긴다. shift_alarm_video_download_status()가 SELECT * 결과를
+    # dict(row)로 바꿔 history["safari_completed_at"]를 그대로 읽다가
+    # KeyError로 API 전체가 500이 나 목록이 통째로 비어 보였다(실측 확인).
+    existing_columns = {row["name"] for row in conn.execute("PRAGMA table_info(video_processing_history)")}
+    for column in ("safari_completed_at", "photo_shortcut_at"):
+        if column not in existing_columns:
+            conn.execute(f"ALTER TABLE video_processing_history ADD COLUMN {column} TEXT")
     return conn
 
 
@@ -1812,14 +1823,16 @@ def shift_alarm_video_download_status(request: Request):
             )
         history = processing.get(file_id)
         if history:
+            # .get()으로 읽는다 — 스키마 마이그레이션 이전에 만들어진 행이나
+            # 컬럼 추가 전 DB에도 이 API 전체가 죽지 않고 그 값만 비어 보이게.
             item.update(
-                subtitle_state=history["subtitle_state"],
-                subtitle_progress=history["subtitle_progress"],
-                subtitle_stage=history["subtitle_stage"],
-                subtitle_started_at=history["subtitle_started_at"],
-                subtitle_completed_at=history["subtitle_completed_at"],
-                safari_completed_at=history["safari_completed_at"],
-                photo_shortcut_at=history["photo_shortcut_at"],
+                subtitle_state=history.get("subtitle_state"),
+                subtitle_progress=history.get("subtitle_progress"),
+                subtitle_stage=history.get("subtitle_stage"),
+                subtitle_started_at=history.get("subtitle_started_at"),
+                subtitle_completed_at=history.get("subtitle_completed_at"),
+                safari_completed_at=history.get("safari_completed_at"),
+                photo_shortcut_at=history.get("photo_shortcut_at"),
             )
         status["downloads"].append(item)
     if status.get("state") == "complete" and status.get("job_id"):
@@ -2101,7 +2114,7 @@ def _source_grounded_preparation(text: str):
 
 @app.get("/api/career-source-analysis")
 def career_source_analysis(request: Request, kind: str, source: str, source_id: str):
-    _require_owner(request)
+    _require_signed_in_user(request)
     table, db_name = ("contests", "contests.db") if kind == "contest" else ("jobs", "jobs.db")
     db_path = CAREER_DATA_DIR / db_name
     conn = sqlite3.connect(str(db_path)); conn.row_factory = sqlite3.Row
@@ -2109,11 +2122,16 @@ def career_source_analysis(request: Request, kind: str, source: str, source_id: 
         row = conn.execute(f"SELECT url,title FROM {table} WHERE source=? AND source_id=?", (source, source_id)).fetchone()
     finally: conn.close()
     if not row: raise HTTPException(status_code=404, detail="수집된 항목을 찾지 못했습니다")
-    cache_dir = CAREER_DATA_DIR / "web_source_cache"; cache_dir.mkdir(exist_ok=True)
+    cache_dir = CAREER_DATA_DIR / "web_source_cache"
     cache_path = cache_dir / (hashlib.sha256(f"v5:{kind}:{source}:{source_id}".encode()).hexdigest() + ".json")
     if cache_path.exists():
         try: return json.loads(cache_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError): pass
+    # 원문 크롤링·브라우저 렌더링·OCR은 외부 접속과 캐시 쓰기가 수반된다.
+    # 일반 사용자는 이미 준비된 분석은 읽을 수 있지만 새 작업을 실행하지 않는다.
+    if not _is_owner_request(request):
+        return {"ok": False, "detail": "원문 분석이 아직 준비되지 않았습니다. 관리자가 분석한 뒤 모든 사용자가 함께 볼 수 있습니다."}
+    cache_dir.mkdir(exist_ok=True)
     url = row["url"]
     if "사람인" in source and source_id.isdigit():
         url = f"https://www.saramin.co.kr/zf_user/jobs/view?rec_idx={source_id}"
@@ -2344,12 +2362,12 @@ def _career_deadline_expired(deadline: str, today: "datetime.date") -> bool:
 
 @app.get("/api/career-summary")
 def career_summary(request: Request):
-    """소유자에게만 최신 추천 요약을 제공한다.
+    """로그인 사용자에게 최신 추천 요약을 제공한다.
 
     후보자 개인정보와 API 키는 내보내지 않고, 이미 공개용 추천 결과 JSON에
     적힌 회사·공고·점수·링크만 최소한으로 전달한다.
     """
-    _require_owner(request)
+    _require_signed_in_user(request)
     return {
         "career": _read_career_card("top_job_notion_career.json"),
         "parttime": _read_career_card("top_job_notion_parttime.json"),
@@ -2374,7 +2392,7 @@ def career_jobs(request: Request, q: str = "", source: str = "", sort: str = "re
     만료된 행은 즉시 화면에서 숨긴다(DB 삭제는 기존 정리 배치가 그대로 담당,
     유예 기간을 건드리지 않아 실수로 지운 데이터를 복구할 여유는 유지된다).
     """
-    _require_owner(request)
+    _require_signed_in_user(request)
     db_path = CAREER_DATA_DIR / "jobs.db"
     if not db_path.exists():
         return {"jobs": [], "total": 0, "stats": {}, "sources": []}
@@ -2424,7 +2442,7 @@ def career_jobs(request: Request, q: str = "", source: str = "", sort: str = "re
 @app.get("/api/career-contests")
 def career_contests(request: Request, q: str = "", source: str = "", sort: str = "recommended", limit: int = 40, offset: int = 0):
     """★ 2026-09-12: career_jobs와 같은 이유로 마감 지난 대회를 화면에서 즉시 숨긴다."""
-    _require_owner(request)
+    _require_signed_in_user(request)
     db_path = CAREER_DATA_DIR / "contests.db"
     if not db_path.exists():
         return {"jobs": [], "total": 0, "stats": {}, "sources": []}
@@ -2452,7 +2470,7 @@ def career_contests(request: Request, q: str = "", source: str = "", sort: str =
 
 @app.get("/api/career-company-analysis")
 def career_company_analysis(request: Request, company: str):
-    _require_owner(request)
+    _require_signed_in_user(request)
     company = company.strip()
     if not company or len(company) > 160: raise HTTPException(status_code=400, detail="회사명이 올바르지 않습니다")
     conn = sqlite3.connect(str(CAREER_DATA_DIR / "jobs.db")); conn.row_factory = sqlite3.Row
@@ -3278,21 +3296,26 @@ QA_REPORTER_USERNAME = "qqq"
 PERSONA_MANAGER_PERSONA_NAME = "페르소나 관리자"
 
 
-def _require_owner(request):
+def _is_owner_request(request) -> bool:
     user = getattr(request.state, "user", None)
     if user:
-        is_owner_request = user["is_owner"]
-    else:
-        # user가 없는 경우가 둘 있다 — ①로컬 개발(무인증, can_write=True)은
-        # 소유자로 간주(기존 관례) ②공유 링크 읽기 전용 방문자(share_guest=True,
-        # can_write=False)는 소유자가 아니다. share_guest를 따로 확인해야
-        # 한다 — can_write만 보면 나중에 다른 읽기전용 경로가 늘었을 때
-        # 실수로 뚫릴 수 있어서 명시적으로 뺐다.
-        is_owner_request = bool(getattr(request.state, "can_write", False)) and not getattr(
-            request.state, "share_guest", False
-        )
-    if not is_owner_request:
+        return bool(user["is_owner"])
+    # 로컬 개발(무인증, can_write=True)은 기존 관례대로 소유자로 간주한다.
+    return bool(getattr(request.state, "can_write", False)) and not getattr(request.state, "share_guest", False)
+
+
+def _require_owner(request):
+    if not _is_owner_request(request):
         raise HTTPException(status_code=403, detail="소유자만 할 수 있습니다")
+
+
+def _require_signed_in_user(request):
+    """툴파챗 로그인 계정 또는 로컬 소유자만 읽기형 하위 앱을 사용한다."""
+    if getattr(request.state, "user", None):
+        return
+    if _is_owner_request(request):
+        return
+    raise HTTPException(status_code=401, detail="로그인이 필요합니다")
 
 
 def _request_username(request):
