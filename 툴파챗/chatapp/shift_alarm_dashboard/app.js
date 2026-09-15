@@ -251,8 +251,8 @@ async function triggerSafariDownload(item){
 async function triggerPhotosSave(item){
     if(!confirm(`Safari 다운로드가 완료됐나요?\n\n"${item.ios_filename}"을 사진 앱 최근 항목에 저장한 뒤 Downloads 원본을 삭제합니다.`))return;
     try{
-        await api(item.action_url,{method:"POST",body:JSON.stringify({action:"mark_photo_shortcut"})});
         await navigator.clipboard.writeText(item.ios_filename);
+        await api(item.action_url,{method:"POST",body:JSON.stringify({action:"mark_photo_shortcut"})});
         notice("파일명을 복사했습니다. 사진 저장 단축어를 실행합니다.");
         window.location.href=shortcutClipboardUrl("다운로드 영상을 사진에 저장");
     }catch(e){
