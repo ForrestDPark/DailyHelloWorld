@@ -123,12 +123,9 @@ function speakCurrentLine() {
   utterance.onend = () => {
     if (sequence !== speechSequence || !listeningMode) return;
     $("portrait").classList.remove("speaking");
-    if (sceneLineIndex < sceneLines.length - 1) {
-      sceneLineIndex += 1;
-      typeLine(sceneLines[sceneLineIndex]);
-    } else {
-      updateListeningControls("선택지를 골라주세요");
-    }
+    updateListeningControls(
+      sceneLineIndex < sceneLines.length - 1 ? "대사창을 눌러 계속" : "선택지를 골라주세요"
+    );
   };
   utterance.onerror = () => {
     if (sequence !== speechSequence) return;
