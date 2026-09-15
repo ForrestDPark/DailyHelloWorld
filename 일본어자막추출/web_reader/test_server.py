@@ -3,6 +3,7 @@ import unittest
 import zipfile
 import datetime
 import sqlite3
+import json
 from pathlib import Path
 from unittest.mock import patch
 
@@ -57,6 +58,17 @@ class ReaderTests(unittest.TestCase):
             self.assertEqual(store.get("book", "alpha")["spine_index"], 3)
             self.assertEqual(store.get("book", "beta")["spine_index"], 0)
 
+    def test_owner_progress_syncs_with_morning_reader_sidecar(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); epub_path = root / "book.epub"; make_epub(epub_path)
+            book = server.parse_book(epub_path)
+            app = object.__new__(server.App); app.store = server.Store(root / "reader.db")
+            app.save_progress(book, 0, 100, "owner", True)
+            shared = json.loads(book.path.with_suffix(".reader-progress.json").read_text(encoding="utf-8"))
+            self.assertEqual(shared["source"], "web")
+            self.assertEqual(app.progress_for(book, "owner", True)["spine_index"], 0)
+            self.assertEqual(app.progress_for(book, "other", False)["spine_index"], 0)
+
     def test_signed_session_expires(self):
         secret = b"secret"; self.assertTrue(server.valid_session(secret, server.sign_session(secret)))
         with patch.object(server.time, "time", return_value=0): token = server.sign_session(secret)
@@ -71,9 +83,9 @@ class ReaderTests(unittest.TestCase):
                 db.execute("INSERT INTO users VALUES(1,1,'owner'),(2,0,'reader')")
                 db.execute("INSERT INTO sessions VALUES('owner',1,?),('user',2,?)", (future, future))
             app = object.__new__(server.App); app.chatapp_db = db_path
-            self.assertEqual(app.chat_session_username("owner"), "owner")
-            self.assertEqual(app.chat_session_username("user"), "reader")
-            self.assertIsNone(app.chat_session_username("missing"))
+            self.assertEqual(app.chat_session_user("owner"), ("owner", True))
+            self.assertEqual(app.chat_session_user("user"), ("reader", False))
+            self.assertIsNone(app.chat_session_user("missing"))
 
 
 if __name__ == "__main__": unittest.main()

@@ -28,6 +28,7 @@ STATIC_DIR = ROOT / "static"
 DEFAULT_FINAL_DIR = Path("/Users/forrestdpark/Desktop/BlogImage/av완성작")
 DEFAULT_FALLBACK_DIR = ROOT.parent / "library"
 STATE_DIR = Path(os.environ.get("JP_WEB_READER_STATE_DIR", "~/.japanese_epub_web")).expanduser()
+MORNING_READER_LAST_STATE = Path("~/.ebook_reader_last.json").expanduser()
 SESSION_COOKIE = "jp_reader_session"
 CHAT_SESSION_COOKIE = "tulpa_session"
 SESSION_TTL = 60 * 60 * 24 * 30
@@ -260,13 +261,17 @@ class ReaderHandler(BaseHTTPRequestHandler):
         length = min(int(self.headers.get("Content-Length", "0")), MAX_JSON)
         return json.loads(self.rfile.read(length) or b"{}")
 
-    def _identity(self) -> str | None:
+    def _principal(self) -> tuple[str, bool] | None:
         jar = cookies.SimpleCookie(self.headers.get("Cookie", ""))
         morsel = jar.get(SESSION_COOKIE)
         if morsel and valid_session(self.app.secret, morsel.value):
-            return "reader-owner"
+            return ("reader-owner", True)
         chat_session = jar.get(CHAT_SESSION_COOKIE)
-        return self.app.chat_session_username(chat_session.value) if chat_session else None
+        return self.app.chat_session_user(chat_session.value) if chat_session else None
+
+    def _identity(self) -> str | None:
+        principal = self._principal()
+        return principal[0] if principal else None
 
     def _authenticated(self) -> bool:
         return self._identity() is not None
@@ -307,7 +312,8 @@ class ReaderHandler(BaseHTTPRequestHandler):
                 data = self._body(); index = int(data.get("spine_index", 0)); percent = float(data.get("percent", 0))
             except (json.JSONDecodeError, TypeError, ValueError): return self._json(400, {"detail": "진행 정보가 올바르지 않습니다"})
             index = max(0, min(index, max(0, len(book.spine) - 1))); percent = max(0, min(percent, 100))
-            return self._json(200, {"ok": True, **self.app.store.save(book.id, index, percent, self._identity() or "")})
+            username, is_owner = self._principal() or ("", False)
+            return self._json(200, {"ok": True, **self.app.save_progress(book, index, percent, username, is_owner)})
         self._json(404, {"ok": False})
 
     def do_GET(self):
@@ -317,7 +323,8 @@ class ReaderHandler(BaseHTTPRequestHandler):
         if path == "/api/books" and self._need_auth():
             books = sorted(self.app.library.books.values(), key=lambda b: b.modified, reverse=True)
             username = self._identity() or ""
-            return self._json(200, [b.public(self.app.store.get(b.id, username), self.app.base_path) for b in books])
+            principal = self._principal() or ("", False)
+            return self._json(200, [b.public(self.app.progress_for(b, *principal), self.app.base_path) for b in books])
         if path.startswith("/api/books/") and self._need_auth(): return self._book_route(path)
         return self._static(path)
 
@@ -339,8 +346,8 @@ class ReaderHandler(BaseHTTPRequestHandler):
                     "begin": clip["begin"], "end": clip["end"], "target": clip["target"],
                 } for clip in book.audio[i]],
             } for i, href in enumerate(book.spine)]
-            return self._json(200, {**book.public(self.app.store.get(book.id, self._identity() or ""), self.app.base_path), "chapters": chapters})
-        if action == "progress": return self._json(200, self.app.store.get(book.id, self._identity() or ""))
+            return self._json(200, {**book.public(self.app.progress_for(book, *(self._principal() or ("", False))), self.app.base_path), "chapters": chapters})
+        if action == "progress": return self._json(200, self.app.progress_for(book, *(self._principal() or ("", False))))
         if action == "cover" and book.cover: return self._resource(book, book.cover)
         if action == "download":
             return self._send_bytes(book.path.read_bytes(), "application/epub+zip", f"attachment; filename*=UTF-8''{urllib.parse.quote(book.path.name)}")
@@ -391,14 +398,14 @@ class App:
         }
         self.secret = load_secret(); self.library = Library(roots); self.store = Store(STATE_DIR / "reader.db")
 
-    def chat_session_username(self, token: str) -> str | None:
+    def chat_session_user(self, token: str) -> tuple[str, bool] | None:
         """같은 호스트의 유효한 툴파챗 로그인 계정을 서재 사용자로 인정한다."""
         if not token or not self.chatapp_db.is_file():
             return None
         try:
             with sqlite3.connect(f"file:{self.chatapp_db}?mode=ro", uri=True, timeout=2) as db:
                 row = db.execute(
-                    "SELECT sessions.expires_at, users.username FROM sessions "
+                    "SELECT sessions.expires_at, users.username, users.is_owner FROM sessions "
                     "JOIN users ON users.id=sessions.user_id WHERE sessions.token=?",
                     (token,),
                 ).fetchone()
@@ -408,9 +415,58 @@ class App:
             now = datetime.datetime.now(datetime.timezone.utc)
             if expires.tzinfo is None:
                 expires = expires.replace(tzinfo=datetime.timezone.utc)
-            return str(row[1]) if expires >= now else None
+            return (str(row[1]), bool(row[2])) if expires >= now else None
         except (OSError, sqlite3.Error, TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _sync_path(book: Book) -> Path:
+        return book.path.with_suffix(".reader-progress.json")
+
+    def progress_for(self, book: Book, username: str, is_owner: bool) -> dict:
+        stored = self.store.get(book.id, username)
+        if not is_owner:
+            return stored
+        try:
+            shared = json.loads(self._sync_path(book).read_text(encoding="utf-8"))
+            if str(shared.get("book_file", "")) != str(book.path):
+                return stored
+            shared_index = max(0, min(int(shared.get("spine_index", 0)), max(0, len(book.spine) - 1)))
+            shared_updated = int(shared.get("updated_at", 0))
+            if shared_updated >= int(stored.get("updated_at", 0)):
+                return {"spine_index": shared_index, "percent": ((shared_index + 1) / max(1, len(book.spine))) * 100, "updated_at": shared_updated}
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            pass
+        # 기능 추가 전부터 쓰던 현재 책은 아직 sidecar가 없다. 기존 전역 JSON의
+        # 문장 진행률을 장 비율로 한 번 이어받고, 웹이 열리면 sidecar로 확정한다.
+        try:
+            legacy = json.loads(MORNING_READER_LAST_STATE.read_text(encoding="utf-8"))
+            if str(Path(str(legacy.get("file", ""))).resolve()) == str(book.path):
+                sentence_total = max(1, int(legacy.get("total", 0)))
+                ratio = max(0.0, min(1.0, int(legacy.get("idx", 0)) / sentence_total))
+                legacy_updated = int(MORNING_READER_LAST_STATE.stat().st_mtime)
+                if legacy_updated > int(stored.get("updated_at", 0)):
+                    spine_index = min(max(0, len(book.spine) - 1), int(ratio * len(book.spine)))
+                    return {"spine_index": spine_index, "percent": ratio * 100, "updated_at": legacy_updated}
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            pass
+        return stored
+
+    def save_progress(self, book: Book, index: int, percent: float, username: str, is_owner: bool) -> dict:
+        result = self.store.save(book.id, index, percent, username)
+        if is_owner:
+            path = self._sync_path(book)
+            temporary = path.with_suffix(path.suffix + ".tmp")
+            payload = {"schema_version": 1, "book_file": str(book.path), "spine_index": index,
+                       "spine_total": len(book.spine), "percent": percent, "updated_at": result["updated_at"],
+                       "source": "web"}
+            try:
+                temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+                os.replace(temporary, path)
+            except OSError:
+                try: temporary.unlink(missing_ok=True)
+                except OSError: pass
+        return result
 
 
 def main():

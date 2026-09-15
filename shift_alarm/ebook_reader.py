@@ -52,6 +52,7 @@ SESSION_DIR = os.path.expanduser("~/.ebook_reader/sessions")
 FILE_PATH = sys.argv[1]
 FILE_NAME = os.path.basename(FILE_PATH)
 PROGRESS_FILE = f"{os.path.splitext(FILE_PATH)[0]}.progress"
+READER_SYNC_FILE = f"{os.path.splitext(FILE_PATH)[0]}.reader-progress.json"
 read_buffer = []
 start_page_val = 0
 end_page_val = 0
@@ -141,6 +142,25 @@ def save_last_state(page, idx, total):
             }, f, ensure_ascii=False)
     except Exception:
         pass
+
+
+def save_reader_sync(spine_index, spine_total, sentence_idx, sentence_total):
+    """웹 EPUB 리더와 공유하는 장 단위 위치를 원자적으로 저장한다."""
+    payload = {
+        "schema_version": 1, "book_file": os.path.abspath(FILE_PATH),
+        "spine_index": int(spine_index), "spine_total": int(spine_total),
+        "sentence_idx": int(sentence_idx), "sentence_total": int(sentence_total),
+        "percent": (sentence_idx / sentence_total * 100) if sentence_total else 0,
+        "updated_at": int(time.time()), "source": "morning-reader",
+    }
+    temporary = READER_SYNC_FILE + ".tmp"
+    try:
+        with open(temporary, "w", encoding="utf-8") as file:
+            json.dump(payload, file, ensure_ascii=False, indent=2)
+        os.replace(temporary, READER_SYNC_FILE)
+    except OSError:
+        try: os.remove(temporary)
+        except OSError: pass
 
 async def speak(text):
     communicate = edge_tts.Communicate(text, VOICE, rate=RATE)
@@ -398,13 +418,18 @@ def extract_sentences(path):
             book = epub.read_epub(path)
             full_text = []
             p_num = 0
-            for item in book.get_items_of_type(ebooklib.ITEM_DOCUMENT):
+            # 웹 리더와 동일한 EPUB spine 순서를 사용해야 양쪽의 장 번호가
+            # 정확히 대응한다. nav/부록 파일을 ITEM_DOCUMENT 순서로 세면 어긋난다.
+            for spine_index, (item_id, _linear) in enumerate(book.spine):
+                item = book.get_item_with_id(item_id)
+                if item is None:
+                    continue
                 soup = BeautifulSoup(item.get_content(), 'html.parser')
                 for tag in soup.find_all(['p', 'h1', 'h2', 'h3']):
                     text = tag.get_text().strip()
                     if text:
                         p_num += 1
-                        full_text.append({"p": p_num, "t": text})
+                        full_text.append({"p": p_num, "t": text, "spine": spine_index, "spine_total": len(book.spine)})
             return full_text
         else:
             print_status(f"❌  지원하지 않는 형식: {ext}", ORANGE)
@@ -417,10 +442,14 @@ def combine_into_sentences(line_data_list):
     sentences = []
     temp_text = ""
     temp_pages = set()
+    temp_spines = []
+    spine_total = 0
 
     for data in line_data_list:
         line = data['t'].strip()
         temp_pages.add(data['p'])
+        temp_spines.append(data.get('spine', 0))
+        spine_total = max(spine_total, data.get('spine_total', 0))
 
         if temp_text.endswith('-'):
             temp_text = temp_text[:-1] + line
@@ -428,12 +457,15 @@ def combine_into_sentences(line_data_list):
             temp_text = (temp_text + " " + line).strip()
 
         if any(temp_text.endswith(p) for p in ['.', '!', '?', '."', '!"', '?"']):
-            sentences.append({"pages": sorted(list(temp_pages)), "content": temp_text})
+            sentences.append({"pages": sorted(list(temp_pages)), "content": temp_text,
+                              "spine": temp_spines[0], "spine_total": spine_total})
             temp_text = ""
             temp_pages = set()
+            temp_spines = []
 
     if temp_text.strip():
-        sentences.append({"pages": sorted(list(temp_pages)), "content": temp_text.strip()})
+        sentences.append({"pages": sorted(list(temp_pages)), "content": temp_text.strip(),
+                          "spine": temp_spines[0] if temp_spines else 0, "spine_total": spine_total})
 
     return sentences
 
@@ -456,6 +488,22 @@ def main():
     else:
         last_idx = 0
         print_status("🆕  처음 학습하는 파일입니다.", GREEN)
+
+    # 웹에서 이 책을 더 최근에 읽었다면 웹의 장 위치부터 이어간다. 아침
+    # 리더가 쓴 동기화 파일에는 정확한 문장 번호도 있으므로 그대로 복원한다.
+    try:
+        with open(READER_SYNC_FILE, encoding="utf-8") as file:
+            shared = json.load(file)
+        if os.path.abspath(shared.get("book_file", "")) == os.path.abspath(FILE_PATH):
+            if shared.get("source") == "morning-reader" and "sentence_idx" in shared:
+                last_idx = max(0, min(int(shared["sentence_idx"]), len(all_sentences)))
+            elif shared.get("source") == "web":
+                shared_spine = max(0, int(shared.get("spine_index", 0)))
+                last_idx = next((i for i, sentence in enumerate(all_sentences)
+                                 if sentence.get("spine", 0) >= shared_spine), last_idx)
+                print_status(f"🌐  웹앱에서 읽던 {shared_spine + 1}장 위치를 불러왔습니다.", CYAN)
+    except (OSError, json.JSONDecodeError, TypeError, ValueError):
+        pass
 
     print(f"\n  {YELLOW}👉  시작할 페이지 번호 입력  (엔터 = 이어서){RESET}  ", end="")
     target = input().strip()
@@ -493,6 +541,7 @@ def main():
         with open(PROGRESS_FILE, 'w') as f:
             f.write(str(current_idx + 1))
         save_last_state(page, current_idx + 1, total)
+        save_reader_sync(data.get("spine", 0), data.get("spine_total", 0), current_idx + 1, total)
 
         read_buffer.append(data['content'])
         asyncio.run(speak(data['content']))
