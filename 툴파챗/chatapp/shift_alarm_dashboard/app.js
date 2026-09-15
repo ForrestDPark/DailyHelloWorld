@@ -5,7 +5,19 @@ let notificationItems = [];
 let completionAudioContext = null;
 const videoTransferStates = new Map();
 let currentSubtitleExtraction = {state:"idle"};
-const SUBTITLE_STATE_LABELS = {idle:"대기",running:"진행 중",complete:"완료",failed:"실패"};
+// ★ 2026-09-15: "db 에있는 영상을 하나씩 하는게 아니라 전부 여러개를 클릭해서
+// 다운받거나 사진에 저장 원본 삭제, 삭제 가능하게 해줘" — 개별 파일 카드의
+// 다운로드/사진저장/삭제 버튼을 없애고 체크박스 다중 선택 + 하단 일괄 처리
+// 바(video-library-bulk)로 옮겼다. selectedVideoIds는 3초 폴링으로
+// renderVideoLibrary가 다시 그려져도(예전엔 카드의 .selected 클래스만 썼는데
+// 매번 DOM을 새로 만들어 선택이 풀렸다) 선택 상태가 유지되도록 모듈
+// 스코프에 둔다.
+let selectedVideoIds = new Set();
+let lastVideoItems = [];
+// Safari 단축어(다운로드·사진 저장)는 클립보드→shortcuts:// 이동이라 완료
+// 여부를 코드로 알 수 없어서, 여러 개를 고르면 한 번에 하나씩만 진행하고
+// 사용자가 "다음 파일 받기"를 눌러야 다음으로 넘어가는 큐로 처리한다.
+let bulkQueue = null;
 function notice(message, error=false){const el=$("notice");el.textContent=message;el.classList.remove("hidden","error");if(error)el.classList.add("error");else setTimeout(()=>el.classList.add("hidden"),3500)}
 async function api(url,options={}){const response=await fetch(url,{credentials:"same-origin",...options,headers:{"Content-Type":"application/json",...(options.headers||{})}});if(response.status===401){location.href="/";throw new Error("로그인이 필요합니다")}const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.detail||"요청을 처리하지 못했습니다");return data}
 function renderNotifications(data){notificationItems=data.items||[];const badge=$("notification-count"),list=$("notification-list"),count=Number(data.unread_count)||0;badge.textContent=count>99?"99+":String(count);badge.classList.toggle("hidden",count===0);list.replaceChildren();if(!notificationItems.length){const emptyState=document.createElement("div");emptyState.className="notification-empty";emptyState.textContent="새 알림이 없습니다.";list.append(emptyState);return}notificationItems.forEach(item=>{const button=document.createElement("button"),dot=document.createElement("span"),copy=document.createElement("span"),title=document.createElement("b"),body=document.createElement("span"),kind=document.createElement("span");button.type="button";button.className=`notification-item${item.unread?" unread":""}`;dot.className="notification-dot";copy.className="notification-copy";title.textContent=item.title;body.textContent=item.body||"";kind.className="notification-kind";kind.textContent=item.type==="chat"?"채팅":"업데이트";copy.append(title,body);button.append(dot,copy,kind);button.addEventListener("click",async()=>{try{if(item.type==="system"&&item.unread){await api("/api/notifications/read",{method:"PUT",body:JSON.stringify({notification_id:item.id})});item.unread=false;await loadNotifications()}location.href=item.url}catch(e){notice(e.message,true)}});list.append(button)})}
@@ -60,7 +72,19 @@ async function copyLinkAndOpenChrome(url){
     }
     window.location.href=url.replace(/^https:/,"googlechromes:").replace(/^http:/,"googlechrome:");
 }
-function renderRecommendedSites(urls){recommendedSiteUrls=urls;const panel=$("recommended-sites"),list=$("recommended-sites-list");list.replaceChildren();urls.forEach((url,index)=>{const link=document.createElement("a"),number=document.createElement("span"),copy=document.createElement("span"),host=document.createElement("b"),path=document.createElement("span"),arrow=document.createElement("span"),parsed=new URL(url);link.className="recommended-site";link.href=url;number.className="recommended-site-index";number.textContent=index+1;copy.className="recommended-site-copy";host.textContent=parsed.hostname;path.textContent=`${parsed.pathname}${parsed.search}`;copy.append(host,path);arrow.className="recommended-site-arrow";arrow.textContent="⧉";link.append(number,copy,arrow);link.addEventListener("click",event=>{event.preventDefault();copyLinkAndOpenChrome(url)});list.append(link)});panel.classList.remove("hidden");$("open-first-site").disabled=!urls.length}
+// ★ 2026-09-15: "링크 자체보다 링크 끝에 붙어있는 keyword 옆에 단어로 표시해서
+// 어떤 사이트가 추천됬는지 대충 알기 편하게 보이면 좋겠어" — 추천 북마크
+// 상당수가 `?keyword=...`(또는 `?s=...`, 배우명 검색) 쿼리를 달고 있어서, 그
+// 값을 굵은 글씨로 보여주면 링크만 보고도 뭘 추천받았는지 바로 알 수 있다.
+// 그런 쿼리가 없는 사이트(홈페이지 등)는 기존처럼 호스트명을 보여준다.
+function extractSiteKeyword(parsed){
+    for(const key of ["keyword","keywords","s","q","query"]){
+        const value=parsed.searchParams.get(key);
+        if(value&&value.trim())return value.trim();
+    }
+    return null;
+}
+function renderRecommendedSites(urls){recommendedSiteUrls=urls;const panel=$("recommended-sites"),list=$("recommended-sites-list");list.replaceChildren();urls.forEach((url,index)=>{const link=document.createElement("a"),number=document.createElement("span"),copy=document.createElement("span"),host=document.createElement("b"),path=document.createElement("span"),arrow=document.createElement("span"),parsed=new URL(url),keyword=extractSiteKeyword(parsed);link.className="recommended-site";link.href=url;number.className="recommended-site-index";number.textContent=index+1;copy.className="recommended-site-copy";host.textContent=keyword||parsed.hostname;path.textContent=keyword?parsed.hostname:`${parsed.pathname}${parsed.search}`;copy.append(host,path);arrow.className="recommended-site-arrow";arrow.textContent="⧉";link.append(number,copy,arrow);link.addEventListener("click",event=>{event.preventDefault();copyLinkAndOpenChrome(url)});list.append(link)});panel.classList.remove("hidden");$("open-first-site").disabled=!urls.length}
 async function loadRecommendedSites(button){const original=button.textContent;button.disabled=true;button.textContent="고르는 중…";try{const data=await api("/api/shift-alarm/media/open-sites",{method:"POST"});renderRecommendedSites(data.urls||[]);notice(`${data.urls?.length||0}개 추천을 골랐습니다.`)}catch(e){notice(e.message,true)}finally{button.disabled=false;button.textContent=original}}
 async function sendTransport(action,button){button.disabled=true;try{await api("/api/shift-alarm/media/transport",{method:"POST",body:JSON.stringify({action})})}catch(e){notice(e.message,true)}finally{button.disabled=false}}
 $("play-favorites").addEventListener("click",e=>playMedia("favorites",e.currentTarget));
@@ -89,29 +113,180 @@ document.addEventListener("pointerdown",primeCompletionChime,{once:true,passive:
 function shortcutClipboardUrl(name){return `shortcuts://run-shortcut?name=${encodeURIComponent(name)}&input=clipboard`}
 function safariShortcutUrl(){return shortcutClipboardUrl("Safari로 다운로드")}
 function renderSubtitleExtraction(info={state:"idle"}){currentSubtitleExtraction=info;const el=$("subtitle-extraction-status"),state=info.state||"idle",percent=Math.max(0,Math.min(100,Number(info.progress)||0));el.dataset.state=state;el.classList.toggle("hidden",state==="idle");const shown=state==="complete"?100:percent;$("subtitle-extraction-percent").textContent=`${Math.round(shown)}%`;$("subtitle-extraction-bar").style.width=`${shown}%`;$("subtitle-extraction-stage").textContent=state==="running"?`🎬 자막 추출 중 — ${info.stage||"Mac에서 처리 중입니다"}`:state==="complete"?"✅ 자막·번역·EPUB·Notion 반영 완료":state==="failed"?`⚠️ ${info.stage||"자막 추출 상태를 확인하지 못했습니다"}`:"";$("subtitle-extraction-file").textContent=info.filename?`${info.filename}${state==="running"?" · 새 터미널 창에서 자세한 로그를 볼 수 있고, 이 화면을 닫아도 계속 진행됩니다.":""}`:""}
-function renderVideoLibrary(items=[]){const library=$("video-library");library.replaceChildren();if(!items.length){library.append(empty("av4 폴더에 MP4 파일이 없습니다."));return}items.forEach(item=>{observeVideoTransferState(item);const card=document.createElement("article"),head=document.createElement("label"),checkbox=document.createElement("input"),copy=document.createElement("div"),name=document.createElement("b"),meta=document.createElement("small"),transfer=document.createElement("div"),transferText=document.createElement("span"),transferBar=document.createElement("i"),buttons=document.createElement("div"),download=document.createElement("a"),transferring=item.transfer_state==="downloading",percent=item.transfer_total_bytes?Math.min(100,item.transfer_sent_bytes/item.transfer_total_bytes*100):0;card.className="video-file";head.className="video-file-head";checkbox.type="checkbox";checkbox.className="video-file-checkbox";checkbox.setAttribute("aria-label",`${item.filename} 선택`);checkbox.addEventListener("change",()=>card.classList.toggle("selected",checkbox.checked));copy.className="video-file-copy";name.textContent=item.filename;meta.textContent=`${byteSize(item.size_bytes)}${item.temporary?" · 24시간 임시 보관":" · av4 보관 파일"}`;const saveName=document.createElement("small");saveName.className="video-file-savename";saveName.textContent=`Files 앱 저장명: ${item.ios_filename}`;copy.append(name,meta,saveName);head.append(checkbox,copy);transfer.className=`video-transfer${item.transfer_state?"":" hidden"}`;transferText.textContent=transferring?`iPhone 전송 중 ${percent.toFixed(1)}% · ${byteSize(item.transfer_sent_bytes)} / ${byteSize(item.transfer_total_bytes)}`:item.transfer_state==="complete"?"서버 전송 완료 · Safari 다운로드를 확인하세요":item.transfer_state==="interrupted"?`전송 중단 · ${byteSize(item.transfer_sent_bytes)}까지 전송됨`:"";transferBar.style.width=`${item.transfer_state==="complete"?100:percent}%`;transfer.append(transferText,transferBar);buttons.className="video-file-buttons";download.href=safariShortcutUrl();download.textContent=transferring?"전송 중…":item.transfer_state==="complete"?"Safari로 다시 받기":"Safari로 다운로드";download.setAttribute("aria-disabled",String(transferring));download.addEventListener("click",async event=>{
-        // ★ 2026-09-14: "사파리에서 다운로드가 눈에 보이게 해줄 수 없나" —
-        // iOS PWA가 shortcuts://의 text 쿼리를 버리는 경우가 있어, 실제 URL을
-        // 먼저 클립보드에 넣고 input=clipboard로 단축어를 실행한다.
-        event.preventDefault();
-        if(transferring||download.dataset.opening==="1")return;
-        download.dataset.opening="1";
-        download.textContent="단축어 여는 중…";
-        const absolute=new URL(item.download_url,window.location.origin).href;
-        try{
-            await navigator.clipboard.writeText(absolute);
-            notice("다운로드 주소를 복사했습니다. 단축어가 Safari에서 엽니다.");
-            window.location.href=safariShortcutUrl();
-        }catch(e){
-            notice("주소를 복사하지 못했습니다. 아래 주소 복사 버튼을 먼저 눌러주세요.",true);
+function renderVideoLibrary(items=[]){
+    lastVideoItems=items;
+    const library=$("video-library");
+    library.replaceChildren();
+    const knownIds=new Set(items.map(item=>item.file_id));
+    for(const id of [...selectedVideoIds])if(!knownIds.has(id))selectedVideoIds.delete(id);
+    if(!items.length){
+        library.append(empty("av4 폴더에 MP4 파일이 없습니다."));
+        renderVideoBulkBar();
+        return;
+    }
+    items.forEach(item=>{
+        observeVideoTransferState(item);
+        const card=document.createElement("article"),head=document.createElement("label"),checkbox=document.createElement("input"),
+              copy=document.createElement("div"),name=document.createElement("b"),meta=document.createElement("small"),
+              transfer=document.createElement("div"),transferText=document.createElement("span"),transferBar=document.createElement("i"),
+              buttons=document.createElement("div"),
+              transferring=item.transfer_state==="downloading",
+              percent=item.transfer_total_bytes?Math.min(100,item.transfer_sent_bytes/item.transfer_total_bytes*100):0;
+        card.className="video-file";
+        head.className="video-file-head";
+        checkbox.type="checkbox";
+        checkbox.className="video-file-checkbox";
+        checkbox.checked=selectedVideoIds.has(item.file_id);
+        checkbox.setAttribute("aria-label",`${item.filename} 선택`);
+        card.classList.toggle("selected",checkbox.checked);
+        checkbox.addEventListener("change",()=>{
+            if(checkbox.checked)selectedVideoIds.add(item.file_id);else selectedVideoIds.delete(item.file_id);
+            card.classList.toggle("selected",checkbox.checked);
+            renderVideoBulkBar();
+        });
+        copy.className="video-file-copy";
+        name.textContent=item.filename;
+        meta.textContent=`${byteSize(item.size_bytes)}${item.temporary?" · 24시간 임시 보관":" · av4 보관 파일"}`;
+        const saveName=document.createElement("small");
+        saveName.className="video-file-savename";
+        saveName.textContent=`Files 앱 저장명: ${item.ios_filename}`;
+        copy.append(name,meta,saveName);
+        head.append(checkbox,copy);
+        transfer.className=`video-transfer${item.transfer_state?"":" hidden"}`;
+        transferText.textContent=transferring?`iPhone 전송 중 ${percent.toFixed(1)}% · ${byteSize(item.transfer_sent_bytes)} / ${byteSize(item.transfer_total_bytes)}`:item.transfer_state==="complete"?"서버 전송 완료 · Safari 다운로드를 확인하세요":item.transfer_state==="interrupted"?`전송 중단 · ${byteSize(item.transfer_sent_bytes)}까지 전송됨`:"";
+        transferBar.style.width=`${item.transfer_state==="complete"?100:percent}%`;
+        transfer.append(transferText,transferBar);
+        buttons.className="video-file-buttons";
+        if(transferring){
+            const cancel=document.createElement("button");
+            cancel.type="button";
+            cancel.textContent="전송 중지";
+            cancel.addEventListener("click",()=>videoAction("cancel_transfer",null,item.action_url));
+            buttons.append(cancel);
         }
-        setTimeout(()=>{download.dataset.opening="";download.textContent=item.transfer_state==="complete"?"Safari로 다시 받기":"Safari로 다운로드";loadVideoDownload()},1500)
-    });buttons.append(download);const copyUrl=document.createElement("button");copyUrl.type="button";copyUrl.textContent="주소 복사";copyUrl.addEventListener("click",async()=>{const absolute=new URL(item.download_url,window.location.origin).href;try{await navigator.clipboard.writeText(absolute);notice("다운로드 주소를 복사했습니다. 단축어가 열리지 않을 때 Safari 주소창에 붙여넣으세요.")}catch(e){notice(`주소 복사 실패: ${absolute}`,true)}});buttons.append(copyUrl);if(transferring){const cancel=document.createElement("button");cancel.type="button";cancel.textContent="전송 중지";cancel.addEventListener("click",()=>videoAction("cancel_transfer",null,item.action_url));buttons.append(cancel)}if(item.transfer_state==="complete"){const photos=document.createElement("button"),files=document.createElement("a"),filename=document.createElement("button");photos.type="button";photos.className="save-to-photos";photos.textContent="사진에 저장·원본 삭제";photos.addEventListener("click",async()=>{if(!confirm(`Safari 다운로드가 완료됐나요?\n\n"${item.ios_filename}"을 사진 앱 최근 항목에 저장한 뒤 Downloads 원본을 삭제합니다.`))return;photos.disabled=true;try{await navigator.clipboard.writeText(item.ios_filename);notice("파일명을 복사했습니다. 사진 저장 단축어를 실행합니다.");window.location.href=shortcutClipboardUrl("다운로드 영상을 사진에 저장")}catch(e){notice("파일명을 복사하지 못해 단축어를 실행할 수 없습니다.",true);photos.disabled=false}});files.href="shareddocuments://";files.textContent="파일 앱 열기";files.addEventListener("click",()=>notice(`사파리 주소창 옆 ↓ 아이콘에서 먼저 확인하거나, 파일 앱 → 둘러보기 → iCloud Drive 또는 나의 iPhone → Downloads에서 "${item.ios_filename}"을 찾아보세요.`));filename.type="button";filename.textContent="저장 파일명 복사";filename.addEventListener("click",async()=>{try{await navigator.clipboard.writeText(item.ios_filename);notice("저장 파일명을 복사했습니다. 파일 앱 검색에 붙여넣으세요.")}catch(e){notice(`저장 파일명: ${item.ios_filename}`)}});buttons.append(photos,files,filename)}[["🎬 자막 추출","extract_subtitle"],["AirDrop","reveal_airdrop"],["iCloud","icloud"],["삭제","delete"]].forEach(([label,action])=>{const button=document.createElement("button");button.type="button";const extractionRunning=currentSubtitleExtraction.state==="running",isThisExtracting=extractionRunning&&currentSubtitleExtraction.filename===item.filename;if(action==="extract_subtitle"){button.className="subtitle-extract-btn";button.textContent=isThisExtracting?"진행 중…":label;button.disabled=extractionRunning}else{button.textContent=label}const confirmation=action==="delete"?"이 영상의 원본 파일을 Mac에서 완전히 삭제할까요? iPhone으로 받았어도 그 사본은 지워지지 않지만, 이 Mac 원본은 되돌릴 수 없습니다.":action==="icloud"?"이 파일을 iCloud Drive의 Shift Alarm Downloads로 복사할까요?":action==="reveal_airdrop"?"Mac에서 이 파일과 AirDrop 창을 열까요?":action==="extract_subtitle"?"이 영상 하나만 골라 자막·번역·후리가나·Notion·EPUB까지 진행할까요? 운동용 영상 추출은 하지 않으며 시간이 오래 걸릴 수 있습니다.":null;button.addEventListener("click",()=>videoAction(action,confirmation,item.action_url));buttons.append(button)});card.append(head,transfer,buttons);library.append(card)})}
+        const extractionRunning=currentSubtitleExtraction.state==="running",isThisExtracting=extractionRunning&&currentSubtitleExtraction.filename===item.filename;
+        const extract=document.createElement("button");
+        extract.type="button";
+        extract.className="subtitle-extract-btn";
+        extract.textContent=isThisExtracting?"진행 중…":"🎬 자막 추출";
+        extract.disabled=extractionRunning;
+        extract.addEventListener("click",()=>videoAction(
+            "extract_subtitle",
+            "이 영상 하나만 골라 자막·번역·후리가나·Notion·EPUB까지 진행할까요? 운동용 영상 추출은 하지 않으며 시간이 오래 걸릴 수 있습니다.",
+            item.action_url,
+        ));
+        buttons.append(extract);
+        card.append(head,transfer,buttons);
+        library.append(card);
+    });
+    renderVideoBulkBar();
+}
+function renderVideoBulkBar(){
+    const bar=$("video-library-bulk");
+    bar.classList.toggle("hidden",!lastVideoItems.length);
+    const count=selectedVideoIds.size;
+    $("video-bulk-count").textContent=`${count}개 선택`;
+    $("video-bulk-select-all").textContent=count&&count===lastVideoItems.length?"선택 해제":"전체 선택";
+    $("video-bulk-download").disabled=count===0;
+    $("video-bulk-save-photos").disabled=count===0;
+    $("video-bulk-delete").disabled=count===0;
+    renderVideoBulkQueue();
+}
+function renderVideoBulkQueue(){
+    const el=$("video-bulk-queue");
+    if(!bulkQueue){el.classList.add("hidden");el.replaceChildren();return}
+    el.classList.remove("hidden");
+    const{action,items,index}=bulkQueue,label=action==="download"?"Safari로 다운로드":"사진에 저장·원본 삭제";
+    el.replaceChildren();
+    const text=document.createElement("p");
+    text.textContent=`${label} · ${index+1} / ${items.length} · ${items[index]?.filename||""}`;
+    const next=document.createElement("button");
+    next.type="button";
+    next.textContent=index+1<items.length?"다음 파일 받기":"완료";
+    next.addEventListener("click",()=>advanceVideoBulkQueue(true));
+    const cancel=document.createElement("button");
+    cancel.type="button";
+    cancel.textContent="중지";
+    cancel.addEventListener("click",()=>{bulkQueue=null;renderVideoBulkQueue()});
+    el.append(text,next,cancel);
+}
+async function triggerSafariDownload(item){
+    const absolute=new URL(item.download_url,window.location.origin).href;
+    try{
+        await navigator.clipboard.writeText(absolute);
+        notice(`다운로드 주소를 복사했습니다 · ${item.filename}. 단축어가 Safari에서 엽니다.`);
+        window.location.href=safariShortcutUrl();
+    }catch(e){
+        notice("주소를 복사하지 못했습니다.",true);
+    }
+}
+async function triggerPhotosSave(item){
+    if(!confirm(`Safari 다운로드가 완료됐나요?\n\n"${item.ios_filename}"을 사진 앱 최근 항목에 저장한 뒤 Downloads 원본을 삭제합니다.`))return;
+    try{
+        await navigator.clipboard.writeText(item.ios_filename);
+        notice("파일명을 복사했습니다. 사진 저장 단축어를 실행합니다.");
+        window.location.href=shortcutClipboardUrl("다운로드 영상을 사진에 저장");
+    }catch(e){
+        notice("파일명을 복사하지 못해 단축어를 실행할 수 없습니다.",true);
+    }
+}
+function startVideoBulkQueue(action,items){
+    bulkQueue={action,items,index:0};
+    advanceVideoBulkQueue(false);
+}
+async function advanceVideoBulkQueue(fromContinueClick){
+    if(!bulkQueue)return;
+    if(fromContinueClick){
+        bulkQueue.index+=1;
+        if(bulkQueue.index>=bulkQueue.items.length){
+            notice(`${bulkQueue.items.length}개 파일 처리를 마쳤습니다.`);
+            bulkQueue=null;
+            renderVideoBulkQueue();
+            await loadVideoDownload();
+            return;
+        }
+    }
+    renderVideoBulkQueue();
+    const item=bulkQueue.items[bulkQueue.index];
+    if(bulkQueue.action==="download")await triggerSafariDownload(item);
+    else await triggerPhotosSave(item);
+}
 function byteSize(bytes){if(bytes==null)return"";const gb=bytes/1024/1024/1024;return gb>=1?`${gb.toFixed(2)}GB`:`${(bytes/1024/1024).toFixed(1)}MB`}
 function renderVideoDownload(data){const state=data.state||"idle",progress=Math.max(0,Math.min(100,Number(data.progress)||0)),active=["queued","running","syncing"].includes(state),sizes=data.downloaded_bytes?`${byteSize(data.downloaded_bytes)}${data.total_bytes?` / ${byteSize(data.total_bytes)}`:" 내려받음"}`:"";$("video-download-state").textContent=VIDEO_STATE_LABELS[state]||state;$("video-download-state").dataset.state=state;$("video-download-submit").disabled=active;$("video-download-progress").classList.toggle("hidden",state==="idle");$("video-download-stage").textContent=data.stage||"상태를 확인하고 있습니다";$("video-download-percent").textContent=data.total_bytes?`${Math.round(progress)}%`:sizes||`${Math.round(progress)}%`;$("video-download-bar").style.width=`${progress}%`;$("video-download-file").textContent=data.filename?`${data.filename}${data.destination?` · ${data.destination}`:""}${data.size_bytes?` · ${byteSize(data.size_bytes)}`:""}`:active?`Mac에서 작업 중입니다. 이 화면을 닫아도 계속 진행됩니다.${sizes?` · ${sizes}`:""}`:"";renderSubtitleExtraction(data.subtitle_extraction);renderVideoLibrary(data.downloads)}
 async function loadVideoDownload(){try{renderVideoDownload(await api("/api/shift-alarm/video-download"))}catch(e){$("video-download-state").textContent="확인 실패"}}
 $("video-download-form").addEventListener("submit",async event=>{event.preventDefault();const url=$("video-download-url").value.trim();if(!url)return;if(!confirm("이 영상을 다운로드할 권한이 있으며, Mac 비공개 보관함에 최대 5GB 파일을 24시간 저장할까요?"))return;$("video-download-submit").disabled=true;try{const data=await api("/api/shift-alarm/video-download",{method:"POST",body:JSON.stringify({url,approved:true})});renderVideoDownload(data);notice("Mac에 영상 다운로드를 요청했습니다.")}catch(e){notice(e.message,true);await loadVideoDownload()}finally{await loadVideoDownload()}});
 async function videoAction(action,confirmation,actionUrl){if(!actionUrl)return;if(confirmation&&!confirm(confirmation))return;try{const data=await api(actionUrl,{method:"POST",body:JSON.stringify({action})});notice(data.message);if(action==="delete"||action==="cancel_transfer"||action==="extract_subtitle")await loadVideoDownload()}catch(e){notice(e.message,true)}}
+$("video-bulk-select-all").addEventListener("click",()=>{
+    if(selectedVideoIds.size&&selectedVideoIds.size===lastVideoItems.length)selectedVideoIds.clear();
+    else lastVideoItems.forEach(item=>selectedVideoIds.add(item.file_id));
+    renderVideoLibrary(lastVideoItems);
+});
+$("video-bulk-download").addEventListener("click",()=>{
+    const targets=lastVideoItems.filter(item=>selectedVideoIds.has(item.file_id)&&item.transfer_state!=="downloading");
+    if(!targets.length){notice("다운로드할 수 있는 항목이 없습니다(이미 전송 중인 파일은 제외됩니다).",true);return}
+    if(!confirm(`선택한 ${targets.length}개 파일을 순서대로 Safari로 받을까요? 한 번에 하나씩 진행되며, 각 파일을 받은 뒤 '다음 파일 받기'를 눌러야 이어집니다.`))return;
+    startVideoBulkQueue("download",targets);
+});
+$("video-bulk-save-photos").addEventListener("click",()=>{
+    const targets=lastVideoItems.filter(item=>selectedVideoIds.has(item.file_id)&&item.transfer_state==="complete");
+    if(!targets.length){notice("Safari 전송이 완료된 항목만 사진에 저장할 수 있습니다.",true);return}
+    startVideoBulkQueue("photos",targets);
+});
+$("video-bulk-delete").addEventListener("click",async()=>{
+    const targets=lastVideoItems.filter(item=>selectedVideoIds.has(item.file_id));
+    if(!targets.length)return;
+    if(!confirm(`선택한 ${targets.length}개 파일을 Mac에서 완전히 삭제할까요? iPhone으로 받았어도 그 사본은 지워지지 않지만, 이 Mac 원본은 되돌릴 수 없습니다.`))return;
+    const button=$("video-bulk-delete");
+    button.disabled=true;
+    let failed=0;
+    for(const item of targets){
+        try{await api(item.action_url,{method:"POST",body:JSON.stringify({action:"delete"})})}
+        catch(e){failed++}
+    }
+    selectedVideoIds.clear();
+    notice(failed?`${targets.length-failed}개 삭제, ${failed}개 실패했습니다.`:`${targets.length}개 파일을 DB에서 삭제했습니다.`,Boolean(failed));
+    await loadVideoDownload();
+});
 function pushKeyBytes(value){const padding="=".repeat((4-value.length%4)%4),raw=atob((value+padding).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from([...raw].map(char=>char.charCodeAt(0)))}
 async function ensureDownloadPushSubscription(){if(!("Notification" in window)||!("serviceWorker" in navigator)||!("PushManager" in window))throw new Error("이 기기에서는 웹푸시를 사용할 수 없습니다");const permission=await Notification.requestPermission();if(permission!=="granted")throw new Error("iPhone 설정에서 이 웹앱의 알림을 허용해주세요");const config=await api("/api/push/public_key");if(!config.enabled)throw new Error("서버 웹푸시 키가 설정되지 않았습니다");const registration=await navigator.serviceWorker.register("/static/sw.js?v=20260914-download-push-v1",{updateViaCache:"none"});let subscription=await registration.pushManager.getSubscription();if(!subscription)subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:pushKeyBytes(config.public_key)});const json=subscription.toJSON();await api("/api/push/subscribe",{method:"POST",body:JSON.stringify({endpoint:json.endpoint,keys:json.keys})})}
 $("test-download-push").addEventListener("click",async event=>{const button=event.currentTarget,original=button.textContent;primeCompletionChime();button.disabled=true;button.textContent="알림 연결 중…";try{await ensureDownloadPushSubscription();button.textContent="테스트 전송 중…";const data=await api("/api/shift-alarm/push-test",{method:"POST"});playCompletionChime();notice(`${data.sent}개 기기로 테스트 알림을 보냈고 앱 완료 벨을 재생했습니다.`)}catch(e){notice(e.message,true)}finally{button.disabled=false;button.textContent=original}});

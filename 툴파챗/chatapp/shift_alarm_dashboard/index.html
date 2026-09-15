@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#201b2f">
-  <title>Shift Alarm · 오늘의 컨트롤</title><link rel="stylesheet" href="/shift-alarm/static/style.css?v=20260908-sunzi-light-v1"><link rel="stylesheet" href="/shift-alarm/static/enhancements.css?v=20260915-subtitle-extract-v1">
+  <title>Shift Alarm · 오늘의 컨트롤</title><link rel="stylesheet" href="/shift-alarm/static/style.css?v=20260908-sunzi-light-v1"><link rel="stylesheet" href="/shift-alarm/static/enhancements.css?v=20260915-bulk-select-v3">
 </head>
 <body>
   <header><a href="/#systems">← 시스템</a><div><small>SHIFT ALARM</small><h1>오늘의 컨트롤</h1></div><span class="header-actions"><button id="notifications" class="notification-button" type="button" aria-label="알림 보기" aria-expanded="false">알림<span id="notification-count" class="notification-count hidden"></span></button><button id="refresh" type="button">새로고침</button></span></header>
@@ -26,11 +26,20 @@
         <p id="subtitle-extraction-file"></p>
       </div>
       <div id="video-library" class="video-library"></div>
-      <details class="iphone-move-guide"><summary>Safari 단축어·다운로드 안내</summary><ol><li><b>Safari로 다운로드</b>는 실제 파일 주소를 클립보드에 복사한 뒤 `Safari로 다운로드` 단축어를 실행합니다.</li><li>Safari가 열리면 주소창 옆 <b>↓ 다운로드 아이콘</b>에서 실제 진행 상태를 확인하세요.</li><li>다운로드가 끝난 뒤 앱으로 돌아와 <b>사진에 저장·원본 삭제</b>를 누르면 저장 파일명을 클립보드에 넣고 `다운로드 영상을 사진에 저장` 단축어를 실행합니다.</li><li>사진 저장 단축어는 사진 저장이 끝난 다음 Downloads 원본을 삭제해야 합니다.</li><li>단축어가 열리지 않으면 <b>주소 복사</b> 또는 <b>저장 파일명 복사</b>를 사용할 수 있습니다.</li></ol><p>다운로드 중 Safari를 닫거나 다른 앱으로 오래 전환하면 iOS가 전송을 중단할 수 있습니다.</p></details>
+      <div id="video-library-bulk" class="video-library-bulk hidden">
+        <div class="video-library-bulk-head"><button id="video-bulk-select-all" type="button">전체 선택</button><span id="video-bulk-count">0개 선택</span></div>
+        <div class="video-library-bulk-actions">
+          <button id="video-bulk-download" type="button" disabled>Safari로 다운로드</button>
+          <button id="video-bulk-save-photos" type="button" disabled>사진에 저장·원본 삭제</button>
+          <button id="video-bulk-delete" type="button" disabled>DB에서 삭제하기</button>
+        </div>
+        <div id="video-bulk-queue" class="video-bulk-queue hidden"></div>
+      </div>
+      <details class="iphone-move-guide"><summary>Safari 단축어·다운로드 안내</summary><ol><li>파일을 체크한 뒤 <b>Safari로 다운로드</b>를 누르면 실제 파일 주소를 클립보드에 복사하고 `Safari로 다운로드` 단축어를 실행합니다. 여러 개를 골랐으면 한 번에 하나씩 진행되며, Safari에서 받은 뒤 화면의 <b>다음 파일 받기</b>를 눌러야 이어집니다.</li><li>Safari가 열리면 주소창 옆 <b>↓ 다운로드 아이콘</b>에서 실제 진행 상태를 확인하세요.</li><li>다운로드가 끝난 뒤 앱으로 돌아와 <b>사진에 저장·원본 삭제</b>를 누르면 저장 파일명을 클립보드에 넣고 `다운로드 영상을 사진에 저장` 단축어를 실행합니다. 이것도 여러 개를 고르면 하나씩 순서대로 진행됩니다.</li><li>사진 저장 단축어는 사진 저장이 끝난 다음 Downloads 원본을 삭제해야 합니다.</li></ol><p>다운로드 중 Safari를 닫거나 다른 앱으로 오래 전환하면 iOS가 전송을 중단할 수 있습니다.</p></details>
       <p class="download-policy">DRM·유료 보호 영상은 지원하지 않으며 한 파일은 최대 5GB입니다.</p><button id="test-download-push" class="test-download-push" type="button">완료 알림·벨 테스트</button>
     </section>
     <section class="panel"><div class="panel-head"><div><small>TODAY</small><h2>오늘의 리마인더</h2></div><a id="notion-link" target="_blank" rel="noopener">Notion에서 보기 ↗</a></div><div id="today-reminders" class="check-list"></div></section>
     <details class="panel"><summary><div><small>DAILY ROUTINE</small><h2>일일 루틴 체크리스트 <span id="routine-count"></span></h2></div><span class="summary-arrow">⌄</span></summary><div class="panel-head action-head"><p>목록을 펼쳐 오늘의 루틴을 확인하세요.</p><button id="check-all" type="button" disabled>전부 체크하기</button></div><div id="routine" class="check-list"></div></details>
     <details class="panel"><summary><div><small>SCHEDULE</small><h2>리마인더 시각 설정</h2></div><span class="summary-arrow">⌄</span></summary><div class="panel-head action-head"><p>근무 유형을 고른 뒤 각 리마인더 시각을 수정할 수 있습니다.</p><label class="profile-picker">근무 유형 <select id="time-profile"><option>시각</option><option>Swing</option><option>Day</option><option>GY</option><option>S-D휴</option><option>D-G휴</option><option>G-S휴</option></select></label></div><div class="table-wrap"><table><thead><tr><th>리마인더</th><th>선택 시각</th><th>상태</th><th></th></tr></thead><tbody id="schedule"></tbody></table></div></details>
-    <p id="updated" class="updated"></p></main><script src="/shift-alarm/static/app.js?v=20260915-subtitle-progress-v2"></script>
+    <p id="updated" class="updated"></p></main><script src="/shift-alarm/static/app.js?v=20260915-site-keyword-v4"></script>
 </body></html>

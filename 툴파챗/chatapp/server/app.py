@@ -1696,7 +1696,7 @@ class ShiftAlarmVideoDownloadRequest(BaseModel):
 
 
 class ShiftAlarmVideoActionRequest(BaseModel):
-    action: str  # reveal_airdrop | icloud | delete | cancel_transfer | extract_subtitle
+    action: str  # delete | cancel_transfer | extract_subtitle
 
 
 @app.post("/api/shift-alarm/media/transport")
@@ -1883,28 +1883,7 @@ def act_on_shift_alarm_library_video(file_id: str, body: ShiftAlarmVideoActionRe
         path.unlink(missing_ok=True)
         with _shift_alarm_video_db() as conn:
             conn.execute("DELETE FROM video_downloads WHERE file_path=?", (str(path),))
-        return {"ok": True, "message": "av4 파일을 삭제했습니다"}
-    if body.action == "reveal_airdrop":
-        subprocess.Popen(["/usr/bin/open", "-R", str(path)], stdin=subprocess.DEVNULL,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        subprocess.Popen(["/usr/bin/open", "airdrop://"], stdin=subprocess.DEVNULL,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return {"ok": True, "message": "Mac에서 파일과 AirDrop 창을 열었습니다"}
-    if body.action == "icloud":
-        destination = Path(os.path.expanduser(
-            "~/Library/Mobile Documents/com~apple~CloudDocs/Shift Alarm Downloads"
-        )) / path.name
-        manifest_dir = Path(os.path.expanduser("~/.shift_alarm_icloud_sync"))
-        manifest_dir.mkdir(parents=True, exist_ok=True)
-        manifest = manifest_dir / f"manifest_{uuid.uuid4().hex}.txt"
-        manifest.write_text(f"{path}\t{destination}\n", encoding="utf-8")
-        os.chmod(manifest, 0o600)
-        helper = REPO_ROOT / "shift_alarm" / "iCloudSync.app"
-        if not helper.is_dir():
-            raise HTTPException(status_code=503, detail="iCloud 전송 도우미를 찾을 수 없습니다")
-        subprocess.Popen(["/usr/bin/open", "-na", str(helper)], stdin=subprocess.DEVNULL,
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return {"ok": True, "message": "iCloud Drive 전송을 요청했습니다"}
+        return {"ok": True, "message": "av4 파일을 DB에서 삭제했습니다"}
     raise HTTPException(status_code=400, detail="지원하지 않는 파일 동작입니다")
 
 
