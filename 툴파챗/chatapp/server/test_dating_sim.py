@@ -58,6 +58,7 @@ class DatingSimApiTests(unittest.TestCase):
         self.assertEqual(state["affection"], 60)
         self.assertEqual(state["day"], 2)
         self.assertIsNone(state["pending_location"])
+        self.assertEqual(state["choice_result"]["affection_delta"], 10)
 
     def test_negative_choice_lowers_affection_and_clamps_at_zero(self):
         app.dating_sim_visit(app.DatingSimLocationRequest(location="cafe"), request())
@@ -103,6 +104,11 @@ class DatingSimApiTests(unittest.TestCase):
         bob_state = app.dating_sim_state(request("bob"))
         self.assertEqual(bob_state["day"], 1)
         self.assertEqual(bob_state["affection"], 50)
+
+    def test_regular_user_receives_character_image_and_numeric_affection(self):
+        state = app.dating_sim_state(request("regular-user"))
+        self.assertEqual(state["affection"], 50)
+        self.assertEqual(state["character_image"], "/dating-sim/static/soi.png")
 
 
 if __name__ == "__main__":

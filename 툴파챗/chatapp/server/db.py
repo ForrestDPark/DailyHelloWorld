@@ -242,6 +242,16 @@ def init_db():
             updated_at TEXT NOT NULL,
             PRIMARY KEY (username, character_id)
         );
+        CREATE TABLE IF NOT EXISTS battle_sim_progress (
+            username TEXT NOT NULL,
+            battle_id TEXT NOT NULL,
+            phase INTEGER NOT NULL DEFAULT 0,
+            score INTEGER NOT NULL DEFAULT 0,
+            completed INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (username, battle_id)
+        );
         """
     )
     _ensure_column(conn, "messages", "room_id", "TEXT NOT NULL DEFAULT 'group'")

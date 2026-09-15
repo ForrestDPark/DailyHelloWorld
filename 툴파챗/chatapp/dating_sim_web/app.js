@@ -1,4 +1,11 @@
 const $ = (id) => document.getElementById(id);
+const bookId = new URLSearchParams(location.search).get("book");
+const storyId = bookId && /^[0-9a-f]{20}$/.test(bookId) ? `book:${bookId}` : null;
+let latestState = null;
+
+function storyQuery() {
+  return storyId ? `?story_id=${encodeURIComponent(storyId)}` : "";
+}
 
 async function api(url, options = {}) {
   const response = await fetch(url, {
@@ -16,13 +23,17 @@ async function api(url, options = {}) {
 }
 
 function showView(name) {
-  for (const id of ["map-view", "scene-view", "ending-view", "loading-view"]) {
+  for (const id of ["map-view", "scene-view", "result-view", "ending-view", "loading-view"]) {
     $(id).classList.toggle("hidden", id !== name);
   }
 }
 
 function renderHud(state) {
+  latestState = state;
+  $("hud-title").textContent = "미연시";
   $("hud-day").textContent = `DAY ${state.day} / ${state.total_days}`;
+  $("affection-value").textContent = state.affection;
+  $("affection-value").parentElement.setAttribute("aria-label", `호감도 ${state.affection}점`);
   $("affection-bar").style.width = `${Math.max(0, Math.min(100, state.affection))}%`;
 }
 
@@ -61,12 +72,14 @@ function typeLine(text) {
   el.textContent = "";
   $("dialogue-next").classList.add("hidden");
   $("choice-list").classList.add("hidden");
+  $("portrait").classList.add("speaking");
   let i = 0;
   typewriterTimer = setInterval(() => {
     i += 1;
     el.textContent = text.slice(0, i);
     if (i >= text.length) {
       stopTypewriter();
+      $("portrait").classList.remove("speaking");
       onLineFullyShown();
     }
   }, 22);
@@ -114,19 +127,33 @@ function renderScene(state) {
   sceneChoices = state.scene.choices;
   sceneLineIndex = 0;
   $("speaker-name").textContent = state.character_name;
+  $("portrait-image").src = state.character_image || "";
   showView("scene-view");
   typeLine(sceneLines[0]);
+}
+
+function renderChoiceResult(state) {
+  const delta = state.choice_result.affection_delta;
+  $("result-speaker-name").textContent = state.character_name;
+  $("result-portrait-image").src = state.character_image || "";
+  $("result-text").textContent = state.choice_result.line;
+  $("result-affection").textContent = `${delta > 0 ? "+" : ""}${delta} · 현재 호감도 ${state.affection}`;
+  showView("result-view");
 }
 
 function renderEnding(state) {
   $("ending-title").textContent = state.ending.title;
   $("ending-text").textContent = state.ending.lines.join(" ");
+  $("ending-speaker-name").textContent = state.character_name;
+  $("ending-portrait-image").src = state.character_image || "";
   showView("ending-view");
 }
 
 function render(state) {
   renderHud(state);
-  if (state.completed) {
+  if (state.choice_result) {
+    renderChoiceResult(state);
+  } else if (state.completed) {
     renderEnding(state);
   } else if (state.scene) {
     renderScene(state);
@@ -138,7 +165,7 @@ function render(state) {
 async function loadState() {
   showView("loading-view");
   try {
-    render(await api("/api/dating-sim/state"));
+    render(await api(`/api/dating-sim/state${storyQuery()}`));
   } catch (e) {
     $("loading-view").querySelector("p").textContent = e.message;
   }
@@ -146,7 +173,7 @@ async function loadState() {
 
 async function visitLocation(locationId) {
   try {
-    render(await api("/api/dating-sim/visit", { method: "POST", body: JSON.stringify({ location: locationId }) }));
+    render(await api("/api/dating-sim/visit", { method: "POST", body: JSON.stringify({ location: locationId, story_id: storyId }) }));
   } catch (e) {
     alert(e.message);
   }
@@ -154,7 +181,7 @@ async function visitLocation(locationId) {
 
 async function chooseOption(choiceIndex) {
   try {
-    render(await api("/api/dating-sim/choose", { method: "POST", body: JSON.stringify({ choice_index: choiceIndex }) }));
+    render(await api("/api/dating-sim/choose", { method: "POST", body: JSON.stringify({ choice_index: choiceIndex, story_id: storyId }) }));
   } catch (e) {
     alert(e.message);
   }
@@ -163,18 +190,26 @@ async function chooseOption(choiceIndex) {
 async function restart() {
   if (!confirm("처음부터 다시 시작할까요? 지금까지의 호감도는 사라집니다.")) return;
   try {
-    render(await api("/api/dating-sim/restart", { method: "POST" }));
+    render(await api("/api/dating-sim/restart", { method: "POST", body: JSON.stringify({ story_id: storyId }) }));
   } catch (e) {
     alert(e.message);
   }
 }
 
-$("dialogue-next").addEventListener("click", advanceLine);
+$("dialogue-next").addEventListener("click", (event) => {
+  event.stopPropagation();
+  advanceLine();
+});
 document.getElementById("scene-view").addEventListener("click", (event) => {
   if (event.target.closest(".choice-button")) return;
   if (!$("choice-list").classList.contains("hidden")) return;
   advanceLine();
 });
 $("restart-btn").addEventListener("click", restart);
+$("result-next").addEventListener("click", () => {
+  const nextState = { ...latestState };
+  delete nextState.choice_result;
+  render(nextState);
+});
 
 loadState();

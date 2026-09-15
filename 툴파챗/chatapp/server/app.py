@@ -58,7 +58,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from pywebpush import WebPushException, webpush
 
-from server import ai_keys, auth, dating_sim_story, oauth
+from server import ai_keys, auth, battle_sim_story, dating_sim_story, oauth
 from server.db import get_conn, init_db
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -69,6 +69,7 @@ CAREER_SYSTEM_DIR = REPO_ROOT / "이직시스템"
 SHIFT_ALARM_DASHBOARD_DIR = BASE_DIR / "shift_alarm_dashboard"
 VOCABULARY_WEB_DIR = BASE_DIR / "vocabulary_web"
 DATING_SIM_WEB_DIR = BASE_DIR / "dating_sim_web"
+BATTLE_SIM_WEB_DIR = BASE_DIR / "battle_sim_web"
 SHIFT_ALARM_STATUS_FILE = Path(os.path.expanduser(
     "~/Library/Mobile Documents/com~apple~CloudDocs/ShiftAlarmStatus/status.json"
 ))
@@ -595,23 +596,36 @@ def dating_sim_dashboard(request: Request):
 @app.get("/dating-sim/static/{filename}")
 def dating_sim_static(filename: str, request: Request):
     _require_signed_in_user(request)
-    if filename not in {"style.css", "app.js"}:
+    if filename not in {"style.css", "app.js", "soi.png", "haru.png"}:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(DATING_SIM_WEB_DIR / filename))
 
 
 class DatingSimLocationRequest(BaseModel):
     location: str
+    story_id: str | None = None
 
 
 class DatingSimChoiceRequest(BaseModel):
     choice_index: int
+    story_id: str | None = None
 
 
-def _dating_sim_row(conn, username):
+class DatingSimRestartRequest(BaseModel):
+    story_id: str | None = None
+
+
+def _dating_story(story_id=None):
+    try:
+        return dating_sim_story.story_for(story_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+def _dating_sim_row(conn, username, story):
     row = conn.execute(
         "SELECT * FROM dating_sim_progress WHERE username=? AND character_id=?",
-        (username, dating_sim_story.CHARACTER_ID),
+        (username, story["id"]),
     ).fetchone()
     if row:
         return dict(row)
@@ -620,46 +634,171 @@ def _dating_sim_row(conn, username):
         "INSERT INTO dating_sim_progress "
         "(username,character_id,day,affection,pending_location,completed,ending_id,created_at,updated_at) "
         "VALUES (?,?,1,50,NULL,0,NULL,?,?)",
-        (username, dating_sim_story.CHARACTER_ID, now, now),
+        (username, story["id"], now, now),
     )
     conn.commit()
     return {
-        "username": username, "character_id": dating_sim_story.CHARACTER_ID,
+        "username": username, "character_id": story["id"],
         "day": 1, "affection": 50, "pending_location": None, "completed": 0, "ending_id": None,
     }
 
 
-def _dating_sim_state_payload(row):
+def _dating_sim_state_payload(row, story):
     completed = bool(row["completed"])
     payload = {
-        "character_name": dating_sim_story.CHARACTER_NAME,
-        "day": min(row["day"], dating_sim_story.TOTAL_DAYS), "total_days": dating_sim_story.TOTAL_DAYS,
+        "story_id": story["id"], "story_title": story["title"],
+        "source_title": story.get("source_title"),
+        "character_name": story["name"], "character_image": story.get("character_image"),
+        "day": min(row["day"], story["total_days"]), "total_days": story["total_days"],
         "affection": row["affection"],
-        "locations": [{"id": key, **value} for key, value in dating_sim_story.LOCATIONS.items()],
+        "locations": [{"id": key, **value} for key, value in story["locations"].items()],
         "pending_location": row["pending_location"],
         "completed": completed,
     }
     if row["pending_location"] and not completed:
-        scene = dating_sim_story.SCENES[row["day"]][row["pending_location"]]
+        scene = story["scenes"][row["day"]][row["pending_location"]]
         payload["scene"] = {
             "location": row["pending_location"],
             "lines": scene["lines"],
             "choices": [{"text": choice["text"]} for choice in scene["choices"]],
         }
     if completed:
-        payload["ending"] = dating_sim_story.resolve_ending(row["affection"])
+        payload["ending"] = dating_sim_story.ending_for(story, row["affection"])
     return payload
 
 
 @app.get("/api/dating-sim/state")
-def dating_sim_state(request: Request):
+def dating_sim_state(request: Request, story_id: str | None = None):
     _require_signed_in_user(request)
     conn = get_conn()
     try:
-        row = _dating_sim_row(conn, _request_username(request))
+        story = _dating_story(story_id)
+        row = _dating_sim_row(conn, _request_username(request), story)
     finally:
         conn.close()
-    return _dating_sim_state_payload(row)
+    return _dating_sim_state_payload(row, story)
+
+
+class BattleSimChoiceRequest(BaseModel):
+    battle_id: str
+    choice_index: int
+
+
+class BattleSimRequest(BaseModel):
+    battle_id: str
+
+
+def _battle(battle_id):
+    battle = battle_sim_story.BATTLES.get(battle_id)
+    if not battle:
+        raise HTTPException(status_code=404, detail="전투를 찾을 수 없습니다")
+    return battle
+
+
+def _battle_row(conn, username, battle_id):
+    row = conn.execute("SELECT * FROM battle_sim_progress WHERE username=? AND battle_id=?",
+                       (username, battle_id)).fetchone()
+    if row:
+        return dict(row)
+    now = _now()
+    conn.execute("INSERT INTO battle_sim_progress(username,battle_id,phase,score,completed,created_at,updated_at) VALUES(?,?,0,0,0,?,?)",
+                 (username, battle_id, now, now))
+    conn.commit()
+    return {"username": username, "battle_id": battle_id, "phase": 0, "score": 0, "completed": 0}
+
+
+def _battle_payload(row, battle, last_result=None):
+    phase = min(row["phase"], len(battle["phases"]))
+    payload = {"battle": {key: value for key, value in battle.items() if key != "phases"},
+               "phase": phase, "score": row["score"], "completed": bool(row["completed"]),
+               "last_result": last_result}
+    payload["battle"]["total_phases"] = len(battle["phases"])
+    if not payload["completed"]:
+        current = battle["phases"][phase]
+        payload["current"] = {"prompt": current["prompt"], "choices": [c["text"] for c in current["choices"]]}
+    else:
+        payload["summary"] = battle_sim_story.battle_summary(battle, row["score"])
+    return payload
+
+
+@app.get("/battle-sim/")
+def battle_sim_dashboard(request: Request):
+    _require_signed_in_user(request)
+    return FileResponse(str(BATTLE_SIM_WEB_DIR / "index.html"))
+
+
+@app.get("/battle-sim")
+def battle_sim_redirect():
+    return RedirectResponse("/battle-sim/", status_code=307)
+
+
+@app.get("/battle-sim/static/{filename}")
+def battle_sim_static(filename: str, request: Request):
+    _require_signed_in_user(request)
+    allowed = {"style.css", "app.js", "jingxing_map.png", "cannae_map.png", "austerlitz_map.png"}
+    if filename not in allowed:
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
+    return FileResponse(str(BATTLE_SIM_WEB_DIR / filename))
+
+
+@app.get("/api/battle-sim/battles")
+def battle_sim_battles(request: Request):
+    _require_signed_in_user(request)
+    return [{"id": key, **{k: v for k, v in battle.items() if k in {"title", "year", "commander", "map"}}}
+            for key, battle in battle_sim_story.BATTLES.items()]
+
+
+@app.get("/api/battle-sim/state")
+def battle_sim_state(request: Request, battle_id: str):
+    _require_signed_in_user(request)
+    battle = _battle(battle_id)
+    conn = get_conn()
+    try:
+        row = _battle_row(conn, _request_username(request), battle_id)
+    finally:
+        conn.close()
+    return _battle_payload(row, battle)
+
+
+@app.post("/api/battle-sim/choose")
+def battle_sim_choose(body: BattleSimChoiceRequest, request: Request):
+    _require_signed_in_user(request)
+    battle = _battle(body.battle_id)
+    username = _request_username(request)
+    conn = get_conn()
+    try:
+        row = _battle_row(conn, username, body.battle_id)
+        if row["completed"]:
+            raise HTTPException(status_code=409, detail="이미 종료된 전투입니다")
+        choices = battle["phases"][row["phase"]]["choices"]
+        if body.choice_index not in range(len(choices)):
+            raise HTTPException(status_code=400, detail="올바르지 않은 명령입니다")
+        choice = choices[body.choice_index]
+        phase, score = row["phase"] + 1, row["score"] + choice["score"]
+        completed = phase >= len(battle["phases"])
+        conn.execute("UPDATE battle_sim_progress SET phase=?,score=?,completed=?,updated_at=? WHERE username=? AND battle_id=?",
+                     (phase, score, int(completed), _now(), username, body.battle_id))
+        conn.commit()
+        row.update(phase=phase, score=score, completed=int(completed))
+    finally:
+        conn.close()
+    return _battle_payload(row, battle, choice["result"])
+
+
+@app.post("/api/battle-sim/restart")
+def battle_sim_restart(body: BattleSimRequest, request: Request):
+    _require_signed_in_user(request)
+    battle = _battle(body.battle_id)
+    username = _request_username(request)
+    conn = get_conn()
+    try:
+        conn.execute("UPDATE battle_sim_progress SET phase=0,score=0,completed=0,updated_at=? WHERE username=? AND battle_id=?",
+                     (_now(), username, body.battle_id))
+        conn.commit()
+        row = _battle_row(conn, username, body.battle_id)
+    finally:
+        conn.close()
+    return _battle_payload(row, battle)
 
 
 @app.post("/api/dating-sim/visit")
@@ -667,25 +806,26 @@ def dating_sim_visit(body: DatingSimLocationRequest, request: Request):
     """장소를 골라 오늘의 장면을 연다 — 선택은 아직 안 하고 대사·선택지만 반환한다."""
     _require_signed_in_user(request)
     username = _request_username(request)
+    story = _dating_story(body.story_id)
     conn = get_conn()
     try:
-        row = _dating_sim_row(conn, username)
+        row = _dating_sim_row(conn, username, story)
         if row["completed"]:
             raise HTTPException(status_code=409, detail="이미 끝난 이야기입니다. 다시 시작해보세요")
         if row["pending_location"]:
             raise HTTPException(status_code=409, detail="이미 진행 중인 장면이 있습니다")
-        day_scenes = dating_sim_story.SCENES.get(row["day"], {})
+        day_scenes = story["scenes"].get(row["day"], {})
         if body.location not in day_scenes:
             raise HTTPException(status_code=400, detail="오늘은 갈 수 없는 장소입니다")
         conn.execute(
             "UPDATE dating_sim_progress SET pending_location=?, updated_at=? WHERE username=? AND character_id=?",
-            (body.location, _now(), username, dating_sim_story.CHARACTER_ID),
+            (body.location, _now(), username, story["id"]),
         )
         conn.commit()
         row["pending_location"] = body.location
     finally:
         conn.close()
-    return _dating_sim_state_payload(row)
+    return _dating_sim_state_payload(row, story)
 
 
 @app.post("/api/dating-sim/choose")
@@ -693,47 +833,60 @@ def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
     """진행 중인 장면의 선택지를 골라 호감도를 반영하고 다음 날로 넘어간다."""
     _require_signed_in_user(request)
     username = _request_username(request)
+    story = _dating_story(body.story_id)
     conn = get_conn()
     try:
-        row = _dating_sim_row(conn, username)
+        row = _dating_sim_row(conn, username, story)
         if row["completed"] or not row["pending_location"]:
             raise HTTPException(status_code=409, detail="지금은 선택할 수 있는 장면이 없습니다")
-        scene = dating_sim_story.SCENES[row["day"]][row["pending_location"]]
+        scene = story["scenes"][row["day"]][row["pending_location"]]
         if body.choice_index not in range(len(scene["choices"])):
             raise HTTPException(status_code=400, detail="올바르지 않은 선택지입니다")
         affection = max(0, min(100, row["affection"] + scene["choices"][body.choice_index]["affection"]))
         next_day = row["day"] + 1
-        completed = next_day > dating_sim_story.TOTAL_DAYS
-        ending_id = dating_sim_story.resolve_ending(affection)["id"] if completed else None
+        completed = next_day > story["total_days"]
+        ending_id = dating_sim_story.ending_for(story, affection)["id"] if completed else None
         conn.execute(
             "UPDATE dating_sim_progress SET day=?, affection=?, pending_location=NULL, completed=?, ending_id=?, "
             "updated_at=? WHERE username=? AND character_id=?",
-            (next_day, affection, int(completed), ending_id, _now(), username, dating_sim_story.CHARACTER_ID),
+            (next_day, affection, int(completed), ending_id, _now(), username, story["id"]),
         )
         conn.commit()
         row.update(day=next_day, affection=affection, pending_location=None,
                    completed=int(completed), ending_id=ending_id)
     finally:
         conn.close()
-    return _dating_sim_state_payload(row)
+    payload = _dating_sim_state_payload(row, story)
+    payload["choice_result"] = {
+        "affection_delta": scene["choices"][body.choice_index]["affection"],
+        "line": (("嬉しいです。少し近くなれた気がします。\n기뻐요. 조금 더 가까워진 것 같아요."
+                  if scene["choices"][body.choice_index]["affection"] > 0
+                  else "大丈夫です。ゆっくり知っていきましょう。\n괜찮아요. 우리 천천히 알아가요.")
+                 if story.get("source_title") else
+                 ("기뻐요. 조금 더 가까워진 것 같아요."
+                  if scene["choices"][body.choice_index]["affection"] > 0
+                  else "괜찮아요. 우리 천천히 알아가요.")),
+    }
+    return payload
 
 
 @app.post("/api/dating-sim/restart")
-def dating_sim_restart(request: Request):
+def dating_sim_restart(request: Request, body: DatingSimRestartRequest | None = None):
     _require_signed_in_user(request)
     username = _request_username(request)
+    story = _dating_story(body.story_id if body else None)
     conn = get_conn()
     try:
         conn.execute(
             "UPDATE dating_sim_progress SET day=1, affection=50, pending_location=NULL, completed=0, "
             "ending_id=NULL, updated_at=? WHERE username=? AND character_id=?",
-            (_now(), username, dating_sim_story.CHARACTER_ID),
+            (_now(), username, story["id"]),
         )
         conn.commit()
-        row = _dating_sim_row(conn, username)
+        row = _dating_sim_row(conn, username, story)
     finally:
         conn.close()
-    return _dating_sim_state_payload(row)
+    return _dating_sim_state_payload(row, story)
 
 
 @app.get("/shift-alarm")

@@ -3,21 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>미연시 · 소이와의 사흘</title>
+<title>미연시</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/dating-sim/static/style.css?v=20260915-v1">
+<link rel="stylesheet" href="/dating-sim/static/style.css?v=20260915-v2">
 </head>
 <body>
   <div id="game">
     <header id="hud">
       <a class="back-link" href="/#home">← 나가기</a>
-      <div class="hud-title">☕ 소이와의 사흘</div>
+      <div id="hud-title" class="hud-title">미연시</div>
       <div class="hud-stats">
         <span id="hud-day">DAY 1 / 3</span>
         <div class="affection-meter" aria-label="호감도">
-          <span>♥</span>
+          <span>♥ <b id="affection-value">50</b></span>
           <div class="affection-track"><i id="affection-bar"></i></div>
         </div>
       </div>
@@ -31,7 +31,7 @@
 
       <section id="scene-view" class="hidden">
         <div class="portrait-box">
-          <div id="portrait" class="portrait">🙂</div>
+          <div id="portrait" class="portrait"><img id="portrait-image" alt="캐릭터 초상화"></div>
           <div id="speaker-name" class="speaker-name">소이</div>
         </div>
         <div class="dialogue-box">
@@ -41,11 +41,23 @@
         <div id="choice-list" class="choice-list hidden"></div>
       </section>
 
+      <section id="result-view" class="hidden">
+        <div class="portrait-box">
+          <div class="portrait"><img id="result-portrait-image" alt="캐릭터 초상화"></div>
+          <div id="result-speaker-name" class="speaker-name"></div>
+        </div>
+        <div class="dialogue-box">
+          <p id="result-text"></p>
+          <p id="result-affection" class="result-affection"></p>
+        </div>
+        <button id="result-next" type="button" class="pixel-button">다음 장면으로</button>
+      </section>
+
       <section id="ending-view" class="hidden">
         <h2 id="ending-title">엔딩</h2>
         <div class="portrait-box">
-          <div class="portrait">🙂</div>
-          <div class="speaker-name">소이</div>
+          <div class="portrait"><img id="ending-portrait-image" alt="캐릭터 초상화"></div>
+          <div id="ending-speaker-name" class="speaker-name"></div>
         </div>
         <div class="dialogue-box"><p id="ending-text"></p></div>
         <button id="restart-btn" type="button" class="pixel-button">처음부터 다시하기</button>
@@ -56,6 +68,6 @@
       </section>
     </main>
   </div>
-  <script src="/dating-sim/static/app.js?v=20260915-v1"></script>
+  <script src="/dating-sim/static/app.js?v=20260915-v2"></script>
 </body>
 </html>
