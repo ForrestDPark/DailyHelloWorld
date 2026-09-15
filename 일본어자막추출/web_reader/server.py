@@ -434,7 +434,8 @@ class App:
             shared_index = max(0, min(int(shared.get("spine_index", 0)), max(0, len(book.spine) - 1)))
             shared_updated = int(shared.get("updated_at", 0))
             if shared_updated >= int(stored.get("updated_at", 0)):
-                return {"spine_index": shared_index, "percent": ((shared_index + 1) / max(1, len(book.spine))) * 100, "updated_at": shared_updated}
+                return {"spine_index": shared_index, "percent": ((shared_index + 1) / max(1, len(book.spine))) * 100,
+                        "updated_at": shared_updated, "resume_text": str(shared.get("resume_text", ""))[:240]}
         except (OSError, json.JSONDecodeError, TypeError, ValueError):
             pass
         # 기능 추가 전부터 쓰던 현재 책은 아직 sidecar가 없다. 기존 전역 JSON의
@@ -457,9 +458,16 @@ class App:
         if is_owner:
             path = self._sync_path(book)
             temporary = path.with_suffix(path.suffix + ".tmp")
+            resume_text = ""
+            try:
+                previous = json.loads(path.read_text(encoding="utf-8"))
+                if int(previous.get("spine_index", -1)) == index:
+                    resume_text = str(previous.get("resume_text", ""))[:240]
+            except (OSError, json.JSONDecodeError, TypeError, ValueError):
+                pass
             payload = {"schema_version": 1, "book_file": str(book.path), "spine_index": index,
                        "spine_total": len(book.spine), "percent": percent, "updated_at": result["updated_at"],
-                       "source": "web"}
+                       "source": "web", "resume_text": resume_text}
             try:
                 temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
                 os.replace(temporary, path)

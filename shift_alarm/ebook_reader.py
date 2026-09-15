@@ -144,12 +144,13 @@ def save_last_state(page, idx, total):
         pass
 
 
-def save_reader_sync(spine_index, spine_total, sentence_idx, sentence_total):
+def save_reader_sync(spine_index, spine_total, sentence_idx, sentence_total, sentence_text=""):
     """웹 EPUB 리더와 공유하는 장 단위 위치를 원자적으로 저장한다."""
     payload = {
         "schema_version": 1, "book_file": os.path.abspath(FILE_PATH),
         "spine_index": int(spine_index), "spine_total": int(spine_total),
         "sentence_idx": int(sentence_idx), "sentence_total": int(sentence_total),
+        "resume_text": str(sentence_text).replace("\n", " ").strip()[:240],
         "percent": (sentence_idx / sentence_total * 100) if sentence_total else 0,
         "updated_at": int(time.time()), "source": "morning-reader",
     }
@@ -541,7 +542,7 @@ def main():
         with open(PROGRESS_FILE, 'w') as f:
             f.write(str(current_idx + 1))
         save_last_state(page, current_idx + 1, total)
-        save_reader_sync(data.get("spine", 0), data.get("spine_total", 0), current_idx + 1, total)
+        save_reader_sync(data.get("spine", 0), data.get("spine_total", 0), current_idx + 1, total, data.get("content", ""))
 
         read_buffer.append(data['content'])
         asyncio.run(speak(data['content']))
