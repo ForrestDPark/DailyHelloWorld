@@ -43,13 +43,20 @@ function renderMap(state) {
   if (window.speechSynthesis?.speaking) stopListening({ turnOff: false });
   $("stage").dataset.location = "map";
   $("stage").dataset.day = state.day;
+  const hint = document.querySelector(".map-hint");
+  renderAnnotatedText(hint, state.day_opening || "오늘 어떤 일이 일어날까?");
   const list = $("map-locations");
   list.replaceChildren();
   state.locations.forEach((location) => {
     const tile = document.createElement("button");
     tile.type = "button";
     tile.className = "map-tile";
-    tile.innerHTML = `<span class="map-tile-emoji">${location.emoji}</span><span>${location.label}</span>`;
+    const emoji = document.createElement("span");
+    emoji.className = "map-tile-emoji";
+    emoji.textContent = location.emoji;
+    const label = document.createElement("span");
+    label.textContent = location.action || location.label;
+    tile.append(emoji, label);
     tile.addEventListener("click", () => visitLocation(location.id));
     list.append(tile);
   });

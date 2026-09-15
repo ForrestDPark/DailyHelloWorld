@@ -687,7 +687,17 @@ def _dating_sim_state_payload(row, story):
         "character_name": story["name"], "character_image": story.get("character_image"),
         "day": min(row["day"], story["total_days"]), "total_days": story["total_days"],
         "affection": row["affection"],
-        "locations": [{"id": key, **value} for key, value in story["locations"].items()],
+        "day_opening": story.get("day_openings", {}).get(min(row["day"], story["total_days"])),
+        "locations": [
+            {
+                "id": key,
+                **value,
+                "action": story.get("map_actions", {}).get(
+                    min(row["day"], story["total_days"]), {}
+                ).get(key, value["label"]),
+            }
+            for key, value in story["locations"].items()
+        ],
         "pending_location": row["pending_location"],
         "completed": completed,
     }

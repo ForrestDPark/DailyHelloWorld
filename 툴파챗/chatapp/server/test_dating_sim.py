@@ -42,6 +42,8 @@ class DatingSimApiTests(unittest.TestCase):
         self.assertFalse(state["completed"])
         self.assertNotIn("scene", state)
         self.assertEqual(len(state["locations"]), len(dating_sim_story.LOCATIONS))
+        self.assertTrue(state["day_opening"])
+        self.assertTrue(all(location["action"] != location["label"] for location in state["locations"]))
 
     def test_visiting_a_location_returns_that_scene_and_blocks_a_second_visit(self):
         state = app.dating_sim_visit(app.DatingSimLocationRequest(location="cafe"), request())
@@ -286,6 +288,18 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         }
         self.assertTrue(any(delta > 0 for delta in first_deltas))
         self.assertTrue(any(delta < 0 for delta in first_deltas))
+
+    def test_day_opening_is_stable_but_varies_between_runs(self):
+        first = dating_sim_story._daily_openings("reader:run-1", dating_sim_story.CHARACTER_ID)
+        repeated = dating_sim_story._daily_openings("reader:run-1", dating_sim_story.CHARACTER_ID)
+        self.assertEqual(first, repeated)
+        day_three_variants = {
+            dating_sim_story._daily_openings(
+                f"reader:run-{number}", dating_sim_story.CHARACTER_ID
+            )[3]
+            for number in range(20)
+        }
+        self.assertGreater(len(day_three_variants), 1)
 
     def test_restart_advances_the_scenario_run(self):
         app.dating_sim_state(request("replay-reader"))

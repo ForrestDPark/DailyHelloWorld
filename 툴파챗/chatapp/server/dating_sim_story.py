@@ -195,6 +195,71 @@ DAY_NARRATION = {
     7: "[七日間|なのかかん]の[場面|ばめん]がよみがえる。[今日|きょう]の[言葉|ことば]で[二人|ふたり]の[関係|かんけい]が[決|き]まる。\n7일 동안의 장면이 떠오른다. 오늘의 말로 두 사람의 관계가 정해진다.",
 }
 
+# 장소를 먼저 고르는 메뉴처럼 보이지 않도록, 매일 사건이 먼저 벌어진다.
+# 같은 회차에는 고정되고 다시 시작하면 다른 도입이 선택된다.
+DAY_OPENINGS = {
+    1: [
+        "[何|なに]も[起|お]きないはずの[一日|いちにち]だった。けれど、[小|ちい]さな[偶然|ぐうぜん]が[見知|みし]らぬ[彼女|かのじょ]との[距離|きょり]を[変|か]えた。\n아무 일도 없을 하루였다. 하지만 작은 우연 하나가 낯선 그녀와의 거리를 바꿨다.",
+        "[何|なに]かに[手|て]を[伸|の]ばしたその[瞬間|しゅんかん]、もうひとつの[手|て]が[同時|どうじ]に[伸|の]びてきた。\n무언가에 손을 뻗은 순간, 다른 손 하나가 동시에 뻗어 왔다.",
+    ],
+    2: [
+        "[知|し]らない[番号|ばんごう]からメッセージが[届|とど]いた。「[昨日|きのう]はありがとう。ソイです」\n모르는 번호로 메시지가 왔다. '어제는 고마웠어요. 소이예요.'",
+        "[昨日|きのう]のことを[思|おも]い[出|だ]していると、[偶然|ぐうぜん]ソイらしい[後|うし]ろ[姿|すがた]を[見|み]つけた。\n어제 일을 떠올리던 중 우연히 소이와 닮은 뒷모습을 발견했다.",
+    ],
+    3: [
+        "[突然|とつぜん]ソイから[電話|でんわ]がかかってきた。「ごめん、[雨|あめ]で[動|うご]けなくて……」\n갑자기 소이에게 전화가 왔다. '미안해요, 비 때문에 움직일 수가 없어서……'",
+        "[空|そら]が[暗|くら]くなった[直後|ちょくご]、ソイから「[傘|かさ]、ある？」と[短|みじか]いメッセージが[届|とど]いた。\n하늘이 어두워진 직후 소이에게서 '우산 있어요?'라는 짧은 메시지가 왔다.",
+    ],
+    4: [
+        "[夜|よる]になって、ソイから「[少|すこ]しだけ[話|はな]せる？」と[着信|ちゃくしん]があった。いつもの[声|こえ]と[違|ちが]う。\n밤이 되자 소이에게서 '잠깐 이야기할 수 있어요?'라는 전화가 왔다. 평소와 다른 목소리다.",
+        "[削除|さくじょ]されたメッセージのあとに、「やっぱり[会|あ]って[話|はな]したい」とだけ[届|とど]いた。\n삭제된 메시지 뒤로 '역시 만나서 이야기하고 싶어요'라는 말만 도착했다.",
+    ],
+    5: [
+        "ソイから[一枚|いちまい]の[写真|しゃしん]と「ここ、[一緒|いっしょ]に[行|い]かない？」という[誘|さそ]いが[届|とど]いた。\n소이에게서 사진 한 장과 '여기 같이 가지 않을래요?'라는 제안이 왔다.",
+        "[休日|きゅうじつ]の[予定|よてい]を[考|かんが]えていると、ソイから[珍|めずら]しく[先|さき]に[誘|さそ]いがきた。\n휴일 계획을 생각하던 중 소이가 드물게 먼저 만나자고 했다.",
+    ],
+    6: [
+        "[昨日|きのう]からソイの[返事|へんじ]がない。ようやく[届|とど]いたのは、「[今日|きょう]、ちゃんと[話|はな]したい」の[一言|ひとこと]だった。\n어제부터 소이의 답장이 없다. 마침내 온 것은 '오늘 제대로 이야기하고 싶어요'라는 한마디였다.",
+        "[約束|やくそく]の[時間|じかん]が[近|ちか]いのに、ソイから「どこにいるの？」と[不安|ふあん]そうな[電話|でんわ]がきた。\n약속 시간이 가까운데 소이에게서 '어디예요?'라는 불안한 전화가 왔다.",
+    ],
+    7: [
+        "[朝|あさ]、ソイから[場所|ばしょ]だけが[書|か]かれたメッセージが[届|とど]いた。「[今日|きょう]、そこで[待|ま]っています」\n아침에 소이에게서 장소만 적힌 메시지가 왔다. '오늘 거기서 기다릴게요.'",
+        "[七日目|なのかめ]の[夕方|ゆうがた]、ソイから「[伝|つた]えたいことがあります」と[電話|でんわ]がかかってきた。\n일곱째 날 저녁, 소이에게서 '전하고 싶은 말이 있어요'라는 전화가 왔다.",
+    ],
+}
+
+DAY_LOCATION_ACTIONS = {
+    1: {"cafe": "카페에서 우연을 마주한다", "park": "날아온 책갈피를 줍는다", "school": "떨어진 공책을 건넨다"},
+    2: {"cafe": "메시지 속 카페로 간다", "park": "공원 입구에서 답한다", "school": "학교 앞에서 기다린다"},
+    3: {"cafe": "가까운 카페로 부른다", "park": "우산을 들고 공원으로 간다", "school": "학교 현관으로 달려간다"},
+    4: {"cafe": "조용한 구석 자리를 잡는다", "park": "밤 산책을 제안한다", "school": "사람 없는 곳에서 듣는다"},
+    5: {"cafe": "함께 마실 것을 고른다", "park": "사진 속 장소를 찾아간다", "school": "추억이 있는 길로 간다"},
+    6: {"cafe": "마주 앉아 이유를 말한다", "park": "걷다가 솔직히 털어놓는다", "school": "약속 장소에서 기다린다"},
+    7: {"cafe": "마감 무렵 그녀를 만난다", "park": "가로등 아래로 향한다", "school": "조용한 교실동으로 간다"},
+}
+
+BOOK_DAY_LOCATION_ACTIONS = {
+    day: {
+        "first": DAY_LOCATION_ACTIONS[day]["school"],
+        "walk": DAY_LOCATION_ACTIONS[day]["park"],
+        "quiet": DAY_LOCATION_ACTIONS[day]["cafe"],
+    }
+    for day in DAY_LOCATION_ACTIONS
+}
+
+
+def _daily_openings(seed_key, story_id, character_name_jp="ソイ", character_name_ko="소이"):
+    selected = {}
+    for day, candidates in DAY_OPENINGS.items():
+        key = f"{seed_key or ''}:{story_id}:{day}:opening"
+        index = int.from_bytes(hashlib.sha256(key.encode("utf-8")).digest()[:4], "big") % len(candidates)
+        selected[day] = (
+            candidates[index]
+            .replace("ソイ", character_name_jp)
+            .replace("소이", character_name_ko)
+        )
+    return selected
+
 # ★ 2026-09-15: "미연시 시나리오를 웹에서 검색해서 좀 재밌게 만들수없을까"
 # 요청 — 장소별 대사가 요일과 무관하게 3줄 고정이라 카페/공원/학교 중 어디를
 # 골라도 그날의 이야기가 똑같이 느껴졌다(선택이 장식일 뿐 서사에 영향이
@@ -451,6 +516,8 @@ def load_story_from_db(conn, character_id, seed_key=None):
         "character_image": character["character_image"], "character_images": character_images,
         "source_title": None, "total_days": character["total_days"],
         "locations": locations, "scenes": scenes, "endings": endings,
+        "day_openings": _daily_openings(seed_key, character_id),
+        "map_actions": DAY_LOCATION_ACTIONS,
     }
 
 
@@ -504,7 +571,9 @@ def story_for(story_id=None, seed_key=None):
                                      "park": "/dating-sim/static/soi-park.png",
                                      "school": "/dating-sim/static/soi-school.png"},
                 "source_title": None, "total_days": TOTAL_DAYS, "locations": LOCATIONS,
-                "scenes": SCENES, "endings": ENDINGS}
+                "scenes": SCENES, "endings": ENDINGS,
+                "day_openings": _daily_openings(seed_key, CHARACTER_ID),
+                "map_actions": DAY_LOCATION_ACTIONS}
     match = BOOK_STORY_RE.fullmatch(story_id)
     path = _find_book(match.group(1)) if match else None
     if not path:
@@ -558,7 +627,9 @@ def story_for(story_id=None, seed_key=None):
                                  "walk": "/dating-sim/static/haru-walk.png",
                                  "quiet": "/dating-sim/static/haru.png"},
             "source_title": source_title, "total_days": TOTAL_DAYS, "locations": locations,
-            "scenes": scenes, "endings": endings}
+            "scenes": scenes, "endings": endings,
+            "day_openings": _daily_openings(seed_key, story_id, "ハル", "하루"),
+            "map_actions": BOOK_DAY_LOCATION_ACTIONS}
 
 
 def ending_for(story, affection):

@@ -89,20 +89,30 @@ html, body {
   font: 8px/1.45 -apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;
 }
 
-.map-hint { font-size: 11px; line-height: 1.8; margin: 4px 0 18px; color: var(--muted); }
-.map-locations { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.map-hint {
+  font-family: -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans KR",sans-serif;
+  font-size: 16px;
+  line-height: 1.75;
+  white-space: pre-line;
+  margin: 4px 0 18px;
+  color: var(--text);
+}
+.map-hint rt { color: var(--border); font-size: .58em; }
+.map-locations { display: grid; grid-template-columns: 1fr; gap: 10px; }
 .map-tile {
-  display: flex; flex-direction: column; align-items: center; gap: 10px;
-  padding: 16px 6px;
+  display: flex; align-items: center; justify-content: flex-start; gap: 12px;
+  padding: 13px 14px;
   background: var(--panel-2);
   border: 3px solid var(--border);
   color: var(--text);
-  font-family: inherit;
-  font-size: 9px;
+  font-family: -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans KR",sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  text-align: left;
   cursor: pointer;
 }
 .map-tile:active { transform: translateY(2px); }
-.map-tile-emoji { font-size: 26px; }
+.map-tile-emoji { width: 34px; flex: none; font-size: 24px; text-align: center; }
 
 .portrait-box { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 8px 0 18px; }
 .portrait {
