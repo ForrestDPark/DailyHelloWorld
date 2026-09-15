@@ -6,7 +6,8 @@
 pending_turns(워커가 처리할 응답 대기열), story_sync(대화 내용을 Notion
 "함께 만든 이야기"에 어디까지 반영했는지 워터마크), users/sessions(로그인
 계정·세션 — 2026-08-26, 아래 참고), ui_dev_grants(소유자가 UI 개발자
-페르소나 "유이"에게 말 걸 권한을 선별 부여한 계정 목록 — 2026-08-26)."""
+페르소나 "유이"에게 말 걸 권한을 선별 부여한 계정 목록 — 2026-08-26),
+dating_sim_progress(미연시 미니게임 — 사용자·캐릭터별 진행 상태, 2026-09-15)."""
 import os
 import sqlite3
 
@@ -228,6 +229,18 @@ def init_db():
             started_at TEXT,
             completed_at TEXT,
             FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS dating_sim_progress (
+            username TEXT NOT NULL,
+            character_id TEXT NOT NULL,
+            day INTEGER NOT NULL DEFAULT 1,
+            affection INTEGER NOT NULL DEFAULT 50,
+            pending_location TEXT,
+            completed INTEGER NOT NULL DEFAULT 0,
+            ending_id TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (username, character_id)
         );
         """
     )

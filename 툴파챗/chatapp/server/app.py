@@ -58,7 +58,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from pywebpush import WebPushException, webpush
 
-from server import ai_keys, auth, oauth
+from server import ai_keys, auth, dating_sim_story, oauth
 from server.db import get_conn, init_db
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -68,6 +68,7 @@ CAREER_DATA_DIR = REPO_ROOT / "이직시스템" / "data"
 CAREER_SYSTEM_DIR = REPO_ROOT / "이직시스템"
 SHIFT_ALARM_DASHBOARD_DIR = BASE_DIR / "shift_alarm_dashboard"
 VOCABULARY_WEB_DIR = BASE_DIR / "vocabulary_web"
+DATING_SIM_WEB_DIR = BASE_DIR / "dating_sim_web"
 SHIFT_ALARM_STATUS_FILE = Path(os.path.expanduser(
     "~/Library/Mobile Documents/com~apple~CloudDocs/ShiftAlarmStatus/status.json"
 ))
@@ -575,6 +576,164 @@ def vocabulary_static(filename: str, request: Request):
     if filename not in {"style.css", "app.js", "manifest.webmanifest"}:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(VOCABULARY_WEB_DIR / filename))
+
+
+# ★ 2026-09-15: "미연시 시스템 하나 만들어봤으면 좋겠어" 요청 — 선택지+호감도+
+# 멀티 엔딩 구조의 작은 연애 시뮬레이션. career/vocabulary와 같은 패턴으로
+# 독립 미니앱을 마운트한다. 로그인 계정마다 진행 상태가 따로 저장된다.
+@app.get("/dating-sim")
+def dating_sim_redirect():
+    return RedirectResponse("/dating-sim/", status_code=307)
+
+
+@app.get("/dating-sim/")
+def dating_sim_dashboard(request: Request):
+    _require_signed_in_user(request)
+    return FileResponse(str(DATING_SIM_WEB_DIR / "index.html"))
+
+
+@app.get("/dating-sim/static/{filename}")
+def dating_sim_static(filename: str, request: Request):
+    _require_signed_in_user(request)
+    if filename not in {"style.css", "app.js"}:
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
+    return FileResponse(str(DATING_SIM_WEB_DIR / filename))
+
+
+class DatingSimLocationRequest(BaseModel):
+    location: str
+
+
+class DatingSimChoiceRequest(BaseModel):
+    choice_index: int
+
+
+def _dating_sim_row(conn, username):
+    row = conn.execute(
+        "SELECT * FROM dating_sim_progress WHERE username=? AND character_id=?",
+        (username, dating_sim_story.CHARACTER_ID),
+    ).fetchone()
+    if row:
+        return dict(row)
+    now = _now()
+    conn.execute(
+        "INSERT INTO dating_sim_progress "
+        "(username,character_id,day,affection,pending_location,completed,ending_id,created_at,updated_at) "
+        "VALUES (?,?,1,50,NULL,0,NULL,?,?)",
+        (username, dating_sim_story.CHARACTER_ID, now, now),
+    )
+    conn.commit()
+    return {
+        "username": username, "character_id": dating_sim_story.CHARACTER_ID,
+        "day": 1, "affection": 50, "pending_location": None, "completed": 0, "ending_id": None,
+    }
+
+
+def _dating_sim_state_payload(row):
+    completed = bool(row["completed"])
+    payload = {
+        "character_name": dating_sim_story.CHARACTER_NAME,
+        "day": min(row["day"], dating_sim_story.TOTAL_DAYS), "total_days": dating_sim_story.TOTAL_DAYS,
+        "affection": row["affection"],
+        "locations": [{"id": key, **value} for key, value in dating_sim_story.LOCATIONS.items()],
+        "pending_location": row["pending_location"],
+        "completed": completed,
+    }
+    if row["pending_location"] and not completed:
+        scene = dating_sim_story.SCENES[row["day"]][row["pending_location"]]
+        payload["scene"] = {
+            "location": row["pending_location"],
+            "lines": scene["lines"],
+            "choices": [{"text": choice["text"]} for choice in scene["choices"]],
+        }
+    if completed:
+        payload["ending"] = dating_sim_story.resolve_ending(row["affection"])
+    return payload
+
+
+@app.get("/api/dating-sim/state")
+def dating_sim_state(request: Request):
+    _require_signed_in_user(request)
+    conn = get_conn()
+    try:
+        row = _dating_sim_row(conn, _request_username(request))
+    finally:
+        conn.close()
+    return _dating_sim_state_payload(row)
+
+
+@app.post("/api/dating-sim/visit")
+def dating_sim_visit(body: DatingSimLocationRequest, request: Request):
+    """장소를 골라 오늘의 장면을 연다 — 선택은 아직 안 하고 대사·선택지만 반환한다."""
+    _require_signed_in_user(request)
+    username = _request_username(request)
+    conn = get_conn()
+    try:
+        row = _dating_sim_row(conn, username)
+        if row["completed"]:
+            raise HTTPException(status_code=409, detail="이미 끝난 이야기입니다. 다시 시작해보세요")
+        if row["pending_location"]:
+            raise HTTPException(status_code=409, detail="이미 진행 중인 장면이 있습니다")
+        day_scenes = dating_sim_story.SCENES.get(row["day"], {})
+        if body.location not in day_scenes:
+            raise HTTPException(status_code=400, detail="오늘은 갈 수 없는 장소입니다")
+        conn.execute(
+            "UPDATE dating_sim_progress SET pending_location=?, updated_at=? WHERE username=? AND character_id=?",
+            (body.location, _now(), username, dating_sim_story.CHARACTER_ID),
+        )
+        conn.commit()
+        row["pending_location"] = body.location
+    finally:
+        conn.close()
+    return _dating_sim_state_payload(row)
+
+
+@app.post("/api/dating-sim/choose")
+def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
+    """진행 중인 장면의 선택지를 골라 호감도를 반영하고 다음 날로 넘어간다."""
+    _require_signed_in_user(request)
+    username = _request_username(request)
+    conn = get_conn()
+    try:
+        row = _dating_sim_row(conn, username)
+        if row["completed"] or not row["pending_location"]:
+            raise HTTPException(status_code=409, detail="지금은 선택할 수 있는 장면이 없습니다")
+        scene = dating_sim_story.SCENES[row["day"]][row["pending_location"]]
+        if body.choice_index not in range(len(scene["choices"])):
+            raise HTTPException(status_code=400, detail="올바르지 않은 선택지입니다")
+        affection = max(0, min(100, row["affection"] + scene["choices"][body.choice_index]["affection"]))
+        next_day = row["day"] + 1
+        completed = next_day > dating_sim_story.TOTAL_DAYS
+        ending_id = dating_sim_story.resolve_ending(affection)["id"] if completed else None
+        conn.execute(
+            "UPDATE dating_sim_progress SET day=?, affection=?, pending_location=NULL, completed=?, ending_id=?, "
+            "updated_at=? WHERE username=? AND character_id=?",
+            (next_day, affection, int(completed), ending_id, _now(), username, dating_sim_story.CHARACTER_ID),
+        )
+        conn.commit()
+        row.update(day=next_day, affection=affection, pending_location=None,
+                   completed=int(completed), ending_id=ending_id)
+    finally:
+        conn.close()
+    return _dating_sim_state_payload(row)
+
+
+@app.post("/api/dating-sim/restart")
+def dating_sim_restart(request: Request):
+    _require_signed_in_user(request)
+    username = _request_username(request)
+    conn = get_conn()
+    try:
+        conn.execute(
+            "UPDATE dating_sim_progress SET day=1, affection=50, pending_location=NULL, completed=0, "
+            "ending_id=NULL, updated_at=? WHERE username=? AND character_id=?",
+            (_now(), username, dating_sim_story.CHARACTER_ID),
+        )
+        conn.commit()
+        row = _dating_sim_row(conn, username)
+    finally:
+        conn.close()
+    return _dating_sim_state_payload(row)
 
 
 @app.get("/shift-alarm")
