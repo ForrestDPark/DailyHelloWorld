@@ -8,6 +8,7 @@ let audioManifest = {};
 const recordedAudio = new Audio();
 let pendingPlaybackResolve = null;
 let choiceInFlight = false;
+let mapOpeningText = "";
 
 function storyQuery() {
   return storyId ? `?story_id=${encodeURIComponent(storyId)}` : "";
@@ -32,6 +33,7 @@ function showView(name) {
   for (const id of ["map-view", "scene-view", "result-view", "ending-view", "loading-view"]) {
     $(id).classList.toggle("hidden", id !== name);
   }
+  $("listening-controls").classList.toggle("hidden", name === "loading-view");
 }
 
 function renderHud(state) {
@@ -44,11 +46,12 @@ function renderHud(state) {
 }
 
 function renderMap(state) {
-  if (window.speechSynthesis?.speaking) stopListening({ turnOff: false });
+  if (!recordedAudio.paused || window.speechSynthesis?.speaking) stopListening({ turnOff: false });
   $("stage").dataset.location = "map";
   $("stage").dataset.day = state.day;
   const hint = document.querySelector(".map-hint");
-  renderAnnotatedText(hint, state.day_opening || "오늘 어떤 일이 일어날까?");
+  mapOpeningText = state.day_opening || "오늘 어떤 일이 일어날까?";
+  renderAnnotatedText(hint, mapOpeningText);
   const list = $("map-locations");
   list.replaceChildren();
   state.locations.forEach((location) => {
@@ -418,6 +421,7 @@ async function loadState() {
 }
 
 async function visitLocation(locationId) {
+  if (!recordedAudio.paused || window.speechSynthesis?.speaking) stopListening({ turnOff: false });
   try {
     render(await api("/api/dating-sim/visit", { method: "POST", body: JSON.stringify({ location: locationId, story_id: storyId }) }));
   } catch (e) {
@@ -469,6 +473,21 @@ $("listening-toggle").addEventListener("click", (event) => {
   }
   listeningMode = true;
   updateListeningControls("대기 중");
+  if (!$("map-view").classList.contains("hidden")) {
+    playStandalone(mapOpeningText, "male", "주인공 독백 재생 중")
+      .then(() => updateListeningControls("장소를 골라주세요"));
+    return;
+  }
+  if (!$("result-view").classList.contains("hidden") && latestState?.choice_result) {
+    playStandalone(latestState.choice_result.line, "female", `${latestState.character_name} 대사 재생 중`)
+      .then(() => updateListeningControls("다음 장면을 눌러 계속"));
+    return;
+  }
+  if (!$("ending-view").classList.contains("hidden") && latestState?.ending) {
+    playStandalone(latestState.ending.lines.join("\n"), "female", `${latestState.character_name} 엔딩 재생 중`)
+      .then(() => updateListeningControls("엔딩 음성 완료"));
+    return;
+  }
   if (typewriterTimer) {
     stopTypewriter();
     const line = sceneLines[sceneLineIndex];

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/dating-sim/static/style.css?v=20260915-v5">
+<link rel="stylesheet" href="/dating-sim/static/style.css?v=20260915-v6">
 </head>
 <body>
   <div id="game">
@@ -24,17 +24,17 @@
     </header>
 
     <main id="stage">
+      <div id="listening-controls" class="listening-controls hidden" aria-label="일본어 듣기">
+        <button id="listening-toggle" type="button" aria-pressed="false">일본어 듣기</button>
+        <button id="listening-stop" type="button" disabled>정지</button>
+        <span id="listening-status" aria-live="polite">꺼짐</span>
+      </div>
       <section id="map-view" class="hidden">
         <p class="map-hint">오늘 어떤 일이 일어날까?</p>
         <div id="map-locations" class="map-locations"></div>
       </section>
 
       <section id="scene-view" class="hidden">
-        <div class="listening-controls" aria-label="일본어 듣기">
-          <button id="listening-toggle" type="button" aria-pressed="false">일본어 듣기</button>
-          <button id="listening-stop" type="button" disabled>정지</button>
-          <span id="listening-status" aria-live="polite">꺼짐</span>
-        </div>
         <div class="portrait-box">
           <div id="portrait" class="portrait"><img id="portrait-image" alt="캐릭터 초상화"></div>
           <div id="speaker-name" class="speaker-name">소이</div>
@@ -73,6 +73,6 @@
       </section>
     </main>
   </div>
-  <script src="/dating-sim/static/app.js?v=20260915-v5"></script>
+  <script src="/dating-sim/static/app.js?v=20260915-v6"></script>
 </body>
 </html>
