@@ -27,13 +27,13 @@
      페이지 로드는 chat.js가 부팅 후 유휴 시간에 백그라운드로 미리 시작). -->
 <link rel="preconnect" href="https://sunzi-strategy-notes.pulpilisory.chatgpt.site" crossorigin>
 <link rel="dns-prefetch" href="https://sunzi-strategy-notes.pulpilisory.chatgpt.site">
-<link rel="stylesheet" href="/static/style.css?v=20260914-global-vocab-v9">
+<link rel="stylesheet" href="/static/style.css?v=20260915-pwa-install-v1">
 <!-- ★ "새 메시지 알림(웹 푸시)" 요청(2026-08-27) — iOS Safari는 PWA로
      "홈 화면에 추가"돼 있어야만 웹 푸시가 동작한다. manifest.json이 그
      설치 가능 상태를 만든다. -->
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#6d8fff">
-<link rel="apple-touch-icon" href="/static/og-image.png">
+<link rel="apple-touch-icon" href="/static/app-icon-180.png">
 </head>
 <body>
   <svg class="icon-sprite" aria-hidden="true">
@@ -99,6 +99,19 @@
       <section class="portal-quick"><div class="portal-section-head"><div><small>QUICK START</small><h2>바로 시작하기</h2></div></div><div class="portal-quick-grid"><a href="#friends"><b>친구</b><span>페르소나와 사람 찾기</span></a><a href="#chats"><b>채팅방</b><span>최근 대화와 안 읽은 방</span></a><a href="#systems"><b>시스템</b><span>학습·병법·이직 도구 모아보기</span></a></div></section>
     </main>
     <nav class="portal-dock" aria-label="주요 화면"><a href="#home">홈</a><a href="#friends">친구</a><a href="#chats">채팅</a><a href="#systems">시스템</a></nav>
+  </div>
+
+  <div id="pwa-install-overlay" class="pwa-install-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="pwa-install-title">
+    <div class="pwa-install-card">
+      <button id="pwa-install-close" class="pwa-install-close" type="button" aria-label="설치 안내 닫기">×</button>
+      <div class="pwa-install-icon" aria-hidden="true">T</div>
+      <p class="pwa-install-kicker">TULPA CHAT APP</p>
+      <h2 id="pwa-install-title">홈 화면에 툴파챗을 설치할까요?</h2>
+      <p id="pwa-install-description">브라우저 탭 없이 앱처럼 바로 열고, 새 메시지 알림도 받을 수 있어요.</p>
+      <div id="pwa-install-steps" class="pwa-install-steps hidden"></div>
+      <button id="pwa-install-action" class="pwa-install-action" type="button">홈 화면에 설치</button>
+      <button id="pwa-install-later" class="pwa-install-later" type="button">다음에 할게요</button>
+    </div>
   </div>
 
   <div id="sunzi-view" class="system-app-view hidden">
@@ -311,6 +324,6 @@
     </div>
   </div>
 
-  <script src="/static/chat.js?v=20260914-global-vocab-v9"></script>
+  <script src="/static/chat.js?v=20260915-pwa-install-v1"></script>
 </body>
 </html>

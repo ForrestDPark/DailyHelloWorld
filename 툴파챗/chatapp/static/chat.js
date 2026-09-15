@@ -1957,8 +1957,91 @@ async function showPortalHome(focusSystems = false) {
     document.getElementById("portal-vocab-count").textContent = String(items.length);
   });
   loadPortalNotifications();
+  maybeShowPwaInstallPrompt();
   if (focusSystems) document.querySelector(".portal-services")?.scrollIntoView({behavior:"smooth", block:"start"});
 }
+
+// ★ 2026-09-15: 모바일 브라우저 링크로 접속한 사용자에게만 PWA 설치를
+// 안내한다. Android/Chromium은 beforeinstallprompt로 시스템 설치창을 열고,
+// iOS는 브라우저가 자동 설치 API를 제공하지 않아 공유 메뉴 절차를 보여준다.
+let deferredPwaInstallPrompt = null;
+let pwaInstallPromptShown = false;
+const PWA_INSTALL_DISMISSED_KEY = "tulpachat_pwa_install_dismissed_at";
+const PWA_INSTALL_REMIND_MS = 3 * 24 * 60 * 60 * 1000;
+const pwaInstallOverlay = document.getElementById("pwa-install-overlay");
+const pwaInstallAction = document.getElementById("pwa-install-action");
+const pwaInstallSteps = document.getElementById("pwa-install-steps");
+
+function isInstalledPwa() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function isMobileBrowser() {
+  return navigator.userAgentData?.mobile === true || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+}
+
+function isIosDevice() {
+  return /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+
+function hidePwaInstallPrompt(remember = false) {
+  pwaInstallOverlay.classList.add("hidden");
+  if (remember) localStorage.setItem(PWA_INSTALL_DISMISSED_KEY, String(Date.now()));
+}
+
+function showManualInstallSteps() {
+  const ios = isIosDevice();
+  document.getElementById("pwa-install-description").textContent = ios
+    ? "iPhone은 보안 정책상 웹사이트가 설치를 자동 완료할 수 없어요. 아래 두 단계만 진행해주세요."
+    : "브라우저 메뉴에서 홈 화면 설치를 진행해주세요.";
+  pwaInstallSteps.innerHTML = ios
+    ? "<b>1.</b> 아래쪽 <b>공유 버튼(□↑)</b>을 누르세요.<br><b>2.</b> <b>홈 화면에 추가</b> → <b>추가</b>를 누르세요."
+    : "브라우저의 <b>⋮ 메뉴</b> → <b>앱 설치</b> 또는 <b>홈 화면에 추가</b>를 누르세요.";
+  pwaInstallSteps.classList.remove("hidden");
+  pwaInstallAction.textContent = "확인했어요";
+  pwaInstallAction.dataset.manual = "true";
+}
+
+function maybeShowPwaInstallPrompt(force = false) {
+  if (!isMobileBrowser() || isInstalledPwa() || pwaInstallPromptShown) return;
+  const dismissedAt = Number(localStorage.getItem(PWA_INSTALL_DISMISSED_KEY) || 0);
+  if (!force && dismissedAt && Date.now() - dismissedAt < PWA_INSTALL_REMIND_MS) return;
+  pwaInstallPromptShown = true;
+  pwaInstallOverlay.classList.remove("hidden");
+  if (isIosDevice()) {
+    pwaInstallAction.textContent = "설치 방법 보기";
+  } else if (!deferredPwaInstallPrompt) {
+    pwaInstallAction.textContent = "설치 방법 보기";
+  }
+  setTimeout(() => pwaInstallAction.focus(), 50);
+}
+
+window.addEventListener("beforeinstallprompt", (event) => {
+  event.preventDefault();
+  deferredPwaInstallPrompt = event;
+});
+window.addEventListener("appinstalled", () => hidePwaInstallPrompt(false));
+
+pwaInstallAction.addEventListener("click", async () => {
+  if (pwaInstallAction.dataset.manual === "true") {
+    hidePwaInstallPrompt(true);
+    return;
+  }
+  if (deferredPwaInstallPrompt && !isIosDevice()) {
+    deferredPwaInstallPrompt.prompt();
+    const choice = await deferredPwaInstallPrompt.userChoice;
+    deferredPwaInstallPrompt = null;
+    if (choice.outcome === "accepted") hidePwaInstallPrompt(false);
+    else hidePwaInstallPrompt(true);
+    return;
+  }
+  showManualInstallSteps();
+});
+document.getElementById("pwa-install-close").addEventListener("click", () => hidePwaInstallPrompt(true));
+document.getElementById("pwa-install-later").addEventListener("click", () => hidePwaInstallPrompt(true));
+pwaInstallOverlay.addEventListener("click", (event) => {
+  if (event.target === pwaInstallOverlay) hidePwaInstallPrompt(true);
+});
 
 // ★ 2026-09-12: "손자병법 탭 뜨는 시간이 오래 걸린다" 개선 — 이 탭은 외부
 // (chatgpt.site) 사이트를 iframe으로 통째로 불러오는데, 예전엔 탭을 클릭한
