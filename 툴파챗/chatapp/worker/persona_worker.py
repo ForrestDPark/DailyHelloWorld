@@ -2171,9 +2171,26 @@ def _voice_for_persona(persona_name, gender=None):
     return pool[digest[0] % len(pool)]
 
 
+# ★ 2026-09-15: "읽어주기 왜안돼지" 진단 — OpenAI TTS 계정이 크레딧 소진
+# 상태("You have no credits remaining")라 매번 실패한 뒤 edge-tts로
+# 넘어가는데, 「」로 문장이 여러 번 나뉘는 메시지(예: 일본어 스터디의 예문
+# 여러 개가 든 메시지)는 이 실패가 세그먼트 수만큼 그대로 반복된다.
+# 실측(메시지 #1343): 세그먼트마다 헛되이 OpenAI를 불렀다 실패하는 과정이
+# 누적돼 한 메시지에 57초가 걸렸는데, 클라이언트 폴링은 30초에서 포기하고
+# "시간이 초과됐어요"를 띄운다(작업 자체는 늦게라도 완료됨). 크레딧 소진은
+# 재시도한다고 나아지는 일시적 오류가 아니므로, 한 번 확인되면 쿨다운 동안
+# OpenAI 호출 자체를 건너뛰고 바로 edge-tts로 간다 — 구독 재신청 없이도
+# 세그먼트 수와 무관하게 지연이 사라진다.
+_OPENAI_TTS_QUOTA_EXHAUSTED_UNTIL = 0.0
+OPENAI_TTS_QUOTA_COOLDOWN_SECONDS = 600  # 10분 — 그사이 크레딧을 충전하면 다음 쿨다운 만료 후 자동 재시도됨
+
+
 def _generate_openai_tts(text, persona_name, persona_cache):
+    global _OPENAI_TTS_QUOTA_EXHAUSTED_UNTIL
     if not OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY가 워커에 설정되지 않았습니다")
+    if time.time() < _OPENAI_TTS_QUOTA_EXHAUSTED_UNTIL:
+        raise RuntimeError("OpenAI 크레딧 소진이 최근에 확인돼 쿨다운 중이라 건너뜀")
     entry = persona_cache.get(persona_name) or {}
     gender = entry.get("gender")
     age_range = entry.get("age_range")
@@ -2207,6 +2224,8 @@ def _generate_openai_tts(text, persona_name, persona_cache):
             error_message = json.loads(body_text).get("error", {}).get("message", "")
         except (json.JSONDecodeError, AttributeError):
             error_message = ""
+        if "credit" in error_message.lower() or "quota" in error_message.lower():
+            _OPENAI_TTS_QUOTA_EXHAUSTED_UNTIL = time.time() + OPENAI_TTS_QUOTA_COOLDOWN_SECONDS
         raise RuntimeError(error_message or f"HTTP {exc.code}: {body_text[:300]}") from exc
     filename = f"tts_{int(time.time())}_{os.urandom(4).hex()}.mp3"
     (UPLOADS_DIR / filename).write_bytes(raw)

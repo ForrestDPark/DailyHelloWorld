@@ -3255,7 +3255,11 @@ async function notifyQaResolution(message, sourceMessageId = message.id) {
 async function requestMessageTtsJob(message) {
   const res = await apiFetch(`/api/messages/${message.id}/tts`, { method: "POST" });
   let job = await res.json();
-  const deadline = Date.now() + 30000;
+  // ★ 2026-09-15: "읽어주기 왜안돼지" 진단 — OpenAI 크레딧 소진으로 「」
+  // 세그먼트마다 헛되이 실패하던 지연은 워커의 회로차단기(persona_worker.py
+  // _generate_openai_tts)로 없앴지만, 세그먼트가 많은 메시지는 edge-tts만
+  // 써도 여전히 30초에 가깝게 걸릴 수 있어 여유를 45초로 늘린다.
+  const deadline = Date.now() + 45000;
   while (job.status !== "done" && job.status !== "failed" && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 1200));
     const pollRes = await apiFetch(`/api/messages/${message.id}/tts`);
