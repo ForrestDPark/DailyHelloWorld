@@ -65,6 +65,30 @@ html, body {
 #stage[data-location="school"],#stage[data-location="first"]{background:linear-gradient(#3c2720aa,#1c1233)}
 .hidden { display: none !important; }
 
+.listening-controls {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  margin-bottom: 8px;
+}
+.listening-controls button {
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 2px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  font: 8px/1.4 inherit;
+  cursor: pointer;
+}
+.listening-controls button.active { background: var(--good); color: #102318; }
+.listening-controls button:disabled { opacity: .45; cursor: default; }
+.listening-controls span {
+  min-width: 0;
+  color: var(--muted);
+  font: 8px/1.45 -apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;
+}
+
 .map-hint { font-size: 11px; line-height: 1.8; margin: 4px 0 18px; color: var(--muted); }
 .map-locations { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .map-tile {

@@ -2,6 +2,8 @@ const $ = (id) => document.getElementById(id);
 const bookId = new URLSearchParams(location.search).get("book");
 const storyId = bookId && /^[0-9a-f]{20}$/.test(bookId) ? `book:${bookId}` : null;
 let latestState = null;
+let listeningMode = false;
+let speechSequence = 0;
 
 function storyQuery() {
   return storyId ? `?story_id=${encodeURIComponent(storyId)}` : "";
@@ -38,6 +40,7 @@ function renderHud(state) {
 }
 
 function renderMap(state) {
+  if (window.speechSynthesis?.speaking) stopListening({ turnOff: false });
   $("stage").dataset.location = "map";
   $("stage").dataset.day = state.day;
   const list = $("map-locations");
@@ -63,6 +66,76 @@ let sceneChoices = [];
 
 function plainText(text) {
   return text.replace(/\[([^\]|]+)\|([^\]]+)\]/g, "$1");
+}
+
+function japaneseText(text) {
+  const surface = plainText(text || "");
+  return surface.split("\n")
+    .filter((line) => /[\u3040-\u30ff\u3400-\u9fff]/.test(line))
+    .join("。")
+    .trim();
+}
+
+function japaneseVoice() {
+  const voices = window.speechSynthesis?.getVoices?.() || [];
+  return voices.find((voice) => /^ja[-_]/i.test(voice.lang)) || null;
+}
+
+function updateListeningControls(status = listeningMode ? "듣는 중" : "꺼짐") {
+  const supported = "speechSynthesis" in window && "SpeechSynthesisUtterance" in window;
+  $("listening-toggle").disabled = !supported;
+  $("listening-toggle").classList.toggle("active", listeningMode);
+  $("listening-toggle").setAttribute("aria-pressed", String(listeningMode));
+  $("listening-toggle").textContent = listeningMode ? "듣기 켜짐" : "일본어 듣기";
+  $("listening-stop").disabled = !supported || !listeningMode;
+  $("listening-status").textContent = supported ? status : "이 기기에서는 지원되지 않음";
+}
+
+function stopListening({ turnOff = true } = {}) {
+  speechSequence += 1;
+  window.speechSynthesis?.cancel();
+  if (turnOff) listeningMode = false;
+  updateListeningControls(turnOff ? "꺼짐" : "대기 중");
+  $("portrait").classList.remove("speaking");
+}
+
+function speakCurrentLine() {
+  if (!listeningMode || typewriterTimer || !sceneLines.length) return;
+  const line = sceneLines[sceneLineIndex];
+  const text = japaneseText(typeof line === "string" ? line : line.text);
+  if (!text) {
+    if (sceneLineIndex < sceneLines.length - 1) advanceLine();
+    return;
+  }
+  const sequence = ++speechSequence;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "ja-JP";
+  utterance.rate = 0.88;
+  utterance.pitch = 1;
+  const voice = japaneseVoice();
+  if (voice) utterance.voice = voice;
+  utterance.onstart = () => {
+    if (sequence !== speechSequence) return;
+    updateListeningControls("읽는 중");
+    $("portrait").classList.toggle("speaking", line.speaker !== "narrator");
+  };
+  utterance.onend = () => {
+    if (sequence !== speechSequence || !listeningMode) return;
+    $("portrait").classList.remove("speaking");
+    if (sceneLineIndex < sceneLines.length - 1) {
+      sceneLineIndex += 1;
+      typeLine(sceneLines[sceneLineIndex]);
+    } else {
+      updateListeningControls("선택지를 골라주세요");
+    }
+  };
+  utterance.onerror = () => {
+    if (sequence !== speechSequence) return;
+    stopListening();
+    updateListeningControls("음성을 재생하지 못했어요");
+  };
+  window.speechSynthesis.speak(utterance);
 }
 
 function renderAnnotatedText(element, text) {
@@ -126,9 +199,11 @@ function onLineFullyShown() {
   } else {
     $("dialogue-next").classList.remove("hidden");
   }
+  if (listeningMode) speakCurrentLine();
 }
 
 function advanceLine() {
+  if (window.speechSynthesis?.speaking) stopListening({ turnOff: false });
   if (typewriterTimer) {
     // 타자기 도중 클릭하면 그 줄을 즉시 완성해서 보여준다.
     stopTypewriter();
@@ -170,6 +245,7 @@ function renderScene(state) {
   $("stage").dataset.day = state.day;
   $("portrait-image").src = state.scene.character_image || state.character_image || "";
   showView("scene-view");
+  updateListeningControls(listeningMode ? "대기 중" : "꺼짐");
   typeLine(sceneLines[0]);
 }
 
@@ -223,6 +299,7 @@ async function visitLocation(locationId) {
 }
 
 async function chooseOption(choiceIndex) {
+  if (window.speechSynthesis?.speaking) stopListening({ turnOff: false });
   try {
     render(await api("/api/dating-sim/choose", { method: "POST", body: JSON.stringify({ choice_index: choiceIndex, story_id: storyId }) }));
   } catch (e) {
@@ -244,10 +321,36 @@ $("dialogue-next").addEventListener("click", (event) => {
   advanceLine();
 });
 document.getElementById("scene-view").addEventListener("click", (event) => {
+  if (event.target.closest(".listening-controls")) return;
   if (event.target.closest(".choice-button")) return;
   if (!$("choice-list").classList.contains("hidden")) return;
   advanceLine();
 });
+$("listening-toggle").addEventListener("click", (event) => {
+  event.stopPropagation();
+  if (listeningMode) {
+    stopListening();
+    return;
+  }
+  listeningMode = true;
+  updateListeningControls("대기 중");
+  if (typewriterTimer) {
+    stopTypewriter();
+    const line = sceneLines[sceneLineIndex];
+    renderAnnotatedText($("dialogue-text"), typeof line === "string" ? line : line.text);
+    onLineFullyShown();
+  } else {
+    speakCurrentLine();
+  }
+});
+$("listening-stop").addEventListener("click", (event) => {
+  event.stopPropagation();
+  stopListening();
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopListening();
+});
+window.addEventListener("pagehide", () => stopListening());
 $("restart-btn").addEventListener("click", restart);
 $("result-next").addEventListener("click", () => {
   const nextState = { ...latestState };
@@ -255,4 +358,5 @@ $("result-next").addEventListener("click", () => {
   render(nextState);
 });
 
+updateListeningControls();
 loadState();
