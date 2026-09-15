@@ -738,6 +738,14 @@ def _shift_alarm_subtitle_status():
         status = json.loads(SHIFT_ALARM_SUBTITLE_STATUS_FILE.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {"state": "idle", "stage": "av4 폴더에서 영상을 선택해주세요"}
+    # 이 기능 배포 전에 시작된 작업 상태에는 file_id가 없다. 파일명이 현재
+    # av4 원본과 정확히 일치할 때만 안전하게 보완해, 진행 중이던 작업도 완료
+    # 이력이 해당 카드에 남도록 한다.
+    if not status.get("file_id") and status.get("filename"):
+        legacy_path = SHIFT_ALARM_VIDEO_FILES / Path(status["filename"]).name
+        if legacy_path.is_file() and legacy_path.parent == SHIFT_ALARM_VIDEO_FILES:
+            status["file_id"] = _shift_alarm_av4_id(legacy_path)
+            _shift_alarm_subtitle_write_status(status)
     if status.get("state") == "running":
         marker = Path(f"/tmp/_jp_subtitle_run_{status.get('run_id')}.done")
         if marker.exists():
@@ -746,6 +754,12 @@ def _shift_alarm_subtitle_status():
             status.update(state="complete", stage="자막·번역·후리가나·Notion·EPUB 반영 완료",
                           progress=100, completed_at=_now(), updated_at=_now())
             _shift_alarm_subtitle_write_status(status)
+            if status.get("file_id") and status.get("filename"):
+                _shift_alarm_update_processing(
+                    status["file_id"], status["filename"], subtitle_state="complete",
+                    subtitle_progress=100, subtitle_stage=status["stage"],
+                    subtitle_completed_at=status["completed_at"],
+                )
             _shift_alarm_notify_jp_subtitle_study_room(
                 "🔔 오늘 새 회차 자막 추출이 끝났습니다. "
                 "오늘 새로 처리한 회차의 줄거리와 재미있는 표현을 학습카드 위주로 소개해주세요."
@@ -755,6 +769,11 @@ def _shift_alarm_subtitle_status():
             if progress_update and progress_update[0] != status.get("progress"):
                 status.update(progress=progress_update[0], stage=progress_update[1], updated_at=_now())
                 _shift_alarm_subtitle_write_status(status)
+                if status.get("file_id") and status.get("filename"):
+                    _shift_alarm_update_processing(
+                        status["file_id"], status["filename"], subtitle_state="running",
+                        subtitle_progress=status["progress"], subtitle_stage=status["stage"],
+                    )
             try:
                 started = datetime.datetime.fromisoformat(status["created_at"])
             except (KeyError, ValueError):
@@ -762,6 +781,11 @@ def _shift_alarm_subtitle_status():
             if started and (datetime.datetime.now(datetime.timezone.utc) - started).total_seconds() > SHIFT_ALARM_SUBTITLE_TIMEOUT_SECONDS:
                 status.update(state="failed", stage="시간이 오래 걸려 상태를 확인할 수 없습니다. Mac의 터미널 창을 직접 확인하세요")
                 _shift_alarm_subtitle_write_status(status)
+                if status.get("file_id") and status.get("filename"):
+                    _shift_alarm_update_processing(
+                        status["file_id"], status["filename"], subtitle_state="failed",
+                        subtitle_progress=status.get("progress") or 0, subtitle_stage=status["stage"],
+                    )
     return status
 
 
@@ -842,7 +866,42 @@ def _shift_alarm_video_db():
             started_at TEXT NOT NULL, updated_at TEXT NOT NULL, completed_at TEXT
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS video_processing_history (
+            file_id TEXT PRIMARY KEY, filename TEXT NOT NULL,
+            subtitle_state TEXT, subtitle_progress REAL, subtitle_stage TEXT,
+            subtitle_started_at TEXT, subtitle_completed_at TEXT,
+            safari_completed_at TEXT, photo_shortcut_at TEXT, updated_at TEXT NOT NULL
+        )
+    """)
     return conn
+
+
+def _shift_alarm_processing_history():
+    with _shift_alarm_video_db() as conn:
+        rows = conn.execute("SELECT * FROM video_processing_history").fetchall()
+    return {row["file_id"]: dict(row) for row in rows}
+
+
+def _shift_alarm_update_processing(file_id, filename, **changes):
+    allowed = {
+        "subtitle_state", "subtitle_progress", "subtitle_stage",
+        "subtitle_started_at", "subtitle_completed_at", "safari_completed_at", "photo_shortcut_at",
+    }
+    values = {key: value for key, value in changes.items() if key in allowed}
+    timestamp = _now()
+    with _shift_alarm_video_db() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO video_processing_history "
+            "(file_id,filename,updated_at) VALUES (?,?,?)",
+            (file_id, filename, timestamp),
+        )
+        if values:
+            assignments = ",".join(f"{key}=?" for key in values)
+            conn.execute(
+                f"UPDATE video_processing_history SET filename=?,{assignments},updated_at=? WHERE file_id=?",
+                (filename, *values.values(), timestamp, file_id),
+            )
 
 
 def _shift_alarm_cleanup_videos(conn):
@@ -1002,6 +1061,9 @@ def _shift_alarm_stream_file(path, range_header, request, file_id=None, username
                 file_id, transfer_id, "complete" if completed else "interrupted", sent, completed
             )
             if completed and username:
+                _shift_alarm_update_processing(
+                    file_id, path.name, safari_completed_at=_now(),
+                )
                 threading.Thread(
                     target=_shift_alarm_notify_transfer_complete,
                     args=(username, path.name), daemon=True,
@@ -1696,7 +1758,7 @@ class ShiftAlarmVideoDownloadRequest(BaseModel):
 
 
 class ShiftAlarmVideoActionRequest(BaseModel):
-    action: str  # delete | cancel_transfer | extract_subtitle
+    action: str  # delete | cancel_transfer | extract_subtitle | mark_photo_shortcut
 
 
 @app.post("/api/shift-alarm/media/transport")
@@ -1724,6 +1786,7 @@ def shift_alarm_video_download_status(request: Request):
     conn.close()
     managed_paths = {row["file_path"]: row for row in rows}
     transfers = _shift_alarm_transfer_states()
+    processing = _shift_alarm_processing_history()
     status["downloads"] = []
     for path in _shift_alarm_av4_files():
         file_id = _shift_alarm_av4_id(path)
@@ -1746,6 +1809,17 @@ def shift_alarm_video_download_status(request: Request):
                 transfer_state=transfer["state"], transfer_sent_bytes=transfer["sent_bytes"],
                 transfer_total_bytes=transfer["total_bytes"],
                 transfer_updated_at=transfer["updated_at"],
+            )
+        history = processing.get(file_id)
+        if history:
+            item.update(
+                subtitle_state=history["subtitle_state"],
+                subtitle_progress=history["subtitle_progress"],
+                subtitle_stage=history["subtitle_stage"],
+                subtitle_started_at=history["subtitle_started_at"],
+                subtitle_completed_at=history["subtitle_completed_at"],
+                safari_completed_at=history["safari_completed_at"],
+                photo_shortcut_at=history["photo_shortcut_at"],
             )
         status["downloads"].append(item)
     if status.get("state") == "complete" and status.get("job_id"):
@@ -1859,12 +1933,21 @@ def act_on_shift_alarm_library_video(file_id: str, body: ShiftAlarmVideoActionRe
             shutil.rmtree(work_dir, ignore_errors=True)
             raise HTTPException(status_code=503, detail="자막 추출 작업을 시작하지 못했습니다") from exc
         _shift_alarm_subtitle_write_status({
-            "job_id": job_id, "run_id": run_id, "state": "running",
+            "job_id": job_id, "run_id": run_id, "file_id": file_id, "state": "running",
             "stage": "새 터미널 창에서 자막·번역·후리가나·Notion·EPUB 생성 중", "progress": 5,
             "filename": path.name, "work_dir": str(work_dir),
             "created_at": _now(), "updated_at": _now(),
         })
+        _shift_alarm_update_processing(
+            file_id, path.name, subtitle_state="running", subtitle_progress=5,
+            subtitle_stage="새 터미널 창에서 자막·번역·후리가나·Notion·EPUB 생성 중",
+            subtitle_started_at=_now(), subtitle_completed_at=None,
+        )
         return {"ok": True, "message": f"{path.name} 자막 추출을 시작했습니다. Mac에서 새 터미널 창이 열립니다."}
+    if body.action == "mark_photo_shortcut":
+        executed_at = _now()
+        _shift_alarm_update_processing(file_id, path.name, photo_shortcut_at=executed_at)
+        return {"ok": True, "message": "사진 저장·원본 삭제 단축어 실행을 기록했습니다", "executed_at": executed_at}
     if body.action == "cancel_transfer":
         # ★ 2026-09-14: "전송중에서 멈춰있는데 어떻게하지" — 터널이 전송 도중
         # 연결을 끊어버리면 스트리밍 제너레이터의 finally 블록이 아예 실행되지
@@ -1883,6 +1966,8 @@ def act_on_shift_alarm_library_video(file_id: str, body: ShiftAlarmVideoActionRe
         path.unlink(missing_ok=True)
         with _shift_alarm_video_db() as conn:
             conn.execute("DELETE FROM video_downloads WHERE file_path=?", (str(path),))
+            conn.execute("DELETE FROM video_transfers WHERE file_id=?", (file_id,))
+            conn.execute("DELETE FROM video_processing_history WHERE file_id=?", (file_id,))
         return {"ok": True, "message": "av4 파일을 DB에서 삭제했습니다"}
     raise HTTPException(status_code=400, detail="지원하지 않는 파일 동작입니다")
 

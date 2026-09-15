@@ -128,6 +128,7 @@ function renderVideoLibrary(items=[]){
         observeVideoTransferState(item);
         const card=document.createElement("article"),head=document.createElement("label"),checkbox=document.createElement("input"),
               copy=document.createElement("div"),name=document.createElement("b"),meta=document.createElement("small"),
+              history=document.createElement("div"),
               transfer=document.createElement("div"),transferText=document.createElement("span"),transferBar=document.createElement("i"),
               buttons=document.createElement("div"),
               transferring=item.transfer_state==="downloading",
@@ -151,9 +152,23 @@ function renderVideoLibrary(items=[]){
         saveName.className="video-file-savename";
         saveName.textContent=`Files 앱 저장명: ${item.ios_filename}`;
         copy.append(name,meta,saveName);
+        history.className="video-file-history";
+        if(item.safari_completed_at||item.transfer_state==="complete"){
+            const safariDone=document.createElement("span");
+            safariDone.className="video-history-badge done";
+            safariDone.textContent="✓ Safari 다운로드 완료";
+            history.append(safariDone);
+        }
+        if(item.photo_shortcut_at){
+            const photosDone=document.createElement("span");
+            photosDone.className="video-history-badge actioned";
+            photosDone.textContent=`사진 저장 단축어 실행됨 · ${new Date(item.photo_shortcut_at).toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})}`;
+            history.append(photosDone);
+        }
+        if(history.childElementCount)copy.append(history);
         head.append(checkbox,copy);
         transfer.className=`video-transfer${item.transfer_state?"":" hidden"}`;
-        transferText.textContent=transferring?`iPhone 전송 중 ${percent.toFixed(1)}% · ${byteSize(item.transfer_sent_bytes)} / ${byteSize(item.transfer_total_bytes)}`:item.transfer_state==="complete"?"서버 전송 완료 · Safari 다운로드를 확인하세요":item.transfer_state==="interrupted"?`전송 중단 · ${byteSize(item.transfer_sent_bytes)}까지 전송됨`:"";
+        transferText.textContent=transferring?`Safari 다운로드 중 ${percent.toFixed(1)}% · ${byteSize(item.transfer_sent_bytes)} / ${byteSize(item.transfer_total_bytes)}`:item.transfer_state==="complete"?"Safari 다운로드 완료":item.transfer_state==="interrupted"?`다운로드 중단 · ${byteSize(item.transfer_sent_bytes)}까지 전송됨`:"";
         transferBar.style.width=`${item.transfer_state==="complete"?100:percent}%`;
         transfer.append(transferText,transferBar);
         buttons.className="video-file-buttons";
@@ -164,19 +179,32 @@ function renderVideoLibrary(items=[]){
             cancel.addEventListener("click",()=>videoAction("cancel_transfer",null,item.action_url));
             buttons.append(cancel);
         }
-        const extractionRunning=currentSubtitleExtraction.state==="running",isThisExtracting=extractionRunning&&currentSubtitleExtraction.filename===item.filename;
+        const extractionRunning=currentSubtitleExtraction.state==="running",isThisExtracting=extractionRunning&&currentSubtitleExtraction.filename===item.filename,
+              subtitleState=isThisExtracting?"running":item.subtitle_state||(currentSubtitleExtraction.filename===item.filename?currentSubtitleExtraction.state:null),
+              subtitleProgress=isThisExtracting?Number(currentSubtitleExtraction.progress)||5:Number(item.subtitle_progress)||0;
+        let subtitleStatus=null;
+        if(subtitleState){
+            const subtitleLabel=document.createElement("span"),subtitleTrack=document.createElement("i");
+            subtitleStatus=document.createElement("div");
+            subtitleStatus.className=`video-subtitle-state ${subtitleState}`;
+            subtitleLabel.textContent=subtitleState==="complete"?"✓ 자막 추출 완료":subtitleState==="running"?`자막 추출 중 ${Math.round(subtitleProgress)}%`:`자막 추출 실패 · 다시 실행할 수 있습니다`;
+            subtitleTrack.style.width=`${subtitleState==="complete"?100:subtitleProgress}%`;
+            subtitleStatus.append(subtitleLabel,subtitleTrack);
+        }
         const extract=document.createElement("button");
         extract.type="button";
         extract.className="subtitle-extract-btn";
-        extract.textContent=isThisExtracting?"진행 중…":"🎬 자막 추출";
-        extract.disabled=extractionRunning;
+        extract.textContent=isThisExtracting?`자막 추출 중 ${Math.round(subtitleProgress)}%`:subtitleState==="complete"?"✓ 자막 추출 완료":"🎬 자막 추출";
+        extract.disabled=extractionRunning||subtitleState==="complete";
         extract.addEventListener("click",()=>videoAction(
             "extract_subtitle",
             "이 영상 하나만 골라 자막·번역·후리가나·Notion·EPUB까지 진행할까요? 운동용 영상 추출은 하지 않으며 시간이 오래 걸릴 수 있습니다.",
             item.action_url,
         ));
         buttons.append(extract);
-        card.append(head,transfer,buttons);
+        card.append(head);
+        if(subtitleStatus)card.append(subtitleStatus);
+        card.append(transfer,buttons);
         library.append(card);
     });
     renderVideoBulkBar();
@@ -223,6 +251,7 @@ async function triggerSafariDownload(item){
 async function triggerPhotosSave(item){
     if(!confirm(`Safari 다운로드가 완료됐나요?\n\n"${item.ios_filename}"을 사진 앱 최근 항목에 저장한 뒤 Downloads 원본을 삭제합니다.`))return;
     try{
+        await api(item.action_url,{method:"POST",body:JSON.stringify({action:"mark_photo_shortcut"})});
         await navigator.clipboard.writeText(item.ios_filename);
         notice("파일명을 복사했습니다. 사진 저장 단축어를 실행합니다.");
         window.location.href=shortcutClipboardUrl("다운로드 영상을 사진에 저장");

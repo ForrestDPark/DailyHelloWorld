@@ -434,6 +434,46 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertEqual(state["sent_bytes"], 6)
         self.assertEqual(state["total_bytes"], 10)
 
+    def test_video_processing_history_is_persisted_per_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            db = root / "downloads.db"
+            with patch.object(module, "SHIFT_ALARM_VIDEO_DIR", root), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_DB", db):
+                module._shift_alarm_update_processing(
+                    "a" * 24, "영상.mp4", subtitle_state="running",
+                    subtitle_progress=35, subtitle_stage="Whisper 자막 분석 중",
+                )
+                module._shift_alarm_update_processing(
+                    "a" * 24, "영상.mp4", subtitle_state="complete",
+                    subtitle_progress=100, subtitle_completed_at="2026-09-15T12:00:00+00:00",
+                )
+                history = module._shift_alarm_processing_history()["a" * 24]
+        self.assertEqual(history["subtitle_state"], "complete")
+        self.assertEqual(history["subtitle_progress"], 100)
+        self.assertEqual(history["subtitle_stage"], "Whisper 자막 분석 중")
+
+    def test_photo_shortcut_action_records_execution_time(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            files = root / "av4"
+            files.mkdir()
+            video = files / "영상.mp4"
+            video.write_bytes(b"1234")
+            db = root / "downloads.db"
+            with patch.object(module, "SHIFT_ALARM_VIDEO_DIR", root), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_FILES", files), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_DB", db):
+                file_id = module._shift_alarm_av4_id(video)
+                result = module.act_on_shift_alarm_library_video(
+                    file_id,
+                    module.ShiftAlarmVideoActionRequest(action="mark_photo_shortcut"),
+                    owner_request(),
+                )
+                history = module._shift_alarm_processing_history()[file_id]
+        self.assertTrue(result["ok"])
+        self.assertEqual(history["photo_shortcut_at"], result["executed_at"])
+
     def test_completed_iphone_transfer_schedules_owner_web_push(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -451,9 +491,11 @@ class ShiftAlarmApiTests(unittest.TestCase):
                     return b"".join([chunk async for chunk in response.body_iterator])
 
                 body = asyncio.run(consume())
+                history = module._shift_alarm_processing_history()["a" * 24]
         self.assertEqual(body, b"0123456789")
         self.assertEqual(thread.call_args.kwargs["target"], module._shift_alarm_notify_transfer_complete)
         self.assertEqual(thread.call_args.kwargs["args"], ("local-owner", video.name))
+        self.assertIsNotNone(history["safari_completed_at"])
         thread.return_value.start.assert_called_once()
 
     def test_owner_can_send_a_realistic_download_push_test(self):
