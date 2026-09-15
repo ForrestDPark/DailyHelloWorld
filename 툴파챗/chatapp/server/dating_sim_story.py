@@ -24,7 +24,7 @@ def _now():
 CHARACTER_ID = "soi_cafe"
 CHARACTER_NAME = "소이"
 TOTAL_DAYS = 3
-CONTENT_VERSION = 2
+CONTENT_VERSION = 3
 
 LOCATIONS = {
     "cafe": {"label": "카페", "emoji": "☕"},
@@ -157,32 +157,32 @@ TOTAL_DAYS = 7
 DAY_BEATS = {
     1: (["あの、すみません。さっきは[助|たす]かりました。[初|はじ]めまして、ですよね。\n저기, 아까는 고마웠어요. 우리 처음 만난 거 맞죠?",
          "[私|わたし]はソイです。よかったら、あなたの[名前|なまえ]も[聞|き]いていいですか。\n저는 소이라고 해요. 괜찮다면 당신 이름도 물어봐도 될까요?"],
-        ["[自分|じぶん]の[名前|なまえ]を[名乗|なの]って、さっきの[出来事|できごと]について[話|はな]す。\n이름을 소개하고 방금 있었던 일에 관해 이야기한다.",
-         "[会釈|えしゃく]だけして、そのまま[立|た]ち[去|さ]る。\n가볍게 목례만 하고 그대로 자리를 떠난다."]),
+        ["[名前|なまえ]を[名乗|なの]り、「また[会|あ]えたら、さっきのお[礼|れい]をさせて」と[笑|わら]う。\n이름을 밝히고 '다시 만나면 아까 도움받은 답례를 할게요'라고 웃는다.",
+         "[名前|なまえ]を[名乗|なの]り、「お[忙|いそが]しいでしょうから」と[先|さき]に[会話|かいわ]を[切|き]り[上|あ]げる。\n이름을 밝히고 '바쁘실 테니까요'라며 먼저 대화를 마무리한다."]),
     2: (["[昨日|きのう]より[自然|しぜん]に[話|はな]せるようになりましたね。\n어제보다 자연스럽게 이야기할 수 있게 됐네요.",
          "あなたの[好|す]きなもの、もっと[教|おし]えてください。\n당신이 좋아하는 것을 더 알려주세요."],
-        ["[最近|さいきん][夢中|むちゅう]になっていることを[話|はな]す。\n요즘 빠져 있는 것을 이야기한다.",
-         "[特|とく]にないと[答|こた]えて[話題|わだい]を[変|か]える。\n특별히 없다고 답하고 화제를 바꾼다."]),
+        ["[少|すこ]し[変|か]わった[自分|じぶん]の[趣味|しゅみ]を[正直|しょうじき]に[話|はな]し、ソイの[反応|はんのう]を[待|ま]つ。\n조금 독특한 내 취미를 솔직하게 말하고 소이의 반응을 기다린다.",
+         "ソイの[好|す]きなものに[話|はなし]を[合|あ]わせ、「[僕|ぼく]も[似|に]たものが[好|す]き」と[答|こた]える。\n소이가 좋아하는 것에 맞춰 '나도 비슷한 걸 좋아해요'라고 답한다."]),
     3: (["[急|きゅう]に[雨|あめ]が[降|ふ]ってきましたね。\n갑자기 비가 내리기 시작했네요.",
          "こういう[予定外|よていがい]の[時間|じかん]も、[嫌|きら]いじゃないです。\n이런 예상 밖의 시간도 싫지는 않아요."],
-        ["[傘|かさ]を[一緒|いっしょ]に[使|つか]おうと[声|こえ]をかける。\n우산을 함께 쓰자고 말한다.",
-         "[雨|あめ]がやむまで[別々|べつべつ]に[待|ま]つ。\n비가 그칠 때까지 따로 기다린다."]),
+        ["「[狭|せま]くてもよければ」と[聞|き]いてから、[傘|かさ]をソイのほうへ[傾|かたむ]ける。\n'좁아도 괜찮다면요'라고 물은 뒤 우산을 소이 쪽으로 기울인다.",
+         "[自分|じぶん]の[傘|かさ]をソイに[渡|わた]し、「[僕|ぼく]はここで[待|ま]つから」と[残|のこ]る。\n내 우산을 소이에게 건네고 '나는 여기서 기다릴게요'라며 남는다."]),
     4: (["[実|じつ]は、[将来|しょうらい]のことで[少|すこ]し[迷|まよ]っているんです。\n사실은 장래 문제로 조금 고민하고 있어요.",
          "こんな[話|はなし]をしても、[困|こま]りませんか。\n이런 이야기를 해도 곤란하지 않아요?"],
-        ["[答|こた]えを[急|いそ]がず、ソイの[話|はなし]を[最後|さいご]まで[聞|き]く。\n답을 재촉하지 않고 소이의 이야기를 끝까지 듣는다.",
-         "すぐに[自分|じぶん]の[考|かんが]えが[正|ただ]しいと[説得|せっとく]する。\n곧바로 내 생각이 옳다고 설득한다."]),
+        ["すぐに[答|こた]えを[出|だ]さず、「ソイはどうなったら[嬉|うれ]しい？」とひとつだけ[聞|き]く。\n바로 답을 내놓지 않고 '소이는 어떻게 되면 좋겠어요?'라고 한 가지만 묻는다.",
+         "[重|おも]くなりすぎないように[冗談|じょうだん]を[交|まじ]え、「[話|はな]したくなったらいつでも」と[伝|つた]える。\n너무 무거워지지 않게 농담을 섞고 '말하고 싶을 때 언제든지요'라고 전한다."]),
     5: (["[次|つぎ]の[休|やす]みも、また[会|あ]えたらいいですね。\n다음 휴일에도 다시 만나면 좋겠네요.",
          "あなたといると、[時間|じかん]が[早|はや]く[過|す]ぎます。\n당신과 있으면 시간이 빨리 지나가요."],
-        ["[二人|ふたり]で[行|い]きたい[場所|ばしょ]を[一緒|いっしょ]に[決|き]める。\n둘이 가고 싶은 장소를 함께 정한다.",
-         "そのうちね、と[曖昧|あいまい]に[答|こた]える。\n언젠가 보자며 애매하게 답한다."]),
+        ["「[土曜日|どようび]なら[空|あ]いてる」と[自分|じぶん]の[予定|よてい]を[先|さき]に[見|み]せ、ソイに[選|えら]んでもらう。\n'토요일이면 비어 있어요'라며 내 일정을 먼저 보여주고 소이가 고르게 한다.",
+         "「ソイの[都合|つごう]がいい[日|ひ]でいいよ」と、[決定|けってい]をすべてソイに[任|まか]せる。\n'소이가 편한 날이면 돼요'라며 결정을 전부 소이에게 맡긴다."]),
     6: (["[昨日|きのう]、[返事|へんじ]がなくて[少|すこ]し[寂|さび]しかったです。\n어제 답장이 없어서 조금 서운했어요.",
          "[責|せ]めたいんじゃなくて、[気持|きも]ちを[知|し]りたかったんです。\n책망하려는 게 아니라 마음을 알고 싶었어요."],
-        ["[遅|おそ]くなった[理由|りゆう]を[話|はな]し、[心配|しんぱい]させたことを[謝|あやま]る。\n늦어진 이유를 말하고 걱정하게 한 것을 사과한다.",
-         "[忙|いそが]しかったから[仕方|しかた]ないと[話|はなし]を[終|お]える。\n바빴으니 어쩔 수 없다며 이야기를 끝낸다."]),
+        ["[遅|おそ]くなった[理由|りゆう]を[短|みじか]く[話|はな]し、「でも[待|ま]たせたことは[別|べつ]だ」と[謝|あやま]る。\n늦어진 이유를 짧게 말하고 '그래도 기다리게 한 건 별개예요'라고 사과한다.",
+         "[言|い]い[訳|わけ]に[聞|き]こえないよう[理由|りゆう]は[話|はな]さず、ただ[謝|あやま]ってしばらく[距離|きょり]を[置|お]く。\n변명처럼 들리지 않도록 이유는 말하지 않고 사과한 뒤 잠시 거리를 둔다."]),
     7: (["この[七日間|なのかかん]、あなたに[会|あ]うのが[毎日|まいにち][楽|たの]しみでした。\n이 7일 동안 당신을 만나는 것이 매일 기대됐어요.",
          "これからも、あなたの[隣|となり]にいてもいいですか。\n앞으로도 당신 곁에 있어도 될까요?"],
-        ["これからも[一緒|いっしょ]にいたいと[伝|つた]える。\n앞으로도 함께 있고 싶다고 말한다.",
-         "まだ[友達|ともだち]でいたいと[正直|しょうじき]に[伝|つた]える。\n아직은 친구로 있고 싶다고 솔직하게 말한다."]),
+        ["「まだ[分|わ]からないこともあるけど、それでも[隣|となり]にいたい」と[正直|しょうじき]に[伝|つた]える。\n'아직 모르는 것도 있지만 그래도 곁에 있고 싶어요'라고 솔직하게 전한다.",
+         "ソイを[急|せ]かさないよう、「これからもゆっくり[知|し]っていけたら」と[答|こた]える。\n소이를 재촉하지 않도록 '앞으로도 천천히 알아가면 좋겠어요'라고 답한다."]),
 }
 
 DAY_NARRATION = {
@@ -321,15 +321,17 @@ def seed_dating_sim_content(conn):
     exists = conn.execute(
         "SELECT content_version FROM dating_sim_characters WHERE character_id=?", (CHARACTER_ID,)
     ).fetchone()
-    if exists and int(exists["content_version"] or 1) >= CONTENT_VERSION:
+    existing_version = int(exists["content_version"] or 1) if exists else 0
+    if exists and existing_version >= CONTENT_VERSION:
         return
     if exists:
-        conn.execute(
-            "UPDATE dating_sim_progress SET day=1, affection=50, pending_location=NULL, "
-            "completed=0, ending_id=NULL, scenario_run=scenario_run+1, updated_at=? "
-            "WHERE character_id=?",
-            (_now(), CHARACTER_ID),
-        )
+        if existing_version < 2:
+            conn.execute(
+                "UPDATE dating_sim_progress SET day=1, affection=50, pending_location=NULL, "
+                "completed=0, ending_id=NULL, scenario_run=scenario_run+1, updated_at=? "
+                "WHERE character_id=?",
+                (_now(), CHARACTER_ID),
+            )
         conn.execute("DELETE FROM dating_sim_scenarios WHERE character_id=?", (CHARACTER_ID,))
         conn.execute("DELETE FROM dating_sim_endings WHERE character_id=?", (CHARACTER_ID,))
         conn.execute("DELETE FROM dating_sim_locations WHERE character_id=?", (CHARACTER_ID,))
@@ -425,12 +427,17 @@ def load_story_from_db(conn, character_id, seed_key=None):
             chosen = _stable_weighted_choice(
                 candidates, f"{seed_key}:{character_id}:{day}:{location_id}"
             )
+        choices = [
+            {"text": chosen["choice_a_text"], "affection": chosen["choice_a_affection"]},
+            {"text": chosen["choice_b_text"], "affection": chosen["choice_b_affection"]},
+        ]
+        if seed_key is not None:
+            order_key = f"{seed_key}:{character_id}:{day}:{location_id}:choice-order"
+            if hashlib.sha256(order_key.encode("utf-8")).digest()[0] & 1:
+                choices.reverse()
         scenes.setdefault(day, {})[location_id] = {
             "lines": [chosen["intro_line"], chosen["activity_line"], chosen["outro_line"]],
-            "choices": [
-                {"text": chosen["choice_a_text"], "affection": chosen["choice_a_affection"]},
-                {"text": chosen["choice_b_text"], "affection": chosen["choice_b_affection"]},
-            ],
+            "choices": choices,
         }
     ending_rows = conn.execute(
         "SELECT * FROM dating_sim_endings WHERE character_id=? ORDER BY sort_order", (character_id,)
@@ -484,7 +491,7 @@ def random_book_id():
     return _book_id(random.choice(books)) if books else None
 
 
-def story_for(story_id=None):
+def story_for(story_id=None, seed_key=None):
     """정적 소이 이야기 또는 EPUB 제목에서 만든 순화 로맨스를 돌려준다.
 
     EPUB 본문은 성인 대사를 포함할 수 있어 절대 게임 대사로 복사하지 않는다.
@@ -538,6 +545,12 @@ def story_for(story_id=None):
         },
     }
     scenes = _seven_day_scenes(book_location_lines, "하루", "ハル")
+    if seed_key is not None:
+        for day, day_scenes in scenes.items():
+            for location_id, scene in day_scenes.items():
+                order_key = f"{seed_key}:{story_id}:{day}:{location_id}:choice-order"
+                if hashlib.sha256(order_key.encode("utf-8")).digest()[0] & 1:
+                    scene["choices"].reverse()
     endings = ENDINGS
     return {"id": story_id, "name": "하루", "title": f"{source_title}에서 영감받은 7일",
             "character_image": "/dating-sim/static/haru.png",

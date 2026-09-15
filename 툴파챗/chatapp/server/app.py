@@ -644,7 +644,7 @@ def _dating_story(story_id=None, variant_seed=None):
         if story:
             return story
     try:
-        return dating_sim_story.story_for(story_id)
+        return dating_sim_story.story_for(story_id, seed_key=variant_seed)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
