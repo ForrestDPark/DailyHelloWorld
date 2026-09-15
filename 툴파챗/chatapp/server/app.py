@@ -620,16 +620,25 @@ class DatingSimRestartRequest(BaseModel):
     story_id: str | None = None
 
 
-def _dating_story(story_id=None):
+def _dating_story(story_id=None, variant_seed=None):
     # ★ 2026-09-15: "스토리 시나리오전개쪽에서 데이터베이스 만들어줘" 요청 —
     # 기본 캐릭터(소이)는 이제 DB(dating_sim_scenarios 등)에서 요일·장소별
-    # 여러 변형 중 하나를 무작위로 골라 읽는다. EPUB 영감 이야기(book:...)는
+    # 여러 변형 중 하나를 고른다. 사용자·회차 키가 같으면 진행 중인 장면이
+    # 조회 사이에 바뀌지 않는다. EPUB 영감 이야기(book:...)는
     # 여전히 절대 DB에 안 담고 그때그때 안전한 템플릿으로 만든다(기존 방식).
     if not story_id:
         conn = get_conn()
         try:
             dating_sim_story.seed_dating_sim_content(conn)
-            story = dating_sim_story.load_story_from_db(conn, dating_sim_story.CHARACTER_ID)
+            run_row = conn.execute(
+                "SELECT scenario_run FROM dating_sim_progress WHERE username=? AND character_id=?",
+                (variant_seed or "", dating_sim_story.CHARACTER_ID),
+            ).fetchone()
+            scenario_run = int(run_row["scenario_run"]) if run_row else 0
+            story = dating_sim_story.load_story_from_db(
+                conn, dating_sim_story.CHARACTER_ID,
+                seed_key=f"{variant_seed or ''}:run-{scenario_run}",
+            )
         finally:
             conn.close()
         if story:
@@ -704,10 +713,11 @@ def _dating_sim_state_payload(row, story):
 @app.get("/api/dating-sim/state")
 def dating_sim_state(request: Request, story_id: str | None = None):
     _require_signed_in_user(request)
+    username = _request_username(request)
     conn = get_conn()
     try:
-        story = _dating_story(story_id)
-        row = _dating_sim_row(conn, _request_username(request), story)
+        story = _dating_story(story_id, username)
+        row = _dating_sim_row(conn, username, story)
     finally:
         conn.close()
     return _dating_sim_state_payload(row, story)
@@ -840,7 +850,7 @@ def dating_sim_visit(body: DatingSimLocationRequest, request: Request):
     """장소를 골라 오늘의 장면을 연다 — 선택은 아직 안 하고 대사·선택지만 반환한다."""
     _require_signed_in_user(request)
     username = _request_username(request)
-    story = _dating_story(body.story_id)
+    story = _dating_story(body.story_id, username)
     conn = get_conn()
     try:
         row = _dating_sim_row(conn, username, story)
@@ -867,7 +877,7 @@ def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
     """진행 중인 장면의 선택지를 골라 호감도를 반영하고 다음 날로 넘어간다."""
     _require_signed_in_user(request)
     username = _request_username(request)
-    story = _dating_story(body.story_id)
+    story = _dating_story(body.story_id, username)
     conn = get_conn()
     try:
         row = _dating_sim_row(conn, username, story)
@@ -908,18 +918,20 @@ def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
 def dating_sim_restart(request: Request, body: DatingSimRestartRequest | None = None):
     _require_signed_in_user(request)
     username = _request_username(request)
-    story = _dating_story(body.story_id if body else None)
+    story = _dating_story(body.story_id if body else None, username)
     conn = get_conn()
     try:
         conn.execute(
             "UPDATE dating_sim_progress SET day=1, affection=50, pending_location=NULL, completed=0, "
-            "ending_id=NULL, updated_at=? WHERE username=? AND character_id=?",
+            "ending_id=NULL, scenario_run=scenario_run+1, updated_at=? WHERE username=? AND character_id=?",
             (_now(), username, story["id"]),
         )
         conn.commit()
         row = _dating_sim_row(conn, username, story)
     finally:
         conn.close()
+    # 기본 DB 이야기는 새 회차 번호로 변형을 다시 선택한다. EPUB 템플릿에는 영향 없다.
+    story = _dating_story(body.story_id if body else None, username)
     return _dating_sim_state_payload(row, story)
 
 

@@ -167,6 +167,33 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
             seen.add(story["scenes"][1]["cafe"]["lines"][1])
         self.assertGreater(len(seen), 1, "40번을 다시 골라도 항상 같은 대사만 나오면 다양성이 없는 것")
 
+    def test_same_account_keeps_the_same_variant_across_api_requests(self):
+        first = app.dating_sim_visit(
+            app.DatingSimLocationRequest(location="cafe"), request("stable-reader")
+        )
+        refreshed = app.dating_sim_state(request("stable-reader"))
+        self.assertEqual(first["scene"]["lines"], refreshed["scene"]["lines"])
+        self.assertEqual(first["scene"]["choices"], refreshed["scene"]["choices"])
+
+    def test_seeded_story_loading_is_stable(self):
+        dating_sim_story.seed_dating_sim_content(self.conn)
+        first = dating_sim_story.load_story_from_db(
+            self.conn, dating_sim_story.CHARACTER_ID, seed_key="reader:run-1"
+        )
+        second = dating_sim_story.load_story_from_db(
+            self.conn, dating_sim_story.CHARACTER_ID, seed_key="reader:run-1"
+        )
+        self.assertEqual(first["scenes"], second["scenes"])
+
+    def test_restart_advances_the_scenario_run(self):
+        app.dating_sim_state(request("replay-reader"))
+        app.dating_sim_restart(request("replay-reader"))
+        row = self.conn.execute(
+            "SELECT scenario_run FROM dating_sim_progress WHERE username=? AND character_id=?",
+            ("replay-reader", dating_sim_story.CHARACTER_ID),
+        ).fetchone()
+        self.assertEqual(row["scenario_run"], 1)
+
     def test_hidden_event_is_rare_but_reachable(self):
         dating_sim_story.seed_dating_sim_content(self.conn)
         hidden_line = dating_sim_story.HIDDEN_EVENTS[5]

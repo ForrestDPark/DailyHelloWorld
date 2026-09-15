@@ -364,9 +364,22 @@ def seed_dating_sim_content(conn):
     conn.commit()
 
 
-def load_story_from_db(conn, character_id):
+def _stable_weighted_choice(candidates, seed_key):
+    """같은 회차·장면은 항상 같은 변형을 고르는 결정론적 가중 선택이다."""
+    weights = [max(1, int(row["weight"] or 1)) for row in candidates]
+    total = sum(weights)
+    point = int.from_bytes(hashlib.sha256(seed_key.encode("utf-8")).digest()[:8], "big") % total
+    for row, weight in zip(candidates, weights):
+        if point < weight:
+            return row
+        point -= weight
+    return candidates[-1]
+
+
+def load_story_from_db(conn, character_id, seed_key=None):
     """DB에 시드된 캐릭터를 story_for()와 같은 모양의 dict로 만든다. 장면마다
-    variant 중 weight 비례로 하나를 무작위로 골라(재플레이 다양성) 반환한다."""
+    variant 중 weight 비례로 하나를 고른다. seed_key가 있으면 같은 사용자·회차의
+    장면은 재조회해도 변하지 않고, 생략하면 콘텐츠 테스트용 무작위 선택을 유지한다."""
     character = conn.execute(
         "SELECT * FROM dating_sim_characters WHERE character_id=?", (character_id,)
     ).fetchone()
@@ -387,7 +400,12 @@ def load_story_from_db(conn, character_id):
         by_slot.setdefault((row["day"], row["location_id"]), []).append(row)
     scenes = {}
     for (day, location_id), candidates in by_slot.items():
-        chosen = random.choices(candidates, weights=[row["weight"] for row in candidates], k=1)[0]
+        if seed_key is None:
+            chosen = random.choices(candidates, weights=[row["weight"] for row in candidates], k=1)[0]
+        else:
+            chosen = _stable_weighted_choice(
+                candidates, f"{seed_key}:{character_id}:{day}:{location_id}"
+            )
         scenes.setdefault(day, {})[location_id] = {
             "lines": [chosen["intro_line"], chosen["activity_line"], chosen["outro_line"]],
             "choices": [

@@ -299,6 +299,7 @@ def init_db():
         """
     )
     _ensure_column(conn, "messages", "room_id", "TEXT NOT NULL DEFAULT 'group'")
+    _ensure_column(conn, "dating_sim_progress", "scenario_run", "INTEGER NOT NULL DEFAULT 0")
     _ensure_column(conn, "messages", "reply_message_id", "INTEGER")
     _ensure_column(conn, "pending_turns", "room_id", "TEXT NOT NULL DEFAULT 'group'")
     _ensure_column(conn, "personas", "group_name", "TEXT")
