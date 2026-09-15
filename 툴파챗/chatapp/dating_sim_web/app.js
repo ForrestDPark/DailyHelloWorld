@@ -6,6 +6,8 @@ let listeningMode = false;
 let speechSequence = 0;
 let audioManifest = {};
 const recordedAudio = new Audio();
+let pendingPlaybackResolve = null;
+let choiceInFlight = false;
 
 function storyQuery() {
   return storyId ? `?story_id=${encodeURIComponent(storyId)}` : "";
@@ -91,7 +93,7 @@ function japaneseVoice() {
 }
 
 function updateListeningControls(status = listeningMode ? "듣는 중" : "꺼짐") {
-  const supported = Object.keys(audioManifest).length > 0 ||
+  const supported = Object.values(audioManifest).some((clips) => Object.keys(clips || {}).length > 0) ||
     ("speechSynthesis" in window && "SpeechSynthesisUtterance" in window);
   $("listening-toggle").disabled = !supported;
   $("listening-toggle").classList.toggle("active", listeningMode);
@@ -110,9 +112,68 @@ function stopListening({ turnOff = true } = {}) {
   recordedAudio.removeAttribute("src");
   recordedAudio.load();
   window.speechSynthesis?.cancel();
+  if (pendingPlaybackResolve) pendingPlaybackResolve();
   if (turnOff) listeningMode = false;
   updateListeningControls(turnOff ? "꺼짐" : "대기 중");
   $("portrait").classList.remove("speaking");
+}
+
+function playStandalone(text, role, status) {
+  text = japaneseText(text);
+  if (!text || !listeningMode) return Promise.resolve();
+  const sequence = ++speechSequence;
+  const recordedUrl = audioManifest[role]?.[text];
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      pendingPlaybackResolve = null;
+      $("portrait").classList.remove("speaking");
+      resolve();
+    };
+    pendingPlaybackResolve = finish;
+    const deviceFallback = () => {
+      if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
+        finish();
+        return;
+      }
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = "ja-JP";
+      utterance.rate = 0.88;
+      const voice = japaneseVoice();
+      if (voice) utterance.voice = voice;
+      utterance.onstart = () => {
+        if (sequence !== speechSequence) return finish();
+        updateListeningControls(`${status} · 기기 음성`);
+        $("portrait").classList.toggle("speaking", role === "female");
+      };
+      utterance.onend = finish;
+      utterance.onerror = finish;
+      window.speechSynthesis.speak(utterance);
+    };
+    if (!recordedUrl) {
+      deviceFallback();
+      return;
+    }
+    recordedAudio.src = recordedUrl;
+    recordedAudio.onplay = () => {
+      if (sequence !== speechSequence) return finish();
+      updateListeningControls(`${status} · OpenAI 생성 음성`);
+      $("portrait").classList.toggle("speaking", role === "female");
+    };
+    recordedAudio.onended = finish;
+    recordedAudio.onerror = () => {
+      recordedAudio.onerror = null;
+      deviceFallback();
+    };
+    recordedAudio.play().catch(() => {
+      if (recordedAudio.onerror) {
+        recordedAudio.onerror = null;
+        deviceFallback();
+      }
+    });
+  });
 }
 
 function finishSpokenLine(sequence) {
@@ -159,7 +220,8 @@ function speakCurrentLine() {
     return;
   }
   const sequence = ++speechSequence;
-  const recordedUrl = audioManifest[text];
+  const role = line.speaker === "narrator" ? "male" : "female";
+  const recordedUrl = audioManifest[role]?.[text];
   if (!recordedUrl) {
     speakWithDevice(text, line, sequence);
     return;
@@ -319,6 +381,10 @@ function renderChoiceResult(state) {
   renderAnnotatedText($("result-text"), state.choice_result.line);
   $("result-affection").textContent = `${delta > 0 ? "+" : ""}${delta} · 현재 호감도 ${state.affection}`;
   showView("result-view");
+  if (listeningMode) {
+    playStandalone(state.choice_result.line, "female", `${state.character_name} 대사 재생 중`)
+      .then(() => updateListeningControls("다음 장면을 눌러 계속"));
+  }
 }
 
 function renderEnding(state) {
@@ -360,11 +426,19 @@ async function visitLocation(locationId) {
 }
 
 async function chooseOption(choiceIndex) {
+  if (choiceInFlight) return;
+  choiceInFlight = true;
   if (!recordedAudio.paused || window.speechSynthesis?.speaking) stopListening({ turnOff: false });
   try {
-    render(await api("/api/dating-sim/choose", { method: "POST", body: JSON.stringify({ choice_index: choiceIndex, story_id: storyId }) }));
+    const state = await api("/api/dating-sim/choose", { method: "POST", body: JSON.stringify({ choice_index: choiceIndex, story_id: storyId }) });
+    if (listeningMode) {
+      await playStandalone(sceneChoices[choiceIndex].text, "male", "내 대사 재생 중");
+    }
+    render(state);
   } catch (e) {
     alert(e.message);
+  } finally {
+    choiceInFlight = false;
   }
 }
 

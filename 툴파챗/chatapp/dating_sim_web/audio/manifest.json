@@ -1,8 +1,14 @@
 {
-  "version": 1,
+  "version": 2,
   "model": "gpt-4o-mini-tts",
-  "voice": "marin",
+  "voices": {
+    "female": "marin",
+    "male": "cedar"
+  },
   "ai_generated": true,
   "generated_at": "2026-09-15T12:44:00+00:00",
-  "clips": {}
+  "clips": {
+    "female": {},
+    "male": {}
+  }
 }

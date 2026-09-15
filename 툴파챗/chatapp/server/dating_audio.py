@@ -14,12 +14,19 @@ from server import dating_sim_story
 
 
 MODEL = "gpt-4o-mini-tts"
-VOICE = "marin"
-INSTRUCTIONS = (
-    "Speak in natural Japanese with a warm, clear, charming young adult female voice. "
-    "Use subtle emotion appropriate for a visual novel. Do not add or omit words. "
-    "Avoid exaggerated anime acting."
-)
+VOICES = {"female": "marin", "male": "cedar"}
+INSTRUCTIONS = {
+    "female": (
+        "Speak in natural Japanese with a warm, clear, charming young adult female voice. "
+        "Use subtle emotion appropriate for a visual novel. Do not add or omit words. "
+        "Avoid exaggerated anime acting."
+    ),
+    "male": (
+        "Speak in natural Japanese with a calm, thoughtful young adult male voice. "
+        "This is the protagonist's inner monologue or selected reply in a visual novel. "
+        "Do not add or omit words. Avoid exaggerated anime acting."
+    ),
+}
 FURIGANA_RE = re.compile(r"\[([^\]|]+)\|([^\]]+)\]")
 JAPANESE_RE = re.compile(r"[\u3040-\u30ff\u3400-\u9fff]")
 
@@ -57,32 +64,54 @@ def _book_template_story():
         dating_sim_story._book_title = original_title
 
 
-def build_catalog() -> list[str]:
-    sources = [
-        dating_sim_story.DAY_NARRATION,
-        dating_sim_story.DAY_OPENINGS,
-        dating_sim_story.DAY_BEATS,
+def build_catalog() -> list[tuple[str, str]]:
+    female_sources = [
+        # 장면의 첫째·셋째 줄, 장소 사건, 여주 반응과 엔딩은 여주 목소리다.
+        [beat[0] for beat in dating_sim_story.DAY_BEATS.values()],
         dating_sim_story.LOCATION_LINES,
         dating_sim_story.VARIANT_2_LOCATION_LINES,
         dating_sim_story.HIDDEN_EVENTS,
         dating_sim_story.ENDINGS,
-        _book_template_story(),
         "[嬉|うれ]しいです。[少|すこ]し[近|ちか]くなれた[気|き]がします。",
         "[大丈夫|だいじょうぶ]です。ゆっくり[知|し]っていきましょう。",
     ]
-    return sorted({spoken for raw in _strings(sources) if (spoken := spoken_text(raw))})
+    book_story = _book_template_story()
+    female_sources.extend(
+        scene["lines"]
+        for day_scenes in book_story["scenes"].values()
+        for scene in day_scenes.values()
+    )
+    female_sources.append(book_story["endings"])
+    male_sources = [
+        dating_sim_story.DAY_NARRATION,
+        [beat[1] for beat in dating_sim_story.DAY_BEATS.values()],
+    ]
+    male_sources.extend(
+        scene["choices"]
+        for day_scenes in book_story["scenes"].values()
+        for scene in day_scenes.values()
+    )
+    catalog = {
+        (role, spoken)
+        for role, sources in (("female", female_sources), ("male", male_sources))
+        for raw in _strings(sources)
+        if (spoken := spoken_text(raw))
+    }
+    return sorted(catalog)
 
 
-def clip_name(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:20] + ".mp3"
+def clip_name(role: str, text: str) -> str:
+    return hashlib.sha256(f"{role}\0{text}".encode("utf-8")).hexdigest()[:20] + ".mp3"
 
 
-def request_speech(api_key: str, text: str, voice: str = VOICE) -> bytes:
+def request_speech(api_key: str, role: str, text: str, voice: str | None = None) -> bytes:
+    if role not in VOICES:
+        raise ValueError("지원하지 않는 미연시 음성 역할입니다")
     payload = json.dumps({
         "model": MODEL,
-        "voice": voice,
+        "voice": voice or VOICES[role],
         "input": text,
-        "instructions": INSTRUCTIONS,
+        "instructions": INSTRUCTIONS[role],
         "response_format": "mp3",
     }, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(
@@ -99,11 +128,11 @@ def request_speech(api_key: str, text: str, voice: str = VOICE) -> bytes:
         raise RuntimeError(f"OpenAI 음성 API 오류 ({error.code}): {detail}") from error
 
 
-def write_manifest(output_dir: Path, clips: dict[str, str], voice: str = VOICE) -> None:
+def write_manifest(output_dir: Path, clips: dict[str, dict[str, str]]) -> None:
     manifest = {
-        "version": 1,
+        "version": 2,
         "model": MODEL,
-        "voice": voice,
+        "voices": VOICES,
         "ai_generated": True,
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
         "clips": clips,

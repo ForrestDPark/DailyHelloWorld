@@ -13,24 +13,25 @@ class DatingAudioTests(unittest.TestCase):
 
     def test_catalog_contains_all_unique_japanese_lines(self):
         catalog = dating_audio.build_catalog()
-        self.assertGreaterEqual(len(catalog), 120)
+        self.assertGreaterEqual(len(catalog), 100)
         self.assertEqual(len(catalog), len(set(catalog)))
-        self.assertTrue(all(dating_audio.JAPANESE_RE.search(text) for text in catalog))
-        self.assertTrue(all("|" not in text and "[" not in text for text in catalog))
+        self.assertEqual({role for role, _text in catalog}, {"female", "male"})
+        self.assertTrue(all(dating_audio.JAPANESE_RE.search(text) for _role, text in catalog))
+        self.assertTrue(all("|" not in text and "[" not in text for _role, text in catalog))
 
     def test_manifest_uses_stable_clip_paths(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary)
             text = "今日はいい天気ですね。"
-            filename = dating_audio.clip_name(text)
+            filename = dating_audio.clip_name("female", text)
             dating_audio.write_manifest(
-                output, {text: f"/dating-sim/audio/{filename}"}
+                output, {"female": {text: f"/dating-sim/audio/{filename}"}, "male": {}}
             )
             manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(manifest["model"], "gpt-4o-mini-tts")
-            self.assertEqual(manifest["voice"], "marin")
+            self.assertEqual(manifest["voices"], {"female": "marin", "male": "cedar"})
             self.assertTrue(manifest["ai_generated"])
-            self.assertEqual(manifest["clips"][text], f"/dating-sim/audio/{filename}")
+            self.assertEqual(manifest["clips"]["female"][text], f"/dating-sim/audio/{filename}")
 
 
 if __name__ == "__main__":

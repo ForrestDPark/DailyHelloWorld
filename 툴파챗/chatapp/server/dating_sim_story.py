@@ -309,9 +309,9 @@ def _seven_day_scenes(location_lines, character_name_ko="소이", character_name
         for location, day_lines in location_lines.items():
             activity = day_lines[day] if isinstance(day_lines, dict) else day_lines
             scene_lines = [
-                lines[0].replace("ソイ", character_name_jp),
+                lines[0].replace("ソイ", character_name_jp).replace("소이", character_name_ko),
                 activity,
-                lines[1].replace("ソイ", character_name_jp),
+                lines[1].replace("ソイ", character_name_jp).replace("소이", character_name_ko),
             ]
             scenes[day][location] = {"lines": scene_lines, "choices": [
                 {"text": choices[0].replace("소이", character_name_ko), "affection": 8},
@@ -621,7 +621,7 @@ def story_for(story_id=None, seed_key=None):
                 if hashlib.sha256(order_key.encode("utf-8")).digest()[0] & 1:
                     scene["choices"].reverse()
     endings = ENDINGS
-    return {"id": story_id, "name": "하루", "title": f"{source_title}에서 영감받은 7일",
+    return {"id": story_id, "name": "ハル", "title": f"{source_title}에서 영감받은 7일",
             "character_image": "/dating-sim/static/haru.png",
             "character_images": {"first": "/dating-sim/static/haru-first.png",
                                  "walk": "/dating-sim/static/haru-walk.png",
