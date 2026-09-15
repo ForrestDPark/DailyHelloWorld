@@ -316,9 +316,6 @@ $("video-bulk-delete").addEventListener("click",async()=>{
     notice(failed?`${targets.length-failed}개 삭제, ${failed}개 실패했습니다.`:`${targets.length}개 파일을 DB에서 삭제했습니다.`,Boolean(failed));
     await loadVideoDownload();
 });
-function pushKeyBytes(value){const padding="=".repeat((4-value.length%4)%4),raw=atob((value+padding).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from([...raw].map(char=>char.charCodeAt(0)))}
-async function ensureDownloadPushSubscription(){if(!("Notification" in window)||!("serviceWorker" in navigator)||!("PushManager" in window))throw new Error("이 기기에서는 웹푸시를 사용할 수 없습니다");const permission=await Notification.requestPermission();if(permission!=="granted")throw new Error("iPhone 설정에서 이 웹앱의 알림을 허용해주세요");const config=await api("/api/push/public_key");if(!config.enabled)throw new Error("서버 웹푸시 키가 설정되지 않았습니다");const registration=await navigator.serviceWorker.register("/static/sw.js?v=20260914-download-push-v1",{updateViaCache:"none"});let subscription=await registration.pushManager.getSubscription();if(!subscription)subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:pushKeyBytes(config.public_key)});const json=subscription.toJSON();await api("/api/push/subscribe",{method:"POST",body:JSON.stringify({endpoint:json.endpoint,keys:json.keys})})}
-$("test-download-push").addEventListener("click",async event=>{const button=event.currentTarget,original=button.textContent;primeCompletionChime();button.disabled=true;button.textContent="알림 연결 중…";try{await ensureDownloadPushSubscription();button.textContent="테스트 전송 중…";const data=await api("/api/shift-alarm/push-test",{method:"POST"});playCompletionChime();notice(`${data.sent}개 기기로 테스트 알림을 보냈고 앱 완료 벨을 재생했습니다.`)}catch(e){notice(e.message,true)}finally{button.disabled=false;button.textContent=original}});
 loadVolume();
 loadNowPlaying();
 loadVideoDownload();

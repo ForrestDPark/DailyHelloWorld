@@ -754,12 +754,6 @@ def _shift_alarm_subtitle_status():
             status.update(state="complete", stage="자막·번역·후리가나·Notion·EPUB 반영 완료",
                           progress=100, completed_at=_now(), updated_at=_now())
             _shift_alarm_subtitle_write_status(status)
-            if status.get("file_id") and status.get("filename"):
-                _shift_alarm_update_processing(
-                    status["file_id"], status["filename"], subtitle_state="complete",
-                    subtitle_progress=100, subtitle_stage=status["stage"],
-                    subtitle_completed_at=status["completed_at"],
-                )
             _shift_alarm_notify_jp_subtitle_study_room(
                 "🔔 오늘 새 회차 자막 추출이 끝났습니다. "
                 "오늘 새로 처리한 회차의 줄거리와 재미있는 표현을 학습카드 위주로 소개해주세요."
@@ -769,11 +763,6 @@ def _shift_alarm_subtitle_status():
             if progress_update and progress_update[0] != status.get("progress"):
                 status.update(progress=progress_update[0], stage=progress_update[1], updated_at=_now())
                 _shift_alarm_subtitle_write_status(status)
-                if status.get("file_id") and status.get("filename"):
-                    _shift_alarm_update_processing(
-                        status["file_id"], status["filename"], subtitle_state="running",
-                        subtitle_progress=status["progress"], subtitle_stage=status["stage"],
-                    )
             try:
                 started = datetime.datetime.fromisoformat(status["created_at"])
             except (KeyError, ValueError):
@@ -781,11 +770,20 @@ def _shift_alarm_subtitle_status():
             if started and (datetime.datetime.now(datetime.timezone.utc) - started).total_seconds() > SHIFT_ALARM_SUBTITLE_TIMEOUT_SECONDS:
                 status.update(state="failed", stage="시간이 오래 걸려 상태를 확인할 수 없습니다. Mac의 터미널 창을 직접 확인하세요")
                 _shift_alarm_subtitle_write_status(status)
-                if status.get("file_id") and status.get("filename"):
-                    _shift_alarm_update_processing(
-                        status["file_id"], status["filename"], subtitle_state="failed",
-                        subtitle_progress=status.get("progress") or 0, subtitle_stage=status["stage"],
-                    )
+    # ★ 2026-09-15: "jufe 194 는 이미 자막 추출되어있는데 버젓이 자막추출
+    # 버튼이 살아있네" 신고의 실제 원인 — 위 running→complete/failed 전환은
+    # 상태 파일이 "running"일 때 딱 한 번만 지나가는 경계(edge)라, 그 순간에
+    # 하필 서버가 다른 버그로 죽어 있었거나 이 동기화 코드가 아직 배포되기
+    # 전이었다면 완료 이력이 영원히 DB에 안 남는다(실측: HODV-21738은
+    # 상태 파일은 complete인데 DB엔 running·5%로 멈춰 있었음). 매 조회마다
+    # 현재 상태를 무조건 다시 써서(level-triggered) 어느 경계를 놓쳤어도
+    # 다음 폴링에서 저절로 맞춰지게 한다.
+    if status.get("file_id") and status.get("filename") and status.get("state") in ("running", "complete", "failed"):
+        _shift_alarm_update_processing(
+            status["file_id"], status["filename"], subtitle_state=status["state"],
+            subtitle_progress=status.get("progress") or 0, subtitle_stage=status.get("stage"),
+            subtitle_completed_at=status.get("completed_at"),
+        )
     return status
 
 
@@ -4428,36 +4426,6 @@ def _send_web_push_to_user(conn, username, title, body_text, url):
             else:
                 print(f"⚠️ 웹 푸시 실패({username}): {exc}")
     return sent
-
-
-@app.post("/api/shift-alarm/push-test")
-def test_shift_alarm_push(request: Request):
-    """소유자가 현재 기기의 완료 알림 구독을 실제 전송으로 점검한다."""
-    _require_owner(request)
-    if not push_enabled():
-        raise HTTPException(status_code=503, detail="서버 웹푸시 키가 설정되지 않았습니다")
-    username = _request_username(request)
-    conn = get_conn()
-    try:
-        subscribed = conn.execute(
-            "SELECT COUNT(*) AS count FROM push_subscriptions WHERE username=?", (username,)
-        ).fetchone()["count"]
-        if not subscribed:
-            raise HTTPException(
-                status_code=409,
-                detail="이 계정에 등록된 웹푸시 기기가 없습니다. 내 프로필에서 알림을 먼저 켜주세요",
-            )
-        sent = _send_web_push_to_user(
-            conn, username, "Shift Alarm 완료 알림 테스트",
-            "웹푸시가 정상입니다. 실제 영상 전송 완료 시에도 알려드립니다.",
-            "/shift-alarm/",
-        )
-        conn.commit()
-    finally:
-        conn.close()
-    if not sent:
-        raise HTTPException(status_code=502, detail="유효한 구독으로 테스트 알림을 보내지 못했습니다")
-    return {"ok": True, "sent": sent}
 
 
 def _deliver_system_update_pushes(conn, username):

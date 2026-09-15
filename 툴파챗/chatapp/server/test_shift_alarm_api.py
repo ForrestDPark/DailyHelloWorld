@@ -389,6 +389,8 @@ class ShiftAlarmApiTests(unittest.TestCase):
             subtitle_dir = root / "subtitle_extract"
             file_id = module._shift_alarm_av4_id(selected)
             with patch.object(module, "SHIFT_ALARM_VIDEO_FILES", av4), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_DIR", root), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_DB", root / "downloads.db"), \
                  patch.object(module, "JP_SUBTITLE_STAGE2_SCRIPT", script), \
                  patch.object(module, "SHIFT_ALARM_SUBTITLE_DIR", subtitle_dir), \
                  patch.object(module, "SHIFT_ALARM_SUBTITLE_STATUS_FILE", subtitle_dir / "status.json"), \
@@ -573,19 +575,6 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertEqual(thread.call_args.kwargs["args"], ("local-owner", video.name))
         self.assertIsNotNone(history["safari_completed_at"])
         thread.return_value.start.assert_called_once()
-
-    def test_owner_can_send_a_realistic_download_push_test(self):
-        conn = sqlite3.connect(":memory:")
-        conn.row_factory = sqlite3.Row
-        conn.execute("CREATE TABLE push_subscriptions (username TEXT)")
-        conn.execute("INSERT INTO push_subscriptions(username) VALUES ('local-owner')")
-        with patch.object(module, "get_conn", return_value=conn), \
-             patch.object(module, "push_enabled", return_value=True), \
-             patch.object(module, "_send_web_push_to_user", return_value=1) as send:
-            result = module.test_shift_alarm_push(owner_request())
-        self.assertEqual(result, {"ok": True, "sent": 1})
-        self.assertEqual(send.call_args.args[1], "local-owner")
-        self.assertEqual(send.call_args.args[2], "Shift Alarm 완료 알림 테스트")
 
     def test_cancel_transfer_unsticks_a_stalled_downloading_row(self):
         """★ 2026-09-14: "전송중에서 멈춰있는데 어떻게하지" — 터널이 전송 도중
