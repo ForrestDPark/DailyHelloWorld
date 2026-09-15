@@ -671,6 +671,46 @@ SHIFT_ALARM_SUBTITLE_TIMEOUT_SECONDS = 3 * 60 * 60
 # 위주로 오늘 회차를 소개해달라는 트리거를 그대로 재사용한다.
 JP_SUBTITLE_STUDY_ROOM_ID = "custom_1fc73254c0"
 
+# ★ 2026-09-15: "자막추출 버튼누를때도 추출진행률 알수있게 ui 만들어줘" 요청 —
+# 이 파이프라인은 영상 다운로드처럼 바이트 단위 진행률이 없어서, 대신
+# subtitle_notion_epub_only.sh가 새 터미널 창에서 남기는 로그 파일
+# (logs/<타임스탬프>_<job_id>.log, subtitle_notion_epub_only.sh 참고)에서
+# subtitle_pipeline_body.sh가 실제로 echo하는 단계 마커 문자열을 찾아 대략적인
+# 퍼센트로 근사한다. 긴 영상은 여러 구간(파트)으로 나뉘어 1~2번 마커가
+# 파트마다 반복되지만, 로그 전체에서 "가장 앞선(가장 큰 퍼센트) 마커"만
+# 취하므로 역행하지 않는다.
+JP_SUBTITLE_LOG_DIR = JP_SUBTITLE_DIR / "logs"
+SHIFT_ALARM_SUBTITLE_PROGRESS_MARKERS = [
+    (8, "🎵 오디오 추출 중", "오디오를 추출하는 중"),
+    (15, "📝 Whisper 자막 분석 중", "Whisper로 일본어 대사를 받아쓰는 중 — 영상 길이에 따라 오래 걸릴 수 있습니다"),
+    (35, "⏱ Whisper 자막 생성 소요", "번역·후리가나를 붙이고 Notion·메모 앱에 기록하는 중"),
+    (60, "📚 EPUB 생성 중", "EPUB 파일을 만드는 중"),
+    (68, "✅ EPUB 생성 완료", "요약·학습카드를 만드는 중"),
+    (78, "📖 Apple Books 문장 동기화", "낭독판 EPUB(음성 낭독)을 만드는 중 — 가장 오래 걸리는 단계입니다"),
+    (92, "⏱ 낭독판 EPUB 생성 소요", "마무리 정리하는 중"),
+    (97, "✅ 정리 완료", "거의 다 됐습니다"),
+]
+
+
+def _shift_alarm_subtitle_log_progress(job_id):
+    if not job_id:
+        return None
+    try:
+        matches = list(JP_SUBTITLE_LOG_DIR.glob(f"*_{job_id}.log"))
+    except OSError:
+        return None
+    if not matches:
+        return None
+    try:
+        content = matches[0].read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return None
+    best = None
+    for percent, marker, stage in SHIFT_ALARM_SUBTITLE_PROGRESS_MARKERS:
+        if marker in content and (best is None or percent > best[0]):
+            best = (percent, stage)
+    return best
+
 
 def _shift_alarm_subtitle_write_status(status):
     SHIFT_ALARM_SUBTITLE_DIR.mkdir(parents=True, exist_ok=True)
@@ -711,6 +751,10 @@ def _shift_alarm_subtitle_status():
                 "오늘 새로 처리한 회차의 줄거리와 재미있는 표현을 학습카드 위주로 소개해주세요."
             )
         else:
+            progress_update = _shift_alarm_subtitle_log_progress(status.get("job_id"))
+            if progress_update and progress_update[0] != status.get("progress"):
+                status.update(progress=progress_update[0], stage=progress_update[1], updated_at=_now())
+                _shift_alarm_subtitle_write_status(status)
             try:
                 started = datetime.datetime.fromisoformat(status["created_at"])
             except (KeyError, ValueError):

@@ -350,6 +350,27 @@ class ShiftAlarmApiTests(unittest.TestCase):
                 )
         self.assertEqual(raised.exception.status_code, 409)
 
+    def test_subtitle_progress_takes_the_furthest_marker_and_never_regresses_across_parts(self):
+        """긴 영상은 여러 구간(파트)으로 나뉘어 처리되므로 1~2번 마커가 파트마다
+        반복된다 — 로그 전체에서 가장 앞선 마커만 골라야 진행률이 뒤로 가지 않는다."""
+        with tempfile.TemporaryDirectory() as directory:
+            log_dir = Path(directory)
+            (log_dir / "20260915_110421_job123.log").write_text(
+                "📝 Whisper 자막 분석 중...\n⏱ Whisper 자막 생성 소요: 20초\n"
+                "📚 EPUB 생성 중...\n"
+                "📺 2편 / 2편\n📝 Whisper 자막 분석 중...\n",  # 2편에서 마커가 다시 나와도 역행 금지
+                encoding="utf-8",
+            )
+            with patch.object(module, "JP_SUBTITLE_LOG_DIR", log_dir):
+                result = module._shift_alarm_subtitle_log_progress("job123")
+        self.assertEqual(result[0], 60)
+
+    def test_subtitle_progress_is_none_before_the_log_file_exists(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(module, "JP_SUBTITLE_LOG_DIR", Path(directory)):
+                result = module._shift_alarm_subtitle_log_progress("no-such-job")
+        self.assertIsNone(result)
+
     def test_video_status_includes_ios_filename_for_finding_the_download_later(self):
         """★ 2026-09-14: "폰에서 아무리 찾아도 파일이 없다"는 신고의 실제 원인 —
         '파일명 복사' 버튼이 원래 긴 파일명(item.filename)을 복사했는데, 정작
