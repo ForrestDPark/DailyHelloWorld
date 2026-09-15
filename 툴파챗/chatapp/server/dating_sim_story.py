@@ -24,7 +24,7 @@ def _now():
 CHARACTER_ID = "soi_cafe"
 CHARACTER_NAME = "소이"
 TOTAL_DAYS = 3
-CONTENT_VERSION = 3
+CONTENT_VERSION = 4
 
 LOCATIONS = {
     "cafe": {"label": "카페", "emoji": "☕"},
@@ -204,7 +204,7 @@ DAY_OPENINGS = {
     ],
     2: [
         "[知|し]らない[番号|ばんごう]からメッセージが[届|とど]いた。「[昨日|きのう]はありがとう。ソイです」\n모르는 번호로 메시지가 왔다. '어제는 고마웠어요. 소이예요.'",
-        "[昨日|きのう]のことを[思|おも]い[出|だ]していると、[偶然|ぐうぜん]ソイらしい[後|うし]ろ[姿|すがた]を[見|み]つけた。\n어제 일을 떠올리던 중 우연히 소이와 닮은 뒷모습을 발견했다.",
+        "もう[一通|いっつう]、ソイからメッセージが[届|とど]いた。「[昨日|きのう]、ちゃんとお[礼|れい]を[言|い]えなかったから」\n소이에게서 메시지가 하나 더 왔다. '어제 제대로 고맙다고 말하지 못해서요.'",
     ],
     3: [
         "[突然|とつぜん]ソイから[電話|でんわ]がかかってきた。「ごめん、[雨|あめ]で[動|うご]けなくて……」\n갑자기 소이에게 전화가 왔다. '미안해요, 비 때문에 움직일 수가 없어서……'",
@@ -230,7 +230,11 @@ DAY_OPENINGS = {
 
 DAY_LOCATION_ACTIONS = {
     1: {"cafe": "카페에서 우연을 마주한다", "park": "날아온 책갈피를 줍는다", "school": "떨어진 공책을 건넨다"},
-    2: {"cafe": "메시지 속 카페로 간다", "park": "공원 입구에서 답한다", "school": "학교 앞에서 기다린다"},
+    2: {
+        "cafe": "“지금 잠깐 이야기할래요?”라고 답한다",
+        "park": "“기억하고 있어요, 소이 씨”라고 솔직히 답한다",
+        "school": "“저야말로 고마웠어요”라고 정중히 답한다",
+    },
     3: {"cafe": "가까운 카페로 부른다", "park": "우산을 들고 공원으로 간다", "school": "학교 현관으로 달려간다"},
     4: {"cafe": "조용한 구석 자리를 잡는다", "park": "밤 산책을 제안한다", "school": "사람 없는 곳에서 듣는다"},
     5: {"cafe": "함께 마실 것을 고른다", "park": "사진 속 장소를 찾아간다", "school": "추억이 있는 길로 간다"},
@@ -308,16 +312,23 @@ def _seven_day_scenes(location_lines, character_name_ko="소이", character_name
         scenes[day] = {}
         for location, day_lines in location_lines.items():
             activity = day_lines[day] if isinstance(day_lines, dict) else day_lines
+            positive_score, negative_score = choice_scores(day, location, 1)
             scene_lines = [
                 lines[0].replace("ソイ", character_name_jp).replace("소이", character_name_ko),
                 activity,
                 lines[1].replace("ソイ", character_name_jp).replace("소이", character_name_ko),
             ]
             scenes[day][location] = {"lines": scene_lines, "choices": [
-                {"text": choices[0].replace("소이", character_name_ko), "affection": 8},
-                {"text": choices[1].replace("소이", character_name_ko), "affection": -4},
+                {"text": choices[0].replace("ソイ", character_name_jp).replace("소이", character_name_ko), "affection": positive_score},
+                {"text": choices[1].replace("ソイ", character_name_jp).replace("소이", character_name_ko), "affection": negative_score},
             ]}
     return scenes
+
+
+def choice_scores(day, location_id, variant):
+    """장면별로 +7~+11/-2~-6 사이의 일관된 점수를 배정한다."""
+    digest = hashlib.sha256(f"score:{day}:{location_id}:{variant}".encode()).digest()
+    return 7 + digest[0] % 5, -(2 + digest[1] % 5)
 
 
 SCENES = _seven_day_scenes(LOCATION_LINES)
@@ -379,6 +390,30 @@ HIDDEN_EVENTS = {
     7: "[恥|は]ずかしそうに、[小|ちい]さな[包|つつ]みを[差|さ]し[出|だ]す。\n부끄러운 듯 작은 선물 꾸러미를 건넨다.",
 }
 
+POSITIVE_REACTIONS = [
+    "そう[言|い]ってくれると、なんだか[安心|あんしん]します。\n그렇게 말해주니 왠지 안심이 돼요.",
+    "ふふ、あなたらしい[答|こた]えですね。[嬉|うれ]しいです。\n후후, 당신다운 대답이네요. 기뻐요.",
+    "[今|いま]の[言葉|ことば]、ちゃんと[覚|おぼ]えておきますね。\n방금 그 말, 제대로 기억해 둘게요.",
+    "もう[少|すこ]しだけ、あなたのことを[知|し]りたくなりました。\n당신을 조금 더 알고 싶어졌어요.",
+    "[同|おな]じことを[考|かんが]えていたなんて、ちょっと[驚|おどろ]きました。\n같은 생각을 하고 있었다니 조금 놀랐어요.",
+    "ありがとう。[今日|きょう]ここに[来|き]てよかったです。\n고마워요. 오늘 여기 오길 잘했어요.",
+]
+NEGATIVE_REACTIONS = [
+    "そうですか……でも、[正直|しょうじき]に[話|はな]してくれてありがとう。\n그렇군요……그래도 솔직하게 말해줘서 고마워요.",
+    "[少|すこ]し[意外|いがい]でした。まだお[互|たが]いを[知|し]る[途中|とちゅう]ですものね。\n조금 뜻밖이었어요. 아직 서로 알아가는 중이니까요.",
+    "わかりました。[急|いそ]がずにいきましょう。\n알겠어요. 서두르지 말고 천천히 가요.",
+    "うん……その[言葉|ことば]の[意味|いみ]、もう[少|すこ]し[考|かんが]えてみます。\n응……그 말의 의미를 조금 더 생각해 볼게요.",
+    "ちょっと[寂|さび]しいけれど、[無理|むり]はしてほしくないです。\n조금 쓸쓸하지만 무리하길 바라지는 않아요.",
+    "そっか。じゃあ、[次|つぎ]はもう[少|すこ]しうまく[話|はな]せるといいですね。\n그렇구나. 다음에는 조금 더 잘 이야기할 수 있으면 좋겠네요.",
+]
+
+
+def choice_reaction(day, location_id, affection_delta, story_id):
+    reactions = POSITIVE_REACTIONS if affection_delta > 0 else NEGATIVE_REACTIONS
+    key = f"reaction:{story_id}:{day}:{location_id}:{affection_delta}"
+    index = int.from_bytes(hashlib.sha256(key.encode()).digest()[:4], "big") % len(reactions)
+    return reactions[index]
+
 
 def seed_dating_sim_content(conn):
     """CHARACTER_ID 콘텐츠를 버전별로 시드한다. 콘텐츠가 갱신되면 진행 기록은
@@ -422,6 +457,7 @@ def seed_dating_sim_content(conn):
         for location_id in LOCATIONS:
             for variant_number, (location_lines, weight) in enumerate(variants, start=1):
                 activity = location_lines[location_id][day]
+                positive_score, negative_score = choice_scores(day, location_id, variant_number)
                 conn.execute(
                     "INSERT INTO dating_sim_scenarios "
                     "(character_id,day,location_id,variant,weight,intro_line,activity_line,outro_line,"
@@ -429,16 +465,17 @@ def seed_dating_sim_content(conn):
                     "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                     (CHARACTER_ID, day, location_id, variant_number,
                      weight, beat_lines[0], activity, beat_lines[1],
-                     beat_choices[0], 8, beat_choices[1], -4),
+                     beat_choices[0], positive_score, beat_choices[1], negative_score),
                 )
             if day in HIDDEN_EVENTS:
+                positive_score, negative_score = choice_scores(day, location_id, 3)
                 conn.execute(
                     "INSERT INTO dating_sim_scenarios "
                     "(character_id,day,location_id,variant,weight,intro_line,activity_line,outro_line,"
                     "choice_a_text,choice_a_affection,choice_b_text,choice_b_affection) "
                     "VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                     (CHARACTER_ID, day, location_id, 3, 1, beat_lines[0], HIDDEN_EVENTS[day], beat_lines[1],
-                     beat_choices[0], 8, beat_choices[1], -4),
+                     beat_choices[0], positive_score, beat_choices[1], negative_score),
                 )
     for order, ending in enumerate(ENDINGS):
         conn.execute(
@@ -523,6 +560,24 @@ def load_story_from_db(conn, character_id, seed_key=None):
 
 JAPANESE_EPUB_ROOT = Path("/Users/forrestdpark/Desktop/BlogImage/av완성작")
 BOOK_STORY_RE = re.compile(r"^book:([0-9a-f]{20})$")
+BOOK_CHARACTER_PROFILES = [
+    {"jp": "ハル", "ko": "하루", "image": "/dating-sim/static/haru.png"},
+    {"jp": "アカリ", "ko": "아카리", "image": "/dating-sim/static/akari.png"},
+    {"jp": "ミオ", "ko": "미오", "image": "/dating-sim/static/mio.png"},
+    {"jp": "レイナ", "ko": "레이나", "image": "/dating-sim/static/reina.png"},
+    {"jp": "ユナ", "ko": "유나", "image": "/dating-sim/static/akari.png"},
+    {"jp": "ナナミ", "ko": "나나미", "image": "/dating-sim/static/mio.png"},
+    {"jp": "カエデ", "ko": "카에데", "image": "/dating-sim/static/reina.png"},
+    {"jp": "サクラ", "ko": "사쿠라", "image": "/dating-sim/static/haru.png"},
+]
+
+
+def book_character_profile(story_id, source_hint=""):
+    """작품 메타데이터의 이름을 우선하고, 없으면 작품별 고정 프로필을 배정한다."""
+    if re.search(r"츠바키[ _·-]*리카", source_hint, re.IGNORECASE):
+        return {"jp": "椿リカ", "ko": "츠바키 리카", "image": "/dating-sim/static/reina.png"}
+    digest = hashlib.sha256(story_id.encode("utf-8")).digest()
+    return BOOK_CHARACTER_PROFILES[digest[0] % len(BOOK_CHARACTER_PROFILES)]
 
 
 def _book_id(path):
@@ -579,6 +634,7 @@ def story_for(story_id=None, seed_key=None):
     if not path:
         raise ValueError("작품을 찾을 수 없습니다")
     source_title = _book_title(path)
+    profile = book_character_profile(story_id, f"{source_title} {path.stem}")
     locations = {
         "first": {"label": "우연히 마주친 곳", "emoji": "✨"},
         "walk": {"label": "함께 걷는 길", "emoji": "🌙"},
@@ -613,7 +669,7 @@ def story_for(story_id=None, seed_key=None):
             7: "[最初|さいしょ]に[譲|ゆず]り[合|あ]った[席|せき]で、[彼女|かのじょ]が[大切|たいせつ]な[言葉|ことば]を[選|えら]ぶ。\n처음 서로 양보했던 자리에서 그녀가 소중한 말을 고른다.",
         },
     }
-    scenes = _seven_day_scenes(book_location_lines, "하루", "ハル")
+    scenes = _seven_day_scenes(book_location_lines, profile["ko"], profile["jp"])
     if seed_key is not None:
         for day, day_scenes in scenes.items():
             for location_id, scene in day_scenes.items():
@@ -621,15 +677,20 @@ def story_for(story_id=None, seed_key=None):
                 if hashlib.sha256(order_key.encode("utf-8")).digest()[0] & 1:
                     scene["choices"].reverse()
     endings = ENDINGS
-    return {"id": story_id, "name": "ハル", "title": f"{source_title}에서 영감받은 7일",
-            "character_image": "/dating-sim/static/haru.png",
-            "character_images": {"first": "/dating-sim/static/haru-first.png",
-                                 "walk": "/dating-sim/static/haru-walk.png",
-                                 "quiet": "/dating-sim/static/haru.png"},
+    map_actions = {
+        day: {location: action.replace("소이", profile["ko"])
+              for location, action in actions.items()}
+        for day, actions in BOOK_DAY_LOCATION_ACTIONS.items()
+    }
+    return {"id": story_id, "name": profile["jp"], "title": f"{source_title}에서 영감받은 7일",
+            "character_image": profile["image"],
+            "character_images": {"first": profile["image"],
+                                 "walk": profile["image"],
+                                 "quiet": profile["image"]},
             "source_title": source_title, "total_days": TOTAL_DAYS, "locations": locations,
             "scenes": scenes, "endings": endings,
-            "day_openings": _daily_openings(seed_key, story_id, "ハル", "하루"),
-            "map_actions": BOOK_DAY_LOCATION_ACTIONS}
+            "day_openings": _daily_openings(seed_key, story_id, profile["jp"], profile["ko"]),
+            "map_actions": map_actions}
 
 
 def ending_for(story, affection):

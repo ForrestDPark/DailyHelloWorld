@@ -67,16 +67,25 @@ class DatingSimApiTests(unittest.TestCase):
         app.dating_sim_visit(app.DatingSimLocationRequest(location="cafe"), request())
         index = self.choice_index("reader", "cafe", True)
         state = app.dating_sim_choose(app.DatingSimChoiceRequest(choice_index=index), request())
-        self.assertEqual(state["affection"], 58)
+        self.assertIn(state["choice_result"]["affection_delta"], range(7, 12))
+        self.assertEqual(state["affection"], 50 + state["choice_result"]["affection_delta"])
         self.assertEqual(state["day"], 2)
         self.assertIsNone(state["pending_location"])
-        self.assertEqual(state["choice_result"]["affection_delta"], 8)
 
     def test_negative_choice_lowers_affection_and_clamps_at_zero(self):
         app.dating_sim_visit(app.DatingSimLocationRequest(location="cafe"), request())
         index = self.choice_index("reader", "cafe", False)
         state = app.dating_sim_choose(app.DatingSimChoiceRequest(choice_index=index), request())
-        self.assertEqual(state["affection"], 46)
+        self.assertIn(state["choice_result"]["affection_delta"], range(-6, -1))
+        self.assertEqual(state["affection"], 50 + state["choice_result"]["affection_delta"])
+
+    def test_choice_scores_and_reactions_vary_by_scene(self):
+        scores = {dating_sim_story.choice_scores(day, location, 1)
+                  for day in range(1, 8) for location in ("cafe", "park", "school")}
+        reactions = {dating_sim_story.choice_reaction(day, "cafe", 8, "story")
+                     for day in range(1, 8)}
+        self.assertGreater(len(scores), 3)
+        self.assertGreater(len(reactions), 3)
 
     def test_out_of_range_choice_index_is_rejected(self):
         app.dating_sim_visit(app.DatingSimLocationRequest(location="cafe"), request())
@@ -331,6 +340,15 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         with patch.object(dating_sim_story, "_find_book", return_value=None):
             with self.assertRaises(ValueError):
                 dating_sim_story.story_for("book:" + "0" * 20)
+
+    def test_book_character_profiles_are_stable_and_varied(self):
+        profiles = [dating_sim_story.book_character_profile(f"book:{number:020x}")
+                    for number in range(20)]
+        self.assertGreater(len({profile["jp"] for profile in profiles}), 3)
+        self.assertEqual(
+            dating_sim_story.book_character_profile("book:" + "1" * 20),
+            dating_sim_story.book_character_profile("book:" + "1" * 20),
+        )
 
 
 if __name__ == "__main__":

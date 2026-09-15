@@ -602,7 +602,9 @@ def dating_sim_dashboard(request: Request):
 def dating_sim_static(filename: str, request: Request):
     _require_signed_in_user(request)
     if filename not in {"style.css", "app.js", "soi.png", "soi-park.png", "soi-school.png",
-                        "haru.png", "haru-first.png", "haru-walk.png"}:
+                        "haru.png", "haru-first.png", "haru-walk.png",
+                        "akari.png", "mio.png", "reina.png",
+                        "pixel-cafe.png", "pixel-park.png", "pixel-school.png"}:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(DATING_SIM_WEB_DIR / filename))
 
@@ -933,9 +935,10 @@ def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
         "location": selected_location,
         "character_image": story.get("character_images", {}).get(
             selected_location, story.get("character_image")),
-        "line": ("[嬉|うれ]しいです。[少|すこ]し[近|ちか]くなれた[気|き]がします。\n기뻐요. 조금 더 가까워진 것 같아요."
-                 if scene["choices"][body.choice_index]["affection"] > 0
-                 else "[大丈夫|だいじょうぶ]です。ゆっくり[知|し]っていきましょう。\n괜찮아요. 우리 천천히 알아가요."),
+        "line": dating_sim_story.choice_reaction(
+            row["day"] - 1, selected_location,
+            scene["choices"][body.choice_index]["affection"], story["id"],
+        ),
     }
     return payload
 

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/dating-sim/static/style.css?v=20260915-v6">
+<link rel="stylesheet" href="/dating-sim/static/style.css?v=20260915-v7">
 </head>
 <body>
   <div id="game">
@@ -26,10 +26,12 @@
     <main id="stage">
       <div id="listening-controls" class="listening-controls hidden" aria-label="일본어 듣기">
         <button id="listening-toggle" type="button" aria-pressed="false">일본어 듣기</button>
+        <button id="listening-replay" type="button">다시 듣기</button>
         <button id="listening-stop" type="button" disabled>정지</button>
         <span id="listening-status" aria-live="polite">꺼짐</span>
       </div>
       <section id="map-view" class="hidden">
+        <div class="intro-art"><img id="intro-art-image" alt="주인공이 바라보는 장소의 도트 배경"></div>
         <p class="map-hint">오늘 어떤 일이 일어날까?</p>
         <div id="map-locations" class="map-locations"></div>
       </section>
@@ -73,6 +75,6 @@
       </section>
     </main>
   </div>
-  <script src="/dating-sim/static/app.js?v=20260915-v6"></script>
+  <script src="/dating-sim/static/app.js?v=20260915-v7"></script>
 </body>
 </html>

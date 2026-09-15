@@ -65,15 +65,29 @@ def _book_template_story():
 
 
 def build_catalog() -> list[tuple[str, str]]:
+    profile_names = [profile["jp"] for profile in dating_sim_story.BOOK_CHARACTER_PROFILES]
+    profile_names.append("椿リカ")
+    character_lines = [
+        raw.replace("ソイ", name)
+        for name in profile_names
+        for beat in dating_sim_story.DAY_BEATS.values()
+        for raw in beat[0]
+    ]
+    protagonist_choices = [
+        raw.replace("ソイ", name)
+        for name in profile_names
+        for beat in dating_sim_story.DAY_BEATS.values()
+        for raw in beat[1]
+    ]
     female_sources = [
         # 장면의 첫째·셋째 줄, 장소 사건, 여주 반응과 엔딩은 여주 목소리다.
-        [beat[0] for beat in dating_sim_story.DAY_BEATS.values()],
+        character_lines,
         dating_sim_story.LOCATION_LINES,
         dating_sim_story.VARIANT_2_LOCATION_LINES,
         dating_sim_story.HIDDEN_EVENTS,
         dating_sim_story.ENDINGS,
-        "[嬉|うれ]しいです。[少|すこ]し[近|ちか]くなれた[気|き]がします。",
-        "[大丈夫|だいじょうぶ]です。ゆっくり[知|し]っていきましょう。",
+        dating_sim_story.POSITIVE_REACTIONS,
+        dating_sim_story.NEGATIVE_REACTIONS,
     ]
     book_story = _book_template_story()
     female_sources.extend(
@@ -84,7 +98,7 @@ def build_catalog() -> list[tuple[str, str]]:
     female_sources.append(book_story["endings"])
     male_sources = [
         dating_sim_story.DAY_NARRATION,
-        [beat[1] for beat in dating_sim_story.DAY_BEATS.values()],
+        protagonist_choices,
     ]
     male_sources.extend(
         scene["choices"]
@@ -97,6 +111,19 @@ def build_catalog() -> list[tuple[str, str]]:
         for raw in _strings(sources)
         if (spoken := spoken_text(raw))
     }
+    for raw_opening in _strings(dating_sim_story.DAY_OPENINGS):
+        for name in profile_names:
+            opening = raw_opening.replace("ソイ", name)
+            japanese = "\n".join(
+                line for line in opening.splitlines() if JAPANESE_RE.search(line)
+            )
+            quote = re.match(r"^(.*?)「(.+?)」(.*)$", japanese, re.DOTALL)
+            if quote:
+                for role, segment in (("male", quote[1]), ("female", quote[2]), ("male", quote[3])):
+                    if spoken := spoken_text(segment):
+                        catalog.add((role, spoken))
+            elif spoken := spoken_text(japanese):
+                catalog.add(("male", spoken))
     return sorted(catalog)
 
 

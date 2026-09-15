@@ -9,6 +9,13 @@ const recordedAudio = new Audio();
 let pendingPlaybackResolve = null;
 let choiceInFlight = false;
 let mapOpeningText = "";
+let sceneCharacterImage = "";
+
+function locationBackdrop(location) {
+  if (["park", "walk"].includes(location)) return "/dating-sim/static/pixel-park.png";
+  if (["school", "first"].includes(location)) return "/dating-sim/static/pixel-school.png";
+  return "/dating-sim/static/pixel-cafe.png";
+}
 
 function storyQuery() {
   return storyId ? `?story_id=${encodeURIComponent(storyId)}` : "";
@@ -51,6 +58,11 @@ function renderMap(state) {
   $("stage").dataset.day = state.day;
   const hint = document.querySelector(".map-hint");
   mapOpeningText = state.day_opening || "오늘 어떤 일이 일어날까?";
+  $("intro-art-image").src = [
+    "/dating-sim/static/pixel-cafe.png",
+    "/dating-sim/static/pixel-park.png",
+    "/dating-sim/static/pixel-school.png",
+  ][(Math.max(1, state.day) - 1) % 3];
   renderAnnotatedText(hint, mapOpeningText);
   const list = $("map-locations");
   list.replaceChildren();
@@ -90,15 +102,23 @@ function japaneseText(text) {
     .trim();
 }
 
-function japaneseVoice() {
+function japaneseVoice(role = "female") {
   const voices = window.speechSynthesis?.getVoices?.() || [];
-  return voices.find((voice) => /^ja[-_]/i.test(voice.lang)) || null;
+  const japanese = voices.filter((voice) => /^ja[-_]/i.test(voice.lang));
+  const female = /Kyoko|Nanami|Hina|Haruka|Sayaka|Ayumi|女性|Female|女/i;
+  const male = /Otoya|Otohiko|Ichiro|Daisuke|男性|Male|男/i;
+  if (role === "female") {
+    return japanese.find((voice) => female.test(voice.name)) ||
+      japanese.find((voice) => !male.test(voice.name)) || japanese[0] || null;
+  }
+  return japanese.find((voice) => male.test(voice.name)) || japanese[0] || null;
 }
 
 function updateListeningControls(status = listeningMode ? "듣는 중" : "꺼짐") {
   const supported = Object.values(audioManifest).some((clips) => Object.keys(clips || {}).length > 0) ||
     ("speechSynthesis" in window && "SpeechSynthesisUtterance" in window);
   $("listening-toggle").disabled = !supported;
+  $("listening-replay").disabled = !supported;
   $("listening-toggle").classList.toggle("active", listeningMode);
   $("listening-toggle").setAttribute("aria-pressed", String(listeningMode));
   $("listening-toggle").textContent = listeningMode ? "듣기 켜짐" : "일본어 듣기";
@@ -143,8 +163,9 @@ function playStandalone(text, role, status) {
       }
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.lang = "ja-JP";
-      utterance.rate = 0.88;
-      const voice = japaneseVoice();
+      utterance.rate = role === "female" ? 0.9 : 0.86;
+      utterance.pitch = role === "female" ? 1.18 : 0.92;
+      const voice = japaneseVoice(role);
       if (voice) utterance.voice = voice;
       utterance.onstart = () => {
         if (sequence !== speechSequence) return finish();
@@ -179,6 +200,20 @@ function playStandalone(text, role, status) {
   });
 }
 
+async function playMapOpening() {
+  const japaneseOnly = (mapOpeningText || "").split("\n")
+    .filter((line) => /[\u3040-\u30ff\u3400-\u9fff]/.test(line)).join("\n");
+  const quote = japaneseOnly.match(/^(.*?)「(.+?)」(.*)$/s);
+  if (!quote) {
+    return playStandalone(mapOpeningText, "male", "주인공 독백 재생 중");
+  }
+  if (quote[1].trim()) await playStandalone(quote[1], "male", "주인공 독백 재생 중");
+  if (listeningMode) await playStandalone(quote[2], "female", "메시지 음성 재생 중");
+  if (listeningMode && quote[3].trim()) {
+    await playStandalone(quote[3], "male", "주인공 독백 재생 중");
+  }
+}
+
 function finishSpokenLine(sequence) {
   if (sequence !== speechSequence || !listeningMode) return;
   $("portrait").classList.remove("speaking");
@@ -196,9 +231,10 @@ function speakWithDevice(text, line, sequence, fallback = false) {
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = "ja-JP";
-  utterance.rate = 0.88;
-  utterance.pitch = 1;
-  const voice = japaneseVoice();
+  const role = line.speaker === "narrator" ? "male" : "female";
+  utterance.rate = role === "female" ? 0.9 : 0.86;
+  utterance.pitch = role === "female" ? 1.18 : 0.92;
+  const voice = japaneseVoice(role);
   if (voice) utterance.voice = voice;
   utterance.onstart = () => {
     if (sequence !== speechSequence) return;
@@ -299,6 +335,9 @@ function typeLine(text) {
   const narrator = line.speaker === "narrator";
   $("speaker-name").textContent = narrator ? "主人公 · 나" : (latestState?.character_name || "");
   $("portrait").classList.toggle("narrator", narrator);
+  $("portrait-image").src = narrator
+    ? locationBackdrop($("stage").dataset.location)
+    : sceneCharacterImage;
   const el = $("dialogue-text");
   el.textContent = "";
   $("dialogue-next").classList.add("hidden");
@@ -369,7 +408,8 @@ function renderScene(state) {
   sceneLineIndex = 0;
   $("stage").dataset.location = state.scene.location;
   $("stage").dataset.day = state.day;
-  $("portrait-image").src = state.scene.character_image || state.character_image || "";
+  sceneCharacterImage = state.scene.character_image || state.character_image || "";
+  $("portrait-image").src = sceneCharacterImage;
   showView("scene-view");
   updateListeningControls(listeningMode ? "대기 중" : "꺼짐");
   typeLine(sceneLines[0]);
@@ -455,6 +495,30 @@ async function restart() {
   }
 }
 
+function replayCurrentView() {
+  if (!$("map-view").classList.contains("hidden")) {
+    return playMapOpening()
+      .then(() => updateListeningControls("답장을 골라주세요"));
+  }
+  if (!$("result-view").classList.contains("hidden") && latestState?.choice_result) {
+    return playStandalone(latestState.choice_result.line, "female", `${latestState.character_name} 대사 재생 중`)
+      .then(() => updateListeningControls("다음 장면을 눌러 계속"));
+  }
+  if (!$("ending-view").classList.contains("hidden") && latestState?.ending) {
+    return playStandalone(latestState.ending.lines.join("\n"), "female", `${latestState.character_name} 엔딩 재생 중`)
+      .then(() => updateListeningControls("엔딩 음성 완료"));
+  }
+  if (typewriterTimer) {
+    stopTypewriter();
+    const line = sceneLines[sceneLineIndex];
+    renderAnnotatedText($("dialogue-text"), typeof line === "string" ? line : line.text);
+    onLineFullyShown();
+    return Promise.resolve();
+  }
+  speakCurrentLine();
+  return Promise.resolve();
+}
+
 $("dialogue-next").addEventListener("click", (event) => {
   event.stopPropagation();
   advanceLine();
@@ -473,29 +537,14 @@ $("listening-toggle").addEventListener("click", (event) => {
   }
   listeningMode = true;
   updateListeningControls("대기 중");
-  if (!$("map-view").classList.contains("hidden")) {
-    playStandalone(mapOpeningText, "male", "주인공 독백 재생 중")
-      .then(() => updateListeningControls("장소를 골라주세요"));
-    return;
-  }
-  if (!$("result-view").classList.contains("hidden") && latestState?.choice_result) {
-    playStandalone(latestState.choice_result.line, "female", `${latestState.character_name} 대사 재생 중`)
-      .then(() => updateListeningControls("다음 장면을 눌러 계속"));
-    return;
-  }
-  if (!$("ending-view").classList.contains("hidden") && latestState?.ending) {
-    playStandalone(latestState.ending.lines.join("\n"), "female", `${latestState.character_name} 엔딩 재생 중`)
-      .then(() => updateListeningControls("엔딩 음성 완료"));
-    return;
-  }
-  if (typewriterTimer) {
-    stopTypewriter();
-    const line = sceneLines[sceneLineIndex];
-    renderAnnotatedText($("dialogue-text"), typeof line === "string" ? line : line.text);
-    onLineFullyShown();
-  } else {
-    speakCurrentLine();
-  }
+  replayCurrentView();
+});
+$("listening-replay").addEventListener("click", (event) => {
+  event.stopPropagation();
+  stopListening({ turnOff: false });
+  listeningMode = true;
+  updateListeningControls("다시 재생 준비 중");
+  replayCurrentView();
 });
 $("listening-stop").addEventListener("click", (event) => {
   event.stopPropagation();

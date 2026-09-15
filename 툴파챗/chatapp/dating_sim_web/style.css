@@ -88,6 +88,15 @@ html, body {
   color: var(--muted);
   font: 8px/1.45 -apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;
 }
+.intro-art {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  margin: 2px 0 14px;
+  overflow: hidden;
+  border: 3px solid var(--border);
+  background: #090611;
+}
+.intro-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
 .map-hint {
   font-family: -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans KR",sans-serif;
@@ -125,7 +134,7 @@ html, body {
 .portrait img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .portrait.speaking { animation: speaking .44s infinite steps(2); }
 .portrait.speaking img{animation:speaking-image .44s infinite steps(2)}
-.portrait.narrator{filter:brightness(.48) saturate(.7)}
+.portrait.narrator{filter:brightness(.82) saturate(.9)}
 @keyframes speaking { 0%, 100% { transform: translateY(0); filter: brightness(1); } 50% { transform: translateY(-3px); filter: brightness(1.08); } }
 @keyframes speaking-image{0%,100%{filter:brightness(1)}50%{filter:brightness(1.1)}}
 .speaker-name {
