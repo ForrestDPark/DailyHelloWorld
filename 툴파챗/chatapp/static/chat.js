@@ -1954,7 +1954,9 @@ async function showPortalHome(focusSystems = false) {
     document.getElementById("portal-unread").textContent = unread;
   } catch (error) { console.error(error); }
   loadJapaneseKanjiFavorites(true).then((items) => {
-    document.getElementById("portal-vocab-count").textContent = String(items.length);
+    apiFetch("/api/me/vocabulary").then((response) => response.json()).then((words) => {
+      document.getElementById("portal-vocab-count").textContent = String(items.length + words.length);
+    }).catch(() => { document.getElementById("portal-vocab-count").textContent = String(items.length); });
   });
   loadPortalNotifications();
   maybeShowPwaInstallPrompt();
@@ -2922,44 +2924,7 @@ const kanjiVocabOverlay = document.getElementById("kanji-vocab-overlay");
 const kanjiVocabList = document.getElementById("kanji-vocab-list");
 
 async function openJapaneseKanjiVocabulary() {
-  closeJapaneseKanjiPopover();
-  kanjiVocabList.innerHTML = '<div class="empty-hint">단어장을 불러오는 중…</div>';
-  kanjiVocabOverlay.classList.remove("hidden");
-  const [items, dictionary] = await Promise.all([loadJapaneseKanjiFavorites(true), loadJapaneseKanjiDictionary()]);
-  if (kanjiVocabOverlay.classList.contains("hidden")) return;
-  kanjiVocabList.innerHTML = "";
-  if (!items.length) {
-    kanjiVocabList.innerHTML = '<div class="empty-hint">아직 저장한 한자가 없어요.<br>채팅의 한자를 누르고 ☆를 탭해보세요.</div>';
-    return;
-  }
-  for (const item of items) {
-    const reading = dictionary[item.character] || {on: [], kun: [], sound: "", meaning: ""};
-    const card = document.createElement("article");
-    card.className = "kanji-vocab-card";
-    const glyph = document.createElement("strong");
-    glyph.lang = "ja"; glyph.textContent = item.character;
-    const detail = document.createElement("div");
-    const rows = [
-      ["뜻·음", formatKoreanHanjaGloss(reading), "ko"],
-      ["훈독", reading.kun.join("・") || "해당 없음", "ja"],
-      ["음독", reading.on.map(katakanaToHiragana).join("・") || "해당 없음", "ja"],
-    ];
-    for (const [label, displayValue, lang] of rows) {
-      const row = document.createElement("p");
-      row.innerHTML = `<span>${label}</span><b lang="${lang}">${escapeHtml(displayValue)}</b>`;
-      detail.appendChild(row);
-    }
-    const remove = document.createElement("button");
-    remove.type = "button"; remove.textContent = "★"; remove.className = "kanji-vocab-remove";
-    remove.setAttribute("aria-label", `${item.character} 단어장에서 제거`);
-    remove.addEventListener("click", async () => {
-      await toggleJapaneseKanjiFavorite(item.character, remove);
-      if (!japaneseKanjiFavorites.has(item.character)) card.remove();
-      if (!kanjiVocabList.querySelector(".kanji-vocab-card")) openJapaneseKanjiVocabulary();
-    });
-    card.append(glyph, detail, remove);
-    kanjiVocabList.appendChild(card);
-  }
+  location.href = "/vocabulary/";
 }
 
 document.getElementById("portal-vocab-btn").addEventListener("click", openJapaneseKanjiVocabulary);

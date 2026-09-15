@@ -166,6 +166,19 @@ def init_db():
             PRIMARY KEY (username, character),
             FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS vocabulary_entries (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            language TEXT NOT NULL,
+            term TEXT NOT NULL,
+            meaning TEXT NOT NULL DEFAULT '',
+            pronunciation TEXT NOT NULL DEFAULT '',
+            note TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE(username, language, term),
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        );
         CREATE TABLE IF NOT EXISTS user_ai_credentials (
             username TEXT NOT NULL,
             provider TEXT NOT NULL,

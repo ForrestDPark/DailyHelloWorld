@@ -67,6 +67,7 @@ CAREER_WEB_DIR = REPO_ROOT / "이직시스템" / "web_dashboard"
 CAREER_DATA_DIR = REPO_ROOT / "이직시스템" / "data"
 CAREER_SYSTEM_DIR = REPO_ROOT / "이직시스템"
 SHIFT_ALARM_DASHBOARD_DIR = BASE_DIR / "shift_alarm_dashboard"
+VOCABULARY_WEB_DIR = BASE_DIR / "vocabulary_web"
 SHIFT_ALARM_STATUS_FILE = Path(os.path.expanduser(
     "~/Library/Mobile Documents/com~apple~CloudDocs/ShiftAlarmStatus/status.json"
 ))
@@ -555,6 +556,25 @@ def career_static(filename: str, request: Request):
     if filename not in allowed:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(CAREER_WEB_DIR / filename))
+
+
+@app.get("/vocabulary")
+def vocabulary_redirect():
+    return RedirectResponse("/vocabulary/", status_code=307)
+
+
+@app.get("/vocabulary/")
+def vocabulary_dashboard(request: Request):
+    _require_signed_in_user(request)
+    return FileResponse(str(VOCABULARY_WEB_DIR / "index.html"))
+
+
+@app.get("/vocabulary/static/{filename}")
+def vocabulary_static(filename: str, request: Request):
+    _require_signed_in_user(request)
+    if filename not in {"style.css", "app.js", "manifest.webmanifest"}:
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
+    return FileResponse(str(VOCABULARY_WEB_DIR / filename))
 
 
 @app.get("/shift-alarm")
@@ -3443,6 +3463,55 @@ def remove_friend_favorite(friend_username: str, request: Request):
 
 
 JAPANESE_KANJI_RE = re.compile(r"^[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]$")
+
+
+class VocabularyEntryUpdate(BaseModel):
+    language: str = "english"
+    term: str
+    meaning: str = ""
+    pronunciation: str = ""
+    note: str = ""
+
+
+@app.get("/api/me/vocabulary")
+def list_vocabulary_entries(request: Request, language: str = ""):
+    user = getattr(request.state, "user", None)
+    if not user: raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    params = [user["username"]]; where = "WHERE username=?"
+    if language:
+        where += " AND language=?"; params.append(language)
+    conn = get_conn()
+    rows = conn.execute(f"SELECT id,language,term,meaning,pronunciation,note,created_at,updated_at FROM vocabulary_entries {where} ORDER BY updated_at DESC,id DESC", params).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+@app.post("/api/me/vocabulary")
+def save_vocabulary_entry(body: VocabularyEntryUpdate, request: Request):
+    user = getattr(request.state, "user", None)
+    if not user: raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    language, term = body.language.strip().lower(), body.term.strip()
+    if language not in {"english", "japanese", "hanja"}: raise HTTPException(status_code=400, detail="지원하지 않는 언어입니다")
+    if not term or len(term) > 120: raise HTTPException(status_code=400, detail="단어는 1~120자로 입력하세요")
+    values = [body.meaning.strip(), body.pronunciation.strip(), body.note.strip()]
+    if any(len(value) > 1000 for value in values): raise HTTPException(status_code=400, detail="뜻·발음·메모는 각각 1000자 이하로 입력하세요")
+    now = _now(); conn = get_conn()
+    conn.execute("""INSERT INTO vocabulary_entries(username,language,term,meaning,pronunciation,note,created_at,updated_at)
+        VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(username,language,term) DO UPDATE SET
+        meaning=excluded.meaning,pronunciation=excluded.pronunciation,note=excluded.note,updated_at=excluded.updated_at""",
+        (user["username"], language, term, *values, now, now))
+    conn.commit()
+    row = conn.execute("SELECT id,language,term,meaning,pronunciation,note,created_at,updated_at FROM vocabulary_entries WHERE username=? AND language=? AND term=?", (user["username"], language, term)).fetchone()
+    conn.close(); return dict(row)
+
+
+@app.delete("/api/me/vocabulary/{entry_id}")
+def delete_vocabulary_entry(entry_id: int, request: Request):
+    user = getattr(request.state, "user", None)
+    if not user: raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    conn = get_conn(); cursor = conn.execute("DELETE FROM vocabulary_entries WHERE id=? AND username=?", (entry_id, user["username"])); conn.commit(); conn.close()
+    if not cursor.rowcount: raise HTTPException(status_code=404, detail="단어를 찾을 수 없습니다")
+    return {"ok": True}
 
 
 @app.get("/api/me/japanese-kanji-favorites")
