@@ -1150,6 +1150,17 @@ main#messages.has-custom-background {
   font-family: "ChatJapanese", "Hiragino Kaku Gothic ProN", "Yu Gothic", sans-serif;
   font-feature-settings: "palt" 0;
 }
+.message-furigana { ruby-position: over; ruby-align: center; }
+.message-furigana rt {
+  color: color-mix(in srgb, currentColor 72%, var(--muted));
+  font-family: "ChatJapanese", "Hiragino Kaku Gothic ProN", sans-serif;
+  font-size: .52em;
+  font-weight: 550;
+  line-height: 1;
+  letter-spacing: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
 .japanese-kanji-char {
   display: inline;
   padding: 0;

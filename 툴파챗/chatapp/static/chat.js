@@ -3042,6 +3042,44 @@ function decorateJapaneseKanji(container, japaneseContext = false) {
   }
 }
 
+// 일본어 선생님은 정확한 문맥 독음을 `漢字(かんじ)` 형태로 답한다. 한 글자
+// 사전 독음을 추측해 붙이면 숙자훈·음편 때문에 틀릴 수 있으므로, 메시지에
+// 명시된 후리가나만 ruby로 승격한다. 괄호 표기는 화면에서 중복 노출하지 않는다.
+function decorateJapaneseFurigana(container) {
+  if (container.dataset.furiganaDecorated === "true") return;
+  container.dataset.furiganaDecorated = "true";
+  const pattern = /([\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]+)[(（]([ぁ-ゖァ-ヺー]+)[)）]/gu;
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      pattern.lastIndex = 0;
+      if (!pattern.test(node.nodeValue || "")) return NodeFilter.FILTER_REJECT;
+      if (node.parentElement?.closest("a, button, rt, .message-reply-quote")) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    const fragment = document.createDocumentFragment();
+    let cursor = 0;
+    pattern.lastIndex = 0;
+    for (const match of node.nodeValue.matchAll(pattern)) {
+      if (match.index > cursor) fragment.appendChild(document.createTextNode(node.nodeValue.slice(cursor, match.index)));
+      const ruby = document.createElement("ruby");
+      ruby.className = "message-furigana";
+      ruby.lang = "ja";
+      ruby.appendChild(document.createTextNode(match[1]));
+      const reading = document.createElement("rt");
+      reading.textContent = katakanaToHiragana(match[2]);
+      ruby.appendChild(reading);
+      fragment.appendChild(ruby);
+      cursor = match.index + match[0].length;
+    }
+    if (cursor < node.nodeValue.length) fragment.appendChild(document.createTextNode(node.nodeValue.slice(cursor)));
+    node.replaceWith(fragment);
+  }
+}
+
 // ★ "한명한테 답장하는 기능" 요청(2026-08-25) — 그룹/회의방에서 페르소나
 // 메시지의 이름을 탭하면 그 사람에게만 답장하는 모드로 들어간다. @멘션을
 // 직접 타이핑할 필요 없이 서버에 reply_to로 실어 보낸다.
@@ -3609,6 +3647,7 @@ function appendMessage(m, forceScroll = false, suppressScroll = false) {
     body.appendChild(quote);
   }
   appendMessageMedia(body, m.content);
+  if (body.classList.contains("message-japanese")) decorateJapaneseFurigana(body);
   decorateJapaneseKanji(body, body.classList.contains("message-japanese"));
   const time = document.createElement("div");
   time.className = "msg-time";
