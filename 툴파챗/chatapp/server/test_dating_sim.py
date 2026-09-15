@@ -111,6 +111,12 @@ class DatingSimApiTests(unittest.TestCase):
         self.assertEqual(state["character_image"], "/dating-sim/static/soi.png")
         self.assertIn("|", state["locations"] and dating_sim_story.SCENES[1]["cafe"]["lines"][0])
 
+    def test_scene_starts_with_protagonist_narration_and_furigana(self):
+        state = app.dating_sim_visit(app.DatingSimLocationRequest(location="cafe"), request())
+        first_line = state["scene"]["lines"][0]
+        self.assertEqual(first_line["speaker"], "narrator")
+        self.assertIn("[約束|やくそく]", first_line["text"])
+
 
 class DatingSimContentDatabaseTests(unittest.TestCase):
     """★ 2026-09-15: "스토리 시나리오전개쪽에서 데이터베이스 만들어주고

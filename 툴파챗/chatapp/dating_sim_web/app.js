@@ -38,6 +38,8 @@ function renderHud(state) {
 }
 
 function renderMap(state) {
+  $("stage").dataset.location = "map";
+  $("stage").dataset.day = state.day;
   const list = $("map-locations");
   list.replaceChildren();
   state.locations.forEach((location) => {
@@ -59,6 +61,31 @@ let sceneLines = [];
 let sceneLineIndex = 0;
 let sceneChoices = [];
 
+function plainText(text) {
+  return text.replace(/\[([^\]|]+)\|([^\]]+)\]/g, "$1");
+}
+
+function renderAnnotatedText(element, text) {
+  element.replaceChildren();
+  const pattern = /\[([^\]|]+)\|([^\]]+)\]|\n/g;
+  let cursor = 0;
+  for (const match of text.matchAll(pattern)) {
+    if (match.index > cursor) element.append(document.createTextNode(text.slice(cursor, match.index)));
+    if (match[0] === "\n") {
+      element.append(document.createElement("br"));
+    } else {
+      const ruby = document.createElement("ruby");
+      ruby.append(document.createTextNode(match[1]));
+      const rt = document.createElement("rt");
+      rt.textContent = match[2];
+      ruby.append(rt);
+      element.append(ruby);
+    }
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < text.length) element.append(document.createTextNode(text.slice(cursor)));
+}
+
 function stopTypewriter() {
   if (typewriterTimer) {
     clearInterval(typewriterTimer);
@@ -68,17 +95,24 @@ function stopTypewriter() {
 
 function typeLine(text) {
   stopTypewriter();
+  const line = typeof text === "string" ? { speaker: "character", text } : text;
+  text = line.text;
+  const narrator = line.speaker === "narrator";
+  $("speaker-name").textContent = narrator ? "主人公 · 나" : (latestState?.character_name || "");
+  $("portrait").classList.toggle("narrator", narrator);
   const el = $("dialogue-text");
   el.textContent = "";
   $("dialogue-next").classList.add("hidden");
   $("choice-list").classList.add("hidden");
-  $("portrait").classList.add("speaking");
+  $("portrait").classList.toggle("speaking", !narrator);
+  const visibleText = plainText(text);
   let i = 0;
   typewriterTimer = setInterval(() => {
     i += 1;
-    el.textContent = text.slice(0, i);
-    if (i >= text.length) {
+    el.textContent = visibleText.slice(0, i);
+    if (i >= visibleText.length) {
       stopTypewriter();
+      renderAnnotatedText(el, text);
       $("portrait").classList.remove("speaking");
       onLineFullyShown();
     }
@@ -98,7 +132,8 @@ function advanceLine() {
   if (typewriterTimer) {
     // 타자기 도중 클릭하면 그 줄을 즉시 완성해서 보여준다.
     stopTypewriter();
-    $("dialogue-text").textContent = sceneLines[sceneLineIndex];
+    const line = sceneLines[sceneLineIndex];
+    renderAnnotatedText($("dialogue-text"), typeof line === "string" ? line : line.text);
     onLineFullyShown();
     return;
   }
@@ -115,7 +150,12 @@ function renderChoices() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "choice-button";
-    button.innerHTML = `<span class="choice-cursor">▶</span>${choice.text}`;
+    const cursor = document.createElement("span");
+    cursor.className = "choice-cursor";
+    cursor.textContent = "▶";
+    const label = document.createElement("span");
+    renderAnnotatedText(label, choice.text);
+    button.append(cursor, label);
     button.addEventListener("click", () => chooseOption(index));
     list.append(button);
   });
@@ -126,8 +166,9 @@ function renderScene(state) {
   sceneLines = state.scene.lines;
   sceneChoices = state.scene.choices;
   sceneLineIndex = 0;
-  $("speaker-name").textContent = state.character_name;
-  $("portrait-image").src = state.character_image || "";
+  $("stage").dataset.location = state.scene.location;
+  $("stage").dataset.day = state.day;
+  $("portrait-image").src = state.scene.character_image || state.character_image || "";
   showView("scene-view");
   typeLine(sceneLines[0]);
 }
@@ -135,15 +176,17 @@ function renderScene(state) {
 function renderChoiceResult(state) {
   const delta = state.choice_result.affection_delta;
   $("result-speaker-name").textContent = state.character_name;
-  $("result-portrait-image").src = state.character_image || "";
-  $("result-text").textContent = state.choice_result.line;
+  $("stage").dataset.location = state.choice_result.location || "result";
+  $("stage").dataset.day = state.day;
+  $("result-portrait-image").src = state.choice_result.character_image || state.character_image || "";
+  renderAnnotatedText($("result-text"), state.choice_result.line);
   $("result-affection").textContent = `${delta > 0 ? "+" : ""}${delta} · 현재 호감도 ${state.affection}`;
   showView("result-view");
 }
 
 function renderEnding(state) {
   $("ending-title").textContent = state.ending.title;
-  $("ending-text").textContent = state.ending.lines.join(" ");
+  renderAnnotatedText($("ending-text"), state.ending.lines.join("\n"));
   $("ending-speaker-name").textContent = state.character_name;
   $("ending-portrait-image").src = state.character_image || "";
   showView("ending-view");

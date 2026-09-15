@@ -685,11 +685,15 @@ def _dating_sim_state_payload(row, story):
     if row["pending_location"] and not completed:
         selected_location = row["pending_location"]
         scene = story["scenes"][row["day"]][selected_location]
+        scene_lines = [{"speaker": "narrator", "text": dating_sim_story.DAY_NARRATION[row["day"]]}]
+        for index, line in enumerate(scene["lines"]):
+            speaker = "narrator" if index == 1 and line.lstrip().startswith("(") else "character"
+            scene_lines.append({"speaker": speaker, "text": line})
         payload["scene"] = {
             "location": row["pending_location"],
             "character_image": story.get("character_images", {}).get(
                 row["pending_location"], story.get("character_image")),
-            "lines": scene["lines"],
+            "lines": scene_lines,
             "choices": [{"text": choice["text"]} for choice in scene["choices"]],
         }
     if completed:
