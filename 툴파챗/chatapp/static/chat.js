@@ -2781,6 +2781,15 @@ let japaneseKanjiPopover = null;
 let japaneseKanjiFavoritesPromise = null;
 let japaneseKanjiFavorites = new Set();
 
+// ★ 2026-09-15: "음독이 가타카나로 되어있어서 잘 안읽히는데 히라가나로
+// 표기되면 좋겠어" — KANJIDIC2 원본은 음독(on)을 가타카나로 담고 있는 게
+// 표준 표기라 데이터 파일은 그대로 두고, 화면에 보여줄 때만 히라가나로
+// 바꾼다. 가타카나 완전탁음 범위(U+30A1~U+30F6)만 -0x60 오프셋으로 옮기고,
+// 장음부호 "ー" 등 범위 밖 글자는 그대로 둔다(음독 데이터에 극히 드묾).
+function katakanaToHiragana(text) {
+  return String(text || "").replace(/[ァ-ヶ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60));
+}
+
 function loadJapaneseKanjiDictionary() {
   if (!japaneseKanjiDictionaryPromise) {
     japaneseKanjiDictionaryPromise = fetch("/static/data/kanjidic-readings.json?v=20260914-hanja-v3", {cache: "no-cache"})
@@ -2887,7 +2896,7 @@ function showJapaneseKanjiPopover(character, reading, anchor, japaneseContext = 
   const rows = [
     ["뜻·음", formatKoreanHanjaGloss(reading)],
     ["훈독", (reading.kun || []).join("・") || "해당 없음"],
-    ["음독", (reading.on || []).join("・") || "해당 없음"],
+    ["음독", (reading.on || []).map(katakanaToHiragana).join("・") || "해당 없음"],
   ];
   for (const [label, displayValue] of rows) {
     const row = document.createElement("div");
@@ -2933,7 +2942,7 @@ async function openJapaneseKanjiVocabulary() {
     const rows = [
       ["뜻·음", formatKoreanHanjaGloss(reading), "ko"],
       ["훈독", reading.kun.join("・") || "해당 없음", "ja"],
-      ["음독", reading.on.join("・") || "해당 없음", "ja"],
+      ["음독", reading.on.map(katakanaToHiragana).join("・") || "해당 없음", "ja"],
     ];
     for (const [label, displayValue, lang] of rows) {
       const row = document.createElement("p");
