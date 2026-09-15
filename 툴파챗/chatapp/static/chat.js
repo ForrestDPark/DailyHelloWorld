@@ -2176,8 +2176,15 @@ function escapeHtml(text) {
 function appendLinkifiedText(container, text) {
   const urlPattern = /https?:\/\/[^\s<]+/g;
   let cursor = 0;
+  const appendTextWithBreaks = (value) => {
+    const parts = String(value || "").split("\n");
+    parts.forEach((part, index) => {
+      if (index) container.appendChild(document.createElement("br"));
+      if (part) container.appendChild(document.createTextNode(part));
+    });
+  };
   for (const match of text.matchAll(urlPattern)) {
-    if (match.index > cursor) container.appendChild(document.createTextNode(text.slice(cursor, match.index)));
+    if (match.index > cursor) appendTextWithBreaks(text.slice(cursor, match.index));
     let url = match[0];
     let suffix = "";
     while (/[),.!?\]}]$/.test(url)) { suffix = url.slice(-1) + suffix; url = url.slice(0, -1); }
@@ -2188,10 +2195,10 @@ function appendLinkifiedText(container, text) {
     link.rel = "noopener noreferrer";
     link.className = "message-link";
     container.appendChild(link);
-    if (suffix) container.appendChild(document.createTextNode(suffix));
+    if (suffix) appendTextWithBreaks(suffix);
     cursor = match.index + match[0].length;
   }
-  if (cursor < text.length) container.appendChild(document.createTextNode(text.slice(cursor)));
+  if (cursor < text.length) appendTextWithBreaks(text.slice(cursor));
 }
 
 const MESSAGE_RICH_INLINE_PATTERN = /\[\[(red|blue|green|orange|purple)\]\]([\s\S]*?)\[\[\/\1\]\]|\*\*([^*\n]+)\*\*/g;
