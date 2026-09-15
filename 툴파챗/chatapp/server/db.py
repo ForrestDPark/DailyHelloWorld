@@ -251,7 +251,8 @@ def init_db():
             title TEXT NOT NULL,
             total_days INTEGER NOT NULL,
             character_image TEXT,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            content_version INTEGER NOT NULL DEFAULT 1
         );
         CREATE TABLE IF NOT EXISTS dating_sim_locations (
             character_id TEXT NOT NULL,
@@ -300,6 +301,7 @@ def init_db():
     )
     _ensure_column(conn, "messages", "room_id", "TEXT NOT NULL DEFAULT 'group'")
     _ensure_column(conn, "dating_sim_progress", "scenario_run", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(conn, "dating_sim_characters", "content_version", "INTEGER NOT NULL DEFAULT 1")
     _ensure_column(conn, "messages", "reply_message_id", "INTEGER")
     _ensure_column(conn, "pending_turns", "room_id", "TEXT NOT NULL DEFAULT 'group'")
     _ensure_column(conn, "personas", "group_name", "TEXT")

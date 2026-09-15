@@ -115,7 +115,8 @@ class DatingSimApiTests(unittest.TestCase):
         state = app.dating_sim_visit(app.DatingSimLocationRequest(location="cafe"), request())
         first_line = state["scene"]["lines"][0]
         self.assertEqual(first_line["speaker"], "narrator")
-        self.assertIn("[約束|やくそく]", first_line["text"])
+        self.assertIn("[名前|なまえ]", first_line["text"])
+        self.assertNotIn("[約束|やくそく]", first_line["text"])
 
 
 class DatingSimContentDatabaseTests(unittest.TestCase):
@@ -144,6 +145,58 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         after = self.conn.execute("SELECT COUNT(*) AS n FROM dating_sim_scenarios").fetchone()["n"]
         self.assertEqual(before, after)
         self.assertGreater(before, 0)
+
+    def test_old_content_is_migrated_to_first_meeting_story(self):
+        dating_sim_story.seed_dating_sim_content(self.conn)
+        self.conn.execute(
+            "INSERT INTO dating_sim_progress "
+            "(username,character_id,day,affection,pending_location,completed,ending_id,"
+            "created_at,updated_at,scenario_run) VALUES (?,?,?,?,?,?,?,?,?,?)",
+            ("legacy-reader", dating_sim_story.CHARACTER_ID, 5, 82, "park", 0, None,
+             "2026-09-15", "2026-09-15", 0),
+        )
+        self.conn.execute(
+            "UPDATE dating_sim_characters SET content_version=1 WHERE character_id=?",
+            (dating_sim_story.CHARACTER_ID,),
+        )
+        self.conn.execute(
+            "UPDATE dating_sim_scenarios SET activity_line='기존 데이트 장면' "
+            "WHERE character_id=? AND day=1",
+            (dating_sim_story.CHARACTER_ID,),
+        )
+        self.conn.commit()
+        dating_sim_story.seed_dating_sim_content(self.conn)
+        version = self.conn.execute(
+            "SELECT content_version FROM dating_sim_characters WHERE character_id=?",
+            (dating_sim_story.CHARACTER_ID,),
+        ).fetchone()["content_version"]
+        first_day = self.conn.execute(
+            "SELECT activity_line FROM dating_sim_scenarios "
+            "WHERE character_id=? AND day=1 AND location_id='cafe' AND variant=1",
+            (dating_sim_story.CHARACTER_ID,),
+        ).fetchone()["activity_line"]
+        self.assertEqual(version, dating_sim_story.CONTENT_VERSION)
+        self.assertNotEqual(first_day, "기존 데이트 장면")
+        self.assertIn("[彼女|かのじょ]", first_day)
+        progress = self.conn.execute(
+            "SELECT day,affection,pending_location,scenario_run FROM dating_sim_progress "
+            "WHERE username='legacy-reader' AND character_id=?",
+            (dating_sim_story.CHARACTER_ID,),
+        ).fetchone()
+        self.assertEqual(
+            (progress["day"], progress["affection"], progress["pending_location"]),
+            (1, 50, None),
+        )
+        self.assertEqual(progress["scenario_run"], 1)
+
+    def test_day_one_establishes_that_they_are_strangers(self):
+        dating_sim_story.seed_dating_sim_content(self.conn)
+        story = dating_sim_story.load_story_from_db(
+            self.conn, dating_sim_story.CHARACTER_ID, seed_key="first-meeting-check"
+        )
+        first_scene = "\n".join(story["scenes"][1]["cafe"]["lines"])
+        self.assertIn("[初|はじ]めまして", first_scene)
+        self.assertIn("[名前|なまえ]", first_scene)
 
     def test_loaded_story_matches_story_for_shape(self):
         dating_sim_story.seed_dating_sim_content(self.conn)
