@@ -2372,6 +2372,18 @@ def _strip_furigana_for_tts(text):
     return FURIGANA_PAREN_RE.sub("", text)
 
 
+# ★ 2026-09-15: "웹에서 epub 열기 링크가 있으면 읽기할때 링크를 다읽는데
+# 읽기할때 링크는 안읽었으면 좋겠어" 요청 — 일본어 선생님이 매 메시지에
+# 붙이는 "웹에서 EPUB 읽기: https://..." 같은 원문 URL을 TTS 엔진이 글자
+# 하나하나(또는 알아들을 수 없는 소리)로 읽어버린다. 화면 표시용
+# 원문(job["content"])은 그대로 두고, 합성 직전 텍스트에서만 URL을 지운다.
+URL_RE_FOR_TTS = re.compile(r"https?://\S+")
+
+
+def _strip_urls_for_tts(text):
+    return re.sub(r"[ \t]{2,}", " ", URL_RE_FOR_TTS.sub("", text)).strip()
+
+
 def _concat_audio_files(paths, output_path):
     """ffmpeg filter_complex concat으로 서로 다른 포맷(mp3/m4a 등 엔진별로
     다를 수 있음)이 섞여 있어도 각각 디코드한 뒤 재인코딩해 하나로 합친다."""
@@ -2387,6 +2399,11 @@ def _concat_audio_files(paths, output_path):
         raise RuntimeError(f"오디오 합치기 실패: {result.stderr[-500:]}")
 
 
+def _prepare_tts_text(text, lang):
+    text = _strip_urls_for_tts(text)
+    return _strip_furigana_for_tts(text) if lang == "ja" else text
+
+
 def process_tts_job(job, persona_cache):
     persona_name = job["persona_name"]
     segments = _split_ko_ja_segments(job["content"])
@@ -2394,15 +2411,21 @@ def process_tts_job(job, persona_cache):
     try:
         if len(segments) <= 1:
             lang = segments[0][0] if segments else "ko"
-            text = _strip_furigana_for_tts(job["content"]) if lang == "ja" else job["content"]
+            text = _prepare_tts_text(job["content"], lang)
+            if not text.strip():
+                raise RuntimeError("링크를 제외하면 읽어줄 내용이 없습니다")
             url, engine = _generate_tts_for_text(text, persona_name, persona_cache)
         else:
             engines_used = []
             for lang, seg_text in segments:
-                text = _strip_furigana_for_tts(seg_text) if lang == "ja" else seg_text
+                text = _prepare_tts_text(seg_text, lang)
+                if not text.strip():
+                    continue  # 세그먼트가 URL 하나뿐이었으면 지운 뒤 빈 텍스트로 TTS를 부르지 않는다
                 seg_url, seg_engine = _generate_tts_for_text(text, persona_name, persona_cache)
                 engines_used.append(seg_engine)
                 segment_paths.append(UPLOADS_DIR / Path(seg_url).name)
+            if not segment_paths:
+                raise RuntimeError("링크를 제외하면 읽어줄 내용이 없습니다")
             filename = f"tts_{int(time.time())}_{os.urandom(4).hex()}.mp3"
             out_path = UPLOADS_DIR / filename
             _concat_audio_files(segment_paths, out_path)
