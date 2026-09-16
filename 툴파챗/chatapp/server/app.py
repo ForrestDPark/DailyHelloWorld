@@ -699,13 +699,26 @@ def _dating_sim_row(conn, username, story):
 
 def _dating_sim_state_payload(row, story):
     completed = bool(row["completed"])
+    current_day = min(row["day"], story["total_days"])
+    # ★ 2026-09-16: "미연시 시스템 누를때마다 인트로가 똑같은데 다양하게
+    # 전개시작할수있게 무작위성좀 추가하면 좋겠어" 요청 — 아직 오늘 장소를
+    # 안 고른 상태(pending_location 없음)라면 진행 일관성과 무관한 순수
+    # 도입부 문구이므로 매번 새로 무작위 선택한다. 장소를 이미 골라 장면이
+    # 진행 중이면(재조회해도 같은 장면이어야 하므로) 기존의 결정론적
+    # 문구를 그대로 쓴다.
+    day_opening = (
+        story.get("day_openings", {}).get(current_day) if row["pending_location"]
+        else dating_sim_story.random_daily_opening(
+            current_day, story["name"], story.get("character_name_ko", "소이")
+        )
+    )
     payload = {
         "story_id": story["id"], "story_title": story["title"],
         "source_title": story.get("source_title"),
         "character_name": story["name"], "character_image": story.get("character_image"),
-        "day": min(row["day"], story["total_days"]), "total_days": story["total_days"],
+        "day": current_day, "total_days": story["total_days"],
         "affection": row["affection"],
-        "day_opening": story.get("day_openings", {}).get(min(row["day"], story["total_days"])),
+        "day_opening": day_opening,
         "locations": [
             {
                 "id": key,

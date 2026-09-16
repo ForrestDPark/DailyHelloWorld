@@ -334,6 +334,20 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         }
         self.assertGreater(len(day_three_variants), 1)
 
+    def test_reopening_before_choosing_a_location_gets_a_different_intro(self):
+        """★ 2026-09-16: "미연시 시스템 누를때마다 인트로가 똑같은데 다양하게
+        전개시작할수있게 무작위성좀 추가하면 좋겠어" 신고 — 장소를 아직 안 고른
+        상태에서 화면을 다시 열면(재시작 없이) 매번 같은 도입부만 나왔다."""
+        openings = {app.dating_sim_state(request("intro-variety"))["day_opening"] for _ in range(30)}
+        self.assertGreater(len(openings), 1)
+
+    def test_intro_stays_stable_once_a_location_is_chosen(self):
+        """장소를 고른 뒤(pending_location 있음)에는 재조회해도 도입부가
+        바뀌면 안 된다 — 선택·호감도와 무관한 문구지만 화면 깜빡임을 막는다."""
+        app.dating_sim_visit(app.DatingSimLocationRequest(location="cafe"), request("intro-stable"))
+        openings = {app.dating_sim_state(request("intro-stable"))["day_opening"] for _ in range(10)}
+        self.assertEqual(len(openings), 1)
+
     def test_restart_advances_the_scenario_run(self):
         app.dating_sim_state(request("replay-reader"))
         app.dating_sim_restart(request("replay-reader"))

@@ -265,6 +265,21 @@ def _daily_openings(seed_key, story_id, character_name_jp="ソイ", character_na
         )
     return selected
 
+
+def random_daily_opening(day, character_name_jp="ソイ", character_name_ko="소이"):
+    """★ 2026-09-16: "미연시 시스템 누를때마다 인트로가 똑같은데 다양하게
+    전개시작할수있게 무작위성좀 추가하면 좋겠어" 요청 — _daily_openings()는
+    scenario_run(재시작 횟수)에 묶인 결정론적 시드라 완주 후 재시작하기
+    전까지는 같은 문구만 나왔다. 아직 오늘 장소를 안 고른 상태(pending_
+    location 없음)에서 여는 화면은 선택지·호감도와 무관한 순수 도입부
+    문구라 매번 새로 뽑아도 진행 일관성에 영향이 없다 — 장면 변형 선택은
+    여전히 scenario_run 기반 결정론적 시드(_stable_weighted_choice)만
+    쓴다."""
+    candidates = DAY_OPENINGS.get(day)
+    if not candidates:
+        return None
+    return random.choice(candidates).replace("ソイ", character_name_jp).replace("소이", character_name_ko)
+
 # ★ 2026-09-15: "미연시 시나리오를 웹에서 검색해서 좀 재밌게 만들수없을까"
 # 요청 — 장소별 대사가 요일과 무관하게 3줄 고정이라 카페/공원/학교 중 어디를
 # 골라도 그날의 이야기가 똑같이 느껴졌다(선택이 장식일 뿐 서사에 영향이
@@ -635,6 +650,7 @@ def load_story_from_db(conn, character_id, seed_key=None):
     return {
         "id": character["character_id"], "name": character["name"], "title": character["title"],
         "character_image": character["character_image"], "character_images": character_images,
+        "character_name_ko": "소이",
         "source_title": None, "total_days": character["total_days"],
         "locations": locations, "scenes": scenes, "endings": endings,
         "day_openings": _daily_openings(seed_key, character_id),
@@ -709,6 +725,7 @@ def story_for(story_id=None, seed_key=None):
                 "character_images": {"cafe": "/dating-sim/static/soi.png",
                                      "park": "/dating-sim/static/soi-park.png",
                                      "school": "/dating-sim/static/soi-school.png"},
+                "character_name_ko": "소이",
                 "source_title": None, "total_days": TOTAL_DAYS, "locations": LOCATIONS,
                 "scenes": SCENES, "endings": ENDINGS,
                 "day_openings": _daily_openings(seed_key, CHARACTER_ID),
@@ -772,6 +789,7 @@ def story_for(story_id=None, seed_key=None):
             "character_images": {"first": profile["image"],
                                  "walk": profile["image"],
                                  "quiet": profile["image"]},
+            "character_name_ko": profile["ko"],
             "source_title": source_title, "total_days": TOTAL_DAYS, "locations": locations,
             "scenes": scenes, "endings": endings,
             "day_openings": _daily_openings(seed_key, story_id, profile["jp"], profile["ko"]),
