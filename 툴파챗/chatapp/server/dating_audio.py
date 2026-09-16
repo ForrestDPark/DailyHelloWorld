@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime
+import asyncio
 import hashlib
 import json
 import re
@@ -10,11 +11,14 @@ import urllib.request
 from pathlib import Path
 from typing import Iterable
 
+import edge_tts
+
 from server import dating_sim_story
 
 
 MODEL = "gpt-4o-mini-tts"
 VOICES = {"female": "marin", "male": "cedar"}
+EDGE_VOICES = {"female": "ja-JP-NanamiNeural", "male": "ja-JP-KeitaNeural"}
 INSTRUCTIONS = {
     "female": (
         "Speak in natural Japanese with a warm, clear, charming young adult female voice. "
@@ -155,11 +159,40 @@ def request_speech(api_key: str, role: str, text: str, voice: str | None = None)
         raise RuntimeError(f"OpenAI 음성 API 오류 ({error.code}): {detail}") from error
 
 
-def write_manifest(output_dir: Path, clips: dict[str, dict[str, str]]) -> None:
+def request_edge_speech(role: str, text: str, voice: str | None = None) -> bytes:
+    """Edge TTS의 일본어 성별 음성을 MP3 바이트로 생성한다."""
+    if role not in EDGE_VOICES:
+        raise ValueError("지원하지 않는 미연시 음성 역할입니다")
+
+    async def collect() -> bytes:
+        chunks = []
+        communicator = edge_tts.Communicate(text, voice or EDGE_VOICES[role])
+        async for item in communicator.stream():
+            if item.get("type") == "audio" and item.get("data"):
+                chunks.append(item["data"])
+        return b"".join(chunks)
+
+    try:
+        audio = asyncio.run(collect())
+    except Exception as error:
+        raise RuntimeError(f"Edge TTS 음성 생성 오류: {error}") from error
+    if not audio:
+        raise RuntimeError("Edge TTS 음성 생성 오류: 오디오를 받지 못했습니다")
+    return audio
+
+
+def write_manifest(
+    output_dir: Path,
+    clips: dict[str, dict[str, str]],
+    *,
+    provider: str = "openai",
+) -> None:
+    voices = EDGE_VOICES if provider == "edge" else VOICES
     manifest = {
         "version": 2,
-        "model": MODEL,
-        "voices": VOICES,
+        "provider": provider,
+        "model": "edge-tts" if provider == "edge" else MODEL,
+        "voices": voices,
         "ai_generated": True,
         "generated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
         "clips": clips,

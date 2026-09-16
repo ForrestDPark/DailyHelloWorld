@@ -33,6 +33,15 @@ class DatingAudioTests(unittest.TestCase):
             self.assertTrue(manifest["ai_generated"])
             self.assertEqual(manifest["clips"]["female"][text], f"/dating-sim/audio/{filename}")
 
+    def test_edge_manifest_identifies_provider_and_gendered_voices(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            dating_audio.write_manifest(output, {"female": {}, "male": {}}, provider="edge")
+            manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["provider"], "edge")
+            self.assertEqual(manifest["model"], "edge-tts")
+            self.assertEqual(manifest["voices"], dating_audio.EDGE_VOICES)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""OpenAI TTS로 미연시 일본어 대사를 중단·재개 가능한 MP3 캐시로 생성한다."""
+"""Edge/OpenAI TTS로 미연시 일본어 대사를 중단·재개 가능한 MP3 캐시로 생성한다."""
 from __future__ import annotations
 
 import argparse
@@ -21,6 +21,7 @@ def main() -> int:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--limit", type=int)
     parser.add_argument("--delay", type=float, default=0.15)
+    parser.add_argument("--provider", choices=("edge", "openai"), default="edge")
     args = parser.parse_args()
 
     catalog = dating_audio.build_catalog()
@@ -43,11 +44,12 @@ def main() -> int:
         print(f"중복 제거 후 {len(catalog)}개, 일본어 {total_chars}자", flush=True)
         for role in ("female", "male"):
             count = sum(1 for item_role, _text in catalog if item_role == role)
-            print(f"{role}: {count}개 · {dating_audio.VOICES[role]}", flush=True)
+            voices = dating_audio.EDGE_VOICES if args.provider == "edge" else dating_audio.VOICES
+            print(f"{role}: {count}개 · {voices[role]}", flush=True)
         return 0
 
     api_key = os.environ.get("OPENAI_API_KEY", "").strip()
-    if not api_key:
+    if args.provider == "openai" and not api_key:
         print("OPENAI_API_KEY가 설정되지 않았습니다.", file=sys.stderr)
         return 2
 
@@ -61,9 +63,13 @@ def main() -> int:
             print(f"[{index}/{len(catalog)}] {role} 기존 파일 사용", flush=True)
             continue
         try:
-            audio = dating_audio.request_speech(api_key, role, text)
+            audio = (
+                dating_audio.request_edge_speech(role, text)
+                if args.provider == "edge"
+                else dating_audio.request_speech(api_key, role, text)
+            )
         except RuntimeError as error:
-            dating_audio.write_manifest(output_dir, clips)
+            dating_audio.write_manifest(output_dir, clips, provider=args.provider)
             print(str(error), file=sys.stderr, flush=True)
             completed = sum(len(items) for items in clips.values())
             print(f"{completed}개까지 저장했습니다. 다시 실행하면 이어집니다.", file=sys.stderr, flush=True)
@@ -72,11 +78,11 @@ def main() -> int:
         temporary.write_bytes(audio)
         temporary.replace(target)
         clips[role][text] = f"/dating-sim/audio/{filename}"
-        dating_audio.write_manifest(output_dir, clips)
+        dating_audio.write_manifest(output_dir, clips, provider=args.provider)
         print(f"[{index}/{len(catalog)}] {role} 생성 완료 · {len(audio) / 1024:.0f} KiB", flush=True)
         if args.delay > 0:
             time.sleep(args.delay)
-    dating_audio.write_manifest(output_dir, clips)
+    dating_audio.write_manifest(output_dir, clips, provider=args.provider)
     print(f"전체 {len(catalog)}개 생성 완료", flush=True)
     return 0
 
