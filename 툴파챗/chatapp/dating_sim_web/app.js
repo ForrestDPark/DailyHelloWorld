@@ -307,6 +307,190 @@ async function loadAudioManifest() {
   updateListeningControls();
 }
 
+// ★ 2026-09-17: "미연시에서도 한자클릭하면 팝업뜨게해줘" 요청 — 채팅
+// (static/chat.js)의 한자 클릭 팝업(훈독·음독·한국 한자음, 단어장 저장)을
+// 미연시 대사·도입부·선택지·엔딩 텍스트에도 그대로 이식한다. 사전 데이터와
+// 단어장 API는 채팅과 동일한 것을 그대로 재사용한다.
+let kanjiDictionaryPromise = null;
+let kanjiPopover = null;
+let kanjiFavoritesPromise = null;
+let kanjiFavorites = new Set();
+const KANJI_PATTERN = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u;
+
+function katakanaToHiragana(text) {
+  return String(text || "").replace(/[ァ-ヶ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60));
+}
+
+function loadKanjiDictionary() {
+  if (!kanjiDictionaryPromise) {
+    kanjiDictionaryPromise = fetch("/static/data/kanjidic-readings.json?v=20260914-hanja-v3", { cache: "no-cache" })
+      .then((response) => {
+        if (!response.ok) throw new Error(`KANJIDIC2 HTTP ${response.status}`);
+        return response.json();
+      })
+      .then((data) => data.entries || {})
+      .catch((error) => {
+        kanjiDictionaryPromise = null;
+        console.error("일본어 한자 독음 사전을 불러오지 못했습니다.", error);
+        return {};
+      });
+  }
+  return kanjiDictionaryPromise;
+}
+
+function closeKanjiPopover() {
+  kanjiPopover?.remove();
+  kanjiPopover = null;
+}
+
+function formatKoreanHanjaGloss(reading) {
+  const meaning = String(reading.meaning || "").trim();
+  const sound = String(reading.sound || "").trim();
+  if (meaning === "불러오는 중…" || sound === "불러오는 중…") return "불러오는 중…";
+  if (!meaning && !sound) return "해당 없음";
+  if (!meaning) return sound;
+  if (!sound) return meaning;
+  const alreadyEndsWithSound = sound.split("·").some((item) => item && meaning.endsWith(` ${item}`));
+  return alreadyEndsWithSound ? meaning : `${meaning} ${sound}`;
+}
+
+// 단어장 API는 실제 로그인 계정에서만 동작한다(로컬 소유자 무인증 우회는
+// 401을 돌려받는다) — game의 api()는 401에서 홈으로 튕겨버리므로 여기서는
+// 별도의 조용한 fetch를 쓴다. 실패해도 팝업 자체(훈독·음독 보기)는 그대로 쓸 수 있다.
+function loadKanjiFavorites(force = false) {
+  if (force) kanjiFavoritesPromise = null;
+  if (!kanjiFavoritesPromise) {
+    kanjiFavoritesPromise = fetch("/api/me/japanese-kanji-favorites", { credentials: "same-origin" })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((items) => {
+        kanjiFavorites = new Set(items.map((item) => item.character));
+        return items;
+      })
+      .catch(() => []);
+  }
+  return kanjiFavoritesPromise;
+}
+
+async function toggleKanjiFavorite(character, button) {
+  await loadKanjiFavorites();
+  const removing = kanjiFavorites.has(character);
+  button.disabled = true;
+  try {
+    const response = await fetch(`/api/me/japanese-kanji-favorites/${encodeURIComponent(character)}`, {
+      method: removing ? "DELETE" : "PUT",
+      credentials: "same-origin",
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (removing) kanjiFavorites.delete(character); else kanjiFavorites.add(character);
+    button.classList.toggle("active", !removing);
+    button.textContent = removing ? "☆ 저장" : "★ 저장됨";
+    button.setAttribute("aria-label", removing ? `${character} 단어장에 저장` : `${character} 단어장에서 제거`);
+  } catch (e) {
+    alert("한자를 저장하지 못했습니다.");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function showKanjiPopover(character, reading, anchor) {
+  closeKanjiPopover();
+  const popover = document.createElement("section");
+  popover.className = "japanese-kanji-popover";
+  popover.setAttribute("role", "dialog");
+  popover.setAttribute("aria-label", `${character} 한자 뜻과 음`);
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "japanese-kanji-popover-close";
+  close.textContent = "×";
+  close.setAttribute("aria-label", "독음 닫기");
+  close.addEventListener("click", closeKanjiPopover);
+  const favorite = document.createElement("button");
+  favorite.type = "button";
+  favorite.className = "japanese-kanji-favorite";
+  favorite.textContent = "☆ 저장";
+  favorite.setAttribute("aria-label", `${character} 단어장에 저장`);
+  loadKanjiFavorites().then(() => {
+    if (!favorite.isConnected) return;
+    const active = kanjiFavorites.has(character);
+    favorite.classList.toggle("active", active);
+    favorite.textContent = active ? "★ 저장됨" : "☆ 저장";
+    favorite.setAttribute("aria-label", active ? `${character} 단어장에서 제거` : `${character} 단어장에 저장`);
+  });
+  favorite.addEventListener("click", () => toggleKanjiFavorite(character, favorite));
+  const glyph = document.createElement("strong");
+  glyph.className = "japanese-kanji-popover-glyph";
+  glyph.lang = "ja";
+  glyph.textContent = character;
+  const readings = document.createElement("div");
+  readings.className = "japanese-kanji-popover-readings";
+  const rows = [
+    ["뜻·음", formatKoreanHanjaGloss(reading)],
+    ["훈독", (reading.kun || []).join("・") || "해당 없음"],
+    ["음독", (reading.on || []).map(katakanaToHiragana).join("・") || "해당 없음"],
+  ];
+  for (const [label, displayValue] of rows) {
+    const row = document.createElement("div");
+    const heading = document.createElement("span");
+    heading.textContent = label;
+    const value = document.createElement("b");
+    value.lang = "ja";
+    value.textContent = displayValue;
+    row.append(heading, value);
+    readings.appendChild(row);
+  }
+  popover.append(close, favorite, glyph, readings);
+  document.body.appendChild(popover);
+  kanjiPopover = popover;
+  const rect = anchor.getBoundingClientRect();
+  const width = popover.offsetWidth;
+  popover.style.left = `${Math.max(12, Math.min(rect.left + rect.width / 2 - width / 2, innerWidth - width - 12))}px`;
+  const desiredTop = rect.bottom + 10;
+  popover.style.top = `${Math.max(12, Math.min(desiredTop, innerHeight - popover.offsetHeight - 12))}px`;
+}
+
+function decorateKanji(container) {
+  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      if (!KANJI_PATTERN.test(node.nodeValue || "")) return NodeFilter.FILTER_REJECT;
+      if (node.parentElement?.closest("rt")) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const nodes = [];
+  while (walker.nextNode()) nodes.push(walker.currentNode);
+  for (const node of nodes) {
+    const fragment = document.createDocumentFragment();
+    for (const part of Array.from(node.nodeValue || "")) {
+      if (!KANJI_PATTERN.test(part)) {
+        fragment.appendChild(document.createTextNode(part));
+        continue;
+      }
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "japanese-kanji-char";
+      button.lang = "ja";
+      button.textContent = part;
+      button.setAttribute("aria-label", `${part} 한자 뜻과 음 보기`);
+      button.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        showKanjiPopover(part, { sound: "불러오는 중…", meaning: "불러오는 중…", on: [], kun: [] }, button);
+        const dictionary = await loadKanjiDictionary();
+        if (!button.isConnected) return;
+        const reading = dictionary[part] || { sound: "", meaning: "", on: [], kun: [] };
+        showKanjiPopover(part, reading, button);
+      });
+      fragment.appendChild(button);
+    }
+    node.replaceWith(fragment);
+  }
+}
+
+document.addEventListener("click", (event) => {
+  if (kanjiPopover && !kanjiPopover.contains(event.target) && !event.target.closest(".japanese-kanji-char")) {
+    closeKanjiPopover();
+  }
+});
+
 function renderAnnotatedText(element, text) {
   element.replaceChildren();
   const pattern = /\[([^\]|]+)\|([^\]]+)\]|\n/g;
@@ -326,6 +510,7 @@ function renderAnnotatedText(element, text) {
     cursor = match.index + match[0].length;
   }
   if (cursor < text.length) element.append(document.createTextNode(text.slice(cursor)));
+  decorateKanji(element);
 }
 
 function stopTypewriter() {

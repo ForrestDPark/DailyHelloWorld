@@ -212,6 +212,87 @@ html, body {
 
 #loading-view { text-align: center; font-size: 10px; color: var(--muted); margin-top: 40px; }
 
+/* ★ 2026-09-17: "미연시에서도 한자클릭하면 팝업뜨게해줘" — static/style.css의
+   채팅 한자 팝업을 미연시 도트 테마 색상으로 옮겨왔다. */
+.japanese-kanji-char {
+  display: inline;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px dotted var(--muted);
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.japanese-kanji-popover {
+  position: fixed;
+  z-index: 1300;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  width: min(340px, calc(100vw - 24px));
+  padding: 54px 16px 16px;
+  border: 3px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+.japanese-kanji-popover-glyph {
+  align-self: center;
+  font-family: "Hiragino Kaku Gothic ProN", "Noto Sans KR", sans-serif;
+  font-size: 44px;
+  line-height: 1;
+  color: var(--accent);
+}
+.japanese-kanji-popover-readings { display: grid; gap: 8px; min-width: 0; }
+.japanese-kanji-popover-readings > div { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.japanese-kanji-popover-readings span {
+  color: var(--muted);
+  font-size: 10px;
+  font-family: -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans KR",sans-serif;
+}
+.japanese-kanji-popover-readings b {
+  overflow-wrap: anywhere;
+  font-family: -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans KR",sans-serif;
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 400;
+}
+.japanese-kanji-popover-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 2px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.japanese-kanji-favorite {
+  position: absolute;
+  top: 8px;
+  left: 16px;
+  right: auto;
+  width: auto;
+  min-width: 74px;
+  height: 30px;
+  padding: 0 8px;
+  border: 2px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+}
+.japanese-kanji-favorite.active { color: var(--border); }
+
 .lobby-hint {
   font-family: -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans KR",sans-serif;
   font-size: 14px;
