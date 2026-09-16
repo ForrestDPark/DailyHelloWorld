@@ -420,6 +420,31 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         self.assertIn("vocab", story["scenes"][1]["first"])
         self.assertEqual(story["scenes"][1]["first"]["vocab"]["ja"], "本音")
 
+    def test_vocab_line_is_inserted_before_the_final_line_not_after_it(self):
+        """★ 2026-09-17: "여자가갑자기이상한말하고 답변도 다이상한데 개연성좀
+        손봐줘" 신고 — 선택지는 항상 마지막 줄(beat_outro)에 답하는데, 표현
+        줄이 그 뒤에 붙어서 화면에 마지막으로 남으면 선택지가 엉뚱한 문장에
+        대답하는 것처럼 보였다. 표현 줄은 마지막 줄 앞에 끼워 넣어야 한다."""
+        with tempfile.TemporaryDirectory() as directory:
+            library_dir = Path(directory)
+            work_dir = library_dir / "MATCHME"
+            work_dir.mkdir()
+            (work_dir / "scene_study_cards.json").write_text(json.dumps({
+                "1-1": {"vocabulary": [{"ja": "本音", "reading": "ほんね", "ko": "본심"}]},
+            }), encoding="utf-8")
+            with patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", library_dir), \
+                 patch.object(dating_sim_story, "_find_book", return_value=Path("/tmp/MATCHME.epub")), \
+                 patch.object(dating_sim_story, "_book_title", return_value="MATCHME"):
+                story = dating_sim_story.story_for("book:" + "3" * 20)
+        expected_outro = (
+            dating_sim_story.DAY_BEATS[1][0][1]
+            .replace("ソイ", story["name"])
+            .replace("소이", story["character_name_ko"])
+        )
+        lines = story["scenes"][1]["first"]["lines"]
+        self.assertEqual(lines[-1], expected_outro)
+        self.assertIn("本音", lines[-2])
+
     def test_book_story_has_no_vocab_when_no_library_match(self):
         with tempfile.TemporaryDirectory() as directory:
             with patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", Path(directory)), \

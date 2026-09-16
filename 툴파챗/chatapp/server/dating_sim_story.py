@@ -381,9 +381,17 @@ def _seven_day_scenes(location_lines, character_name_ko="소이", character_name
     장소 대사) 모든 요일에 같은 대사가 붙는다.
 
     vocab_pool을 주면(그 작품 학습카드에서 뽑은 단어 목록) 요일마다 단어
-    하나를 새 문장 템플릿에 끼워 넣은 "오늘의 표현" 줄을 장면 끝에 덧붙인다
-    — 원작 대사 문장은 절대 그대로 옮기지 않고, 안전하게 새로 쓴 문장에
-    실제 단어(한자+읽기+뜻)만 넣는다."""
+    하나를 새 문장 템플릿에 끼워 넣은 "오늘의 표현" 줄을 장면 중간에 끼워
+    넣는다 — 원작 대사 문장은 절대 그대로 옮기지 않고, 안전하게 새로 쓴
+    문장에 실제 단어(한자+읽기+뜻)만 넣는다.
+
+    ★ 2026-09-17 수정: "여자가갑자기이상한말하고 답변도 다이상한데" 신고 —
+    이 표현 줄을 장면 맨 끝(scene_lines.append)에 붙였더니, 선택지가 실제로
+    답하는 질문(beat_outro, 예: "이름과 연락처를 물어봐도 될까요")이 아니라
+    그 뒤에 이어붙은 무관한 단어 이야기가 화면에 마지막으로 남아 선택지와
+    안 맞아 보였다. beat_outro는 항상 선택지가 답하는 문장이어야 하므로,
+    표현 줄은 그 앞(대화 중간)에 끼워 넣어 마지막 줄은 항상 beat_outro로
+    남긴다."""
     scenes = {}
     for day, (lines, choices) in DAY_BEATS.items():
         scenes[day] = {}
@@ -395,7 +403,7 @@ def _seven_day_scenes(location_lines, character_name_ko="소이", character_name
             beat_outro = lines[1].replace("ソイ", character_name_jp).replace("소이", character_name_ko)
             scene_lines = [activity, beat_intro, beat_outro] if day == 1 else [beat_intro, activity, beat_outro]
             if vocab_word:
-                scene_lines.append(_vocab_highlight_line(vocab_word, day - 1))
+                scene_lines.insert(-1, _vocab_highlight_line(vocab_word, day - 1))
             scene = {"lines": scene_lines, "choices": [
                 {"text": choices[0].replace("ソイ", character_name_jp).replace("소이", character_name_ko), "affection": positive_score},
                 {"text": choices[1].replace("ソイ", character_name_jp).replace("소이", character_name_ko), "affection": negative_score},
