@@ -1216,6 +1216,27 @@ def _jp_epub_read_url(title):
     return f"{JP_EPUB_WEB_PUBLIC_URL}/?book={book_id}" if book_id else ""
 
 
+# ★ 2026-09-16: "일본어선생님이 채팅방에서 작품올리고 설명할때 epub
+# 작품링크랑 미연시 링크도 같이 올리면좋겠어 ... 그작품에서 사용된 표현들을
+# 사용한 대사들이 미연시에서 드러났으면 좋겠어" 요청 — EPUB 링크와 같은
+# book_id(같은 EPUB 절대경로 sha256 공식)로 /dating-sim/?book=<id>를 만든다.
+# server/dating_sim_story.py의 story_for("book:<id>")가 그 book_id로 EPUB
+# 제목만 안전하게 뽑아 쓰고(원본 대사는 절대 안 옮김), 그 작품 학습카드의
+# 단어(vocabulary)만 새로 쓴 안전한 문장에 끼워 넣어 "오늘의 표현"을 만든다.
+JP_DATING_SIM_WEB_PUBLIC_URL = os.environ.get(
+    "JP_DATING_SIM_WEB_PUBLIC_URL", "https://chat.tulpa-chat.site/dating-sim"
+).rstrip("/")
+
+
+def _jp_dating_sim_url(title):
+    """웹 리더와 같은 book_id로 이 회차 속 인물과 비슷한 상황의 미연시
+    링크를 만든다. EPUB이 없으면(=book_id를 못 만들면) 빈 문자열."""
+    if not JP_DATING_SIM_WEB_PUBLIC_URL:
+        return ""
+    book_id = _jp_epub_book_id(title)
+    return f"{JP_DATING_SIM_WEB_PUBLIC_URL}/?book={book_id}" if book_id else ""
+
+
 # ★ 2026-09-06: "새로 만들고있는 chat.tulpa-chat.site/epub/ 이 싸이트도
 # 활용하면 좋겠어" 요청 — 웹 리더가 이미 읽은 위치를 ~/.japanese_epub_web/
 # reader.db(progress 테이블, book_id별 spine_index/percent/updated_at)에
@@ -1345,6 +1366,9 @@ def load_jp_subtitle_state():
             read_url = _jp_epub_read_url(t)
             if read_url:
                 lines.append(f"웹에서 EPUB 읽기: {read_url}")
+            dating_sim_url = _jp_dating_sim_url(t)
+            if dating_sim_url:
+                lines.append(f"이 회차 속 인물과 비슷한 상황의 미연시 해보기: {dating_sim_url}")
             progress = _jp_epub_progress_text(t)
             if progress:
                 lines.append(progress)
@@ -1361,6 +1385,9 @@ def load_jp_subtitle_state():
     review_url = _jp_epub_read_url(review_title)
     if review_url:
         lines.append(f"웹에서 EPUB 읽기: {review_url}")
+    review_dating_sim_url = _jp_dating_sim_url(review_title)
+    if review_dating_sim_url:
+        lines.append(f"이 회차 속 인물과 비슷한 상황의 미연시 해보기: {review_dating_sim_url}")
     review_progress = _jp_epub_progress_text(review_title)
     if review_progress:
         lines.append(review_progress)
@@ -1386,6 +1413,11 @@ JP_SUBTITLE_ADDENDUM = (
     "★ 회차를 소개할 때 라이브 상태에 '웹에서 EPUB 읽기:' URL이 있으면 반드시 회차명과 "
     "함께 그 링크를 별도 줄에 적는다. URL을 문장 안에 숨기거나 임의로 바꾸지 말고, 링크가 "
     "주입되지 않은 회차에는 존재할 것 같은 주소를 지어내지 않는다.\n"
+    "★ 2026-09-16 미연시 링크: 라이브 상태에 '이 회차 속 인물과 비슷한 상황의 미연시 "
+    "해보기:' URL이 있으면 EPUB 링크 바로 다음 줄에 그대로 적는다(마찬가지로 지어내지 "
+    "않음). 소개할 때는 '오늘 배운 표현으로 직접 대화해볼 수 있는 미연시예요' 정도로 "
+    "가볍게만 언급한다 — 게임 속 상황이 그 회차 내용과 똑같다고 말하지 않는다(실제로는 "
+    "안전한 가상의 만남 이야기이고, 그 회차 학습카드의 단어만 대사에 살짝 녹아 있음).\n"
     "★ 2026-09-03 실측 피드백: \"학습카드 하나만 올라오는데 한작품에있는 모든 학습카드에 "
     "해당하는 대화를 생성했으면 좋겠어\" — 매 턴 주입되는 '학습카드 전체'에는 그 회차의 "
     "장면 전부가 들어있다. 앞쪽 몇 개만 골라서 소개하고 나머지를 생략하지 말고, 장면을 "

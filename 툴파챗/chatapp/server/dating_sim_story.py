@@ -11,6 +11,7 @@
 """
 import datetime
 import hashlib
+import json
 import random
 import re
 import zipfile
@@ -303,23 +304,90 @@ LOCATION_LINES = {
 }
 
 
-def _seven_day_scenes(location_lines, character_name_ko="소이", character_name_jp="ソイ"):
+# ★ 2026-09-16: "일본어선생님이 채팅방에서 작품올리고 설명할때 ... 미연시
+# 링크도 같이 올리면좋겠어 ... 상황이 똑같지않아도 그작품에서 사용된
+# 표현들을 사용한 대사들이 미연시에서 드러났으면 좋겠어" 요청 — EPUB
+# 본문(대사 원문)은 여전히 절대 옮기지 않는다는 안전장치는 그대로 두고,
+# 이미 학습용으로 추출·정제된 scene_study_cards.json의 vocabulary(개별
+# 단어+읽기+뜻)만 재료로 써서 새 문장을 만든다. 문장 자체는 여기서 직접
+# 쓴 안전한 템플릿이고, 그 안에 실제 단어 하나만 끼워 넣는 방식이라 원작
+# 대사를 그대로 복사하는 것과는 다르다.
+JP_SUBTITLE_LIBRARY_DIR = Path(__file__).resolve().parents[3] / "일본어자막추출" / "library"
+
+VOCAB_SENTENCE_TEMPLATES = [
+    "「{tag}」について、[少|すこ]し[話|はな]してもいいですか。\n'{ko}'에 대해 잠깐 이야기해도 될까요?",
+    "[今日|きょう]は{tag}のことを、なんとなく[考|かんが]えていました。\n오늘은 '{ko}' 생각을 왠지 하고 있었어요.",
+    "{tag}という[言葉|ことば]、[最近|さいきん][気|き]になっているんです。\n'{ko}'라는 말이 요즘 신경 쓰여요.",
+    "[実|じつ]は{tag}のこと、あなたに[聞|き]いてみたかったんです。\n사실 '{ko}' 얘기, 당신한테 물어보고 싶었어요.",
+]
+
+
+def _find_library_folder(title):
+    """일본어자막추출/library/<제목>/ 폴더를 EPUB 제목과 접두 일치로 찾는다
+    (persona_worker.py의 _jp_epub_book_id와 반대 방향의 같은 매칭 규칙)."""
+    if not title or not JP_SUBTITLE_LIBRARY_DIR.is_dir():
+        return None
+    title_key = title.casefold()
+    for folder in JP_SUBTITLE_LIBRARY_DIR.iterdir():
+        if folder.is_dir() and title_key.startswith(folder.name.casefold()):
+            return folder
+    return None
+
+
+def _load_work_vocabulary(title):
+    """해당 작품의 scene_study_cards.json에서 개별 단어(vocabulary)만
+    추린다 — 문장(expressions)은 원본 대사 그대로일 수 있어 쓰지 않는다."""
+    folder = _find_library_folder(title)
+    if not folder:
+        return []
+    try:
+        cards = json.loads((folder / "scene_study_cards.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    seen = {}
+    for scene in cards.values():
+        for entry in (scene or {}).get("vocabulary", []) or []:
+            ja, reading, ko = entry.get("ja"), entry.get("reading"), entry.get("ko")
+            if ja and reading and ko and ja not in seen:
+                seen[ja] = (ja, reading, ko)
+    return list(seen.values())
+
+
+def _vocab_highlight_line(word, template_index):
+    ja, reading, ko = word
+    tag = f"[{ja}|{reading}]"
+    template = VOCAB_SENTENCE_TEMPLATES[template_index % len(VOCAB_SENTENCE_TEMPLATES)]
+    return template.format(tag=tag, ko=ko)
+
+
+def _seven_day_scenes(location_lines, character_name_ko="소이", character_name_jp="ソイ", vocab_pool=None):
     """location_lines는 {장소: 대사} 또는 {장소: {일차: 대사}} 둘 다 받는다 —
     후자면 요일마다 다른 활동 대사가, 전자면(예: EPUB 영감 이야기의 임시
-    장소 대사) 모든 요일에 같은 대사가 붙는다."""
+    장소 대사) 모든 요일에 같은 대사가 붙는다.
+
+    vocab_pool을 주면(그 작품 학습카드에서 뽑은 단어 목록) 요일마다 단어
+    하나를 새 문장 템플릿에 끼워 넣은 "오늘의 표현" 줄을 장면 끝에 덧붙인다
+    — 원작 대사 문장은 절대 그대로 옮기지 않고, 안전하게 새로 쓴 문장에
+    실제 단어(한자+읽기+뜻)만 넣는다."""
     scenes = {}
     for day, (lines, choices) in DAY_BEATS.items():
         scenes[day] = {}
+        vocab_word = vocab_pool[(day - 1) % len(vocab_pool)] if vocab_pool else None
         for location, day_lines in location_lines.items():
             activity = day_lines[day] if isinstance(day_lines, dict) else day_lines
             positive_score, negative_score = choice_scores(day, location, 1)
             beat_intro = lines[0].replace("ソイ", character_name_jp).replace("소이", character_name_ko)
             beat_outro = lines[1].replace("ソイ", character_name_jp).replace("소이", character_name_ko)
             scene_lines = [activity, beat_intro, beat_outro] if day == 1 else [beat_intro, activity, beat_outro]
-            scenes[day][location] = {"lines": scene_lines, "choices": [
+            if vocab_word:
+                scene_lines.append(_vocab_highlight_line(vocab_word, day - 1))
+            scene = {"lines": scene_lines, "choices": [
                 {"text": choices[0].replace("ソイ", character_name_jp).replace("소이", character_name_ko), "affection": positive_score},
                 {"text": choices[1].replace("ソイ", character_name_jp).replace("소이", character_name_ko), "affection": negative_score},
             ]}
+            if vocab_word:
+                scene["vocab"] = {"ja": vocab_word[0], "reading": vocab_word[1], "ko": vocab_word[2]}
+            scenes[day][location] = scene
     return scenes
 
 
@@ -685,7 +753,8 @@ def story_for(story_id=None, seed_key=None):
             7: "[最初|さいしょ]に[譲|ゆず]り[合|あ]った[席|せき]で、[彼女|かのじょ]が[大切|たいせつ]な[言葉|ことば]を[選|えら]ぶ。\n처음 서로 양보했던 자리에서 그녀가 소중한 말을 고른다.",
         },
     }
-    scenes = _seven_day_scenes(book_location_lines, profile["ko"], profile["jp"])
+    vocab_pool = _load_work_vocabulary(source_title)
+    scenes = _seven_day_scenes(book_location_lines, profile["ko"], profile["jp"], vocab_pool=vocab_pool)
     if seed_key is not None:
         for day, day_scenes in scenes.items():
             for location_id, scene in day_scenes.items():

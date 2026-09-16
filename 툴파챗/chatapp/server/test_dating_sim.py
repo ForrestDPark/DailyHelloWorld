@@ -1,5 +1,6 @@
 """★ 2026-09-15: "미연시 시스템 하나 만들어봤으면 좋겠어" 요청으로 만든
 선택지+호감도+멀티 엔딩 미니게임의 엔진(상태 저장·전환) 테스트."""
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -363,6 +364,55 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         with patch.object(dating_sim_story, "_find_book", return_value=None):
             with self.assertRaises(ValueError):
                 dating_sim_story.story_for("book:" + "0" * 20)
+
+    def test_load_work_vocabulary_only_reads_vocabulary_field_never_expressions(self):
+        """★ 2026-09-16: "그작품에서 사용된 표현들을 사용한 대사들이 미연시에서
+        드러났으면 좋겠어" 요청 — 다만 expressions(원본 대사 문장 그대로일
+        수 있음)는 절대 재료로 쓰면 안 되고, 이미 학습용으로 추출된 개별
+        단어(vocabulary)만 안전하게 재사용해야 한다."""
+        with tempfile.TemporaryDirectory() as directory:
+            library_dir = Path(directory)
+            work_dir = library_dir / "TEST-001"
+            work_dir.mkdir()
+            (work_dir / "scene_study_cards.json").write_text(json.dumps({
+                "1-1": {
+                    "expressions": [{"ja": "원본 대사 문장이라 절대 쓰면 안 됨", "reading": "x", "ko": "금지"}],
+                    "vocabulary": [{"ja": "同棲", "reading": "どうせい", "ko": "동거"}],
+                }
+            }), encoding="utf-8")
+            with patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", library_dir):
+                vocab = dating_sim_story._load_work_vocabulary("TEST-001")
+        self.assertEqual(vocab, [("同棲", "どうせい", "동거")])
+        for _, _, ko in vocab:
+            self.assertNotEqual(ko, "금지")
+
+    def test_vocab_highlight_line_embeds_real_word_in_authored_sentence(self):
+        line = dating_sim_story._vocab_highlight_line(("同棲", "どうせい", "동거"), 0)
+        self.assertIn("[同棲|どうせい]", line)
+        self.assertIn("동거", line)
+
+    def test_book_story_attaches_vocab_when_library_match_exists(self):
+        with tempfile.TemporaryDirectory() as directory:
+            library_dir = Path(directory)
+            work_dir = library_dir / "MATCHME"
+            work_dir.mkdir()
+            (work_dir / "scene_study_cards.json").write_text(json.dumps({
+                "1-1": {"vocabulary": [{"ja": "本音", "reading": "ほんね", "ko": "본심"}]},
+            }), encoding="utf-8")
+            with patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", library_dir), \
+                 patch.object(dating_sim_story, "_find_book", return_value=Path("/tmp/MATCHME.epub")), \
+                 patch.object(dating_sim_story, "_book_title", return_value="MATCHME"):
+                story = dating_sim_story.story_for("book:" + "1" * 20)
+        self.assertIn("vocab", story["scenes"][1]["first"])
+        self.assertEqual(story["scenes"][1]["first"]["vocab"]["ja"], "本音")
+
+    def test_book_story_has_no_vocab_when_no_library_match(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", Path(directory)), \
+                 patch.object(dating_sim_story, "_find_book", return_value=Path("/tmp/NOMATCH.epub")), \
+                 patch.object(dating_sim_story, "_book_title", return_value="NOMATCH"):
+                story = dating_sim_story.story_for("book:" + "2" * 20)
+        self.assertNotIn("vocab", story["scenes"][1]["first"])
 
     def test_book_character_profiles_are_stable_and_varied(self):
         profiles = [dating_sim_story.book_character_profile(f"book:{number:020x}")

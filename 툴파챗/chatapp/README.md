@@ -3599,3 +3599,12 @@ JOB_SYSTEM_ADDENDUM 계열 페르소나(매 턴 정규직/알바 두 카테고�
 - **원인 2(새로 발견·수정)**: `seed_dating_sim_content()`가 1일차만 `intro_line`/`activity_line` 컬럼 값을 미리 뒤바꿔 저장해뒀는데(사고 장면을 먼저 보여주기 위해), `load_story_from_db()`(실제 플레이가 타는 경로)는 이 뒤바뀜을 모르고 컬럼을 항상 같은 순서로만 읽어서 1일차에 "고마워요"가 사고 장면보다 먼저 나오고 있었다. `activity_line`이라는 이름의 컬럼에 실제로는 인트로 대사가 들어가는 것 자체가 헷갈리는 설계라 컬럼 값은 항상 이름 그대로(intro/activity/outro)만 담게 되돌리고, 1일차 예외 순서는 읽는 쪽(`load_story_from_db`, EPUB 폴백 경로인 `_seven_day_scenes`와 동일하게) 한 곳에서만 적용하도록 정리했다.
 - 이 컬럼 의미 불일치 때문에 콘텐츠 마이그레이션 테스트(`test_old_content_is_migrated_to_first_meeting_story`)도 실패하고 있었다 — DB를 직접 조회하면 `activity_line` 컬럼에서 엉뚱하게 인트로 대사가 나왔기 때문. 정리 후 저장소 전체 테스트 101건이 다시 통과한다.
 - 실제 운영 DB(`~/.tulpachat/chatapp.db`)에 직접 재시딩해 1일차가 [사고 장면 → 고마워요 → 자기소개+연락처 요청] 순서로, 2일차 알림이 "소이"를 정확히 참조하는지 확인했다.
+
+## 일본어 선생님이 작품 소개할 때 미연시 링크도 함께 (★ 2026-09-16 추가)
+
+**사용자 요청**: "일본어선생님이 채팅방에서 작품올리고 설명할때 epup 작품링크랑 미연시 링크도 같이 올리면좋겠어 해당작품 인물이랑 비슷한상황에서 시뮬레이션을 하는거지 꼭 상황이 똑같지않아도 그작품에서 사용된 표현들을 사용한 대사들이 미연시에서 드러났으면 좋겠어".
+
+- `worker/persona_worker.py`에 `_jp_dating_sim_url(title)`을 추가했다 — EPUB 읽기 링크와 완전히 같은 `book_id` 공식(EPUB 절대경로 sha256 앞 20자)으로 `/dating-sim/?book=<id>`를 만든다. `load_jp_subtitle_state()`가 "오늘 새로 처리한 회차"·"오늘의 복습 대상" 두 곳 모두에서 EPUB 링크 바로 다음 줄에 이 링크를 끼워 넣고, `JP_SUBTITLE_ADDENDUM`에 이 링크도 반드시 별도 줄에 적으라는 지시를 추가했다.
+- **안전장치는 그대로 유지**: `dating_sim_story.py`의 EPUB 영감 이야기는 여전히 원본 대사(`expressions`)를 절대 옮기지 않는다. 대신 `_load_work_vocabulary(title)`이 그 작품의 `scene_study_cards.json`에서 이미 학습용으로 추출된 개별 단어(`vocabulary` — 한자+읽기+뜻)만 골라오고, `_vocab_highlight_line()`이 직접 새로 쓴 안전한 문장 템플릿(예: 「〜について、少し話してもいいですか」)에 그 단어 하나만 끼워 넣는다. 요일마다 다른 단어를 하나씩 배정해 장면 끝에 "오늘의 표현"으로 덧붙인다.
+- EPUB 제목이 `일본어자막추출/library/<제목>/` 폴더명과 접두 일치하지 않는 작품(또는 학습카드가 아직 없는 회차)은 단어 없이 기존 안전한 고정 템플릿만 쓴다 — 조용히 정상 동작(graceful degrade)한다.
+- 단위 테스트 4건 추가(`server/test_dating_sim.py`) — `expressions` 필드는 절대 재료로 안 쓰는지, 실제 문장에 단어가 잘 들어가는지, 라이브러리 매칭 성공/실패 양쪽 모두 확인. `worker/test_jp_dating_sim_link.py` 3건으로 EPUB·미연시 링크가 같은 book_id를 쓰는지, 조건 미충족 시 빈 문자열을 돌려주는지 확인. 실제 운영 데이터(오늘의 복습 대상 EKDV-819)로 전체 흐름(페르소나 메시지 → 링크 → 실제 게임 속 "疲れる/피곤해지다" 표현 등장)을 직접 검증했다.
