@@ -59,12 +59,40 @@ class DatingSimCoherenceTests(unittest.TestCase):
         issues = report.check_hidden_events_preserve_outro(db.get_conn)
         self.assertEqual(issues, [], "\n".join(issues))
 
+    def test_no_vocab_tangent_on_emotionally_heavy_days(self):
+        """★ 2026-09-17 실제 버그: "장래에대한 고민인데 왜 돕다에대해서
+        이야기한다는거야 의미가 이해가 안가" — 4·6일차(고민 상담·서운함
+        사과) 같은 감정적으로 무거운 요일에 EPUB에서 뽑은 무관한 단어로
+        화제를 트는 표현 줄이 섞이면 안 된다."""
+        issues = report.check_no_vocab_tangent_on_serious_days(
+            [("同棲", "どうせい", "동거"), ("本音", "ほんね", "본심")]
+        )
+        self.assertEqual(issues, [], "\n".join(issues))
+
     def test_run_all_checks_reports_nothing_wrong(self):
-        """네 규칙을 한 번에 묶어 돌리는 진입점(run_all_checks)도 그대로
+        """다섯 규칙을 한 번에 묶어 돌리는 진입점(run_all_checks)도 그대로
         비어 있어야 한다 — dating_sim_coherence_report.py를 직접 실행했을
         때와 같은 결과를 테스트로도 보장한다."""
         issues = report.run_all_checks(conn_factory=db.get_conn)
         self.assertEqual(issues, [], "\n".join(issues))
+
+    def test_emotionally_heavy_days_have_concrete_worry_content_not_just_a_question(self):
+        """★ 2026-09-17: "고민내영에대해서 더 대화를 해야지 이런식으로
+        억지대화가 나지않게" 요청 — 4·6일차는 감정을 언급만 하고 바로
+        질문으로 넘어가면 안 되고, 최소한의 구체적인 내용(문장 쌍 3개
+        이상)이 있어야 한다는 하한선을 회귀 방지로 건다."""
+        for day in ds.DAYS_WITHOUT_VOCAB_ASIDE:
+            self.assertEqual(
+                report.score_day_depth(day), 100,
+                f"day={day}가 다시 얕아짐(문장 쌍 부족) — DAY_BEATS[{day}]에 내용을 더 채워야 함",
+            )
+
+    def test_narrative_completeness_score_stays_above_the_floor(self):
+        """종합 완성도 점수가 과거 버그 수정 이전 수준(87점 미만)으로
+        되돌아가지 않는지 확인하는 회귀 방지 하한선이다."""
+        score = report.score_narrative_completeness(conn_factory=db.get_conn)
+        self.assertGreaterEqual(score["overall"], 85, score)
+        self.assertEqual(score["invariant_score"], 100, score["issues"])
 
 
 if __name__ == "__main__":

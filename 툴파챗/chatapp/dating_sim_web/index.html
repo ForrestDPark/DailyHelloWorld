@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/dating-sim/static/style.css?v=20260917-v11">
+<link rel="stylesheet" href="/dating-sim/static/style.css?v=20260917-v12">
 </head>
 <body>
   <div id="game">
@@ -42,6 +42,7 @@
           <div id="speaker-name" class="speaker-name">소이</div>
         </div>
         <div class="dialogue-box">
+          <button id="dialogue-back" type="button" class="dialogue-back hidden">◀</button>
           <p id="dialogue-text"></p>
           <button id="dialogue-next" type="button" class="dialogue-next hidden">▼</button>
         </div>
@@ -57,7 +58,7 @@
           <p id="result-text"></p>
           <p id="result-affection" class="result-affection"></p>
         </div>
-        <button id="result-next" type="button" class="pixel-button">다음 장면으로</button>
+        <button id="result-next" type="button" class="pixel-button">다음 장면으로 (화면을 눌러도 넘어가요)</button>
       </section>
 
       <section id="ending-view" class="hidden">
@@ -81,6 +82,6 @@
       </section>
     </main>
   </div>
-  <script src="/dating-sim/static/app.js?v=20260917-v11"></script>
+  <script src="/dating-sim/static/app.js?v=20260917-v12"></script>
 </body>
 </html>

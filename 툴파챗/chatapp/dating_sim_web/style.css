@@ -169,6 +169,17 @@ html, body {
   cursor: pointer;
 }
 @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+.dialogue-back {
+  position: absolute;
+  left: 12px;
+  bottom: 8px;
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.dialogue-back:active { transform: translateX(-2px); }
 
 .choice-list { display: grid; gap: 10px; margin-top: 14px; }
 .choice-button {

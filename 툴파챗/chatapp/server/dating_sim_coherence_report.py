@@ -7,18 +7,31 @@
 불일치를 사람이 스크린샷을 볼 때까지 기다리지 않고 자동으로 잡아내는
 점검 도구를 만들었다.
 
-구조 (2단계):
+★ 2026-09-17 확장: "이런식으로 억지대화가 나지않게 파이프라인구성하고
+갑자기대화가 끝나는식으로 되지않게 파이프라인구성해서 시나리오개연성
+완성도 점수까지 평가하도록하자" 요청 — 2일차 라벨·EPUB 표현 줄 버그를
+잡은 1차 파이프라인에 이어, "장래 고민인데 왜 무관한 단어 얘기를 하냐"
+(감정적으로 무거운 요일에 EPUB 표현 줄이 끼어드는 문제)와 "장면이 갑자기
+끝난다"(고민 내용 없이 바로 질문으로 넘어가는 구조)를 잡는 규칙, 그리고
+0~100 완성도 점수를 매기는 3단계를 추가했다.
+
+구조 (3단계):
   1. 결정론적 규칙 검사(이 파일의 check_*() 함수들, LLM 없이 코드로 판정) —
      "마지막 줄은 항상 선택지가 답하는 문장이어야 한다", "장소 라벨은 전부
      물리적 행동 표현이어야 한다(따옴표+답한다 금지)", "요일별 데이터가
-     전부 1~TOTAL_DAYS를 빠짐없이 갖춰야 한다" 같은, 과거 실제로 터진
-     버그에서 뽑아낸 불변식을 코드로 고정한다. test_dating_sim_coherence.py가
-     이 함수들을 그대로 호출해 전체 테스트 스위트에 편입시켰으므로, 앞으로
-     DAY_BEATS·LOCATION_LINES 등을 고칠 때마다 자동으로 재검증된다.
-  2. 사람(또는 콘텐츠 검토 에이전트)이 읽는 전체 대본 출력(render_full_script) —
-     결정론적 규칙만으로는 "말투가 갑자기 바뀐다"류의 미묘한 어색함까지는
-     못 잡으므로, 하루·장소·변형별로 실제 플레이 순서 그대로 조립한 전체
-     대사를 사람이 읽고 검토할 수 있게 텍스트로 뽑아준다.
+     전부 1~TOTAL_DAYS를 빠짐없이 갖춰야 한다", "감정적으로 무거운 요일에는
+     EPUB 표현 줄이 섞이면 안 된다" 같은, 과거 실제로 터진 버그에서 뽑아낸
+     불변식을 코드로 고정한다. test_dating_sim_coherence.py가 이 함수들을
+     그대로 호출해 전체 테스트 스위트에 편입시켰으므로, 앞으로 DAY_BEATS·
+     LOCATION_LINES 등을 고칠 때마다 자동으로 재검증된다.
+  2. 완성도 점수(score_narrative_completeness) — 1단계 규칙 위반 개수 +
+     요일별 대화 깊이(문장 쌍 수로 근사)를 합쳐 0~100 점수를 낸다. ⚠️ 이건
+     "적어도 구조적으로 얕지 않다"는 하한선을 보장하는 대리 지표이지 진짜
+     의미 판정이 아니다.
+  3. 사람(또는 콘텐츠 검토 에이전트)이 읽는 전체 대본 출력(render_full_script) —
+     1·2단계로도 못 잡는 "말투가 갑자기 바뀐다"류의 미묘한 어색함은 하루·
+     장소·변형별로 실제 플레이 순서 그대로 조립한 전체 대사를 사람이 직접
+     읽고 판단해야 한다.
 
 실행: server/.venv/bin/python3 dating_sim_coherence_report.py
 """
@@ -126,6 +139,21 @@ def check_hidden_events_preserve_outro(conn_factory):
         conn.close()
 
 
+def check_no_vocab_tangent_on_serious_days(sample_vocab_pool):
+    """★ 2026-09-17: "장래에대한 고민인데 왜 돕다에대해서 이야기한다는거야
+    의미가 이해가 안가" 신고 — 4·6일차(고민 상담·서운함 사과)처럼 감정적으로
+    무거운 요일에 EPUB에서 뽑은 무관한 단어(예: "돕다")로 화제를 트는 표현
+    줄이 끼어들면 대화 톤이 갑자기 끊긴다. DAYS_WITHOUT_VOCAB_ASIDE에 있는
+    요일은 vocab_pool을 줘도 표현 줄이 절대 섞이면 안 된다."""
+    issues = []
+    scenes = ds._seven_day_scenes(ds.LOCATION_LINES, vocab_pool=sample_vocab_pool)
+    for day in ds.DAYS_WITHOUT_VOCAB_ASIDE:
+        for location, scene in scenes[day].items():
+            if "vocab" in scene:
+                issues.append(f"day={day}(감정적으로 무거운 요일) location={location}: 표현 줄이 섞임")
+    return issues
+
+
 def run_all_checks(conn_factory=None):
     """모든 결정론적 규칙을 돌려 이슈 목록을 합쳐 돌려준다. 빈 리스트면 통과."""
     issues = []
@@ -136,9 +164,52 @@ def run_all_checks(conn_factory=None):
     issues += check_last_line_matches_outro(scenes_by_variant)
     issues += check_location_labels_are_physical(ds.DAY_LOCATION_ACTIONS)
     issues += check_day_range_completeness()
+    issues += check_no_vocab_tangent_on_serious_days([("同棲", "どうせい", "동거"), ("本音", "ほんね", "본심")])
     if conn_factory is not None:
         issues += check_hidden_events_preserve_outro(conn_factory)
     return issues
+
+
+# ── 완성도 점수 (heuristic — 진짜 의미 판정은 render_full_script()를 사람이나
+# 콘텐츠 검토 에이전트가 읽는 3단계가 맡는다. 여기서는 "장면당 문장 쌍이
+# 몇 개인지"라는 구조적 대리 지표로만 얕은 대화를 근사 탐지한다.) ─────────
+
+def _sentence_pair_count(text):
+    """JP/KO 두 줄이 한 쌍이므로 빈 줄을 뺀 줄 수를 2로 나눈다."""
+    non_empty = [line for line in text.split("\n") if line.strip()]
+    return max(1, len(non_empty) // 2)
+
+
+def score_day_depth(day):
+    """그 날의 대사(beat_intro+beat_outro)에 담긴 문장 쌍 수로 대화 깊이를
+    근사 채점한다. "장래에 대한 고민인데... 고민 내용에 대해서 더 대화를
+    해야지" 신고처럼, 원인은 문장 쌍이 2개(도입 1 + 질문 1)뿐이라 고민의
+    실체 없이 바로 질문으로 넘어가는 구조였다. 3쌍 이상이면 도입만이 아니라
+    구체적인 내용이 최소 한 번은 더 들어간 것으로 본다."""
+    beat_lines = ds.DAY_BEATS[day][0]
+    total_pairs = sum(_sentence_pair_count(line) for line in beat_lines)
+    if total_pairs >= 3:
+        return 100
+    if total_pairs == 2:
+        return 70
+    return 40
+
+
+def score_narrative_completeness(conn_factory=None):
+    """결정론적 규칙 위반 개수 + 요일별 대화 깊이를 합쳐 0~100 종합 점수를
+    낸다. ⚠️ 이건 구조적 대리 지표일 뿐 진짜 의미 판정이 아니다 — "말투가
+    갑자기 바뀐다"류는 여전히 render_full_script() 출력을 사람이 읽어야
+    잡힌다. 이 점수는 "적어도 구조적으로는 얕지 않다"는 하한선만 보장한다."""
+    issues = run_all_checks(conn_factory=conn_factory)
+    invariant_score = max(0, 100 - 20 * len(issues))
+    depth_by_day = {day: score_day_depth(day) for day in ds.DAY_BEATS}
+    avg_depth = sum(depth_by_day.values()) / len(depth_by_day)
+    overall = round((invariant_score + avg_depth) / 2)
+    return {
+        "overall": overall, "invariant_score": invariant_score,
+        "avg_depth_score": round(avg_depth, 1), "depth_by_day": depth_by_day,
+        "issues": issues,
+    }
 
 
 def render_full_script():
@@ -165,11 +236,19 @@ def render_full_script():
 
 
 if __name__ == "__main__":
-    issues = run_all_checks()
     print(render_full_script())
+    score = score_narrative_completeness()
     print("===== 규칙 검사 결과 =====")
-    if issues:
-        for issue in issues:
+    if score["issues"]:
+        for issue in score["issues"]:
             print(f"⚠️ {issue}")
+    else:
+        print("이상 없음.")
+    print("===== 완성도 점수 (구조적 대리 지표 — 참고용) =====")
+    print(f"종합: {score['overall']}/100 (규칙 {score['invariant_score']}/100, "
+          f"평균 대화 깊이 {score['avg_depth_score']}/100)")
+    for day, depth in sorted(score["depth_by_day"].items()):
+        flag = "" if depth >= 100 else " ⚠️ 얕음 — 대화 내용을 한 줄 더 늘리는 걸 고려"
+        print(f"  DAY {day}: 깊이 점수 {depth}/100{flag}")
+    if score["issues"]:
         sys.exit(1)
-    print("이상 없음.")

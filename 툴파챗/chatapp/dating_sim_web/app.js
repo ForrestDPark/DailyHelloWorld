@@ -533,6 +533,7 @@ function typeLine(text) {
   const el = $("dialogue-text");
   el.textContent = "";
   $("dialogue-next").classList.add("hidden");
+  $("dialogue-back").classList.toggle("hidden", sceneLineIndex === 0);
   $("choice-list").classList.add("hidden");
   $("portrait").classList.toggle("speaking", !narrator);
   const visibleText = plainText(text);
@@ -573,6 +574,17 @@ function advanceLine() {
     sceneLineIndex += 1;
     typeLine(sceneLines[sceneLineIndex]);
   }
+}
+
+// ★ 2026-09-17: "이전대사로 다시넘어갈수있게해줘" 요청 — 다음 줄로만
+// 넘어가던 대사창에 이전 줄로 돌아가는 버튼을 추가한다. 선택지가 떠 있는
+// 마지막 줄에서 뒤로 가면 선택지는 다시 숨기고(typeLine이 처리) 그 앞
+// 줄부터 다시 읽을 수 있다.
+function goToPreviousLine() {
+  if (sceneLineIndex === 0) return;
+  if (!recordedAudio.paused || window.speechSynthesis?.speaking) stopListening({ turnOff: false });
+  sceneLineIndex -= 1;
+  typeLine(sceneLines[sceneLineIndex]);
 }
 
 function renderChoices() {
@@ -784,9 +796,14 @@ $("dialogue-next").addEventListener("click", (event) => {
   event.stopPropagation();
   advanceLine();
 });
+$("dialogue-back").addEventListener("click", (event) => {
+  event.stopPropagation();
+  goToPreviousLine();
+});
 document.getElementById("scene-view").addEventListener("click", (event) => {
   if (event.target.closest(".listening-controls")) return;
   if (event.target.closest(".choice-button")) return;
+  if (event.target.closest("#dialogue-back")) return;
   if (!$("choice-list").classList.contains("hidden")) return;
   advanceLine();
 });
@@ -816,10 +833,22 @@ document.addEventListener("visibilitychange", () => {
 });
 window.addEventListener("pagehide", () => stopListening());
 $("restart-btn").addEventListener("click", restart);
-$("result-next").addEventListener("click", () => {
+
+// ★ 2026-09-17: "호감도 나오고 다음장면으로를 클릭하는게아니라 터치하면
+// 바로 다음장면으로 넘어가" 요청 — 버튼을 정확히 눌러야만 넘어가던 것을,
+// 화면 아무 곳이나 터치해도 넘어가도록 scene-view와 같은 패턴을 적용한다.
+function advancePastResult() {
   const nextState = { ...latestState };
   delete nextState.choice_result;
   render(nextState);
+}
+$("result-next").addEventListener("click", (event) => {
+  event.stopPropagation();
+  advancePastResult();
+});
+document.getElementById("result-view").addEventListener("click", (event) => {
+  if (event.target.closest(".listening-controls")) return;
+  advancePastResult();
 });
 
 updateListeningControls();
