@@ -604,7 +604,7 @@ def dating_sim_static(filename: str, request: Request):
     if filename not in {"style.css", "app.js", "soi.png", "soi-park.png", "soi-school.png",
                         "haru.png", "haru-first.png", "haru-walk.png",
                         "akari.png", "mio.png", "reina.png",
-                        "pixel-cafe.png", "pixel-park.png", "pixel-school.png"}:
+                        "pixel-cafe.png", "pixel-park.png", "pixel-school.png", "pixel-message.png"}:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(DATING_SIM_WEB_DIR / filename))
 

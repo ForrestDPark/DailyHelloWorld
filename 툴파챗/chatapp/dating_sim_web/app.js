@@ -17,6 +17,17 @@ function locationBackdrop(location) {
   return "/dating-sim/static/pixel-cafe.png";
 }
 
+function openingBackdrop(opening, day) {
+  const normalized = String(opening || "").replace(/\s+/g, " ");
+  const isMessageArrival = /メッセージ|メール|返事|메시지|문자|답장|写真.{0,80}届|사진.{0,80}도착/i.test(normalized);
+  if (isMessageArrival) return "/dating-sim/static/pixel-message.png";
+  return [
+    "/dating-sim/static/pixel-cafe.png",
+    "/dating-sim/static/pixel-park.png",
+    "/dating-sim/static/pixel-school.png",
+  ][(Math.max(1, Number(day) || 1) - 1) % 3];
+}
+
 function storyQuery() {
   return storyId ? `?story_id=${encodeURIComponent(storyId)}` : "";
 }
@@ -58,11 +69,7 @@ function renderMap(state) {
   $("stage").dataset.day = state.day;
   const hint = document.querySelector(".map-hint");
   mapOpeningText = state.day_opening || "오늘 어떤 일이 일어날까?";
-  $("intro-art-image").src = [
-    "/dating-sim/static/pixel-cafe.png",
-    "/dating-sim/static/pixel-park.png",
-    "/dating-sim/static/pixel-school.png",
-  ][(Math.max(1, state.day) - 1) % 3];
+  $("intro-art-image").src = openingBackdrop(mapOpeningText, state.day);
   renderAnnotatedText(hint, mapOpeningText);
   const list = $("map-locations");
   list.replaceChildren();
