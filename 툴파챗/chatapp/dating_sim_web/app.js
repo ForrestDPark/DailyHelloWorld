@@ -469,42 +469,42 @@ async function loadState() {
 
 // ★ 2026-09-17: "만남마다 나가기하면 그 진행상태가 세이브되서 다시 미연시
 // 누르면 이전 진행 이어가기, 새로운 만남 중에 선택해서 플레이할수있으면
-// 좋겠어" 요청 — book= 딥링크(일본어 선생님 채팅 링크)로 들어온 경우는
-// 그 작품으로 바로 들어가고, 홈 카드로 그냥 들어온 경우에만 저장된 만남
-// 목록 + "새로운 만남 시작" 로비를 보여준다. 저장된 만남이 하나도 없는
-// 첫 이용자는 로비 없이 바로 시작한다.
+// 좋겠어" → 이어서 "모든 목록이 다 나오는 것 같은데 그렇게 하지 말고
+// 이어하기랑 새 만남 하기 이거 두 개만 목록이 떠서 선택하게끔" 요청 —
+// 저장된 만남이 여러 개여도 전부 나열하지 않고, 가장 최근에 하던 만남
+// 하나로 이어가는 "이어하기"와 "새로운 만남 시작하기" 두 버튼만 보여준다.
+// book= 딥링크(일본어 선생님 채팅 링크)로 들어온 경우는 그대로 그 작품으로
+// 바로 들어간다. 저장된 만남이 하나도 없으면(이전에 했던 작품이 없으면)
+// 로비 없이 곧바로 새로 시작한다.
 function lobbyStatusText(encounter) {
   return encounter.completed
     ? `엔딩 · ${encounter.ending_title}`
     : `DAY ${encounter.day} / ${encounter.total_days} · 호감도 ${encounter.affection}`;
 }
 
-function renderLobby(encounters) {
-  const list = $("lobby-list");
-  list.replaceChildren();
-  encounters.forEach((encounter) => {
-    const card = document.createElement("button");
-    card.type = "button";
-    card.className = "lobby-card";
-    if (encounter.character_image) {
-      const img = document.createElement("img");
-      img.src = encounter.character_image;
-      img.alt = encounter.character_name;
-      card.append(img);
-    }
-    const info = document.createElement("div");
-    info.className = "lobby-card-info";
-    const title = document.createElement("strong");
-    title.textContent = encounter.source_title
-      ? `${encounter.character_name} · ${encounter.source_title}`
-      : encounter.character_name;
-    const status = document.createElement("span");
-    status.textContent = lobbyStatusText(encounter);
-    info.append(title, status);
-    card.append(info);
-    card.addEventListener("click", () => enterStory(encounter.story_id));
-    list.append(card);
-  });
+function renderLobby(mostRecentEncounter) {
+  const continueBtn = $("lobby-continue-btn");
+  continueBtn.replaceChildren();
+  continueBtn.classList.remove("hidden");
+  if (mostRecentEncounter.character_image) {
+    const img = document.createElement("img");
+    img.src = mostRecentEncounter.character_image;
+    img.alt = mostRecentEncounter.character_name;
+    continueBtn.append(img);
+  }
+  const info = document.createElement("div");
+  info.className = "lobby-card-info";
+  const title = document.createElement("strong");
+  title.textContent = "이어하기";
+  const subtitle = document.createElement("span");
+  subtitle.textContent = mostRecentEncounter.source_title
+    ? `${mostRecentEncounter.character_name} · ${mostRecentEncounter.source_title}`
+    : mostRecentEncounter.character_name;
+  const status = document.createElement("span");
+  status.textContent = lobbyStatusText(mostRecentEncounter);
+  info.append(title, subtitle, status);
+  continueBtn.append(info);
+  continueBtn.onclick = () => enterStory(mostRecentEncounter.story_id);
   showView("lobby-view");
 }
 
@@ -519,7 +519,7 @@ async function boot() {
   try {
     const encounters = await api("/api/dating-sim/encounters");
     if (!encounters.length) return loadState();
-    renderLobby(encounters);
+    renderLobby(encounters[0]);
   } catch (e) {
     $("loading-view").querySelector("p").textContent = e.message;
   }
