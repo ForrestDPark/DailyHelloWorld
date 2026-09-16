@@ -705,11 +705,15 @@ def _find_book(book_id):
     return None
 
 
-def random_book_id():
-    """서재에 실제 존재하는 EPUB 하나의 공개 식별자를 무작위로 고른다."""
+def random_book_id(exclude=None):
+    """서재에 실제 존재하는 EPUB 하나의 공개 식별자를 무작위로 고른다.
+    exclude를 주면(이미 시작한 만남들) 그 책들은 후보에서 뺀다 — "새로운
+    만남 시작하기"가 이미 진행 중인 이야기를 다시 새 만남인 척 내놓지
+    않기 위함(2026-09-17)."""
     if not JAPANESE_EPUB_ROOT.is_dir():
         return None
-    books = list(JAPANESE_EPUB_ROOT.rglob("*.epub"))
+    exclude = exclude or set()
+    books = [path for path in JAPANESE_EPUB_ROOT.rglob("*.epub") if _book_id(path) not in exclude]
     return _book_id(random.choice(books)) if books else None
 
 

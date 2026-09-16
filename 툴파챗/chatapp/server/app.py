@@ -591,10 +591,6 @@ def dating_sim_redirect():
 @app.get("/dating-sim/")
 def dating_sim_dashboard(request: Request):
     _require_signed_in_user(request)
-    if "book" not in request.query_params:
-        book_id = dating_sim_story.random_book_id()
-        if book_id:
-            return RedirectResponse(f"/dating-sim/?book={book_id}", status_code=307)
     return FileResponse(str(DATING_SIM_WEB_DIR / "index.html"))
 
 
@@ -762,6 +758,68 @@ def dating_sim_state(request: Request, story_id: str | None = None):
     finally:
         conn.close()
     return _dating_sim_state_payload(row, story)
+
+
+# ★ 2026-09-17: "만남마다 나가기하면 그 진행상태가 세이브되서 다시 미연시
+# 누르면 이전 진행 이어가기, 새로운 만남 중에 선택해서 플레이할수있으면
+# 좋겠어" 요청 — 지금까지 /dating-sim/ 진입은 매번 서재의 무작위 EPUB으로
+# 강제 리다이렉트했다(진행 저장은 (계정, 이야기 ID)별로 이미 되고 있었지만,
+# 홈에서 다시 들어갈 때마다 새 무작위 작품으로 튕겨서 방금 하던 이야기로
+# 못 돌아왔다). 리다이렉트를 없애고, 대신 진행 중인 만남 목록과 "새로운
+# 만남 시작" 선택지를 프론트(app.js)가 보여주게 두 엔드포인트를 추가한다.
+@app.get("/api/dating-sim/encounters")
+def dating_sim_encounters(request: Request):
+    """로그인 계정이 지금까지 시작한 모든 만남(기본 이야기 + 작품별 이야기)의
+    요약을 최근 갱신순으로 돌려준다 — 프론트의 "이어하기" 목록에 쓴다."""
+    _require_signed_in_user(request)
+    username = _request_username(request)
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM dating_sim_progress WHERE username=? ORDER BY updated_at DESC", (username,)
+        ).fetchall()
+        encounters = []
+        for row in rows:
+            story_id = None if row["character_id"] == dating_sim_story.CHARACTER_ID else row["character_id"]
+            try:
+                story = _dating_story(story_id, username)
+            except HTTPException:
+                continue  # 서재에서 지워진 EPUB 등 더 이상 존재하지 않는 이야기는 건너뛴다
+            encounters.append({
+                "story_id": story["id"], "title": story["title"], "character_name": story["name"],
+                "character_image": story.get("character_image"), "source_title": story.get("source_title"),
+                "day": min(row["day"], story["total_days"]), "total_days": story["total_days"],
+                "affection": row["affection"], "completed": bool(row["completed"]),
+                "ending_title": dating_sim_story.ending_for(story, row["affection"])["title"] if row["completed"] else None,
+            })
+    finally:
+        conn.close()
+    return encounters
+
+
+@app.post("/api/dating-sim/new")
+def dating_sim_new_encounter(request: Request):
+    """아직 시작하지 않은 만남(기본 이야기 또는 서재의 작품) 하나를 무작위로
+    골라준다. 전부 이미 시작했으면 409 — 그 경우 프론트는 기존 만남을
+    이어가거나 게임 안 "처음부터 다시하기"로 특정 만남을 초기화하게 안내한다."""
+    _require_signed_in_user(request)
+    username = _request_username(request)
+    conn = get_conn()
+    try:
+        started = {
+            row["character_id"] for row in
+            conn.execute("SELECT character_id FROM dating_sim_progress WHERE username=?", (username,)).fetchall()
+        }
+    finally:
+        conn.close()
+    candidates = [] if dating_sim_story.CHARACTER_ID in started else [None]
+    exclude_books = {sid.split(":", 1)[1] for sid in started if sid.startswith("book:")}
+    book_id = dating_sim_story.random_book_id(exclude=exclude_books)
+    if book_id:
+        candidates.append(f"book:{book_id}")
+    if not candidates:
+        raise HTTPException(status_code=409, detail="새로 시작할 수 있는 만남이 없어요. 기존 만남을 이어가거나 다시 시작해보세요")
+    return {"story_id": random.choice(candidates)}
 
 
 class BattleSimChoiceRequest(BaseModel):

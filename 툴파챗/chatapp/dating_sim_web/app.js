@@ -1,6 +1,6 @@
 const $ = (id) => document.getElementById(id);
 const bookId = new URLSearchParams(location.search).get("book");
-const storyId = bookId && /^[0-9a-f]{20}$/.test(bookId) ? `book:${bookId}` : null;
+let storyId = bookId && /^[0-9a-f]{20}$/.test(bookId) ? `book:${bookId}` : null;
 let latestState = null;
 let listeningMode = false;
 let speechSequence = 0;
@@ -48,10 +48,10 @@ async function api(url, options = {}) {
 }
 
 function showView(name) {
-  for (const id of ["map-view", "scene-view", "result-view", "ending-view", "loading-view"]) {
+  for (const id of ["map-view", "scene-view", "result-view", "ending-view", "lobby-view", "loading-view"]) {
     $(id).classList.toggle("hidden", id !== name);
   }
-  $("listening-controls").classList.toggle("hidden", name === "loading-view");
+  $("listening-controls").classList.toggle("hidden", name === "loading-view" || name === "lobby-view");
 }
 
 function renderHud(state) {
@@ -467,6 +467,75 @@ async function loadState() {
   }
 }
 
+// ★ 2026-09-17: "만남마다 나가기하면 그 진행상태가 세이브되서 다시 미연시
+// 누르면 이전 진행 이어가기, 새로운 만남 중에 선택해서 플레이할수있으면
+// 좋겠어" 요청 — book= 딥링크(일본어 선생님 채팅 링크)로 들어온 경우는
+// 그 작품으로 바로 들어가고, 홈 카드로 그냥 들어온 경우에만 저장된 만남
+// 목록 + "새로운 만남 시작" 로비를 보여준다. 저장된 만남이 하나도 없는
+// 첫 이용자는 로비 없이 바로 시작한다.
+function lobbyStatusText(encounter) {
+  return encounter.completed
+    ? `엔딩 · ${encounter.ending_title}`
+    : `DAY ${encounter.day} / ${encounter.total_days} · 호감도 ${encounter.affection}`;
+}
+
+function renderLobby(encounters) {
+  const list = $("lobby-list");
+  list.replaceChildren();
+  encounters.forEach((encounter) => {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "lobby-card";
+    if (encounter.character_image) {
+      const img = document.createElement("img");
+      img.src = encounter.character_image;
+      img.alt = encounter.character_name;
+      card.append(img);
+    }
+    const info = document.createElement("div");
+    info.className = "lobby-card-info";
+    const title = document.createElement("strong");
+    title.textContent = encounter.source_title
+      ? `${encounter.character_name} · ${encounter.source_title}`
+      : encounter.character_name;
+    const status = document.createElement("span");
+    status.textContent = lobbyStatusText(encounter);
+    info.append(title, status);
+    card.append(info);
+    card.addEventListener("click", () => enterStory(encounter.story_id));
+    list.append(card);
+  });
+  showView("lobby-view");
+}
+
+function enterStory(nextStoryId) {
+  storyId = nextStoryId;
+  loadState();
+}
+
+async function boot() {
+  if (storyId) return loadState();
+  showView("loading-view");
+  try {
+    const encounters = await api("/api/dating-sim/encounters");
+    if (!encounters.length) return loadState();
+    renderLobby(encounters);
+  } catch (e) {
+    $("loading-view").querySelector("p").textContent = e.message;
+  }
+}
+
+$("lobby-new-btn").addEventListener("click", async () => {
+  showView("loading-view");
+  try {
+    const { story_id } = await api("/api/dating-sim/new", { method: "POST" });
+    enterStory(story_id);
+  } catch (e) {
+    alert(e.message);
+    boot();
+  }
+});
+
 async function visitLocation(locationId) {
   if (!recordedAudio.paused || window.speechSynthesis?.speaking) stopListening({ turnOff: false });
   try {
@@ -569,4 +638,4 @@ $("result-next").addEventListener("click", () => {
 });
 
 updateListeningControls();
-loadAudioManifest().finally(loadState);
+loadAudioManifest().finally(boot);

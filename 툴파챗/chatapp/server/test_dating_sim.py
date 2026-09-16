@@ -428,6 +428,51 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
                 story = dating_sim_story.story_for("book:" + "2" * 20)
         self.assertNotIn("vocab", story["scenes"][1]["first"])
 
+    def test_random_book_id_excludes_already_started_books(self):
+        """★ 2026-09-17: "새로운 만남 시작하기"가 이미 진행 중인 만남을 새
+        만남인 척 다시 내놓으면 안 된다."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "a.epub").write_bytes(b"")
+            (root / "b.epub").write_bytes(b"")
+            with patch.object(dating_sim_story, "JAPANESE_EPUB_ROOT", root):
+                id_a = dating_sim_story._book_id(root / "a.epub")
+                id_b = dating_sim_story._book_id(root / "b.epub")
+                picked = {dating_sim_story.random_book_id(exclude={id_a}) for _ in range(20)}
+        self.assertEqual(picked, {id_b})
+
+    def test_new_encounter_starts_with_the_default_story_when_nothing_played_yet(self):
+        with patch.object(dating_sim_story, "JAPANESE_EPUB_ROOT", Path("/tmp/no-such-jp-epub-root")):
+            result = app.dating_sim_new_encounter(request("fresh-player"))
+        self.assertIsNone(result["story_id"])
+
+    def test_new_encounter_picks_an_unstarted_book_once_default_is_played(self):
+        app.dating_sim_state(request("book-picker"))
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "only.epub").write_bytes(b"")
+            with patch.object(dating_sim_story, "JAPANESE_EPUB_ROOT", root):
+                result = app.dating_sim_new_encounter(request("book-picker"))
+        self.assertTrue(result["story_id"].startswith("book:"))
+
+    def test_new_encounter_rejects_when_everything_is_already_started(self):
+        app.dating_sim_state(request("completionist"))
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(dating_sim_story, "JAPANESE_EPUB_ROOT", Path(directory)):
+                with self.assertRaises(HTTPException) as raised:
+                    app.dating_sim_new_encounter(request("completionist"))
+        self.assertEqual(raised.exception.status_code, 409)
+
+    def test_encounters_lists_every_saved_progress_row_for_resuming(self):
+        """"다시 미연시 누르면 이전 진행 이어가기 ... 선택해서 플레이" 요청 —
+        홈에서 보여줄 이어하기 목록이 저장된 진행을 그대로 반영해야 한다."""
+        app.dating_sim_state(request("lister"))
+        encounters = app.dating_sim_encounters(request("lister"))
+        self.assertEqual(len(encounters), 1)
+        self.assertEqual(encounters[0]["story_id"], dating_sim_story.CHARACTER_ID)
+        self.assertEqual(encounters[0]["day"], 1)
+        self.assertFalse(encounters[0]["completed"])
+
     def test_book_character_profiles_are_stable_and_varied(self):
         profiles = [dating_sim_story.book_character_profile(f"book:{number:020x}")
                     for number in range(20)]
