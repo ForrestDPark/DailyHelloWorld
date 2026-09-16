@@ -275,7 +275,9 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         self.assertEqual(set(story["scenes"]), set(range(1, dating_sim_story.TOTAL_DAYS + 1)))
         for day_scenes in story["scenes"].values():
             for scene in day_scenes.values():
-                self.assertEqual(len(scene["lines"]), 3)
+                # ★ 2026-09-17: "하루에 나누는 대화제한도 풀어버려" 요청으로
+                # 일부 요일(중간 대화 턴이 있는 날)은 3줄보다 길어질 수 있다.
+                self.assertGreaterEqual(len(scene["lines"]), 3)
                 self.assertEqual(len(scene["choices"]), 2)
 
     def test_replaying_the_same_slot_can_surface_different_variants(self):
@@ -400,8 +402,8 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         for _, _, ko in vocab:
             self.assertNotEqual(ko, "금지")
 
-    def test_vocab_highlight_line_embeds_real_word_in_authored_sentence(self):
-        line = dating_sim_story._vocab_highlight_line(("同棲", "どうせい", "동거"), 0)
+    def test_vocab_situation_line_embeds_real_word_in_authored_sentence(self):
+        line = dating_sim_story._vocab_situation_line(("同棲", "どうせい", "동거"), 0)
         self.assertIn("[同棲|どうせい]", line)
         self.assertIn("동거", line)
 

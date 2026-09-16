@@ -10,20 +10,26 @@
 ★ 2026-09-17 확장: "이런식으로 억지대화가 나지않게 파이프라인구성하고
 갑자기대화가 끝나는식으로 되지않게 파이프라인구성해서 시나리오개연성
 완성도 점수까지 평가하도록하자" 요청 — 2일차 라벨·EPUB 표현 줄 버그를
-잡은 1차 파이프라인에 이어, "장래 고민인데 왜 무관한 단어 얘기를 하냐"
-(감정적으로 무거운 요일에 EPUB 표현 줄이 끼어드는 문제)와 "장면이 갑자기
-끝난다"(고민 내용 없이 바로 질문으로 넘어가는 구조)를 잡는 규칙, 그리고
-0~100 완성도 점수를 매기는 3단계를 추가했다.
+잡은 1차 파이프라인에 이어, "장래 고민인데 왜 무관한 단어 얘기를 하냐"와
+"장면이 갑자기 끝난다"(고민 내용 없이 바로 질문으로 넘어가는 구조)를 잡는
+규칙, 그리고 0~100 완성도 점수를 매기는 3단계를 추가했다.
+
+★ 2026-09-17 재확장: "건너뛰고 그러는것보다 그표현에맞는 적절한상황을 더
+만들어서 대응... 7일이라는 제한도 풀고 하루에 나누는 대화제한도 풀어버려"
+요청 — 감정적으로 무거운 요일에 표현 줄을 건너뛰던 방식(DAYS_WITHOUT_
+VOCAB_ASIDE)을 버리고 단어 뜻을 카테고리로 분류해 어울리는 상황 문장을
+만드는 방식(VOCAB_SITUATION_TEMPLATES)으로 바꿨다. DAY_BEATS의 대사 줄
+수를 2개 고정에서 몇 개든 되도록 일반화하고, 7일 → 14일로 확장했다.
 
 구조 (3단계):
   1. 결정론적 규칙 검사(이 파일의 check_*() 함수들, LLM 없이 코드로 판정) —
      "마지막 줄은 항상 선택지가 답하는 문장이어야 한다", "장소 라벨은 전부
      물리적 행동 표현이어야 한다(따옴표+답한다 금지)", "요일별 데이터가
-     전부 1~TOTAL_DAYS를 빠짐없이 갖춰야 한다", "감정적으로 무거운 요일에는
-     EPUB 표현 줄이 섞이면 안 된다" 같은, 과거 실제로 터진 버그에서 뽑아낸
-     불변식을 코드로 고정한다. test_dating_sim_coherence.py가 이 함수들을
-     그대로 호출해 전체 테스트 스위트에 편입시켰으므로, 앞으로 DAY_BEATS·
-     LOCATION_LINES 등을 고칠 때마다 자동으로 재검증된다.
+     전부 1~TOTAL_DAYS를 빠짐없이 갖춰야 한다", "표현 줄의 단어 분류가
+     맞고 결과 문장에 실제 단어가 들어가야 한다" 같은, 과거 실제로 터진
+     버그에서 뽑아낸 불변식을 코드로 고정한다. test_dating_sim_coherence.py가
+     이 함수들을 그대로 호출해 전체 테스트 스위트에 편입시켰으므로, 앞으로
+     DAY_BEATS·LOCATION_LINES 등을 고칠 때마다 자동으로 재검증된다.
   2. 완성도 점수(score_narrative_completeness) — 1단계 규칙 위반 개수 +
      요일별 대화 깊이(문장 쌍 수로 근사)를 합쳐 0~100 점수를 낸다. ⚠️ 이건
      "적어도 구조적으로 얕지 않다"는 하한선을 보장하는 대리 지표이지 진짜
@@ -55,11 +61,13 @@ def variant_scenes(location_lines):
 
 def check_last_line_matches_outro(scenes_by_variant):
     """선택지는 항상 그 장면의 마지막 줄(beat_outro)에 답해야 한다. EPUB
-    표현 줄을 맨 끝에 붙였던 버그(2026-09-17)가 이 불변식을 깼었다."""
+    표현 줄을 맨 끝에 붙였던 버그(2026-09-17)가 이 불변식을 깼었다.
+    DAY_BEATS[day][0]는 몇 줄이든 될 수 있으므로(★ 2026-09-17, "하루에
+    나누는 대화제한도 풀어버려" 요청) beat_outro는 항상 마지막 원소[-1]다."""
     issues = []
     for variant_name, scenes in scenes_by_variant.items():
         for day, locations in scenes.items():
-            expected_outro = ds.DAY_BEATS[day][0][1]
+            expected_outro = ds.DAY_BEATS[day][0][-1]
             for location, scene in locations.items():
                 if scene["lines"][-1] != expected_outro:
                     issues.append(
@@ -123,7 +131,7 @@ def check_hidden_events_preserve_outro(conn_factory):
         ds.seed_dating_sim_content(conn)
         issues = []
         for day in sorted(ds.HIDDEN_EVENTS):
-            expected_outro = ds.DAY_BEATS[day][0][1]
+            expected_outro = ds.DAY_BEATS[day][0][-1]
             for location in ds.LOCATIONS:
                 row = conn.execute(
                     "SELECT outro_line FROM dating_sim_scenarios "
@@ -139,18 +147,22 @@ def check_hidden_events_preserve_outro(conn_factory):
         conn.close()
 
 
-def check_no_vocab_tangent_on_serious_days(sample_vocab_pool):
-    """★ 2026-09-17: "장래에대한 고민인데 왜 돕다에대해서 이야기한다는거야
-    의미가 이해가 안가" 신고 — 4·6일차(고민 상담·서운함 사과)처럼 감정적으로
-    무거운 요일에 EPUB에서 뽑은 무관한 단어(예: "돕다")로 화제를 트는 표현
-    줄이 끼어들면 대화 톤이 갑자기 끊긴다. DAYS_WITHOUT_VOCAB_ASIDE에 있는
-    요일은 vocab_pool을 줘도 표현 줄이 절대 섞이면 안 된다."""
+def check_vocab_situation_fits_its_category(sample_words):
+    """★ 2026-09-17: "건너뛰고 그러는것보다 그표현에맞는 적절한상황을 더
+    만들어서 대응하는 방식으로해" 요청 — 예전엔 감정적으로 무거운 요일에
+    무관한 단어가 나오면 아예 건너뛰었지만, 이제는 카테고리에 맞는 상황
+    문장으로 대응한다. 이 규칙은 "분류가 실패하면 조용히 general로 떨어져
+    아무도 모르게 엉뚱한 문장이 나오는" 사고를 막는다 — 카테고리별 샘플
+    단어가 그 카테고리로 정확히 분류되고, 결과 문장에 실제 단어(tag)가
+    반드시 포함되는지 확인한다."""
     issues = []
-    scenes = ds._seven_day_scenes(ds.LOCATION_LINES, vocab_pool=sample_vocab_pool)
-    for day in ds.DAYS_WITHOUT_VOCAB_ASIDE:
-        for location, scene in scenes[day].items():
-            if "vocab" in scene:
-                issues.append(f"day={day}(감정적으로 무거운 요일) location={location}: 표현 줄이 섞임")
+    for expected_category, word in sample_words.items():
+        actual_category = ds._classify_vocab_word(word[2])
+        if actual_category != expected_category:
+            issues.append(f"단어 {word!r}가 {expected_category} 대신 {actual_category}로 분류됨")
+        line = ds._vocab_situation_line(word, 0)
+        if word[0] not in line:
+            issues.append(f"단어 {word!r}의 상황 문장에 실제 단어가 안 보임 — {line!r}")
     return issues
 
 
@@ -164,7 +176,11 @@ def run_all_checks(conn_factory=None):
     issues += check_last_line_matches_outro(scenes_by_variant)
     issues += check_location_labels_are_physical(ds.DAY_LOCATION_ACTIONS)
     issues += check_day_range_completeness()
-    issues += check_no_vocab_tangent_on_serious_days([("同棲", "どうせい", "동거"), ("本音", "ほんね", "본심")])
+    issues += check_vocab_situation_fits_its_category({
+        "help": ("手伝う", "てつだう", "돕다"),
+        "worry": ("悩む", "なやむ", "고민"),
+        "general": ("机", "つくえ", "책상"),
+    })
     if conn_factory is not None:
         issues += check_hidden_events_preserve_outro(conn_factory)
     return issues
@@ -181,11 +197,11 @@ def _sentence_pair_count(text):
 
 
 def score_day_depth(day):
-    """그 날의 대사(beat_intro+beat_outro)에 담긴 문장 쌍 수로 대화 깊이를
-    근사 채점한다. "장래에 대한 고민인데... 고민 내용에 대해서 더 대화를
-    해야지" 신고처럼, 원인은 문장 쌍이 2개(도입 1 + 질문 1)뿐이라 고민의
-    실체 없이 바로 질문으로 넘어가는 구조였다. 3쌍 이상이면 도입만이 아니라
-    구체적인 내용이 최소 한 번은 더 들어간 것으로 본다."""
+    """그 날의 대사(DAY_BEATS[day]의 모든 대화 턴)에 담긴 문장 쌍 수로 대화
+    깊이를 근사 채점한다. "장래에 대한 고민인데... 고민 내용에 대해서 더
+    대화를 해야지" 신고처럼, 원인은 문장 쌍이 2개(도입 1 + 질문 1)뿐이라
+    고민의 실체 없이 바로 질문으로 넘어가는 구조였다. 3쌍 이상이면 도입만이
+    아니라 구체적인 내용이 최소 한 번은 더 들어간 것으로 본다."""
     beat_lines = ds.DAY_BEATS[day][0]
     total_pairs = sum(_sentence_pair_count(line) for line in beat_lines)
     if total_pairs >= 3:

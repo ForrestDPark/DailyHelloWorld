@@ -272,6 +272,7 @@ def init_db():
             weight INTEGER NOT NULL DEFAULT 4,
             intro_line TEXT NOT NULL,
             activity_line TEXT NOT NULL,
+            middle_lines TEXT NOT NULL DEFAULT '[]',
             outro_line TEXT NOT NULL,
             choice_a_text TEXT NOT NULL,
             choice_a_affection INTEGER NOT NULL,
