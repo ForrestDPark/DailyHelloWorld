@@ -222,6 +222,22 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         self.assertIn("[初|はじ]めまして", first_scene)
         self.assertIn("[名前|なまえ]", first_scene)
 
+    def test_day_one_explains_the_help_before_thanking_and_exchanges_contact(self):
+        dating_sim_story.seed_dating_sim_content(self.conn)
+        story = dating_sim_story.load_story_from_db(
+            self.conn, dating_sim_story.CHARACTER_ID, seed_key="coherence-check"
+        )
+        for scene in story["scenes"][1].values():
+            self.assertTrue(scene["lines"][0].lstrip().startswith("("))
+            self.assertIn("ありがとうございました", scene["lines"][1])
+            self.assertIn("[連絡先|れんらくさき]", scene["lines"][2])
+            self.assertTrue(all("[連絡先|れんらくさき]" in choice["text"] for choice in scene["choices"]))
+
+    def test_day_six_openings_agree_that_protagonist_missed_her_contact(self):
+        openings = dating_sim_story.DAY_OPENINGS[6]
+        self.assertTrue(all("ソイの[返事|へんじ]がない" not in opening for opening in openings))
+        self.assertTrue(all("メッセージ" in opening for opening in openings))
+
     def test_difficulty_upgrade_preserves_current_progress(self):
         dating_sim_story.seed_dating_sim_content(self.conn)
         self.conn.execute(
@@ -263,11 +279,18 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
 
     def test_replaying_the_same_slot_can_surface_different_variants(self):
         dating_sim_story.seed_dating_sim_content(self.conn)
+        # 1일차는 사고(활동 대사)가 먼저 나오도록 순서가 바뀌어 있어 인덱스 0을
+        # 본다 — 나머지 요일은 인트로가 먼저라 인덱스 1(활동 대사)을 본다.
         seen = set()
         for _ in range(40):
             story = dating_sim_story.load_story_from_db(self.conn, dating_sim_story.CHARACTER_ID)
-            seen.add(story["scenes"][1]["cafe"]["lines"][1])
+            seen.add(story["scenes"][1]["cafe"]["lines"][0])
         self.assertGreater(len(seen), 1, "40번을 다시 골라도 항상 같은 대사만 나오면 다양성이 없는 것")
+        seen_other_day = set()
+        for _ in range(40):
+            story = dating_sim_story.load_story_from_db(self.conn, dating_sim_story.CHARACTER_ID)
+            seen_other_day.add(story["scenes"][2]["cafe"]["lines"][1])
+        self.assertGreater(len(seen_other_day), 1, "2일차도 40번을 다시 골라도 항상 같은 대사만 나오면 다양성이 없는 것")
 
     def test_same_account_keeps_the_same_variant_across_api_requests(self):
         first = app.dating_sim_visit(

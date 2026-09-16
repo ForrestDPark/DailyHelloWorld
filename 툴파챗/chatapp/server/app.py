@@ -723,8 +723,8 @@ def _dating_sim_state_payload(row, story):
         selected_location = row["pending_location"]
         scene = story["scenes"][row["day"]][selected_location]
         scene_lines = [{"speaker": "narrator", "text": dating_sim_story.DAY_NARRATION[row["day"]]}]
-        for index, line in enumerate(scene["lines"]):
-            speaker = "narrator" if index == 1 and line.lstrip().startswith("(") else "character"
+        for line in scene["lines"]:
+            speaker = "narrator" if line.lstrip().startswith("(") else "character"
             scene_lines.append({"speaker": speaker, "text": line})
         payload["scene"] = {
             "location": row["pending_location"],
