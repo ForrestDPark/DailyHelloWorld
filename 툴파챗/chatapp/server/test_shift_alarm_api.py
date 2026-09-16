@@ -130,6 +130,29 @@ class ShiftAlarmApiTests(unittest.TestCase):
             module.start_shift_alarm_sunzi_analysis(owner_request())
         self.assertEqual(raised.exception.status_code, 409)
 
+    def test_wake_alarm_worker_endpoint_queues_the_same_light_pipeline_turn(self):
+        """★ 2026-09-16: ShiftAlarm이 기상 알람 시각에 세션 쿠키 없이도 손무의
+        라이트 분석을 트리거할 수 있어야 한다 — WORKER_TOKEN 인증 엔드포인트가
+        소유자 버튼(start_shift_alarm_sunzi_analysis)과 같은 결과를 내는지 확인."""
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = Path(directory) / "chat.db"
+            conn = self.pipeline_conn(db_path)
+            with patch.object(module, "get_conn", return_value=conn), \
+                 patch.object(module, "WORKER_TOKEN", "secret-token"), \
+                 patch.object(module, "SUNZI_PIPELINE_LOCK_DIR", Path(directory) / "no-lock"):
+                result = module.worker_start_sunzi_light_analysis(authorization="Bearer secret-token")
+            self.assertEqual(result["mode"], "light")
+            check = sqlite3.connect(db_path)
+            turn = check.execute("SELECT persona_name,room_id,status FROM pending_turns").fetchone()
+            check.close()
+        self.assertEqual(turn, ("손무", module.SUNZI_DISCUSSION_ROOM_ID, "pending"))
+
+    def test_wake_alarm_worker_endpoint_rejects_a_bad_token(self):
+        with patch.object(module, "WORKER_TOKEN", "secret-token"), \
+             self.assertRaises(HTTPException) as raised:
+            module.worker_start_sunzi_light_analysis(authorization="Bearer wrong-token")
+        self.assertEqual(raised.exception.status_code, 401)
+
     def test_video_download_requires_explicit_owner_approval(self):
         with self.assertRaises(HTTPException) as raised:
             module.start_shift_alarm_video_download(

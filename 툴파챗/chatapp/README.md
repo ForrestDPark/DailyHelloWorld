@@ -1,5 +1,12 @@
 # 툴파챗
 
+## ShiftAlarm 기상 알람 → 손자병법 라이트 분석 트리거 (2026-09-16)
+
+- "일본어선생님이 매일 오후 9시에 메시지 보내는거같은데 기상알람 뜰때도 메시지 보내면 좋겠어 ... 손자병법방도 기상알람 뜨면 다음구절 라이트모드로 분석한다음 토론 시작하면좋겠어" 요청으로, ShiftAlarm이 기상 알람 시각에 손무의 라이트 구절 분석을 직접 트리거할 수 있게 됐다.
+- 기존 `/api/shift-alarm/sunzi-analysis`(대시보드 "분석 시작하기" 버튼)는 소유자 세션 쿠키로 인증하는데, ShiftAlarm 메뉴바 앱은 그 쿠키를 들고 있지 않다. 큐잉 로직을 `_enqueue_sunzi_light_analysis()`로 뽑아내 공유하고, WORKER_TOKEN으로 인증하는 `POST /api/worker/sunzi_light_analysis`를 새로 추가해 ShiftAlarm 쪽에서 부르게 했다.
+- 라이트 파이프라인이 끝나면 기존 자동화(`POST /api/worker/announcements`)가 자동으로 토론까지 이어가므로, 이 엔드포인트는 분석 큐잉만 하면 된다 — 별도의 "토론 시작" 호출은 필요 없다.
+- ShiftAlarm 쪽 세 트리거(일본어 스터디방·이직 준비방·손자병법 토론방)의 전체 설명은 `shift_alarm/README.md`의 "기상 알람 연동 알림 확장 (2026-09-16)" 참고.
+
 ## 영어 EPUB 학습 서재 첫 버전 (2026-09-15)
 
 - 통합 홈에 `영어 학습` 카드를 추가하고 `https://chat.tulpa-chat.site/english/`로 연결했다. 기존 일본어 EPUB 리더의 모바일 좌우 넘김·세로 스크롤·집중 모드·정렬·작품 선택을 공유한다.

@@ -2063,30 +2063,52 @@ def public_sunzi_analysis_status(verse: int):
     })
 
 
+def _enqueue_sunzi_light_analysis(conn):
+    """손무의 고정 라이트 파이프라인 한 건을 큐에 넣는다 — 소유자 버튼과
+    ShiftAlarm 기상 알람 트리거가 이 로직을 공유한다(2026-09-16)."""
+    if _sunzi_light_pipeline_state(conn)["busy"]:
+        raise HTTPException(status_code=409, detail="병법 구절 분석이 이미 대기 중이거나 실행 중입니다")
+    if not conn.execute("SELECT 1 FROM personas WHERE name=?", ("손무",)).fetchone():
+        raise HTTPException(status_code=409, detail="손무 페르소나를 찾지 못했습니다")
+    now = _now()
+    cursor = conn.execute(
+        """INSERT INTO messages (room_id, sender, content, created_at, is_system)
+           VALUES (?, 'system', ?, ?, 1)""",
+        (SUNZI_DISCUSSION_ROOM_ID, SUNZI_LIGHT_PIPELINE_REQUEST, now),
+    )
+    conn.execute(
+        """INSERT INTO pending_turns
+           (persona_name, room_id, status, created_at, source_message_id)
+           VALUES (?, ?, 'pending', ?, ?)""",
+        ("손무", SUNZI_DISCUSSION_ROOM_ID, now, cursor.lastrowid),
+    )
+    conn.commit()
+    return {"ok": True, "busy": True, "queued": True, "running": False, "mode": "light"}
+
+
 @app.post("/api/shift-alarm/sunzi-analysis")
 def start_shift_alarm_sunzi_analysis(request: Request):
     """소유자 버튼 한 번을 손무의 고정 라이트 파이프라인 한 건으로 변환한다."""
     _require_owner(request)
     conn = get_conn()
     try:
-        if _sunzi_light_pipeline_state(conn)["busy"]:
-            raise HTTPException(status_code=409, detail="병법 구절 분석이 이미 대기 중이거나 실행 중입니다")
-        if not conn.execute("SELECT 1 FROM personas WHERE name=?", ("손무",)).fetchone():
-            raise HTTPException(status_code=409, detail="손무 페르소나를 찾지 못했습니다")
-        now = _now()
-        cursor = conn.execute(
-            """INSERT INTO messages (room_id, sender, content, created_at, is_system)
-               VALUES (?, 'system', ?, ?, 1)""",
-            (SUNZI_DISCUSSION_ROOM_ID, SUNZI_LIGHT_PIPELINE_REQUEST, now),
-        )
-        conn.execute(
-            """INSERT INTO pending_turns
-               (persona_name, room_id, status, created_at, source_message_id)
-               VALUES (?, ?, 'pending', ?, ?)""",
-            ("손무", SUNZI_DISCUSSION_ROOM_ID, now, cursor.lastrowid),
-        )
-        conn.commit()
-        return {"ok": True, "busy": True, "queued": True, "running": False, "mode": "light"}
+        return _enqueue_sunzi_light_analysis(conn)
+    finally:
+        conn.close()
+
+
+@app.post("/api/worker/sunzi_light_analysis")
+def worker_start_sunzi_light_analysis(authorization: Optional[str] = Header(None)):
+    """ShiftAlarm이 기상 알람 시각에 손무의 라이트 분석을 직접 트리거한다
+    (2026-09-16, "기상알람 뜨면 다음구절 라이트모드로 분석한다음 토론
+    시작하면좋겠어" 요청). /api/shift-alarm/sunzi-analysis와 같은 로직이지만
+    브라우저 세션 대신 WORKER_TOKEN으로 인증한다 — ShiftAlarm은 소유자
+    세션 쿠키를 들고 있지 않다. 이미 대기 중이면 409를 그냥 삼켜 알람
+    루프가 실패로 보지 않게 한다(호출부에서 잡음)."""
+    _check_worker_auth(authorization)
+    conn = get_conn()
+    try:
+        return _enqueue_sunzi_light_analysis(conn)
     finally:
         conn.close()
 

@@ -3262,6 +3262,33 @@ def _notify_job_prep_room(content, target_persona=None):
     _notify_tulpachat_room(JOB_PREP_ROOM_ID, content, target_persona=target_persona)
 
 
+def _start_sunzi_light_analysis():
+    """기상 알람 시각에 손무의 라이트 구절 분석(→ 파이프라인 완료 시 자동
+    토론 시작)을 트리거한다. server/app.py의 /api/shift-alarm/sunzi-analysis와
+    같은 로직이지만, ShiftAlarm은 소유자 세션 쿠키가 없어 WORKER_TOKEN으로
+    인증하는 전용 엔드포인트(/api/worker/sunzi_light_analysis)를 쓴다
+    (2026-09-16). 이미 분석이 대기·진행 중이면 서버가 409를 돌려주는데,
+    그건 정상 상황(이미 오늘 처리 중)이라 조용히 무시한다."""
+    try:
+        result = subprocess.run(
+            ["security", "find-generic-password", "-s", TULPACHAT_WORKER_KEYCHAIN_SERVICE, "-w"],
+            capture_output=True, text=True, check=True, timeout=10,
+        )
+        token = result.stdout.strip()
+        request = urllib.request.Request(
+            f"{TULPACHAT_LOCAL_URL}/api/worker/sunzi_light_analysis",
+            data=b"{}",
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        urllib.request.urlopen(request, timeout=10)
+    except urllib.error.HTTPError as exc:
+        if exc.code != 409:
+            print(f"⚠️ 손자병법 라이트 분석 요청 실패: {exc}")
+    except Exception as exc:
+        print(f"⚠️ 손자병법 라이트 분석 요청 실패: {exc}")
+
+
 def _watch_jp_subtitle_completion(run_id, label, folder_path, notify_room=True):
     marker = f"/tmp/_jp_subtitle_run_{run_id}.done"
     deadline = time.time() + JP_SUBTITLE_MARKER_TIMEOUT_SECONDS
@@ -5048,6 +5075,24 @@ class ShiftAlarmApp(rumps.App):
         self.ebook_resume_alarm_timer = rumps.Timer(self._check_wake_alarm_ebook_resume, 60)
         self.ebook_resume_alarm_timer.start()
 
+        # ★ 2026-09-16: "일본어선생님이 매일 오후 9시에 메시지 보내는거같은데
+        # 기상알람 뜰때도 메시지 보내면 좋겠어 이직방도 기상알람과 함께 그날
+        # 공고관련되서 업데이트 된게있으면 메시지 보내서 알리고 손자병법방도
+        # 기상알람 뜨면 다음구절 라이트모드로 분석한다음 토론 시작하면좋겠어"
+        # 요청 — 기존 오후 9시 일본어 복습 트리거는 그대로 두고, 기상 알람
+        # 시각에 세 방(일본어 스터디·이직 준비·손자병법 토론)을 추가로 깨운다.
+        self._last_wake_alarm_jp_teacher_notified = None
+        self.wake_alarm_jp_teacher_timer = rumps.Timer(self._check_wake_alarm_jp_teacher_greeting, 60)
+        self.wake_alarm_jp_teacher_timer.start()
+
+        self._last_wake_alarm_job_prep_notified = None
+        self.wake_alarm_job_prep_timer = rumps.Timer(self._check_wake_alarm_job_prep_update, 60)
+        self.wake_alarm_job_prep_timer.start()
+
+        self._last_wake_alarm_sunzi_notified = None
+        self.wake_alarm_sunzi_timer = rumps.Timer(self._check_wake_alarm_sunzi_analysis, 60)
+        self.wake_alarm_sunzi_timer.start()
+
         # 기상 알람 시각 + 2시간에 일일 루틴 체크리스트 확인 알림 (1분마다 시각 체크)
         self._last_daily_routine_checklist_reminder_notified = None
         self.daily_routine_checklist_reminder_timer = rumps.Timer(
@@ -5744,6 +5789,68 @@ class ShiftAlarmApp(rumps.App):
             return
         open_ebook_reader_terminal(last["file"])
         threading.Thread(target=self._turn_on_hue_for_reading, daemon=True).start()
+
+    def _check_wake_alarm_jp_teacher_greeting(self, _):
+        """1분마다 오늘의 기상 알람 시각인지 확인, 맞으면 일본어 스터디방에도
+        메시지를 보낸다(★ 2026-09-16: "일본어선생님이 매일 오후 9시에
+        메시지 보내는거같은데 기상알람 뜰때도 메시지 보내면 좋겠어" 요청).
+        기존 오후 9시 복습 트리거(_check_jp_subtitle_daily_review)는 그대로
+        유지하고, 이건 별도로 추가되는 아침 트리거다."""
+        wake_time = self._todays_wake_alarm_time(datetime.date.today())
+        if not wake_time:
+            return
+        now = datetime.datetime.now()
+        if now.hour != wake_time["hour"] or now.minute != wake_time["minute"]:
+            return
+        today = now.date()
+        if self._last_wake_alarm_jp_teacher_notified == today:
+            return
+        self._last_wake_alarm_jp_teacher_notified = today
+        threading.Thread(
+            target=_notify_jp_subtitle_study_room,
+            args=("🔔 기상 알람이 울렸어요. 좋은 아침 인사와 함께 오늘의 학습 정보를 소개해주세요.",),
+            daemon=True,
+        ).start()
+
+    def _check_wake_alarm_job_prep_update(self, _):
+        """1분마다 오늘의 기상 알람 시각인지 확인, 맞으면 이직시스템 수집을
+        기상 알람 시각에 맞춰 트리거한다(★ 2026-09-16: "이직방도 기상알람과
+        함께 그날 공고관련되서 업데이트 된게있으면 메시지 보내서 알리고"
+        요청). 원래도 하루 1번(JOB_COLLECTOR_REFRESH_SECONDS) 자동 수집이
+        돌지만 시각이 앱 시작 시점에 매여 있었다 — 기상 알람 시각에 맞춰
+        불러도 _refresh_job_collector 자체의 경과시간 가드·실행중 가드가
+        이미 있어 중복 실행되지 않는다. 새 공고가 있을 때만 스터디코치가
+        이직 준비방에 알리는 기존 로직(_run_job_collector_thread)을 그대로
+        재사용한다."""
+        wake_time = self._todays_wake_alarm_time(datetime.date.today())
+        if not wake_time:
+            return
+        now = datetime.datetime.now()
+        if now.hour != wake_time["hour"] or now.minute != wake_time["minute"]:
+            return
+        today = now.date()
+        if self._last_wake_alarm_job_prep_notified == today:
+            return
+        self._last_wake_alarm_job_prep_notified = today
+        self._refresh_job_collector(None)
+
+    def _check_wake_alarm_sunzi_analysis(self, _):
+        """1분마다 오늘의 기상 알람 시각인지 확인, 맞으면 손자병법 토론방의
+        다음 구절 라이트 모드 분석을 트리거한다(★ 2026-09-16: "손자병법방도
+        기상알람 뜨면 다음구절 라이트모드로 분석한다음 토론 시작하면좋겠어"
+        요청). 라이트 파이프라인이 끝나면 기존 자동화(worker/announcements)가
+        토론까지 이어서 시작하므로 여기서는 분석 요청만 보내면 된다."""
+        wake_time = self._todays_wake_alarm_time(datetime.date.today())
+        if not wake_time:
+            return
+        now = datetime.datetime.now()
+        if now.hour != wake_time["hour"] or now.minute != wake_time["minute"]:
+            return
+        today = now.date()
+        if self._last_wake_alarm_sunzi_notified == today:
+            return
+        self._last_wake_alarm_sunzi_notified = today
+        threading.Thread(target=_start_sunzi_light_analysis, daemon=True).start()
 
     def _check_daily_routine_checklist_reminder(self, _):
         """1분마다 '오늘 기상 알람 시각 + 2시간'인지 확인, 하루 한 번만 일일
