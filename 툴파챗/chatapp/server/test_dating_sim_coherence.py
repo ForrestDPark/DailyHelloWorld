@@ -59,17 +59,6 @@ class DatingSimCoherenceTests(unittest.TestCase):
         issues = report.check_hidden_events_preserve_outro(db.get_conn)
         self.assertEqual(issues, [], "\n".join(issues))
 
-    def test_vocab_situation_matches_its_category_and_keeps_the_real_word(self):
-        """★ 2026-09-17: "건너뛰고 그러는것보다 그표현에맞는 적절한상황을 더
-        만들어서 대응하는 방식으로해" 요청 — "돕다" 같은 단어가 help
-        카테고리로 분류되고, 결과 문장에 실제 단어가 들어가는지 확인한다."""
-        issues = report.check_vocab_situation_fits_its_category({
-            "help": ("手伝う", "てつだう", "돕다"),
-            "worry": ("悩む", "なやむ", "고민"),
-            "general": ("机", "つくえ", "책상"),
-        })
-        self.assertEqual(issues, [], "\n".join(issues))
-
     def test_run_all_checks_reports_nothing_wrong(self):
         """네 규칙을 한 번에 묶어 돌리는 진입점(run_all_checks)도 그대로
         비어 있어야 한다 — dating_sim_coherence_report.py를 직접 실행했을

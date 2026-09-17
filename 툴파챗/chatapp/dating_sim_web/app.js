@@ -777,10 +777,11 @@ function renderLobby(mostRecentEncounter) {
   info.className = "lobby-card-info";
   const title = document.createElement("strong");
   title.textContent = "이어하기";
+  // ★ 2026-09-17: "작품명은 안나오면좋겠어 그냥 여자이름이랑 현재까지의
+  // 만남요약정도만 나오면 좋겠어" 요청 — source_title(EPUB 제목)은 화면에
+  // 절대 노출하지 않는다. 이름 + 진행 요약만 보여준다.
   const subtitle = document.createElement("span");
-  subtitle.textContent = mostRecentEncounter.source_title
-    ? `${mostRecentEncounter.character_name} · ${mostRecentEncounter.source_title}`
-    : mostRecentEncounter.character_name;
+  subtitle.textContent = mostRecentEncounter.character_name;
   const status = document.createElement("span");
   status.textContent = lobbyStatusText(mostRecentEncounter);
   info.append(title, subtitle, status);
