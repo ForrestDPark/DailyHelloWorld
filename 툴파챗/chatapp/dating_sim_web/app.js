@@ -11,6 +11,89 @@ let choiceInFlight = false;
 let mapOpeningText = "";
 let sceneCharacterImage = "";
 
+// ★ 2026-09-17: "이전장면보기버튼이없는데... 아니 이전장면 대사말고" 요청 —
+// 대사창 안 ◀ 뒤로가기(현재 장면 안에서만 동작)와는 별개로, 이미 끝낸
+// 과거 장면 전체를 다시 볼 수 있는 백로그. 서버에 왕복하지 않고 브라우저
+// localStorage에 만남(story_id)별로 저장해서 새로고침해도 남는다.
+let sceneHistory = [];
+const LOCATION_LABELS = {
+  cafe: "카페", park: "공원", school: "학교 앞",
+  first: "첫 만남 장소", walk: "산책길", quiet: "찻집",
+};
+
+function historyStorageKey() {
+  return `dating-sim-history:${storyId || "default"}`;
+}
+
+function loadSceneHistory() {
+  try {
+    sceneHistory = JSON.parse(localStorage.getItem(historyStorageKey()) || "[]");
+  } catch (e) {
+    sceneHistory = [];
+  }
+  updateHistoryButtonVisibility();
+}
+
+function saveSceneHistory() {
+  try {
+    localStorage.setItem(historyStorageKey(), JSON.stringify(sceneHistory));
+  } catch (e) {
+    // localStorage가 꽉 찼거나 비활성화된 환경 — 백로그는 이번 방문에서만 쓰고 조용히 넘어간다.
+  }
+}
+
+function updateHistoryButtonVisibility() {
+  $("history-open-btn").classList.toggle("hidden", sceneHistory.length === 0);
+}
+
+function addSceneToHistory(entry) {
+  sceneHistory.push(entry);
+  saveSceneHistory();
+  updateHistoryButtonVisibility();
+}
+
+function clearSceneHistory() {
+  sceneHistory = [];
+  saveSceneHistory();
+  updateHistoryButtonVisibility();
+}
+
+function renderHistoryList() {
+  const list = $("history-list");
+  list.replaceChildren();
+  if (!sceneHistory.length) {
+    const empty = document.createElement("p");
+    empty.className = "history-empty";
+    empty.textContent = "아직 지나간 장면이 없어요.";
+    list.append(empty);
+    return;
+  }
+  for (const entry of sceneHistory) {
+    const card = document.createElement("div");
+    card.className = "history-entry";
+    const head = document.createElement("div");
+    head.className = "history-entry-head";
+    const dayLabel = document.createElement("span");
+    dayLabel.textContent = `DAY ${entry.day} · ${LOCATION_LABELS[entry.location] || entry.location}`;
+    head.append(dayLabel);
+    const linesBox = document.createElement("div");
+    linesBox.className = "history-entry-lines";
+    for (const line of entry.lines) {
+      const p = document.createElement("p");
+      renderAnnotatedText(p, typeof line === "string" ? line : line.text);
+      linesBox.append(p);
+    }
+    card.append(head, linesBox);
+    if (entry.choiceText) {
+      const choiceBox = document.createElement("div");
+      choiceBox.className = "history-entry-choice";
+      renderAnnotatedText(choiceBox, `▶ ${entry.choiceText}`);
+      card.append(choiceBox);
+    }
+    list.append(card);
+  }
+}
+
 function locationBackdrop(location) {
   if (["park", "walk"].includes(location)) return "/dating-sim/static/pixel-park.png";
   if (["school", "first"].includes(location)) return "/dating-sim/static/pixel-school.png";
@@ -656,6 +739,7 @@ function render(state) {
 }
 
 async function loadState() {
+  loadSceneHistory();
   showView("loading-view");
   try {
     render(await api(`/api/dating-sim/state${storyQuery()}`));
@@ -746,11 +830,18 @@ async function chooseOption(choiceIndex) {
   if (choiceInFlight) return;
   choiceInFlight = true;
   if (!recordedAudio.paused || window.speechSynthesis?.speaking) stopListening({ turnOff: false });
+  // render(state)가 sceneLines/latestState를 다음 장면 것으로 덮어쓰기 전에,
+  // 지금 끝나는 장면을 백로그용으로 미리 떼어둔다.
+  const finishedEntry = {
+    day: latestState?.day, location: $("stage").dataset.location,
+    lines: sceneLines.slice(), choiceText: sceneChoices[choiceIndex]?.text || "",
+  };
   try {
     const state = await api("/api/dating-sim/choose", { method: "POST", body: JSON.stringify({ choice_index: choiceIndex, story_id: storyId }) });
     if (listeningMode) {
       await playStandalone(sceneChoices[choiceIndex].text, "male", "내 대사 재생 중");
     }
+    addSceneToHistory(finishedEntry);
     render(state);
   } catch (e) {
     alert(e.message);
@@ -763,6 +854,7 @@ async function restart() {
   if (!confirm("처음부터 다시 시작할까요? 지금까지의 호감도는 사라집니다.")) return;
   try {
     render(await api("/api/dating-sim/restart", { method: "POST", body: JSON.stringify({ story_id: storyId }) }));
+    clearSceneHistory();
   } catch (e) {
     alert(e.message);
   }
@@ -849,6 +941,17 @@ $("result-next").addEventListener("click", (event) => {
 document.getElementById("result-view").addEventListener("click", (event) => {
   if (event.target.closest(".listening-controls")) return;
   advancePastResult();
+});
+
+$("history-open-btn").addEventListener("click", () => {
+  renderHistoryList();
+  $("history-overlay").classList.remove("hidden");
+});
+$("history-close-btn").addEventListener("click", () => {
+  $("history-overlay").classList.add("hidden");
+});
+$("history-overlay").addEventListener("click", (event) => {
+  if (event.target === $("history-overlay")) $("history-overlay").classList.add("hidden");
 });
 
 updateListeningControls();
