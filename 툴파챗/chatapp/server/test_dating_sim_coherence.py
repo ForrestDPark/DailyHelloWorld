@@ -110,6 +110,31 @@ class DatingSimCoherenceTests(unittest.TestCase):
         self.assertGreaterEqual(score["overall"], 88, score)
         self.assertEqual(score["invariant_score"], 100, score["issues"])
 
+    def test_day_transition_coherence_covers_every_day_and_stays_above_the_floor(self):
+        """★ 2026-09-18: "각각의 장면마다 전방면과의 개연성을 점수화해서
+        나타내게해" 요청 — 2일차부터 마지막 날까지 전환이 전부 채점돼
+        있어야 하고(요일 추가 시 빠뜨리면 이 테스트가 잡는다), 각 전환
+        점수가 70점 밑(원인 없는 급반전 수준)으로 떨어지면 안 된다."""
+        rows = report.score_day_transitions()
+        covered_days = {row["to_day"] for row in rows}
+        self.assertEqual(covered_days, set(range(2, ds.TOTAL_DAYS + 1)))
+        for row in rows:
+            self.assertGreaterEqual(
+                row["score"], 70,
+                f"DAY {row['from_day']}→{row['to_day']} 개연성 점수가 너무 낮음: {row['note']}",
+            )
+
+    def test_day6_transition_no_longer_has_an_unexplained_mood_reversal(self):
+        """★ 2026-09-18 실제 버그: 5일차 '시간이 빨리 간다'는 좋은 분위기
+        직후 6일차가 설명 없이 '답장이 뜸해졌다'로 급반전했다. 나레이션에
+        시간적 연결('즐거웠던 다음 날부터')이 들어갔는지 확인한다."""
+        self.assertIn("다음 날", ds.DAY_NARRATION[6])
+
+    def test_day13_transition_bridges_the_family_conversation(self):
+        """★ 2026-09-18 실제 버그: 12일차의 무거운 가족 이야기 직후 13일차가
+        곧장 '특별한 날'이라는 밝은 화제로 바뀌어 감정이 안 이어졌다."""
+        self.assertIn("가족", ds.DAY_NARRATION[13])
+
 
 if __name__ == "__main__":
     unittest.main()
