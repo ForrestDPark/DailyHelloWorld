@@ -1216,6 +1216,8 @@ REMINDERS = {
     "day_shift_last_day_routine": {"label": "☕ 점심 먹고 아아 한잔·헬스장 갔다 오후 9시 이후 취침(주간 마지막날)", "enabled": True, "time": {"hour": 14, "minute": 30}},
     "engine_oil_change": {"label": "🛢️ 엔진오일 가는 날(5개월에 1회)", "enabled": True, "time": {"hour": 12, "minute": 0}},
     "coconut_oil":     {"label": "🥥 코코넛오일 사는 날(2개월에 1회)", "enabled": True, "time": {"hour": 12, "minute": 15}},
+    "car_refuel":      {"label": "⛽ 차 기름 넣는 날(1개월에 1회)", "enabled": True, "time": {"hour": 12, "minute": 30}},
+    "coffee_purchase": {"label": "☕ 커피 구매하는 날(1개월에 1회)", "enabled": True, "time": {"hour": 12, "minute": 45}},
     # ★ 2026-09-09: "Day,swing, gy 각각에도 멜라토닌 먹는 시각 리마인더
     # 만들어줘" 요청 — 지금까지 멜라토닌 알림은 S-D휴/G-S휴 "전환 휴무일"에만
     # 있었고 평소 근무일(Day/Swing/GY)엔 없었다. 근무일은 매일 반복이라
@@ -2098,6 +2100,12 @@ ENGINE_OIL_CHANGE_ANCHOR = datetime.date(2026, 8, 20)
 ENGINE_OIL_CHANGE_INTERVAL_MONTHS = 5
 COCONUT_OIL_ANCHOR = datetime.date(2026, 9, 12)
 COCONUT_OIL_INTERVAL_MONTHS = 2
+# ★ 2026-09-17: "오늘 차 기름넣기 주기한달로 해서리마인더 추가하고 커피구매하기도
+# 한달주기로 리마인더 추가해줘" 요청 — 엔진오일·코코넛오일과 같은 달 단위 주기.
+CAR_REFUEL_ANCHOR = datetime.date(2026, 9, 17)
+CAR_REFUEL_INTERVAL_MONTHS = 1
+COFFEE_PURCHASE_ANCHOR = datetime.date(2026, 9, 17)
+COFFEE_PURCHASE_INTERVAL_MONTHS = 1
 
 
 def _is_dongchan_call_day(d):
@@ -2193,6 +2201,28 @@ def _is_coconut_oil_day(d):
     return months_diff % COCONUT_OIL_INTERVAL_MONTHS == 0
 
 
+def _is_car_refuel_day(d):
+    """기준일(2026-09-17)부터 1개월마다 돌아오는 차 기름넣는 날인지 반환.
+    엔진오일·코코넛오일 리마인더와 같은 달 단위 주기 계산 방식을 그대로 쓴다."""
+    if d < CAR_REFUEL_ANCHOR:
+        return False
+    if d.day != CAR_REFUEL_ANCHOR.day:
+        return False
+    months_diff = (d.year - CAR_REFUEL_ANCHOR.year) * 12 + (d.month - CAR_REFUEL_ANCHOR.month)
+    return months_diff % CAR_REFUEL_INTERVAL_MONTHS == 0
+
+
+def _is_coffee_purchase_day(d):
+    """기준일(2026-09-17)부터 1개월마다 돌아오는 커피 구매일인지 반환.
+    엔진오일·코코넛오일 리마인더와 같은 달 단위 주기 계산 방식을 그대로 쓴다."""
+    if d < COFFEE_PURCHASE_ANCHOR:
+        return False
+    if d.day != COFFEE_PURCHASE_ANCHOR.day:
+        return False
+    months_diff = (d.year - COFFEE_PURCHASE_ANCHOR.year) * 12 + (d.month - COFFEE_PURCHASE_ANCHOR.month)
+    return months_diff % COFFEE_PURCHASE_INTERVAL_MONTHS == 0
+
+
 def _is_first_off_block_start_of_month(schedule, d):
     """d가 이번 달의 '첫 번째' 휴무 블록 시작일인지 반환 (한 달에 한 번 리마인더용)."""
     if not _is_off_block_start(schedule, d):
@@ -2259,6 +2289,9 @@ def _get_today_reminder_items(schedule, now=None):
     - 주간 마지막날 루틴(점심·아아·헬스장·취침): 오늘이 주간(Day) 근무 블록의 마지막날
       (내일은 주간이 아님, 휴무든 다른 근무든 상관없음). (2026-08-20 추가)
     - 엔진오일 교체: 근무표와 무관하게 2026-08-20부터 5개월마다 한 번. (2026-08-20 추가)
+    - 코코넛오일 구매: 근무표와 무관하게 2026-09-12부터 2개월마다 한 번.
+    - 차 기름 넣기: 근무표와 무관하게 2026-09-17부터 1개월마다 한 번. (2026-09-17 추가)
+    - 커피 구매: 근무표와 무관하게 2026-09-17부터 1개월마다 한 번. (2026-09-17 추가)
     - 멜라토닌 먹을 시각(근무일): 오늘이 Day/Swing/GY 근무일이면 매번. 시각은 컨텍스트별로
       다르며(⏰ 리마인더 시각표 Notion 표), S-D휴/D-G휴/G-S휴 전환 휴무는 기존 전용
       멜라토닌 알림이 따로 있어 여기 포함하지 않는다. (2026-09-09 추가)
@@ -2338,6 +2371,12 @@ def _get_today_reminder_items(schedule, now=None):
 
     if REMINDERS["coconut_oil"]["enabled"] and _is_coconut_oil_day(today):
         items.append(("coconut_oil", REMINDERS["coconut_oil"]["label"]))
+
+    if REMINDERS["car_refuel"]["enabled"] and _is_car_refuel_day(today):
+        items.append(("car_refuel", REMINDERS["car_refuel"]["label"]))
+
+    if REMINDERS["coffee_purchase"]["enabled"] and _is_coffee_purchase_day(today):
+        items.append(("coffee_purchase", REMINDERS["coffee_purchase"]["label"]))
 
     if REMINDERS["melatonin_shift"]["enabled"] and get_shift_for_date(schedule, today) in ("Day", "Swing", "GY"):
         items.append(("melatonin_shift", REMINDERS["melatonin_shift"]["label"]))
