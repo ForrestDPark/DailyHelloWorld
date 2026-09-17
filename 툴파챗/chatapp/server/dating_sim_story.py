@@ -609,11 +609,20 @@ def _seven_day_scenes(location_lines, character_name_ko="소이", character_name
     실제로 답하는 질문(beat_outro)이 아니라 그 뒤에 이어붙은 줄이 화면에
     마지막으로 남아 선택지와 안 맞아 보였다. beat_outro는 항상 선택지가
     답하는 문장이어야 하므로, 나레이션 줄은 그 앞(대화 중간)에 끼워 넣어
-    마지막 줄은 항상 beat_outro로 남긴다."""
+    마지막 줄은 항상 beat_outro로 남긴다.
+
+    ★ 2026-09-18 수정: "이거 두 장면이 개연성이없어" 신고 — 1일차(방금
+    처음 만난 사이)에 "残る"(남다)처럼 관계의 지속·애착을 전제하는 단어가
+    나오면, "그녀가 그 말에 마음이 걸리는 듯했다"는 나레이션 자체가 마치
+    플레이어가 그녀의 속마음을 이미 읽을 수 있는 것처럼 느껴져 낯선 사이
+    설정과 부딪힌다. 카테고리를 아무리 다듬어도(general·memory·feeling
+    등은 특히 더) 1일차엔 "아직 서로를 모르는 사이"라는 전제 자체와
+    충돌하므로, 표현 나레이션은 이미 만나서 연락을 주고받는 2일차부터만
+    넣는다(직전 두 신고가 전부 1일차였다는 것도 이 판단의 근거)."""
     scenes = {}
     for day, (lines, choices) in DAY_BEATS.items():
         scenes[day] = {}
-        vocab_word = vocab_pool[(day - 1) % len(vocab_pool)] if vocab_pool else None
+        vocab_word = vocab_pool[(day - 1) % len(vocab_pool)] if vocab_pool and day != 1 else None
         beat_lines = [line.replace("ソイ", character_name_jp).replace("소이", character_name_ko) for line in lines]
         beat_intro, beat_middle, beat_outro = beat_lines[0], beat_lines[1:-1], beat_lines[-1]
         for location, day_lines in location_lines.items():

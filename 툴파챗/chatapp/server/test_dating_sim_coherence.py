@@ -72,6 +72,16 @@ class DatingSimCoherenceTests(unittest.TestCase):
         ])
         self.assertEqual(issues, [], "\n".join(issues))
 
+    def test_no_vocab_narration_on_the_first_meeting_day(self):
+        """★ 2026-09-18 실제 버그: 1일차(방금 처음 만난 사이)에 "남다"처럼
+        관계 지속을 전제하는 단어가 나레이션으로 나오면, 나레이션 형식으로
+        바꿔도 여전히 낯선 사이 설정과 부딪힌다. 1일차는 표현 나레이션 자체를
+        완전히 빼야 한다(2일차부터는 이미 연락하는 사이라 허용)."""
+        issues = report.check_no_vocab_narration_on_first_meeting_day([
+            ("残る", "のこる", "남다"), ("同棲", "どうせい", "동거"), ("思い出", "おもいで", "추억"),
+        ])
+        self.assertEqual(issues, [], "\n".join(issues))
+
     def test_run_all_checks_reports_nothing_wrong(self):
         """네 규칙을 한 번에 묶어 돌리는 진입점(run_all_checks)도 그대로
         비어 있어야 한다 — dating_sim_coherence_report.py를 직접 실행했을

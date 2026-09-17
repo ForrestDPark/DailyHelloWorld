@@ -437,7 +437,7 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         # "오랜만"도 받침(ㄴ)이 있으므로 "이라는"이 붙어야 한다.
         self.assertNotIn("오랜만라는", without_batchim)
 
-    def test_book_story_attaches_vocab_when_library_match_exists(self):
+    def test_book_story_attaches_vocab_from_day_two_onward_when_library_match_exists(self):
         with tempfile.TemporaryDirectory() as directory:
             library_dir = Path(directory)
             work_dir = library_dir / "MATCHME"
@@ -449,8 +449,27 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
                  patch.object(dating_sim_story, "_find_book", return_value=Path("/tmp/MATCHME.epub")), \
                  patch.object(dating_sim_story, "_book_title", return_value="MATCHME"):
                 story = dating_sim_story.story_for("book:" + "1" * 20)
-        self.assertIn("vocab", story["scenes"][1]["first"])
-        self.assertEqual(story["scenes"][1]["first"]["vocab"]["ja"], "本音")
+        self.assertIn("vocab", story["scenes"][2]["first"])
+        self.assertEqual(story["scenes"][2]["first"]["vocab"]["ja"], "本音")
+
+    def test_book_story_never_attaches_vocab_on_the_first_meeting_day(self):
+        """★ 2026-09-18: "이거 두 장면이 개연성이없어" 신고 — 1일차(방금
+        처음 만난 사이)에 관계 지속을 전제하는 단어가 나오면 나레이션
+        형식이어도 낯선 사이 설정과 부딪힌다. 1일차는 표현 나레이션 자체를
+        빼야 한다."""
+        with tempfile.TemporaryDirectory() as directory:
+            library_dir = Path(directory)
+            work_dir = library_dir / "MATCHME"
+            work_dir.mkdir()
+            (work_dir / "scene_study_cards.json").write_text(json.dumps({
+                "1-1": {"vocabulary": [{"ja": "残る", "reading": "のこる", "ko": "남다"}]},
+            }), encoding="utf-8")
+            with patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", library_dir), \
+                 patch.object(dating_sim_story, "_find_book", return_value=Path("/tmp/MATCHME.epub")), \
+                 patch.object(dating_sim_story, "_book_title", return_value="MATCHME"):
+                story = dating_sim_story.story_for("book:" + "8" * 20)
+        for location, scene in story["scenes"][1].items():
+            self.assertNotIn("vocab", scene, f"1일차 {location}에 표현 나레이션이 섞임")
 
     def test_book_story_has_no_vocab_when_no_library_match(self):
         with tempfile.TemporaryDirectory() as directory:

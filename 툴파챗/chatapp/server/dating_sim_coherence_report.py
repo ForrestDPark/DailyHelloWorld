@@ -32,6 +32,16 @@ VOCAB_ASIDE)을 버리고 단어 뜻을 카테고리로 분류해 어울리는 �
 화제를 묻는 문장은 하나도 없다(check_vocab_templates_avoid_meta_
 commentary가 회귀 방지).
 
+★ 2026-09-18 4차 수정: "이거 두 장면이 개연성이없어 확인하고 이렇게
+이상한부분이없는지 모든시나리오 검증해 관련 파이프라인도 구성해" 신고 —
+1일차(방금 처음 만난 사이)에 "残る"(남다)처럼 관계 지속을 전제하는 단어가
+나오자, 나레이션 방식으로 바꿔도 여전히 "그녀가 그 말에 마음이 걸리는
+듯했다"는 문장 자체가 낯선 사이 설정과 부딪혔다. 표현 나레이션을 1일차
+에서 완전히 뺐다(2일차부터는 이미 연락하는 사이라 허용) —
+check_no_vocab_narration_on_first_meeting_day가 회귀 방지. 이 신고를
+계기로 render_full_script() 전체를 처음부터 끝까지 다시 읽어 다른 요일도
+검토했다(README 참고).
+
 구조 (3단계):
   1. 결정론적 규칙 검사(이 파일의 check_*() 함수들, LLM 없이 코드로 판정) —
      "마지막 줄은 항상 선택지가 답하는 문장이어야 한다", "장소 라벨은 전부
@@ -175,6 +185,20 @@ def check_vocab_templates_avoid_meta_commentary(sample_words):
     return issues
 
 
+def check_no_vocab_narration_on_first_meeting_day(sample_words):
+    """★ 2026-09-18: "이거 두 장면이 개연성이없어" 신고 — 1일차(방금 처음
+    만난 사이)에 "남다"처럼 관계의 지속·애착을 전제하는 표현 나레이션이
+    나오면 "그녀가 그 말에 마음이 걸리는 듯했다"는 문장 자체가 낯선 사이
+    설정과 부딪힌다. 1일차 장면에는 vocab_pool을 줘도 표현 나레이션이
+    절대 섞이면 안 된다(2일차부터는 이미 만나서 연락하는 사이라 허용)."""
+    issues = []
+    scenes = ds._seven_day_scenes(ds.LOCATION_LINES, vocab_pool=sample_words)
+    for location, scene in scenes[1].items():
+        if "vocab" in scene:
+            issues.append(f"1일차 location={location}: 표현 나레이션이 섞임(첫 만남인데 부적절) — {scene['vocab']!r}")
+    return issues
+
+
 def run_all_checks(conn_factory=None):
     """모든 결정론적 규칙을 돌려 이슈 목록을 합쳐 돌려준다. 빈 리스트면 통과."""
     issues = []
@@ -190,6 +214,9 @@ def run_all_checks(conn_factory=None):
         ("進行", "しんこう", "진행"), ("悩む", "なやむ", "고민"),
         ("好き", "すき", "좋아함"), ("思い出", "おもいで", "추억"),
         ("約束", "やくそく", "약속"), ("嬉しい", "うれしい", "기쁨"),
+    ])
+    issues += check_no_vocab_narration_on_first_meeting_day([
+        ("残る", "のこる", "남다"), ("同棲", "どうせい", "동거"), ("思い出", "おもいで", "추억"),
     ])
     if conn_factory is not None:
         issues += check_hidden_events_preserve_outro(conn_factory)
