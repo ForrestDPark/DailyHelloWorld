@@ -21,12 +21,16 @@ VOCAB_ASIDE)을 버리고 단어 뜻을 카테고리로 분류해 어울리는 �
 만드는 방식(VOCAB_SITUATION_TEMPLATES)으로 바꿨다. DAY_BEATS의 대사 줄
 수를 2개 고정에서 몇 개든 되도록 일반화하고, 7일 → 14일로 확장했다.
 
-★ 2026-09-17 재수정: "왜 갑자기 세탁에대해 이야기한다니 너무 뜬금없잖아
+★ 2026-09-17 3차 수정: "왜 갑자기 세탁에대해 이야기한다니 너무 뜬금없잖아
 이런식으로 작품에서 표현하나가져온다음 그거에대해서 물어본다던지 하는
-컨셉 버려 너무이상해 다른 여주와의 시나리오도 전부 수정해" 요청 — 카테고리
-분류로도 여전히 뜬금없었다(분류 실패 단어가 general로 떨어지면 예전과
-똑같이 어색함). "오늘의 표현" 기능 자체를 완전히 제거했다 — 관련 규칙
-(check_vocab_situation_fits_its_category)도 함께 삭제했다.
+컨셉 버려 너무이상해" 신고를 받고 처음엔 기능 자체를 통째로 삭제했는데,
+"삭제하라는게 아니라 그단어가 작품에서 사용된 상황을 비슷하게 미연시에서
+전개하고 흐름에따라서 단어가 자연스럽게 사용되게하라는 말이었어" 요청으로
+다시 복원했다 — 문제는 기능 존재 여부가 아니라 "단어가 뚝 나오고 그것에
+대해 말해볼까요?"라는 메타 발화 구조였다. 지금은 전부 괄호 3인칭
+나레이션(다른 곳의 "(...)" 장면 묘사와 같은 형식)이고, 플레이어에게
+화제를 묻는 문장은 하나도 없다(check_vocab_templates_avoid_meta_
+commentary가 회귀 방지).
 
 구조 (3단계):
   1. 결정론적 규칙 검사(이 파일의 check_*() 함수들, LLM 없이 코드로 판정) —
@@ -153,6 +157,24 @@ def check_hidden_events_preserve_outro(conn_factory):
         conn.close()
 
 
+def check_vocab_templates_avoid_meta_commentary(sample_words):
+    """★ 2026-09-17: "단어뚝 나오고 그거에대해 말해볼까요 이런식으로 하눈
+    컨셉을 버리라는거였지" 요청 — 표현 나레이션은 ①괄호 3인칭 나레이션
+    이어야 하고(플레이어에게 말 거는 대사가 아님), ②물음표로 화제 전환을
+    묻지 않아야 하며, ③실제 단어(한자+읽기)가 문장에 들어가야 한다."""
+    issues = []
+    for word in sample_words:
+        for template_index in range(2):
+            line = ds._vocab_situation_line(word, template_index)
+            if not line.lstrip().startswith(("(", "（")):
+                issues.append(f"단어 {word!r} 템플릿 {template_index}: 나레이션(괄호)이 아님 — {line!r}")
+            if "?" in line or "？" in line:
+                issues.append(f"단어 {word!r} 템플릿 {template_index}: 플레이어에게 화제를 묻는 물음표가 있음 — {line!r}")
+            if f"[{word[0]}|{word[1]}]" not in line:
+                issues.append(f"단어 {word!r} 템플릿 {template_index}: 실제 단어가 문장에 없음 — {line!r}")
+    return issues
+
+
 def run_all_checks(conn_factory=None):
     """모든 결정론적 규칙을 돌려 이슈 목록을 합쳐 돌려준다. 빈 리스트면 통과."""
     issues = []
@@ -163,6 +185,12 @@ def run_all_checks(conn_factory=None):
     issues += check_last_line_matches_outro(scenes_by_variant)
     issues += check_location_labels_are_physical(ds.DAY_LOCATION_ACTIONS)
     issues += check_day_range_completeness()
+    issues += check_vocab_templates_avoid_meta_commentary([
+        ("洗濯", "せんたく", "세탁"), ("手伝う", "てつだう", "돕다"),
+        ("進行", "しんこう", "진행"), ("悩む", "なやむ", "고민"),
+        ("好き", "すき", "좋아함"), ("思い出", "おもいで", "추억"),
+        ("約束", "やくそく", "약속"), ("嬉しい", "うれしい", "기쁨"),
+    ])
     if conn_factory is not None:
         issues += check_hidden_events_preserve_outro(conn_factory)
     return issues

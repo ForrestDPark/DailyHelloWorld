@@ -59,6 +59,19 @@ class DatingSimCoherenceTests(unittest.TestCase):
         issues = report.check_hidden_events_preserve_outro(db.get_conn)
         self.assertEqual(issues, [], "\n".join(issues))
 
+    def test_vocab_situation_templates_avoid_meta_commentary(self):
+        """★ 2026-09-17: "단어뚝 나오고 그거에대해 말해볼까요 이런식으로
+        하눈 컨셉을 버리라는거였지" 요청 — 표현 나레이션은 괄호 3인칭
+        나레이션이어야 하고, 물음표로 화제를 묻지 않아야 하며, 실제
+        단어가 문장에 들어가야 한다."""
+        issues = report.check_vocab_templates_avoid_meta_commentary([
+            ("洗濯", "せんたく", "세탁"), ("手伝う", "てつだう", "돕다"),
+            ("進行", "しんこう", "진행"), ("悩む", "なやむ", "고민"),
+            ("好き", "すき", "좋아함"), ("思い出", "おもいで", "추억"),
+            ("約束", "やくそく", "약속"), ("嬉しい", "うれしい", "기쁨"),
+        ])
+        self.assertEqual(issues, [], "\n".join(issues))
+
     def test_run_all_checks_reports_nothing_wrong(self):
         """네 규칙을 한 번에 묶어 돌리는 진입점(run_all_checks)도 그대로
         비어 있어야 한다 — dating_sim_coherence_report.py를 직접 실행했을

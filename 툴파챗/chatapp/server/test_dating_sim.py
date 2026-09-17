@@ -382,12 +382,10 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
                 dating_sim_story.story_for("book:" + "0" * 20)
 
     def test_book_story_scene_last_line_is_always_the_outro_the_choices_answer(self):
-        """★ 2026-09-17: "작품에서 표현하나가져온다음 그거에대해서 물어본다던지
-        하는 컨셉 버려 너무이상해" 요청으로 EPUB 학습 단어를 대사에 끼워 넣던
-        "오늘의 표현" 기능을 완전히 없앴다(예전엔 처음 만난 날 갑자기 무관한
-        단어 얘기를 꺼내 뜬금없었다). 이 회귀 방지 테스트는 그 기능이 빠진
-        뒤에도 마지막 줄이 여전히 선택지가 답하는 beat_outro인지 확인한다."""
-        with patch.object(dating_sim_story, "_find_book", return_value=Path("/tmp/MATCHME.epub")), \
+        """선택지는 항상 마지막 줄(beat_outro)에 답해야 한다 — 표현 나레이션이
+        중간에 끼어들어도(아래 vocab 테스트들) 마지막 줄은 그대로여야 한다."""
+        with patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", Path("/tmp/no-such-jp-epub-library")), \
+             patch.object(dating_sim_story, "_find_book", return_value=Path("/tmp/MATCHME.epub")), \
              patch.object(dating_sim_story, "_book_title", return_value="MATCHME"):
             story = dating_sim_story.story_for("book:" + "1" * 20)
         expected_outro = (
@@ -396,6 +394,70 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
             .replace("소이", story["character_name_ko"])
         )
         self.assertEqual(story["scenes"][1]["first"]["lines"][-1], expected_outro)
+        self.assertNotIn("vocab", story["scenes"][1]["first"])
+
+    def test_load_work_vocabulary_only_reads_vocabulary_field_never_expressions(self):
+        """expressions(원본 대사 문장 그대로일 수 있음)는 절대 재료로 쓰면
+        안 되고, 이미 학습용으로 추출된 개별 단어(vocabulary)만 안전하게
+        재사용해야 한다."""
+        with tempfile.TemporaryDirectory() as directory:
+            library_dir = Path(directory)
+            work_dir = library_dir / "TEST-001"
+            work_dir.mkdir()
+            (work_dir / "scene_study_cards.json").write_text(json.dumps({
+                "1-1": {
+                    "expressions": [{"ja": "원본 대사 문장이라 절대 쓰면 안 됨", "reading": "x", "ko": "금지"}],
+                    "vocabulary": [{"ja": "同棲", "reading": "どうせい", "ko": "동거"}],
+                }
+            }), encoding="utf-8")
+            with patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", library_dir):
+                vocab = dating_sim_story._load_work_vocabulary("TEST-001")
+        self.assertEqual(vocab, [("同棲", "どうせい", "동거")])
+        for _, _, ko in vocab:
+            self.assertNotEqual(ko, "금지")
+
+    def test_vocab_situation_line_is_narration_not_a_question_to_the_player(self):
+        """★ 2026-09-17: "단어뚝 나오고 그거에대해 말해볼까요 이런식으로
+        하눈 컨셉을 버리라는거였지" 요청 — 표현 나레이션은 플레이어에게
+        화제 전환을 묻는 대사가 아니라 괄호 3인칭 나레이션이어야 하고,
+        실제 단어(한자+읽기)가 문장에 들어가야 한다."""
+        line = dating_sim_story._vocab_situation_line(("洗濯", "せんたく", "세탁"), 0)
+        self.assertTrue(line.lstrip().startswith("("), "나레이션이 아니라 대사처럼 보임")
+        self.assertNotIn("?", line)
+        self.assertNotIn("？", line)
+        self.assertIn("[洗濯|せんたく]", line)
+        self.assertIn("세탁", line)
+
+    def test_vocab_situation_line_picks_the_correct_korean_particle(self):
+        """받침 있는 단어("고민")는 "이라는", 받침 없는 단어("고마워")는
+        "라는"이 붙어야 한다 — 안 그러면 "고민라는 말이"처럼 문법이 깨진다."""
+        with_batchim = dating_sim_story._vocab_situation_line(("進行", "しんこう", "진행"), 0)
+        self.assertNotIn("진행라는", with_batchim)
+        without_batchim = dating_sim_story._vocab_situation_line(("久しぶり", "ひさしぶり", "오랜만"), 0)
+        # "오랜만"도 받침(ㄴ)이 있으므로 "이라는"이 붙어야 한다.
+        self.assertNotIn("오랜만라는", without_batchim)
+
+    def test_book_story_attaches_vocab_when_library_match_exists(self):
+        with tempfile.TemporaryDirectory() as directory:
+            library_dir = Path(directory)
+            work_dir = library_dir / "MATCHME"
+            work_dir.mkdir()
+            (work_dir / "scene_study_cards.json").write_text(json.dumps({
+                "1-1": {"vocabulary": [{"ja": "本音", "reading": "ほんね", "ko": "본심"}]},
+            }), encoding="utf-8")
+            with patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", library_dir), \
+                 patch.object(dating_sim_story, "_find_book", return_value=Path("/tmp/MATCHME.epub")), \
+                 patch.object(dating_sim_story, "_book_title", return_value="MATCHME"):
+                story = dating_sim_story.story_for("book:" + "1" * 20)
+        self.assertIn("vocab", story["scenes"][1]["first"])
+        self.assertEqual(story["scenes"][1]["first"]["vocab"]["ja"], "本音")
+
+    def test_book_story_has_no_vocab_when_no_library_match(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", Path(directory)), \
+                 patch.object(dating_sim_story, "_find_book", return_value=Path("/tmp/NOMATCH.epub")), \
+                 patch.object(dating_sim_story, "_book_title", return_value="NOMATCH"):
+                story = dating_sim_story.story_for("book:" + "2" * 20)
         self.assertNotIn("vocab", story["scenes"][1]["first"])
 
     def test_random_book_id_excludes_already_started_books(self):

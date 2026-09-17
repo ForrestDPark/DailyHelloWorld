@@ -353,15 +353,25 @@ BOOK_DAY_LOCATION_ACTIONS = {
 
 
 def _daily_openings(seed_key, story_id, character_name_jp="ソイ", character_name_ko="소이"):
+    """★ 2026-09-17: "이거 선택이 다이상하잖아 메시지가 더구체적으로
+    나온다음에 선택하게하면 될거같은데" 신고 — 도입 메시지(예: "어제 제대로
+    고맙다고 말하지 못해서요")만 뜨고 바로 장소 선택지 3개가 나와서, 왜
+    그 장소들 중에 고르는 건지 연결이 없었다. 1일차는 사고로 우연히
+    마주치는 장면이라 장소 자체가 곧 사건이지만, 2일차부터는 메시지를
+    받은 뒤 "어디서 만날지" 결정하는 흐름이므로, 그 결정을 하게 되는
+    한 줄을 도입 메시지 뒤에 이어 붙인다."""
     selected = {}
     for day, candidates in DAY_OPENINGS.items():
         key = f"{seed_key or ''}:{story_id}:{day}:opening"
         index = int.from_bytes(hashlib.sha256(key.encode("utf-8")).digest()[:4], "big") % len(candidates)
-        selected[day] = (
+        opening = (
             candidates[index]
             .replace("ソイ", character_name_jp)
             .replace("소이", character_name_ko)
         )
+        if day != 1:
+            opening = f"{opening}\n[今日|きょう]はどこで[会|あ]おうか、[少|すこ]し[考|かんが]えてみる。\n오늘은 어디서 만날지 잠깐 생각해본다."
+        selected[day] = opening
     return selected
 
 
@@ -439,25 +449,171 @@ LOCATION_LINES = {
 }
 
 
-def _seven_day_scenes(location_lines, character_name_ko="소이", character_name_jp="ソイ"):
+# ★ 2026-09-16: "일본어선생님이 채팅방에서 작품올리고 설명할때 ... 미연시
+# 링크도 같이 올리면좋겠어 ... 상황이 똑같지않아도 그작품에서 사용된
+# 표현들을 사용한 대사들이 미연시에서 드러났으면 좋겠어" 요청 — EPUB
+# 본문(대사 원문)은 여전히 절대 옮기지 않는다는 안전장치는 그대로 두고,
+# 이미 학습용으로 추출·정제된 scene_study_cards.json의 vocabulary(개별
+# 단어+읽기+뜻)만 재료로 써서 새 문장을 만든다.
+#
+# ★ 2026-09-17 재설계: "삭제하라는게 아니라 그단어가 작품에서 사용된
+# 상황을 비슷하게 미연시에서 전개하고 흐름에따라서 단어가 자연스럽게
+# 사용되게하라는 말이었어 이상하게 단어뚝 나오고 그거에대해 말해볼까요
+# 이런식으로 하눈 컨셉을 버리라는거였지" 요청 — 두 번 갈아엎었다.
+#   1차(카테고리 분류): "「{단어}」에 대해 이야기해도 될까요?"류 문장을
+#      단어 뜻별 주제로 나눠 좀 더 어울리게 골랐지만, 여전히 "단어가
+#      뚝 나오고 그것에 대해 말해볼까요"라는 메타 발화 구조 자체는
+#      그대로였다.
+#   2차(완전 삭제): 아예 기능을 없앴는데, 이건 "삭제"가 아니라 "상황
+#      전개로 자연스럽게 녹이기"를 원했다는 걸 뒤늦게 확인.
+#   3차(지금, narration 방식): 플레이어에게 "이 단어 얘기해도 되나요"라고
+#      묻는 대사 대신, 그 단어가 실제로 쓰이는 상황을 나레이션(다른 곳에서
+#      쓰는 "(...)" 3인칭 장면 묘사와 같은 형식 — 예: Day1 사고 장면)으로
+#      짧게 그려서 대사 사이에 끼워 넣는다. "洗濯"(세탁)이면 "빨래하던
+#      손을 멈추고 돌아봤다"처럼 단어가 상황 속에서 자연스럽게 쓰이고,
+#      플레이어에게 화제 전환을 묻지 않는다.
+JP_SUBTITLE_LIBRARY_DIR = Path(__file__).resolve().parents[3] / "일본어자막추출" / "library"
+
+# 단어 뜻(한국어 풀이)으로 상황 유형을 추정한다 — 카테고리·문장은 계속
+# 늘려갈 수 있다. household는 EPUB 학습 단어에 흔한 집안일류(세탁·요리·
+# 청소 등, 일본어로 스루동사 명사라 "~をしていた"에 자연스럽게 들어간다).
+VOCAB_CATEGORY_KEYWORDS = {
+    "household": ["청소", "세탁", "빨래", "요리", "설거지", "정리", "장보기", "숙제", "공부", "준비"],
+    "help": ["돕다", "도와", "도움", "거들다", "힘이 되다"],
+    "worry": ["고민", "걱정", "망설", "불안"],
+    "preference": ["좋아하다", "취향", "마음에 들다", "즐기다", "즐거"],
+    "memory": ["기억", "추억", "그립다", "그리워", "떠오르다"],
+    "plan": ["약속", "계획", "예정", "다음에"],
+    "feeling": ["고맙다", "미안", "기쁘다", "슬프다", "설레다", "소중"],
+}
+
+# 전부 나레이션(괄호 3인칭 장면 묘사) 문장이고, 전부 {tag}(한자+읽기)를
+# 직접 담아 단어가 실제로 쓰이게 한다 — "이 단어 이야기해도 될까요?" 같은
+# 플레이어 대상 질문은 하나도 없다. household는 {tag}를 "~をしていた/
+# しながら"에 직접 넣는다(스루동사 명사라 문법상 자연스러움). 나머지는
+# 품사가 제각각(동사 원형·명사·형용사 등)이라 그대로 문장에 끼우면
+# 어색해지므로, "{tag}のこと"/"{tag}という言葉" 같은 품사 무관 안전한
+# 틀에 넣는다. 한국어 쪽은 받침 유무에 따라 조사가 달라지므로 _vocab_
+# situation_line()이 {ko_ilaneun}(이라는/라는)을 미리 계산해서 넘긴다.
+VOCAB_SITUATION_TEMPLATES = {
+    "household": [
+        "({tag}をしていた[手|て]を[止|と]めて、あなたの[方|ほう]をちらっと[見|み]た。)\n({ko} 하던 손을 멈추고 당신 쪽을 살짝 봤다.)",
+        "({tag}をしながら、[鼻歌|はなうた]まじりに[何|なに]かつぶやいている。)\n({ko} 하면서 콧노래 섞어 뭔가 중얼거리고 있다.)",
+    ],
+    "help": [
+        "({tag}という[言葉|ことば]が[頭|あたま]をよぎったのか、あなたが[困|こま]っていないかそれとなく[様子|ようす]をうかがっている。)\n({ko_ilaneun} 말이 문득 떠올랐는지, 당신이 곤란하지 않은지 슬쩍 낌새를 살피고 있다.)",
+    ],
+    "worry": [
+        "({tag}のことが[頭|あたま]から[離|はな]れないのか、[時折|ときおり][考|かんが]え[込|こ]むような[顔|かお]をする。)\n({ko} 생각이 떠나지 않는지 이따금 골똘한 표정을 짓는다.)",
+    ],
+    "preference": [
+        "({tag}の[話|はなし]になると、[目|め]がぱっと[輝|かがや]いた。)\n({ko} 이야기가 나오면 눈이 반짝 빛났다.)",
+    ],
+    "memory": [
+        "({tag}という[言葉|ことば]に、ふと[遠|とお]い[目|め]をした。)\n({ko_ilaneun} 말에 문득 먼 곳을 보는 눈빛이 됐다.)",
+    ],
+    "plan": [
+        "({tag}のことを[思|おも]い[出|だ]したように、[手帳|てちょう]をそっと[開|ひら]いた。)\n({ko} 생각이 난 듯 수첩을 살짝 펼쳤다.)",
+    ],
+    "feeling": [
+        "({tag}という[言葉|ことば]が、[今|いま]の[気持|きも]ちに[近|ちか]い[気|き]がした。)\n({ko_ilaneun} 말이 지금 마음과 가까운 듯했다.)",
+    ],
+    "general": [
+        "({tag}という[言葉|ことば]が、なぜか[心|こころ]に[引|ひ]っかかっているような[様子|ようす]だった。)\n({ko_ilaneun} 말이 왠지 마음에 걸리는 듯한 모습이었다.)",
+    ],
+}
+
+
+def _classify_vocab_word(ko_gloss):
+    """단어의 한국어 풀이에서 상황 카테고리를 추정한다. 못 찾으면 general로
+    떨어진다(단어를 그대로 문장에 넣어도 안전한 범용 나레이션)."""
+    for category, keywords in VOCAB_CATEGORY_KEYWORDS.items():
+        if any(keyword in ko_gloss for keyword in keywords):
+            return category
+    return "general"
+
+
+def _korean_has_batchim(word):
+    """마지막 글자에 받침이 있는지 — "이라는"/"라는" 같은 조사를 고르는 데
+    쓴다. 한글 음절이 아니면(영문·기호 등) 받침 없는 것으로 취급한다."""
+    if not word:
+        return False
+    code = ord(word[-1])
+    if 0xAC00 <= code <= 0xD7A3:
+        return (code - 0xAC00) % 28 != 0
+    return False
+
+
+def _find_library_folder(title):
+    """일본어자막추출/library/<제목>/ 폴더를 EPUB 제목과 접두 일치로 찾는다
+    (persona_worker.py의 _jp_epub_book_id와 반대 방향의 같은 매칭 규칙)."""
+    if not title or not JP_SUBTITLE_LIBRARY_DIR.is_dir():
+        return None
+    title_key = title.casefold()
+    for folder in JP_SUBTITLE_LIBRARY_DIR.iterdir():
+        if folder.is_dir() and title_key.startswith(folder.name.casefold()):
+            return folder
+    return None
+
+
+def _load_work_vocabulary(title):
+    """해당 작품의 scene_study_cards.json에서 개별 단어(vocabulary)만
+    추린다 — 문장(expressions)은 원본 대사 그대로일 수 있어 쓰지 않는다."""
+    folder = _find_library_folder(title)
+    if not folder:
+        return []
+    try:
+        cards = json.loads((folder / "scene_study_cards.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    seen = {}
+    for scene in cards.values():
+        for entry in (scene or {}).get("vocabulary", []) or []:
+            ja, reading, ko = entry.get("ja"), entry.get("reading"), entry.get("ko")
+            if ja and reading and ko and ja not in seen:
+                seen[ja] = (ja, reading, ko)
+    return list(seen.values())
+
+
+def _vocab_situation_line(word, template_index):
+    """단어 뜻(ko)으로 상황을 분류해 그 단어가 실제로 쓰일 법한 3인칭
+    나레이션 장면을 고른다 — "이 단어 얘기해도 될까요?" 같은 플레이어
+    대상 질문이 아니라, 다른 나레이션 줄(예: Day1 사고 장면)과 같은
+    형식의 짧은 상황 묘사다(2026-09-17 재설계)."""
+    ja, reading, ko = word
+    tag = f"[{ja}|{reading}]"
+    ko_ilaneun = f"{ko}{'이라는' if _korean_has_batchim(ko) else '라는'}"
+    category = _classify_vocab_word(ko)
+    templates = VOCAB_SITUATION_TEMPLATES.get(category, VOCAB_SITUATION_TEMPLATES["general"])
+    template = templates[template_index % len(templates)]
+    return template.format(tag=tag, ko=ko, ko_ilaneun=ko_ilaneun)
+
+
+def _seven_day_scenes(location_lines, character_name_ko="소이", character_name_jp="ソイ", vocab_pool=None):
     """location_lines는 {장소: 대사} 또는 {장소: {일차: 대사}} 둘 다 받는다 —
     후자면 요일마다 다른 활동 대사가, 전자면(예: EPUB 영감 이야기의 임시
     장소 대사) 모든 요일에 같은 대사가 붙는다.
+
+    vocab_pool을 주면(그 작품 학습카드에서 뽑은 단어 목록) 요일마다 단어
+    하나가 실제로 쓰일 법한 나레이션 장면을 장면 중간에 끼워 넣는다 —
+    원작 대사 문장은 절대 그대로 옮기지 않고, 새로 쓴 안전한 나레이션에
+    단어(한자+읽기+뜻)만 재료로 쓴다.
 
     DAY_BEATS[day]의 lines는 2개(도입+질문) 이상 몇 개든 될 수 있다 —
     ★ 2026-09-17 "하루에 나누는 대화제한도 풀어버려" 요청으로 정확히 2개로
     고정하던 제약을 없앴다. 첫 줄=도입, 마지막 줄=선택지가 답하는 질문,
     그 사이는 전부 추가 대화 턴(중간 줄)으로 취급한다.
 
-    ★ 2026-09-17: "왜 갑자기 세탁에대해 이야기한다니 너무 뜬금없잖아
-    이런식으로 작품에서 표현하나가져온다음 그거에대해서 물어본다던지
-    하는 컨셉 버려 너무이상해" 요청 — EPUB 학습 단어를 새 문장에 끼워
-    넣던 "오늘의 표현" 기능(vocab_pool 인자, 이전 버전에서 카테고리
-    분류까지 시도했지만 여전히 뜬금없었다)을 완전히 없앴다. 장면은
-    이제 DAY_BEATS·location_lines 원본 그대로만 조립한다."""
+    ★ 2026-09-17 수정: "여자가갑자기이상한말하고 답변도 다이상한데" 신고 —
+    이 나레이션 줄을 장면 맨 끝(scene_lines.append)에 붙였더니, 선택지가
+    실제로 답하는 질문(beat_outro)이 아니라 그 뒤에 이어붙은 줄이 화면에
+    마지막으로 남아 선택지와 안 맞아 보였다. beat_outro는 항상 선택지가
+    답하는 문장이어야 하므로, 나레이션 줄은 그 앞(대화 중간)에 끼워 넣어
+    마지막 줄은 항상 beat_outro로 남긴다."""
     scenes = {}
     for day, (lines, choices) in DAY_BEATS.items():
         scenes[day] = {}
+        vocab_word = vocab_pool[(day - 1) % len(vocab_pool)] if vocab_pool else None
         beat_lines = [line.replace("ソイ", character_name_jp).replace("소이", character_name_ko) for line in lines]
         beat_intro, beat_middle, beat_outro = beat_lines[0], beat_lines[1:-1], beat_lines[-1]
         for location, day_lines in location_lines.items():
@@ -467,10 +623,14 @@ def _seven_day_scenes(location_lines, character_name_ko="소이", character_name
                 [activity, beat_intro, *beat_middle, beat_outro] if day == 1
                 else [beat_intro, activity, *beat_middle, beat_outro]
             )
+            if vocab_word:
+                scene_lines.insert(-1, _vocab_situation_line(vocab_word, day - 1))
             scene = {"lines": scene_lines, "choices": [
                 {"text": choices[0].replace("ソイ", character_name_jp).replace("소이", character_name_ko), "affection": positive_score},
                 {"text": choices[1].replace("ソイ", character_name_jp).replace("소이", character_name_ko), "affection": negative_score},
             ]}
+            if vocab_word:
+                scene["vocab"] = {"ja": vocab_word[0], "reading": vocab_word[1], "ko": vocab_word[2]}
             scenes[day][location] = scene
     return scenes
 
@@ -903,7 +1063,8 @@ def story_for(story_id=None, seed_key=None):
             14: "[閉店|へいてん][間際|まぎわ]の[静|しず]かな[店|みせ]で、これからのことを[話|はな]す。\n마감 직전 조용한 가게에서 앞으로의 일을 이야기한다.",
         },
     }
-    scenes = _seven_day_scenes(book_location_lines, profile["ko"], profile["jp"])
+    vocab_pool = _load_work_vocabulary(source_title)
+    scenes = _seven_day_scenes(book_location_lines, profile["ko"], profile["jp"], vocab_pool=vocab_pool)
     if seed_key is not None:
         for day, day_scenes in scenes.items():
             for location_id, scene in day_scenes.items():
