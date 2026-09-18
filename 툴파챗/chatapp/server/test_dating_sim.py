@@ -426,21 +426,25 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         직접 들려주는 구체적 사건 대사로 바뀌면서 괄호도 뗐다 — 이제는
         평문 대사 형식이라 괄호 여부는 검사하지 않는다. 무물음표 규칙과
         "실제 단어는 reveal에만"(setup에 단어가 나오면 "뜬금없음"이
-        재발한 것) 규칙은 그대로 유지한다."""
-        setup, reveal = dating_sim_story._vocab_situation_lines(("洗濯", "せんたく", "세탁"), 0)
-        for line in (setup, reveal):
+        재발한 것) 규칙은 그대로 유지한다.
+
+        ★ 2026-09-18(8차): reveal 뒤에 화제 복귀 줄(transition_back)이
+        추가돼 반환값이 세 줄이 됐다."""
+        setup, reveal, transition_back = dating_sim_story._vocab_situation_lines(("洗濯", "せんたく", "세탁"), 0)
+        for line in (setup, reveal, transition_back):
             self.assertNotIn("?", line)
             self.assertNotIn("？", line)
         self.assertNotIn("[洗濯|せんたく]", setup, "setup 줄에 단어가 이미 나옴 — 뜬금없음 방지 설계 위반")
         self.assertIn("[洗濯|せんたく]", reveal)
         self.assertIn("세탁", reveal)
+        self.assertNotIn("[洗濯|せんたく]", transition_back, "화제 복귀 줄은 단어와 무관한 범용 문장이어야 함")
 
     def test_vocab_situation_line_picks_the_correct_korean_particle(self):
         """받침 있는 단어("고민")는 "이라는", 받침 없는 단어("고마워")는
         "라는"이 붙어야 한다 — 안 그러면 "고민라는 말이"처럼 문법이 깨진다."""
-        _, with_batchim = dating_sim_story._vocab_situation_lines(("進行", "しんこう", "진행"), 0)
+        _, with_batchim, _ = dating_sim_story._vocab_situation_lines(("進行", "しんこう", "진행"), 0)
         self.assertNotIn("진행라는", with_batchim)
-        _, without_batchim = dating_sim_story._vocab_situation_lines(("久しぶり", "ひさしぶり", "오랜만"), 0)
+        _, without_batchim, _ = dating_sim_story._vocab_situation_lines(("久しぶり", "ひさしぶり", "오랜만"), 0)
         # "오랜만"도 받침(ㄴ)이 있으므로 "이라는"이 붙어야 한다.
         self.assertNotIn("오랜만라는", without_batchim)
 

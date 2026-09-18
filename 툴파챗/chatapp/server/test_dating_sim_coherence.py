@@ -135,6 +135,53 @@ class DatingSimCoherenceTests(unittest.TestCase):
         곧장 '특별한 날'이라는 밝은 화제로 바뀌어 감정이 안 이어졌다."""
         self.assertIn("가족", ds.DAY_NARRATION[13])
 
+    def test_day2_first_line_grounds_itself_in_day_ones_actual_event(self):
+        """★ 2026-09-18 실제 버그: "만나고 바로다음날 이전보다더
+        잘말하게됫네여가 나오니까 이상해" 신고 — 장소를 고른 뒤 실제로
+        나오는 2일차 첫 대사(DAY_BEATS[2][0])가 "어제보다 자연스럽게
+        이야기할 수 있게 됐다"며 여러 번의 대화 연습을 전제했는데, 1일차는
+        어제 딱 한 번(그것도 사고로) 만난 사이라 앞뒤가 안 맞았다. 채점
+        파이프라인(score_day_transitions)이 narration·openings만 보고
+        beat_intro는 놓쳤던 사각지대이기도 하다 — 1일차에 실제로 있었던
+        일(인사·연락처 교환)에 근거를 맞췄는지 확인한다."""
+        day2_first_line = ds.DAY_BEATS[2][0][0]
+        self.assertIn("어제", day2_first_line)
+        self.assertIn("연락처", day2_first_line)
+        self.assertNotIn("자연스럽게 이야기할 수 있게", day2_first_line)
+
+    def test_day2_location_actions_specify_whose_club_it_is(self):
+        """★ 2026-09-18 실제 버그: "동아리가 끝나길기다린다는게 려주동아리
+        인지 내동아리인지모르겠고" 신고 — 학교 선택지 라벨이 "동아리 끝나길
+        기다린다"뿐이라 누구의 동아리인지 알 수 없었다. LOCATION_LINES의
+        2일차 school 대사는 그녀 본인이 자기 동아리를 언급하는 대사이므로
+        라벨도 "그녀"를 명시해야 한다."""
+        self.assertIn("그녀", ds.DAY_LOCATION_ACTIONS[2]["school"])
+
+    def test_vocab_insertion_returns_to_the_days_own_topic_before_the_outro(self):
+        """★ 2026-09-18 실제 버그: "그 다음 장면도 좀 이상해 장면이 전혀
+        연결되지가 않잖아" 신고 — 표현 삽입(reveal) 바로 다음 줄이 그날
+        원래 하려던 질문(beat_outro)이면 화제가 뚝 끊긴다. reveal과
+        beat_outro 사이에 화제를 되돌리는 범용 다리 줄이 항상 있는지
+        확인한다."""
+        sample_pool = [("効果", "こうか", "효과")]
+        scenes = ds._seven_day_scenes(ds.LOCATION_LINES, vocab_pool=sample_pool)
+        scene = scenes[2]["cafe"]
+        self.assertIn("vocab", scene)
+        self.assertEqual(scene["lines"][-2], ds.VOCAB_TRANSITION_BACK)
+        self.assertNotEqual(scene["lines"][-1], ds.VOCAB_TRANSITION_BACK)
+
+    def test_outcome_words_no_longer_get_the_unrelated_workplace_stress_story(self):
+        """★ 2026-09-18 실제 버그: "효과라는 말이 왜 갑자기 생각났냐고"
+        신고 — "효과"가 어떤 카테고리에도 안 걸려 general로 떨어졌는데,
+        그때의 general 고정 설화(알바 스트레스를 참는 이야기)는 감정
+        억누르기 얘기라 "효과"(효능·결과)와 의미가 안 맞았다. "효과"류
+        단어는 이제 전용 outcome 카테고리로 분류되고, general 자체도
+        특정 감정을 전제하지 않는 내용 중립적인 틀로 바뀌었는지 확인한다."""
+        self.assertEqual(ds._classify_vocab_word("효과"), "outcome")
+        for category in ("outcome", "general"):
+            for setup, _reveal in ds.VOCAB_SITUATION_TEMPLATES[category]:
+                self.assertNotIn("억울", setup, f"{category} 카테고리가 여전히 특정 감정(억울함)을 전제함")
+
 
 if __name__ == "__main__":
     unittest.main()

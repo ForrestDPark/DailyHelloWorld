@@ -78,6 +78,46 @@ reveal에만 있는지를 회귀 방지로 검사한다.
 app.py의 상태 payload에 실제로 실려 나가는지는 여전히 확인할 가치가
 있다(프론트가 그 필드로 어떤 줄을 강조할지 결정하므로).
 
+★ 2026-09-18 8차 수정: "효과라는 말이 왜 갑자기 생각났냐고... 아르바이트
+하고 있는데 고객이랑 대화를 했는데 설명하는 효과가 전혀 없었다던가
+이런 식으로... 그리고 그 다음 장면도 좀 이상해 장면이 전혀 연결되지가
+않잖아" 신고 — 두 가지를 동시에 잡았다.
+  ① "효과"가 household·help·worry 등 어떤 카테고리 키워드에도 안 걸려
+     general로 떨어졌는데, 그때 general의 고정 설화(알바 스트레스를
+     참는 이야기)는 감정 억누르기 얘기라 "효과"(효능·결과)와 의미가
+     전혀 안 맞았다. "효과"류 단어를 위한 전용 outcome 카테고리를
+     만들어 신고자가 직접 제안한 시나리오(설명했는데 효과를 못 봄)를
+     그대로 템플릿화했고, general 자체도 특정 감정을 전제하지 않는
+     내용 중립적인 틀("오늘도 이것저것 하다 보니 어느새 저녁이
+     됐다")로 바꿔 앞으로 어떤 단어가 general에 떨어져도 의미 충돌
+     위험을 낮췄다.
+  ② reveal 바로 다음 줄이 그 요일의 beat_outro(원래 하려던 질문)라서,
+     "효과라는 말이 그때 마음이랑 맞아떨어지는 것 같아요" 다음에 "당신이
+     좋아하는 것을 더 알려주세요" 같은 무관한 화제가 곧장 이어졌다.
+     beat_outro는 요일·장소마다 달라 개별적으로 다리를 놓을 수 없으므로,
+     대신 "방금 내 얘기만 했다"는 자각으로 화제를 되돌리는 범용 문장
+     (VOCAB_TRANSITION_BACK)을 reveal 뒤에 항상 붙였다 — 어떤 beat_outro
+     가 와도 자연스럽게 이어진다.
+_vocab_situation_lines()의 반환값이 (setup, reveal) 두 줄에서
+(setup, reveal, transition_back) 세 줄로 바뀌었다.
+
+★ 2026-09-18 9차 수정: "만나고 바로다음날 이전보다더 잘말하게됫네여가
+나오니까 이상해... 동아리가 끝나길기다린다는게 려주동아리인지
+내동아리인지모르겠고" 신고 — 표현 삽입과 무관한, DAY_BEATS·
+DAY_LOCATION_ACTIONS 자체의 개연성 버그 두 개를 추가로 잡았다.
+  ① DAY_BEATS[2][0](장소를 고른 뒤 실제로 나오는 2일차 첫 대사)이
+     "어제보다 자연스럽게 이야기할 수 있게 됐다"며 여러 차례의 대화
+     연습을 전제했는데, 1일차는 어제 딱 한 번(그것도 사고로) 만난
+     사이라 앞뒤가 안 맞았다. extract_day_transition()이 narration·
+     openings만 뽑고 beat_intro는 안 뽑아서 이전 채점(95점)이 이 대사를
+     놓쳤다 — extract_day_transition()에 beat_intro를 추가하고, 대사도
+     1일차에 실제로 있었던 일(인사·연락처 교환)에 근거를 맞춰 고쳤다
+     (수정 후 90점).
+  ② DAY_LOCATION_ACTIONS[2]["school"] 라벨("동아리 끝나길 기다린다")이
+     누구의 동아리인지 명시하지 않아 헷갈렸다 — LOCATION_LINES의 실제
+     대사(그녀가 자기 동아리를 언급)에 맞춰 "그녀의 동아리가 끝나길
+     기다린다"로, cafe·park도 같은 기준으로 목적어("그녀를")를 명시했다.
+
 구조 (4단계):
   1. 결정론적 규칙 검사(이 파일의 check_*() 함수들, LLM 없이 코드로 판정) —
      "마지막 줄은 항상 선택지가 답하는 문장이어야 한다", "장소 라벨은 전부
@@ -220,13 +260,19 @@ def check_vocab_templates_avoid_meta_commentary(sample_words):
     대신 setup 줄에 단어가 미리 나오면 "먼저 사건을 들려준다"는 설계
     의도가 깨지므로 그 부분은 그대로 검사하고, 옛 신고의 문구였던
     "단어"·"표현"이라는 메타 언급 명사가 되돌아오지 않는지도 추가로
-    막는다."""
+    막는다.
+
+    ★ 2026-09-18(8차): "효과라는 말이 왜 갑자기 생각났냐고... 그 다음
+    장면도 좀 이상해 장면이 전혀 연결되지가 않잖아" 신고 이후 반환값이
+    (setup, reveal, transition_back) 세 줄이 됐다. transition_back은
+    카테고리·단어와 무관하게 항상 같은 범용 문장이므로, 여기서는 단어
+    태그가 setup·transition_back에는 없고 reveal에만 있는지를 검사한다."""
     issues = []
     for word in sample_words:
         for template_index in range(2):
-            setup, reveal = ds._vocab_situation_lines(word, template_index)
+            setup, reveal, transition_back = ds._vocab_situation_lines(word, template_index)
             tag = f"[{word[0]}|{word[1]}]"
-            for label, line in (("setup", setup), ("reveal", reveal)):
+            for label, line in (("setup", setup), ("reveal", reveal), ("transition_back", transition_back)):
                 if "?" in line or "？" in line:
                     issues.append(f"단어 {word!r} 템플릿 {template_index} {label}: 플레이어에게 화제를 묻는 물음표가 있음 — {line!r}")
                 if "단어" in line or "표현" in line:
@@ -235,6 +281,8 @@ def check_vocab_templates_avoid_meta_commentary(sample_words):
                 issues.append(f"단어 {word!r} 템플릿 {template_index}: setup 줄에 단어가 이미 나옴(구체적 사건 먼저 → 단어 순서 위반) — {setup!r}")
             if tag not in reveal:
                 issues.append(f"단어 {word!r} 템플릿 {template_index}: reveal 줄에 실제 단어가 없음 — {reveal!r}")
+            if tag in transition_back:
+                issues.append(f"단어 {word!r} 템플릿 {template_index}: 화제 복귀 줄이 범용이 아니라 단어에 의존함 — {transition_back!r}")
     return issues
 
 
@@ -330,16 +378,27 @@ def score_narrative_completeness(conn_factory=None):
 # (extract_day_transition()으로 원문을 다시 뽑아 재검토).
 
 def extract_day_transition(day):
-    """day-1일차의 마지막 대사(outro)와 day일차 나레이션·도입부 후보를
-    사람이 읽기 좋게 묶어서 돌려준다 — 채점 재검토·회귀 확인에 쓴다."""
+    """day-1일차의 마지막 대사(outro)와 day일차 나레이션·도입부 후보·
+    장면 첫 대사(beat_intro)를 사람이 읽기 좋게 묶어서 돌려준다 — 채점
+    재검토·회귀 확인에 쓴다.
+
+    ★ 2026-09-18: "만나고 바로다음날 이전보다더 잘말하게됫네여가
+    나오니까 이상해" 신고 — DAY_BEATS[2][0](장소를 고른 뒤 실제로 처음
+    나오는 대사)가 narration·openings에는 없어서 이전 채점(2일차 95점)
+    이 이 대사를 못 보고 넘어갔다. beat_intro도 항상 같이 뽑아야 다음에
+    또 이런 사각지대가 생기지 않는다."""
     prev_outro = ds.DAY_BEATS[day - 1][0][-1].split("\n")[-1]
     narration = ds.DAY_NARRATION[day].split("\n")[-1]
     openings = [opening.split("\n")[-1] for opening in ds.DAY_OPENINGS[day]]
-    return {"from_day": day - 1, "to_day": day, "prev_outro": prev_outro, "narration": narration, "openings": openings}
+    beat_intro = ds.DAY_BEATS[day][0][0].split("\n")[-1]
+    return {
+        "from_day": day - 1, "to_day": day, "prev_outro": prev_outro,
+        "narration": narration, "openings": openings, "beat_intro": beat_intro,
+    }
 
 
 DAY_TRANSITION_COHERENCE = {
-    2: (95, "1일차 끝에 이름·연락처를 물어봤으니, 2일차에 그녀가 먼저 문자를 보내는 건 곧바로 이어지는 자연스러운 다음 수순."),
+    2: (90, "★2026-09-18 수정: DAY_BEATS[2][0](장소를 고른 뒤 실제 첫 대사)가 '어제보다 더 잘 말하게 됐다'며 반복된 연습을 전제해, 어제 딱 한 번 만난 사이라는 1일차 전제와 부딪혔다(수정 전 95점 — 채점이 narration·openings만 보고 이 대사를 놓쳤음). '어제 인사와 연락처를 주고받아서 그런지'로 1일차의 실제 사건에 근거를 맞춰 고쳤다."),
     3: (85, "'좋아하는 것' 화제에서 '갑자기 비'로 바뀌지만, 새로운 날의 새 사건이라는 문맥이라 무리 없음."),
     4: (90, "비를 함께 피한 뒤 생긴 호감이 4일차의 더 깊은 이야기(장래 고민)로 이어지는 자연스러운 심화."),
     5: (90, "고민을 털어놓은 뒤 관계가 더 편해지는 5일차 전개가 자연스럽게 이어짐."),
