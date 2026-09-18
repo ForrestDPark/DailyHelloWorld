@@ -758,7 +758,25 @@ def dating_sim_state(request: Request, story_id: str | None = None):
         row = _dating_sim_row(conn, username, story)
     finally:
         conn.close()
-    return _dating_sim_state_payload(row, story)
+    payload = _dating_sim_state_payload(row, story)
+    # ★ 2026-09-18: 관리자만 시나리오 트리 버튼을 볼 수 있게 소유자 여부를
+    # 상태에 실어 준다(트리 엔드포인트 자체도 소유자만 허용하므로 이중 방어).
+    payload["is_admin"] = _is_owner_request(request)
+    return payload
+
+
+@app.get("/api/dating-sim/scenario-tree")
+def dating_sim_scenario_tree(request: Request, story_id: str | None = None):
+    """★ 2026-09-18: 관리자 전용 — 한 이야기의 전체 시나리오 구조(요일·장소·
+    대사·선택지·호감도·EPUB 학습 단어 삽입 위치)를 진행 상태 변경 없이
+    돌려준다. 진행 저장 경로(_dating_sim_row)를 아예 타지 않아 조회만으로는
+    DB가 바뀌지 않는다."""
+    _require_owner(request)
+    username = _request_username(request)
+    try:
+        return dating_sim_story.scenario_tree(story_id, seed_key=username)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
 
 
 # ★ 2026-09-17: "만남마다 나가기하면 그 진행상태가 세이브되서 다시 미연시

@@ -7,14 +7,17 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/dating-sim/static/style.css?v=20260917-v14">
+<link rel="stylesheet" href="/dating-sim/static/style.css?v=20260918-v15">
 </head>
 <body>
   <div id="game">
     <header id="hud">
       <div class="hud-top-row">
         <a class="back-link" href="/#home">← 나가기</a>
-        <button id="history-open-btn" type="button" class="history-open-btn hidden">📜 이전 장면</button>
+        <div class="hud-top-actions">
+          <button id="tree-open-btn" type="button" class="history-open-btn hidden">🌳 시나리오 트리</button>
+          <button id="history-open-btn" type="button" class="history-open-btn hidden">📜 이전 장면</button>
+        </div>
       </div>
       <div id="hud-title" class="hud-title">미연시</div>
       <div class="hud-stats">
@@ -33,6 +36,16 @@
           <button id="history-close-btn" type="button" class="history-close-btn" aria-label="이전 장면 닫기">×</button>
         </div>
         <div id="history-list" class="history-list"></div>
+      </div>
+    </div>
+
+    <div id="tree-overlay" class="history-overlay hidden">
+      <div class="history-panel tree-panel">
+        <div class="history-panel-head">
+          <strong>시나리오 트리 (관리자)</strong>
+          <button id="tree-close-btn" type="button" class="history-close-btn" aria-label="시나리오 트리 닫기">×</button>
+        </div>
+        <div id="tree-body" class="tree-body"></div>
       </div>
     </div>
 
@@ -95,6 +108,6 @@
       </section>
     </main>
   </div>
-  <script src="/dating-sim/static/app.js?v=20260917-v14"></script>
+  <script src="/dating-sim/static/app.js?v=20260918-v15"></script>
 </body>
 </html>

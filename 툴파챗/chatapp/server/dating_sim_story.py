@@ -268,6 +268,28 @@ DAY_NARRATION = {
     14: "この[二週間|にしゅうかん]の[締|し]めくくりに、[大切|たいせつ]な[言葉|ことば]を[交|か]わす。\n이 2주의 마무리로 소중한 말을 주고받는다.",
 }
 
+# ★ 2026-09-19: "각 작품마다 어떤 장소라던지 대화라던지 어떤 대화주제를
+# 다뤘는지에 대해서 항목화해서 테이블로 보고" 요청 — 관리자 시나리오 트리
+# 보고서에서 요일마다의 대화 주제를 한 줄로 보여주기 위한 스냅샷. DAY_BEATS·
+# DAY_NARRATION의 실제 전개를 요약한 것이라, 그 내용을 크게 바꾸면 여기도
+# 함께 손봐야 한다(코드가 자동 계산하지 않는 사람 작성 라벨).
+DAY_TOPICS = {
+    1: "첫 만남 — 우연한 사고로 인사",
+    2: "다시 만나 가까워지기 · 좋아하는 것",
+    3: "갑작스러운 비, 함께 피하기",
+    4: "장래·속마음 고민 털어놓기",
+    5: "자연스러운 일상이 된 만남",
+    6: "어긋난 연락, 첫 갈등",
+    7: "관계를 정하는 고백 직전",
+    8: "첫 정식 데이트 계획",
+    9: "서로의 취미·과거 알아가기",
+    10: "작은 오해와 서먹함",
+    11: "화해",
+    12: "가족 등 깊은 사정 이야기",
+    13: "특별한 날(기념일) 축하",
+    14: "2주의 마무리, 앞으로의 약속",
+}
+
 # 장소를 먼저 고르는 메뉴처럼 보이지 않도록, 매일 사건이 먼저 벌어진다.
 # 같은 회차에는 고정되고 다시 시작하면 다른 도입이 선택된다.
 DAY_OPENINGS = {
@@ -732,6 +754,49 @@ def _load_work_vocabulary(title):
             if ja and reading and ko and ja not in seen:
                 seen[ja] = (ja, reading, ko)
     return list(seen.values())
+
+
+def work_corpus_stats(title):
+    """★ 2026-09-19: 관리자 보고서용 — 원작 회차의 규모(학습카드 장면 수,
+    추출된 학습 단어/표현 수, 원본 대사 줄 수)를 센다. 원본 대사(transcript)는
+    성인 원문이라 게임에 절대 안 옮기지만, "몇 줄짜리 작품에서 몇 단어를
+    뽑아 시나리오에 얼마나 녹였나"라는 규모 비교는 안전하게 보고할 수 있다."""
+    folder = _find_library_folder(title)
+    stats = {"study_card_scenes": 0, "vocabulary_total": 0, "expressions_total": 0,
+             "transcript_lines": 0, "transcript_scenes": 0}
+    if not folder:
+        return stats
+    try:
+        cards = json.loads((folder / "scene_study_cards.json").read_text(encoding="utf-8"))
+        if isinstance(cards, dict):
+            stats["study_card_scenes"] = len(cards)
+            vocab_seen, expr_count = set(), 0
+            for scene in cards.values():
+                for entry in (scene or {}).get("vocabulary", []) or []:
+                    if entry.get("ja"):
+                        vocab_seen.add(entry["ja"])
+                expr_count += len((scene or {}).get("expressions", []) or [])
+            stats["vocabulary_total"] = len(vocab_seen)
+            stats["expressions_total"] = expr_count
+    except (OSError, ValueError):
+        pass
+    scenes = set()
+    for path in sorted(folder.glob("transcript_part*.jsonl")):
+        try:
+            for raw in path.read_text(encoding="utf-8").splitlines():
+                raw = raw.strip()
+                if not raw:
+                    continue
+                stats["transcript_lines"] += 1
+                try:
+                    rec = json.loads(raw)
+                    scenes.add((rec.get("part"), rec.get("scene")))
+                except ValueError:
+                    pass
+        except OSError:
+            pass
+    stats["transcript_scenes"] = len(scenes)
+    return stats
 
 
 def load_all_jp_vocabulary():
@@ -1329,3 +1394,125 @@ def ending_for(story, affection):
         if affection >= ending["min_affection"]:
             return ending
     return story["endings"][-1]
+
+
+def scenario_tree(story_id=None, seed_key=None):
+    """★ 2026-09-18: "미연시스템 관리자 모드에서는 시나리오트리를 볼수있게...
+    각장면마다의 대사랑 선택에따른 브랜치를 한눈에 볼수있으면 좋겠고 이걸
+    사용해서 일본어스터디에 있는 작품의 학습카드에서 나온 표현들이 어떻게
+    시나리오상에 작용되었는지 확인할수있으면 좋겠어" 요청 — 진행 상태를
+    건드리지 않고, 한 이야기의 전체 구조(요일 → 장소 3갈래 → 장면 대사 →
+    선택지 2갈래+호감도)를 통째로 돌려준다. 각 줄에는 그 줄이 EPUB 학습
+    단어 삽입(setup/reveal/화제복귀)인지 표시하고, 요일마다 어떤 단어가
+    삽입됐는지, 그리고 이 작품의 전체 학습 단어 풀도 함께 실어 보내
+    관리자가 "이 표현이 시나리오 어디에 어떻게 쓰였나"를 한눈에 본다.
+    엔진 로직이 아니라 조회 전용이므로 DB도 안 건드린다."""
+    story = story_for(story_id, seed_key)
+    name_jp, name_ko = story["name"], story.get("character_name_ko", "소이")
+
+    def _sub(text):
+        return text.replace("ソイ", name_jp).replace("소이", name_ko)
+
+    source_title = story.get("source_title")
+    vocab_pool = _load_work_vocabulary(source_title) if source_title else []
+    days = []
+    for day in range(1, story["total_days"] + 1):
+        day_scenes = story["scenes"].get(day, {})
+        vocab_meta, vocab_line_set = None, set()
+        for scene in day_scenes.values():
+            if scene.get("vocab"):
+                v = scene["vocab"]
+                vocab_meta = v
+                vocab_line_set = set(_vocab_situation_lines((v["ja"], v["reading"], v["ko"]), day - 1))
+                break
+        locations = []
+        for loc_id, scene in day_scenes.items():
+            raw_lines = scene["lines"]
+            lines = []
+            for index, text in enumerate(raw_lines):
+                lines.append({
+                    "speaker": "narrator" if text.lstrip().startswith("(") else "character",
+                    "text": text,
+                    "is_vocab": text in vocab_line_set,
+                    "is_outro": index == len(raw_lines) - 1,
+                })
+            locations.append({
+                "id": loc_id,
+                "label": story["locations"].get(loc_id, {}).get("label", loc_id),
+                "emoji": story["locations"].get(loc_id, {}).get("emoji", ""),
+                "action": story.get("map_actions", {}).get(day, {}).get(
+                    loc_id, story["locations"].get(loc_id, {}).get("label", loc_id)),
+                "lines": lines,
+                "choices": [
+                    {"text": choice["text"], "affection": choice["affection"]}
+                    for choice in scene["choices"]
+                ],
+            })
+        days.append({
+            "day": day,
+            "topic": DAY_TOPICS.get(day, ""),
+            "narration": _sub(DAY_NARRATION.get(day, "")),
+            "openings": [_sub(opening) for opening in DAY_OPENINGS.get(day, [])],
+            "vocab": vocab_meta,
+            "locations": locations,
+        })
+
+    # ★ 2026-09-19: "학습카드와 대사전반을 읽고 어떤 대사를 활용하고 어떤
+    # 단어를 시나리오에서 활용했는지 간단한 보고서" 요청 — 원작에서 뽑은
+    # 학습 단어가 시나리오 어디에 쓰였는지(또는 안 쓰였는지)와 요일별
+    # 주제·장소를 표로 정리한다. 시나리오는 원본 대사를 절대 복사하지 않고
+    # 학습 단어만 녹이므로, 보고서도 "대사 활용"이 아니라 "단어 활용"을
+    # 정확히 나타낸다(작품 대사 규모는 참고용으로 함께 보여준다).
+    used_days_by_ja = {}
+    for day in days:
+        if day["vocab"]:
+            used_days_by_ja.setdefault(day["vocab"]["ja"], []).append(day["day"])
+    vocabulary_usage = [
+        {
+            "ja": ja, "reading": reading, "ko": ko,
+            "category": _classify_vocab_word(ko),
+            "used_days": used_days_by_ja.get(ja, []),
+        }
+        for ja, reading, ko in vocab_pool
+    ]
+    used_count = sum(1 for w in vocabulary_usage if w["used_days"])
+    scenario_breakdown = [
+        {
+            "day": day["day"],
+            "topic": day["topic"],
+            "vocab": day["vocab"],
+            "vocab_category": _classify_vocab_word(day["vocab"]["ko"]) if day["vocab"] else "",
+            "locations": [{"label": loc["label"], "action": loc["action"]} for loc in day["locations"]],
+        }
+        for day in days
+    ]
+    corpus = work_corpus_stats(source_title) if source_title else {
+        "study_card_scenes": 0, "vocabulary_total": 0, "expressions_total": 0,
+        "transcript_lines": 0, "transcript_scenes": 0,
+    }
+    report = {
+        "corpus": corpus,
+        "vocabulary_used_count": used_count,
+        "vocabulary_pool_count": len(vocab_pool),
+        "vocabulary_usage": vocabulary_usage,
+        "scenario_breakdown": scenario_breakdown,
+        "locations": [
+            {"id": k, "label": v.get("label", k), "emoji": v.get("emoji", "")}
+            for k, v in story["locations"].items()
+        ],
+    }
+    return {
+        "story_id": story["id"],
+        "title": story["title"],
+        "character_name": name_jp,
+        "character_name_ko": name_ko,
+        "source_title": source_title,
+        "total_days": story["total_days"],
+        "endings": [
+            {"id": e["id"], "title": e["title"], "min_affection": e["min_affection"]}
+            for e in story["endings"]
+        ],
+        "vocab_pool": [{"ja": ja, "reading": reading, "ko": ko} for ja, reading, ko in vocab_pool],
+        "report": report,
+        "days": days,
+    }

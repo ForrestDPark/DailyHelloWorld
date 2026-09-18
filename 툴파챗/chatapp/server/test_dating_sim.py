@@ -490,6 +490,82 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
                 state = app.dating_sim_visit(app.DatingSimLocationRequest(location="first", story_id=story_id), request(username))
         self.assertEqual(state["scene"]["vocab"], {"ja": "本音", "reading": "ほんね", "ko": "본심"})
 
+    def test_scenario_tree_reports_vocab_usage_and_flags_injected_lines(self):
+        """★ 2026-09-19: "미연시스템 관리자 모드에서는 시나리오트리를 볼수있게...
+        학습카드에서 나온 표현들이 어떻게 시나리오상에 작용되었는지 확인" +
+        "간단한 보고서도... 항목화해서 테이블로 보고" 요청 — 시나리오 트리가
+        요일·장소·대사·선택지 전체 구조와, 학습 단어가 어느 요일에 실제로
+        삽입됐는지(report.vocabulary_usage) + 요일별 주제·장소(scenario_
+        breakdown) + 원작 규모(corpus)를 함께 실어 주는지 확인한다. 삽입된
+        단어 줄은 is_vocab로 표시돼야 하고, 그 단어는 report에서 used로
+        잡혀야 한다."""
+        with tempfile.TemporaryDirectory() as directory:
+            library_dir = Path(directory)
+            work_dir = library_dir / "MATCHME"
+            work_dir.mkdir()
+            (work_dir / "scene_study_cards.json").write_text(json.dumps({
+                "1-1": {
+                    "vocabulary": [
+                        {"ja": "効果", "reading": "こうか", "ko": "효과"},
+                        {"ja": "本音", "reading": "ほんね", "ko": "본심"},
+                    ],
+                    "expressions": [{"ja": "a", "reading": "a", "ko": "a"}],
+                },
+            }), encoding="utf-8")
+            (work_dir / "transcript_part1.jsonl").write_text(
+                '{"part":1,"scene":1,"ja":"x","ko":"y"}\n{"part":1,"scene":1,"ja":"z","ko":"w"}\n',
+                encoding="utf-8",
+            )
+            with patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", library_dir), \
+                 patch.object(dating_sim_story, "_find_book", return_value=Path("/tmp/MATCHME.epub")), \
+                 patch.object(dating_sim_story, "_book_title", return_value="MATCHME"):
+                tree = dating_sim_story.scenario_tree("book:" + "5" * 20, seed_key="admin")
+        # 전체 구조
+        self.assertEqual(len(tree["days"]), tree["total_days"])
+        self.assertEqual(len(tree["days"][1]["locations"]), 3)
+        self.assertTrue(tree["days"][1]["locations"][0]["choices"])
+        # 1일차는 단어 삽입이 없어야 하고, 2일차부터 삽입된다.
+        self.assertIsNone(tree["days"][0]["vocab"])
+        self.assertIsNotNone(tree["days"][1]["vocab"])
+        # 삽입된 단어 줄은 is_vocab로 표시된다.
+        vocab_flagged = [
+            line for loc in tree["days"][1]["locations"]
+            for line in loc["lines"] if line["is_vocab"]
+        ]
+        self.assertTrue(vocab_flagged, "2일차에 is_vocab로 표시된 줄이 없음")
+        # 보고서: corpus 규모 + 단어 활용 현황 + 요일별 breakdown
+        report = tree["report"]
+        self.assertEqual(report["corpus"]["study_card_scenes"], 1)
+        self.assertEqual(report["corpus"]["transcript_lines"], 2)
+        self.assertEqual(report["vocabulary_pool_count"], 2)
+        self.assertGreaterEqual(report["vocabulary_used_count"], 1)
+        used = [w for w in report["vocabulary_usage"] if w["used_days"]]
+        self.assertTrue(used, "시나리오에 쓰인 단어가 보고서에 하나도 없음")
+        self.assertTrue(all("category" in w for w in report["vocabulary_usage"]))
+        self.assertEqual(len(report["scenario_breakdown"]), tree["total_days"])
+        self.assertTrue(all(row["topic"] for row in report["scenario_breakdown"]))
+
+    def test_scenario_tree_default_story_has_no_vocab_but_still_reports_topics(self):
+        """EPUB 매칭이 없는 기본 소이 이야기는 학습 단어 풀이 비어도 트리·
+        보고서 자체는 정상이어야 한다(요일별 주제·장소는 여전히 나옴)."""
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", Path(directory)):
+                tree = dating_sim_story.scenario_tree(None, seed_key="admin")
+        self.assertEqual(tree["report"]["vocabulary_pool_count"], 0)
+        self.assertEqual(tree["report"]["vocabulary_used_count"], 0)
+        self.assertEqual(len(tree["report"]["scenario_breakdown"]), tree["total_days"])
+        self.assertTrue(all(row["topic"] for row in tree["report"]["scenario_breakdown"]))
+
+    def test_state_payload_marks_owner_as_admin_for_the_scenario_tree_button(self):
+        """관리자(is_owner)만 시나리오 트리 버튼을 보게 상태에 is_admin이
+        실려야 한다 — 일반 로그인 사용자는 False."""
+        owner_req = SimpleNamespace(state=SimpleNamespace(
+            user={"username": "boss", "is_owner": True}, can_write=True, share_guest=False))
+        owner_state = app.dating_sim_state(owner_req)
+        self.assertTrue(owner_state["is_admin"])
+        member_state = app.dating_sim_state(request("member"))
+        self.assertFalse(member_state["is_admin"])
+
     def test_book_story_never_attaches_vocab_on_the_first_meeting_day(self):
         """★ 2026-09-18: "이거 두 장면이 개연성이없어" 신고 — 1일차(방금
         처음 만난 사이)에 관계 지속을 전제하는 단어가 나오면 나레이션

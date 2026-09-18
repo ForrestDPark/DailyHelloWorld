@@ -144,6 +144,8 @@ function renderHud(state) {
   $("affection-value").textContent = state.affection;
   $("affection-value").parentElement.setAttribute("aria-label", `호감도 ${state.affection}점`);
   $("affection-bar").style.width = `${Math.max(0, Math.min(100, state.affection))}%`;
+  // 관리자 계정에서만 시나리오 트리 버튼을 보여준다(서버도 소유자만 허용).
+  $("tree-open-btn").classList.toggle("hidden", !state.is_admin);
 }
 
 function renderMap(state) {
@@ -1098,6 +1100,282 @@ $("history-close-btn").addEventListener("click", () => {
 });
 $("history-overlay").addEventListener("click", (event) => {
   if (event.target === $("history-overlay")) $("history-overlay").classList.add("hidden");
+});
+
+// ★ 2026-09-18: "미연시스템 관리자 모드에서는 시나리오트리를 볼수있게...
+// 학습카드에서 나온 표현들이 어떻게 시나리오상에 작용되었는지 확인" 요청 —
+// 관리자(state.is_admin)에게만 뜨는 버튼으로 지금 이야기의 전체 구조를
+// 조회한다(진행 상태는 안 건드림). 각 요일마다 삽입된 EPUB 학습 단어와
+// 그 단어가 실제로 쓰인 대사 줄을 강조해 보여준다.
+function treeLineDom(line) {
+  const p = document.createElement("p");
+  p.className = "tree-line";
+  p.classList.toggle("tree-line-narrator", line.speaker === "narrator");
+  p.classList.toggle("tree-line-vocab", !!line.is_vocab);
+  p.classList.toggle("tree-line-outro", !!line.is_outro);
+  const text = document.createElement("span");
+  renderAnnotatedText(text, line.text);
+  p.append(text);
+  if (line.is_outro) {
+    const tag = document.createElement("span");
+    tag.className = "tree-tag";
+    tag.textContent = "선택지가 답하는 줄";
+    p.append(tag);
+  }
+  return p;
+}
+
+// ★ 2026-09-19: "학습카드와 대사전반을 읽고 어떤 대사를 활용하고 어떤
+// 단어를 시나리오에서 활용했는지 간단한 보고서... 항목화해서 테이블로"
+// 요청 — 시나리오 트리 맨 위에 보고서 테이블을 붙인다.
+function makeTreeTable(headers, rows) {
+  const table = document.createElement("table");
+  table.className = "tree-table";
+  const thead = document.createElement("thead");
+  const htr = document.createElement("tr");
+  for (const h of headers) {
+    const th = document.createElement("th");
+    th.textContent = h;
+    htr.append(th);
+  }
+  thead.append(htr);
+  table.append(thead);
+  const tbody = document.createElement("tbody");
+  for (const row of rows) {
+    const tr = document.createElement("tr");
+    for (const cell of row) {
+      const td = document.createElement("td");
+      if (cell instanceof Node) td.append(cell);
+      else td.textContent = cell == null ? "" : String(cell);
+      tr.append(td);
+    }
+    tbody.append(tr);
+  }
+  table.append(tbody);
+  return table;
+}
+
+const VOCAB_CATEGORY_LABELS = {
+  household: "집안일", help: "도움", worry: "고민", preference: "취향",
+  memory: "추억", plan: "계획", feeling: "감정", outcome: "결과", general: "일반",
+};
+
+function renderScenarioReport(body, tree) {
+  const report = tree.report;
+  const head = document.createElement("div");
+  head.className = "tree-section-head";
+  head.textContent = "📊 작품·시나리오 보고서";
+  body.append(head);
+
+  // 규모 요약 칩
+  const c = report.corpus;
+  const summary = document.createElement("div");
+  summary.className = "tree-report-summary";
+  const chips = [
+    `원작 대사 ${c.transcript_lines}줄 · ${c.transcript_scenes}장면`,
+    `학습카드 ${c.study_card_scenes}장면`,
+    `학습 단어 ${report.vocabulary_pool_count}개`,
+    `핵심 표현 ${c.expressions_total}개`,
+    `시나리오 활용 단어 ${report.vocabulary_used_count}개`,
+  ];
+  for (const text of chips) {
+    const chip = document.createElement("span");
+    chip.className = "tree-report-chip";
+    chip.textContent = text;
+    summary.append(chip);
+  }
+  body.append(summary);
+
+  const note = document.createElement("p");
+  note.className = "tree-report-note";
+  note.textContent = "시나리오는 원작 대사를 그대로 옮기지 않습니다. 학습카드에서 뽑은 단어만 매일 하나씩 상황 속에 녹여 씁니다(아래 표의 초록 줄).";
+  body.append(note);
+
+  // 표 1 — 요일별 시나리오 구성
+  const t1head = document.createElement("div");
+  t1head.className = "tree-table-title";
+  t1head.textContent = "요일별 시나리오 구성";
+  body.append(t1head);
+  const dayRows = report.scenario_breakdown.map((d) => {
+    let wordCell = "—";
+    if (d.vocab) {
+      const w = document.createElement("span");
+      w.lang = "ja";
+      w.className = "tree-table-word";
+      w.textContent = `${d.vocab.ja}(${d.vocab.reading}) ${d.vocab.ko}`;
+      wordCell = w;
+    }
+    const cat = d.vocab_category ? (VOCAB_CATEGORY_LABELS[d.vocab_category] || d.vocab_category) : "—";
+    const places = d.locations.map((l) => l.label).join(" / ");
+    return [`D${d.day}`, d.topic, wordCell, cat, places];
+  });
+  body.append(makeTreeTable(["일차", "대화 주제", "삽입 단어", "분류", "장소 선택지"], dayRows));
+
+  // 표 2 — 학습 단어 활용 현황 (활용된 것 먼저, 나머지는 접기)
+  const used = report.vocabulary_usage.filter((w) => w.used_days.length);
+  const unused = report.vocabulary_usage.filter((w) => !w.used_days.length);
+  if (used.length) {
+    const t2head = document.createElement("div");
+    t2head.className = "tree-table-title";
+    t2head.textContent = `시나리오에 쓰인 학습 단어 (${used.length}개)`;
+    body.append(t2head);
+    const usedRows = used.map((w) => {
+      const word = document.createElement("span");
+      word.lang = "ja";
+      word.className = "tree-table-word";
+      word.textContent = `${w.ja}(${w.reading})`;
+      return [word, w.ko, VOCAB_CATEGORY_LABELS[w.category] || w.category, w.used_days.map((d) => `D${d}`).join(", ")];
+    });
+    body.append(makeTreeTable(["단어", "뜻", "분류", "활용 요일"], usedRows));
+  }
+  if (unused.length) {
+    const details = document.createElement("details");
+    details.className = "tree-unused";
+    const summaryEl = document.createElement("summary");
+    summaryEl.textContent = `시나리오에 아직 안 쓰인 학습 단어 ${unused.length}개 (탭해서 펼치기)`;
+    details.append(summaryEl);
+    const unusedRows = unused.map((w) => {
+      const word = document.createElement("span");
+      word.lang = "ja";
+      word.className = "tree-table-word";
+      word.textContent = `${w.ja}(${w.reading})`;
+      return [word, w.ko, VOCAB_CATEGORY_LABELS[w.category] || w.category];
+    });
+    details.append(makeTreeTable(["단어", "뜻", "분류"], unusedRows));
+    body.append(details);
+  }
+}
+
+function renderScenarioTree(tree) {
+  const body = $("tree-body");
+  body.replaceChildren();
+
+  const head = document.createElement("div");
+  head.className = "tree-work-head";
+  const workTitle = document.createElement("strong");
+  workTitle.textContent = tree.source_title
+    ? `${tree.character_name} · ${tree.source_title}`
+    : tree.character_name;
+  head.append(workTitle);
+  const meta = document.createElement("span");
+  meta.textContent = `${tree.total_days}일 · 학습 단어 ${tree.vocab_pool.length}개`;
+  head.append(meta);
+  body.append(head);
+
+  if (tree.report) renderScenarioReport(body, tree);
+
+  const tocHead = document.createElement("div");
+  tocHead.className = "tree-section-head";
+  tocHead.textContent = "🌳 요일별 시나리오 트리";
+  body.append(tocHead);
+
+  for (const day of tree.days) {
+    const dayEl = document.createElement("section");
+    dayEl.className = "tree-day";
+    const dayHead = document.createElement("div");
+    dayHead.className = "tree-day-head";
+    const dayNum = document.createElement("strong");
+    dayNum.textContent = `DAY ${day.day}`;
+    dayHead.append(dayNum);
+    if (day.vocab) {
+      const badge = document.createElement("span");
+      badge.className = "tree-vocab-badge";
+      badge.lang = "ja";
+      badge.textContent = `삽입 단어: ${day.vocab.ja}（${day.vocab.reading}） ${day.vocab.ko}`;
+      dayHead.append(badge);
+    }
+    dayEl.append(dayHead);
+
+    if (day.narration) {
+      const nar = document.createElement("p");
+      nar.className = "tree-narration";
+      renderAnnotatedText(nar, day.narration);
+      dayEl.append(nar);
+    }
+    if (day.openings.length) {
+      const openWrap = document.createElement("div");
+      openWrap.className = "tree-openings";
+      const label = document.createElement("span");
+      label.className = "tree-openings-label";
+      label.textContent = "도입 메시지 후보";
+      openWrap.append(label);
+      for (const opening of day.openings) {
+        const o = document.createElement("p");
+        o.className = "tree-opening";
+        renderAnnotatedText(o, opening);
+        openWrap.append(o);
+      }
+      dayEl.append(openWrap);
+    }
+
+    for (const loc of day.locations) {
+      const locEl = document.createElement("div");
+      locEl.className = "tree-loc";
+      const action = document.createElement("div");
+      action.className = "tree-loc-action";
+      action.textContent = `${loc.emoji || "•"} ${loc.action}`;
+      locEl.append(action);
+      for (const line of loc.lines) locEl.append(treeLineDom(line));
+      const choices = document.createElement("div");
+      choices.className = "tree-choices";
+      loc.choices.forEach((choice, index) => {
+        const c = document.createElement("div");
+        c.className = "tree-choice";
+        c.classList.toggle("tree-choice-up", choice.affection > 0);
+        c.classList.toggle("tree-choice-down", choice.affection <= 0);
+        const branch = document.createElement("span");
+        branch.className = "tree-branch";
+        branch.textContent = index === 0 ? "├" : "└";
+        const label = document.createElement("span");
+        label.className = "tree-choice-text";
+        renderAnnotatedText(label, choice.text);
+        const aff = document.createElement("span");
+        aff.className = "tree-aff";
+        aff.textContent = `${choice.affection > 0 ? "+" : ""}${choice.affection}`;
+        c.append(branch, label, aff);
+        choices.append(c);
+      });
+      locEl.append(choices);
+      dayEl.append(locEl);
+    }
+    body.append(dayEl);
+  }
+
+  const endings = document.createElement("section");
+  endings.className = "tree-endings";
+  const endHead = document.createElement("strong");
+  endHead.textContent = "엔딩 분기 (누적 호감도)";
+  endings.append(endHead);
+  for (const ending of tree.endings) {
+    const e = document.createElement("div");
+    e.className = "tree-ending";
+    e.textContent = `호감도 ${ending.min_affection}+ → ${ending.title}`;
+    endings.append(e);
+  }
+  body.append(endings);
+}
+
+async function openScenarioTree() {
+  $("tree-body").replaceChildren(Object.assign(document.createElement("p"), {
+    className: "tree-loading", textContent: "불러오는 중...",
+  }));
+  $("tree-overlay").classList.remove("hidden");
+  try {
+    const tree = await api(`/api/dating-sim/scenario-tree${storyQuery()}`);
+    renderScenarioTree(tree);
+  } catch (e) {
+    $("tree-body").replaceChildren(Object.assign(document.createElement("p"), {
+      className: "tree-loading", textContent: e.message,
+    }));
+  }
+}
+
+$("tree-open-btn").addEventListener("click", openScenarioTree);
+$("tree-close-btn").addEventListener("click", () => {
+  $("tree-overlay").classList.add("hidden");
+});
+$("tree-overlay").addEventListener("click", (event) => {
+  if (event.target === $("tree-overlay")) $("tree-overlay").classList.add("hidden");
 });
 
 updateListeningControls();
