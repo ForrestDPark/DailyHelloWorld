@@ -79,6 +79,8 @@ def build_prompt(base_name, lines, existing_subtitle="", include_cards=True):
 핵심 표현은 고정 3개가 아니다. 해당 장면 대사에 실제로 나온 학습 가치 있는 표현을
 가능한 한 모두 살펴보고 장면당 8~10개(목표 10개)를 추려라. 짧은 장면에서도 표현을
 지어내거나 중복해 수를 채우지 말고 실제 쓸 만한 표현을 최소 6개 이상 고른다.
+단, 그 장면의 실제 대사 줄 수가 6줄보다 적으면 6개를 채우려고 지어내지 말고
+그 줄 수만큼만 expressions를 만들어라(예: 대사가 1줄뿐이면 expressions도 1개).
 expressions의 reading에는 문장 전체의 자연스러운 히라가나 읽기를 써서 후리가나로
 표시할 수 있게 한다. shadowing에도 reading을 반드시 쓴다.
 {card_example}
@@ -447,6 +449,22 @@ def main():
         base_name, lines, existing_subtitle, include_cards=not use_batched_cards
     )
 
+    # ★ 2026-09-18: JUFE-194 2편 장면 1 — 대사가 딱 1줄뿐인 장면이 있는
+    # 12장면 이하(비분할) 작품에서, "6~10개, 지어내지 않음"을 동시에
+    # 만족 못 해 3번 재시도 후 그대로 실패했다. valid_cards()의 적응형
+    # 최소 표현 개수(min_expressions)는 원래 분할 생성 경로(12장면 초과)
+    # 에서만 계산해서 썼는데, 비분할 경로는 이 값이 항상 None이라 모든
+    # 장면에 floor=6이 강제됐다 — MIDA-154_J 때 분할 경로에서 고친 것과
+    # 정확히 같은 버그가 비분할 경로엔 남아 있었던 것. lines만 있으면
+    # 계산 가능하므로 장면 개수와 무관하게 여기서 한 번만 구해 두 경로
+    # 모두(재시도 루프의 cards_ready 판정 + 최종 검증) 같이 쓴다.
+    grouped_all = {}
+    for record in lines:
+        grouped_all.setdefault((int(record["part"]), int(record["scene"])), []).append(record)
+    min_expr_all = {
+        f"{part}-{scene}": len(records) for (part, scene), records in grouped_all.items()
+    }
+
     # 모델이 가끔 "[N편 장면 M]" 태그 형식을 안 지키고 다른
     # 방식(예: "장면 M:")으로 답하는 경우가 있어(실제로 DLDSS-217에서 발생),
     # 형식이 하나도 안 지켜지면 "태그 형식을 반드시 지키라"고 한 번 더 강조해서
@@ -463,7 +481,7 @@ def main():
 
         generated_subtitle, overview, descriptions, cards, corrections = parse_response(body)
         missing_scenes = expected_scenes - set(descriptions)
-        cards_ready = use_batched_cards or valid_cards(cards, expected_scenes)
+        cards_ready = use_batched_cards or valid_cards(cards, expected_scenes, min_expr_all)
         if not missing_scenes and (existing_subtitle or generated_subtitle) and cards_ready:
             descriptions = {
                 key: descriptions[key] for key in sorted(expected_scenes)
@@ -494,21 +512,14 @@ def main():
             )
         )
     corrected_count = apply_translation_corrections(book_dir, lines, corrections)
-    min_expr_all = None
     if use_batched_cards:
         print(f"🗂️ 장면 {len(expected_scenes)}개 — 학습카드를 6장면씩 나눠 생성합니다.")
         try:
             cards = generate_cards_batched(book_dir, base_name, lines)
         except (RuntimeError, json.JSONDecodeError) as exc:
             sys.exit(f"❌ 분할 학습 카드 생성 실패: {exc}")
-        # 배치 내부 검증과 동일한 장면별 적응형 최소 표현 개수를 써야
-        # 짧은 장면(대사 6줄 미만)이 배치 통과 후 여기서 다시 탈락하지 않는다.
-        grouped_all = {}
-        for record in lines:
-            grouped_all.setdefault((int(record["part"]), int(record["scene"])), []).append(record)
-        min_expr_all = {
-            f"{part}-{scene}": len(records) for (part, scene), records in grouped_all.items()
-        }
+        # min_expr_all은 main() 앞부분에서 이미 lines 기준으로 계산해 뒀다
+        # (비분할 경로의 cards_ready 판정에도 같이 써야 해서 위로 옮김).
     if not valid_cards(cards, expected_scenes, min_expr_all):
         sys.exit("❌ 장면별 학습 카드가 누락됐거나 형식이 잘못되었습니다(재시도 포함).")
 
