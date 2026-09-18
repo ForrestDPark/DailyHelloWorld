@@ -312,6 +312,18 @@ html, body {
 }
 .japanese-kanji-favorite.active { color: var(--border); }
 
+/* ★ 2026-09-18: "쓰여진 그 단어는 대사에서 글자색상을 다르게... 다른
+   한자 클릭이랑 다르게 단어클릭도 가능하고" 요청 — 표현 삽입 단어는
+   낱글자 한자(점선 밑줄, 본문과 같은 색)와 구분되도록 색을 다르게 하고
+   실선 밑줄을 준다. */
+.vocab-word {
+  color: var(--good);
+  border-bottom: 1px solid var(--good);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.vocab-word rt { color: var(--good); }
+
 .lobby-hint {
   font-family: -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans KR",sans-serif;
   font-size: 14px;

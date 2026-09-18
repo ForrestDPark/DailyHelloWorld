@@ -80,7 +80,7 @@ function renderHistoryList() {
     linesBox.className = "history-entry-lines";
     for (const line of entry.lines) {
       const p = document.createElement("p");
-      renderAnnotatedText(p, typeof line === "string" ? line : line.text);
+      renderAnnotatedText(p, typeof line === "string" ? line : line.text, entry.vocab || null);
       linesBox.append(p);
     }
     card.append(head, linesBox);
@@ -179,6 +179,12 @@ let typewriterTimer = null;
 let sceneLines = [];
 let sceneLineIndex = 0;
 let sceneChoices = [];
+// ★ 2026-09-18: "쓰여진 그 단어는 대사에서 글자색상을 다르게... 단어클릭도
+// 가능하고 클릭시에 팝업이 떠서 훈음과 한국어뜻을 보고 단어장 즐겨찾기도
+// 되면 좋겠어" 요청 — 이번 장면에 표현 삽입 단어가 있으면 {ja, reading, ko}
+// 그대로 담아둔다. renderAnnotatedText가 이 값과 일치하는 [한자|읽기]
+// 태그를 만나면 개별 한자 클릭 대신 단어 전체 클릭(단어 팝업)으로 바꾼다.
+let sceneVocab = null;
 
 function plainText(text) {
   return text.replace(/\[([^\]|]+)\|([^\]]+)\]/g, "$1");
@@ -400,6 +406,122 @@ let kanjiFavoritesPromise = null;
 let kanjiFavorites = new Set();
 const KANJI_PATTERN = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u;
 
+// \u2605 2026-09-18: "\ub2e8\uc5b4\ud074\ub9ad\ub3c4 \uac00\ub2a5\ud558\uace0 \ud074\ub9ad\uc2dc\uc5d0 \ud31d\uc5c5\uc774 \ub5a0\uc11c \ud6c8\uc74c\uacfc
+// \ud55c\uad6d\uc5b4\ub73b\uc744 \ubcf4\uace0 \ub2e8\uc5b4\uc7a5 \uc990\uaca8\ucc3e\uae30\ub3c4 \ub418\uba74 \uc88b\uaca0\uc5b4" \uc694\uccad \u2014 \ud45c\ud604 \uc0bd\uc785
+// \ub2e8\uc5b4(sceneVocab)\ub294 \ud55c\uc790 1\uae00\uc790\uac00 \uc544\ub2c8\ub77c \ub2e8\uc5b4 \uc804\uccb4(\uc608: "\u6211\u6162")\ub77c\uc11c
+// japanese_kanji_favorites(1\uae00\uc790 \uc804\uc6a9) \ud14c\uc774\ube14\uc744 \ubabb \uc4f4\ub2e4. \uc774\ubbf8 \uc788\ub294 \ubc94\uc6a9
+// vocabulary_entries \ud14c\uc774\ube14(/api/me/vocabulary, language="japanese"\uae4c\uc9c0
+// API \ub808\ubca8\uc5d0\uc120 \uc774\ubbf8 \uc9c0\uc6d0)\uc744 \uadf8\ub300\ub85c \uc7ac\uc0ac\uc6a9\ud55c\ub2e4 \u2014 \uc0c8 \ud14c\uc774\ube14\u00b7\uc5d4\ub4dc\ud3ec\uc778\ud2b8 \ubd88\ud544\uc694.
+let vocabPopover = null;
+let vocabFavoritesPromise = null;
+let vocabFavorites = new Map(); // term(ja) -> entry id
+
+function loadVocabFavorites(force = false) {
+  if (force) vocabFavoritesPromise = null;
+  if (!vocabFavoritesPromise) {
+    vocabFavoritesPromise = fetch("/api/me/vocabulary?language=japanese", { credentials: "same-origin" })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((items) => {
+        vocabFavorites = new Map(items.map((item) => [item.term, item.id]));
+        return items;
+      })
+      .catch(() => []);
+  }
+  return vocabFavoritesPromise;
+}
+
+async function toggleVocabFavorite(word, button) {
+  await loadVocabFavorites();
+  const removing = vocabFavorites.has(word.ja);
+  button.disabled = true;
+  try {
+    if (removing) {
+      const entryId = vocabFavorites.get(word.ja);
+      const response = await fetch(`/api/me/vocabulary/${entryId}`, { method: "DELETE", credentials: "same-origin" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      vocabFavorites.delete(word.ja);
+    } else {
+      const response = await fetch("/api/me/vocabulary", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ language: "japanese", term: word.ja, meaning: word.ko, pronunciation: word.reading }),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const saved = await response.json();
+      vocabFavorites.set(word.ja, saved.id);
+    }
+    button.classList.toggle("active", !removing);
+    button.textContent = removing ? "\u2606 \uc800\uc7a5" : "\u2605 \uc800\uc7a5\ub428";
+    button.setAttribute("aria-label", removing ? `${word.ja} \ub2e8\uc5b4\uc7a5\uc5d0 \uc800\uc7a5` : `${word.ja} \ub2e8\uc5b4\uc7a5\uc5d0\uc11c \uc81c\uac70`);
+  } catch (e) {
+    alert("\ub2e8\uc5b4\ub97c \uc800\uc7a5\ud558\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4.");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function closeVocabPopover() {
+  vocabPopover?.remove();
+  vocabPopover = null;
+}
+
+function showVocabWordPopover(word, anchor) {
+  closeKanjiPopover();
+  closeVocabPopover();
+  const popover = document.createElement("section");
+  popover.className = "japanese-kanji-popover";
+  popover.setAttribute("role", "dialog");
+  popover.setAttribute("aria-label", `${word.ja} \ub2e8\uc5b4 \ub73b\uacfc \uc77d\uae30`);
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "japanese-kanji-popover-close";
+  close.textContent = "\u00d7";
+  close.setAttribute("aria-label", "\ub2e8\uc5b4 \ub73b \ub2eb\uae30");
+  close.addEventListener("click", closeVocabPopover);
+  const favorite = document.createElement("button");
+  favorite.type = "button";
+  favorite.className = "japanese-kanji-favorite";
+  favorite.textContent = "\u2606 \uc800\uc7a5";
+  favorite.setAttribute("aria-label", `${word.ja} \ub2e8\uc5b4\uc7a5\uc5d0 \uc800\uc7a5`);
+  loadVocabFavorites().then(() => {
+    if (!favorite.isConnected) return;
+    const active = vocabFavorites.has(word.ja);
+    favorite.classList.toggle("active", active);
+    favorite.textContent = active ? "\u2605 \uc800\uc7a5\ub428" : "\u2606 \uc800\uc7a5";
+    favorite.setAttribute("aria-label", active ? `${word.ja} \ub2e8\uc5b4\uc7a5\uc5d0\uc11c \uc81c\uac70` : `${word.ja} \ub2e8\uc5b4\uc7a5\uc5d0 \uc800\uc7a5`);
+  });
+  favorite.addEventListener("click", () => toggleVocabFavorite(word, favorite));
+  const glyph = document.createElement("strong");
+  glyph.className = "japanese-kanji-popover-glyph";
+  glyph.lang = "ja";
+  glyph.textContent = word.ja;
+  const readings = document.createElement("div");
+  readings.className = "japanese-kanji-popover-readings";
+  const rows = [
+    ["\ud6c8\uc74c", word.reading || "\ud574\ub2f9 \uc5c6\uc74c"],
+    ["\ub73b", word.ko || "\ud574\ub2f9 \uc5c6\uc74c"],
+  ];
+  for (const [label, displayValue] of rows) {
+    const row = document.createElement("div");
+    const heading = document.createElement("span");
+    heading.textContent = label;
+    const value = document.createElement("b");
+    value.lang = label === "\ud6c8\uc74c" ? "ja" : "ko";
+    value.textContent = displayValue;
+    row.append(heading, value);
+    readings.appendChild(row);
+  }
+  popover.append(close, favorite, glyph, readings);
+  document.body.appendChild(popover);
+  vocabPopover = popover;
+  const rect = anchor.getBoundingClientRect();
+  const width = popover.offsetWidth;
+  popover.style.left = `${Math.max(12, Math.min(rect.left + rect.width / 2 - width / 2, innerWidth - width - 12))}px`;
+  const desiredTop = rect.bottom + 10;
+  popover.style.top = `${Math.max(12, Math.min(desiredTop, innerHeight - popover.offsetHeight - 12))}px`;
+}
+
 function katakanaToHiragana(text) {
   return String(text || "").replace(/[ァ-ヶ]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0x60));
 }
@@ -477,6 +599,7 @@ async function toggleKanjiFavorite(character, button) {
 
 function showKanjiPopover(character, reading, anchor) {
   closeKanjiPopover();
+  closeVocabPopover();
   const popover = document.createElement("section");
   popover.className = "japanese-kanji-popover";
   popover.setAttribute("role", "dialog");
@@ -536,6 +659,9 @@ function decorateKanji(container) {
     acceptNode(node) {
       if (!KANJI_PATTERN.test(node.nodeValue || "")) return NodeFilter.FILTER_REJECT;
       if (node.parentElement?.closest("rt")) return NodeFilter.FILTER_REJECT;
+      // 표현 삽입 단어(vocab-word)는 한자 낱글자 클릭이 아니라 단어 전체
+      // 클릭(단어 팝업)으로 처리하므로, 개별 한자 버튼으로 다시 쪼개지 않는다.
+      if (node.parentElement?.closest("[data-vocab-word]")) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     },
   });
@@ -572,9 +698,12 @@ document.addEventListener("click", (event) => {
   if (kanjiPopover && !kanjiPopover.contains(event.target) && !event.target.closest(".japanese-kanji-char")) {
     closeKanjiPopover();
   }
+  if (vocabPopover && !vocabPopover.contains(event.target) && !event.target.closest(".vocab-word")) {
+    closeVocabPopover();
+  }
 });
 
-function renderAnnotatedText(element, text) {
+function renderAnnotatedText(element, text, vocabWord = null) {
   element.replaceChildren();
   const pattern = /\[([^\]|]+)\|([^\]]+)\]|\n/g;
   let cursor = 0;
@@ -588,6 +717,20 @@ function renderAnnotatedText(element, text) {
       const rt = document.createElement("rt");
       rt.textContent = match[2];
       ruby.append(rt);
+      // ★ 2026-09-18: 표현 삽입 단어(sceneVocab)와 정확히 일치하는 태그만
+      // 색상을 다르게 하고 단어 전체 클릭(단어 팝업)을 붙인다 — 같은 줄의
+      // 다른 한자는 그대로 decorateKanji의 낱글자 클릭을 쓴다.
+      if (vocabWord && match[1] === vocabWord.ja && match[2] === vocabWord.reading) {
+        ruby.classList.add("vocab-word");
+        ruby.dataset.vocabWord = "1";
+        ruby.tabIndex = 0;
+        ruby.setAttribute("role", "button");
+        ruby.setAttribute("aria-label", `${vocabWord.ja} 단어 뜻 보기`);
+        ruby.addEventListener("click", (event) => {
+          event.stopPropagation();
+          showVocabWordPopover(vocabWord, ruby);
+        });
+      }
       element.append(ruby);
     }
     cursor = match.index + match[0].length;
@@ -626,7 +769,7 @@ function typeLine(text) {
     el.textContent = visibleText.slice(0, i);
     if (i >= visibleText.length) {
       stopTypewriter();
-      renderAnnotatedText(el, text);
+      renderAnnotatedText(el, text, sceneVocab);
       $("portrait").classList.remove("speaking");
       onLineFullyShown();
     }
@@ -649,7 +792,7 @@ function advanceLine() {
     // 타자기 도중 클릭하면 그 줄을 즉시 완성해서 보여준다.
     stopTypewriter();
     const line = sceneLines[sceneLineIndex];
-    renderAnnotatedText($("dialogue-text"), typeof line === "string" ? line : line.text);
+    renderAnnotatedText($("dialogue-text"), typeof line === "string" ? line : line.text, sceneVocab);
     onLineFullyShown();
     return;
   }
@@ -692,6 +835,7 @@ function renderChoices() {
 function renderScene(state) {
   sceneLines = state.scene.lines;
   sceneChoices = state.scene.choices;
+  sceneVocab = state.scene.vocab || null;
   sceneLineIndex = 0;
   $("stage").dataset.location = state.scene.location;
   $("stage").dataset.day = state.day;
@@ -836,6 +980,7 @@ async function chooseOption(choiceIndex) {
   const finishedEntry = {
     day: latestState?.day, location: $("stage").dataset.location,
     lines: sceneLines.slice(), choiceText: sceneChoices[choiceIndex]?.text || "",
+    vocab: sceneVocab,
   };
   try {
     const state = await api("/api/dating-sim/choose", { method: "POST", body: JSON.stringify({ choice_index: choiceIndex, story_id: storyId }) });
@@ -877,7 +1022,7 @@ function replayCurrentView() {
   if (typewriterTimer) {
     stopTypewriter();
     const line = sceneLines[sceneLineIndex];
-    renderAnnotatedText($("dialogue-text"), typeof line === "string" ? line : line.text);
+    renderAnnotatedText($("dialogue-text"), typeof line === "string" ? line : line.text, sceneVocab);
     onLineFullyShown();
     return Promise.resolve();
   }

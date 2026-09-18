@@ -62,6 +62,22 @@ setup이 먼저 그 카테고리 분위기(예: "뭔가 골똘히 생각하는 �
 check_vocab_templates_avoid_meta_commentary가 setup에는 단어가 없고
 reveal에만 있는지를 회귀 방지로 검사한다.
 
+★ 2026-09-18 7차 수정: "참음이라는 단어가 생각났어 라고 하지말고
+구체적인 예시를 들어서 어제 상사한테 혼났는데 속으로 분노를 참느라고
+스트레스를 많이받았어 라고 구체적인 그단어를 쓰는 상황을 표현하게
+해주면 좋겠어" 요청 — 6차의 setup도 "뭔가 골똘히 생각하는 표정을
+지었다"류 추상적 분위기 묘사에 그쳤다. setup을 캐릭터가 실제로 겪은
+구체적 사건(예: "오늘 알바하다가 이유 없이 억울한 일이 있었다")으로
+바꾸고, 3인칭 나레이션 괄호도 뗐다 — 플레이어에게 직접 자기 하루
+이야기를 들려주는 대사이므로 다른 DAY_BEATS 대사와 같은 평문 형식이
+맞다. 같은 요청의 뒷부분("쓰여진 그 단어는 대사에서 글자색상을
+다르게... 클릭시에 팝업이 떠서 훈음과 한국어뜻을 보고 단어장
+즐겨찾기")은 프론트엔드 영역이라 dating_sim_web/app.js의 vocab-word
+클릭 팝업(showVocabWordPopover, /api/me/vocabulary 재사용)으로
+구현했다 — 이 파일의 검증 대상은 아니지만 scene["vocab"]이
+app.py의 상태 payload에 실제로 실려 나가는지는 여전히 확인할 가치가
+있다(프론트가 그 필드로 어떤 줄을 강조할지 결정하므로).
+
 구조 (4단계):
   1. 결정론적 규칙 검사(이 파일의 check_*() 함수들, LLM 없이 코드로 판정) —
      "마지막 줄은 항상 선택지가 답하는 문장이어야 한다", "장소 라벨은 전부
@@ -193,27 +209,30 @@ def check_hidden_events_preserve_outro(conn_factory):
 
 def check_vocab_templates_avoid_meta_commentary(sample_words):
     """★ 2026-09-17: "단어뚝 나오고 그거에대해 말해볼까요 이런식으로 하눈
-    컨셉을 버리라는거였지" 요청 — 표현 나레이션은 ①괄호 3인칭 나레이션
-    이어야 하고(플레이어에게 말 거는 대사가 아님), ②물음표로 화제 전환을
-    묻지 않아야 하며, ③실제 단어(한자+읽기)가 문장에 들어가야 한다.
+    컨셉을 버리라는거였지" 요청 — 표현 삽입은 ①물음표로 화제 전환을
+    묻지 않아야 하고, ②실제 단어(한자+읽기)가 문장에 들어가야 한다.
 
-    ★ 2026-09-18: "참음이 왜 갑자기생각나냐고... 참음이 생각나게끔 하는
-    이전장면을 넣고서" 신고 이후 나레이션이 (setup, reveal) 두 줄이
-    됐다. 두 줄 다 나레이션·무물음표 규칙을 지켜야 하고, 실제 단어는
-    reveal 줄에만 있어야 한다 — setup 줄에 단어가 이미 나오면 "먼저
-    분위기를 깐다"는 설계 의도가 깨진다(2026-09-18 신규 회귀 규칙)."""
+    ★ 2026-09-18(6차): "참음이라는 단어가 생각났어 라고 하지말고
+    구체적인 예시를 들어서... 구체적인 그단어를 쓰는 상황을 표현하게
+    해주면 좋겠어" 요청 이후 3인칭 나레이션 괄호를 떼고 캐릭터가 직접
+    자기 하루의 구체적인 사건을 들려주는 대사(setup)로 바꿨다 — 이제는
+    괄호 여부를 검사하지 않는다(다른 DAY_BEATS 대사와 같은 평문 형식).
+    대신 setup 줄에 단어가 미리 나오면 "먼저 사건을 들려준다"는 설계
+    의도가 깨지므로 그 부분은 그대로 검사하고, 옛 신고의 문구였던
+    "단어"·"표현"이라는 메타 언급 명사가 되돌아오지 않는지도 추가로
+    막는다."""
     issues = []
     for word in sample_words:
         for template_index in range(2):
             setup, reveal = ds._vocab_situation_lines(word, template_index)
             tag = f"[{word[0]}|{word[1]}]"
             for label, line in (("setup", setup), ("reveal", reveal)):
-                if not line.lstrip().startswith(("(", "（")):
-                    issues.append(f"단어 {word!r} 템플릿 {template_index} {label}: 나레이션(괄호)이 아님 — {line!r}")
                 if "?" in line or "？" in line:
                     issues.append(f"단어 {word!r} 템플릿 {template_index} {label}: 플레이어에게 화제를 묻는 물음표가 있음 — {line!r}")
+                if "단어" in line or "표현" in line:
+                    issues.append(f"단어 {word!r} 템플릿 {template_index} {label}: 메타 언급('단어'/'표현')이 되돌아옴 — {line!r}")
             if tag in setup:
-                issues.append(f"단어 {word!r} 템플릿 {template_index}: setup 줄에 단어가 이미 나옴(뜬금없음 방지 설계 위반) — {setup!r}")
+                issues.append(f"단어 {word!r} 템플릿 {template_index}: setup 줄에 단어가 이미 나옴(구체적 사건 먼저 → 단어 순서 위반) — {setup!r}")
             if tag not in reveal:
                 issues.append(f"단어 {word!r} 템플릿 {template_index}: reveal 줄에 실제 단어가 없음 — {reveal!r}")
     return issues

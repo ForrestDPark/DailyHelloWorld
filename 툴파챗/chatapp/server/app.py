@@ -741,6 +741,7 @@ def _dating_sim_state_payload(row, story):
                 row["pending_location"], story.get("character_image")),
             "lines": scene_lines,
             "choices": [{"text": choice["text"]} for choice in scene["choices"]],
+            "vocab": scene.get("vocab"),
         }
     if completed:
         payload["ending"] = dating_sim_story.ending_for(story, row["affection"])

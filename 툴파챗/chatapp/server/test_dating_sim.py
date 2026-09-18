@@ -418,16 +418,17 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
 
     def test_vocab_situation_line_is_narration_not_a_question_to_the_player(self):
         """★ 2026-09-17: "단어뚝 나오고 그거에대해 말해볼까요 이런식으로
-        하눈 컨셉을 버리라는거였지" 요청 — 표현 나레이션은 플레이어에게
-        화제 전환을 묻는 대사가 아니라 괄호 3인칭 나레이션이어야 하고,
-        실제 단어(한자+읽기)가 문장에 들어가야 한다.
+        하눈 컨셉을 버리라는거였지" 요청 — 표현 삽입은 플레이어에게
+        화제 전환을 묻는 대사가 아니어야 하고, 실제 단어(한자+읽기)가
+        문장에 들어가야 한다.
 
-        ★ 2026-09-18: 나레이션이 (setup, reveal) 두 줄로 바뀌었다 —
-        두 줄 다 나레이션·무물음표여야 하고, 실제 단어는 reveal에만
-        있어야 한다(setup에 단어가 나오면 "뜬금없음"이 재발한 것)."""
+        ★ 2026-09-18(6차): setup이 (추상적 나레이션이 아니라) 캐릭터가
+        직접 들려주는 구체적 사건 대사로 바뀌면서 괄호도 뗐다 — 이제는
+        평문 대사 형식이라 괄호 여부는 검사하지 않는다. 무물음표 규칙과
+        "실제 단어는 reveal에만"(setup에 단어가 나오면 "뜬금없음"이
+        재발한 것) 규칙은 그대로 유지한다."""
         setup, reveal = dating_sim_story._vocab_situation_lines(("洗濯", "せんたく", "세탁"), 0)
         for line in (setup, reveal):
-            self.assertTrue(line.lstrip().startswith("("), "나레이션이 아니라 대사처럼 보임")
             self.assertNotIn("?", line)
             self.assertNotIn("？", line)
         self.assertNotIn("[洗濯|せんたく]", setup, "setup 줄에 단어가 이미 나옴 — 뜬금없음 방지 설계 위반")
@@ -457,6 +458,33 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
                 story = dating_sim_story.story_for("book:" + "1" * 20)
         self.assertIn("vocab", story["scenes"][2]["first"])
         self.assertEqual(story["scenes"][2]["first"]["vocab"]["ja"], "本音")
+
+    def test_book_story_state_payload_forwards_vocab_for_the_frontend_to_highlight(self):
+        """★ 2026-09-18: "쓰여진 그 단어는 대사에서 글자색상을 다르게...
+        클릭시에 팝업이 떠서 훈음과 한국어뜻을 보고 단어장 즐겨찾기도
+        되면 좋겠어" 요청을 구현하다가 발견 — story_for()가 계산한
+        scene["vocab"]이 _dating_sim_state_payload()의 실제 응답에는
+        실려 나가지 않고 있었다(프론트가 어떤 단어를 강조할지 알 방법이
+        아예 없었음). /api/dating-sim/visit 응답까지 끝까지 확인한다."""
+        story_id = "book:" + "9" * 20
+        username = "vocab-payload-reader"
+        with tempfile.TemporaryDirectory() as directory:
+            library_dir = Path(directory)
+            work_dir = library_dir / "MATCHME"
+            work_dir.mkdir()
+            (work_dir / "scene_study_cards.json").write_text(json.dumps({
+                "1-1": {"vocabulary": [{"ja": "本音", "reading": "ほんね", "ko": "본심"}]},
+            }), encoding="utf-8")
+            with patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", library_dir), \
+                 patch.object(dating_sim_story, "_find_book", return_value=Path("/tmp/MATCHME.epub")), \
+                 patch.object(dating_sim_story, "_book_title", return_value="MATCHME"):
+                app.dating_sim_visit(app.DatingSimLocationRequest(location="first", story_id=story_id), request(username))
+                story = app._dating_story(story_id, username)
+                choices = story["scenes"][1]["first"]["choices"]
+                index = next(i for i, choice in enumerate(choices) if choice["affection"] > 0)
+                app.dating_sim_choose(app.DatingSimChoiceRequest(choice_index=index, story_id=story_id), request(username))
+                state = app.dating_sim_visit(app.DatingSimLocationRequest(location="first", story_id=story_id), request(username))
+        self.assertEqual(state["scene"]["vocab"], {"ja": "本音", "reading": "ほんね", "ko": "본심"})
 
     def test_book_story_never_attaches_vocab_on_the_first_meeting_day(self):
         """★ 2026-09-18: "이거 두 장면이 개연성이없어" 신고 — 1일차(방금
