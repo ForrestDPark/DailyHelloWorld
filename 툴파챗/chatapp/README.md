@@ -1,5 +1,13 @@
 # 툴파챗
 
+## 미연시 표현 나레이션을 setup+reveal 2줄 구조로 재설계 (2026-09-18)
+
+- "참음이 왜 갑자기생각나냐고 참음이 생각나게끔 하는 이전장면을 넣고서 이렇게 나오던지하게해줘" 신고 — 1일차 제외(4차 수정) 이후에도 "我慢"(참음) 같은 general류 단어가 2일차 이후에서 여전히 아무 인과 없이 툭 튀어나왔다.
+- `VOCAB_SITUATION_TEMPLATES`의 각 카테고리 템플릿을 문자열 1개에서 `(setup, reveal)` 튜플로 바꿨다. setup 줄은 단어를 이름 붙이지 않고 그 카테고리 분위기만 먼저 깐다(예: "뭔가 골똘히 생각하는 듯한 표정을 지었다"), reveal 줄이 그 다음에 실제 단어를 붙인다 — "무슨 생각을 하나 했더니" 식으로 이어지게 하는 구조.
+- `_vocab_situation_line(word, idx)`(단수, 문자열 1개 반환) → `_vocab_situation_lines(word, idx)`(복수, `[setup, reveal]` 리스트 반환)로 이름을 바꿨고, `_seven_day_scenes()`가 두 줄 다 outro 직전에 끼워 넣도록 고쳤다(`scene_lines[-1:-1] = ...` 슬라이스 삽입 — outro가 항상 진짜 마지막 줄이라는 불변식은 그대로 유지).
+- `dating_sim_coherence_report.py`의 `check_vocab_templates_avoid_meta_commentary`도 두 줄 다 검사하도록 확장하고, setup 줄에는 단어가 없고 reveal 줄에만 있는지를 새 회귀 규칙으로 추가했다(setup에 단어가 섞이면 "뜬금없음"이 재발한 것).
+- 테스트 스위트 129건 전부 통과.
+
 ## 미연시 파이프라인에 요일 전환 개연성 점수 추가 (2026-09-18)
 
 - "각각의 장면마다 전방면과의 개연성을 점수화해서 나타내게해" 요청 — `dating_sim_coherence_report.py`에 4단계(`score_day_transitions`)를 추가했다. 요일 전환(전날 마지막 대사 → 다음날 나레이션·도입부 후보)마다 0~100 개연성 점수와 근거를 매겨 `DAY_TRANSITION_COHERENCE`에 기록한다.

@@ -420,20 +420,26 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         """★ 2026-09-17: "단어뚝 나오고 그거에대해 말해볼까요 이런식으로
         하눈 컨셉을 버리라는거였지" 요청 — 표현 나레이션은 플레이어에게
         화제 전환을 묻는 대사가 아니라 괄호 3인칭 나레이션이어야 하고,
-        실제 단어(한자+읽기)가 문장에 들어가야 한다."""
-        line = dating_sim_story._vocab_situation_line(("洗濯", "せんたく", "세탁"), 0)
-        self.assertTrue(line.lstrip().startswith("("), "나레이션이 아니라 대사처럼 보임")
-        self.assertNotIn("?", line)
-        self.assertNotIn("？", line)
-        self.assertIn("[洗濯|せんたく]", line)
-        self.assertIn("세탁", line)
+        실제 단어(한자+읽기)가 문장에 들어가야 한다.
+
+        ★ 2026-09-18: 나레이션이 (setup, reveal) 두 줄로 바뀌었다 —
+        두 줄 다 나레이션·무물음표여야 하고, 실제 단어는 reveal에만
+        있어야 한다(setup에 단어가 나오면 "뜬금없음"이 재발한 것)."""
+        setup, reveal = dating_sim_story._vocab_situation_lines(("洗濯", "せんたく", "세탁"), 0)
+        for line in (setup, reveal):
+            self.assertTrue(line.lstrip().startswith("("), "나레이션이 아니라 대사처럼 보임")
+            self.assertNotIn("?", line)
+            self.assertNotIn("？", line)
+        self.assertNotIn("[洗濯|せんたく]", setup, "setup 줄에 단어가 이미 나옴 — 뜬금없음 방지 설계 위반")
+        self.assertIn("[洗濯|せんたく]", reveal)
+        self.assertIn("세탁", reveal)
 
     def test_vocab_situation_line_picks_the_correct_korean_particle(self):
         """받침 있는 단어("고민")는 "이라는", 받침 없는 단어("고마워")는
         "라는"이 붙어야 한다 — 안 그러면 "고민라는 말이"처럼 문법이 깨진다."""
-        with_batchim = dating_sim_story._vocab_situation_line(("進行", "しんこう", "진행"), 0)
+        _, with_batchim = dating_sim_story._vocab_situation_lines(("進行", "しんこう", "진행"), 0)
         self.assertNotIn("진행라는", with_batchim)
-        without_batchim = dating_sim_story._vocab_situation_line(("久しぶり", "ひさしぶり", "오랜만"), 0)
+        _, without_batchim = dating_sim_story._vocab_situation_lines(("久しぶり", "ひさしぶり", "오랜만"), 0)
         # "오랜만"도 받침(ㄴ)이 있으므로 "이라는"이 붙어야 한다.
         self.assertNotIn("오랜만라는", without_batchim)
 

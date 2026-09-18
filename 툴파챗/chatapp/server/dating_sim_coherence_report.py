@@ -52,6 +52,16 @@ DAY_TRANSITION_COHERENCE에 기록한다. 이건 구조 검사·문장 쌍 수�
 그 근방 전환은 다시 검토해야 한다. 이번 채점으로 실제 약점 2곳(5→6일차
 급반전, 12→13일차 급전환)을 찾아 나레이션에 다리 문장을 추가해 고쳤다.
 
+★ 2026-09-18 6차 수정: "참음이 왜 갑자기생각나냐고 참음이 생각나게끔
+하는 이전장면을 넣고서 이렇게 나오던지하게해줘" 신고 — 1일차를 뺀 뒤에도
+"我慢"(참음) 같은 general류 단어가 2일차 이후에서 여전히 원인 없이
+튀어나왔다. 표현 나레이션 한 줄을 (setup, reveal) 두 줄로 쪼갰다 —
+setup이 먼저 그 카테고리 분위기(예: "뭔가 골똘히 생각하는 표정을
+지었다")를 단어 없이 깔고, reveal이 그 다음 줄에서 실제 단어를 이름
+붙인다. setup 줄에 단어가 섞이면 다시 "뜬금없음"이 재발한 것이므로
+check_vocab_templates_avoid_meta_commentary가 setup에는 단어가 없고
+reveal에만 있는지를 회귀 방지로 검사한다.
+
 구조 (4단계):
   1. 결정론적 규칙 검사(이 파일의 check_*() 함수들, LLM 없이 코드로 판정) —
      "마지막 줄은 항상 선택지가 답하는 문장이어야 한다", "장소 라벨은 전부
@@ -185,17 +195,27 @@ def check_vocab_templates_avoid_meta_commentary(sample_words):
     """★ 2026-09-17: "단어뚝 나오고 그거에대해 말해볼까요 이런식으로 하눈
     컨셉을 버리라는거였지" 요청 — 표현 나레이션은 ①괄호 3인칭 나레이션
     이어야 하고(플레이어에게 말 거는 대사가 아님), ②물음표로 화제 전환을
-    묻지 않아야 하며, ③실제 단어(한자+읽기)가 문장에 들어가야 한다."""
+    묻지 않아야 하며, ③실제 단어(한자+읽기)가 문장에 들어가야 한다.
+
+    ★ 2026-09-18: "참음이 왜 갑자기생각나냐고... 참음이 생각나게끔 하는
+    이전장면을 넣고서" 신고 이후 나레이션이 (setup, reveal) 두 줄이
+    됐다. 두 줄 다 나레이션·무물음표 규칙을 지켜야 하고, 실제 단어는
+    reveal 줄에만 있어야 한다 — setup 줄에 단어가 이미 나오면 "먼저
+    분위기를 깐다"는 설계 의도가 깨진다(2026-09-18 신규 회귀 규칙)."""
     issues = []
     for word in sample_words:
         for template_index in range(2):
-            line = ds._vocab_situation_line(word, template_index)
-            if not line.lstrip().startswith(("(", "（")):
-                issues.append(f"단어 {word!r} 템플릿 {template_index}: 나레이션(괄호)이 아님 — {line!r}")
-            if "?" in line or "？" in line:
-                issues.append(f"단어 {word!r} 템플릿 {template_index}: 플레이어에게 화제를 묻는 물음표가 있음 — {line!r}")
-            if f"[{word[0]}|{word[1]}]" not in line:
-                issues.append(f"단어 {word!r} 템플릿 {template_index}: 실제 단어가 문장에 없음 — {line!r}")
+            setup, reveal = ds._vocab_situation_lines(word, template_index)
+            tag = f"[{word[0]}|{word[1]}]"
+            for label, line in (("setup", setup), ("reveal", reveal)):
+                if not line.lstrip().startswith(("(", "（")):
+                    issues.append(f"단어 {word!r} 템플릿 {template_index} {label}: 나레이션(괄호)이 아님 — {line!r}")
+                if "?" in line or "？" in line:
+                    issues.append(f"단어 {word!r} 템플릿 {template_index} {label}: 플레이어에게 화제를 묻는 물음표가 있음 — {line!r}")
+            if tag in setup:
+                issues.append(f"단어 {word!r} 템플릿 {template_index}: setup 줄에 단어가 이미 나옴(뜬금없음 방지 설계 위반) — {setup!r}")
+            if tag not in reveal:
+                issues.append(f"단어 {word!r} 템플릿 {template_index}: reveal 줄에 실제 단어가 없음 — {reveal!r}")
     return issues
 
 
