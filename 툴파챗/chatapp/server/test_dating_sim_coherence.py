@@ -61,14 +61,19 @@ class DatingSimCoherenceTests(unittest.TestCase):
 
     def test_vocab_situation_templates_avoid_meta_commentary(self):
         """★ 2026-09-17: "단어뚝 나오고 그거에대해 말해볼까요 이런식으로
-        하눈 컨셉을 버리라는거였지" 요청 — 표현 나레이션은 괄호 3인칭
-        나레이션이어야 하고, 물음표로 화제를 묻지 않아야 하며, 실제
-        단어가 문장에 들어가야 한다."""
+        하눈 컨셉을 버리라는거였지" 요청 — 표현 삽입은 물음표로 화제를
+        묻지 않아야 하며, 실제 단어가 문장에 들어가야 한다.
+
+        ★ 2026-09-18(10차): 실제 신고에 나왔던 문제 단어들("효과"·"온천"·
+        "참음"처럼 어떤 카테고리에도 안 걸려 general/outcome으로 떨어진
+        명사, "그립다"처럼 형용사 사전형인 서술어)을 표본에 추가했다."""
         issues = report.check_vocab_templates_avoid_meta_commentary([
             ("洗濯", "せんたく", "세탁"), ("手伝う", "てつだう", "돕다"),
             ("進行", "しんこう", "진행"), ("悩む", "なやむ", "고민"),
             ("好き", "すき", "좋아함"), ("思い出", "おもいで", "추억"),
             ("約束", "やくそく", "약속"), ("嬉しい", "うれしい", "기쁨"),
+            ("効果", "こうか", "효과"), ("温泉", "おんせん", "온천"),
+            ("我慢", "がまん", "참음"), ("懐かしい", "なつかしい", "그립다"),
         ])
         self.assertEqual(issues, [], "\n".join(issues))
 
@@ -181,6 +186,40 @@ class DatingSimCoherenceTests(unittest.TestCase):
         for category in ("outcome", "general"):
             for setup, _reveal in ds.VOCAB_SITUATION_TEMPLATES[category]:
                 self.assertNotIn("억울", setup, f"{category} 카테고리가 여전히 특정 감정(억울함)을 전제함")
+
+    def test_vocab_reveal_never_uses_the_word_came_to_mind_reference_pattern(self):
+        """★ 2026-09-18(10차) 실제 버그: "이거 뭐 다짜고짜 무슨 단어가
+        생각났네요 이거 똑같은 패턴 계속 반복되는데... 그냥 그 상황에
+        그 단어를 끼워 넣어" 신고 — 8차의 general reveal("{단어}라는
+        말이 오늘 하루를 잘 나타내는 것 같다")이 문구만 바뀐 "단어가
+        생각났다" 재탕이었다. 모든 카테고리·모든 템플릿·명사/서술어 두
+        경로 전부에서 "-라는 말이" 참조형이 reveal에 다시는 안 나오는지
+        직접 확인한다(카테고리 키워드 표본 하나씩 + 서술어 강제 표본)."""
+        samples = [
+            ("洗濯", "せんたく", "세탁"), ("悩む", "なやむ", "고민"),
+            ("約束", "やくそく", "약속"), ("手伝う", "てつだう", "돕다"),
+            ("好き", "すき", "좋아함"), ("思い出", "おもいで", "추억"),
+            ("嬉しい", "うれしい", "기쁨"), ("効果", "こうか", "효과"),
+            ("温泉", "おんせん", "온천"), ("懐かしい", "なつかしい", "그립다"),
+        ]
+        for word in samples:
+            for template_index in range(2):
+                _setup, reveal, _bridge = ds._vocab_situation_lines(word, template_index)
+                self.assertNotIn("라는 말이", reveal, f"{word!r} reveal에 참조형이 되돌아옴: {reveal!r}")
+                self.assertNotIn("라는 말을", reveal, f"{word!r} reveal에 참조형이 되돌아옴: {reveal!r}")
+
+    def test_each_category_has_more_than_one_template_for_real_rotation(self):
+        """★ 2026-09-18(10차) 실제 버그: "매일 반복되는 패턴은 너무
+        이상하잖아" 신고 — template_index로 회전하는 구조는 이미
+        있었지만 카테고리마다 템플릿이 1개뿐이라 `% 1`이 항상 0이 되어
+        실제로는 절대 회전하지 않았다. 모든 카테고리가 최소 2개 이상의
+        서로 다른 템플릿을 갖고 있는지 확인한다."""
+        for category, templates in ds.VOCAB_SITUATION_TEMPLATES.items():
+            self.assertGreaterEqual(
+                len(templates), 2,
+                f"{category} 카테고리 템플릿이 {len(templates)}개뿐이라 회전이 안 됨",
+            )
+            self.assertEqual(len(set(templates)), len(templates), f"{category} 카테고리에 중복 템플릿이 있음")
 
 
 if __name__ == "__main__":

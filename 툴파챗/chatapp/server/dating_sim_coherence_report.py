@@ -266,7 +266,16 @@ def check_vocab_templates_avoid_meta_commentary(sample_words):
     장면도 좀 이상해 장면이 전혀 연결되지가 않잖아" 신고 이후 반환값이
     (setup, reveal, transition_back) 세 줄이 됐다. transition_back은
     카테고리·단어와 무관하게 항상 같은 범용 문장이므로, 여기서는 단어
-    태그가 setup·transition_back에는 없고 reveal에만 있는지를 검사한다."""
+    태그가 setup·transition_back에는 없고 reveal에만 있는지를 검사한다.
+
+    ★ 2026-09-18(10차): "이거 뭐 다짜고짜 무슨 단어가 생각났네요 이거
+    똑같은 패턴 계속 반복되는데... 그냥 그 상황에 그 단어를 끼워 넣어"
+    신고 — 8차의 general reveal이 "{단어}라는 말이 오늘 하루를 잘
+    나타내는 것 같다"였는데, 문구만 바꿨을 뿐 "단어를 지칭하고 상황과
+    어울린다고 말하는" 구조는 그대로라 결국 "단어가 생각났다"의 재탕
+    이었다. "-(이)라는 말이" 패턴 자체를 reveal에서 완전히 금지해
+    되돌아오지 못하게 막는다(직접 목적어로 쓰거나, 서술어는 사전형
+    그대로 인용하는 것만 허용)."""
     issues = []
     for word in sample_words:
         for template_index in range(2):
@@ -277,6 +286,8 @@ def check_vocab_templates_avoid_meta_commentary(sample_words):
                     issues.append(f"단어 {word!r} 템플릿 {template_index} {label}: 플레이어에게 화제를 묻는 물음표가 있음 — {line!r}")
                 if "단어" in line or "표현" in line:
                     issues.append(f"단어 {word!r} 템플릿 {template_index} {label}: 메타 언급('단어'/'표현')이 되돌아옴 — {line!r}")
+            if "라는 말이" in reveal or "라는 말을" in reveal or "이라는 말이" in reveal or "이라는 말을" in reveal:
+                issues.append(f"단어 {word!r} 템플릿 {template_index}: '단어가 생각났다' 참조형 문구('-라는 말이')가 되돌아옴 — {reveal!r}")
             if tag in setup:
                 issues.append(f"단어 {word!r} 템플릿 {template_index}: setup 줄에 단어가 이미 나옴(구체적 사건 먼저 → 단어 순서 위반) — {setup!r}")
             if tag not in reveal:
