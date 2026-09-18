@@ -3995,6 +3995,19 @@ def delete_vocabulary_entry(entry_id: int, request: Request):
     return {"ok": True}
 
 
+@app.get("/api/jp-vocabulary")
+def jp_vocabulary(request: Request):
+    """★ 2026-09-18: "일본어선생님이 메시지로 말하는 말에서도 일본어
+    어휘도 팝오버 되는 기능이 있으면 좋을거같은데" 요청 — 처리된 모든
+    회차의 학습 단어(vocabulary)를 한 번에 돌려준다. 채팅 메시지는
+    어느 회차를 언급할지 미리 알 수 없으므로, 프론트가 이 목록 전체와
+    대조해 정확히 일치하는 단어만 강조·클릭 가능하게 만든다."""
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    return dating_sim_story.load_all_jp_vocabulary()
+
+
 @app.get("/api/me/japanese-kanji-favorites")
 def list_japanese_kanji_favorites(request: Request):
     """로그인 계정에 저장된 일본어 한자 단어장을 최신 저장 순으로 돌려준다."""

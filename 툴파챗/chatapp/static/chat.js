@@ -2355,6 +2355,10 @@ async function showChatView(roomId) {
   refreshAutoReadButton();
   loadChatBackground(roomId);
   loadRoomNotice(roomId, isGroupMeetingRoom);
+  // ★ 2026-09-18: 학습 단어 목록은 비동기로 오는데 후리가나는 메시지 도착
+  // 즉시 그려진다. 목록이 준비되면 이미 그려진 말풍선까지 다시 훑어 늦게
+  // 온 목록으로도 강조를 놓치지 않게 한다(전 회차 공용이라 캐시됨).
+  loadJpVocabulary().then(() => applyJpVocabHighlighting(messagesEl));
   poll();
 }
 
@@ -2783,6 +2787,171 @@ let japaneseKanjiPopover = null;
 let japaneseKanjiFavoritesPromise = null;
 let japaneseKanjiFavorites = new Set();
 
+// ★ 2026-09-18: "일본어선생님이 메시지로 말하는 말에서도 일본어 어휘도
+// 팝오버 되는 기능이 있으면 좋을거같은데 한자한글자씩 팝오버하는 기능도
+// 그대로 있으면 좋을거같아" 요청 — 미연시(dating_sim_web/app.js)에 만든
+// 단어 전체 클릭 팝업(훈음·뜻·단어장 즐겨찾기)을 일반 채팅에도 옮긴다.
+// 미연시는 장면 하나에 단어가 하나뿐이라 서버가 지목해줬지만, 채팅은
+// 페르소나가 어느 회차를 말할지 미리 모르므로 처리된 전 회차 단어 목록
+// (/api/jp-vocabulary)을 한 번 받아두고 후리가나로 뜬 단어와 정확히
+// 일치하는지 프론트에서 직접 대조한다.
+let jpVocabularyPromise = null;
+let jpVocabularyMap = new Map(); // ja -> {ja, reading, ko}
+let jpVocabFavoritesPromise = null;
+let jpVocabFavorites = new Map(); // ja -> vocabulary_entries id
+
+function loadJpVocabulary() {
+  if (!jpVocabularyPromise) {
+    jpVocabularyPromise = apiFetch("/api/jp-vocabulary")
+      .then((response) => response.ok ? response.json() : [])
+      .then((items) => {
+        jpVocabularyMap = new Map(items.map((item) => [item.ja, item]));
+        return items;
+      })
+      .catch((error) => {
+        if (error.message !== "unauthorized") console.error("일본어 학습 단어 목록을 불러오지 못했습니다.", error);
+        return [];
+      });
+  }
+  return jpVocabularyPromise;
+}
+
+function loadJpVocabFavorites(force = false) {
+  if (force) jpVocabFavoritesPromise = null;
+  if (!jpVocabFavoritesPromise) {
+    jpVocabFavoritesPromise = apiFetch("/api/me/vocabulary?language=japanese")
+      .then((response) => response.ok ? response.json() : [])
+      .then((items) => {
+        jpVocabFavorites = new Map(items.map((item) => [item.term, item.id]));
+        return items;
+      })
+      .catch((error) => {
+        if (error.message !== "unauthorized") console.error("일본어 단어장을 불러오지 못했습니다.", error);
+        return [];
+      });
+  }
+  return jpVocabFavoritesPromise;
+}
+
+async function toggleJpVocabFavorite(word, button) {
+  await loadJpVocabFavorites();
+  const removing = jpVocabFavorites.has(word.ja);
+  button.disabled = true;
+  try {
+    if (removing) {
+      const entryId = jpVocabFavorites.get(word.ja);
+      const response = await apiFetch(`/api/me/vocabulary/${entryId}`, {method: "DELETE"});
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      jpVocabFavorites.delete(word.ja);
+    } else {
+      const response = await apiFetch("/api/me/vocabulary", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({language: "japanese", term: word.ja, meaning: word.ko, pronunciation: word.reading}),
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const saved = await response.json();
+      jpVocabFavorites.set(word.ja, saved.id);
+    }
+    button.classList.toggle("active", !removing);
+    button.textContent = removing ? "☆ 저장" : "★ 저장됨";
+    button.setAttribute("aria-label", removing ? `${word.ja} 단어장에 저장` : `${word.ja} 단어장에서 제거`);
+  } catch (error) {
+    if (error.message !== "unauthorized") alert("단어를 저장하지 못했습니다.");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+let jpVocabWordPopover = null;
+
+function closeJpVocabWordPopover() {
+  jpVocabWordPopover?.remove();
+  jpVocabWordPopover = null;
+}
+
+function showJpVocabWordPopover(word, anchor) {
+  closeJapaneseKanjiPopover();
+  closeJpVocabWordPopover();
+  const popover = document.createElement("section");
+  popover.className = "japanese-kanji-popover japanese-context";
+  popover.setAttribute("role", "dialog");
+  popover.setAttribute("aria-label", `${word.ja} 단어 뜻과 읽기`);
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "japanese-kanji-popover-close";
+  close.textContent = "×";
+  close.setAttribute("aria-label", "단어 뜻 닫기");
+  close.addEventListener("click", closeJpVocabWordPopover);
+  const favorite = document.createElement("button");
+  favorite.type = "button";
+  favorite.className = "japanese-kanji-favorite";
+  favorite.textContent = "☆ 저장";
+  favorite.setAttribute("aria-label", `${word.ja} 단어장에 저장`);
+  loadJpVocabFavorites().then(() => {
+    if (!favorite.isConnected) return;
+    const active = jpVocabFavorites.has(word.ja);
+    favorite.classList.toggle("active", active);
+    favorite.textContent = active ? "★ 저장됨" : "☆ 저장";
+    favorite.setAttribute("aria-label", active ? `${word.ja} 단어장에서 제거` : `${word.ja} 단어장에 저장`);
+  });
+  favorite.addEventListener("click", () => toggleJpVocabFavorite(word, favorite));
+  const glyph = document.createElement("strong");
+  glyph.className = "japanese-kanji-popover-glyph";
+  glyph.lang = "ja";
+  glyph.textContent = word.ja;
+  const readings = document.createElement("div");
+  readings.className = "japanese-kanji-popover-readings";
+  const rows = [
+    ["훈음", katakanaToHiragana(word.reading) || "해당 없음"],
+    ["뜻", word.ko || "해당 없음"],
+  ];
+  for (const [label, displayValue] of rows) {
+    const row = document.createElement("div");
+    const heading = document.createElement("span");
+    heading.textContent = label;
+    const value = document.createElement("b");
+    value.lang = label === "훈음" ? "ja" : "ko";
+    value.textContent = displayValue;
+    row.append(heading, value);
+    readings.appendChild(row);
+  }
+  popover.append(close, favorite, glyph, readings);
+  document.body.appendChild(popover);
+  jpVocabWordPopover = popover;
+  const rect = anchor.getBoundingClientRect();
+  const width = popover.offsetWidth;
+  popover.style.left = `${Math.max(12, Math.min(rect.left + rect.width / 2 - width / 2, innerWidth - width - 12))}px`;
+  const desiredTop = rect.bottom + 10;
+  popover.style.top = `${Math.max(12, Math.min(desiredTop, innerHeight - popover.offsetHeight - 12))}px`;
+}
+
+// 후리가나로 이미 뜬 단어(ruby.message-furigana)를 학습 단어 목록과 대조해
+// 일치하면 색을 다르게 하고 단어 전체 클릭(단어 팝업)을 붙인다. 후리가나
+// 렌더링은 메시지 도착 시 곧장 일어나는데 단어 목록은 비동기로 오므로,
+// 목록이 늦게 도착해도 이미 그려진 말풍선까지 다시 훑어 놓치지 않는다.
+function applyJpVocabHighlighting(container) {
+  if (!jpVocabularyMap.size) return;
+  const rubies = container.querySelectorAll("ruby.message-furigana:not([data-vocab-checked])");
+  for (const ruby of rubies) {
+    ruby.dataset.vocabChecked = "1";
+    const base = ruby.firstChild?.nodeValue || "";
+    const word = jpVocabularyMap.get(base);
+    if (!word) continue;
+    const rt = ruby.querySelector("rt");
+    if (rt && katakanaToHiragana(rt.textContent) !== katakanaToHiragana(word.reading)) continue;
+    ruby.classList.add("vocab-word");
+    ruby.dataset.vocabWord = "1";
+    ruby.tabIndex = 0;
+    ruby.setAttribute("role", "button");
+    ruby.setAttribute("aria-label", `${word.ja} 단어 뜻 보기`);
+    ruby.addEventListener("click", (event) => {
+      event.stopPropagation();
+      showJpVocabWordPopover(word, ruby);
+    });
+  }
+}
+
 // ★ 2026-09-15: "음독이 가타카나로 되어있어서 잘 안읽히는데 히라가나로
 // 표기되면 좋겠어" — KANJIDIC2 원본은 음독(on)을 가타카나로 담고 있는 게
 // 표준 표기라 데이터 파일은 그대로 두고, 화면에 보여줄 때만 히라가나로
@@ -2865,6 +3034,7 @@ async function toggleJapaneseKanjiFavorite(character, button) {
 
 function showJapaneseKanjiPopover(character, reading, anchor, japaneseContext = false) {
   closeJapaneseKanjiPopover();
+  closeJpVocabWordPopover();
   const popover = document.createElement("section");
   popover.className = "japanese-kanji-popover";
   popover.classList.toggle("japanese-context", japaneseContext);
@@ -2973,6 +3143,9 @@ function decorateJapaneseKanji(container, japaneseContext = false) {
     acceptNode(node) {
       if (!/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u.test(node.nodeValue || "")) return NodeFilter.FILTER_REJECT;
       if (node.parentElement?.closest("a, button, .message-reply-quote")) return NodeFilter.FILTER_REJECT;
+      // \ud559\uc2b5 \ub2e8\uc5b4\uc640 \uc77c\uce58\ud574 \ub2e8\uc5b4 \uc804\uccb4 \ud074\ub9ad(\ub2e8\uc5b4 \ud31d\uc5c5)\uc774 \ubd99\uc740 \ud6c4\ub9ac\uac00\ub098\ub294
+      // \ub0b1\uae00\uc790 \ud55c\uc790 \ubc84\ud2bc\uc73c\ub85c \ub2e4\uc2dc \ucabc\uac1c\uc9c0 \uc54a\ub294\ub2e4.
+      if (node.parentElement?.closest("[data-vocab-word]")) return NodeFilter.FILTER_REJECT;
       return NodeFilter.FILTER_ACCEPT;
     },
   });
@@ -3439,6 +3612,9 @@ document.addEventListener("pointerdown", (event) => {
   if (japaneseKanjiPopover && !japaneseKanjiPopover.contains(event.target) && !event.target.closest(".japanese-kanji-char")) {
     closeJapaneseKanjiPopover();
   }
+  if (jpVocabWordPopover && !jpVocabWordPopover.contains(event.target) && !event.target.closest(".vocab-word")) {
+    closeJpVocabWordPopover();
+  }
 });
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
@@ -3616,7 +3792,10 @@ function appendMessage(m, forceScroll = false, suppressScroll = false) {
     body.appendChild(quote);
   }
   appendMessageMedia(body, m.content);
-  if (body.classList.contains("message-japanese")) decorateJapaneseFurigana(body);
+  if (body.classList.contains("message-japanese")) {
+    decorateJapaneseFurigana(body);
+    applyJpVocabHighlighting(body);
+  }
   decorateJapaneseKanji(body, body.classList.contains("message-japanese"));
   const time = document.createElement("div");
   time.className = "msg-time";
@@ -3629,7 +3808,7 @@ function appendMessage(m, forceScroll = false, suppressScroll = false) {
   let longPressStart = null;
   const cancelLongPress = () => { if (longPressTimer) clearTimeout(longPressTimer); longPressTimer = null; };
   body.addEventListener("pointerdown", (event) => {
-    if (event.target.closest(".japanese-kanji-char")) return;
+    if (event.target.closest(".japanese-kanji-char, .vocab-word")) return;
     if (event.pointerType === "mouse" && event.button !== 0) return;
     const x = event.clientX, y = event.clientY;
     longPressStart = {x, y};
@@ -3641,7 +3820,7 @@ function appendMessage(m, forceScroll = false, suppressScroll = false) {
     if (longPressStart && Math.hypot(event.clientX - longPressStart.x, event.clientY - longPressStart.y) > 10) cancelLongPress();
   });
   body.addEventListener("contextmenu", (event) => {
-    if (event.target.closest(".japanese-kanji-char")) return;
+    if (event.target.closest(".japanese-kanji-char, .vocab-word")) return;
     event.preventDefault(); cancelLongPress(); openMessageMenu(m, el, event.clientX, event.clientY);
   });
   messagesEl.appendChild(el);

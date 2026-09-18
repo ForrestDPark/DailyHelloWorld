@@ -1174,6 +1174,20 @@ main#messages.has-custom-background {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
+/* ★ 2026-09-18: 학습카드에서 나온 단어와 일치하는 후리가나는 낱글자
+   한자(점선 밑줄, 본문색)와 구분되게 강조색+실선 밑줄을 준다. 단어 전체가
+   클릭되어 뜻·훈음·단어장 저장 팝업이 뜬다(미연시의 .vocab-word와 같은 개념). */
+.vocab-word {
+  color: var(--accent);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.vocab-word rt { color: color-mix(in srgb, var(--accent) 80%, var(--muted)); }
+.vocab-word:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .japanese-kanji-char:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;

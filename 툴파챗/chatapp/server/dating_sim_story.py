@@ -734,6 +734,32 @@ def _load_work_vocabulary(title):
     return list(seen.values())
 
 
+def load_all_jp_vocabulary():
+    """★ 2026-09-18: "일본어선생님이 메시지로 말하는 말에서도 일본어
+    어휘도 팝오버 되는 기능이 있으면 좋을거같은데" 요청 — 미연시는 EPUB
+    한 편의 단어만 필요했지만, 일반 채팅에서는 페르소나가 어느 회차를
+    언급할지 미리 알 수 없다. 처리된 모든 회차의 vocabulary를 모아
+    두면 프론트가 채팅 메시지 어디서든 그 단어가 나오면 매칭할 수 있다
+    (expressions/문장은 원본 대사 그대로일 수 있어 여전히 제외).
+    ja가 같으면 첫 번째 값을 쓴다(대부분 회차 간에도 뜻이 일관됨)."""
+    if not JP_SUBTITLE_LIBRARY_DIR.is_dir():
+        return []
+    seen = {}
+    for folder in JP_SUBTITLE_LIBRARY_DIR.iterdir():
+        if not folder.is_dir() or folder.name.startswith("."):
+            continue
+        try:
+            cards = json.loads((folder / "scene_study_cards.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        for scene in cards.values():
+            for entry in (scene or {}).get("vocabulary", []) or []:
+                ja, reading, ko = entry.get("ja"), entry.get("reading"), entry.get("ko")
+                if ja and reading and ko and ja not in seen:
+                    seen[ja] = {"ja": ja, "reading": reading, "ko": ko}
+    return list(seen.values())
+
+
 # ★ 2026-09-18: "그 다음 장면도 좀 이상해 장면이 전혀 연결되지가
 # 않잖아" 신고 — reveal 줄 바로 다음에 beat_outro(그날 원래 하려던
 # 질문/화제)가 곧장 이어지면, "효과라는 말이 그때 마음이랑 맞아떨어지는
