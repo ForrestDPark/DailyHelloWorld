@@ -1285,11 +1285,115 @@ def random_book_id(exclude=None):
     return _book_id(random.choice(books)) if books else None
 
 
+# ★ 2026-09-19: "학습단어를 전부다 사용하게끔 시나리오를 수정... 시나리오가
+# 너무고정되어있는거같은데 학습단어를 토대로 시나리오를 전부 새로 구성했으면
+# 좋겠어" 요청 — 고정 14일 템플릿(_seven_day_scenes) 대신, 작품마다 학습카드
+# 단어를 최대한 녹여 AI로 새로 생성한 시나리오를 쓴다. 생성은 오프라인
+# 배치(generate_dating_sim_scenario.py)가 하고 library/<작품>/dating_sim_
+# scenario.json에 캐싱한다 — 생성은 수십 초~분이 걸려 웹 요청 경로에서 못
+# 돌리므로, 런타임(story_for)은 캐시가 있으면 그걸 쓰고 없으면 기존 고정
+# 템플릿으로 안전하게 폴백한다(학습카드 파이프라인과 같은 오프라인 생성·
+# 런타임 소비 구조).
+GENERATED_SCENARIO_VERSION = 1
+GENERATED_SCENARIO_FILENAME = "dating_sim_scenario.json"
+
+
+def _generated_scenario_path(title):
+    folder = _find_library_folder(title)
+    return (folder / GENERATED_SCENARIO_FILENAME) if folder else None
+
+
+def _validate_generated_scenario(gen, expected_locations):
+    """생성 캐시가 엔진이 기대하는 구조(요일별 3장소, 장소마다 lines +
+    선택지 정확히 2개(양·음 호감도))를 갖췄는지 확인한다. 하나라도 어긋나면
+    캐시를 무시하고 고정 템플릿으로 폴백한다(깨진 생성물로 게임이 죽지 않게)."""
+    if not isinstance(gen, dict) or gen.get("content_version") != GENERATED_SCENARIO_VERSION:
+        return False
+    days = gen.get("days")
+    if not isinstance(days, dict) or not days:
+        return False
+    for day_str in (str(d) for d in range(1, TOTAL_DAYS + 1)):
+        day_data = days.get(day_str)
+        if not isinstance(day_data, dict):
+            return False
+        day_scenes = day_data.get("scenes")
+        if not isinstance(day_scenes, dict):
+            return False
+        for loc in expected_locations:
+            scene = day_scenes.get(loc)
+            if not isinstance(scene, dict):
+                return False
+            lines = scene.get("lines")
+            choices = scene.get("choices")
+            if not isinstance(lines, list) or not lines or not all(isinstance(x, str) and x.strip() for x in lines):
+                return False
+            if not isinstance(choices, list) or len(choices) != 2:
+                return False
+            if not all(isinstance(c, dict) and isinstance(c.get("text"), str) and c["text"].strip()
+                       and isinstance(c.get("affection"), int) for c in choices):
+                return False
+            if not (choices[0]["affection"] > 0 and choices[1]["affection"] <= 0):
+                return False
+    return True
+
+
+def load_generated_scenario(title, expected_locations):
+    """작품별 AI 생성 시나리오 캐시를 읽어 검증 통과분만 돌려준다(없거나
+    깨졌으면 None → 호출부가 고정 템플릿으로 폴백)."""
+    path = _generated_scenario_path(title)
+    if not path or not path.is_file():
+        return None
+    try:
+        gen = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return gen if _validate_generated_scenario(gen, expected_locations) else None
+
+
+def _scenes_from_generated(gen, character_name_ko, character_name_jp):
+    """생성 캐시(dating_sim_scenario.json)를 엔진이 쓰는 scenes[day][location]
+    구조로 변환한다. 대사는 ソイ/소이 자리표시자를 쓰고 여기서 실제 이름으로
+    치환한다(_seven_day_scenes와 같은 규칙). vocab_used(장면에 녹인 학습
+    단어 목록)는 트리·보고서용 메타로 scene에 실어 둔다 — 한 장면에 여러
+    단어가 들어갈 수 있어 vocab_words(리스트)로 두고, 하위 호환을 위해 첫
+    단어는 vocab(단수)로도 남긴다."""
+    def _sub(text):
+        return text.replace("ソイ", character_name_jp).replace("소이", character_name_ko)
+
+    scenes, day_narration = {}, {}
+    for day in range(1, TOTAL_DAYS + 1):
+        day_data = gen["days"][str(day)]
+        narration = day_data.get("narration")
+        if isinstance(narration, str) and narration.strip():
+            day_narration[day] = _sub(narration)
+        scenes[day] = {}
+        for loc, sc in day_data["scenes"].items():
+            scene = {
+                "lines": [_sub(line) for line in sc["lines"]],
+                "choices": [
+                    {"text": _sub(c["text"]), "affection": int(c["affection"])}
+                    for c in sc["choices"]
+                ],
+            }
+            vocab_used = [
+                {"ja": w["ja"], "reading": w["reading"], "ko": w["ko"]}
+                for w in (sc.get("vocab_used") or [])
+                if isinstance(w, dict) and w.get("ja") and w.get("reading") and w.get("ko")
+            ]
+            if vocab_used:
+                scene["vocab"] = dict(vocab_used[0])
+                scene["vocab_words"] = vocab_used
+            scenes[day][loc] = scene
+    return scenes, day_narration
+
+
 def story_for(story_id=None, seed_key=None):
     """정적 소이 이야기 또는 EPUB 제목에서 만든 순화 로맨스를 돌려준다.
 
     EPUB 본문은 성인 대사를 포함할 수 있어 절대 게임 대사로 복사하지 않는다.
-    작품 식별과 제목만 영감 출처로 쓰고 장면은 안전한 고정 템플릿으로 만든다.
+    작품 식별과 제목만 영감 출처로 쓴다. 그 작품의 AI 생성 시나리오 캐시가
+    있으면 그걸(학습 단어를 최대한 녹인 새 시나리오) 쓰고, 없으면 안전한
+    고정 템플릿으로 만든다(2026-09-19).
     """
     if not story_id:
         return {"id": CHARACTER_ID, "name": CHARACTER_NAME, "title": "미연시",
@@ -1364,7 +1468,16 @@ def story_for(story_id=None, seed_key=None):
         },
     }
     vocab_pool = _load_work_vocabulary(source_title)
-    scenes = _seven_day_scenes(book_location_lines, profile["ko"], profile["jp"], vocab_pool=vocab_pool)
+    # 작품별 AI 생성 시나리오 캐시가 있으면 그걸 쓰고(학습 단어를 최대한
+    # 녹인 새 시나리오), 없거나 깨졌으면 고정 템플릿으로 폴백한다.
+    generated = load_generated_scenario(source_title, locations.keys())
+    day_narration = None
+    if generated:
+        scenes, day_narration = _scenes_from_generated(generated, profile["ko"], profile["jp"])
+        scenario_source = "generated"
+    else:
+        scenes = _seven_day_scenes(book_location_lines, profile["ko"], profile["jp"], vocab_pool=vocab_pool)
+        scenario_source = "template"
     if seed_key is not None:
         for day, day_scenes in scenes.items():
             for location_id, scene in day_scenes.items():
@@ -1377,7 +1490,7 @@ def story_for(story_id=None, seed_key=None):
               for location, action in actions.items()}
         for day, actions in BOOK_DAY_LOCATION_ACTIONS.items()
     }
-    return {"id": story_id, "name": profile["jp"], "title": f"{source_title}에서 영감받은 7일",
+    story = {"id": story_id, "name": profile["jp"], "title": f"{source_title}에서 영감받은 이야기",
             "character_image": profile["image"],
             "character_images": {"first": profile["image"],
                                  "walk": profile["image"],
@@ -1386,7 +1499,11 @@ def story_for(story_id=None, seed_key=None):
             "source_title": source_title, "total_days": TOTAL_DAYS, "locations": locations,
             "scenes": scenes, "endings": endings,
             "day_openings": _daily_openings(seed_key, story_id, profile["jp"], profile["ko"]),
-            "map_actions": map_actions}
+            "map_actions": map_actions,
+            "scenario_source": scenario_source}
+    if day_narration:
+        story["day_narration"] = day_narration
+    return story
 
 
 def ending_for(story, affection):
@@ -1415,25 +1532,29 @@ def scenario_tree(story_id=None, seed_key=None):
 
     source_title = story.get("source_title")
     vocab_pool = _load_work_vocabulary(source_title) if source_title else []
+    # ★ 2026-09-19: 생성 시나리오는 한 장면에 여러 단어가 들어가고, 단어가
+    # 삽입 나레이션이 아니라 대사 본문에 자연스럽게 녹아 있을 수 있다.
+    # 그래서 "이 줄이 학습 단어를 담고 있나"를 고정 삽입 줄 비교가 아니라
+    # 단어 태그([한자|읽기]) 포함 여부로 판정한다(고정 템플릿·생성 둘 다 동작).
+    pool_tags = [(f"[{ja}|{reading}]", {"ja": ja, "reading": reading, "ko": ko})
+                 for ja, reading, ko in vocab_pool]
+    story_day_narration = story.get("day_narration", {})
     days = []
     for day in range(1, story["total_days"] + 1):
         day_scenes = story["scenes"].get(day, {})
-        vocab_meta, vocab_line_set = None, set()
-        for scene in day_scenes.values():
-            if scene.get("vocab"):
-                v = scene["vocab"]
-                vocab_meta = v
-                vocab_line_set = set(_vocab_situation_lines((v["ja"], v["reading"], v["ko"]), day - 1))
-                break
+        day_words = {}
         locations = []
         for loc_id, scene in day_scenes.items():
             raw_lines = scene["lines"]
             lines = []
             for index, text in enumerate(raw_lines):
+                hit_words = [meta for tag, meta in pool_tags if tag in text]
+                for meta in hit_words:
+                    day_words.setdefault(meta["ja"], meta)
                 lines.append({
                     "speaker": "narrator" if text.lstrip().startswith("(") else "character",
                     "text": text,
-                    "is_vocab": text in vocab_line_set,
+                    "is_vocab": bool(hit_words),
                     "is_outro": index == len(raw_lines) - 1,
                 })
             locations.append({
@@ -1448,12 +1569,14 @@ def scenario_tree(story_id=None, seed_key=None):
                     for choice in scene["choices"]
                 ],
             })
+        day_word_list = list(day_words.values())
         days.append({
             "day": day,
             "topic": DAY_TOPICS.get(day, ""),
-            "narration": _sub(DAY_NARRATION.get(day, "")),
+            "narration": story_day_narration.get(day) or _sub(DAY_NARRATION.get(day, "")),
             "openings": [_sub(opening) for opening in DAY_OPENINGS.get(day, [])],
-            "vocab": vocab_meta,
+            "vocab": day_word_list[0] if day_word_list else None,
+            "vocab_words": day_word_list,
             "locations": locations,
         })
 
@@ -1465,13 +1588,13 @@ def scenario_tree(story_id=None, seed_key=None):
     # 정확히 나타낸다(작품 대사 규모는 참고용으로 함께 보여준다).
     used_days_by_ja = {}
     for day in days:
-        if day["vocab"]:
-            used_days_by_ja.setdefault(day["vocab"]["ja"], []).append(day["day"])
+        for word in day.get("vocab_words", []):
+            used_days_by_ja.setdefault(word["ja"], []).append(day["day"])
     vocabulary_usage = [
         {
             "ja": ja, "reading": reading, "ko": ko,
             "category": _classify_vocab_word(ko),
-            "used_days": used_days_by_ja.get(ja, []),
+            "used_days": sorted(set(used_days_by_ja.get(ja, []))),
         }
         for ja, reading, ko in vocab_pool
     ]
@@ -1481,6 +1604,7 @@ def scenario_tree(story_id=None, seed_key=None):
             "day": day["day"],
             "topic": day["topic"],
             "vocab": day["vocab"],
+            "vocab_words": day.get("vocab_words", []),
             "vocab_category": _classify_vocab_word(day["vocab"]["ko"]) if day["vocab"] else "",
             "locations": [{"label": loc["label"], "action": loc["action"]} for loc in day["locations"]],
         }

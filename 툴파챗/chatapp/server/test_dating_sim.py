@@ -556,6 +556,78 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         self.assertEqual(len(tree["report"]["scenario_breakdown"]), tree["total_days"])
         self.assertTrue(all(row["topic"] for row in tree["report"]["scenario_breakdown"]))
 
+    def _fake_generated_scenario(self):
+        """★ 2026-09-19: AI 생성 시나리오 캐시(dating_sim_scenario.json)의
+        최소 유효 버전을 프로그램으로 만든다 — 14일 × first/walk/quiet,
+        장소마다 lines(마지막이 질문) + 선택지 2개(양·음)."""
+        days = {}
+        for day in range(1, dating_sim_story.TOTAL_DAYS + 1):
+            scenes = {}
+            for loc in ("first", "walk", "quiet"):
+                # 2일차 first 장면에만 학습 단어 태그를 넣어 활용 추적을 확인.
+                extra = "[効果|こうか]がありました。\n효과가 있었어요." if (day == 2 and loc == "first") else "오늘도 좋은 하루였어요."
+                scenes[loc] = {
+                    "lines": [f"D{day} {loc} 도입.\n도입", extra, "오늘 뭐 할까요?\n오늘 뭐 할까요?"],
+                    "choices": [
+                        {"text": "같이 있고 싶어요.\n같이", "affection": 10},
+                        {"text": "글쎄요.\n글쎄", "affection": -4},
+                    ],
+                }
+            days[str(day)] = {"narration": f"DAY{day} 생성 나레이션.\n생성 나레이션", "scenes": scenes}
+        return {"content_version": dating_sim_story.GENERATED_SCENARIO_VERSION, "days": days}
+
+    def test_story_uses_generated_scenario_cache_when_present(self):
+        """★ 2026-09-19: "학습단어를 토대로 시나리오를 전부 새로 구성" 요청 —
+        작품 폴더에 dating_sim_scenario.json이 있으면 story_for가 고정
+        템플릿 대신 그 생성 시나리오를 쓰고(scenario_source=generated),
+        작품별 나레이션·대사가 반영돼야 한다. 없으면 템플릿으로 폴백."""
+        with tempfile.TemporaryDirectory() as directory:
+            library_dir = Path(directory)
+            work_dir = library_dir / "MATCHME"
+            work_dir.mkdir()
+            (work_dir / "scene_study_cards.json").write_text(json.dumps({
+                "1-1": {"vocabulary": [{"ja": "効果", "reading": "こうか", "ko": "효과"}]},
+            }), encoding="utf-8")
+            with patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", library_dir), \
+                 patch.object(dating_sim_story, "_find_book", return_value=Path("/tmp/MATCHME.epub")), \
+                 patch.object(dating_sim_story, "_book_title", return_value="MATCHME"):
+                # 캐시 없을 때는 템플릿
+                template_story = dating_sim_story.story_for("book:" + "3" * 20)
+                self.assertEqual(template_story["scenario_source"], "template")
+                # 캐시를 쓰면 생성 시나리오
+                (work_dir / "dating_sim_scenario.json").write_text(
+                    json.dumps(self._fake_generated_scenario()), encoding="utf-8")
+                gen_story = dating_sim_story.story_for("book:" + "3" * 20)
+        self.assertEqual(gen_story["scenario_source"], "generated")
+        self.assertIn("day_narration", gen_story)
+        self.assertIn("생성 나레이션", gen_story["day_narration"][2])
+        # 생성 대사에는 ソイ/소이 자리표시자가 실제 이름으로 치환돼 있어야 한다.
+        first_scene = gen_story["scenes"][1]["first"]
+        self.assertTrue(first_scene["lines"])
+        self.assertEqual(len(first_scene["choices"]), 2)
+
+    def test_generated_scenario_tree_flags_vocab_by_content_and_reports_usage(self):
+        """생성 시나리오(한 장면 여러 단어, 대사에 직접 녹음)에서도 트리가
+        단어 태그 포함 여부로 is_vocab을 잡고, 보고서 활용 집계가 맞아야 한다."""
+        with tempfile.TemporaryDirectory() as directory:
+            library_dir = Path(directory)
+            work_dir = library_dir / "MATCHME"
+            work_dir.mkdir()
+            (work_dir / "scene_study_cards.json").write_text(json.dumps({
+                "1-1": {"vocabulary": [{"ja": "効果", "reading": "こうか", "ko": "효과"}]},
+            }), encoding="utf-8")
+            (work_dir / "dating_sim_scenario.json").write_text(
+                json.dumps(self._fake_generated_scenario()), encoding="utf-8")
+            with patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", library_dir), \
+                 patch.object(dating_sim_story, "_find_book", return_value=Path("/tmp/MATCHME.epub")), \
+                 patch.object(dating_sim_story, "_book_title", return_value="MATCHME"):
+                tree = dating_sim_story.scenario_tree("book:" + "3" * 20, seed_key="admin")
+        day2 = tree["days"][1]
+        flagged = [ln for loc in day2["locations"] for ln in loc["lines"] if ln["is_vocab"]]
+        self.assertTrue(flagged, "생성 대사에 든 학습 단어 줄이 is_vocab로 안 잡힘")
+        usage = {w["ja"]: w for w in tree["report"]["vocabulary_usage"]}
+        self.assertIn(2, usage["効果"]["used_days"])
+
     def test_state_payload_marks_owner_as_admin_for_the_scenario_tree_button(self):
         """관리자(is_owner)만 시나리오 트리 버튼을 보게 상태에 is_admin이
         실려야 한다 — 일반 로그인 사용자는 False."""

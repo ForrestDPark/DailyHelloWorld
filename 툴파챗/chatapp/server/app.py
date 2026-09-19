@@ -731,7 +731,10 @@ def _dating_sim_state_payload(row, story):
     if row["pending_location"] and not completed:
         selected_location = row["pending_location"]
         scene = story["scenes"][row["day"]][selected_location]
-        scene_lines = [{"speaker": "narrator", "text": dating_sim_story.DAY_NARRATION[row["day"]]}]
+        # ★ 2026-09-19: AI 생성 시나리오는 요일 나레이션도 작품별로 새로
+        # 만들므로, 있으면 그 작품 나레이션을 쓰고 없으면 고정 템플릿을 쓴다.
+        day_narration = story.get("day_narration", {}).get(row["day"]) or dating_sim_story.DAY_NARRATION[row["day"]]
+        scene_lines = [{"speaker": "narrator", "text": day_narration}]
         for line in scene["lines"]:
             speaker = "narrator" if line.lstrip().startswith("(") else "character"
             scene_lines.append({"speaker": speaker, "text": line})
@@ -741,7 +744,10 @@ def _dating_sim_state_payload(row, story):
                 row["pending_location"], story.get("character_image")),
             "lines": scene_lines,
             "choices": [{"text": choice["text"]} for choice in scene["choices"]],
+            # 한 장면에 여러 학습 단어가 들어갈 수 있어(생성 시나리오) 목록으로
+            # 보낸다. 하위 호환을 위해 단수 vocab(첫 단어)도 유지한다.
             "vocab": scene.get("vocab"),
+            "vocab_words": scene.get("vocab_words") or ([scene["vocab"]] if scene.get("vocab") else []),
         }
     if completed:
         payload["ending"] = dating_sim_story.ending_for(story, row["affection"])

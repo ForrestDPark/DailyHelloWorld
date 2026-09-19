@@ -183,10 +183,11 @@ let sceneLineIndex = 0;
 let sceneChoices = [];
 // ★ 2026-09-18: "쓰여진 그 단어는 대사에서 글자색상을 다르게... 단어클릭도
 // 가능하고 클릭시에 팝업이 떠서 훈음과 한국어뜻을 보고 단어장 즐겨찾기도
-// 되면 좋겠어" 요청 — 이번 장면에 표현 삽입 단어가 있으면 {ja, reading, ko}
-// 그대로 담아둔다. renderAnnotatedText가 이 값과 일치하는 [한자|읽기]
-// 태그를 만나면 개별 한자 클릭 대신 단어 전체 클릭(단어 팝업)으로 바꾼다.
-let sceneVocab = null;
+// 되면 좋겠어" 요청 — 이번 장면에 든 학습 단어 목록({ja,reading,ko} 배열)을
+// 담아둔다. renderAnnotatedText가 이 목록과 일치하는 [한자|읽기] 태그를
+// 만나면 개별 한자 클릭 대신 단어 전체 클릭(단어 팝업)으로 바꾼다. ★
+// 2026-09-19: AI 생성 시나리오는 한 장면에 여러 단어가 들어가 배열로 관리.
+let sceneVocab = [];
 
 function plainText(text) {
   return text.replace(/\[([^\]|]+)\|([^\]]+)\]/g, "$1");
@@ -705,8 +706,12 @@ document.addEventListener("click", (event) => {
   }
 });
 
-function renderAnnotatedText(element, text, vocabWord = null) {
+// vocabWords: 학습 단어 하나(객체) 또는 여러 개(배열). ★ 2026-09-19: AI 생성
+// 시나리오는 한 장면에 여러 단어가 들어가므로 배열을 받아 태그별로 매칭한다.
+function renderAnnotatedText(element, text, vocabWords = null) {
   element.replaceChildren();
+  const list = Array.isArray(vocabWords) ? vocabWords : (vocabWords ? [vocabWords] : []);
+  const wordByTag = new Map(list.map((w) => [`${w.ja}|${w.reading}`, w]));
   const pattern = /\[([^\]|]+)\|([^\]]+)\]|\n/g;
   let cursor = 0;
   for (const match of text.matchAll(pattern)) {
@@ -719,18 +724,19 @@ function renderAnnotatedText(element, text, vocabWord = null) {
       const rt = document.createElement("rt");
       rt.textContent = match[2];
       ruby.append(rt);
-      // ★ 2026-09-18: 표현 삽입 단어(sceneVocab)와 정확히 일치하는 태그만
-      // 색상을 다르게 하고 단어 전체 클릭(단어 팝업)을 붙인다 — 같은 줄의
-      // 다른 한자는 그대로 decorateKanji의 낱글자 클릭을 쓴다.
-      if (vocabWord && match[1] === vocabWord.ja && match[2] === vocabWord.reading) {
+      // 학습 단어와 일치하는 태그만 색상을 다르게 하고 단어 전체 클릭(단어
+      // 팝업)을 붙인다 — 같은 줄의 다른 한자는 그대로 decorateKanji의 낱글자
+      // 클릭을 쓴다.
+      const word = wordByTag.get(`${match[1]}|${match[2]}`);
+      if (word) {
         ruby.classList.add("vocab-word");
         ruby.dataset.vocabWord = "1";
         ruby.tabIndex = 0;
         ruby.setAttribute("role", "button");
-        ruby.setAttribute("aria-label", `${vocabWord.ja} 단어 뜻 보기`);
+        ruby.setAttribute("aria-label", `${word.ja} 단어 뜻 보기`);
         ruby.addEventListener("click", (event) => {
           event.stopPropagation();
-          showVocabWordPopover(vocabWord, ruby);
+          showVocabWordPopover(word, ruby);
         });
       }
       element.append(ruby);
@@ -837,7 +843,7 @@ function renderChoices() {
 function renderScene(state) {
   sceneLines = state.scene.lines;
   sceneChoices = state.scene.choices;
-  sceneVocab = state.scene.vocab || null;
+  sceneVocab = state.scene.vocab_words || (state.scene.vocab ? [state.scene.vocab] : []);
   sceneLineIndex = 0;
   $("stage").dataset.location = state.scene.location;
   $("stage").dataset.day = state.day;
