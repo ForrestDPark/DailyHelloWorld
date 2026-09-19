@@ -1183,6 +1183,7 @@ function renderScenarioReport(body, tree) {
     `학습 단어 ${report.vocabulary_pool_count}개`,
     `핵심 표현 ${c.expressions_total}개`,
     `시나리오 활용 단어 ${report.vocabulary_used_count}개`,
+    `시나리오 활용 표현 ${report.expression_used_count || 0}개`,
   ];
   for (const text of chips) {
     const chip = document.createElement("span");
@@ -1248,6 +1249,33 @@ function renderScenarioReport(body, tree) {
       return [word, w.ko, VOCAB_CATEGORY_LABELS[w.category] || w.category];
     });
     details.append(makeTreeTable(["단어", "뜻", "분류"], unusedRows));
+    body.append(details);
+  }
+
+  const expressions = report.expression_usage || [];
+  const usedExpressions = expressions.filter((entry) => entry.used_days.length);
+  const unusedExpressions = expressions.filter((entry) => !entry.used_days.length);
+  if (usedExpressions.length) {
+    const heading = document.createElement("div");
+    heading.className = "tree-table-title";
+    heading.textContent = `시나리오에 쓰인 핵심 표현 (${usedExpressions.length}개)`;
+    body.append(heading);
+    body.append(makeTreeTable(["표현", "뜻", "활용 요일"], usedExpressions.map((entry) => [
+      `${entry.ja}${entry.reading ? ` (${entry.reading})` : ""}`,
+      entry.ko,
+      entry.used_days.map((day) => `D${day}`).join(", "),
+    ])));
+  }
+  if (unusedExpressions.length) {
+    const details = document.createElement("details");
+    details.className = "tree-unused";
+    const summaryEl = document.createElement("summary");
+    summaryEl.textContent = `시나리오에 아직 안 쓰인 핵심 표현 ${unusedExpressions.length}개 (탭해서 펼치기)`;
+    details.append(summaryEl);
+    details.append(makeTreeTable(["표현", "뜻"], unusedExpressions.map((entry) => [
+      `${entry.ja}${entry.reading ? ` (${entry.reading})` : ""}`,
+      entry.ko,
+    ])));
     body.append(details);
   }
 }

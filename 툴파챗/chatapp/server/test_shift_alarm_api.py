@@ -76,6 +76,25 @@ class ShiftAlarmApiTests(unittest.TestCase):
             )
         self.assertEqual(raised.exception.status_code, 422)
 
+    def test_reminder_definition_crud_uses_owner_editor_file(self):
+        status = {"reminder_schedule": [{"key": "laundry", "label": "빨래", "time": "11:30"}]}
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(module, "SHIFT_ALARM_REMINDER_EDITOR_FILE", Path(directory) / "editor.json"), \
+             patch.object(module, "_read_shift_alarm_status", return_value=status):
+            created = module.create_shift_alarm_reminder(module.ReminderDefinitionUpdate(
+                label="물 마시기", time="09:10", recurrence_unit="days",
+                recurrence_interval=2, recurrence_anchor="2026-09-20",
+            ), owner_request())
+            payload = module._read_reminder_editor()
+            self.assertTrue(payload["items"][created["key"]]["custom"])
+            updated = module.update_shift_alarm_reminder("laundry", module.ReminderDefinitionUpdate(
+                label="빨래 돌리기", time="12:00", recurrence_unit="weeks",
+                recurrence_interval=1, recurrence_anchor="2026-09-20",
+            ), owner_request())
+            self.assertTrue(updated["ok"])
+            module.delete_shift_alarm_reminder_definition("laundry", owner_request())
+            self.assertTrue(module._read_reminder_editor()["items"]["laundry"]["deleted"])
+
     def test_check_all_only_patches_unchecked_allowlisted_routines(self):
         status = {"routine_date": "2026-09-07", "daily_routine": [
             {"label": "완료", "checked": True}, {"label": "남음", "checked": False},

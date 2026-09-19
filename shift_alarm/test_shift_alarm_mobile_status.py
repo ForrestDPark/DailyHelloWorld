@@ -7,7 +7,8 @@ import unittest
 from shift_alarm import (
     _context_key_for_date, _parse_reminder_time_row, build_daily_routine, build_reminder_schedule,
     build_sleep_schedule,
-    build_reminders_detailed, filter_dismissed_reminder_items,
+    build_reminders_detailed, filter_dismissed_reminder_items, _effective_reminder_definitions,
+    _generic_recurrence_due,
 )
 
 
@@ -58,6 +59,34 @@ class RemindersDetailedTests(unittest.TestCase):
 
 
 class ReminderScheduleTests(unittest.TestCase):
+    def test_generic_day_week_and_month_recurrence(self):
+        day = datetime.date(2026, 9, 20)
+        self.assertTrue(_generic_recurrence_due(
+            {"unit": "days", "interval": 3, "anchor": "2026-09-17"}, day
+        ))
+        self.assertTrue(_generic_recurrence_due(
+            {"unit": "weeks", "interval": 1, "anchor": "2026-09-13"}, day
+        ))
+        self.assertTrue(_generic_recurrence_due(
+            {"unit": "months", "interval": 2, "anchor": "2026-07-20"}, day
+        ))
+
+    def test_editor_can_add_override_and_delete_definitions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "reminders.json")
+            with open(path, "w", encoding="utf-8") as file:
+                json.dump({"items": {
+                    "laundry": {"label": "빨래 수정", "enabled": False},
+                    "call_mom": {"deleted": True},
+                    "custom_test": {"label": "테스트", "enabled": True, "custom": True,
+                                    "time": {"hour": 8, "minute": 5}},
+                }}, file, ensure_ascii=False)
+            definitions = _effective_reminder_definitions(path)
+        self.assertEqual(definitions["laundry"]["label"], "빨래 수정")
+        self.assertFalse(definitions["laundry"]["enabled"])
+        self.assertNotIn("call_mom", definitions)
+        self.assertEqual(definitions["custom_test"]["time"], {"hour": 8, "minute": 5})
+
     def test_exports_current_full_schedule_without_secrets(self):
         definitions = {
             "laundry": {

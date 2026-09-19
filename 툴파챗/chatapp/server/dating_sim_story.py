@@ -756,6 +756,36 @@ def _load_work_vocabulary(title):
     return list(seen.values())
 
 
+def _load_work_expressions(title):
+    """★ 2026-09-19: "시나리오트리에서 핵심표현이 사용된 장면과 안쓰인
+    핵심표현도 보이게 해줘 학습단어처럼" 요청 — 학습카드의 핵심 표현
+    (expressions)을 중복 없이 모아 (ja, reading, ko)로 돌려준다. 보고서에서
+    이 표현이 시나리오 대사에 나타났는지 대조하는 데 쓴다."""
+    folder = _find_library_folder(title)
+    if not folder:
+        return []
+    try:
+        cards = json.loads((folder / "scene_study_cards.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    seen = {}
+    for scene in cards.values():
+        for entry in (scene or {}).get("expressions", []) or []:
+            ja, ko = entry.get("ja"), entry.get("ko")
+            if ja and ko and ja not in seen:
+                seen[ja] = (ja, entry.get("reading") or "", ko)
+    return list(seen.values())
+
+
+_FURIGANA_TAG_RE = re.compile(r"\[([^\]|]+)\|[^\]]+\]")
+
+
+def _strip_furigana(text):
+    """대사의 [한자|읽기] 후리가나 태그를 한자만 남기고 벗겨, 표현 원문(한자)
+    과 부분 문자열 대조가 되게 한다."""
+    return _FURIGANA_TAG_RE.sub(r"\1", text)
+
+
 def work_corpus_stats(title):
     """★ 2026-09-19: 관리자 보고서용 — 원작 회차의 규모(학습카드 장면 수,
     추출된 학습 단어/표현 수, 원본 대사 줄 수)를 센다. 원본 대사(transcript)는
@@ -1538,16 +1568,25 @@ def scenario_tree(story_id=None, seed_key=None):
     # 단어 태그([한자|읽기]) 포함 여부로 판정한다(고정 템플릿·생성 둘 다 동작).
     pool_tags = [(f"[{ja}|{reading}]", {"ja": ja, "reading": reading, "ko": ko})
                  for ja, reading, ko in vocab_pool]
+    # ★ 2026-09-19: 핵심 표현(구·문장)은 단어처럼 [태그] 하나로 안 잡히므로,
+    # 대사에서 후리가나를 벗긴 평문에 표현 원문(한자)이 부분 문자열로 들어
+    # 있는지로 "그 표현이 그 장면에 실제로 나타났나"를 판정한다.
+    expr_pool = _load_work_expressions(source_title) if source_title else []
+    expr_plain = [(_strip_furigana(ja), {"ja": ja, "reading": reading, "ko": ko})
+                  for ja, reading, ko in expr_pool]
+    expr_used_days = {}
     story_day_narration = story.get("day_narration", {})
     days = []
     for day in range(1, story["total_days"] + 1):
         day_scenes = story["scenes"].get(day, {})
         day_words = {}
+        day_plain_parts = []
         locations = []
         for loc_id, scene in day_scenes.items():
             raw_lines = scene["lines"]
             lines = []
             for index, text in enumerate(raw_lines):
+                day_plain_parts.append(_strip_furigana(text))
                 hit_words = [meta for tag, meta in pool_tags if tag in text]
                 for meta in hit_words:
                     day_words.setdefault(meta["ja"], meta)
@@ -1569,6 +1608,10 @@ def scenario_tree(story_id=None, seed_key=None):
                     for choice in scene["choices"]
                 ],
             })
+        day_plain = "\n".join(day_plain_parts)
+        for plain_ja, meta in expr_plain:
+            if plain_ja and plain_ja in day_plain:
+                expr_used_days.setdefault(meta["ja"], []).append(day)
         day_word_list = list(day_words.values())
         days.append({
             "day": day,
@@ -1599,6 +1642,14 @@ def scenario_tree(story_id=None, seed_key=None):
         for ja, reading, ko in vocab_pool
     ]
     used_count = sum(1 for w in vocabulary_usage if w["used_days"])
+    expression_usage = [
+        {
+            "ja": ja, "reading": reading, "ko": ko,
+            "used_days": sorted(set(expr_used_days.get(ja, []))),
+        }
+        for ja, reading, ko in expr_pool
+    ]
+    expr_used_count = sum(1 for e in expression_usage if e["used_days"])
     scenario_breakdown = [
         {
             "day": day["day"],
@@ -1619,6 +1670,9 @@ def scenario_tree(story_id=None, seed_key=None):
         "vocabulary_used_count": used_count,
         "vocabulary_pool_count": len(vocab_pool),
         "vocabulary_usage": vocabulary_usage,
+        "expression_used_count": expr_used_count,
+        "expression_pool_count": len(expr_pool),
+        "expression_usage": expression_usage,
         "scenario_breakdown": scenario_breakdown,
         "locations": [
             {"id": k, "label": v.get("label", k), "emoji": v.get("emoji", "")}

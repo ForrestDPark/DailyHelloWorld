@@ -1231,6 +1231,60 @@ REMINDERS = {
     "melatonin_shift": {"label": "💊 멜라토닌 먹을 시각(근무일)", "enabled": True, "time": {"hour": 20, "minute": 0}},
 }
 
+# 웹 대시보드에서 추가·수정한 정의를 Shift Alarm 본체가 직접 읽는다. AI나 웹
+# 서버가 알람을 실행하는 것이 아니라, 승인된 JSON 설정만 이 결정론적 코드가
+# 해석하므로 기존 안전 경계를 유지한다.
+REMINDER_EDITOR_FILE = os.path.expanduser("~/.shift_alarm_reminders.json")
+
+
+def _load_reminder_editor_items(path=REMINDER_EDITOR_FILE):
+    try:
+        with open(path, encoding="utf-8") as file:
+            payload = json.load(file)
+        items = payload.get("items", {}) if isinstance(payload, dict) else {}
+        return items if isinstance(items, dict) else {}
+    except (OSError, json.JSONDecodeError, AttributeError):
+        return {}
+
+
+def _effective_reminder_definitions(path=REMINDER_EDITOR_FILE):
+    definitions = {key: dict(value) for key, value in REMINDERS.items()}
+    for key, override in _load_reminder_editor_items(path).items():
+        if not isinstance(key, str) or not isinstance(override, dict):
+            continue
+        if override.get("deleted"):
+            definitions.pop(key, None)
+            continue
+        current = definitions.setdefault(key, {})
+        for field in ("label", "time", "enabled", "recurrence", "custom"):
+            if field in override:
+                current[field] = override[field]
+    return definitions
+
+
+def _generic_recurrence_due(recurrence, day):
+    """대시보드의 단순 반복 규칙이 오늘 실행 대상인지 결정론적으로 계산한다."""
+    if not isinstance(recurrence, dict):
+        return False
+    try:
+        anchor = datetime.date.fromisoformat(str(recurrence.get("anchor")))
+        interval = max(1, int(recurrence.get("interval", 1)))
+    except (TypeError, ValueError):
+        return False
+    if day < anchor:
+        return False
+    unit = recurrence.get("unit")
+    if unit == "daily":
+        return True
+    if unit == "days":
+        return (day - anchor).days % interval == 0
+    if unit == "weeks":
+        return (day - anchor).days % (interval * 7) == 0
+    if unit == "months":
+        month_delta = (day.year - anchor.year) * 12 + day.month - anchor.month
+        return month_delta >= 0 and month_delta % interval == 0 and day.day == anchor.day
+    return False
+
 # "⏰ 리마인더 시각표" Notion 페이지 — REMINDERS 위 "time" 값은 코드 기본값(안전망)이고,
 # 실제 사용 시각은 이 표를 주기적으로 읽어와 덮어쓴다. 사용자가 표의 시각 칸만
 # 고치면 코드를 손대지 않고도 알람 시각이 바뀐다(라벨 텍스트는 체크리스트 기록과
@@ -2057,7 +2111,7 @@ def _resolve_reminder_time(schedule, key, today):
         override = _REMINDER_CONTEXT_TIMES.get(key, {}).get(context)
         if override:
             return override
-    return REMINDERS[key].get("time")
+    return _effective_reminder_definitions().get(key, {}).get("time")
 
 
 CALL_DONGCHAN_ANCHOR = datetime.date(2026, 8, 3)
@@ -2381,7 +2435,21 @@ def _get_today_reminder_items(schedule, now=None):
     if REMINDERS["melatonin_shift"]["enabled"] and get_shift_for_date(schedule, today) in ("Day", "Swing", "GY"):
         items.append(("melatonin_shift", REMINDERS["melatonin_shift"]["label"]))
 
-    return filter_dismissed_reminder_items(items, today)
+    definitions = _effective_reminder_definitions()
+    by_key = {key: label for key, label in items if key in definitions}
+    for key, definition in definitions.items():
+        if not definition.get("enabled", False):
+            by_key.pop(key, None)
+            continue
+        recurrence = definition.get("recurrence")
+        if recurrence is not None:
+            if _generic_recurrence_due(recurrence, today):
+                by_key[key] = definition.get("label", key)
+            else:
+                by_key.pop(key, None)
+        elif key in by_key:
+            by_key[key] = definition.get("label", by_key[key])
+    return filter_dismissed_reminder_items(list(by_key.items()), today)
 
 
 def filter_dismissed_reminder_items(items, date, path=REMINDER_DISMISSED_FILE):
@@ -2437,6 +2505,8 @@ def build_reminders_detailed(
 
 def build_reminder_schedule(reminder_definitions, context_times=None):
     """Notion 동기화까지 반영된 현재 전체 리마인더 설정의 공개용 목록."""
+    if reminder_definitions is REMINDERS:
+        reminder_definitions = _effective_reminder_definitions()
     context_times = context_times or {}
     return [
         {
@@ -2451,6 +2521,8 @@ def build_reminder_schedule(reminder_definitions, context_times=None):
                 },
             },
             "enabled": bool(definition.get("enabled", False)),
+            "recurrence": definition.get("recurrence"),
+            "custom": bool(definition.get("custom", False)),
         }
         for key, definition in reminder_definitions.items()
     ]

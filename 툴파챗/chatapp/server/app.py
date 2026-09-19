@@ -81,6 +81,7 @@ SHIFT_ALARM_STATUS_FALLBACK_FILE = Path(os.path.expanduser(
     "~/.shift_alarm_icloud_sync/status.json"
 ))
 SHIFT_ALARM_DISMISSED_FILE = Path(os.path.expanduser("~/.tulpachat/shift_alarm_dismissed.json"))
+SHIFT_ALARM_REMINDER_EDITOR_FILE = Path(os.path.expanduser("~/.shift_alarm_reminders.json"))
 SHIFT_ALARM_NOTION_PAGE_ID = "3b532a1e-ae80-8034-90af-fd8c9b658711"
 SHIFT_ALARM_REMINDER_TIMES_PAGE_ID = "3d432a1e-ae80-8171-b8e1-e0d3c545a707"
 SUNZI_DISCUSSION_ROOM_ID = "custom_16ea779e1f"
@@ -1826,6 +1827,58 @@ def _read_shift_alarm_status():
     raise HTTPException(status_code=503, detail=detail)
 
 
+def _read_reminder_editor():
+    try:
+        payload = json.loads(SHIFT_ALARM_REMINDER_EDITOR_FILE.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return {"items": {}}
+    items = payload.get("items", {}) if isinstance(payload, dict) else {}
+    return {"items": items if isinstance(items, dict) else {}}
+
+
+def _write_reminder_editor(payload):
+    SHIFT_ALARM_REMINDER_EDITOR_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = SHIFT_ALARM_REMINDER_EDITOR_FILE.with_suffix(".tmp")
+    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(SHIFT_ALARM_REMINDER_EDITOR_FILE)
+
+
+def _merge_reminder_editor(status):
+    editor = _read_reminder_editor()["items"]
+    schedule = []
+    seen = set()
+    for source in status.get("reminder_schedule", []):
+        if not isinstance(source, dict) or not source.get("key"):
+            continue
+        key = source["key"]
+        override = editor.get(key, {}) if isinstance(editor.get(key), dict) else {}
+        if override.get("deleted"):
+            continue
+        item = dict(source)
+        item.update({field: override[field] for field in
+                     ("label", "enabled", "recurrence", "custom") if field in override})
+        if isinstance(override.get("time"), dict):
+            hour, minute = override["time"].get("hour"), override["time"].get("minute")
+            if isinstance(hour, int) and isinstance(minute, int):
+                item["time"] = f"{hour:02d}:{minute:02d}"
+                item.setdefault("times", {})["시각"] = item["time"]
+        schedule.append(item)
+        seen.add(key)
+    for key, override in editor.items():
+        if key in seen or not isinstance(override, dict) or override.get("deleted"):
+            continue
+        reminder_time = override.get("time", {})
+        value = (f"{reminder_time.get('hour', 0):02d}:{reminder_time.get('minute', 0):02d}"
+                 if isinstance(reminder_time, dict) else None)
+        schedule.append({
+            "key": key, "label": override.get("label", key), "time": value,
+            "times": {"시각": value}, "enabled": bool(override.get("enabled", True)),
+            "recurrence": override.get("recurrence"), "custom": True,
+        })
+    status["reminder_schedule"] = schedule
+    return status
+
+
 def _shift_alarm_notion_token():
     try:
         result = subprocess.run(
@@ -1895,6 +1948,15 @@ class ReminderCheckUpdate(BaseModel):
     checked: bool
 
 
+class ReminderDefinitionUpdate(BaseModel):
+    label: str
+    time: str
+    recurrence_unit: Optional[str] = None
+    recurrence_interval: int = 1
+    recurrence_anchor: Optional[str] = None
+    enabled: bool = True
+
+
 SHIFT_ALARM_TIME_PROFILES = {"시각", "Swing", "Day", "GY", "S-D휴", "D-G휴", "G-S휴"}
 
 
@@ -1916,7 +1978,72 @@ def shift_alarm_status(request: Request):
         status["reminders_detailed"] = [
             item for item in status.get("reminders_detailed", []) if item.get("label") not in hidden
         ]
-    return status
+    return _merge_reminder_editor(status)
+
+
+def _validated_reminder_definition(body):
+    label = body.label.strip()
+    if not label or len(label) > 80:
+        raise HTTPException(status_code=422, detail="리마인더 이름은 1~80자로 입력해주세요")
+    if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", body.time or ""):
+        raise HTTPException(status_code=422, detail="시각은 HH:MM 형식이어야 합니다")
+    if body.recurrence_unit not in {None, "daily", "days", "weeks", "months"}:
+        raise HTTPException(status_code=422, detail="지원하지 않는 반복 주기입니다")
+    if not 1 <= body.recurrence_interval <= 365:
+        raise HTTPException(status_code=422, detail="반복 간격은 1~365 사이여야 합니다")
+    recurrence = None
+    if body.recurrence_unit:
+        try:
+            anchor = datetime.date.fromisoformat(body.recurrence_anchor or "")
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail="반복 시작일을 선택해주세요") from exc
+        recurrence = {"unit": body.recurrence_unit, "interval": body.recurrence_interval,
+                      "anchor": anchor.isoformat()}
+    hour, minute = (int(part) for part in body.time.split(":"))
+    return {"label": label, "time": {"hour": hour, "minute": minute},
+            "enabled": body.enabled, "recurrence": recurrence}
+
+
+@app.post("/api/shift-alarm/reminder-definitions")
+def create_shift_alarm_reminder(body: ReminderDefinitionUpdate, request: Request):
+    _require_owner(request)
+    definition = _validated_reminder_definition(body)
+    if not definition["recurrence"]:
+        raise HTTPException(status_code=422, detail="새 리마인더의 반복 주기를 선택해주세요")
+    payload = _read_reminder_editor()
+    key = f"custom_{uuid.uuid4().hex[:12]}"
+    payload["items"][key] = {**definition, "custom": True}
+    _write_reminder_editor(payload)
+    return {"ok": True, "key": key}
+
+
+@app.put("/api/shift-alarm/reminder-definitions/{key}")
+def update_shift_alarm_reminder(key: str, body: ReminderDefinitionUpdate, request: Request):
+    _require_owner(request)
+    status = _merge_reminder_editor(_read_shift_alarm_status())
+    allowed = {item.get("key") for item in status.get("reminder_schedule", [])}
+    if key not in allowed:
+        raise HTTPException(status_code=404, detail="리마인더를 찾지 못했습니다")
+    payload = _read_reminder_editor()
+    custom = bool(payload["items"].get(key, {}).get("custom")) or key.startswith("custom_")
+    payload["items"][key] = {**_validated_reminder_definition(body), "custom": custom}
+    _write_reminder_editor(payload)
+    return {"ok": True, "key": key}
+
+
+@app.delete("/api/shift-alarm/reminder-definitions/{key}")
+def delete_shift_alarm_reminder_definition(key: str, request: Request):
+    _require_owner(request)
+    status = _merge_reminder_editor(_read_shift_alarm_status())
+    allowed = {item.get("key") for item in status.get("reminder_schedule", [])}
+    if key not in allowed:
+        raise HTTPException(status_code=404, detail="리마인더를 찾지 못했습니다")
+    payload = _read_reminder_editor()
+    # 상태 파일은 Shift Alarm의 다음 갱신 전까지 이전 사용자 항목을 담고 있을
+    # 수 있으므로 사용자 항목도 즉시 지우지 않고 tombstone을 남겨 재등장을 막는다.
+    payload["items"][key] = {"deleted": True, "custom": key.startswith("custom_")}
+    _write_reminder_editor(payload)
+    return {"ok": True, "key": key}
 
 
 @app.put("/api/shift-alarm/reminder-time")

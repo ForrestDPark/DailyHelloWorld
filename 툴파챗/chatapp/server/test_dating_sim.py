@@ -509,7 +509,10 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
                         {"ja": "効果", "reading": "こうか", "ko": "효과"},
                         {"ja": "本音", "reading": "ほんね", "ko": "본심"},
                     ],
-                    "expressions": [{"ja": "a", "reading": "a", "ko": "a"}],
+                    "expressions": [
+                        {"ja": "a", "reading": "a", "ko": "사용 안 됨"},
+                        {"ja": "初めまして", "reading": "はじめまして", "ko": "처음 뵙겠습니다"},
+                    ],
                 },
             }), encoding="utf-8")
             (work_dir / "transcript_part1.jsonl").write_text(
@@ -542,6 +545,9 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         used = [w for w in report["vocabulary_usage"] if w["used_days"]]
         self.assertTrue(used, "시나리오에 쓰인 단어가 보고서에 하나도 없음")
         self.assertTrue(all("category" in w for w in report["vocabulary_usage"]))
+        self.assertEqual(report["expression_pool_count"], 2)
+        self.assertEqual(len(report["expression_usage"]), 2)
+        self.assertTrue(all("used_days" in entry for entry in report["expression_usage"]))
         self.assertEqual(len(report["scenario_breakdown"]), tree["total_days"])
         self.assertTrue(all(row["topic"] for row in report["scenario_breakdown"]))
 
