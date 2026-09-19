@@ -41,6 +41,7 @@ import socket
 import sqlite3
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -50,15 +51,16 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, File, Header, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.background import BackgroundTask
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from pywebpush import WebPushException, webpush
 
-from server import ai_keys, auth, battle_sim_story, dating_sim_story, oauth
+from server import ai_keys, audio_editor, auth, battle_sim_story, dating_sim_story, oauth
 from server.db import get_conn, init_db
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -70,6 +72,7 @@ SHIFT_ALARM_DASHBOARD_DIR = BASE_DIR / "shift_alarm_dashboard"
 VOCABULARY_WEB_DIR = BASE_DIR / "vocabulary_web"
 DATING_SIM_WEB_DIR = BASE_DIR / "dating_sim_web"
 DATING_SIM_AUDIO_DIR = DATING_SIM_WEB_DIR / "audio"
+AUDIO_EDITOR_WEB_DIR = BASE_DIR / "audio_editor_web"
 BATTLE_SIM_WEB_DIR = BASE_DIR / "battle_sim_web"
 SHIFT_ALARM_STATUS_FILE = Path(os.path.expanduser(
     "~/Library/Mobile Documents/com~apple~CloudDocs/ShiftAlarmStatus/status.json"
@@ -297,7 +300,7 @@ class NoCacheStaticMiddleware(BaseHTTPMiddleware):
     아니라 "쓰기 전에 항상 물어보라"는 지시라 대역폭 낭비는 크지 않다."""
     async def dispatch(self, request, call_next):
         response = await call_next(request)
-        if request.url.path.startswith(("/static/", "/uploads/", "/shift-alarm/static/")):
+        if request.url.path.startswith(("/static/", "/uploads/", "/shift-alarm/static/", "/audio-editor/static/")):
             response.headers["Cache-Control"] = "no-cache"
         if request.url.path == "/career/" or request.url.path.startswith("/career/static/"):
             # iOS 홈 화면 웹앱은 일반 탭보다 HTML/JS를 오래 보존하는 경우가 있다.
@@ -579,6 +582,97 @@ def vocabulary_static(filename: str, request: Request):
     if filename not in {"style.css", "app.js", "manifest.webmanifest"}:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(VOCABULARY_WEB_DIR / filename))
+
+
+@app.get("/audio-editor")
+def audio_editor_redirect():
+    return RedirectResponse("/audio-editor/", status_code=307)
+
+
+@app.get("/audio-editor/")
+def audio_editor_dashboard(request: Request):
+    _require_signed_in_user(request)
+    return FileResponse(str(AUDIO_EDITOR_WEB_DIR / "index.html"))
+
+
+@app.get("/audio-editor/static/{filename}")
+def audio_editor_static(filename: str, request: Request):
+    _require_signed_in_user(request)
+    if filename not in {"style.css", "app.js", "manifest.webmanifest"}:
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
+    return FileResponse(str(AUDIO_EDITOR_WEB_DIR / filename))
+
+
+@app.post("/api/audio-editor/export")
+async def export_edited_audio(
+    request: Request,
+    file: UploadFile = File(...),
+    cuts: str = Form("[]"),
+):
+    """로그인 사용자의 MP3에서 지정 구간을 제외하고 새 MP3를 반환한다."""
+    _require_signed_in_user(request)
+    original_name = Path(file.filename or "audio.mp3").name
+    if Path(original_name).suffix.lower() != ".mp3":
+        raise HTTPException(status_code=422, detail="MP3 파일만 편집할 수 있습니다")
+    try:
+        parsed_cuts = json.loads(cuts)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=422, detail="삭제 구간 정보가 올바르지 않습니다") from exc
+    if not isinstance(parsed_cuts, list) or len(parsed_cuts) > 100:
+        raise HTTPException(status_code=422, detail="삭제 구간은 최대 100개까지 지정할 수 있습니다")
+
+    work_root = Path(os.path.expanduser("~/.tulpachat/audio_editor"))
+    work_root.mkdir(parents=True, exist_ok=True)
+    job_dir = Path(tempfile.mkdtemp(prefix="edit-", dir=work_root))
+    source = job_dir / "source.mp3"
+    output = job_dir / "edited.mp3"
+    size = 0
+    try:
+        with source.open("wb") as destination:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > 250 * 1024 * 1024:
+                    raise HTTPException(status_code=413, detail="MP3는 최대 250MB까지 편집할 수 있습니다")
+                destination.write(chunk)
+        if size < 128:
+            raise HTTPException(status_code=422, detail="비어 있거나 손상된 MP3입니다")
+        ffprobe = shutil.which("ffprobe")
+        ffmpeg = shutil.which("ffmpeg")
+        if not ffprobe or not ffmpeg:
+            raise HTTPException(status_code=503, detail="오디오 편집기를 실행할 수 없습니다")
+        probe = subprocess.run(
+            [ffprobe, "-v", "error", "-show_entries", "format=duration",
+             "-of", "default=noprint_wrappers=1:nokey=1", str(source)],
+            capture_output=True, text=True, timeout=30,
+        )
+        try:
+            duration = float(probe.stdout.strip()) if probe.returncode == 0 else 0
+        except ValueError:
+            duration = 0
+        if duration <= 0 or duration > 8 * 60 * 60:
+            raise HTTPException(status_code=422, detail="재생 시간을 확인할 수 없거나 8시간을 초과한 MP3입니다")
+        segments = audio_editor.kept_segments(parsed_cuts, duration)
+        if not segments:
+            raise HTTPException(status_code=422, detail="전체 오디오를 삭제할 수는 없습니다")
+        command = [
+            ffmpeg, "-y", "-v", "error", "-i", str(source),
+            "-filter_complex", audio_editor.ffmpeg_filter(segments),
+            "-map", "[out]", "-codec:a", "libmp3lame", "-q:a", "2", str(output),
+        ]
+        encoded = subprocess.run(command, capture_output=True, text=True, timeout=300)
+        if encoded.returncode != 0 or not output.is_file():
+            raise HTTPException(status_code=422, detail="MP3를 편집하지 못했습니다. 파일을 다시 확인해주세요")
+        download_name = f"{Path(original_name).stem}-편집본.mp3"
+        return FileResponse(
+            str(output), media_type="audio/mpeg", filename=download_name,
+            background=BackgroundTask(shutil.rmtree, job_dir, ignore_errors=True),
+        )
+    except HTTPException:
+        shutil.rmtree(job_dir, ignore_errors=True)
+        raise
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        shutil.rmtree(job_dir, ignore_errors=True)
+        raise HTTPException(status_code=500, detail="오디오 편집 중 오류가 발생했습니다") from exc
 
 
 # ★ 2026-09-15: "미연시 시스템 하나 만들어봤으면 좋겠어" 요청 — 선택지+호감도+

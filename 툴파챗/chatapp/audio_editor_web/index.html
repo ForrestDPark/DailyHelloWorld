@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#fff7f8"><title>오디오 편집기</title>
+  <link rel="manifest" href="/audio-editor/static/manifest.webmanifest">
+  <link rel="stylesheet" href="/audio-editor/static/style.css?v=20260920-v1">
+</head>
+<body>
+  <header><a href="/#systems" aria-label="시스템으로 돌아가기">‹</a><h1>오디오 편집기</h1><button id="export" disabled>내보내기</button></header>
+  <main>
+    <label class="file-picker"><input id="file" type="file" accept="audio/mpeg,.mp3"><span>＋ MP3 불러오기</span><small>iPhone 파일 앱의 MP3도 선택할 수 있습니다</small></label>
+    <section id="editor" class="editor hidden">
+      <div class="clip-head"><div><strong id="filename"></strong><small id="filemeta"></small></div><button id="replace" type="button">다른 파일</button></div>
+      <div class="timeline"><canvas id="waveform" aria-label="시간에 따른 오디오 음량 파형"></canvas><div id="loading" class="loading">파형 분석 중…</div></div>
+      <div class="time-row"><span id="current">00:00.0</span><span id="duration">00:00.0</span></div>
+      <div class="transport"><button id="back" type="button" aria-label="5초 뒤로">−5초</button><button id="play" class="play" type="button" aria-label="재생">▶</button><button id="forward" type="button" aria-label="5초 앞으로">+5초</button></div>
+      <section class="selection"><div class="selection-title"><strong>삭제할 구간</strong><span id="selection-time">구간을 파형에서 드래그하세요</span></div><div class="mark-buttons"><button id="mark-start" type="button">현재 위치를 시작점</button><button id="mark-end" type="button">현재 위치를 끝점</button></div><button id="delete-selection" class="delete-selection" type="button" disabled>선택 구간 잘라내기</button></section>
+      <section class="cuts"><div class="cuts-head"><strong>잘라낼 구간</strong><button id="undo" type="button" disabled>실행 취소</button></div><div id="cut-list"><p>아직 잘라낼 구간이 없습니다.</p></div><small>미리듣기에서는 분홍색 삭제 구간을 자동으로 건너뜁니다. 원본 파일은 변경되지 않습니다.</small></section>
+    </section>
+    <div id="status" class="status hidden" role="status" aria-live="polite"></div>
+  </main>
+  <audio id="audio" preload="metadata"></audio>
+  <script src="/audio-editor/static/app.js?v=20260920-v1"></script>
+</body>
+</html>

@@ -1741,4 +1741,5 @@ button.portal-card{font:inherit;text-align:left;cursor:pointer}
 .portal-card.vocabulary .portal-card-mark{background:linear-gradient(145deg,#bd842c,#7d5519)}
 .portal-card.english .portal-card-mark{background:linear-gradient(145deg,#4b7fd0,#294f94)}
 .portal-card.dating-sim .portal-card-mark{background:linear-gradient(145deg,#ff6fa5,#7a2856)}
+.portal-card.audio-editor .portal-card-mark{background:linear-gradient(145deg,#f26c82,#8b3147)}
 .portal-card.battle-sim .portal-card-mark{background:linear-gradient(145deg,#bd8b3f,#543416)}
