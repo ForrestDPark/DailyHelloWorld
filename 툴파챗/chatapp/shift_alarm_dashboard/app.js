@@ -298,7 +298,7 @@ async function advanceVideoBulkQueue(fromContinueClick){
 }
 function byteSize(bytes){if(bytes==null)return"";const gb=bytes/1024/1024/1024;return gb>=1?`${gb.toFixed(2)}GB`:`${(bytes/1024/1024).toFixed(1)}MB`}
 function renderVideoDownload(data){const state=data.state||"idle",progress=Math.max(0,Math.min(100,Number(data.progress)||0)),active=["queued","running","syncing"].includes(state),sizes=data.downloaded_bytes?`${byteSize(data.downloaded_bytes)}${data.total_bytes?` / ${byteSize(data.total_bytes)}`:" 내려받음"}`:"";$("video-download-state").textContent=VIDEO_STATE_LABELS[state]||state;$("video-download-state").dataset.state=state;$("video-download-submit").disabled=active;$("video-download-progress").classList.toggle("hidden",state==="idle");$("video-download-stage").textContent=data.stage||"상태를 확인하고 있습니다";$("video-download-percent").textContent=data.total_bytes?`${Math.round(progress)}%`:sizes||`${Math.round(progress)}%`;$("video-download-bar").style.width=`${progress}%`;$("video-download-file").textContent=data.filename?`${data.filename}${data.destination?` · ${data.destination}`:""}${data.size_bytes?` · ${byteSize(data.size_bytes)}`:""}`:active?`Mac에서 작업 중입니다. 이 화면을 닫아도 계속 진행됩니다.${sizes?` · ${sizes}`:""}`:"";renderSubtitleExtraction(data.subtitle_extraction);renderVideoLibrary(data.downloads)}
-async function loadVideoDownload(){try{renderVideoDownload(await api("/api/shift-alarm/video-download"))}catch(e){$("video-download-state").textContent="확인 실패"}}
+async function loadVideoDownload(){try{renderVideoDownload(await api("/api/shift-alarm/video-download",{cache:"no-store"}))}catch(e){$("video-download-state").textContent="확인 실패"}}
 $("video-download-form").addEventListener("submit",async event=>{event.preventDefault();const url=$("video-download-url").value.trim();if(!url)return;if(!confirm("이 영상을 다운로드할 권한이 있으며, Mac 비공개 보관함에 최대 5GB 파일을 24시간 저장할까요?"))return;$("video-download-submit").disabled=true;try{const data=await api("/api/shift-alarm/video-download",{method:"POST",body:JSON.stringify({url,approved:true})});renderVideoDownload(data);notice("Mac에 영상 다운로드를 요청했습니다.")}catch(e){notice(e.message,true);await loadVideoDownload()}finally{await loadVideoDownload()}});
 async function videoAction(action,confirmation,actionUrl){if(!actionUrl)return;if(confirmation&&!confirm(confirmation))return;try{const data=await api(actionUrl,{method:"POST",body:JSON.stringify({action})});notice(data.message);if(action==="delete"||action==="cancel_transfer"||action==="extract_subtitle")await loadVideoDownload()}catch(e){notice(e.message,true)}}
 $("video-bulk-select-all").addEventListener("click",()=>{
@@ -329,7 +329,7 @@ $("video-bulk-delete").addEventListener("click",async()=>{
         catch(e){failed++}
     }
     selectedVideoIds.clear();
-    notice(failed?`${targets.length-failed}개 삭제, ${failed}개 실패했습니다.`:`${targets.length}개 파일을 DB에서 삭제했습니다.`,Boolean(failed));
+    notice(failed?`${targets.length-failed}개 삭제, ${failed}개 실패했습니다.`:`${targets.length}개의 Mac 원본 파일을 삭제했습니다.`,Boolean(failed));
     await loadVideoDownload();
 });
 $("reminder-add-anchor").value=new Date().toISOString().slice(0,10);

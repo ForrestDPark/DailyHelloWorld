@@ -1642,6 +1642,15 @@ def _shift_alarm_av4_files():
     return sorted(paths, key=lambda path: path.stat().st_mtime, reverse=True)
 
 
+def _shift_alarm_av4_revision(paths=None):
+    """Finder와 웹 목록이 같은 실제 디렉터리 세대를 보고 있는지 식별한다."""
+    paths = paths if paths is not None else _shift_alarm_av4_files()
+    payload = "\n".join(
+        f"{path.name}:{path.stat().st_size}:{path.stat().st_mtime_ns}" for path in paths
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
 def _shift_alarm_av4_file(file_id):
     if not re.fullmatch(r"[a-f0-9]{24}", file_id):
         raise HTTPException(status_code=404, detail="영상 파일을 찾을 수 없습니다")
@@ -2673,7 +2682,9 @@ def shift_alarm_video_download_status(request: Request):
     transfers = _shift_alarm_transfer_states()
     processing = _shift_alarm_processing_history()
     status["downloads"] = []
-    for path in _shift_alarm_av4_files():
+    av4_files = _shift_alarm_av4_files()
+    status["library_revision"] = _shift_alarm_av4_revision(av4_files)
+    for path in av4_files:
         file_id = _shift_alarm_av4_id(path)
         managed = managed_paths.get(str(path))
         item = {
@@ -2850,12 +2861,23 @@ def act_on_shift_alarm_library_video(file_id: str, body: ShiftAlarmVideoActionRe
             )
         return {"ok": True, "message": "전송을 중지했습니다. 버튼을 다시 눌러 받아보세요"}
     if body.action == "delete":
-        path.unlink(missing_ok=True)
+        try:
+            path.unlink()
+            os.utime(SHIFT_ALARM_VIDEO_FILES, None)
+        except OSError as exc:
+            raise HTTPException(status_code=503, detail="Mac 원본 파일을 삭제하지 못했습니다") from exc
+        if path.exists():
+            raise HTTPException(status_code=503, detail="삭제 후에도 Mac 원본 파일이 남아 있습니다")
         with _shift_alarm_video_db() as conn:
             conn.execute("DELETE FROM video_downloads WHERE file_path=?", (str(path),))
             conn.execute("DELETE FROM video_transfers WHERE file_id=?", (file_id,))
             conn.execute("DELETE FROM video_processing_history WHERE file_id=?", (file_id,))
-        return {"ok": True, "message": "av4 파일을 DB에서 삭제했습니다"}
+        remaining = _shift_alarm_av4_files()
+        return {
+            "ok": True, "message": "av4의 Mac 원본 파일을 삭제했습니다",
+            "deleted_file_id": file_id, "remaining_count": len(remaining),
+            "library_revision": _shift_alarm_av4_revision(remaining),
+        }
     raise HTTPException(status_code=400, detail="지원하지 않는 파일 동작입니다")
 
 

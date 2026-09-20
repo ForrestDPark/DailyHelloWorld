@@ -359,6 +359,26 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertEqual([path.name for path in files], ["첫째.mp4"])
         self.assertEqual(resolved.name, "첫째.mp4")
 
+    def test_av4_delete_confirms_disk_removal_and_returns_fresh_revision(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            files = root / "av4"
+            files.mkdir()
+            video = files / "오래된영상.mp4"
+            video.write_bytes(b"stale")
+            db_path = root / "downloads.db"
+            file_id = module._shift_alarm_av4_id(video)
+            with patch.object(module, "SHIFT_ALARM_VIDEO_DIR", root), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_FILES", files), \
+                 patch.object(module, "SHIFT_ALARM_VIDEO_DB", db_path):
+                result = module.act_on_shift_alarm_library_video(
+                    file_id, module.ShiftAlarmVideoActionRequest(action="delete"), owner_request()
+                )
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["remaining_count"], 0)
+        self.assertFalse(video.exists())
+        self.assertRegex(result["library_revision"], r"^[a-f0-9]{16}$")
+
     def test_video_processing_history_table_migrates_missing_columns(self):
         """★ 2026-09-15: "영상가져오기가 다운로드 파일이 하나도 안보이는데
         왜 그렇지" 신고의 실제 원인 — safari_completed_at 컬럼이 코드에
