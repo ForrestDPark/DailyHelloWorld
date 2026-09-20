@@ -24,6 +24,7 @@ function windowEnd() { return viewportStart + WINDOW_SECONDS; }
 function viewportBounds() { return {min:-WINDOW_SECONDS/2,max:Math.max(-WINDOW_SECONDS/2,duration-WINDOW_SECONDS/2)}; }
 function followPlayhead() { const bounds=viewportBounds();viewportStart=clamp(audio.currentTime-WINDOW_SECONDS/2,bounds.min,bounds.max); }
 function seek(value, follow = true) { audio.currentTime = clamp(value,0,duration); if(follow) followPlayhead(); render(); }
+function pauseAt(value) { audio.pause(); seek(value); }
 
 function resizeCanvas() {
   const rect=canvas.getBoundingClientRect(), ratio=window.devicePixelRatio||1;
@@ -75,15 +76,19 @@ async function loadFile(file) {
 }
 
 canvas.addEventListener("pointerdown",e=>{drag={x:e.clientX,start:viewportStart,moved:false};canvas.setPointerCapture(e.pointerId)});
-canvas.addEventListener("pointermove",e=>{if(!drag)return;const dx=e.clientX-drag.x;if(Math.abs(dx)>3)drag.moved=true;const bounds=viewportBounds();viewportStart=clamp(drag.start-dx/canvas.clientWidth*WINDOW_SECONDS,bounds.min,bounds.max);audio.currentTime=clamp(viewportStart+WINDOW_SECONDS/2,0,duration);render()});
-canvas.addEventListener("pointerup",e=>{if(!drag)return;if(!drag.moved){const rect=canvas.getBoundingClientRect();seek(viewportStart+(e.clientX-rect.left)/rect.width*WINDOW_SECONDS)}drag=null});
+canvas.addEventListener("pointermove",e=>{if(!drag)return;const dx=e.clientX-drag.x;if(Math.abs(dx)>3){drag.moved=true;audio.pause()}const bounds=viewportBounds();viewportStart=clamp(drag.start-dx/canvas.clientWidth*WINDOW_SECONDS,bounds.min,bounds.max);audio.currentTime=clamp(viewportStart+WINDOW_SECONDS/2,0,duration);render()});
+function finishWaveformGesture(e){if(!drag)return;if(!drag.moved){const rect=canvas.getBoundingClientRect();pauseAt(viewportStart+(e.clientX-rect.left)/rect.width*WINDOW_SECONDS)}else{audio.pause();seek(viewportStart+WINDOW_SECONDS/2)}drag=null}
+canvas.addEventListener("pointerup",finishWaveformGesture);canvas.addEventListener("pointercancel",finishWaveformGesture);
 $("file").addEventListener("change",e=>loadFile(e.target.files[0])); $("replace").addEventListener("click",()=>$("file").click());
 $("play").addEventListener("click",async()=>{if(audio.paused){const cut=cutAt(audio.currentTime);if(cut)seek(cut.end);await audio.play();$("play").textContent="Ⅱ";draw()}else audio.pause()});
 $("back").addEventListener("click",()=>seek(audio.currentTime-5)); $("forward").addEventListener("click",()=>seek(audio.currentTime+5));
+$("jump-start").addEventListener("click",()=>pauseAt(0)); $("jump-end").addEventListener("click",()=>pauseAt(duration));
+$("previous-segment").addEventListener("click",()=>{const segment=segmentBounds();const points=[0,...splits,duration].sort((a,b)=>a-b);pauseAt(points[Math.max(0,segment.index-1)])});
+$("next-segment").addEventListener("click",()=>{const segment=segmentBounds();pauseAt(segment.end)});
 audio.addEventListener("timeupdate",()=>{const cut=cutAt(audio.currentTime);if(cut)audio.currentTime=cut.end;followPlayhead();$("current").textContent=formatTime(audio.currentTime);$("window-start").textContent=formatTime(viewportStart,false);$("window-end").textContent=formatTime(windowEnd(),false);renderSegments()});
 audio.addEventListener("ended",()=>{$("play").textContent="▶";render()}); audio.addEventListener("pause",()=>{$("play").textContent="▶";render()});
 $("split").addEventListener("click",()=>{const point=audio.currentTime;if(point<.05||duration-point<.05)return;if(!splits.some(x=>Math.abs(x-point)<.05)){splits.push(point);splits.sort((a,b)=>a-b);status(`${formatTime(point)}에서 분할했습니다.`);render()}});
-$("delete-segment").addEventListener("click",()=>{const segment=segmentBounds();cutHistory.push(cuts.map(c=>({...c})));cuts=mergeCuts([...cuts,segment]);const next=segment.end<duration-.01?segment.end:Math.max(0,segment.start-.01);seek(next);status(`${formatTime(segment.start)}–${formatTime(segment.end)} 조각을 삭제했습니다. 내보낼 때 앞뒤 조각을 바로 잇습니다.`)});
+$("delete-segment").addEventListener("click",()=>{const segment=segmentBounds();audio.pause();cutHistory.push(cuts.map(c=>({...c})));cuts=mergeCuts([...cuts,segment]);const next=segment.end<duration-.01?segment.end:Math.max(0,segment.start-.01);seek(next);status(`${formatTime(segment.start)}–${formatTime(segment.end)} 조각을 삭제했습니다. 다음 조각 첫부분에서 멈췄습니다.`)});
 $("undo").addEventListener("click",()=>{if(!cutHistory.length)return;cuts=cutHistory.pop();render();status("마지막 조각 삭제를 취소했습니다.")});
 $("export").addEventListener("click",async()=>{if(!sourceFile)return;const button=$("export"),form=new FormData();form.append("file",sourceFile,sourceFile.name);form.append("cuts",JSON.stringify(cuts));button.disabled=true;button.textContent="처리 중";status("삭제한 조각을 제외하고 MP3를 만드는 중입니다…");try{const response=await fetch("/api/audio-editor/export",{method:"POST",credentials:"same-origin",body:form});if(!response.ok){const data=await response.json().catch(()=>({}));throw new Error(data.detail||"내보내지 못했습니다")}const blob=await response.blob(),url=URL.createObjectURL(blob),link=document.createElement("a");link.href=url;link.download=`${sourceFile.name.replace(/\.mp3$/i,"")}-편집본.mp3`;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);status("편집한 MP3 다운로드를 시작했습니다.")}catch(e){status(e.message,true)}finally{button.disabled=false;button.textContent="내보내기"}});
 window.addEventListener("resize",resizeCanvas); window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change",draw);

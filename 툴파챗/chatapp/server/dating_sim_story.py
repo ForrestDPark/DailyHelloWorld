@@ -1283,7 +1283,12 @@ _KNOWN_TRANSCRIPT_CHARACTER_NAMES = {
     # 실제 표기와 읽기로 보정한다.
     "SONE-486": {
         "jp": "レン", "full_jp": "[五条|ごじょう] [恋|れん]", "ko": "고죠 렌",
-        "image": "/dating-sim/static/reina.png", "is_alias": False,
+        "image": "/dating-sim/static/sone-486/office-first-meeting.png", "is_alias": False,
+        "scene_images": {
+            "first": "/dating-sim/static/sone-486/office-first-meeting.png",
+            "walk": "/dating-sim/static/sone-486/rainy-evening.png",
+            "quiet": "/dating-sim/static/sone-486/message-received.png",
+        },
     },
 }
 
@@ -1640,9 +1645,9 @@ def story_for(story_id=None, seed_key=None):
     }
     story = {"id": story_id, "name": display_name_jp, "title": f"{source_title}에서 영감받은 이야기",
             "character_image": profile["image"],
-            "character_images": {"first": profile["image"],
-                                 "walk": profile["image"],
-                                 "quiet": profile["image"]},
+            "character_images": profile.get("scene_images") or {
+                "first": profile["image"], "walk": profile["image"], "quiet": profile["image"]
+            },
             "character_name_ko": display_name_ko,
             "character_dialogue_name_jp": dialogue_name_jp,
             "character_dialogue_name_ko": dialogue_name_ko,

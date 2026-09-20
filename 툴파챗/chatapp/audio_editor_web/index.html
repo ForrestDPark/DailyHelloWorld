@@ -5,7 +5,7 @@
   <meta name="theme-color" content="#fff7f8" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#171317" media="(prefers-color-scheme: dark)"><title>오디오 편집기</title>
   <link rel="manifest" href="/audio-editor/static/manifest.webmanifest">
-  <link rel="stylesheet" href="/audio-editor/static/style.css?v=20260920-v4">
+  <link rel="stylesheet" href="/audio-editor/static/style.css?v=20260920-v5">
 </head>
 <body>
   <header><a href="/#systems" aria-label="시스템으로 돌아가기">‹</a><h1>오디오 편집기</h1><button id="export" disabled>내보내기</button></header>
@@ -15,15 +15,22 @@
       <div class="clip-head"><div><strong id="filename"></strong><small id="filemeta"></small></div><button id="replace" type="button">다른 파일</button></div>
       <div class="window-head"><span id="window-start">00:00</span><strong id="current">00:00.0</strong><span id="window-end">00:30</span></div>
       <div class="timeline"><canvas id="waveform" aria-label="현재 위치 앞뒤 30초 오디오 파형"></canvas><div class="fixed-playhead" aria-hidden="true"></div><div id="loading" class="loading">파형 분석 중…</div></div>
-      <div class="swipe-hint">파형을 좌우로 밀어 이동 · 가운데 선이 편집 위치</div>
+      <div class="swipe-hint">파형을 밀면 그 위치에서 일시정지 · 가운데 선이 편집 위치</div>
       <div class="time-row"><span>30초 구간</span><span id="duration">00:00.0</span></div>
       <div class="transport"><button id="back" type="button" aria-label="5초 뒤로">−5초</button><button id="play" class="play" type="button" aria-label="재생">▶</button><button id="forward" type="button" aria-label="5초 앞으로">+5초</button></div>
-      <section class="split-panel"><button id="split" class="split-button" type="button">✂ 가운데 선에서 분할</button><button id="delete-segment" type="button" disabled>밝은 조각 삭제</button><button id="undo" type="button" disabled>실행 취소</button></section>
+      <section class="edit-tools" aria-label="구간 편집 도구">
+        <button id="jump-start" type="button"><span aria-hidden="true">|◀</span><small>처음부터</small></button>
+        <button id="previous-segment" type="button"><span aria-hidden="true">◀|</span><small>이전 조각</small></button>
+        <button id="split" class="split-button" type="button" aria-label="가운데 선에서 분할"><svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="12" cy="34" r="7"></circle><circle cx="36" cy="34" r="7"></circle><path d="M17 29 37 8M31 26 11 8"></path></svg><small>분할</small></button>
+        <button id="next-segment" type="button"><span aria-hidden="true">|▶</span><small>다음 조각</small></button>
+        <button id="jump-end" type="button"><span aria-hidden="true">▶|</span><small>끝까지</small></button>
+      </section>
+      <section class="action-tools"><button id="delete-segment" type="button" disabled><span aria-hidden="true">⌫</span><small>선택 삭제</small></button><button id="undo" type="button" disabled><span aria-hidden="true">↶</span><small>실행 취소</small></button></section>
       <section class="cuts"><div class="cuts-head"><strong>분할된 조각</strong><small>조각을 누르면 이동</small></div><div id="segment-list" class="segment-list"></div><small>삭제한 조각은 미리듣기에서 자동으로 건너뜁니다. 원본 파일은 변경되지 않습니다.</small></section>
     </section>
     <div id="status" class="status hidden" role="status" aria-live="polite"></div>
   </main>
   <audio id="audio" preload="metadata"></audio>
-  <script src="/audio-editor/static/app.js?v=20260920-v4"></script>
+  <script src="/audio-editor/static/app.js?v=20260920-v5"></script>
 </body>
 </html>

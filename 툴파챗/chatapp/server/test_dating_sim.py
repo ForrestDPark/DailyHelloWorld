@@ -774,6 +774,7 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         self.assertEqual(profile["full_jp"], "[五条|ごじょう] [恋|れん]")
         self.assertEqual(profile["ko"], "고죠 렌")
         self.assertFalse(profile["is_alias"])
+        self.assertIn("rainy-evening.png", profile["scene_images"]["walk"])
 
     def test_book_character_marks_generated_name_as_alias(self):
         with tempfile.TemporaryDirectory() as directory, \

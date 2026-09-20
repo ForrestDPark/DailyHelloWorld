@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 from server.audio_editor import ffmpeg_filter, kept_segments, normalize_cuts
 
@@ -20,6 +21,15 @@ class AudioEditorTests(unittest.TestCase):
         value = ffmpeg_filter([(0, 2), (4, 6)])
         self.assertIn("atrim=start=0.000000:end=2.000000", value)
         self.assertTrue(value.endswith("[a0][a1]concat=n=2:v=0:a=1[out]"))
+
+    def test_mobile_editor_pauses_after_swipe_and_seeks_after_delete(self):
+        root = Path(__file__).resolve().parents[1] / "audio_editor_web"
+        script = (root / "app.js").read_text(encoding="utf-8")
+        markup = (root / "index.html").read_text(encoding="utf-8")
+        self.assertIn('audio.pause();seek(viewportStart+WINDOW_SECONDS/2)', script)
+        self.assertIn('audio.pause();cutHistory.push', script)
+        self.assertIn('id="split" class="split-button"', markup)
+        self.assertIn('<svg viewBox="0 0 48 48"', markup)
 
 
 if __name__ == "__main__":

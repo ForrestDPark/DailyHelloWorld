@@ -7,10 +7,10 @@
 .window-head strong{padding:7px 13px;border-radius:10px;background:var(--ink);color:var(--panel);font-size:18px}.window-head span:last-child{text-align:right}
 .timeline:before{content:"30초 파형"}.fixed-playhead{position:absolute;z-index:2;top:0;bottom:0;left:50%;width:3px;transform:translateX(-1.5px);background:#ef2e56;pointer-events:none;box-shadow:0 0 0 1px rgba(255,255,255,.45)}
 .loading{z-index:3}.swipe-hint{text-align:center;padding-top:8px;color:var(--muted);font-size:12px}
-.split-panel{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;margin:14px 16px 0;padding:14px;border:1px solid var(--line);border-radius:18px;background:var(--panel);box-shadow:0 8px 30px rgba(80,45,57,.05)}
-.split-panel button{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);padding:11px;font-weight:750}.split-panel .split-button{background:var(--pink);border-color:var(--pink);color:#fff}
+.edit-tools{display:grid;grid-template-columns:repeat(5,1fr);margin-top:14px;border-block:1px solid var(--line);background:var(--panel)}
+.edit-tools button,.action-tools button{display:grid;place-items:center;gap:5px;min-width:0;border:0;background:transparent;color:var(--ink);padding:12px 3px}.edit-tools button+button{border-left:1px solid var(--line)}.edit-tools button>span,.action-tools button>span{font-size:25px;line-height:1}.edit-tools small,.action-tools small{font-size:11px;white-space:nowrap}.edit-tools .split-button{color:var(--ink)}.edit-tools .split-button svg{width:33px;height:33px;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}.action-tools{display:grid;grid-template-columns:1fr 1fr;margin:0 16px;border-bottom:1px solid var(--line);background:var(--panel)}.action-tools button:first-child{color:var(--pink)}.action-tools button+button{border-left:1px solid var(--line)}
 .segment-list{display:flex;gap:7px;overflow-x:auto;padding:12px 0 4px;scrollbar-width:none}.segment-chip{flex:0 0 auto;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--ink);padding:8px 11px;font-size:12px}.segment-chip.active{border-color:var(--pink);box-shadow:0 0 0 2px color-mix(in srgb,var(--pink) 22%,transparent)}.segment-chip.deleted{text-decoration:line-through;opacity:.46;background:var(--soft)}
-@media(min-width:561px){.split-panel{margin-left:0;margin-right:0}}@media(max-width:480px){.split-panel{grid-template-columns:1fr 1fr}.split-panel .split-button{grid-column:1/-1}.timeline{height:200px}}
+@media(min-width:561px){.action-tools{margin-inline:0}}@media(max-width:480px){.timeline{height:200px}.edit-tools small,.action-tools small{font-size:10px}}
 
 /* 선택 조각 강조와 운영체제 다크 모드 */
 :root{--inactive:rgba(35,27,33,.58);--active:#f05f78}
