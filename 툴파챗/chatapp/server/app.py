@@ -975,6 +975,10 @@ def dating_sim_encounters(request: Request):
         encounters = []
         for row in rows:
             story_id = None if row["character_id"] == dating_sim_story.CHARACTER_ID else row["character_id"]
+            # 로비에는 임시 고정 템플릿과 아직 이미지 생성 중인 작품을 노출하지
+            # 않는다. 예전 진행 기록은 DB에 보존하되 완성되면 자동으로 다시 보인다.
+            if not story_id or not story_id.startswith("book:") or not dating_sim_story.prepared_book(story_id.split(":", 1)[1]):
+                continue
             try:
                 story = _dating_story(story_id, username)
             except HTTPException:
@@ -1007,13 +1011,16 @@ def dating_sim_new_encounter(request: Request):
         }
     finally:
         conn.close()
-    candidates = [] if dating_sim_story.CHARACTER_ID in started else [None]
+    # 새 만남은 학습 단어·표현을 전수 반영한 시나리오와 작품 이미지가 모두
+    # 준비된 작품에서만 시작한다. 고정 소이 템플릿이나 생성 중인 작품을 먼저
+    # 보여주지 않는다(2026-09-21).
+    candidates = []
     exclude_books = {sid.split(":", 1)[1] for sid in started if sid.startswith("book:")}
     book_id = dating_sim_story.random_book_id(exclude=exclude_books)
     if book_id:
         candidates.append(f"book:{book_id}")
     if not candidates:
-        raise HTTPException(status_code=409, detail="새로 시작할 수 있는 만남이 없어요. 기존 만남을 이어가거나 다시 시작해보세요")
+        raise HTTPException(status_code=409, detail="완전히 준비된 새 시나리오가 아직 없어요. 기존 만남을 이어가거나 다음 기상 알람의 자동 생성을 기다려주세요")
     return {"story_id": random.choice(candidates)}
 
 

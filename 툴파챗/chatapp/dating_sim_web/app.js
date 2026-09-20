@@ -984,7 +984,10 @@ async function boot() {
   showView("loading-view");
   try {
     const encounters = await api("/api/dating-sim/encounters");
-    if (!encounters.length) return loadState();
+    if (!encounters.length) {
+      const created = await api("/api/dating-sim/new", { method: "POST" });
+      return enterStory(created.story_id);
+    }
     renderLobby(encounters[0]);
   } catch (e) {
     $("loading-view").querySelector("p").textContent = e.message;

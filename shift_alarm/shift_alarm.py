@@ -70,6 +70,27 @@ import Quartz
 # ── 설정 파일 경로 ──────────────────────────────────────────
 CONFIG_FILE = os.path.expanduser("~/.shift_alarm_config.json")
 REMINDER_DISMISSED_FILE = os.path.expanduser("~/.tulpachat/shift_alarm_dismissed.json")
+DAILY_DATING_SIM_AGENT = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "일본어자막추출", "run_daily_dating_sim_agent.py",
+)
+DAILY_DATING_SIM_LOG = os.path.expanduser("~/Library/Logs/dating_sim_daily_agent.log")
+
+
+def _start_daily_dating_sim_agent():
+    """기상 알람 스레드는 즉시 반환하고, 무거운 AI·이미지 작업은 별도 프로세스가 맡는다."""
+    if not os.path.isfile(DAILY_DATING_SIM_AGENT):
+        return False
+    os.makedirs(os.path.dirname(DAILY_DATING_SIM_LOG), exist_ok=True)
+    log = open(DAILY_DATING_SIM_LOG, "a", encoding="utf-8")
+    try:
+        subprocess.Popen(
+            [sys.executable, DAILY_DATING_SIM_AGENT],
+            stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+        )
+    finally:
+        log.close()
+    return True
 
 # ── 모바일 접근용 상태 파일 ───────────────────────────────────
 # iCloud Drive에 오늘의 근무/리마인더/날씨를 JSON으로 써두면 아이폰에서 읽을 수
@@ -5206,6 +5227,7 @@ class ShiftAlarmApp(rumps.App):
         # 요청 — 기존 오후 9시 일본어 복습 트리거는 그대로 두고, 기상 알람
         # 시각에 세 방(일본어 스터디·이직 준비·손자병법 토론)을 추가로 깨운다.
         self._last_wake_alarm_jp_teacher_notified = None
+        self._last_wake_alarm_dating_sim_started = None
         self.wake_alarm_jp_teacher_timer = rumps.Timer(self._check_wake_alarm_jp_teacher_greeting, 60)
         self.wake_alarm_jp_teacher_timer.start()
 
@@ -5930,6 +5952,11 @@ class ShiftAlarmApp(rumps.App):
         if self._last_wake_alarm_jp_teacher_notified == today:
             return
         self._last_wake_alarm_jp_teacher_notified = today
+        # 같은 기상 알람을 하루 한 작품 미연시 제작의 시작점으로 공유한다.
+        # 에이전트 자체도 날짜 상태와 락을 검사해 앱 재시작 시 중복 생성을 막는다.
+        if self._last_wake_alarm_dating_sim_started != today:
+            self._last_wake_alarm_dating_sim_started = today
+            _start_daily_dating_sim_agent()
         threading.Thread(
             target=_notify_jp_subtitle_study_room,
             args=("🔔 기상 알람이 울렸어요. 좋은 아침 인사와 함께 오늘의 학습 정보를 소개해주세요.",),

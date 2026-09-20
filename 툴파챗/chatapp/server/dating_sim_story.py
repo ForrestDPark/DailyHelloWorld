@@ -1399,7 +1399,43 @@ def _find_book(book_id):
     return None
 
 
-def random_book_id(exclude=None):
+def _image_file_ready(path):
+    """매니페스트만 남고 실제 이미지가 사라진 반쪽짜리 결과를 걸러낸다."""
+    try:
+        return path.is_file() and path.stat().st_size >= 1024
+    except OSError:
+        return False
+
+
+def prepared_book(book_id):
+    """시나리오 전수 검증과 장면 이미지 생성을 모두 마친 EPUB이면 경로를 돌려준다."""
+    path = _find_book(book_id)
+    if not path:
+        return None
+    title = _book_title(path)
+    locations = ("first", "walk", "quiet")
+    scenario = load_generated_scenario(title, locations)
+    folder = _find_library_folder(title)
+    manifest_path = folder / GENERATED_IMAGE_DIRNAME / GENERATED_IMAGE_MANIFEST if folder else None
+    if not scenario or not manifest_path or not manifest_path.is_file():
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    image_dir = manifest_path.parent
+    if manifest.get("status") != "complete" or not _image_file_ready(image_dir / str(manifest.get("portrait", ""))):
+        return None
+    expected = {f"{day}:{location}" for day in range(1, TOTAL_DAYS + 1) for location in locations}
+    assignments = manifest.get("assignments") or {}
+    if not expected.issubset(assignments):
+        return None
+    if not all(_image_file_ready(image_dir / str(assignments[key])) for key in expected):
+        return None
+    return path
+
+
+def random_book_id(exclude=None, prepared_only=True):
     """서재에 실제 존재하는 EPUB 하나의 공개 식별자를 무작위로 고른다.
     exclude를 주면(이미 시작한 만남들) 그 책들은 후보에서 뺀다 — "새로운
     만남 시작하기"가 이미 진행 중인 이야기를 다시 새 만남인 척 내놓지
@@ -1407,7 +1443,9 @@ def random_book_id(exclude=None):
     if not JAPANESE_EPUB_ROOT.is_dir():
         return None
     exclude = exclude or set()
-    books = [path for path in JAPANESE_EPUB_ROOT.rglob("*.epub") if _book_id(path) not in exclude]
+    books = [path for path in JAPANESE_EPUB_ROOT.rglob("*.epub")
+             if _book_id(path) not in exclude
+             and (not prepared_only or prepared_book(_book_id(path)))]
     return _book_id(random.choice(books)) if books else None
 
 
