@@ -1262,6 +1262,17 @@ def _effective_reminder_definitions(path=REMINDER_EDITOR_FILE):
     return definitions
 
 
+def _automatic_schedule_time(key, profile, fallback, path=REMINDER_EDITOR_FILE):
+    """웹에서 저장한 교대표 기반 알람의 프로필별 시각을 적용한다."""
+    override = _load_reminder_editor_items(path).get(key, {})
+    value = override.get("profile_times", {}).get(profile) if isinstance(override, dict) else None
+    if (isinstance(value, dict) and isinstance(value.get("hour"), int)
+            and isinstance(value.get("minute"), int)
+            and 0 <= value["hour"] <= 23 and 0 <= value["minute"] <= 59):
+        return {"hour": value["hour"], "minute": value["minute"]}
+    return fallback
+
+
 def _generic_recurrence_due(recurrence, day):
     """대시보드의 단순 반복 규칙이 오늘 실행 대상인지 결정론적으로 계산한다."""
     if not isinstance(recurrence, dict):
@@ -2069,16 +2080,16 @@ def _todays_wake_alarm_time_for_schedule(schedule, d):
     shift = get_shift_for_date(schedule, d)
     t = SHIFT_TIMES.get(shift)
     if t:
-        return t
+        return _automatic_schedule_time("wake_shift", shift, t)
     if shift == "휴무":
         if _is_day_to_gy_off_day(schedule, d):
-            return DAY_TO_GY_OFF_ALARM_TIME
+            return _automatic_schedule_time("wake_day_to_gy", "D-G휴", DAY_TO_GY_OFF_ALARM_TIME)
         if _is_gy_to_swing_off_day(schedule, d):
-            return GY_TO_SWING_OFF_ALARM_TIME
+            return _automatic_schedule_time("wake_gy_swing_day1", "G-S휴", GY_TO_SWING_OFF_ALARM_TIME)
         if _is_gy_to_swing_off_day2(schedule, d):
-            return GY_TO_SWING_OFF_DAY2_ALARM_TIME
+            return _automatic_schedule_time("wake_gy_swing_day2", "G-S휴", GY_TO_SWING_OFF_DAY2_ALARM_TIME)
         if _is_swing_to_day_off_day_last(schedule, d):
-            return SWING_TO_DAY_LAST_DAY_WAKE_ALARM_TIME
+            return _automatic_schedule_time("wake_swing_to_day", "S-D휴", SWING_TO_DAY_LAST_DAY_WAKE_ALARM_TIME)
     return None
 
 
@@ -2531,10 +2542,11 @@ def build_reminder_schedule(reminder_definitions, context_times=None):
 def build_sleep_schedule():
     """교대표로 자동 계산되는 기상·멜라토닌 시각을 리마인더 시각표에 표시한다.
 
-    일반 리마인더와 달리 날짜/전환 순서가 조건이므로 웹에서 직접 수정하지 않고,
-    실제 알람 상수와 같은 값을 내보내 중복된 하드코딩이 생기지 않게 한다.
+    날짜/전환 조건은 그대로 유지하되 웹에서 프로필별 시각을 바꿀 수 있다.
     """
-    def row(key, label, times):
+    def row(key, label, times, rule):
+        times = {profile: _automatic_schedule_time(key, profile, value)
+                 for profile, value in times.items()}
         formatted = {
             "시각": None,
             **{context: _format_reminder_time(times.get(context))
@@ -2542,14 +2554,15 @@ def build_sleep_schedule():
         }
         return {
             "key": key, "label": label, "time": None,
-            "times": formatted, "enabled": True, "editable": False,
+            "times": formatted, "enabled": True, "editable": True,
+            "auto_schedule": True, "default_recurrence_text": rule,
         }
 
     return [
         row("wake_shift", "⏰ 기상 알람 (근무일)", {
             "Swing": SHIFT_TIMES["Swing"], "Day": SHIFT_TIMES["Day"],
             "GY": SHIFT_TIMES["GY"],
-        }),
+        }, "선택한 근무 유형의 근무일마다"),
         # ★ 2026-09-09: "휴무일 기상알람이 G-S 때밖에 없다" 지적 — S-D휴·D-G휴를
         # 한 행("전환 휴무")에 같이 넣어뒀더니, 값 자체는 있어도 웹 표가 프로필
         # 하나만 골라 그 칼럼 값만 보여주는 구조라 G-S휴 프로필로 볼 때는 이
@@ -2557,25 +2570,25 @@ def build_sleep_schedule():
         # 별도 행으로 쪼개서 어떤 프로필을 보든 항상 자기 값이 보이게 한다.
         row("wake_swing_to_day", "⏰ 기상 알람 (S→D 휴무 마지막날)", {
             "S-D휴": SWING_TO_DAY_LAST_DAY_WAKE_ALARM_TIME,
-        }),
+        }, "S→D 전환 휴무 마지막날마다"),
         row("wake_day_to_gy", "⏰ 기상 알람 (D→G 휴무)", {
             "D-G휴": DAY_TO_GY_OFF_ALARM_TIME,
-        }),
+        }, "D→G 전환 휴무일마다"),
         row("wake_gy_swing_day1", "⏰ 기상 알람 (G→S 휴무 첫날)", {
             "G-S휴": GY_TO_SWING_OFF_ALARM_TIME,
-        }),
+        }, "G→S 전환 휴무 첫날마다"),
         row("wake_gy_swing_day2", "⏰ 기상 알람 (G→S 휴무 둘째날)", {
             "G-S휴": GY_TO_SWING_OFF_DAY2_ALARM_TIME,
-        }),
+        }, "G→S 전환 휴무 둘째날마다"),
         row("melatonin_swing_day", "💊 멜라토닌 (S→D 마지막 휴무)", {
             "S-D휴": SWING_TO_DAY_MELATONIN_REMINDER_TIME,
-        }),
+        }, "S→D 전환 휴무 마지막날마다"),
         row("melatonin_gy_swing_day1", "💊 멜라토닌 (G→S 첫날 다음 새벽)", {
             "G-S휴": GY_TO_SWING_DAY1_MELATONIN_REMINDER_TIME,
-        }),
+        }, "G→S 전환 휴무 첫날 다음날마다"),
         row("melatonin_gy_swing_day2", "💊 멜라토닌 (G→S 둘째날 다음 새벽)", {
             "G-S휴": GY_TO_SWING_DAY2_MELATONIN_REMINDER_TIME,
-        }),
+        }, "G→S 전환 휴무 둘째날 다음날마다"),
     ]
 
 
@@ -5990,7 +6003,8 @@ class ShiftAlarmApp(rumps.App):
         알람 띄워달라"는 요청 — 둘째날 자체의 기상 알람(13:00)과는 별개로,
         register_alarm 자리 하나를 놓고 다투지 않도록 독립된 타이머로 처리)."""
         now = datetime.datetime.now()
-        t = GY_TO_SWING_DAY2_MELATONIN_REMINDER_TIME
+        t = _automatic_schedule_time(
+            "melatonin_gy_swing_day2", "G-S휴", GY_TO_SWING_DAY2_MELATONIN_REMINDER_TIME)
         if now.hour != t["hour"] or now.minute != t["minute"]:
             return
         today = now.date()
@@ -6010,7 +6024,8 @@ class ShiftAlarmApp(rumps.App):
         알림 (★ 2026-08-30: "첫째날엔 18시에 일어나서 다음날 03:00까지 활동하고
         03:00에 멜라토닌 먹고 운기조식하라는 알람 띄워달라"는 요청)."""
         now = datetime.datetime.now()
-        t = GY_TO_SWING_DAY1_MELATONIN_REMINDER_TIME
+        t = _automatic_schedule_time(
+            "melatonin_gy_swing_day1", "G-S휴", GY_TO_SWING_DAY1_MELATONIN_REMINDER_TIME)
         if now.hour != t["hour"] or now.minute != t["minute"]:
             return
         today = now.date()
@@ -6031,7 +6046,8 @@ class ShiftAlarmApp(rumps.App):
         6시 기상알람" 구조는 Day 근무 시작 바로 전날에만 맞는다고 명확히 해서
         블록 전체에서 마지막날로 좁힘 — _is_swing_to_day_off_day_last() 참고)."""
         now = datetime.datetime.now()
-        t = SWING_TO_DAY_MELATONIN_REMINDER_TIME
+        t = _automatic_schedule_time(
+            "melatonin_swing_day", "S-D휴", SWING_TO_DAY_MELATONIN_REMINDER_TIME)
         if now.hour != t["hour"] or now.minute != t["minute"]:
             return
         today = now.date()
@@ -6931,32 +6947,34 @@ class ShiftAlarmApp(rumps.App):
 
     def _set_shift_internal(self, shift, notify=True, date=None):
         date = date or datetime.date.today()
-        time = SHIFT_TIMES.get(shift)
+        time = (_automatic_schedule_time("wake_shift", shift, SHIFT_TIMES[shift])
+                if shift in SHIFT_TIMES else None)
         if time:
             register_alarm(time["hour"], time["minute"])
             if notify:
                 notify_spoken("교대근무 알람 설정", f"{shift} 근무",
                                    f"알람이 {time['hour']:02d}:{time['minute']:02d}으로 설정되었습니다.")
         elif _is_day_to_gy_off_day(self.schedule, date):
-            time = DAY_TO_GY_OFF_ALARM_TIME
+            time = _automatic_schedule_time("wake_day_to_gy", "D-G휴", DAY_TO_GY_OFF_ALARM_TIME)
             register_alarm(time["hour"], time["minute"])
             if notify:
                 notify_spoken("교대근무 알람 설정", "휴무(Day→GY 전환)",
                                    f"알람이 {time['hour']:02d}:{time['minute']:02d}으로 설정되었습니다.")
         elif _is_gy_to_swing_off_day(self.schedule, date):
-            time = GY_TO_SWING_OFF_ALARM_TIME
+            time = _automatic_schedule_time("wake_gy_swing_day1", "G-S휴", GY_TO_SWING_OFF_ALARM_TIME)
             register_alarm(time["hour"], time["minute"])
             if notify:
                 notify_spoken("교대근무 알람 설정", "휴무 첫날(GY→Swing 전환)",
                                    f"알람이 {time['hour']:02d}:{time['minute']:02d}으로 설정되었습니다.")
         elif _is_gy_to_swing_off_day2(self.schedule, date):
-            time = GY_TO_SWING_OFF_DAY2_ALARM_TIME
+            time = _automatic_schedule_time("wake_gy_swing_day2", "G-S휴", GY_TO_SWING_OFF_DAY2_ALARM_TIME)
             register_alarm(time["hour"], time["minute"])
             if notify:
                 notify_spoken("교대근무 알람 설정", "휴무 둘째날(GY→Swing 전환)",
                                    f"알람이 {time['hour']:02d}:{time['minute']:02d}으로 설정되었습니다.")
         elif _is_swing_to_day_off_day_last(self.schedule, date):
-            time = SWING_TO_DAY_LAST_DAY_WAKE_ALARM_TIME
+            time = _automatic_schedule_time(
+                "wake_swing_to_day", "S-D휴", SWING_TO_DAY_LAST_DAY_WAKE_ALARM_TIME)
             register_alarm(time["hour"], time["minute"])
             if notify:
                 notify_spoken("교대근무 알람 설정", "휴무 마지막날(Swing→Day 전환)",

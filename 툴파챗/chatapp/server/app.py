@@ -2047,7 +2047,7 @@ def _merge_reminder_editor(status):
         item = dict(source)
         display_label, default_recurrence_text = _reminder_display_label(item.get("label"))
         item["display_label"] = display_label
-        item["default_recurrence_text"] = default_recurrence_text
+        item["default_recurrence_text"] = item.get("default_recurrence_text") or default_recurrence_text
         item.update({field: override[field] for field in
                      ("label", "enabled", "recurrence", "custom") if field in override})
         if "label" in override:
@@ -2057,6 +2057,13 @@ def _merge_reminder_editor(status):
             if isinstance(hour, int) and isinstance(minute, int):
                 item["time"] = f"{hour:02d}:{minute:02d}"
                 item.setdefault("times", {})["시각"] = item["time"]
+        if isinstance(override.get("profile_times"), dict):
+            for profile, value in override["profile_times"].items():
+                if profile not in SHIFT_ALARM_TIME_PROFILES or not isinstance(value, dict):
+                    continue
+                hour, minute = value.get("hour"), value.get("minute")
+                if isinstance(hour, int) and isinstance(minute, int):
+                    item.setdefault("times", {})[profile] = f"{hour:02d}:{minute:02d}"
         schedule.append(item)
         seen.add(key)
     for key, override in editor.items():
@@ -2151,6 +2158,7 @@ class ReminderDefinitionUpdate(BaseModel):
     recurrence_interval: int = 1
     recurrence_anchor: Optional[str] = None
     enabled: bool = True
+    profile: str = "시각"
 
 
 SHIFT_ALARM_TIME_PROFILES = {"시각", "Swing", "Day", "GY", "S-D휴", "D-G휴", "G-S휴"}
@@ -2217,10 +2225,22 @@ def create_shift_alarm_reminder(body: ReminderDefinitionUpdate, request: Request
 def update_shift_alarm_reminder(key: str, body: ReminderDefinitionUpdate, request: Request):
     _require_owner(request)
     status = _merge_reminder_editor(_read_shift_alarm_status())
-    allowed = {item.get("key") for item in status.get("reminder_schedule", [])}
-    if key not in allowed:
+    items = {item.get("key"): item for item in status.get("reminder_schedule", [])}
+    if key not in items:
         raise HTTPException(status_code=404, detail="리마인더를 찾지 못했습니다")
     payload = _read_reminder_editor()
+    source = items[key]
+    if source.get("auto_schedule"):
+        if body.profile not in SHIFT_ALARM_TIME_PROFILES or body.profile == "시각":
+            raise HTTPException(status_code=422, detail="수정할 근무 유형을 선택해주세요")
+        definition = _validated_reminder_definition(body)
+        current = payload["items"].get(key, {})
+        current = dict(current) if isinstance(current, dict) else {}
+        current.setdefault("profile_times", {})[body.profile] = definition["time"]
+        current["enabled"] = definition["enabled"]
+        payload["items"][key] = current
+        _write_reminder_editor(payload)
+        return {"ok": True, "key": key, "profile": body.profile}
     custom = bool(payload["items"].get(key, {}).get("custom")) or key.startswith("custom_")
     payload["items"][key] = {**_validated_reminder_definition(body), "custom": custom}
     _write_reminder_editor(payload)

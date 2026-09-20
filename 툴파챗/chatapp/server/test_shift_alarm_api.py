@@ -95,6 +95,22 @@ class ShiftAlarmApiTests(unittest.TestCase):
             module.delete_shift_alarm_reminder_definition("laundry", owner_request())
             self.assertTrue(module._read_reminder_editor()["items"]["laundry"]["deleted"])
 
+    def test_automatic_schedule_saves_profile_time_without_deleting_rule(self):
+        status = {"reminder_schedule": [{
+            "key": "wake_shift", "label": "기상 알람", "auto_schedule": True,
+            "default_recurrence_text": "선택한 근무 유형의 근무일마다",
+            "times": {"Day": "02:55"}, "editable": True,
+        }]}
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(module, "SHIFT_ALARM_REMINDER_EDITOR_FILE", Path(directory) / "editor.json"), \
+             patch.object(module, "_read_shift_alarm_status", return_value=status):
+            result = module.update_shift_alarm_reminder("wake_shift", module.ReminderDefinitionUpdate(
+                label="기상 알람", time="03:10", profile="Day",
+            ), owner_request())
+            self.assertEqual(result["profile"], "Day")
+            saved = module._read_reminder_editor()["items"]["wake_shift"]
+            self.assertEqual(saved["profile_times"]["Day"], {"hour": 3, "minute": 10})
+
     def test_check_all_only_patches_unchecked_allowlisted_routines(self):
         status = {"routine_date": "2026-09-07", "daily_routine": [
             {"label": "완료", "checked": True}, {"label": "남음", "checked": False},

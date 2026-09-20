@@ -117,7 +117,10 @@ class ReminderScheduleTests(unittest.TestCase):
         self.assertEqual(rows["wake_shift"]["times"]["Swing"], "08:30")
         self.assertEqual(rows["wake_shift"]["times"]["GY"], "16:30")
         self.assertEqual(rows["melatonin_swing_day"]["times"]["S-D휴"], "20:00")
-        self.assertFalse(rows["melatonin_swing_day"]["editable"])
+        self.assertTrue(rows["melatonin_swing_day"]["editable"])
+        self.assertTrue(rows["wake_shift"]["auto_schedule"])
+        self.assertEqual(rows["wake_gy_swing_day2"]["default_recurrence_text"],
+                         "G→S 전환 휴무 둘째날마다")
 
 
 class ReminderContextTests(unittest.TestCase):
