@@ -11,3 +11,8 @@
 .split-panel button{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);padding:11px;font-weight:750}.split-panel .split-button{background:var(--pink);border-color:var(--pink);color:#fff}
 .segment-list{display:flex;gap:7px;overflow-x:auto;padding:12px 0 4px;scrollbar-width:none}.segment-chip{flex:0 0 auto;border:1px solid var(--line);border-radius:999px;background:var(--panel);color:var(--ink);padding:8px 11px;font-size:12px}.segment-chip.active{border-color:var(--pink);box-shadow:0 0 0 2px color-mix(in srgb,var(--pink) 22%,transparent)}.segment-chip.deleted{text-decoration:line-through;opacity:.46;background:var(--soft)}
 @media(min-width:561px){.split-panel{margin-left:0;margin-right:0}}@media(max-width:480px){.split-panel{grid-template-columns:1fr 1fr}.split-panel .split-button{grid-column:1/-1}.timeline{height:200px}}
+
+/* 선택 조각 강조와 운영체제 다크 모드 */
+:root{--inactive:rgba(35,27,33,.58);--active:#f05f78}
+.segment-chip{opacity:.62}.segment-chip.active{opacity:1;background:color-mix(in srgb,var(--pink) 12%,var(--panel))}.segment-chip.deleted{opacity:.34}
+@media(prefers-color-scheme:dark){:root{color-scheme:dark;--wave:#ff8298;--cut:rgba(4,3,4,.72);--inactive:rgba(2,2,3,.68);--active:#ff6684}.loading{background:rgba(23,19,23,.82)}.status{background:#f4eaf0;color:#241d22}}

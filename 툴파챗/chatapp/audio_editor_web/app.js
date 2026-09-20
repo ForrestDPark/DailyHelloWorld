@@ -1,7 +1,7 @@
 const $ = id => document.getElementById(id);
 const audio = $("audio"), canvas = $("waveform"), ctx = canvas.getContext("2d");
 const WINDOW_SECONDS = 30;
-let sourceFile = null, objectUrl = null, duration = 0, peaks = [], cuts = [], splits = [];
+let sourceFile = null, objectUrl = null, duration = 0, peaks = [], cuts = [], splits = [], cutHistory = [];
 let viewportStart = 0, drag = null;
 
 function formatTime(value, tenths = true) {
@@ -38,6 +38,12 @@ function draw() {
   const first=Math.max(0,Math.floor(viewportStart/duration*peaks.length)), last=Math.min(peaks.length-1,Math.ceil(end/duration*peaks.length));
   ctx.strokeStyle=style.getPropertyValue("--wave"); ctx.lineWidth=Math.max(1,ratio); ctx.beginPath(); const mid=h*.55;
   for(let i=first;i<=last;i++){const t=i/Math.max(1,peaks.length-1)*duration,x=(t-viewportStart)/span*w,amp=peaks[i]*h*.38;ctx.moveTo(x,mid-amp);ctx.lineTo(x,mid+amp)} ctx.stroke();
+  // 중앙선이 속한 조각만 밝게 남기고 나머지 조각은 어둡게 표시한다.
+  const active=segmentBounds(),activeLeft=clamp((active.start-viewportStart)/span*w,0,w),activeRight=clamp((active.end-viewportStart)/span*w,0,w);
+  ctx.fillStyle=style.getPropertyValue("--inactive");
+  if(activeLeft>0)ctx.fillRect(0,0,activeLeft,h);
+  if(activeRight<w)ctx.fillRect(activeRight,0,w-activeRight,h);
+  if(activeRight>activeLeft){ctx.strokeStyle=style.getPropertyValue("--active");ctx.lineWidth=2*ratio;ctx.strokeRect(activeLeft+ratio,ratio,Math.max(0,activeRight-activeLeft-2*ratio),h-2*ratio)}
   for(const cut of cuts){const left=Math.max(cut.start,viewportStart),right=Math.min(cut.end,end);if(right>left){ctx.fillStyle=style.getPropertyValue("--cut");ctx.fillRect((left-viewportStart)/span*w,0,(right-left)/span*w,h)}}
   ctx.strokeStyle=style.getPropertyValue("--split");ctx.lineWidth=ratio;
   for(const point of splits){if(point<=viewportStart||point>=end)continue;const x=(point-viewportStart)/span*w;ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,h);ctx.stroke()}
@@ -59,11 +65,11 @@ function segmentBounds(time=audio.currentTime) {
 function renderSegments() {
   const list=$("segment-list"); list.replaceChildren(); if(!duration)return; const points=[0,...splits,duration].sort((a,b)=>a-b), active=segmentBounds();
   for(let i=0;i<points.length-1;i++){const button=document.createElement("button"),deleted=cuts.some(c=>c.start<=points[i]+.01&&c.end>=points[i+1]-.01);button.type="button";button.className=`segment-chip${i===active.index?" active":""}${deleted?" deleted":""}`;button.textContent=`${i+1} · ${formatTime(points[i])}–${formatTime(points[i+1])}`;button.addEventListener("click",()=>seek((points[i]+points[i+1])/2));list.append(button)}
-  $("delete-segment").disabled=active.end-active.start<.05; $("undo").disabled=!cuts.length;
+  $("delete-segment").disabled=active.end-active.start<.05||Boolean(cutAt((active.start+active.end)/2)); $("undo").disabled=!cutHistory.length;
 }
 async function loadFile(file) {
   if(!file)return; if(!/\.mp3$/i.test(file.name)){status("MP3 파일을 선택해주세요.",true);return}
-  sourceFile=file;cuts=[];splits=[];peaks=[];duration=0;viewportStart=0;if(objectUrl)URL.revokeObjectURL(objectUrl);objectUrl=URL.createObjectURL(file);audio.src=objectUrl;
+  sourceFile=file;cuts=[];splits=[];cutHistory=[];peaks=[];duration=0;viewportStart=0;if(objectUrl)URL.revokeObjectURL(objectUrl);objectUrl=URL.createObjectURL(file);audio.src=objectUrl;
   $("filename").textContent=file.name;$("filemeta").textContent=`${(file.size/1024/1024).toFixed(1)}MB`;$("editor").classList.remove("hidden");$("loading").classList.remove("hidden");$("file").closest("label").classList.add("hidden");
   try{await new Promise((resolve,reject)=>{audio.onloadedmetadata=resolve;audio.onerror=reject});await buildWaveform(file);followPlayhead();$("duration").textContent=`전체 ${formatTime(duration)}`;$("filemeta").textContent+=` · ${formatTime(duration)}`;render()}catch(e){status("이 MP3의 파형을 분석하지 못했습니다.",true)}finally{$("loading").classList.add("hidden")}
 }
@@ -77,7 +83,7 @@ $("back").addEventListener("click",()=>seek(audio.currentTime-5)); $("forward").
 audio.addEventListener("timeupdate",()=>{const cut=cutAt(audio.currentTime);if(cut)audio.currentTime=cut.end;followPlayhead();$("current").textContent=formatTime(audio.currentTime);$("window-start").textContent=formatTime(viewportStart,false);$("window-end").textContent=formatTime(windowEnd(),false);renderSegments()});
 audio.addEventListener("ended",()=>{$("play").textContent="▶";render()}); audio.addEventListener("pause",()=>{$("play").textContent="▶";render()});
 $("split").addEventListener("click",()=>{const point=audio.currentTime;if(point<.05||duration-point<.05)return;if(!splits.some(x=>Math.abs(x-point)<.05)){splits.push(point);splits.sort((a,b)=>a-b);status(`${formatTime(point)}에서 분할했습니다.`);render()}});
-$("delete-segment").addEventListener("click",()=>{const segment=segmentBounds();cuts=mergeCuts([...cuts,segment]);status(`${formatTime(segment.start)}–${formatTime(segment.end)} 조각을 삭제 대상으로 표시했습니다.`);render()});
-$("undo").addEventListener("click",()=>{cuts.pop();render()});
+$("delete-segment").addEventListener("click",()=>{const segment=segmentBounds();cutHistory.push(cuts.map(c=>({...c})));cuts=mergeCuts([...cuts,segment]);const next=segment.end<duration-.01?segment.end:Math.max(0,segment.start-.01);seek(next);status(`${formatTime(segment.start)}–${formatTime(segment.end)} 조각을 삭제했습니다. 내보낼 때 앞뒤 조각을 바로 잇습니다.`)});
+$("undo").addEventListener("click",()=>{if(!cutHistory.length)return;cuts=cutHistory.pop();render();status("마지막 조각 삭제를 취소했습니다.")});
 $("export").addEventListener("click",async()=>{if(!sourceFile)return;const button=$("export"),form=new FormData();form.append("file",sourceFile,sourceFile.name);form.append("cuts",JSON.stringify(cuts));button.disabled=true;button.textContent="처리 중";status("삭제한 조각을 제외하고 MP3를 만드는 중입니다…");try{const response=await fetch("/api/audio-editor/export",{method:"POST",credentials:"same-origin",body:form});if(!response.ok){const data=await response.json().catch(()=>({}));throw new Error(data.detail||"내보내지 못했습니다")}const blob=await response.blob(),url=URL.createObjectURL(blob),link=document.createElement("a");link.href=url;link.download=`${sourceFile.name.replace(/\.mp3$/i,"")}-편집본.mp3`;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);status("편집한 MP3 다운로드를 시작했습니다.")}catch(e){status(e.message,true)}finally{button.disabled=false;button.textContent="내보내기"}});
 window.addEventListener("resize",resizeCanvas); window.matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change",draw);
