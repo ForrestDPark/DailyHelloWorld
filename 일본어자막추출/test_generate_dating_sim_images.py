@@ -1,0 +1,56 @@
+import importlib.util
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+
+MODULE_PATH = Path(__file__).with_name("generate_dating_sim_images.py")
+SPEC = importlib.util.spec_from_file_location("dating_images", MODULE_PATH)
+images = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(images)
+
+
+def scenario(days=14):
+    data = {"days": {}}
+    beats = ["비 오는 서점", "야간 산책", "휴대폰 메시지", "회사 회의", "축제 불꽃", "조용한 식사"]
+    for day in range(1, days + 1):
+        data["days"][str(day)] = {
+            "narration": beats[(day - 1) % len(beats)],
+            "scenes": {
+                loc: {"lines": [f"{beats[(day + index) % len(beats)]} {day} {loc}"], "choices": []}
+                for index, loc in enumerate(images.LOCATIONS)
+            },
+        }
+    return data
+
+
+class DatingImageAgentTests(unittest.TestCase):
+    def test_plan_is_adaptive_diverse_and_assigns_every_scene(self):
+        plan = images.build_plan(scenario(), max_scenes=12)
+        self.assertGreater(len(plan["selected"]), 4)
+        self.assertLessEqual(len(plan["selected"]), 12)
+        self.assertEqual(len(plan["assignments"]), 14 * 3)
+        self.assertEqual({item["location"] for item in plan["selected"]}, set(images.LOCATIONS))
+
+    def test_agent_resumes_existing_files_and_writes_manifest(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "TEST-001"
+            work.mkdir()
+            (work / "dating_sim_scenario.json").write_text(json.dumps(scenario(3)), encoding="utf-8")
+            calls = []
+            def fake_generator(prompt, target, reference=None):
+                calls.append(target.name)
+                target.write_bytes(b"fake-png")
+                return "test"
+            first = images.run_agent(work, max_scenes=5, generator=fake_generator)
+            self.assertEqual(first["status"], "complete")
+            first_call_count = len(calls)
+            second = images.run_agent(work, max_scenes=5, generator=fake_generator)
+            self.assertEqual(second["status"], "complete")
+            self.assertEqual(len(calls), first_call_count)
+            self.assertTrue(second["assignments"])
+
+
+if __name__ == "__main__":
+    unittest.main()

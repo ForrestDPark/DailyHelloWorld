@@ -1422,6 +1422,8 @@ def random_book_id(exclude=None):
 # 런타임 소비 구조).
 GENERATED_SCENARIO_VERSION = 2
 GENERATED_SCENARIO_FILENAME = "dating_sim_scenario.json"
+GENERATED_IMAGE_DIRNAME = "dating_sim_images"
+GENERATED_IMAGE_MANIFEST = "manifest.json"
 
 
 def _generated_scenario_path(title):
@@ -1474,6 +1476,50 @@ def load_generated_scenario(title, expected_locations):
     except (OSError, ValueError):
         return None
     return gen if _validate_generated_scenario(gen, expected_locations) else None
+
+
+def load_generated_images(title, book_id):
+    """작품 이미지 에이전트가 만든 매니페스트를 안전한 공개 URL로 바꾼다."""
+    folder = _find_library_folder(title)
+    image_dir = folder / GENERATED_IMAGE_DIRNAME if folder else None
+    path = image_dir / GENERATED_IMAGE_MANIFEST if image_dir else None
+    if not path or not path.is_file() or not re.fullmatch(r"[0-9a-f]{20}", book_id or ""):
+        return None
+    try:
+        manifest = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    def public(filename):
+        if not isinstance(filename, str) or not re.fullmatch(r"(?:portrait|scene-[0-9a-f]{12})\.png", filename):
+            return None
+        return f"/api/dating-sim/books/{book_id}/images/{filename}" if (image_dir / filename).is_file() else None
+    portrait = public(manifest.get("portrait"))
+    assignments = {key: url for key, filename in (manifest.get("assignments") or {}).items()
+                   if (url := public(filename))}
+    return {"portrait": portrait, "assignments": assignments} if portrait or assignments else None
+
+
+def generated_image_path(book_id, filename):
+    """인증 라우트가 제공할 작품 이미지 경로. 매니페스트에 등록된 파일만 허용한다."""
+    if not re.fullmatch(r"(?:portrait|scene-[0-9a-f]{12})\.png", filename or ""):
+        return None
+    book = _find_book(book_id)
+    if not book:
+        return None
+    folder = _find_library_folder(_book_title(book))
+    manifest_path = folder / GENERATED_IMAGE_DIRNAME / GENERATED_IMAGE_MANIFEST if folder else None
+    if not manifest_path or not manifest_path.is_file():
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    allowed = {manifest.get("portrait")}
+    allowed.update((manifest.get("assignments") or {}).values())
+    if filename not in allowed:
+        return None
+    target = manifest_path.parent / filename
+    return target if target.is_file() else None
 
 
 def _scenes_from_generated(gen, character_name_ko, character_name_jp):
@@ -1560,6 +1606,7 @@ def story_for(story_id=None, seed_key=None):
     if not path:
         raise ValueError("작품을 찾을 수 없습니다")
     source_title = _book_title(path)
+    book_id = match.group(1)
     profile = book_character_profile(story_id, f"{source_title} {path.stem}", source_title)
     locations = {
         "first": {"label": "우연히 마주친 곳", "emoji": "✨"},
@@ -1631,6 +1678,13 @@ def story_for(story_id=None, seed_key=None):
     else:
         scenes = _seven_day_scenes(book_location_lines, dialogue_name_ko, dialogue_name_jp, vocab_pool=vocab_pool)
         scenario_source = "template"
+    generated_images = load_generated_images(source_title, book_id)
+    if generated_images:
+        for day, day_scenes in scenes.items():
+            for location_id, scene in day_scenes.items():
+                image_url = generated_images["assignments"].get(f"{day}:{location_id}")
+                if image_url:
+                    scene["character_image"] = image_url
     if seed_key is not None:
         for day, day_scenes in scenes.items():
             for location_id, scene in day_scenes.items():
@@ -1643,8 +1697,9 @@ def story_for(story_id=None, seed_key=None):
               for location, action in actions.items()}
         for day, actions in BOOK_DAY_LOCATION_ACTIONS.items()
     }
+    portrait_image = (generated_images or {}).get("portrait") or profile["image"]
     story = {"id": story_id, "name": display_name_jp, "title": f"{source_title}에서 영감받은 이야기",
-            "character_image": profile["image"],
+            "character_image": portrait_image,
             "character_images": profile.get("scene_images") or {
                 "first": profile["image"], "walk": profile["image"], "quiet": profile["image"]
             },

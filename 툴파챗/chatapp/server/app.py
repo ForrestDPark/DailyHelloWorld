@@ -723,6 +723,16 @@ def dating_sim_audio(filename: str, request: Request):
     return FileResponse(str(target))
 
 
+@app.get("/api/dating-sim/books/{book_id}/images/{filename}")
+def dating_sim_generated_image(book_id: str, filename: str, request: Request):
+    """로그인 사용자에게 작품 이미지 에이전트가 등록한 결과만 제공한다."""
+    _require_signed_in_user(request)
+    target = dating_sim_story.generated_image_path(book_id, filename)
+    if not target:
+        raise HTTPException(status_code=404, detail="장면 이미지를 찾을 수 없습니다")
+    return FileResponse(str(target), media_type="image/png")
+
+
 class DatingSimLocationRequest(BaseModel):
     location: str
     story_id: str | None = None
@@ -898,7 +908,7 @@ def _dating_sim_state_payload(row, story, username=None):
             scene_lines.append({"speaker": speaker, "text": line})
         payload["scene"] = {
             "location": row["pending_location"],
-            "character_image": story.get("character_images", {}).get(
+            "character_image": scene.get("character_image") or story.get("character_images", {}).get(
                 row["pending_location"], story.get("character_image")),
             "lines": scene_lines,
             "choices": [{"text": choice["text"]} for choice in scene["choices"]],
@@ -1208,7 +1218,7 @@ def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
     payload["choice_result"] = {
         "affection_delta": scene["choices"][body.choice_index]["affection"],
         "location": selected_location,
-        "character_image": story.get("character_images", {}).get(
+        "character_image": scene.get("character_image") or story.get("character_images", {}).get(
             selected_location, story.get("character_image")),
         "line": dating_sim_story.choice_reaction(
             row["day"] - 1, selected_location,

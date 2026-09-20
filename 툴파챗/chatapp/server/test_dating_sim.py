@@ -46,6 +46,22 @@ class DatingSimApiTests(unittest.TestCase):
             app.dating_sim_static("static/sone-486/not-allowed.png", request())
         self.assertEqual(raised.exception.status_code, 404)
 
+    def test_generated_scene_image_route_only_serves_manifest_files(self):
+        root = Path(self.temp.name) / "work" / "dating_sim_images"
+        root.mkdir(parents=True)
+        image = root / "portrait.png"
+        image.write_bytes(b"png")
+        (root / "manifest.json").write_text(json.dumps({
+            "portrait": "portrait.png", "assignments": {"1:first": "portrait.png"}
+        }), encoding="utf-8")
+        with patch.object(dating_sim_story, "_find_book", return_value=Path("book.epub")), \
+             patch.object(dating_sim_story, "_book_title", return_value="TEST"), \
+             patch.object(dating_sim_story, "_find_library_folder", return_value=root.parent):
+            response = app.dating_sim_generated_image("a" * 20, "portrait.png", request())
+            self.assertEqual(Path(response.path), image)
+            with self.assertRaises(HTTPException):
+                app.dating_sim_generated_image("a" * 20, "../secret.png", request())
+
     def test_new_player_starts_at_day_one_with_base_affection_and_no_pending_scene(self):
         state = app.dating_sim_state(request())
         self.assertEqual(state["day"], 1)

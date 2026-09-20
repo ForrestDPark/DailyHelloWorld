@@ -170,6 +170,12 @@ except Exception:
         if ! /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_dating_sim_scenario.py" "$BOOK_CANDIDATE"; then
             echo "⚠️  미연시 시나리오 복구는 다음 실행에서 이어갑니다."
         fi
+        if [[ -f "${BOOK_CANDIDATE}/dating_sim_scenario.json" ]]; then
+            echo "🖼️  작품 이미지 에이전트가 누락된 초상화·장면 이미지를 이어서 생성합니다."
+            if ! /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_dating_sim_images.py" "$BOOK_CANDIDATE"; then
+                echo "⚠️  작품 이미지 일부가 아직 없습니다. EPUB 복구는 계속하고 다음 실행에서 이어갑니다."
+            fi
+        fi
         RETRY_FINAL_EPUB="${BOOK_CANDIDATE}/${BOOK_CANDIDATE:t}.epub"
         if ! /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/finalize_japanese_book.py" "$BOOK_CANDIDATE" \
             || [[ ! -f "$RETRY_FINAL_EPUB" ]]; then
@@ -1326,6 +1332,12 @@ drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese 
         echo "\n💗 학습 단어·핵심 표현 전수 활용 미연시 시나리오 생성 중..."
         if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_dating_sim_scenario.py" "$BOOK_DIR"; then
             echo "✅ 미연시 시나리오 생성 완료"
+            echo "\n🖼️ 작품 전용 초상화·다양한 장면 이미지 에이전트 실행 중..."
+            if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_dating_sim_images.py" "$BOOK_DIR"; then
+                echo "✅ 작품 이미지 생성·미연시 연결 완료"
+            else
+                echo "⚠️  작품 이미지 일부가 아직 없습니다. EPUB 생성은 계속하고 다음 실행에서 이어갑니다."
+            fi
         else
             echo "⚠️  미연시 시나리오 생성은 완료되지 않았습니다. 중간 결과를 보존하고 다음 실행에서 이어갑니다."
         fi
