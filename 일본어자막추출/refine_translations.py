@@ -6,7 +6,10 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
+
+import requests
 
 from ai_exec import run_ai_exec
 
@@ -84,6 +87,78 @@ def save_memory(memory):
     os.replace(temp_path, MEMORY_PATH)
 
 
+def _google_batch(texts, retries=3):
+    payload = "\n".join(f"[[[T{index:04d}]]]\n{text}" for index, text in enumerate(texts))
+    marker = re.compile(r"\[\[\[\s*T\s*(\d{4})\s*\]\]\]")
+    endpoints = (
+        "https://translate.googleapis.com/translate_a/single",
+        "https://translate.google.com/translate_a/single",
+    )
+    had_200 = False
+    for attempt in range(retries):
+        try:
+            response = requests.post(
+                endpoints[attempt % len(endpoints)],
+                data={"client": "gtx", "sl": "ja", "tl": "ko", "dt": "t", "q": payload},
+                headers={"User-Agent": "Mozilla/5.0"}, timeout=20,
+            )
+            if response.status_code == 200:
+                had_200 = True
+                translated = "".join(part[0] for part in response.json()[0] if part[0])
+                matches = list(marker.finditer(translated))
+                parsed = {}
+                for pos, match in enumerate(matches):
+                    end = matches[pos + 1].start() if pos + 1 < len(matches) else len(translated)
+                    value = translated[match.end():end].strip()
+                    if value:
+                        parsed[int(match.group(1))] = value
+                if len(parsed) == len(texts):
+                    return [parsed[index] for index in range(len(texts))]
+        except (requests.RequestException, ValueError, KeyError, TypeError):
+            pass
+        if attempt + 1 < retries:
+            time.sleep(1.5 * (2 ** attempt))
+    raise RuntimeError("alignment" if had_200 else "unavailable")
+
+
+def recover_google_failures(rows, memory, batch_size=24):
+    """이전 실행에 남은 실패도 AI를 쓰기 전에 저호출 배치 방식으로 다시 살린다."""
+    failed = [row for row in rows if row["data"].get("ko", "").strip() in ("", "[번역 실패]")]
+    recovered = 0
+    provider_unavailable = False
+
+    def recover(batch):
+        nonlocal recovered, provider_unavailable
+        if provider_unavailable or not batch:
+            return
+        try:
+            translated = _google_batch([row["data"].get("ja", "") for row in batch])
+        except RuntimeError as exc:
+            if str(exc) == "alignment" and len(batch) > 1:
+                middle = len(batch) // 2
+                recover(batch[:middle])
+                recover(batch[middle:])
+            else:
+                provider_unavailable = True
+            return
+        for row, ko in zip(batch, translated):
+            if KO_RE.search(ko) and not JP_RE.search(ko):
+                ja = row["data"].get("ja", "").strip()
+                row["data"]["ko"] = ko
+                if ja:
+                    memory[ja] = ko
+                recovered += 1
+        save_rows(rows)
+        save_memory(memory)
+        time.sleep(0.35)
+
+    for start in range(0, len(failed), batch_size):
+        recover(failed[start:start + batch_size])
+        if provider_unavailable:
+            break
+    return recovered, provider_unavailable
+
+
 def codex_refine(book_dir, candidates):
     payload = []
     for item in candidates:
@@ -118,6 +193,14 @@ def codex_refine_with_retry(book_dir, batch):
     try:
         return codex_refine(book_dir, batch)
     except Exception as exc:
+        # 사용량·인증·결제 오류는 입력 크기 문제가 아니므로 반으로 쪼개도 절대
+        # 성공하지 않는다. 수백 번 CLI를 재호출하지 말고 다음 실행을 위해 즉시 멈춘다.
+        capacity_markers = (
+            "usage limit", "rate limit", "quota", "credit", "billing",
+            "authentication", "unauthorized", "invalid_grant",
+        )
+        if any(marker in str(exc).casefold() for marker in capacity_markers):
+            raise RuntimeError(f"AI 번역 공급자 사용 불가: {exc}") from exc
         if len(batch) <= 1:
             raise
         mid = len(batch) // 2
@@ -154,6 +237,12 @@ def main():
         if ja in memory and memory[ja] and row["data"].get("ko") != memory[ja]:
             row["data"]["ko"] = memory[ja]
             memory_hits += 1
+
+    google_recovered, google_unavailable = recover_google_failures(rows, memory)
+    if google_recovered:
+        print(f"🌐 Google 저호출 배치 복구: 번역 실패 {google_recovered}문장 복원")
+    elif google_unavailable:
+        print("⚠️ Google 배치 번역도 현재 차단됨 — 남은 실패만 AI 복구로 넘깁니다.")
 
     ranked = []
     for index, row in enumerate(rows):
@@ -195,6 +284,9 @@ def main():
                     f"⚠️ Codex/Claude 선택 검수 배치 실패 "
                     f"({start + 1}~{start + len(batch)}): {exc}"
                 )
+                if "AI 번역 공급자 사용 불가" in str(exc):
+                    print("⏭️ 입력을 나눠도 회복되지 않는 사용량·인증 오류라 남은 AI 호출을 중단합니다.")
+                    break
         for item in candidates:
             corrected = refined.get(item["id"], "")
             if corrected and KO_RE.search(corrected) and not JP_RE.search(corrected):

@@ -560,6 +560,114 @@ def translate(text, retries=6):
     finally:
         TIMING["translate"] += time.time() - _t0
 
+
+def _save_translation_memory():
+    """성공한 번역은 작품 종료를 기다리지 않고 원자적으로 보존한다."""
+    memory_path = os.path.join(os.environ.get("SCRIPT_DIR", ""), "translation_memory.json")
+    if not memory_path:
+        return
+    temp_path = memory_path + ".tmp"
+    try:
+        with open(temp_path, "w", encoding="utf-8") as memory_file:
+            json.dump(TRANSLATION_MEMORY, memory_file, ensure_ascii=False, indent=2)
+            memory_file.write("\n")
+        os.replace(temp_path, memory_path)
+    except OSError as exc:
+        print(f"⚠️ 번역 메모리 저장 실패: {exc}", file=sys.stderr)
+
+
+def _parse_batch_translation(translated, expected):
+    marker = re.compile(r"\[\[\[\s*T\s*(\d{4})\s*\]\]\]")
+    matches = list(marker.finditer(translated or ""))
+    result = {}
+    for index, match in enumerate(matches):
+        item_id = int(match.group(1))
+        end = matches[index + 1].start() if index + 1 < len(matches) else len(translated)
+        value = translated[match.end():end].strip()
+        if item_id < expected and value:
+            result[item_id] = value
+    return result
+
+
+def _translate_batch(texts, retries=4):
+    """여러 문장을 표식으로 묶어 한 요청에 번역한다. 문장별 호출 폭주를 막는다."""
+    payload = "\n".join(f"[[[T{index:04d}]]]\n{text}" for index, text in enumerate(texts))
+    endpoints = (
+        "https://translate.googleapis.com/translate_a/single",
+        "https://translate.google.com/translate_a/single",
+    )
+    had_success_response = False
+    for attempt in range(retries):
+        endpoint = endpoints[attempt % len(endpoints)]
+        try:
+            response = requests.post(
+                endpoint,
+                data={"client": "gtx", "sl": "ja", "tl": "ko", "dt": "t", "q": payload},
+                timeout=20,
+                headers={"User-Agent": "Mozilla/5.0"},
+            )
+            if response.status_code == 200:
+                had_success_response = True
+                translated = "".join(segment[0] for segment in response.json()[0] if segment[0])
+                parsed = _parse_batch_translation(translated, len(texts))
+                if len(parsed) == len(texts):
+                    return [parsed[index] for index in range(len(texts))]
+            print(f"⚠️ Google 배치 번역 실패 HTTP {response.status_code} ({attempt + 1}/{retries})", file=sys.stderr)
+        except Exception as exc:
+            print(f"⚠️ Google 배치 번역 예외 {type(exc).__name__} ({attempt + 1}/{retries})", file=sys.stderr)
+        if attempt + 1 < retries:
+            time.sleep(min(12.0, 1.5 * (2 ** attempt)) + (time.time() % 0.5))
+    if had_success_response:
+        raise RuntimeError("Google 배치 번역 응답 정렬 실패")
+    raise RuntimeError("Google 배치 번역 공급자 실패")
+
+
+def translate_many(texts, batch_size=24):
+    """메모리 미적중 문장만 묶어 번역하고, 손상된 배치만 재귀적으로 나눈다."""
+    results = [None] * len(texts)
+    missing = []
+    for index, text in enumerate(texts):
+        remembered = TRANSLATION_MEMORY.get(text.strip(), "")
+        if remembered and remembered != "[번역 실패]":
+            results[index] = remembered
+        else:
+            missing.append((index, text))
+
+    provider_unavailable = False
+
+    def recover(items):
+        nonlocal provider_unavailable
+        if not items:
+            return
+        if provider_unavailable:
+            for index, _ in items:
+                results[index] = "[번역 실패]"
+            return
+        try:
+            translated = _translate_batch([text for _, text in items])
+        except RuntimeError as exc:
+            if "정렬 실패" in str(exc) and len(items) > 1:
+                middle = len(items) // 2
+                recover(items[:middle])
+                recover(items[middle:])
+                return
+            provider_unavailable = "공급자 실패" in str(exc)
+            for index, _ in items:
+                results[index] = "[번역 실패]"
+            if provider_unavailable:
+                print("⏭️ Google 배치 번역 공급자가 차단되어 남은 문장은 AI 복구 단계로 넘깁니다.", file=sys.stderr)
+            return
+        for (index, text), ko in zip(items, translated):
+            results[index] = ko
+            if ko and ko != "[번역 실패]":
+                TRANSLATION_MEMORY[text.strip()] = ko
+        _save_translation_memory()
+        time.sleep(0.35)
+
+    for start in range(0, len(missing), max(1, batch_size)):
+        recover(missing[start:start + batch_size])
+    return [value or "[번역 실패]" for value in results]
+
 def time_to_seconds(t):
     try:
         h, m, s = t.replace(',', '.').split(':')
@@ -1040,13 +1148,15 @@ if not os.path.exists(summary_path):
 _PIPELINE_START = time.time()
 scene_primary_path = None
 scene_secondary_path = None
+all_ja_list = [line['text'] for line in parsed_lines]
+all_ko_list = translate_many(all_ja_list)
 for idx in range(0, len(parsed_lines), 3):
     chunk     = parsed_lines[idx:idx + 3]
     chunk_idx = idx // 3 + 1
     n         = len(chunk)
 
     ja_list = [c['text'] for c in chunk]
-    ko_list = [translate(t) for t in ja_list]
+    ko_list = all_ko_list[idx:idx + n]
 
     scene_num = (chunk_idx - 1) // SCENE_SIZE + 1
     representative_path = None
