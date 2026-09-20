@@ -32,7 +32,7 @@ FILES_DIR = Path("/Users/forrestdpark/Desktop/BlogImage/av4")
 DB_FILE = STATE_DIR / "downloads.db"
 YTDLP = "/opt/homebrew/bin/yt-dlp"
 MAX_FILESIZE = "5G"
-RETENTION_HOURS = 24
+PERSISTENT_EXPIRES_AT = "9999-12-31T23:59:59+00:00"
 
 
 def now() -> str:
@@ -90,16 +90,9 @@ def open_db() -> sqlite3.Connection:
 
 
 def cleanup_expired() -> None:
-    current = now()
+    """이전 24시간 보관 행도 파일이 남아 있으면 영구 보관으로 승격한다."""
     with open_db() as connection:
-        rows = connection.execute(
-            "SELECT job_id, file_path FROM video_downloads WHERE expires_at <= ?", (current,)
-        ).fetchall()
-        for _job_id, file_path in rows:
-            path = Path(file_path)
-            if path.parent == FILES_DIR:
-                path.unlink(missing_ok=True)
-        connection.execute("DELETE FROM video_downloads WHERE expires_at <= ?", (current,))
+        connection.execute("UPDATE video_downloads SET expires_at=?", (PERSISTENT_EXPIRES_AT,))
 
 
 def notify_owner(filename: str) -> None:
@@ -192,7 +185,6 @@ def run(request_path: Path) -> int:
         result_path.replace(destination)
         os.chmod(destination, 0o600)
         completed = dt.datetime.now(dt.timezone.utc)
-        expires = completed + dt.timedelta(hours=RETENTION_HOURS)
         with open_db() as connection:
             connection.execute(
                 "INSERT OR REPLACE INTO video_downloads "
@@ -200,7 +192,7 @@ def run(request_path: Path) -> int:
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (job_id, owner_username, destination.name, str(destination), destination.stat().st_size,
                  str(request.get("created_at") or now()), completed.isoformat(timespec="seconds"),
-                 expires.isoformat(timespec="seconds")),
+                 PERSISTENT_EXPIRES_AT),
             )
         try:
             job_dir.rmdir()
@@ -208,7 +200,7 @@ def run(request_path: Path) -> int:
             pass
         write_state(
             state="complete", stage="Mac 저장 완료 · iPhone에서 직접 받을 수 있습니다", progress=100,
-            filename=destination.name, destination="BlogImage/av4 · 24시간",
+            filename=destination.name, destination="BlogImage/av4 · 직접 삭제할 때까지 보관",
             completed_at=now(),
         )
         notify_owner(destination.name)

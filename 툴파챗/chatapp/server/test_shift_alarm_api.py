@@ -568,11 +568,14 @@ class ShiftAlarmApiTests(unittest.TestCase):
                         "(job_id,owner_username,filename,file_path,size_bytes,created_at,completed_at,expires_at) "
                         "VALUES (?,?,?,?,?,?,?,?)",
                         ("job", "local-owner", video.name, str(video), 4, module._now(),
-                         module._now(), "2999-01-01T00:00:00+00:00"),
+                         module._now(), "2000-01-01T00:00:00+00:00"),
                     )
                 result = module.shift_alarm_video_download_status(owner_request())
+                file_remained = video.is_file()
         self.assertEqual(len(result["downloads"]), 1)
-        self.assertTrue(result["downloads"][0]["temporary"])
+        self.assertTrue(file_remained)
+        self.assertFalse(result["downloads"][0]["temporary"])
+        self.assertIsNone(result["downloads"][0]["expires_at"])
         self.assertEqual(result["downloads"][0]["filename"], "완성.mp4")
 
     def test_iphone_transfer_progress_is_persisted_per_file(self):

@@ -1606,14 +1606,12 @@ def _shift_alarm_update_processing(file_id, filename, **changes):
 
 
 def _shift_alarm_cleanup_videos(conn):
-    rows = conn.execute(
-        "SELECT job_id, file_path FROM video_downloads WHERE expires_at <= ?", (_now(),)
-    ).fetchall()
-    for row in rows:
-        path = Path(row["file_path"])
-        if path.parent == SHIFT_ALARM_VIDEO_FILES:
-            path.unlink(missing_ok=True)
-    conn.execute("DELETE FROM video_downloads WHERE expires_at <= ?", (_now(),))
+    # 과거에는 완료 24시간 뒤 원본을 자동 삭제했다. 사용자가 직접 삭제할
+    # 때까지 av4에 보관하도록 바뀌었으므로 기존 행도 영구 보관 값으로 승격한다.
+    conn.execute(
+        "UPDATE video_downloads SET expires_at=? WHERE expires_at<>?",
+        ("9999-12-31T23:59:59+00:00", "9999-12-31T23:59:59+00:00"),
+    )
     conn.commit()
 
 
@@ -1625,7 +1623,7 @@ def _shift_alarm_owned_video(job_id, username):
     ).fetchone()
     conn.close()
     if not row:
-        raise HTTPException(status_code=404, detail="영상이 없거나 보관 기간이 끝났습니다")
+        raise HTTPException(status_code=404, detail="영상이 없거나 직접 삭제되었습니다")
     path = Path(row["file_path"])
     if path.parent != SHIFT_ALARM_VIDEO_FILES or not path.is_file():
         raise HTTPException(status_code=404, detail="영상 파일을 찾을 수 없습니다")
@@ -2703,8 +2701,8 @@ def shift_alarm_video_download_status(request: Request):
             "completed_at": managed["completed_at"] if managed else datetime.datetime.fromtimestamp(
                 path.stat().st_mtime, datetime.timezone.utc
             ).isoformat(timespec="seconds"),
-            "expires_at": managed["expires_at"] if managed else None,
-            "temporary": bool(managed),
+            "expires_at": None,
+            "temporary": False,
             "download_url": f"/api/shift-alarm/video-library/{file_id}/file",
             "download_page_url": f"/shift-alarm/download/{file_id}",
             "action_url": f"/api/shift-alarm/video-library/{file_id}/action",
@@ -2738,7 +2736,7 @@ def shift_alarm_video_download_status(request: Request):
                 download_url=f"/api/shift-alarm/video-download/{row['job_id']}/file",
             )
         except HTTPException:
-            status.update(available=False, stage="보관 기간이 끝났거나 파일이 삭제됐습니다")
+            status.update(available=False, stage="파일이 이동되었거나 삭제됐습니다")
     status["subtitle_extraction"] = _shift_alarm_subtitle_status()
     return status
 
