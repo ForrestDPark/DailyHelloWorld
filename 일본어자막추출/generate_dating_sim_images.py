@@ -28,6 +28,7 @@ MANIFEST_NAME = "manifest.json"
 LOCATIONS = ("first", "walk", "quiet")
 _LOCAL_PIPELINE = None
 _LOCAL_PIPELINE_EDIT = None
+_OPENAI_DISABLED_REASON = None
 
 
 def _clean(text, limit=700):
@@ -180,22 +181,51 @@ def _local_generate(prompt, target, reference=None):
         _LOCAL_PIPELINE = _LOCAL_PIPELINE.to("mps")
         _LOCAL_PIPELINE_EDIT = edit
     pipe = _LOCAL_PIPELINE
+    # SD 1.5의 CLIP 한도는 77토큰이다. OpenAI용 장문 프롬프트를 그대로 넣으면
+    # 실제 사건 설명이 잘리므로 핵심 묘사만 남긴 로컬 전용 프롬프트를 쓴다.
+    local_prompt = (
+        "photorealistic adult Japanese woman age 25, fully clothed, tasteful romance scene, "
+        "natural face and hands, cinematic light, no text, " + _clean(prompt.split("Visualize this specific narrative beat rather than a generic pose:")[-1], 24)
+    )
     seed = int.from_bytes(hashlib.sha256(prompt.encode()).digest()[:4], "big")
-    kwargs = dict(prompt=prompt, negative_prompt="low quality, blurry, distorted, text, watermark, child",
-                  num_inference_steps=24, guidance_scale=7.0,
-                  generator=torch.Generator(device="cpu").manual_seed(seed))
+    kwargs = dict(prompt=local_prompt,
+                  negative_prompt="nsfw, nude, child, low quality, blurry, distorted, deformed, text, watermark",
+                  num_inference_steps=24, guidance_scale=7.0)
     if reference and reference.is_file():
         with Image.open(reference) as image:
             kwargs["image"] = ImageOps.fit(image.convert("RGB"), (512, 512), Image.Resampling.LANCZOS)
         kwargs["strength"] = 0.65
-    pipe(**kwargs).images[0].save(target, format="PNG", optimize=True)
+    for attempt in range(4):
+        kwargs["generator"] = torch.Generator(device="cpu").manual_seed(seed + attempt * 104729)
+        image = pipe(**kwargs).images[0]
+        image.save(target, format="PNG", optimize=True)
+        if _valid_image(target):
+            return
+    raise RuntimeError("로컬 안전 필터가 검은 이미지를 반복 반환했습니다")
+
+
+def _valid_image(path):
+    if not path.is_file() or path.stat().st_size < 1024:
+        return False
+    try:
+        from PIL import Image, ImageStat
+        with Image.open(path) as image:
+            stats = ImageStat.Stat(image.convert("RGB").resize((64, 64)))
+        return sum(stats.mean) / 3 > 4 and sum(stats.stddev) / 3 > 2
+    except (OSError, ImportError):
+        return True
 
 
 def _generate(prompt, target, reference=None):
+    global _OPENAI_DISABLED_REASON
     try:
+        if _OPENAI_DISABLED_REASON:
+            raise RuntimeError(_OPENAI_DISABLED_REASON)
         _openai_generate(prompt, target, reference)
         return "openai"
     except Exception as openai_error:
+        if "no credits remaining" in str(openai_error).lower() or "quota" in str(openai_error).lower():
+            _OPENAI_DISABLED_REASON = str(openai_error)
         print(f"⚠️ OpenAI 이미지 실패, 로컬 Diffusers로 전환: {openai_error}", flush=True)
         try:
             _local_generate(prompt, target, reference)
@@ -226,7 +256,7 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
     portrait = output / "portrait.png"
     cover_reference = next((path for name in ("cover.jpg", "cover.png", "cover.webp")
                             if (path := work_dir / name).is_file()), None)
-    if force or not portrait.is_file():
+    if force or not _valid_image(portrait):
         manifest["portrait_provider"] = generator(_prompt(work_dir.name), portrait, cover_reference)
         manifest["portrait_reference"] = cover_reference.name if cover_reference else None
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -234,7 +264,7 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
         filename = _image_filename(scene["key"])
         target = output / filename
         try:
-            if force or not target.is_file():
+            if force or not _valid_image(target):
                 provider = generator(_prompt(work_dir.name, scene), target, portrait)
             else:
                 provider = manifest.get("scenes", {}).get(scene["key"], {}).get("provider", "existing")

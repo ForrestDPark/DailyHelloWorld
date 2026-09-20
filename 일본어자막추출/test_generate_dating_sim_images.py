@@ -41,7 +41,9 @@ class DatingImageAgentTests(unittest.TestCase):
             calls = []
             def fake_generator(prompt, target, reference=None):
                 calls.append(target.name)
-                target.write_bytes(b"fake-png")
+                # 테스트 환경에는 Pillow가 없을 수 있으므로 크기 검증을 넘는
+                # 가짜 데이터로 재개 시 재호출되지 않는지만 확인한다.
+                target.write_bytes(b"fake-png" * 256)
                 return "test"
             first = images.run_agent(work, max_scenes=5, generator=fake_generator)
             self.assertEqual(first["status"], "complete")
