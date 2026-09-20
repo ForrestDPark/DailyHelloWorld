@@ -319,7 +319,7 @@ DAY_OPENINGS = {
     ],
     7: [
         "[朝|あさ]、ソイから[場所|ばしょ]だけが[書|か]かれたメッセージが[届|とど]いた。「[今日|きょう]、そこで[待|ま]っています」\n아침에 소이에게서 장소만 적힌 메시지가 왔다. '오늘 거기서 기다릴게요.'",
-        "[七日目|なのかめ]の[夕方|ゆうがた]、ソイから「[伝|つた]えたいことがあります」と[電話|でんわ]がかかってきた。\n일곱째 날 저녁, 소이에게서 '전하고 싶은 말이 있어요'라는 전화가 왔다.",
+        "ある[夕方|ゆうがた]、ソイから「[伝|つた]えたいことがあります」と[電話|でんわ]がかかってきた。\n어느 날 저녁, 소이에게서 '전하고 싶은 말이 있어요'라는 전화가 왔다.",
     ],
     8: [
         "ソイから[写真|しゃしん]サイトのリンクと「ここ、[気|き]になる」というメッセージが[届|とど]いた。\n소이에게서 사진 사이트 링크와 '여기 궁금해요'라는 메시지가 왔다.",
@@ -778,12 +778,19 @@ def _load_work_expressions(title):
 
 
 _FURIGANA_TAG_RE = re.compile(r"\[([^\]|]+)\|[^\]]+\]")
+_JAPANESE_MATERIAL_RE = re.compile(r"[^一-龯々〆ヵヶぁ-ゖァ-ヺーA-Za-z0-9]+")
 
 
 def _strip_furigana(text):
     """대사의 [한자|읽기] 후리가나 태그를 한자만 남기고 벗겨, 표현 원문(한자)
     과 부분 문자열 대조가 되게 한다."""
     return _FURIGANA_TAG_RE.sub(r"\1", text)
+
+
+def _normalize_japanese_material(text):
+    """생성기의 전수검증과 같은 규칙으로 후리가나·공백·구두점 차이를
+    없앤다. 그래야 검증을 통과한 표현이 관리자 보고서에서도 동일하게 잡힌다."""
+    return _JAPANESE_MATERIAL_RE.sub("", _strip_furigana(str(text or "")))
 
 
 def work_corpus_stats(title):
@@ -1259,21 +1266,21 @@ def load_story_from_db(conn, character_id, seed_key=None):
 JAPANESE_EPUB_ROOT = Path("/Users/forrestdpark/Desktop/BlogImage/av완성작")
 BOOK_STORY_RE = re.compile(r"^book:([0-9a-f]{20})$")
 BOOK_CHARACTER_PROFILES = [
-    {"jp": "ハル", "ko": "하루", "image": "/dating-sim/static/haru.png"},
-    {"jp": "アカリ", "ko": "아카리", "image": "/dating-sim/static/akari.png"},
-    {"jp": "ミオ", "ko": "미오", "image": "/dating-sim/static/mio.png"},
-    {"jp": "レイナ", "ko": "레이나", "image": "/dating-sim/static/reina.png"},
-    {"jp": "ユナ", "ko": "유나", "image": "/dating-sim/static/akari.png"},
-    {"jp": "ナナミ", "ko": "나나미", "image": "/dating-sim/static/mio.png"},
-    {"jp": "カエデ", "ko": "카에데", "image": "/dating-sim/static/reina.png"},
-    {"jp": "サクラ", "ko": "사쿠라", "image": "/dating-sim/static/haru.png"},
+    {"jp": "ハル", "full_jp": "[佐藤|さとう] [春|はる]", "ko": "사토 하루", "image": "/dating-sim/static/haru.png"},
+    {"jp": "アカリ", "full_jp": "[高橋|たかはし] [明里|あかり]", "ko": "다카하시 아카리", "image": "/dating-sim/static/akari.png"},
+    {"jp": "ミオ", "full_jp": "[中村|なかむら] [美緒|みお]", "ko": "나카무라 미오", "image": "/dating-sim/static/mio.png"},
+    {"jp": "レイナ", "full_jp": "[小林|こばやし] [玲奈|れいな]", "ko": "고바야시 레이나", "image": "/dating-sim/static/reina.png"},
+    {"jp": "ユナ", "full_jp": "[伊藤|いとう] [優奈|ゆうな]", "ko": "이토 유나", "image": "/dating-sim/static/akari.png"},
+    {"jp": "ナナミ", "full_jp": "[渡辺|わたなべ] [七海|ななみ]", "ko": "와타나베 나나미", "image": "/dating-sim/static/mio.png"},
+    {"jp": "カエデ", "full_jp": "[加藤|かとう] [楓|かえで]", "ko": "가토 카에데", "image": "/dating-sim/static/reina.png"},
+    {"jp": "サクラ", "full_jp": "[山本|やまもと] [桜|さくら]", "ko": "야마모토 사쿠라", "image": "/dating-sim/static/haru.png"},
 ]
 
 
 def book_character_profile(story_id, source_hint=""):
     """작품 메타데이터의 이름을 우선하고, 없으면 작품별 고정 프로필을 배정한다."""
     if re.search(r"츠바키[ _·-]*리카", source_hint, re.IGNORECASE):
-        return {"jp": "椿リカ", "ko": "츠바키 리카", "image": "/dating-sim/static/reina.png"}
+        return {"jp": "リカ", "full_jp": "[椿|つばき] リカ", "ko": "츠바키 리카", "image": "/dating-sim/static/reina.png"}
     digest = hashlib.sha256(story_id.encode("utf-8")).digest()
     return BOOK_CHARACTER_PROFILES[digest[0] % len(BOOK_CHARACTER_PROFILES)]
 
@@ -1324,7 +1331,7 @@ def random_book_id(exclude=None):
 # 돌리므로, 런타임(story_for)은 캐시가 있으면 그걸 쓰고 없으면 기존 고정
 # 템플릿으로 안전하게 폴백한다(학습카드 파이프라인과 같은 오프라인 생성·
 # 런타임 소비 구조).
-GENERATED_SCENARIO_VERSION = 1
+GENERATED_SCENARIO_VERSION = 2
 GENERATED_SCENARIO_FILENAME = "dating_sim_scenario.json"
 
 
@@ -1502,11 +1509,12 @@ def story_for(story_id=None, seed_key=None):
     # 녹인 새 시나리오), 없거나 깨졌으면 고정 템플릿으로 폴백한다.
     generated = load_generated_scenario(source_title, locations.keys())
     day_narration = None
+    display_name_jp = profile.get("full_jp", profile["jp"])
     if generated:
-        scenes, day_narration = _scenes_from_generated(generated, profile["ko"], profile["jp"])
+        scenes, day_narration = _scenes_from_generated(generated, profile["ko"], display_name_jp)
         scenario_source = "generated"
     else:
-        scenes = _seven_day_scenes(book_location_lines, profile["ko"], profile["jp"], vocab_pool=vocab_pool)
+        scenes = _seven_day_scenes(book_location_lines, profile["ko"], display_name_jp, vocab_pool=vocab_pool)
         scenario_source = "template"
     if seed_key is not None:
         for day, day_scenes in scenes.items():
@@ -1520,7 +1528,7 @@ def story_for(story_id=None, seed_key=None):
               for location, action in actions.items()}
         for day, actions in BOOK_DAY_LOCATION_ACTIONS.items()
     }
-    story = {"id": story_id, "name": profile["jp"], "title": f"{source_title}에서 영감받은 이야기",
+    story = {"id": story_id, "name": display_name_jp, "title": f"{source_title}에서 영감받은 이야기",
             "character_image": profile["image"],
             "character_images": {"first": profile["image"],
                                  "walk": profile["image"],
@@ -1528,7 +1536,7 @@ def story_for(story_id=None, seed_key=None):
             "character_name_ko": profile["ko"],
             "source_title": source_title, "total_days": TOTAL_DAYS, "locations": locations,
             "scenes": scenes, "endings": endings,
-            "day_openings": _daily_openings(seed_key, story_id, profile["jp"], profile["ko"]),
+            "day_openings": _daily_openings(seed_key, story_id, display_name_jp, profile["ko"]),
             "map_actions": map_actions,
             "scenario_source": scenario_source}
     if day_narration:
@@ -1566,13 +1574,14 @@ def scenario_tree(story_id=None, seed_key=None):
     # 삽입 나레이션이 아니라 대사 본문에 자연스럽게 녹아 있을 수 있다.
     # 그래서 "이 줄이 학습 단어를 담고 있나"를 고정 삽입 줄 비교가 아니라
     # 단어 태그([한자|읽기]) 포함 여부로 판정한다(고정 템플릿·생성 둘 다 동작).
-    pool_tags = [(f"[{ja}|{reading}]", {"ja": ja, "reading": reading, "ko": ko})
-                 for ja, reading, ko in vocab_pool]
+    pool_materials = [(_normalize_japanese_material(ja),
+                       {"ja": ja, "reading": reading, "ko": ko})
+                      for ja, reading, ko in vocab_pool]
     # ★ 2026-09-19: 핵심 표현(구·문장)은 단어처럼 [태그] 하나로 안 잡히므로,
     # 대사에서 후리가나를 벗긴 평문에 표현 원문(한자)이 부분 문자열로 들어
     # 있는지로 "그 표현이 그 장면에 실제로 나타났나"를 판정한다.
     expr_pool = _load_work_expressions(source_title) if source_title else []
-    expr_plain = [(_strip_furigana(ja), {"ja": ja, "reading": reading, "ko": ko})
+    expr_plain = [(_normalize_japanese_material(ja), {"ja": ja, "reading": reading, "ko": ko})
                   for ja, reading, ko in expr_pool]
     expr_used_days = {}
     story_day_narration = story.get("day_narration", {})
@@ -1586,8 +1595,10 @@ def scenario_tree(story_id=None, seed_key=None):
             raw_lines = scene["lines"]
             lines = []
             for index, text in enumerate(raw_lines):
-                day_plain_parts.append(_strip_furigana(text))
-                hit_words = [meta for tag, meta in pool_tags if tag in text]
+                normalized_text = _normalize_japanese_material(text)
+                day_plain_parts.append(normalized_text)
+                hit_words = [meta for material, meta in pool_materials
+                             if material and material in normalized_text]
                 for meta in hit_words:
                     day_words.setdefault(meta["ja"], meta)
                 lines.append({

@@ -29,6 +29,20 @@ const messagesEl = document.getElementById("messages");
 const aiResponseStatus = document.getElementById("ai-response-status");
 const aiResponseStatusText = document.getElementById("ai-response-status-text");
 const aiStatusRetry = document.getElementById("ai-status-retry");
+const portalServices = document.querySelector(".portal-services");
+const portalLayoutBtn = document.getElementById("portal-layout-btn");
+function setPortalLayout(mode) {
+  const grid = mode === "grid";
+  portalServices?.classList.toggle("grid-view", grid);
+  portalServices?.classList.toggle("list-view", !grid);
+  if (portalLayoutBtn) {
+    portalLayoutBtn.textContent = grid ? "☰ 목록" : "▦ 격자";
+    portalLayoutBtn.setAttribute("aria-label", grid ? "목록 보기로 전환" : "격자 보기로 전환");
+  }
+  localStorage.setItem("portal-layout", grid ? "grid" : "list");
+}
+setPortalLayout(localStorage.getItem("portal-layout") === "grid" ? "grid" : "list");
+portalLayoutBtn?.addEventListener("click", () => setPortalLayout(portalServices?.classList.contains("grid-view") ? "list" : "grid"));
 
 function setAiResponseStatus(waiting) {
   clearTimeout(aiStatusTimer);
@@ -1945,7 +1959,8 @@ async function showPortalHome(focusSystems = false) {
   if (activePollController) activePollController.abort();
   if (pollTimer) clearTimeout(pollTimer);
   authView.classList.add("hidden"); chatView.classList.add("hidden"); roomListView.classList.add("hidden"); sunziView.classList.add("hidden"); homeView.classList.remove("hidden");
-  document.getElementById("portal-greeting-name").textContent = myDisplayName || myUsername || "오늘도";
+  const greetingName = document.getElementById("portal-greeting-name");
+  if (greetingName) greetingName.textContent = myDisplayName || myUsername || "오늘도";
   try {
     const rooms = await loadDirectoryData();
     // 메시지 ID는 서버 전체에서 증가하므로 두 ID의 차이는 메시지 개수가 아니다.
@@ -1953,6 +1968,13 @@ async function showPortalHome(focusSystems = false) {
     const unread = rooms.reduce((sum, room) => sum + (Number(room.last_message_id || 0) > getLastRead(room.room_id) ? 1 : 0), 0);
     document.getElementById("portal-unread").textContent = unread;
   } catch (error) { console.error(error); }
+  fetch("/epub/api/books", {credentials:"same-origin"}).then((response) => response.ok ? response.json() : Promise.reject(new Error("library"))).then((books) => {
+    const count = document.getElementById("portal-japanese-count");
+    if (count) count.textContent = `${books.length}권`;
+  }).catch(() => {
+    const count = document.getElementById("portal-japanese-count");
+    if (count) count.textContent = "서재에서 확인";
+  });
   loadJapaneseKanjiFavorites(true).then((items) => {
     apiFetch("/api/me/vocabulary").then((response) => response.json()).then((words) => {
       document.getElementById("portal-vocab-count").textContent = String(items.length + words.length);

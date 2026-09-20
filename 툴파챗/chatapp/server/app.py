@@ -1937,6 +1937,26 @@ def _write_reminder_editor(payload):
     temporary.replace(SHIFT_ALARM_REMINDER_EDITOR_FILE)
 
 
+def _reminder_display_label(label):
+    """리마인더 이름 끝의 반복 설명은 제목에서 떼어 편집 UI의 규칙 칸으로
+    보낸다. 원본 label은 Shift Alarm 체크 상태 연결을 위해 그대로 보존한다."""
+    value = str(label or "").strip()
+    match = re.search(r"\(([^()]*(?:일|주|월|회|근무)[^()]*)\)\s*$", value)
+    if not match:
+        return value, "자동 계산"
+    rule = match.group(1).strip()
+    normalized = rule
+    replacements = {
+        "월 1회": "약 30일에 1회", "매월 1회": "약 30일에 1회",
+        "주 1회": "7일에 1회", "매주 1회": "7일에 1회", "1주일에 1회": "7일에 1회",
+    }
+    normalized = replacements.get(rule, normalized)
+    day_match = re.fullmatch(r"(\d+)일(?:에)?\s*1회", normalized)
+    if day_match:
+        normalized = f"{int(day_match.group(1))}일에 1회"
+    return value[:match.start()].rstrip(), normalized
+
+
 def _merge_reminder_editor(status):
     editor = _read_reminder_editor()["items"]
     schedule = []
@@ -1949,8 +1969,13 @@ def _merge_reminder_editor(status):
         if override.get("deleted"):
             continue
         item = dict(source)
+        display_label, default_recurrence_text = _reminder_display_label(item.get("label"))
+        item["display_label"] = display_label
+        item["default_recurrence_text"] = default_recurrence_text
         item.update({field: override[field] for field in
                      ("label", "enabled", "recurrence", "custom") if field in override})
+        if "label" in override:
+            item["display_label"] = override["label"]
         if isinstance(override.get("time"), dict):
             hour, minute = override["time"].get("hour"), override["time"].get("minute")
             if isinstance(hour, int) and isinstance(minute, int):
@@ -1966,6 +1991,7 @@ def _merge_reminder_editor(status):
                  if isinstance(reminder_time, dict) else None)
         schedule.append({
             "key": key, "label": override.get("label", key), "time": value,
+            "display_label": override.get("label", key), "default_recurrence_text": "사용자 지정",
             "times": {"시각": value}, "enabled": bool(override.get("enabled", True)),
             "recurrence": override.get("recurrence"), "custom": True,
         })

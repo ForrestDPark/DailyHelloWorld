@@ -167,6 +167,9 @@ except Exception:
             echo "⚠️  학습카드 복구 실패(쿼터 소진 등) — 다음 실행에서 다시 시도"
             continue
         fi
+        if ! /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_dating_sim_scenario.py" "$BOOK_CANDIDATE"; then
+            echo "⚠️  미연시 시나리오 복구는 다음 실행에서 이어갑니다."
+        fi
         RETRY_FINAL_EPUB="${BOOK_CANDIDATE}/${BOOK_CANDIDATE:t}.epub"
         if ! /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/finalize_japanese_book.py" "$BOOK_CANDIDATE" \
             || [[ ! -f "$RETRY_FINAL_EPUB" ]]; then
@@ -1319,6 +1322,13 @@ drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese 
     if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_summary.py" "$BOOK_DIR"; then
         SUMMARY_OK=1
         echo "⏱ 요약 생성 소요: $(( $(date +%s) - _T0 ))초"
+
+        echo "\n💗 학습 단어·핵심 표현 전수 활용 미연시 시나리오 생성 중..."
+        if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_dating_sim_scenario.py" "$BOOK_DIR"; then
+            echo "✅ 미연시 시나리오 생성 완료"
+        else
+            echo "⚠️  미연시 시나리오 생성은 완료되지 않았습니다. 중간 결과를 보존하고 다음 실행에서 이어갑니다."
+        fi
 
         FINAL_LIBRARY_EPUB="${BOOK_DIR}/${SAFE_BASE_NAME}.epub"
         if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/finalize_japanese_book.py" "$BOOK_DIR" \

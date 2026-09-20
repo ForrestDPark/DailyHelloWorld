@@ -154,6 +154,7 @@ class Library:
     def __init__(self, roots: list[Path]):
         self.roots = roots
         self.books: dict[str, Book] = {}
+        self.last_scan_monotonic = 0.0
         self.scan()
 
     def scan(self) -> None:
@@ -174,6 +175,13 @@ class Library:
             except (OSError, KeyError, ValueError, zipfile.BadZipFile, ET.ParseError):
                 continue
         self.books = books
+        self.last_scan_monotonic = time.monotonic()
+
+    def scan_if_stale(self, max_age: float = 60.0) -> None:
+        """파이프라인이 새 EPUB을 추가해도 웹 서버 재시작을 기다리지 않는다.
+        목록 요청 시 최대 1분에 한 번만 다시 훑어 모바일·Mac 서재를 맞춘다."""
+        if time.monotonic() - self.last_scan_monotonic >= max_age:
+            self.scan()
 
 
 class Store:
@@ -321,6 +329,7 @@ class ReaderHandler(BaseHTTPRequestHandler):
         if path == "/api/session": return self._json(200, {"authenticated": self._authenticated()})
         if path == "/api/config": return self._json(200, self.app.reader_config)
         if path == "/api/books" and self._need_auth():
+            self.app.library.scan_if_stale()
             books = sorted(self.app.library.books.values(), key=lambda b: b.modified, reverse=True)
             username = self._identity() or ""
             principal = self._principal() or ("", False)

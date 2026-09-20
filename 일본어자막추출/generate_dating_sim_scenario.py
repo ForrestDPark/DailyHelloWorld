@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""작품별 미연시 시나리오를 학습카드(어휘+표현)를 최대한 녹여 AI로 새로 생성한다.
+"""작품별 미연시 시나리오를 학습카드(어휘+표현)를 전부 녹여 AI로 새로 생성한다.
 
 ★ 2026-09-19: "학습단어를 전부다 사용하게끔 시나리오를 수정... 시나리오가 너무
 고정되어있는거같은데 학습단어를 토대로 시나리오를 전부 새로 구성했으면 좋겠어"
@@ -10,10 +10,8 @@
   써서 96개 중 13개만 등장했다. 이 스크립트는 작품마다 학습카드의 어휘·표현을
   요일·장소에 골고루 배정해, 그 단어·표현을 자연스럽게 쓰는 새 대사·선택지를
   AI로 생성한다.
-- ★ 안전: 이 미연시는 순화된 언어학습용이다. 원작은 성인물이라 원본 대사를
-  그대로 옮기지 않는다. 재료는 이미 학습용으로 추출·정제된 어휘(vocabulary)와
-  표현(expressions)만 쓰고, 노골적/성적 내용은 만들지 않는다. 원작 줄거리
-  요약(성인 내용)도 프롬프트에 넣지 않는다.
+- 등장인물은 모두 성인으로 고정한다. 성인 사이의 합의된 연애·성적 맥락을
+  일괄 금지하지 않되, 미성년자·강압·비동의 상황은 만들지 않는다.
 - 생성 결과는 library/<작품>/dating_sim_scenario.json에 캐싱되고, 챗앱 런타임
   (story_for)이 있으면 그걸 쓰고 없으면 고정 템플릿으로 폴백한다.
 
@@ -44,6 +42,18 @@ BOOK_LOCATIONS = [
     ("quiet", "조용한 찻집·카페"),
 ]
 FURIGANA_RE = re.compile(r"\[([^\]|]+)\|([^\]]+)\]")
+JAPANESE_TOKEN_RE = re.compile(r"[^一-龯々〆ヵヶぁ-ゖァ-ヺーA-Za-z0-9]+")
+
+
+def plain_japanese(text):
+    """후리가나·구두점·공백 차이를 없애 필수 재료가 실제 문장에 쓰였는지
+    판정한다. 한글 번역은 허용 문자 정규식에서 자연스럽게 제거된다."""
+    return JAPANESE_TOKEN_RE.sub("", FURIGANA_RE.sub(r"\1", str(text or "")))
+
+
+def contains_material(text, material):
+    needle = plain_japanese(material.get("ja", ""))
+    return bool(needle and needle in plain_japanese(text))
 
 
 def load_expressions(work_dir):
@@ -84,6 +94,13 @@ def assign_round_robin(items, day_count, per_day):
     return assignments
 
 
+def distribute_locations(items):
+    assigned = {loc: [] for loc, _ in BOOK_LOCATIONS}
+    for index, item in enumerate(items):
+        assigned[BOOK_LOCATIONS[index % len(BOOK_LOCATIONS)][0]].append(item)
+    return assigned
+
+
 def build_day_prompt(character_ko, day, topic, arc_hint, words, expressions, is_first_day):
     schema_example = json.dumps({
         "narration": "[今日|きょう]は[雨|あめ]が[降|ふ]っていた。\n오늘은 비가 내리고 있었다.",
@@ -109,27 +126,28 @@ def build_day_prompt(character_ko, day, topic, arc_hint, words, expressions, is_
     def fmt_exprs(es):
         return "\n".join(f"- {e['ja']} = {e['ko']}" for e in es) or "- (없음)"
 
-    # 장소별로 단어를 다시 3등분해 배정한다(각 장소가 다른 단어를 쓰게).
-    loc_words = {loc: [] for loc, _ in BOOK_LOCATIONS}
-    for i, w in enumerate(words):
-        loc_words[BOOK_LOCATIONS[i % 3][0]].append(w)
+    # 단어와 표현을 장면별로 확정 배정한다. AI가 임의로 고르는 후보 목록이
+    # 아니라, 그 장면의 lines에 모두 실어야 하는 체크리스트다.
+    loc_words = distribute_locations(words)
+    loc_expressions = distribute_locations(expressions)
 
     loc_blocks = []
     for loc, desc in BOOK_LOCATIONS:
         loc_blocks.append(
             f"[{loc}] {desc}\n"
-            f"이 장소 장면에서 자연스럽게 녹일 학습 단어:\n{fmt_words(loc_words[loc])}"
+            f"이 장소 lines에 반드시 모두 넣을 학습 단어:\n{fmt_words(loc_words[loc])}\n"
+            f"이 장소 lines에 반드시 모두 넣을 핵심 표현:\n{fmt_exprs(loc_expressions[loc])}"
         )
     loc_section = "\n\n".join(loc_blocks)
 
     first_rule = (
-        "오늘은 1일차 — 두 사람은 방금 처음 만난 완전한 남남이다. 관계의 지속·애착을 "
-        "전제하는 말(다시 만나자, 늘 그랬듯이 등)이나 학습 단어 삽입은 하지 마라. "
-        "우연한 작은 사고로 인사만 나누는 풋풋한 첫 만남이어야 한다."
+        "두 사람은 방금 처음 만난 완전한 남남이다. 관계의 지속·애착을 "
+        "전제하는 말(다시 만나자, 늘 그랬듯이 등)은 하지 마라. 배정된 학습 단어·표현은 "
+        "우연한 작은 사고와 첫 인사 맥락 안에 전부 자연스럽게 넣어라."
         if is_first_day else
-        "이미 며칠째 만나 연락을 주고받는 사이다. 위 학습 단어·표현을 그날 상황 속에 "
-        "자연스럽게 녹여라 — 단어를 지칭하며 설명하지 말고, 등장인물이 실제로 그 단어를 "
-        "쓰는 대사가 되게 하라. 억지로 다 넣지 말고 자연스러운 것만."
+        "이미 여러 사건을 거치며 연락을 주고받는 성인들이다. 배정된 학습 단어·표현을 현재 상황 "
+        "속에 전부 자연스럽게 녹여라. 단어를 지칭하며 설명하지 말고 등장인물의 실제 대사나 "
+        "나레이션 문장으로 써라."
     )
 
     return f"""너는 순화된 언어학습용 연애 시뮬레이션의 시나리오 작가다. 여주인공 이름은
@@ -137,9 +155,12 @@ def build_day_prompt(character_ko, day, topic, arc_hint, words, expressions, is_
 써라 — 프로그램이 실제 이름으로 치환한다). 플레이어는 "당신/너"로 부른다.
 
 ★ 절대 규칙:
-- 전연령가 풋풋한 연애물이다. 노골적/성적/폭력적 내용은 절대 만들지 마라.
-- 아래 학습 단어와 표현(이미 학습용으로 정제된 것)만 재료로 쓴다. 원작의 성인 내용은
-  참고하지 않는다.
+- 등장인물과 플레이어는 모두 20세 이상의 성인이다. 성인 사이의 합의된 연애·성적 맥락을
+  일괄 배제하지 않는다. 다만 미성년자, 강압, 비동의, 착취 상황은 만들지 마라.
+- 각 장소에 배정된 학습 단어와 핵심 표현을 그 장소의 lines에 하나도 빠짐없이 실제로 써라.
+  핵심 표현의 일본어 어순과 어휘는 유지하되 주변 문맥과 한국어 번역은 장면에 맞게 연결하라.
+- 독자에게 DAY, n일차, n일째, n日目처럼 날짜를 세는 표현을 노출하지 마라. 사건의 전후 관계와
+  장소 변화만으로 흐름이 자연스럽게 이어지게 써라.
 - 모든 대사·나레이션·선택지는 "일본어\\n한국어" 두 줄로 쓴다(한 문자열 안에 \\n 하나).
 - 한자에는 반드시 [한자|요미가나] 형식으로 후리가나를 단다(한자 덩어리에만, 예:
   [久|ひさ]しぶり, [約束|やくそく]). 히라가나·가타카나·조사에는 달지 않는다. 한국어 줄에는
@@ -157,14 +178,28 @@ def build_day_prompt(character_ko, day, topic, arc_hint, words, expressions, is_
 장소별 지정 재료:
 {loc_section}
 
-이 회차에서 함께 쓰면 좋은 표현(자연스러운 것만 골라 대사에 녹여라, 전부 안 써도 됨):
-{fmt_exprs(expressions)}
-
 출력 JSON 스키마(정확히 이 구조, 장소는 first/walk/quiet 3개 모두):
 {schema_example}"""
 
 
-def validate_day(day_obj):
+def missing_day_materials(day_obj, words, expressions):
+    """배정 재료를 해당 장소의 lines에서 찾는다. 선택지나 번역에만 우연히
+    등장한 것은 학습 표현을 시나리오 대사에 활용한 것으로 세지 않는다."""
+    missing = []
+    word_map = distribute_locations(words)
+    expression_map = distribute_locations(expressions)
+    scenes = day_obj.get("scenes", {}) if isinstance(day_obj, dict) else {}
+    for loc, _ in BOOK_LOCATIONS:
+        lines = (scenes.get(loc) or {}).get("lines") or []
+        joined = "\n".join(lines)
+        for kind, items in (("단어", word_map[loc]), ("표현", expression_map[loc])):
+            for item in items:
+                if not contains_material(joined, item):
+                    missing.append(f"{loc} {kind}: {item['ja']}")
+    return missing
+
+
+def validate_day(day_obj, words=None, expressions=None):
     if not isinstance(day_obj, dict):
         return False
     scenes = day_obj.get("scenes")
@@ -183,10 +218,10 @@ def validate_day(day_obj):
         tones = {c.get("tone") for c in choices if isinstance(c, dict) and c.get("text", "").strip()}
         if tones != {"positive", "negative"}:
             return False
-    return True
+    return not missing_day_materials(day_obj, words or [], expressions or [])
 
 
-def finalize_day(day, day_obj, word_tags):
+def finalize_day(day, day_obj, vocab_pool, expressions):
     """AI 출력(tone 기반 선택지)을 엔진 스키마(affection 점수)로 변환하고,
     실제로 대사에 등장한 학습 단어를 스캔해 vocab_used로 기록한다."""
     out = {"scenes": {}}
@@ -204,10 +239,13 @@ def finalize_day(day, day_obj, word_tags):
         choices.sort(key=lambda c: c["affection"], reverse=True)
         lines = [x.strip() for x in sc["lines"]]
         joined = "\n".join(lines)
-        vocab_used = [meta for tag, meta in word_tags if tag in joined]
+        vocab_used = [meta for meta in vocab_pool if contains_material(joined, meta)]
+        expressions_used = [meta for meta in expressions if contains_material(joined, meta)]
         scene = {"lines": lines, "choices": choices}
         if vocab_used:
             scene["vocab_used"] = vocab_used
+        if expressions_used:
+            scene["expressions_used"] = expressions_used
         out["scenes"][loc] = scene
     return out
 
@@ -220,8 +258,6 @@ def generate_for_work(work_dir, log=print):
         log(f"❌ {title}: 학습 단어가 없어 생성 불가(학습카드 먼저 생성 필요)")
         return False
     expressions = load_expressions(work_dir)
-    word_tags = [(f"[{w['ja']}|{w['reading']}]", w) for w in vocab_pool]
-
     total_days = ds.TOTAL_DAYS
     # 96단어를 2~14일차(13일)에 골고루 → 하루 약 8개, 장소당 2~3개.
     per_day = max(3, -(-len(vocab_pool) // (total_days - 1)))
@@ -230,9 +266,12 @@ def generate_for_work(work_dir, log=print):
 
     partial_path = work_dir / "dating_sim_scenario.partial.json"
     days = {}
+    partial_version = ds.GENERATED_SCENARIO_VERSION
     if partial_path.is_file():
         try:
-            days = json.loads(partial_path.read_text(encoding="utf-8")).get("days", {})
+            partial = json.loads(partial_path.read_text(encoding="utf-8"))
+            if partial.get("content_version") == partial_version:
+                days = partial.get("days", {})
         except (OSError, ValueError):
             days = {}
 
@@ -245,9 +284,11 @@ def generate_for_work(work_dir, log=print):
         exprs = [] if is_first else expr_by_day.get(day, [])
         topic = ds.DAY_TOPICS.get(day, "")
         arc_hint = ds.DAY_NARRATION.get(day, "").split("\n")[-1]
-        prompt = build_day_prompt(title.split("_")[0], day, topic, arc_hint, words, exprs, is_first)
+        base_prompt = build_day_prompt(title.split("_")[0], day, topic, arc_hint, words, exprs, is_first)
+        prompt = base_prompt
         day_obj = None
-        for attempt in range(3):
+        max_attempts = 5
+        for attempt in range(max_attempts):
             try:
                 stdout, engine = run_ai_exec(prompt, str(work_dir), timeout=600)
             except RuntimeError as exc:
@@ -258,35 +299,53 @@ def generate_for_work(work_dir, log=print):
                 candidate = json.loads(match.group(0)) if match else None
             except json.JSONDecodeError:
                 candidate = None
-            if candidate and validate_day(candidate):
+            if candidate and validate_day(candidate, words, exprs):
                 day_obj = candidate
                 break
-            prompt += ("\n\n★ 이전 출력이 형식 검사를 통과하지 못했다. 장소 3개(first/walk/quiet) "
-                       "모두, 각 lines 4~7줄에 마지막이 질문, 선택지 정확히 2개(positive/negative), "
-                       "모든 문자열 '일본어\\n한국어' 형식으로 JSON만 다시 출력하라.")
-            log(f"   ↻ DAY {day} 재시도 {attempt + 2}/3")
+            missing = missing_day_materials(candidate or {}, words, exprs)
+            if attempt + 1 < max_attempts:
+                previous = json.dumps(candidate, ensure_ascii=False) if candidate else "(유효한 JSON 없음)"
+                prompt = (base_prompt
+                          + "\n\n★ 아래 이전 출력을 최소한으로 고쳐 다시 JSON만 출력하라. "
+                            "빠진 재료는 지정 장소의 lines에 자연스럽게 추가하고 다른 필수 재료는 지우지 마라. "
+                            "형식도 함께 다시 확인하라.\n"
+                          + "누락: " + "; ".join(missing)
+                          + "\n이전 출력: " + previous)
+                preview = "; ".join(missing[:3]) or "JSON 구조 오류"
+                log(f"   ↻ DAY {day} 재시도 {attempt + 2}/{max_attempts} — {preview}")
         if not day_obj:
             log(f"❌ {title}: DAY {day} 생성 실패 — 중간 저장본은 남김, 재실행 시 이어감")
             return False
-        days[str(day)] = finalize_day(day, day_obj, word_tags)
-        partial_path.write_text(json.dumps({"days": days}, ensure_ascii=False, indent=1), encoding="utf-8")
+        days[str(day)] = finalize_day(day, day_obj, vocab_pool, expressions)
+        partial_path.write_text(json.dumps({"content_version": partial_version, "days": days}, ensure_ascii=False, indent=1), encoding="utf-8")
         used = sum(len(days[str(day)]["scenes"][loc].get("vocab_used", [])) for loc, _ in BOOK_LOCATIONS)
         log(f"   ✅ DAY {day} 생성 완료 (단어 {used}개 삽입)")
 
-    scenario = {"content_version": ds.GENERATED_SCENARIO_VERSION, "days": days}
+    used_ja, used_expr = set(), set()
+    for generated_day in days.values():
+        for loc, _ in BOOK_LOCATIONS:
+            scene = generated_day["scenes"][loc]
+            used_ja.update(w["ja"] for w in scene.get("vocab_used", []))
+            used_expr.update(e["ja"] for e in scene.get("expressions_used", []))
+    missing_words = [w["ja"] for w in vocab_pool if w["ja"] not in used_ja]
+    missing_expressions = [e["ja"] for e in expressions if e["ja"] not in used_expr]
+    if missing_words or missing_expressions:
+        log(f"❌ {title}: 전수 활용 검증 실패 — 단어 {len(missing_words)}개, 표현 {len(missing_expressions)}개 누락")
+        return False
+    scenario = {
+        "content_version": ds.GENERATED_SCENARIO_VERSION,
+        "coverage": {"vocabulary": [len(used_ja), len(vocab_pool)],
+                     "expressions": [len(used_expr), len(expressions)], "complete": True},
+        "days": days,
+    }
     if not ds._validate_generated_scenario(scenario, [loc for loc, _ in BOOK_LOCATIONS]):
         log(f"❌ {title}: 최종 검증 실패 — 캐시를 쓰지 않음")
         return False
     (work_dir / "dating_sim_scenario.json").write_text(
         json.dumps(scenario, ensure_ascii=False, indent=1), encoding="utf-8")
     partial_path.unlink(missing_ok=True)
-    # 실제 사용된 단어 수 집계
-    used_ja = set()
-    for day_obj in days.values():
-        for loc, _ in BOOK_LOCATIONS:
-            for w in day_obj["scenes"][loc].get("vocab_used", []):
-                used_ja.add(w["ja"])
-    log(f"🎉 {title}: 시나리오 생성 완료 — 학습 단어 {len(used_ja)}/{len(vocab_pool)}개 활용")
+    log(f"🎉 {title}: 시나리오 생성 완료 — 학습 단어 {len(used_ja)}/{len(vocab_pool)}개, "
+        f"핵심 표현 {len(used_expr)}/{len(expressions)}개 전부 활용")
     return True
 
 
@@ -319,9 +378,17 @@ def main():
 
     ok, fail = 0, 0
     for work_dir in targets:
-        if not args.force and (work_dir / "dating_sim_scenario.json").is_file():
-            print(f"⏭️  {work_dir.name}: 이미 생성됨(--force로 재생성)")
-            continue
+        scenario_path = work_dir / "dating_sim_scenario.json"
+        if not args.force and scenario_path.is_file():
+            try:
+                cached = json.loads(scenario_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                cached = {}
+            if (cached.get("content_version") == ds.GENERATED_SCENARIO_VERSION
+                    and (cached.get("coverage") or {}).get("complete") is True):
+                print(f"⏭️  {work_dir.name}: 전수 활용 시나리오가 이미 생성됨(--force로 재생성)")
+                continue
+            print(f"↻ {work_dir.name}: 이전/불완전 시나리오를 새 규칙으로 교체합니다")
         print(f"\n===== {work_dir.name} =====")
         try:
             if generate_for_work(work_dir):

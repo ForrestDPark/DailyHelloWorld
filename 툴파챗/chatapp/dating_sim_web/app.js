@@ -74,7 +74,7 @@ function renderHistoryList() {
     const head = document.createElement("div");
     head.className = "history-entry-head";
     const dayLabel = document.createElement("span");
-    dayLabel.textContent = `DAY ${entry.day} · ${LOCATION_LABELS[entry.location] || entry.location}`;
+    dayLabel.textContent = `지난 장면 · ${LOCATION_LABELS[entry.location] || entry.location}`;
     head.append(dayLabel);
     const linesBox = document.createElement("div");
     linesBox.className = "history-entry-lines";
@@ -140,7 +140,8 @@ function showView(name) {
 function renderHud(state) {
   latestState = state;
   $("hud-title").textContent = "미연시";
-  $("hud-day").textContent = `DAY ${state.day} / ${state.total_days}`;
+  const progress = Math.max(0, Math.min(100, Math.round(((state.day - 1) / state.total_days) * 100)));
+  $("hud-day").textContent = `이야기 진행 ${progress}%`;
   $("affection-value").textContent = state.affection;
   $("affection-value").parentElement.setAttribute("aria-label", `호감도 ${state.affection}점`);
   $("affection-bar").style.width = `${Math.max(0, Math.min(100, state.affection))}%`;
@@ -759,7 +760,9 @@ function typeLine(text) {
   const line = typeof text === "string" ? { speaker: "character", text } : text;
   text = line.text;
   const narrator = line.speaker === "narrator";
-  $("speaker-name").textContent = narrator ? "主人公 · 나" : (latestState?.character_name || "");
+  const speakerName = $("speaker-name");
+  if (narrator) speakerName.textContent = "主人公 · 나";
+  else renderAnnotatedText(speakerName, latestState?.character_name || "");
   $("portrait").classList.toggle("narrator", narrator);
   $("portrait-image").src = narrator
     ? locationBackdrop($("stage").dataset.location)
@@ -856,7 +859,7 @@ function renderScene(state) {
 
 function renderChoiceResult(state) {
   const delta = state.choice_result.affection_delta;
-  $("result-speaker-name").textContent = state.character_name;
+  renderAnnotatedText($("result-speaker-name"), state.character_name);
   $("stage").dataset.location = state.choice_result.location || "result";
   $("stage").dataset.day = state.day;
   $("result-portrait-image").src = state.choice_result.character_image || state.character_image || "";
@@ -872,7 +875,7 @@ function renderChoiceResult(state) {
 function renderEnding(state) {
   $("ending-title").textContent = state.ending.title;
   renderAnnotatedText($("ending-text"), state.ending.lines.join("\n"));
-  $("ending-speaker-name").textContent = state.character_name;
+  renderAnnotatedText($("ending-speaker-name"), state.character_name);
   $("ending-portrait-image").src = state.character_image || "";
   showView("ending-view");
 }
@@ -910,9 +913,10 @@ async function loadState() {
 // 바로 들어간다. 저장된 만남이 하나도 없으면(이전에 했던 작품이 없으면)
 // 로비 없이 곧바로 새로 시작한다.
 function lobbyStatusText(encounter) {
+  const progress = Math.max(0, Math.min(100, Math.round(((encounter.day - 1) / encounter.total_days) * 100)));
   return encounter.completed
     ? `엔딩 · ${encounter.ending_title}`
-    : `DAY ${encounter.day} / ${encounter.total_days} · 호감도 ${encounter.affection}`;
+    : `이야기 진행 ${progress}% · 호감도 ${encounter.affection}`;
 }
 
 function renderLobby(mostRecentEncounter) {
@@ -922,7 +926,7 @@ function renderLobby(mostRecentEncounter) {
   if (mostRecentEncounter.character_image) {
     const img = document.createElement("img");
     img.src = mostRecentEncounter.character_image;
-    img.alt = mostRecentEncounter.character_name;
+    img.alt = plainText(mostRecentEncounter.character_name);
     continueBtn.append(img);
   }
   const info = document.createElement("div");
@@ -933,7 +937,7 @@ function renderLobby(mostRecentEncounter) {
   // 만남요약정도만 나오면 좋겠어" 요청 — source_title(EPUB 제목)은 화면에
   // 절대 노출하지 않는다. 이름 + 진행 요약만 보여준다.
   const subtitle = document.createElement("span");
-  subtitle.textContent = mostRecentEncounter.character_name;
+  renderAnnotatedText(subtitle, mostRecentEncounter.character_name);
   const status = document.createElement("span");
   status.textContent = lobbyStatusText(mostRecentEncounter);
   info.append(title, subtitle, status);
@@ -1287,12 +1291,12 @@ function renderScenarioTree(tree) {
   const head = document.createElement("div");
   head.className = "tree-work-head";
   const workTitle = document.createElement("strong");
-  workTitle.textContent = tree.source_title
+  renderAnnotatedText(workTitle, tree.source_title
     ? `${tree.character_name} · ${tree.source_title}`
-    : tree.character_name;
+    : tree.character_name);
   head.append(workTitle);
   const meta = document.createElement("span");
-  meta.textContent = `${tree.total_days}일 · 학습 단어 ${tree.vocab_pool.length}개`;
+  meta.textContent = `${tree.total_days}개 장면 흐름 · 학습 단어 ${tree.vocab_pool.length}개`;
   head.append(meta);
   body.append(head);
 
@@ -1300,7 +1304,7 @@ function renderScenarioTree(tree) {
 
   const tocHead = document.createElement("div");
   tocHead.className = "tree-section-head";
-  tocHead.textContent = "🌳 요일별 시나리오 트리";
+  tocHead.textContent = "🌳 사건 흐름별 시나리오 트리";
   body.append(tocHead);
 
   for (const day of tree.days) {
@@ -1309,7 +1313,7 @@ function renderScenarioTree(tree) {
     const dayHead = document.createElement("div");
     dayHead.className = "tree-day-head";
     const dayNum = document.createElement("strong");
-    dayNum.textContent = `DAY ${day.day}`;
+    dayNum.textContent = `흐름 ${day.day}`;
     dayHead.append(dayNum);
     if (day.vocab) {
       const badge = document.createElement("span");
