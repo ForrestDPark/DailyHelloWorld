@@ -22,6 +22,14 @@ const LOCATION_LABELS = {
   first: "첫 만남 장소", walk: "산책길", quiet: "찻집",
 };
 
+function setSafeImage(element, source, fallback="/dating-sim/static/reina.png") {
+  element.onerror = () => {
+    element.onerror = null;
+    element.src = fallback;
+  };
+  element.src = source || fallback;
+}
+
 function historyStorageKey() {
   return `dating-sim-history:${storyId || "default"}`;
 }
@@ -768,9 +776,10 @@ function typeLine(text) {
   if (narrator) speakerName.textContent = "主人公 · 나";
   else renderAnnotatedText(speakerName, latestState?.character_name || "");
   $("portrait").classList.toggle("narrator", narrator);
-  $("portrait-image").src = narrator
-    ? locationBackdrop($("stage").dataset.location)
-    : sceneCharacterImage;
+  setSafeImage(
+    $("portrait-image"),
+    narrator ? locationBackdrop($("stage").dataset.location) : sceneCharacterImage,
+  );
   const el = $("dialogue-text");
   el.textContent = "";
   $("dialogue-next").classList.add("hidden");
@@ -870,7 +879,7 @@ function renderScene(state) {
   $("stage").dataset.location = state.scene.location;
   $("stage").dataset.day = state.day;
   sceneCharacterImage = state.scene.character_image || state.character_image || "";
-  $("portrait-image").src = sceneCharacterImage;
+  setSafeImage($("portrait-image"), sceneCharacterImage);
   showView("scene-view");
   updateListeningControls(listeningMode ? "대기 중" : "꺼짐");
   typeLine(sceneLines[0]);
@@ -881,7 +890,7 @@ function renderChoiceResult(state) {
   renderAnnotatedText($("result-speaker-name"), state.character_name);
   $("stage").dataset.location = state.choice_result.location || "result";
   $("stage").dataset.day = state.day;
-  $("result-portrait-image").src = state.choice_result.character_image || state.character_image || "";
+  setSafeImage($("result-portrait-image"), state.choice_result.character_image || state.character_image);
   renderAnnotatedText($("result-text"), state.choice_result.line);
   $("result-affection").textContent = `${delta > 0 ? "+" : ""}${delta} · 현재 호감도 ${state.affection}`;
   showView("result-view");
@@ -895,7 +904,7 @@ function renderEnding(state) {
   $("ending-title").textContent = state.ending.title;
   renderAnnotatedText($("ending-text"), state.ending.lines.join("\n"));
   renderAnnotatedText($("ending-speaker-name"), state.character_name);
-  $("ending-portrait-image").src = state.character_image || "";
+  setSafeImage($("ending-portrait-image"), state.character_image);
   showView("ending-view");
 }
 

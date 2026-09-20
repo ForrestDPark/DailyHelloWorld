@@ -37,6 +37,15 @@ class DatingSimApiTests(unittest.TestCase):
             if (choice["affection"] > 0) is positive
         )
 
+    def test_nested_sone_scene_image_is_served_but_unlisted_path_is_blocked(self):
+        response = app.dating_sim_static(
+            "static/sone-486/rainy-evening.png", request()
+        )
+        self.assertTrue(str(response.path).endswith("static/sone-486/rainy-evening.png"))
+        with self.assertRaises(HTTPException) as raised:
+            app.dating_sim_static("static/sone-486/not-allowed.png", request())
+        self.assertEqual(raised.exception.status_code, 404)
+
     def test_new_player_starts_at_day_one_with_base_affection_and_no_pending_scene(self):
         state = app.dating_sim_state(request())
         self.assertEqual(state["day"], 1)

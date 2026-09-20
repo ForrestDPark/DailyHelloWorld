@@ -689,15 +689,23 @@ def dating_sim_dashboard(request: Request):
     return FileResponse(str(DATING_SIM_WEB_DIR / "index.html"))
 
 
-@app.get("/dating-sim/static/{filename}")
+@app.get("/dating-sim/static/{filename:path}")
 def dating_sim_static(filename: str, request: Request):
     _require_signed_in_user(request)
-    if filename not in {"style.css", "app.js", "soi.png", "soi-park.png", "soi-school.png",
-                        "haru.png", "haru-first.png", "haru-walk.png",
-                        "akari.png", "mio.png", "reina.png",
-                        "pixel-cafe.png", "pixel-park.png", "pixel-school.png", "pixel-message.png"}:
+    allowed = {
+        "style.css", "app.js", "soi.png", "soi-park.png", "soi-school.png",
+        "haru.png", "haru-first.png", "haru-walk.png", "akari.png", "mio.png", "reina.png",
+        "pixel-cafe.png", "pixel-park.png", "pixel-school.png", "pixel-message.png",
+        "static/sone-486/office-first-meeting.png",
+        "static/sone-486/rainy-evening.png",
+        "static/sone-486/message-received.png",
+    }
+    if filename not in allowed:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
-    return FileResponse(str(DATING_SIM_WEB_DIR / filename))
+    target = DATING_SIM_WEB_DIR / filename
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
+    return FileResponse(str(target))
 
 
 @app.get("/dating-sim/audio/{filename}")
