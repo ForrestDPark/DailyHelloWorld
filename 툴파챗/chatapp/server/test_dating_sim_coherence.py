@@ -41,10 +41,9 @@ class DatingSimCoherenceTests(unittest.TestCase):
         issues = report.check_last_line_matches_outro(self.scenes_by_variant())
         self.assertEqual(issues, [], "\n".join(issues))
 
-    def test_location_labels_use_physical_destination_framing_not_text_reply(self):
-        """★ 2026-09-17 실제 버그: 2일차만 장소 라벨이 따옴표+"답한다" 문자
-        답장투였는데, 실제로는 물리적 장소 장면으로 곧장 이어져 어색했다."""
-        issues = report.check_location_labels_are_physical(ds.DAY_LOCATION_ACTIONS)
+    def test_location_labels_respond_to_the_previous_dialogue(self):
+        """사건 도입 뒤에는 장소 이동보다 여주의 말에 대한 반응을 먼저 고른다."""
+        issues = report.check_location_labels_follow_dialogue(ds.DAY_LOCATION_ACTIONS)
         self.assertEqual(issues, [], "\n".join(issues))
 
     def test_every_day_has_complete_content_across_all_data_tables(self):
@@ -154,13 +153,11 @@ class DatingSimCoherenceTests(unittest.TestCase):
         self.assertIn("연락처", day2_first_line)
         self.assertNotIn("자연스럽게 이야기할 수 있게", day2_first_line)
 
-    def test_day2_location_actions_specify_whose_club_it_is(self):
-        """★ 2026-09-18 실제 버그: "동아리가 끝나길기다린다는게 려주동아리
-        인지 내동아리인지모르겠고" 신고 — 학교 선택지 라벨이 "동아리 끝나길
-        기다린다"뿐이라 누구의 동아리인지 알 수 없었다. LOCATION_LINES의
-        2일차 school 대사는 그녀 본인이 자기 동아리를 언급하는 대사이므로
-        라벨도 "그녀"를 명시해야 한다."""
-        self.assertIn("그녀", ds.DAY_LOCATION_ACTIONS[2]["school"])
+    def test_day2_school_action_is_a_natural_reply_not_club_waiting(self):
+        """뜬금없이 동아리가 끝나길 기다리지 않고 만나자는 말에 답해야 한다."""
+        label = ds.DAY_LOCATION_ACTIONS[2]["school"]
+        self.assertIn("답한다", label)
+        self.assertNotIn("동아리", label)
 
     def test_vocab_insertion_returns_to_the_days_own_topic_before_the_outro(self):
         """★ 2026-09-18 실제 버그: "그 다음 장면도 좀 이상해 장면이 전혀

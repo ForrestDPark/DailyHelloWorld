@@ -168,7 +168,11 @@ def build_day_prompt(character_ko, day, topic, arc_hint, words, expressions, is_
 - 각 장면(scene)의 lines는 4~7줄. 마지막 줄은 반드시 두 선택지가 자연스럽게 답이 되는
   질문이나 화제여야 한다.
 - 선택지는 정확히 2개: 하나는 호감이 오르는 다정/진솔한 답(tone:positive), 하나는
-  거리를 두는 무뚝뚝/회피 답(tone:negative).
+  거리를 두는 무뚝뚝/회피 답(tone:negative). 두 선택지는 반드시 바로 앞 마지막 대사에
+  플레이어가 말로 답하는 1인칭 문장이어야 한다. 갑자기 장소로 이동하거나 상대를 부르거나
+  기다리는 행동 지시문으로 쓰지 마라.
+- lines와 choices 본문 앞에 "ソイ:", "여주 이름:", "佐藤 春「" 같은 화자 이름표를
+  붙이지 마라. 화자 이름은 게임 UI가 대사창 위에 별도로 표시한다.
 - JSON 객체 하나만 출력하라(코드펜스·설명 금지).
 
 오늘(DAY {day}) 이야기 주제: {topic}

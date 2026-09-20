@@ -1,6 +1,7 @@
 """★ 2026-09-15: "미연시 시스템 하나 만들어봤으면 좋겠어" 요청으로 만든
 선택지+호감도+멀티 엔딩 미니게임의 엔진(상태 저장·전환) 테스트."""
 import json
+import copy
 import tempfile
 import unittest
 from pathlib import Path
@@ -53,6 +54,23 @@ class DatingSimApiTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as raised:
             app.dating_sim_visit(app.DatingSimLocationRequest(location="park"), request())
         self.assertEqual(raised.exception.status_code, 409)
+
+    def test_learning_progress_counts_only_after_last_line_is_seen(self):
+        story = copy.deepcopy(dating_sim_story.story_for())
+        story["id"] = "learning-progress-test"
+        story["scenes"][1]["cafe"]["vocab_words"] = [
+            {"ja": "約束", "reading": "やくそく", "ko": "약속"}
+        ]
+        story["scenes"][1]["cafe"]["expressions_used"] = [
+            {"ja": "また会いましょう", "reading": "またあいましょう", "ko": "또 만나요"}
+        ]
+        with patch.object(app, "_dating_story", return_value=story):
+            initial = app.dating_sim_state(request())
+            self.assertEqual(initial["learning_progress"], {"seen": 0, "total": 2, "percent": 0})
+            visited = app.dating_sim_visit(app.DatingSimLocationRequest(location="cafe"), request())
+            self.assertEqual(visited["learning_progress"]["seen"], 0)
+            result = app.dating_sim_seen(app.DatingSimRestartRequest(story_id=story["id"]), request())
+            self.assertEqual(result["learning_progress"], {"seen": 2, "total": 2, "percent": 100})
 
     def test_visiting_an_unknown_location_is_rejected(self):
         with self.assertRaises(HTTPException) as raised:
@@ -611,6 +629,19 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         first_scene = gen_story["scenes"][1]["first"]
         self.assertTrue(first_scene["lines"])
         self.assertEqual(len(first_scene["choices"]), 2)
+
+    def test_generated_dialogue_removes_repeated_character_name_prefix(self):
+        generated = self._fake_generated_scenario()
+        generated["days"]["1"]["scenes"]["first"]["lines"][0] = (
+            "ソイ：[今日|きょう]はいい[天気|てんき]ですね。\n소이: 오늘은 날씨가 좋네요."
+        )
+        scenes, _ = dating_sim_story._scenes_from_generated(
+            generated, "사토 하루", "[佐藤|さとう] [春|はる]"
+        )
+        line = scenes[1]["first"]["lines"][0]
+        self.assertNotIn("[佐藤|さとう] [春|はる]", line)
+        self.assertNotIn("사토 하루:", line)
+        self.assertTrue(line.startswith("[今日|きょう]"))
 
     def test_generated_scenario_tree_flags_vocab_by_content_and_reports_usage(self):
         """생성 시나리오(한 장면 여러 단어, 대사에 직접 녹음)에서도 트리가

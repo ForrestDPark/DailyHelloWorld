@@ -788,7 +788,58 @@ def _dating_sim_row(conn, username, story):
     }
 
 
-def _dating_sim_state_payload(row, story):
+def _dating_materials(story):
+    """이야기 전체에서 실제로 쓰이는 고유 학습 단어·표현 목록."""
+    materials = set()
+    for day_scenes in story.get("scenes", {}).values():
+        for scene in day_scenes.values():
+            for word in scene.get("vocab_words") or ([scene["vocab"]] if scene.get("vocab") else []):
+                if word.get("ja"):
+                    materials.add(("vocabulary", word["ja"]))
+            for expression in scene.get("expressions_used") or []:
+                if expression.get("ja"):
+                    materials.add(("expression", expression["ja"]))
+    return materials
+
+
+def _dating_mark_scene_seen(conn, username, story, scene):
+    now = _now()
+    rows = []
+    for word in scene.get("vocab_words") or ([scene["vocab"]] if scene.get("vocab") else []):
+        if word.get("ja"):
+            rows.append((username, story["id"], "vocabulary", word["ja"], now))
+    for expression in scene.get("expressions_used") or []:
+        if expression.get("ja"):
+            rows.append((username, story["id"], "expression", expression["ja"], now))
+    if rows:
+        conn.executemany(
+            "INSERT OR IGNORE INTO dating_sim_learning_seen "
+            "(username,character_id,material_type,material_key,seen_at) VALUES (?,?,?,?,?)",
+            rows,
+        )
+
+
+def _dating_learning_progress(username, story):
+    total_materials = _dating_materials(story)
+    if not total_materials:
+        return {"seen": 0, "total": 0, "percent": 100}
+    conn = get_conn()
+    try:
+        seen = {
+            (row["material_type"], row["material_key"])
+            for row in conn.execute(
+                "SELECT material_type,material_key FROM dating_sim_learning_seen "
+                "WHERE username=? AND character_id=?",
+                (username, story["id"]),
+            ).fetchall()
+        }
+    finally:
+        conn.close()
+    count = len(total_materials & seen)
+    return {"seen": count, "total": len(total_materials), "percent": round(count / len(total_materials) * 100)}
+
+
+def _dating_sim_state_payload(row, story, username=None):
     completed = bool(row["completed"])
     current_day = min(row["day"], story["total_days"])
     # ★ 2026-09-16: "미연시 시스템 누를때마다 인트로가 똑같은데 다양하게
@@ -823,6 +874,8 @@ def _dating_sim_state_payload(row, story):
         "pending_location": row["pending_location"],
         "completed": completed,
     }
+    if username is not None:
+        payload["learning_progress"] = _dating_learning_progress(username, story)
     if row["pending_location"] and not completed:
         selected_location = row["pending_location"]
         scene = story["scenes"][row["day"]][selected_location]
@@ -843,6 +896,7 @@ def _dating_sim_state_payload(row, story):
             # 보낸다. 하위 호환을 위해 단수 vocab(첫 단어)도 유지한다.
             "vocab": scene.get("vocab"),
             "vocab_words": scene.get("vocab_words") or ([scene["vocab"]] if scene.get("vocab") else []),
+            "expressions_used": scene.get("expressions_used") or [],
         }
     if completed:
         payload["ending"] = dating_sim_story.ending_for(story, row["affection"])
@@ -859,7 +913,7 @@ def dating_sim_state(request: Request, story_id: str | None = None):
         row = _dating_sim_row(conn, username, story)
     finally:
         conn.close()
-    payload = _dating_sim_state_payload(row, story)
+    payload = _dating_sim_state_payload(row, story, username)
     # ★ 2026-09-18: 관리자만 시나리오 트리 버튼을 볼 수 있게 소유자 여부를
     # 상태에 실어 준다(트리 엔드포인트 자체도 소유자만 허용하므로 이중 방어).
     payload["is_admin"] = _is_owner_request(request)
@@ -911,6 +965,7 @@ def dating_sim_encounters(request: Request):
                 "day": min(row["day"], story["total_days"]), "total_days": story["total_days"],
                 "affection": row["affection"], "completed": bool(row["completed"]),
                 "ending_title": dating_sim_story.ending_for(story, row["affection"])["title"] if row["completed"] else None,
+                "learning_progress": _dating_learning_progress(username, story),
             })
     finally:
         conn.close()
@@ -1088,7 +1143,26 @@ def dating_sim_visit(body: DatingSimLocationRequest, request: Request):
         row["pending_location"] = body.location
     finally:
         conn.close()
-    return _dating_sim_state_payload(row, story)
+    return _dating_sim_state_payload(row, story, username)
+
+
+@app.post("/api/dating-sim/seen")
+def dating_sim_seen(body: DatingSimRestartRequest, request: Request):
+    """현재 장면의 마지막 대사까지 실제 표시된 뒤 학습 재료를 본 것으로 기록한다."""
+    _require_signed_in_user(request)
+    username = _request_username(request)
+    story = _dating_story(body.story_id, username)
+    conn = get_conn()
+    try:
+        row = _dating_sim_row(conn, username, story)
+        if not row["pending_location"] or row["completed"]:
+            raise HTTPException(status_code=409, detail="확인할 장면이 없습니다")
+        scene = story["scenes"][row["day"]][row["pending_location"]]
+        _dating_mark_scene_seen(conn, username, story, scene)
+        conn.commit()
+    finally:
+        conn.close()
+    return {"learning_progress": _dating_learning_progress(username, story)}
 
 
 @app.post("/api/dating-sim/choose")
@@ -1120,7 +1194,7 @@ def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
                    completed=int(completed), ending_id=ending_id)
     finally:
         conn.close()
-    payload = _dating_sim_state_payload(row, story)
+    payload = _dating_sim_state_payload(row, story, username)
     payload["choice_result"] = {
         "affection_delta": scene["choices"][body.choice_index]["affection"],
         "location": selected_location,
@@ -1152,7 +1226,7 @@ def dating_sim_restart(request: Request, body: DatingSimRestartRequest | None = 
         conn.close()
     # 기본 DB 이야기는 새 회차 번호로 변형을 다시 선택한다. EPUB 템플릿에는 영향 없다.
     story = _dating_story(body.story_id if body else None, username)
-    return _dating_sim_state_payload(row, story)
+    return _dating_sim_state_payload(row, story, username)
 
 
 @app.get("/shift-alarm")

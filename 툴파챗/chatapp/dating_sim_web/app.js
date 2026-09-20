@@ -10,6 +10,7 @@ let pendingPlaybackResolve = null;
 let choiceInFlight = false;
 let mapOpeningText = "";
 let sceneCharacterImage = "";
+let sceneLearningMarked = false;
 
 // ★ 2026-09-17: "이전장면보기버튼이없는데... 아니 이전장면 대사말고" 요청 —
 // 대사창 안 ◀ 뒤로가기(현재 장면 안에서만 동작)와는 별개로, 이미 끝낸
@@ -140,8 +141,11 @@ function showView(name) {
 function renderHud(state) {
   latestState = state;
   $("hud-title").textContent = "미연시";
-  const progress = Math.max(0, Math.min(100, Math.round(((state.day - 1) / state.total_days) * 100)));
-  $("hud-day").textContent = `이야기 진행 ${progress}%`;
+  const learning = state.learning_progress;
+  const progress = learning ? learning.percent : 0;
+  $("hud-day").textContent = learning?.total
+    ? `학습 ${learning.seen}/${learning.total} · ${progress}%`
+    : `학습 진행 ${progress}%`;
   $("affection-value").textContent = state.affection;
   $("affection-value").parentElement.setAttribute("aria-label", `호감도 ${state.affection}점`);
   $("affection-bar").style.width = `${Math.max(0, Math.min(100, state.affection))}%`;
@@ -791,10 +795,24 @@ function onLineFullyShown() {
   const isLastLine = sceneLineIndex >= sceneLines.length - 1;
   if (isLastLine && sceneChoices.length) {
     renderChoices();
+    markCurrentSceneSeen();
   } else {
     $("dialogue-next").classList.remove("hidden");
   }
   if (listeningMode) speakCurrentLine();
+}
+
+async function markCurrentSceneSeen() {
+  if (sceneLearningMarked) return;
+  sceneLearningMarked = true;
+  try {
+    const result = await api("/api/dating-sim/seen", {method:"POST", body:JSON.stringify({story_id:storyId})});
+    latestState.learning_progress = result.learning_progress;
+    renderHud(latestState);
+  } catch (error) {
+    sceneLearningMarked = false;
+    console.error(error);
+  }
 }
 
 function advanceLine() {
@@ -848,6 +866,7 @@ function renderScene(state) {
   sceneChoices = state.scene.choices;
   sceneVocab = state.scene.vocab_words || (state.scene.vocab ? [state.scene.vocab] : []);
   sceneLineIndex = 0;
+  sceneLearningMarked = false;
   $("stage").dataset.location = state.scene.location;
   $("stage").dataset.day = state.day;
   sceneCharacterImage = state.scene.character_image || state.character_image || "";
@@ -913,10 +932,10 @@ async function loadState() {
 // 바로 들어간다. 저장된 만남이 하나도 없으면(이전에 했던 작품이 없으면)
 // 로비 없이 곧바로 새로 시작한다.
 function lobbyStatusText(encounter) {
-  const progress = Math.max(0, Math.min(100, Math.round(((encounter.day - 1) / encounter.total_days) * 100)));
+  const learning = encounter.learning_progress;
   return encounter.completed
     ? `엔딩 · ${encounter.ending_title}`
-    : `이야기 진행 ${progress}% · 호감도 ${encounter.affection}`;
+    : `${learning?.total ? `학습 ${learning.seen}/${learning.total} · ${learning.percent}%` : "학습 진행 0%"} · 호감도 ${encounter.affection}`;
 }
 
 function renderLobby(mostRecentEncounter) {

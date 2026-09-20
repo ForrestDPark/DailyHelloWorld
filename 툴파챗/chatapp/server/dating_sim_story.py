@@ -375,19 +375,19 @@ DAY_LOCATION_ACTIONS = {
     # 명시해 누구를 기다리는지 분명히 했다. cafe·park도 같은 기준으로
     # 목적어를 명시해 세 선택지 모두 "그녀를 어디로/어떻게 만나는지"가
     # 라벨만 보고도 구체적으로 그려지게 했다.
-    2: {"cafe": "카페로 그녀를 불러낸다", "park": "벤치로 그녀를 부른다", "school": "그녀의 동아리가 끝나길 기다린다"},
-    3: {"cafe": "가까운 카페로 부른다", "park": "우산을 들고 공원으로 간다", "school": "학교 현관으로 달려간다"},
-    4: {"cafe": "조용한 구석 자리를 잡는다", "park": "밤 산책을 제안한다", "school": "사람 없는 곳에서 듣는다"},
-    5: {"cafe": "함께 마실 것을 고른다", "park": "사진 속 장소를 찾아간다", "school": "추억이 있는 길로 간다"},
-    6: {"cafe": "마주 앉아 이유를 말한다", "park": "걷다가 솔직히 털어놓는다", "school": "약속 장소에서 기다린다"},
-    7: {"cafe": "마감 무렵 그녀를 만난다", "park": "가로등 아래로 향한다", "school": "조용한 교실동으로 간다"},
-    8: {"cafe": "카페 데이트를 계획한다", "park": "공원 산책 코스를 짠다", "school": "학교 근처에서 만나기로 한다"},
-    9: {"cafe": "카페에서 사진첩을 펼친다", "park": "공원 벤치에서 옛날이야기를 듣는다", "school": "동아리실에서 취미 이야기를 나눈다"},
-    10: {"cafe": "카페에서 마주 앉아 이야기한다", "park": "공원을 함께 걷는다", "school": "교문 앞에서 붙잡는다"},
-    11: {"cafe": "카페에서 화해를 청한다", "park": "공원 벤치에 나란히 앉는다", "school": "학교 앞에서 기다린다"},
-    12: {"cafe": "조용한 카페 구석에 앉는다", "park": "인적 드문 공원 길을 걷는다", "school": "빈 교실로 데려간다"},
-    13: {"cafe": "카페에서 기념일을 확인한다", "park": "공원에서 함께 축하한다", "school": "학교 앞에서 깜짝 인사를 한다"},
-    14: {"cafe": "마감 시간 카페에서 이야기한다", "park": "공원 가로등 아래 선다", "school": "학교 옥상에서 마주 본다"},
+    2: {"cafe": "답장이 와서 반가웠다고 말한다", "park": "어제 일을 더 이야기하고 싶다고 답한다", "school": "시간이 괜찮을 때 만나자고 답한다"},
+    3: {"cafe": "비가 그칠 때까지 함께 있겠다고 답한다", "park": "우산을 가져가겠다고 답한다", "school": "안전한 곳에서 기다려 달라고 답한다"},
+    4: {"cafe": "천천히 말해도 된다고 답한다", "park": "곁에서 끝까지 듣겠다고 답한다", "school": "부담되면 말하지 않아도 된다고 답한다"},
+    5: {"cafe": "함께 고르면 더 즐거울 것 같다고 답한다", "park": "사진 속 장소가 궁금하다고 답한다", "school": "그 추억을 더 듣고 싶다고 답한다"},
+    6: {"cafe": "오해하게 해서 미안하다고 답한다", "park": "숨기지 않고 솔직히 말하겠다고 답한다", "school": "직접 만나 설명하고 싶다고 답한다"},
+    7: {"cafe": "전하고 싶은 말을 듣겠다고 답한다", "park": "나도 하고 싶은 말이 있다고 답한다", "school": "서두르지 말고 천천히 말하라고 답한다"},
+    8: {"cafe": "둘이 편히 이야기할 곳이 좋다고 답한다", "park": "함께 걷고 싶다고 답한다", "school": "익숙한 곳에서 만나자고 답한다"},
+    9: {"cafe": "사진을 함께 보고 싶다고 답한다", "park": "옛날이야기를 들려 달라고 답한다", "school": "그 취미를 직접 보고 싶다고 답한다"},
+    10: {"cafe": "내가 서운하게 했는지 묻는다", "park": "변명하지 않고 먼저 사과한다", "school": "잠깐만 이야기를 들어 달라고 답한다"},
+    11: {"cafe": "괜찮지 않았다고 솔직히 답한다", "park": "걱정해 줘서 고맙다고 답한다", "school": "우리 사이를 다시 이야기하고 싶다고 답한다"},
+    12: {"cafe": "무슨 이야기든 괜찮다고 답한다", "park": "말할 준비가 될 때까지 기다리겠다고 답한다", "school": "혼자 감당하지 않아도 된다고 답한다"},
+    13: {"cafe": "기억하고 있다고 조심스럽게 답한다", "park": "힌트를 달라고 장난스럽게 답한다", "school": "함께 확인하고 싶다고 답한다"},
+    14: {"cafe": "나도 전하고 싶은 말이 있다고 답한다", "park": "끝까지 듣겠다고 답한다", "school": "직접 얼굴을 보고 말해 달라고 답한다"},
 }
 
 BOOK_DAY_LOCATION_ACTIONS = {
@@ -1397,6 +1397,22 @@ def _scenes_from_generated(gen, character_name_ko, character_name_jp):
     def _sub(text):
         return text.replace("ソイ", character_name_jp).replace("소이", character_name_ko)
 
+    def _without_speaker_label(text):
+        """이름은 대사창 위 화자 칸에 이미 나오므로 본문의 반복 접두사는 뺀다."""
+        parts = _sub(text).split("\n")
+        for index, part in enumerate(parts):
+            names = (character_name_jp, character_name_ko)
+            for name in names:
+                if part.lstrip().startswith(name):
+                    prefix = len(part) - len(part.lstrip())
+                    remainder = part.lstrip()[len(name):].lstrip(" \t:：")
+                    quote_pairs = {"「": "」", "『": "』", '"': '"', "“": "”"}
+                    if remainder[:1] in quote_pairs and remainder.endswith(quote_pairs[remainder[0]]):
+                        remainder = remainder[1:-1]
+                    parts[index] = part[:prefix] + remainder
+                    break
+        return "\n".join(parts)
+
     scenes, day_narration = {}, {}
     for day in range(1, TOTAL_DAYS + 1):
         day_data = gen["days"][str(day)]
@@ -1406,9 +1422,9 @@ def _scenes_from_generated(gen, character_name_ko, character_name_jp):
         scenes[day] = {}
         for loc, sc in day_data["scenes"].items():
             scene = {
-                "lines": [_sub(line) for line in sc["lines"]],
+                "lines": [_without_speaker_label(line) for line in sc["lines"]],
                 "choices": [
-                    {"text": _sub(c["text"]), "affection": int(c["affection"])}
+                    {"text": _without_speaker_label(c["text"]), "affection": int(c["affection"])}
                     for c in sc["choices"]
                 ],
             }
@@ -1420,6 +1436,13 @@ def _scenes_from_generated(gen, character_name_ko, character_name_jp):
             if vocab_used:
                 scene["vocab"] = dict(vocab_used[0])
                 scene["vocab_words"] = vocab_used
+            expressions_used = [
+                {"ja": e["ja"], "reading": e.get("reading", ""), "ko": e["ko"]}
+                for e in (sc.get("expressions_used") or [])
+                if isinstance(e, dict) and e.get("ja") and e.get("ko")
+            ]
+            if expressions_used:
+                scene["expressions_used"] = expressions_used
             scenes[day][loc] = scene
     return scenes, day_narration
 

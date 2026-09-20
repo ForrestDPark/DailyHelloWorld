@@ -245,6 +245,14 @@ def init_db():
             updated_at TEXT NOT NULL,
             PRIMARY KEY (username, character_id)
         );
+        CREATE TABLE IF NOT EXISTS dating_sim_learning_seen (
+            username TEXT NOT NULL,
+            character_id TEXT NOT NULL,
+            material_type TEXT NOT NULL,
+            material_key TEXT NOT NULL,
+            seen_at TEXT NOT NULL,
+            PRIMARY KEY (username, character_id, material_type, material_key)
+        );
         CREATE TABLE IF NOT EXISTS dating_sim_characters (
             character_id TEXT PRIMARY KEY,
             name TEXT NOT NULL,

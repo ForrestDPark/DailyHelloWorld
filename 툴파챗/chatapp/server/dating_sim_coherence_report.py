@@ -177,20 +177,23 @@ def check_last_line_matches_outro(scenes_by_variant):
     return issues
 
 
-def check_location_labels_are_physical(day_location_actions):
-    """장소 선택 라벨은 "어디로 가서 뭘 하는지"를 나타내는 물리적 행동
-    표현이어야 한다. 따옴표로 감싼 대사 + "답한다"류 표현은 마치 문자
-    답장을 고르는 화면처럼 보이는데, 실제로는 그 장소의 물리적 장면으로
-    바로 이어져 어색하다(2일차에서 실제로 발생했던 버그, 2026-09-17)."""
+def check_location_labels_follow_dialogue(day_location_actions):
+    """첫 만남 이후 선택 라벨은 직전 여주의 말에 대한 플레이어의 반응이어야
+    한다. 장소 이동부터 먼저 제시하면 대화를 무시하고 순간이동하는 느낌이 난다."""
     issues = []
-    reply_markers = ("“", "‘", "\"", "'", "「")
     for day, actions in day_location_actions.items():
+        if day == 1:
+            continue
         for location, label in actions.items():
-            if label.startswith(reply_markers) or label.rstrip("다").endswith("답한"):
+            if not any(marker in label for marker in ("답한다", "말한다", "묻는다", "사과한다")):
                 issues.append(
-                    f"day={day} location={location}: 라벨이 문자 답장투 — {label!r}"
+                    f"day={day} location={location}: 직전 대사에 대한 반응이 아님 — {label!r}"
                 )
     return issues
+
+
+# 외부에서 쓰던 이름은 호환하되 새 대화 반응 규칙으로 검사한다.
+check_location_labels_are_physical = check_location_labels_follow_dialogue
 
 
 def check_day_range_completeness(total_days=ds.TOTAL_DAYS):
@@ -319,7 +322,7 @@ def run_all_checks(conn_factory=None):
         "variant2": variant_scenes(ds.VARIANT_2_LOCATION_LINES),
     }
     issues += check_last_line_matches_outro(scenes_by_variant)
-    issues += check_location_labels_are_physical(ds.DAY_LOCATION_ACTIONS)
+    issues += check_location_labels_follow_dialogue(ds.DAY_LOCATION_ACTIONS)
     issues += check_day_range_completeness()
     issues += check_vocab_templates_avoid_meta_commentary([
         ("洗濯", "せんたく", "세탁"), ("手伝う", "てつだう", "돕다"),
