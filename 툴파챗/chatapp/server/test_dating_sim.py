@@ -408,8 +408,8 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
             story = dating_sim_story.story_for("book:" + "1" * 20)
         expected_outro = (
             dating_sim_story.DAY_BEATS[1][0][-1]
-            .replace("ソイ", story["name"])
-            .replace("소이", story["character_name_ko"])
+            .replace("ソイ", story["character_dialogue_name_jp"])
+            .replace("소이", story["character_dialogue_name_ko"])
         )
         self.assertEqual(story["scenes"][1]["first"]["lines"][-1], expected_outro)
         self.assertNotIn("vocab", story["scenes"][1]["first"])
@@ -755,6 +755,35 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
             dating_sim_story.book_character_profile("book:" + "1" * 20),
             dating_sim_story.book_character_profile("book:" + "1" * 20),
         )
+
+    def test_book_character_uses_actual_sone_486_dialogue_name(self):
+        """SONE-486 자기소개 ASR 오류는 실제 五条恋(고죠 렌)으로 보정한다."""
+        with tempfile.TemporaryDirectory() as directory:
+            library_dir = Path(directory)
+            work_dir = library_dir / "SONE-486"
+            work_dir.mkdir()
+            (work_dir / "transcript_part1.jsonl").write_text(
+                json.dumps({"ja": "ご乗れんです。お願いします", "ko": "고렌입니다."},
+                           ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+            with patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", library_dir):
+                profile = dating_sim_story.book_character_profile(
+                    "book:" + "4" * 20, source_title="SONE-486 — 출장의 밤"
+                )
+        self.assertEqual(profile["full_jp"], "[五条|ごじょう] [恋|れん]")
+        self.assertEqual(profile["ko"], "고죠 렌")
+        self.assertFalse(profile["is_alias"])
+
+    def test_book_character_marks_generated_name_as_alias(self):
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", Path(directory)):
+            profile = dating_sim_story.book_character_profile(
+                "book:" + "5" * 20, source_title="NO-DIALOGUE-NAME"
+            )
+        self.assertTrue(profile["is_alias"])
+        self.assertTrue(profile["display_jp"].endswith("(가명)"))
+        self.assertTrue(profile["display_ko"].endswith("(가명)"))
 
 
 if __name__ == "__main__":

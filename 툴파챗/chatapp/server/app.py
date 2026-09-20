@@ -851,7 +851,9 @@ def _dating_sim_state_payload(row, story, username=None):
     day_opening = (
         story.get("day_openings", {}).get(current_day) if row["pending_location"]
         else dating_sim_story.random_daily_opening(
-            current_day, story["name"], story.get("character_name_ko", "소이")
+            current_day,
+            story.get("character_dialogue_name_jp", story["name"]),
+            story.get("character_dialogue_name_ko", story.get("character_name_ko", "소이")),
         )
     )
     payload = {

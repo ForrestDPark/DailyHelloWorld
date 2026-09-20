@@ -1277,12 +1277,96 @@ BOOK_CHARACTER_PROFILES = [
 ]
 
 
-def book_character_profile(story_id, source_hint=""):
-    """작품 메타데이터의 이름을 우선하고, 없으면 작품별 고정 프로필을 배정한다."""
+_KNOWN_TRANSCRIPT_CHARACTER_NAMES = {
+    # SONE-486의 음성 인식 결과는 五条恋을 `ご乗れん`/`고렌`으로 잘못
+    # 적었다. 작품 대사에 자기소개와 재확인 대사가 모두 있으므로, 여기서는
+    # 실제 표기와 읽기로 보정한다.
+    "SONE-486": {
+        "jp": "レン", "full_jp": "[五条|ごじょう] [恋|れん]", "ko": "고죠 렌",
+        "image": "/dating-sim/static/reina.png", "is_alias": False,
+    },
+}
+
+
+def _furigana_parentheses_to_tags(text):
+    """`五条(ごじょう)` 표기를 미연시 공통 후리가나 태그로 바꾼다."""
+    return re.sub(r"([一-龯々〆ヵヶ]+)\(([ぁ-ゖァ-ヺー]+)\)", r"[\1|\2]", text or "")
+
+
+def _profile_from_work_dialogue(source_title):
+    """작품의 실제 대사에서 명시적으로 자기소개한 여주 이름만 찾는다.
+
+    자동 추측으로 엉뚱한 이름을 붙이지 않도록 같은 transcript 행의 일본어
+    `…です`와 한국어 `…입니다/라고 해요`가 함께 맞을 때만 채택한다.
+    파이프라인이 검수한 character_profile.json이 있으면 그것을 최우선으로
+    쓴다.
+    """
+    folder = _find_library_folder(source_title)
+    if not folder:
+        return None
+
+    profile_path = folder / "character_profile.json"
+    try:
+        saved = json.loads(profile_path.read_text(encoding="utf-8"))
+        if all(saved.get(key) for key in ("jp", "full_jp", "ko")) and not saved.get("is_alias"):
+            return {**saved, "image": saved.get("image") or "/dating-sim/static/reina.png",
+                    "is_alias": False}
+    except (OSError, ValueError, TypeError):
+        pass
+
+    known = _KNOWN_TRANSCRIPT_CHARACTER_NAMES.get(folder.name.upper())
+    transcript_rows = []
+    for transcript in sorted(folder.glob("transcript_part*.jsonl")):
+        try:
+            with transcript.open(encoding="utf-8") as handle:
+                for _ in range(160):
+                    line = handle.readline()
+                    if not line:
+                        break
+                    try:
+                        transcript_rows.append(json.loads(line))
+                    except ValueError:
+                        continue
+        except OSError:
+            continue
+    if known and any("ご乗れん" in str(row.get("ja", "")) or "고렌" in str(row.get("ko", ""))
+                     for row in transcript_rows):
+        return dict(known)
+
+    ko_intro = re.compile(r"(?:저는\s*)?([가-힣]{2,8}(?:\s+[가-힣]{1,5})?)\s*(?:이라고\s*해요|입니다)")
+    ja_intro = re.compile(r"(?:私は)?([ぁ-ゖァ-ヺー一-龯々〆ヵヶ]{2,14})です(?:[。,.、]|$)")
+    excluded = {"감사", "괜찮", "처음", "오늘", "여기", "그렇", "맞습니다"}
+    for row in transcript_rows:
+        ja, ko = str(row.get("ja", "")), str(row.get("ko", ""))
+        ja_match, ko_match = ja_intro.search(ja), ko_intro.search(ko)
+        if not (ja_match and ko_match):
+            continue
+        ko_name = ko_match.group(1).strip()
+        if any(word in ko_name for word in excluded):
+            continue
+        ja_name = ja_match.group(1).removeprefix("私は")
+        tagged = _furigana_parentheses_to_tags(str(row.get("furigana", "")))
+        tagged_match = re.search(rf"({re.escape(ja_name)}|(?:\[[^\]]+\]|[ぁ-ゖァ-ヺー])+)(?=です)", tagged)
+        full_jp = tagged_match.group(1) if tagged_match else ja_name
+        return {"jp": ja_name, "full_jp": full_jp, "ko": ko_name,
+                "image": "/dating-sim/static/reina.png", "is_alias": False}
+    return None
+
+
+def book_character_profile(story_id, source_hint="", source_title=None):
+    """작품 대사의 실제 이름을 우선하고, 없을 때만 `(가명)` 프로필을 배정한다."""
+    dialogue_profile = _profile_from_work_dialogue(source_title) if source_title else None
+    if dialogue_profile:
+        return dialogue_profile
     if re.search(r"츠바키[ _·-]*리카", source_hint, re.IGNORECASE):
-        return {"jp": "リカ", "full_jp": "[椿|つばき] リカ", "ko": "츠바키 리카", "image": "/dating-sim/static/reina.png"}
+        return {"jp": "リカ", "full_jp": "[椿|つばき] リカ", "ko": "츠바키 리카",
+                "image": "/dating-sim/static/reina.png", "is_alias": False}
     digest = hashlib.sha256(story_id.encode("utf-8")).digest()
-    return BOOK_CHARACTER_PROFILES[digest[0] % len(BOOK_CHARACTER_PROFILES)]
+    fallback = dict(BOOK_CHARACTER_PROFILES[digest[0] % len(BOOK_CHARACTER_PROFILES)])
+    fallback["is_alias"] = True
+    fallback["display_jp"] = f'{fallback["full_jp"]} (가명)'
+    fallback["display_ko"] = f'{fallback["ko"]} (가명)'
+    return fallback
 
 
 def _book_id(path):
@@ -1471,7 +1555,7 @@ def story_for(story_id=None, seed_key=None):
     if not path:
         raise ValueError("작품을 찾을 수 없습니다")
     source_title = _book_title(path)
-    profile = book_character_profile(story_id, f"{source_title} {path.stem}")
+    profile = book_character_profile(story_id, f"{source_title} {path.stem}", source_title)
     locations = {
         "first": {"label": "우연히 마주친 곳", "emoji": "✨"},
         "walk": {"label": "함께 걷는 길", "emoji": "🌙"},
@@ -1532,12 +1616,15 @@ def story_for(story_id=None, seed_key=None):
     # 녹인 새 시나리오), 없거나 깨졌으면 고정 템플릿으로 폴백한다.
     generated = load_generated_scenario(source_title, locations.keys())
     day_narration = None
-    display_name_jp = profile.get("full_jp", profile["jp"])
+    dialogue_name_jp = profile.get("full_jp", profile["jp"])
+    dialogue_name_ko = profile["ko"]
+    display_name_jp = profile.get("display_jp", dialogue_name_jp)
+    display_name_ko = profile.get("display_ko", dialogue_name_ko)
     if generated:
-        scenes, day_narration = _scenes_from_generated(generated, profile["ko"], display_name_jp)
+        scenes, day_narration = _scenes_from_generated(generated, dialogue_name_ko, dialogue_name_jp)
         scenario_source = "generated"
     else:
-        scenes = _seven_day_scenes(book_location_lines, profile["ko"], display_name_jp, vocab_pool=vocab_pool)
+        scenes = _seven_day_scenes(book_location_lines, dialogue_name_ko, dialogue_name_jp, vocab_pool=vocab_pool)
         scenario_source = "template"
     if seed_key is not None:
         for day, day_scenes in scenes.items():
@@ -1547,7 +1634,7 @@ def story_for(story_id=None, seed_key=None):
                     scene["choices"].reverse()
     endings = ENDINGS
     map_actions = {
-        day: {location: action.replace("소이", profile["ko"])
+        day: {location: action.replace("소이", dialogue_name_ko)
               for location, action in actions.items()}
         for day, actions in BOOK_DAY_LOCATION_ACTIONS.items()
     }
@@ -1556,10 +1643,13 @@ def story_for(story_id=None, seed_key=None):
             "character_images": {"first": profile["image"],
                                  "walk": profile["image"],
                                  "quiet": profile["image"]},
-            "character_name_ko": profile["ko"],
+            "character_name_ko": display_name_ko,
+            "character_dialogue_name_jp": dialogue_name_jp,
+            "character_dialogue_name_ko": dialogue_name_ko,
+            "character_name_is_alias": bool(profile.get("is_alias")),
             "source_title": source_title, "total_days": TOTAL_DAYS, "locations": locations,
             "scenes": scenes, "endings": endings,
-            "day_openings": _daily_openings(seed_key, story_id, display_name_jp, profile["ko"]),
+            "day_openings": _daily_openings(seed_key, story_id, dialogue_name_jp, dialogue_name_ko),
             "map_actions": map_actions,
             "scenario_source": scenario_source}
     if day_narration:
@@ -1586,7 +1676,8 @@ def scenario_tree(story_id=None, seed_key=None):
     관리자가 "이 표현이 시나리오 어디에 어떻게 쓰였나"를 한눈에 본다.
     엔진 로직이 아니라 조회 전용이므로 DB도 안 건드린다."""
     story = story_for(story_id, seed_key)
-    name_jp, name_ko = story["name"], story.get("character_name_ko", "소이")
+    name_jp = story.get("character_dialogue_name_jp", story["name"])
+    name_ko = story.get("character_dialogue_name_ko", story.get("character_name_ko", "소이"))
 
     def _sub(text):
         return text.replace("ソイ", name_jp).replace("소이", name_ko)
