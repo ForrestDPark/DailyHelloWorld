@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import base64
-import gc
 import hashlib
 import json
 import math
@@ -17,6 +16,7 @@ import os
 import re
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -26,8 +26,6 @@ DEFAULT_MAX_SCENES = 12
 IMAGE_DIR_NAME = "dating_sim_images"
 MANIFEST_NAME = "manifest.json"
 LOCATIONS = ("first", "walk", "quiet")
-_LOCAL_PIPELINE = None
-_LOCAL_PIPELINE_EDIT = None
 _OPENAI_DISABLED_REASON = None
 
 
@@ -162,46 +160,153 @@ def _openai_generate(prompt, target, reference=None):
     target.write_bytes(base64.b64decode(payload["data"][0]["b64_json"]))
 
 
-def _local_generate(prompt, target, reference=None):
-    global _LOCAL_PIPELINE, _LOCAL_PIPELINE_EDIT
-    import torch
-    from diffusers import StableDiffusionImg2ImgPipeline, StableDiffusionPipeline
-    from PIL import Image, ImageOps
-    model = os.environ.get("CHATAPP_LOCAL_IMAGE_MODEL", "stable-diffusion-v1-5/stable-diffusion-v1-5")
-    klass = StableDiffusionImg2ImgPipeline if reference and reference.is_file() else StableDiffusionPipeline
-    edit = bool(reference and reference.is_file())
-    if _LOCAL_PIPELINE is None or _LOCAL_PIPELINE_EDIT != edit:
-        if _LOCAL_PIPELINE is not None:
-            del _LOCAL_PIPELINE
-            gc.collect()
-            if torch.backends.mps.is_available():
-                torch.mps.empty_cache()
-        _LOCAL_PIPELINE = klass.from_pretrained(model, torch_dtype=torch.float32, use_safetensors=True)
-        _LOCAL_PIPELINE.enable_attention_slicing()
-        _LOCAL_PIPELINE = _LOCAL_PIPELINE.to("mps")
-        _LOCAL_PIPELINE_EDIT = edit
-    pipe = _LOCAL_PIPELINE
-    # SD 1.5의 CLIP 한도는 77토큰이다. OpenAI용 장문 프롬프트를 그대로 넣으면
-    # 실제 사건 설명이 잘리므로 핵심 묘사만 남긴 로컬 전용 프롬프트를 쓴다.
+def _comfy_base_url():
+    return os.environ.get("JP_COMFYUI_URL", "http://127.0.0.1:8188").rstrip("/")
+
+
+def _comfy_request(path, data=None, timeout=20):
+    headers = {"Content-Type": "application/json"} if data is not None else {}
+    request = urllib.request.Request(
+        _comfy_base_url() + path,
+        data=json.dumps(data).encode("utf-8") if data is not None else None,
+        headers=headers,
+    )
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        body = response.read()
+    return json.loads(body) if body else {}
+
+
+def _comfy_model_spec():
+    configured = os.environ.get("JP_COMFYUI_CHECKPOINT", "").strip()
+    if configured:
+        return "CheckpointLoaderSimple", configured
+    try:
+        models = _comfy_request("/models/checkpoints")
+    except Exception:
+        models = []
+    if isinstance(models, list) and models:
+        # 서버에 실제로 있는 모델을 골라 하드코딩된 파일명으로 인한
+        # prompt validation 실패를 피한다.
+        return "CheckpointLoaderSimple", sorted(str(model) for model in models)[0]
+    configured_diffusers = os.environ.get("JP_COMFYUI_DIFFUSERS_MODEL", "").strip()
+    try:
+        diffusers_models = _comfy_request("/models/diffusers")
+    except Exception:
+        diffusers_models = []
+    if not diffusers_models:
+        try:
+            node_info = _comfy_request("/object_info/DiffusersLoader")
+            model_input = node_info["DiffusersLoader"]["input"]["required"]["model_path"]
+            diffusers_models = model_input[0] if model_input else []
+        except (KeyError, IndexError, TypeError, urllib.error.URLError):
+            diffusers_models = []
+    if configured_diffusers:
+        return "DiffusersLoader", configured_diffusers
+    if isinstance(diffusers_models, list) and diffusers_models:
+        return "DiffusersLoader", sorted(str(model) for model in diffusers_models)[0]
+    raise RuntimeError(
+        "ComfyUI 로컬 모델을 찾지 못했습니다. JP_COMFYUI_CHECKPOINT 또는 "
+        "JP_COMFYUI_DIFFUSERS_MODEL을 설정하거나 ComfyUI models 폴더에 모델을 넣으세요"
+    )
+
+
+def _build_comfy_workflow(prompt, model_name, seed, reference_name=None, loader="CheckpointLoaderSimple"):
+    # 추가 커스텀 노드 없이 새 ComfyUI에서도 동작하는 API 형식이다.
+    # 레퍼런스가 있으면 VAE img2img로 구도·인물성을 유지한다.
     local_prompt = (
         "photorealistic adult Japanese woman age 25, fully clothed, tasteful romance scene, "
         "natural face and hands, cinematic light, no text, " + _clean(prompt.split("Visualize this specific narrative beat rather than a generic pose:")[-1], 24)
     )
-    seed = int.from_bytes(hashlib.sha256(prompt.encode()).digest()[:4], "big")
-    kwargs = dict(prompt=local_prompt,
-                  negative_prompt="nsfw, nude, child, low quality, blurry, distorted, deformed, text, watermark",
-                  num_inference_steps=24, guidance_scale=7.0)
-    if reference and reference.is_file():
-        with Image.open(reference) as image:
-            kwargs["image"] = ImageOps.fit(image.convert("RGB"), (512, 512), Image.Resampling.LANCZOS)
-        kwargs["strength"] = 0.65
+    workflow = {
+        "3": {"class_type": "KSampler", "inputs": {
+            "seed": seed, "steps": 25, "cfg": 7.0, "sampler_name": "dpmpp_2m",
+            "scheduler": "karras", "denoise": 0.62 if reference_name else 1.0,
+            "model": ["4", 0], "positive": ["6", 0], "negative": ["7", 0],
+            "latent_image": ["11", 0] if reference_name else ["5", 0],
+        }},
+        "4": {"class_type": loader, "inputs": {
+            "ckpt_name" if loader == "CheckpointLoaderSimple" else "model_path": model_name
+        }},
+        "6": {"class_type": "CLIPTextEncode", "inputs": {"text": local_prompt, "clip": ["4", 1]}},
+        "7": {"class_type": "CLIPTextEncode", "inputs": {
+            "text": "nsfw, nude, child, low quality, blurry, distorted, deformed, bad hands, text, watermark",
+            "clip": ["4", 1],
+        }},
+        "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
+        "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "tulpachat/dating", "images": ["8", 0]}},
+    }
+    if reference_name:
+        workflow["10"] = {"class_type": "LoadImage", "inputs": {"image": reference_name}}
+        workflow["11"] = {"class_type": "VAEEncode", "inputs": {"pixels": ["10", 0], "vae": ["4", 2]}}
+    else:
+        workflow["5"] = {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 768, "batch_size": 1}}
+    return workflow
+
+
+def _comfy_upload(reference):
+    boundary = "----jpcomfy" + hashlib.sha1(str(time.time_ns()).encode()).hexdigest()
+    filename = "dating-reference-" + hashlib.sha1(reference.read_bytes()).hexdigest()[:12] + reference.suffix.lower()
+    body = b"".join((
+        f"--{boundary}\r\nContent-Disposition: form-data; name=\"image\"; filename=\"{filename}\"\r\n"
+        "Content-Type: image/png\r\n\r\n".encode(),
+        reference.read_bytes(),
+        f"\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"overwrite\"\r\n\r\ntrue\r\n"
+        f"--{boundary}--\r\n".encode(),
+    ))
+    request = urllib.request.Request(
+        _comfy_base_url() + "/upload/image", data=body,
+        headers={"Content-Type": f"multipart/form-data; boundary={boundary}"}, method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=60) as response:
+        payload = json.loads(response.read())
+    return payload.get("name") or filename
+
+
+def _comfy_wait_image(prompt_id, timeout):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        history = _comfy_request(f"/history/{urllib.parse.quote(prompt_id)}", timeout=15)
+        record = history.get(prompt_id, {})
+        for output in record.get("outputs", {}).values():
+            images = output.get("images") or []
+            if images:
+                return images[0]
+        status = record.get("status", {})
+        if status.get("status_str") == "error":
+            messages = status.get("messages") or []
+            raise RuntimeError(f"ComfyUI 실행 실패: {messages[-1] if messages else status}")
+        time.sleep(1)
+    raise RuntimeError(f"ComfyUI 생성이 {timeout}초 안에 완료되지 않았습니다")
+
+
+def _local_generate(prompt, target, reference=None):
+    try:
+        _comfy_request("/system_stats", timeout=5)
+    except Exception as exc:
+        raise RuntimeError(f"ComfyUI 서버({_comfy_base_url()})에 연결할 수 없습니다: {exc}") from exc
+    loader, model_name = _comfy_model_spec()
+    reference_name = _comfy_upload(reference) if reference and reference.is_file() else None
+    base_seed = int.from_bytes(hashlib.sha256(prompt.encode()).digest()[:8], "big") & ((1 << 63) - 1)
+    timeout = int(os.environ.get("JP_COMFYUI_TIMEOUT", "600"))
     for attempt in range(4):
-        kwargs["generator"] = torch.Generator(device="cpu").manual_seed(seed + attempt * 104729)
-        image = pipe(**kwargs).images[0]
-        image.save(target, format="PNG", optimize=True)
+        workflow = _build_comfy_workflow(
+            prompt, model_name, base_seed + attempt * 104729, reference_name, loader=loader
+        )
+        queued = _comfy_request("/prompt", {"prompt": workflow}, timeout=30)
+        if queued.get("node_errors"):
+            raise RuntimeError(f"ComfyUI 워크플로 검증 실패: {queued['node_errors']}")
+        prompt_id = queued.get("prompt_id")
+        if not prompt_id:
+            raise RuntimeError(f"ComfyUI가 prompt_id를 반환하지 않았습니다: {queued}")
+        image = _comfy_wait_image(prompt_id, timeout)
+        query = urllib.parse.urlencode({
+            "filename": image["filename"], "subfolder": image.get("subfolder", ""), "type": image.get("type", "output")
+        })
+        with urllib.request.urlopen(_comfy_base_url() + "/view?" + query, timeout=60) as response:
+            target.write_bytes(response.read())
         if _valid_image(target):
             return
-    raise RuntimeError("로컬 안전 필터가 검은 이미지를 반복 반환했습니다")
+    raise RuntimeError("ComfyUI가 검은 또는 손상된 이미지를 반복 반환했습니다")
 
 
 def _valid_image(path):
@@ -226,12 +331,12 @@ def _generate(prompt, target, reference=None):
     except Exception as openai_error:
         if "no credits remaining" in str(openai_error).lower() or "quota" in str(openai_error).lower():
             _OPENAI_DISABLED_REASON = str(openai_error)
-        print(f"⚠️ OpenAI 이미지 실패, 로컬 Diffusers로 전환: {openai_error}", flush=True)
+        print(f"⚠️ OpenAI 이미지 실패, 로컬 ComfyUI로 전환: {openai_error}", flush=True)
         try:
             _local_generate(prompt, target, reference)
-            return "diffusers"
+            return "comfyui"
         except Exception as local_error:
-            raise RuntimeError(f"OpenAI 실패({openai_error}) / Diffusers 실패({local_error})") from local_error
+            raise RuntimeError(f"OpenAI 실패({openai_error}) / ComfyUI 실패({local_error})") from local_error
 
 
 def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_generate):

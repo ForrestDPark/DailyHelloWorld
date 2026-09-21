@@ -26,6 +26,28 @@ def scenario(days=14):
 
 
 class DatingImageAgentTests(unittest.TestCase):
+    def test_comfy_workflow_uses_core_nodes_and_reference_img2img(self):
+        text_workflow = images._build_comfy_workflow("a quiet cafe scene", "model.safetensors", 42)
+        self.assertEqual(text_workflow["3"]["inputs"]["latent_image"], ["5", 0])
+        self.assertEqual(text_workflow["3"]["inputs"]["denoise"], 1.0)
+        self.assertEqual(text_workflow["4"]["inputs"]["ckpt_name"], "model.safetensors")
+        self.assertEqual(text_workflow["9"]["class_type"], "SaveImage")
+
+        folder_workflow = images._build_comfy_workflow(
+            "a quiet cafe scene", "stable-v15", 42, loader="DiffusersLoader"
+        )
+        self.assertEqual(folder_workflow["4"]["class_type"], "DiffusersLoader")
+        self.assertEqual(folder_workflow["4"]["inputs"]["model_path"], "stable-v15")
+
+        edit_workflow = images._build_comfy_workflow(
+            "a quiet cafe scene", "model.safetensors", 42, "reference.png"
+        )
+        self.assertNotIn("5", edit_workflow)
+        self.assertEqual(edit_workflow["3"]["inputs"]["latent_image"], ["11", 0])
+        self.assertEqual(edit_workflow["10"]["class_type"], "LoadImage")
+        self.assertEqual(edit_workflow["11"]["class_type"], "VAEEncode")
+        self.assertLess(edit_workflow["3"]["inputs"]["denoise"], 1.0)
+
     def test_plan_is_adaptive_diverse_and_assigns_every_scene(self):
         plan = images.build_plan(scenario(), max_scenes=12)
         self.assertGreater(len(plan["selected"]), 4)

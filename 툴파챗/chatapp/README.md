@@ -3888,3 +3888,10 @@ JOB_SYSTEM_ADDENDUM 계열 페르소나(매 턴 정규직/알바 두 카테고�
 - 자막 번역을 최대 24문장 단위의 표식 포함 배치 요청으로 바꿔 요청 수를 약 1/24로 줄였다. 표식 정렬이 깨질 때만 해당 배치를 나누고, 공급자 자체가 차단된 경우에는 나머지 문장을 반복 호출하지 않는다.
 - 성공한 배치는 작품 완료 전이라도 `translation_memory.json`에 원자적으로 저장해 중단·재실행 시 다시 호출하지 않는다.
 - `refine_translations.py`도 기존 JSONL에 남은 실패를 먼저 Google 저호출 배치로 복구한 뒤, 정말 남은 문장만 Codex/Claude에 전달한다. AI 사용량·인증·쿼터 오류는 입력 분할로 해결되지 않으므로 최초 감지 즉시 남은 AI 호출을 멈추고 정확한 실패 수를 보존한다.
+
+# 로컬 작품 이미지 ComfyUI 전환 (2026-09-21)
+
+- OpenAI Images 크레딧이 없을 때 스크립트 내부에서 Diffusers를 직접 로드하던 폴백을 제거하고, 로컬 ComfyUI의 HTTP API 큐에 생성 작업을 넣는 구조로 바꾸었다.
+- 기본 `txt2img`는 ComfyUI 기본 노드만 사용하며, 대표 초상화를 참조하는 장면은 이미지를 ComfyUI input으로 업로드해 VAE `img2img`로 생성한다. 작업은 `/prompt`로 제출하고 `/history`, `/view`로 완료 결과를 확인한다.
+- `JP_COMFYUI_URL`(기본 `http://127.0.0.1:8188`), `JP_COMFYUI_CHECKPOINT`, `JP_COMFYUI_DIFFUSERS_MODEL`, `JP_COMFYUI_TIMEOUT`으로 서버·모델·대기 시간을 설정할 수 있다. 변수가 없으면 서버의 체크포인트, 기존 로컬 모델 폴더 순서로 자동 선택해 가중치를 중복 다운로드하지 않는다.
+- ComfyUI 연결, 모델 누락, 워크플로 검증, 생성 시간 초과를 서로 구분해 오류에 표시한다. 생성 중단 후에도 기존 매니페스트 기반 재개 동작은 그대로 유지한다.
