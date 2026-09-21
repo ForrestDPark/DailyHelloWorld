@@ -494,7 +494,22 @@ class App:
             shared_index = max(0, min(int(shared.get("spine_index", 0)), max(0, len(book.spine) - 1)))
             shared_updated = int(shared.get("updated_at", 0))
             if shared_updated >= int(stored.get("updated_at", 0)):
-                return {"spine_index": shared_index, "percent": ((shared_index + 1) / max(1, len(book.spine))) * 100,
+                # ★ 2026-09-22: "아침에 진행한 프로그레스를 참조해서 그부분의
+                # 쪽수가 바로 보이게" 요청 — 이 책처럼 장(spine)이 몇 개 안
+                # 되고 장마다 분량이 크게 다르면((장+1)/전체장 수)식은 부정확
+                # 하다(예: 6장 중 3장이면 66.7%로 보이지만 실제로는 그 장이
+                # 25~60% 구간을 차지해 59%가 맞음). 아침 리더가 준 문장 단위
+                # 진행률(sentence_idx/sentence_total)이 있으면 그걸 그대로
+                # 쓴다 — resume_text는 이미 프론트가 그 문단으로 스크롤하는
+                # 데 쓰고 있어(prepareEnglishSpeech) 쪽수뿐 아니라 화면
+                # 위치까지 정확해진다.
+                sentence_total = int(shared.get("sentence_total", 0) or 0)
+                if shared.get("source") == "morning-reader" and sentence_total > 0:
+                    sentence_idx = max(0, min(int(shared.get("sentence_idx", 0)), sentence_total))
+                    percent = (sentence_idx / sentence_total) * 100
+                else:
+                    percent = ((shared_index + 1) / max(1, len(book.spine))) * 100
+                return {"spine_index": shared_index, "percent": percent,
                         "updated_at": shared_updated, "resume_text": str(shared.get("resume_text", ""))[:240]}
         except (OSError, json.JSONDecodeError, TypeError, ValueError):
             pass
@@ -523,18 +538,36 @@ class App:
                 previous = json.loads(path.read_text(encoding="utf-8"))
                 if int(previous.get("spine_index", -1)) == index:
                     resume_text = str(previous.get("resume_text", ""))[:240]
+                    # ★ 2026-09-22: display()는 페이지를 "보기만" 해도 매번 이
+                    # PUT을 호출한다(실제로 더 읽었는지와 무관). 같은 장을 보는
+                    # 동안은 아침 리더가 준 문장 단위 진행률(sentence_idx 등)을
+                    # 그대로 지켜야, 열어보기만 해도 정밀 진행률이 장 단위
+                    # 근사치로 깎여나가는 걸 막는다 — 실제로 다른 장으로
+                    # 넘어갈 때만 "web" 소스·장 단위 근사치로 갈아탄다.
+                    if previous.get("source") == "morning-reader" and previous.get("sentence_total"):
+                        # DB에는 방금 새 updated_at으로 저장했으니(store.save),
+                        # sidecar도 시간을 맞춰 갱신해야 다음 progress_for()의
+                        # "더 최신 쪽 채택" 비교에서 이 정밀 값이 stored보다
+                        # 오래된 것으로 잘못 밀려나지 않는다.
+                        previous["updated_at"] = result["updated_at"]
+                        self._write_sync(path, temporary, previous)
+                        return result
             except (OSError, json.JSONDecodeError, TypeError, ValueError):
                 pass
             payload = {"schema_version": 1, "book_file": str(book.path), "spine_index": index,
                        "spine_total": len(book.spine), "percent": percent, "updated_at": result["updated_at"],
                        "source": "web", "resume_text": resume_text}
-            try:
-                temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-                os.replace(temporary, path)
-            except OSError:
-                try: temporary.unlink(missing_ok=True)
-                except OSError: pass
+            self._write_sync(path, temporary, payload)
         return result
+
+    @staticmethod
+    def _write_sync(path: Path, temporary: Path, payload: dict) -> None:
+        try:
+            temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            os.replace(temporary, path)
+        except OSError:
+            try: temporary.unlink(missing_ok=True)
+            except OSError: pass
 
 
 def main():

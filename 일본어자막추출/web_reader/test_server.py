@@ -69,6 +69,53 @@ class ReaderTests(unittest.TestCase):
             self.assertEqual(app.progress_for(book, "owner", True)["spine_index"], 0)
             self.assertEqual(app.progress_for(book, "other", False)["spine_index"], 0)
 
+    def test_morning_reader_sidecar_uses_sentence_ratio_not_chapter_ratio(self):
+        """★ 2026-09-22 실제 버그: 장(spine)이 몇 개뿐이고 분량이 들쭉날쭉한
+        책(예: 6장 중 3장이 전체의 25~60% 구간)에서 "(장 번호+1)/전체 장 수"
+        식은 실제 위치와 크게 어긋난다(66.7%로 보였지만 실제로는 59%).
+        아침 리더가 문장 단위 진행률(sentence_idx/sentence_total)을 준
+        sidecar가 있으면 그걸로 정확한 퍼센트를 계산해야 한다."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); epub_path = root / "book.epub"; make_epub(epub_path)
+            book = server.parse_book(epub_path)
+            app = object.__new__(server.App); app.store = server.Store(root / "reader.db")
+            sidecar = book.path.with_suffix(".reader-progress.json")
+            sidecar.write_text(json.dumps({
+                "book_file": str(book.path), "spine_index": 0, "spine_total": 1,
+                "sentence_idx": 1144, "sentence_total": 1934,
+                "percent": 28.2, "updated_at": 99999999999, "source": "morning-reader",
+                "resume_text": "Behind the Scenes",
+            }), encoding="utf-8")
+            progress = app.progress_for(book, "owner", True)
+            self.assertAlmostEqual(progress["percent"], 1144 / 1934 * 100, places=3)
+            self.assertEqual(progress["resume_text"], "Behind the Scenes")
+
+    def test_viewing_the_same_chapter_does_not_downgrade_morning_reader_precision(self):
+        """★ 2026-09-22 실제 버그: 웹 리더는 페이지를 "보기만" 해도(실제로
+        더 읽지 않아도) display()가 진행률 PUT을 매번 보낸다. 이게 그대로
+        sidecar를 "web" 소스·장 단위 근사치로 덮어써서, 아침 리더로 정밀하게
+        복원한 위치를 여는 순간 다시 부정확해지는 사고가 있었다. 같은 장을
+        보는 동안은(spine_index 불변) 아침 리더의 문장 단위 정보를 지켜야
+        한다 — 실제로 다른 장으로 넘어갈 때만 web 소스로 갈아탄다."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); epub_path = root / "book.epub"; make_epub(epub_path)
+            book = server.parse_book(epub_path)
+            app = object.__new__(server.App); app.store = server.Store(root / "reader.db")
+            sidecar = book.path.with_suffix(".reader-progress.json")
+            sidecar.write_text(json.dumps({
+                "book_file": str(book.path), "spine_index": 0, "spine_total": 1,
+                "sentence_idx": 1144, "sentence_total": 1934,
+                "percent": 59.15, "updated_at": 100, "source": "morning-reader",
+                "resume_text": "Behind the Scenes",
+            }), encoding="utf-8")
+            # display()가 같은 장(0)을 다시 "보기만" 하며 PUT을 보낸 상황을 재현.
+            app.save_progress(book, 0, ((0 + 1) / 1) * 100, "owner", True)
+            shared = json.loads(sidecar.read_text(encoding="utf-8"))
+            self.assertEqual(shared["source"], "morning-reader")
+            self.assertEqual(shared["sentence_idx"], 1144)
+            progress = app.progress_for(book, "owner", True)
+            self.assertAlmostEqual(progress["percent"], 1144 / 1934 * 100, places=3)
+
     def test_signed_session_expires(self):
         secret = b"secret"; self.assertTrue(server.valid_session(secret, server.sign_session(secret)))
         with patch.object(server.time, "time", return_value=0): token = server.sign_session(secret)

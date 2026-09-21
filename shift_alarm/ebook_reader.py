@@ -492,6 +492,12 @@ def main():
 
     # 웹에서 이 책을 더 최근에 읽었다면 웹의 장 위치부터 이어간다. 아침
     # 리더가 쓴 동기화 파일에는 정확한 문장 번호도 있으므로 그대로 복원한다.
+    # ★ 2026-09-22 실제 사고: 웹 쪽 위치는 "장(chapter) 번호"만 갖고 있어
+    # 그 장의 "첫 문장"으로만 변환할 수 있다 — 장이 길면(이 책은 6장뿐이라
+    # 한 장이 전체의 25~35%씩 차지) 그 장 안에서 이미 한참 더 읽은 상태였어도
+    # 장 시작으로 되돌아가 진행이 크게 후퇴했다(50%대 → 28%대). 웹에서 온
+    # 위치가 지금 위치보다 "더 앞설 때만" 받아들이고, 뒤라면 무시한다 —
+    # 두 리더를 오가도 진행은 앞으로만 간다.
     try:
         with open(READER_SYNC_FILE, encoding="utf-8") as file:
             shared = json.load(file)
@@ -500,9 +506,11 @@ def main():
                 last_idx = max(0, min(int(shared["sentence_idx"]), len(all_sentences)))
             elif shared.get("source") == "web":
                 shared_spine = max(0, int(shared.get("spine_index", 0)))
-                last_idx = next((i for i, sentence in enumerate(all_sentences)
-                                 if sentence.get("spine", 0) >= shared_spine), last_idx)
-                print_status(f"🌐  웹앱에서 읽던 {shared_spine + 1}장 위치를 불러왔습니다.", CYAN)
+                web_idx = next((i for i, sentence in enumerate(all_sentences)
+                                if sentence.get("spine", 0) >= shared_spine), last_idx)
+                if web_idx > last_idx:
+                    last_idx = web_idx
+                    print_status(f"🌐  웹앱에서 읽던 {shared_spine + 1}장 위치를 불러왔습니다.", CYAN)
     except (OSError, json.JSONDecodeError, TypeError, ValueError):
         pass
 
