@@ -75,6 +75,29 @@ class DatingImageAgentTests(unittest.TestCase):
         self.assertEqual(edit_workflow["11"]["class_type"], "VAEEncode")
         self.assertLess(edit_workflow["3"]["inputs"]["denoise"], 1.0)
 
+    def test_comfy_workflow_can_use_external_vae(self):
+        workflow = images._build_comfy_workflow(
+            "a rainy bookshop reunion with a shy smile",
+            images.DEFAULT_CIVITAI_CHECKPOINT,
+            42,
+            "reference.png",
+            vae_name=images.DEFAULT_CIVITAI_VAE,
+        )
+        self.assertEqual(workflow["12"]["class_type"], "VAELoader")
+        self.assertEqual(workflow["12"]["inputs"]["vae_name"], images.DEFAULT_CIVITAI_VAE)
+        self.assertEqual(workflow["8"]["inputs"]["vae"], ["12", 0])
+        self.assertEqual(workflow["11"]["inputs"]["vae"], ["12", 0])
+        self.assertIn("rainy bookshop reunion", workflow["6"]["inputs"]["text"])
+
+    def test_civitai_checkpoint_is_preferred_when_installed(self):
+        with patch.object(images, "_comfy_request", side_effect=lambda path: {
+            "/models/checkpoints": ["zzz.safetensors", images.DEFAULT_CIVITAI_CHECKPOINT],
+        }.get(path, [])):
+            self.assertEqual(
+                images._comfy_model_spec(),
+                ("CheckpointLoaderSimple", images.DEFAULT_CIVITAI_CHECKPOINT),
+            )
+
     def test_plan_is_adaptive_diverse_and_assigns_every_scene(self):
         plan = images.build_plan(scenario(), max_scenes=12)
         self.assertGreater(len(plan["selected"]), 4)

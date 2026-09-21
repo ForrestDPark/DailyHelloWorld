@@ -25,6 +25,8 @@ from pathlib import Path
 VERSION = 1
 DEFAULT_MAX_SCENES = 12
 IMAGE_DIR_NAME = "dating_sim_images"
+DEFAULT_CIVITAI_CHECKPOINT = "majicmixRealistic_v7.safetensors"
+DEFAULT_CIVITAI_VAE = "vaeFtMse840000EmaPruned_vaeFtMse840k.safetensors"
 MANIFEST_NAME = "manifest.json"
 LOCATIONS = ("first", "walk", "quiet")
 _OPENAI_DISABLED_REASON = None
@@ -189,6 +191,8 @@ def _comfy_model_spec():
     if isinstance(models, list) and models:
         # 서버에 실제로 있는 모델을 골라 하드코딩된 파일명으로 인한
         # prompt validation 실패를 피한다.
+        if DEFAULT_CIVITAI_CHECKPOINT in models:
+            return "CheckpointLoaderSimple", DEFAULT_CIVITAI_CHECKPOINT
         return "CheckpointLoaderSimple", sorted(str(model) for model in models)[0]
     configured_diffusers = os.environ.get("JP_COMFYUI_DIFFUSERS_MODEL", "").strip()
     try:
@@ -212,12 +216,31 @@ def _comfy_model_spec():
     )
 
 
-def _build_comfy_workflow(prompt, model_name, seed, reference_name=None, loader="CheckpointLoaderSimple"):
+def _comfy_vae_name():
+    configured = os.environ.get("JP_COMFYUI_VAE", "").strip()
+    try:
+        models = _comfy_request("/models/vae")
+    except Exception:
+        models = []
+    if configured:
+        if isinstance(models, list) and models and configured not in models:
+            raise RuntimeError(f"설정한 ComfyUI VAE를 찾을 수 없습니다: {configured}")
+        return configured
+    if isinstance(models, list) and DEFAULT_CIVITAI_VAE in models:
+        return DEFAULT_CIVITAI_VAE
+    return ""
+
+
+def _build_comfy_workflow(
+    prompt, model_name, seed, reference_name=None,
+    loader="CheckpointLoaderSimple", vae_name="",
+):
     # 추가 커스텀 노드 없이 새 ComfyUI에서도 동작하는 API 형식이다.
     # 레퍼런스가 있으면 VAE img2img로 구도·인물성을 유지한다.
     local_prompt = (
         "photorealistic adult Japanese woman age 25, fully clothed, tasteful romance scene, "
-        "natural face and hands, cinematic light, no text, " + _clean(prompt.split("Visualize this specific narrative beat rather than a generic pose:")[-1], 24)
+        "natural face and hands, cinematic light, detailed skin, sharp focus, no text, "
+        + _clean(prompt.split("Visualize this specific narrative beat rather than a generic pose:")[-1], 180)
     )
     workflow = {
         "3": {"class_type": "KSampler", "inputs": {
@@ -234,12 +257,16 @@ def _build_comfy_workflow(prompt, model_name, seed, reference_name=None, loader=
             "text": "nsfw, nude, child, low quality, blurry, distorted, deformed, bad hands, text, watermark",
             "clip": ["4", 1],
         }},
-        "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["4", 2]}},
+        "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["12", 0] if vae_name else ["4", 2]}},
         "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "tulpachat/dating", "images": ["8", 0]}},
     }
+    if vae_name:
+        workflow["12"] = {"class_type": "VAELoader", "inputs": {"vae_name": vae_name}}
     if reference_name:
         workflow["10"] = {"class_type": "LoadImage", "inputs": {"image": reference_name}}
-        workflow["11"] = {"class_type": "VAEEncode", "inputs": {"pixels": ["10", 0], "vae": ["4", 2]}}
+        workflow["11"] = {"class_type": "VAEEncode", "inputs": {
+            "pixels": ["10", 0], "vae": ["12", 0] if vae_name else ["4", 2]
+        }}
     else:
         workflow["5"] = {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 768, "batch_size": 1}}
     return workflow
@@ -296,13 +323,14 @@ def _local_generate(prompt, target, reference=None):
     except Exception as exc:
         raise RuntimeError(f"ComfyUI 서버({_comfy_base_url()})에 연결할 수 없습니다: {exc}") from exc
     loader, model_name = _comfy_model_spec()
+    vae_name = _comfy_vae_name() if loader == "CheckpointLoaderSimple" else ""
     reference_name = _comfy_upload(reference) if reference and reference.is_file() else None
     base_seed = int.from_bytes(hashlib.sha256(prompt.encode()).digest()[:8], "big") & ((1 << 63) - 1)
     timeout = int(os.environ.get("JP_COMFYUI_TIMEOUT", "600"))
     for attempt in range(4):
         seed = base_seed + attempt * 104729
         workflow = _build_comfy_workflow(
-            prompt, model_name, seed, reference_name, loader=loader
+            prompt, model_name, seed, reference_name, loader=loader, vae_name=vae_name
         )
         queued = _comfy_request("/prompt", {"prompt": workflow}, timeout=30)
         if queued.get("node_errors"):
@@ -321,7 +349,8 @@ def _local_generate(prompt, target, reference=None):
             _LAST_GENERATION_META = {
                 "effective_prompt": workflow["6"]["inputs"]["text"],
                 "generation_settings": {
-                    "model": model_name, "loader": loader, "width": 512, "height": 768,
+                    "model": model_name, "loader": loader, "vae": vae_name or "checkpoint embedded",
+                    "width": 512, "height": 768,
                     "steps": sampler["steps"], "cfg": sampler["cfg"],
                     "sampler": sampler["sampler_name"], "scheduler": sampler["scheduler"],
                     "denoise": sampler["denoise"], "base_seed": base_seed,

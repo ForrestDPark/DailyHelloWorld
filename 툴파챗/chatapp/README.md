@@ -3911,3 +3911,10 @@ JOB_SYSTEM_ADDENDUM 계열 페르소나(매 턴 정규직/알바 두 카테고�
 - 웹 서재의 `읽기`는 EPUB에 섞여 있던 기존 녹음과 iPhone 브라우저 기본 음성을 사용하지 않고 모든 본문을 서버 Edge TTS로 읽는다.
 - 일본어는 `ja-JP-NanamiNeural`, 한국어 뜻은 `ko-KR-SunHiNeural`, 영어 서재는 `en-US-JennyNeural`로 고정해 페이지나 문장마다 목소리가 바뀌지 않는다.
 - 같은 문장과 음성 조합은 서버 캐시에 저장해 두 번째 재생부터 즉시 재사용한다. 한 번 읽기·두 번씩 읽기·일본어와 한국어 뜻 읽기, 속도·일시정지·완전 정지·현재 구절 강조·자동 스크롤은 그대로 유지한다.
+
+# Civitai 실사 체크포인트·외부 VAE 적용 (2026-09-21)
+
+- ComfyUI 작품 이미지 생성 모델을 기존 로컬 `stable-diffusion-v1-5` Diffusers 폴더에서 Civitai의 `majicMIX realistic v7` SafeTensor 체크포인트로 전환했다. 체크포인트가 설치되어 있으면 다른 파일의 이름순보다 이 모델을 우선 선택한다.
+- Civitai의 `vae-ft-mse-840000-ema-pruned / 840k`를 별도 `VAELoader`로 불러와 txt2img의 디코딩과 참조 이미지 img2img의 인코딩·디코딩에 동일하게 사용한다. `JP_COMFYUI_VAE`로 다른 VAE를 명시할 수도 있다.
+- 다운로드 파일은 Civitai 공식 API가 제공한 SHA-256과 대조하며, 체크포인트와 VAE 모두 피클 대신 SafeTensor 형식을 사용한다.
+- ComfyUI에 전달하던 장면 설명이 24글자에서 잘려 거의 모든 이미지가 비슷해지던 문제를 수정했다. 인물·장소·행동·표정에 필요한 장면 문맥을 SD 1.5의 CLIP 범위에 맞게 더 충분히 전달한다.
