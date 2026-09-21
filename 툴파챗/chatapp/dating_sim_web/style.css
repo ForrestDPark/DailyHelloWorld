@@ -461,6 +461,20 @@ html, body {
 }
 .tree-work-head strong { font-size: 14px; color: var(--text); line-height: 1.4; }
 .tree-work-head span { font-size: 11px; color: var(--muted); }
+.tree-toggle { border: 2px solid var(--border); background: var(--panel-2); }
+.tree-toggle > summary {
+  position: relative; padding: 10px 34px 10px 12px; cursor: pointer; list-style: none;
+  color: var(--border); font-size: 12px; font-weight: 700; line-height: 1.4;
+  background: rgba(244,211,94,0.08);
+}
+.tree-toggle > summary::-webkit-details-marker { display: none; }
+.tree-toggle > summary::after {
+  content: "＋"; position: absolute; right: 11px; top: 50%; transform: translateY(-50%);
+  color: var(--border); font-size: 17px; font-weight: 400;
+}
+.tree-toggle[open] > summary::after { content: "−"; }
+.tree-toggle[open] > summary { border-bottom: 1px solid rgba(244,211,94,0.35); }
+.tree-toggle-content { padding: 10px; display: flex; flex-direction: column; gap: 10px; }
 .tree-vocab-pool { border: 2px solid var(--border); background: var(--panel-2); }
 .tree-vocab-pool summary { padding: 8px 10px; font-size: 11px; color: var(--border); cursor: pointer; }
 .tree-vocab-chip {
@@ -470,10 +484,11 @@ html, body {
 .tree-vocab-chip b { color: var(--good); font-weight: 600; }
 .tree-vocab-chip span { color: var(--text); }
 .tree-vocab-chip em { margin-left: auto; color: var(--muted); font-size: 10px; font-style: normal; }
-.tree-day { border: 2px solid var(--border); background: var(--panel-2); }
+.tree-day { border-width: 1px; }
+.tree-day > .tree-toggle-content { padding: 0; gap: 0; }
 .tree-day-head {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  padding: 8px 10px; background: rgba(244,211,94,0.12); border-bottom: 2px solid var(--border);
+  padding: 8px 34px 8px 10px; background: rgba(244,211,94,0.12);
 }
 .tree-day-head strong { font-size: 13px; color: var(--border); }
 .tree-vocab-badge {
@@ -512,7 +527,7 @@ html, body {
 .tree-aff { font-weight: 700; font-size: 11px; }
 .tree-choice-up .tree-aff { color: var(--good); }
 .tree-choice-down .tree-aff { color: var(--accent); }
-.tree-endings { border: 2px solid var(--border); background: var(--panel-2); padding: 10px 12px; }
+.tree-endings { padding: 10px 12px; }
 .tree-endings strong { font-size: 12px; color: var(--border); display: block; margin-bottom: 6px; }
 .tree-ending { font-size: 12px; color: var(--text); padding: 3px 0; }
 

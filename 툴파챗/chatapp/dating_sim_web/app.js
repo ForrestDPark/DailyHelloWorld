@@ -1272,12 +1272,26 @@ function openTreeImageDetail(item) {
   close.focus();
 }
 
-function renderScenarioImages(body, tree) {
+function makeTreeToggle(title, open = false, className = "") {
+  const details = document.createElement("details");
+  details.className = `tree-toggle ${className}`.trim();
+  details.open = open;
+  const summary = document.createElement("summary");
+  summary.textContent = title;
+  const content = document.createElement("div");
+  content.className = "tree-toggle-content";
+  details.append(summary, content);
+  return { details, summary, content };
+}
+
+function renderScenarioImages(body, tree, includeHeading = true) {
   const images = tree.generated_images?.gallery || [];
-  const head = document.createElement("div");
-  head.className = "tree-section-head";
-  head.textContent = "🖼️ 생성된 캐릭터·장면 이미지";
-  body.append(head);
+  if (includeHeading) {
+    const head = document.createElement("div");
+    head.className = "tree-section-head";
+    head.textContent = "🖼️ 생성된 캐릭터·장면 이미지";
+    body.append(head);
+  }
   if (!images.length) {
     const empty = document.createElement("p");
     empty.className = "tree-report-note";
@@ -1305,12 +1319,14 @@ function renderScenarioImages(body, tree) {
   body.append(gallery);
 }
 
-function renderScenarioReport(body, tree) {
+function renderScenarioReport(body, tree, includeHeading = true) {
   const report = tree.report;
-  const head = document.createElement("div");
-  head.className = "tree-section-head";
-  head.textContent = "📊 작품·시나리오 보고서";
-  body.append(head);
+  if (includeHeading) {
+    const head = document.createElement("div");
+    head.className = "tree-section-head";
+    head.textContent = "📊 작품·시나리오 보고서";
+    body.append(head);
+  }
 
   // 규모 요약 칩
   const c = report.corpus;
@@ -1435,19 +1451,24 @@ function renderScenarioTree(tree) {
   head.append(meta);
   body.append(head);
 
-  renderScenarioImages(body, tree);
-  if (tree.report) renderScenarioReport(body, tree);
+  const imageToggle = makeTreeToggle("🖼️ 생성된 캐릭터·장면 이미지");
+  renderScenarioImages(imageToggle.content, tree, false);
+  body.append(imageToggle.details);
 
-  const tocHead = document.createElement("div");
-  tocHead.className = "tree-section-head";
-  tocHead.textContent = "🌳 사건 흐름별 시나리오 트리";
-  body.append(tocHead);
+  if (tree.report) {
+    const reportToggle = makeTreeToggle("📊 작품·시나리오 보고서");
+    renderScenarioReport(reportToggle.content, tree, false);
+    body.append(reportToggle.details);
+  }
+
+  const flowToggle = makeTreeToggle("🌳 사건 흐름별 시나리오 트리");
+  body.append(flowToggle.details);
 
   for (const day of tree.days) {
-    const dayEl = document.createElement("section");
-    dayEl.className = "tree-day";
-    const dayHead = document.createElement("div");
-    dayHead.className = "tree-day-head";
+    const dayToggle = makeTreeToggle("", false, "tree-day");
+    const dayEl = dayToggle.content;
+    const dayHead = dayToggle.summary;
+    dayHead.classList.add("tree-day-head");
     const dayNum = document.createElement("strong");
     dayNum.textContent = `흐름 ${day.day}`;
     dayHead.append(dayNum);
@@ -1458,8 +1479,6 @@ function renderScenarioTree(tree) {
       badge.textContent = `삽입 단어: ${day.vocab.ja}（${day.vocab.reading}） ${day.vocab.ko}`;
       dayHead.append(badge);
     }
-    dayEl.append(dayHead);
-
     if (day.narration) {
       const nar = document.createElement("p");
       nar.className = "tree-narration";
@@ -1512,21 +1531,19 @@ function renderScenarioTree(tree) {
       locEl.append(choices);
       dayEl.append(locEl);
     }
-    body.append(dayEl);
+    flowToggle.content.append(dayToggle.details);
   }
 
-  const endings = document.createElement("section");
-  endings.className = "tree-endings";
-  const endHead = document.createElement("strong");
-  endHead.textContent = "엔딩 분기 (누적 호감도)";
-  endings.append(endHead);
+  const endingToggle = makeTreeToggle("🏁 엔딩 분기 (누적 호감도)");
+  const endings = endingToggle.content;
+  endings.classList.add("tree-endings");
   for (const ending of tree.endings) {
     const e = document.createElement("div");
     e.className = "tree-ending";
     e.textContent = `호감도 ${ending.min_affection}+ → ${ending.title}`;
     endings.append(e);
   }
-  body.append(endings);
+  body.append(endingToggle.details);
 }
 
 async function openScenarioTree() {
