@@ -3895,3 +3895,4 @@ JOB_SYSTEM_ADDENDUM 계열 페르소나(매 턴 정규직/알바 두 카테고�
 - 기본 `txt2img`는 ComfyUI 기본 노드만 사용하며, 대표 초상화를 참조하는 장면은 이미지를 ComfyUI input으로 업로드해 VAE `img2img`로 생성한다. 작업은 `/prompt`로 제출하고 `/history`, `/view`로 완료 결과를 확인한다.
 - `JP_COMFYUI_URL`(기본 `http://127.0.0.1:8188`), `JP_COMFYUI_CHECKPOINT`, `JP_COMFYUI_DIFFUSERS_MODEL`, `JP_COMFYUI_TIMEOUT`으로 서버·모델·대기 시간을 설정할 수 있다. 변수가 없으면 서버의 체크포인트, 기존 로컬 모델 폴더 순서로 자동 선택해 가중치를 중복 다운로드하지 않는다.
 - ComfyUI 연결, 모델 누락, 워크플로 검증, 생성 시간 초과를 서로 구분해 오류에 표시한다. 생성 중단 후에도 기존 매니페스트 기반 재개 동작은 그대로 유지한다.
+- 최근 Diffusers로 만들었던 `277DCV-298` 대표 초상화 1장과 장면 9장을 ComfyUI MPS 생성본으로 전부 교체했다. 큰 표지·참조 이미지는 API 업로드 전 512×768로 정규화해 불필요하게 큰 latent로 인한 장시간 추론을 막았다. 전체 매니페스트에서 `diffusers` 공급자 기록 0개, ComfyUI 이미지 10장의 파일·밝기·명암 검증을 통과했다.

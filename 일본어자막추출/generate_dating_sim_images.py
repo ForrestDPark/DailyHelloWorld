@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import io
 import json
 import math
 import os
@@ -244,12 +245,20 @@ def _build_comfy_workflow(prompt, model_name, seed, reference_name=None, loader=
 
 
 def _comfy_upload(reference):
+    from PIL import Image, ImageOps
+
     boundary = "----jpcomfy" + hashlib.sha1(str(time.time_ns()).encode()).hexdigest()
-    filename = "dating-reference-" + hashlib.sha1(reference.read_bytes()).hexdigest()[:12] + reference.suffix.lower()
+    source = reference.read_bytes()
+    filename = "dating-reference-" + hashlib.sha1(source).hexdigest()[:12] + ".png"
+    with Image.open(io.BytesIO(source)) as image:
+        normalized = ImageOps.fit(image.convert("RGB"), (512, 768), Image.Resampling.LANCZOS)
+        payload = io.BytesIO()
+        normalized.save(payload, format="PNG", optimize=True)
+        image_bytes = payload.getvalue()
     body = b"".join((
         f"--{boundary}\r\nContent-Disposition: form-data; name=\"image\"; filename=\"{filename}\"\r\n"
         "Content-Type: image/png\r\n\r\n".encode(),
-        reference.read_bytes(),
+        image_bytes,
         f"\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"overwrite\"\r\n\r\ntrue\r\n"
         f"--{boundary}--\r\n".encode(),
     ))

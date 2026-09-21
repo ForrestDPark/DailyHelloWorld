@@ -3,6 +3,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 MODULE_PATH = Path(__file__).with_name("generate_dating_sim_images.py")
@@ -26,6 +27,32 @@ def scenario(days=14):
 
 
 class DatingImageAgentTests(unittest.TestCase):
+    def test_comfy_reference_upload_normalizes_large_image(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow not installed")
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "large.jpg"
+            Image.new("RGB", (1600, 900), "white").save(source)
+            captured = {}
+
+            class Response:
+                def __enter__(self): return self
+                def __exit__(self, *args): return False
+                def read(self): return b'{"name":"normalized.png"}'
+
+            def fake_urlopen(request, timeout=0):
+                captured["body"] = request.data
+                return Response()
+
+            with patch.object(images.urllib.request, "urlopen", fake_urlopen):
+                self.assertEqual(images._comfy_upload(source), "normalized.png")
+            marker = b"Content-Type: image/png\r\n\r\n"
+            png = captured["body"].split(marker, 1)[1].split(b"\r\n------jpcomfy", 1)[0]
+            with Image.open(images.io.BytesIO(png)) as normalized:
+                self.assertEqual(normalized.size, (512, 768))
+
     def test_comfy_workflow_uses_core_nodes_and_reference_img2img(self):
         text_workflow = images._build_comfy_workflow("a quiet cafe scene", "model.safetensors", 42)
         self.assertEqual(text_workflow["3"]["inputs"]["latent_image"], ["5", 0])
