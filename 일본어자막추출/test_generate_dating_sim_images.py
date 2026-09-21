@@ -69,11 +69,15 @@ class DatingImageAgentTests(unittest.TestCase):
         edit_workflow = images._build_comfy_workflow(
             "a quiet cafe scene", "model.safetensors", 42, "reference.png"
         )
-        self.assertNotIn("5", edit_workflow)
-        self.assertEqual(edit_workflow["3"]["inputs"]["latent_image"], ["11", 0])
+        self.assertIn("5", edit_workflow)
         self.assertEqual(edit_workflow["10"]["class_type"], "LoadImage")
         self.assertEqual(edit_workflow["11"]["class_type"], "VAEEncode")
-        self.assertLess(edit_workflow["3"]["inputs"]["denoise"], 1.0)
+        self.assertEqual(edit_workflow["3"]["inputs"]["latent_image"], ["14", 0])
+        self.assertLess(edit_workflow["3"]["inputs"]["denoise"], 0.5)
+        self.assertEqual(edit_workflow["13"]["class_type"], "KSampler")
+        self.assertEqual(edit_workflow["13"]["inputs"]["latent_image"], ["5", 0])
+        self.assertEqual(edit_workflow["14"]["class_type"], "LatentBlend")
+        self.assertEqual(edit_workflow["14"]["inputs"]["blend_factor"], 0.78)
 
     def test_comfy_workflow_can_use_external_vae(self):
         workflow = images._build_comfy_workflow(
@@ -106,6 +110,31 @@ class DatingImageAgentTests(unittest.TestCase):
         self.assertLessEqual(len(plan["selected"]), 12)
         self.assertEqual(len(plan["assignments"]), 14 * 3)
         self.assertEqual({item["location"] for item in plan["selected"]}, set(images.LOCATIONS))
+
+    def test_original_epub_scene_images_are_used_as_distinct_references(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "TEST-001"
+            source = work / "images"
+            source.mkdir(parents=True)
+            for name in ("part1_scene001.jpg", "part1_scene002.jpg", "part1_scene003.jpg"):
+                (source / name).write_bytes(name.encode() * 100)
+            originals = images._original_scene_images(work)
+            self.assertEqual([path.name for path in originals], [
+                "part1_scene001.jpg", "part1_scene002.jpg", "part1_scene003.jpg",
+            ])
+            first = images._scene_reference(originals, {"location": "first"}, 0, 3)
+            last = images._scene_reference(originals, {"location": "quiet"}, 2, 3)
+            self.assertNotEqual(first, last)
+
+    def test_comfyui_is_default_and_openai_is_opt_in(self):
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.dict(images.os.environ, {}, clear=True), \
+             patch.object(images, "_local_generate") as local, \
+             patch.object(images, "_openai_generate") as openai:
+            result = images._generate("prompt", Path(tmp) / "out.png")
+        self.assertEqual(result, "comfyui")
+        local.assert_called_once()
+        openai.assert_not_called()
 
     def test_agent_resumes_existing_files_and_writes_manifest(self):
         with tempfile.TemporaryDirectory() as tmp:

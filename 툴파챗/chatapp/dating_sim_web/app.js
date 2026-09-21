@@ -1285,6 +1285,7 @@ function openTreeImageDetail(item) {
     const labels = {
       model: "모델", loader: "로더", width: "너비", height: "높이", steps: "스텝",
       cfg: "CFG", sampler: "샘플러", scheduler: "스케줄러", denoise: "Denoise",
+      vae: "VAE", composition_pass: "구도 합성",
       base_seed: "기본 시드", used_seed: "사용 시드", attempt: "시도 횟수",
     };
     for (const [key, value] of settingsEntries) {
@@ -1347,7 +1348,20 @@ function renderScenarioImages(body, tree, includeHeading = true) {
     const label = document.createElement("span");
     label.textContent = item.label;
     button.append(image, label);
-    button.addEventListener("click", () => openTreeImageDetail(item));
+    let touchedAt = 0;
+    const activate = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openTreeImageDetail(item);
+    };
+    button.addEventListener("touchend", (event) => {
+      touchedAt = Date.now();
+      activate(event);
+    }, { passive: false });
+    button.addEventListener("click", (event) => {
+      if (Date.now() - touchedAt < 700) return;
+      activate(event);
+    });
     gallery.append(button);
   }
   body.append(gallery);

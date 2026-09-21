@@ -17,7 +17,6 @@ import base64
 import datetime
 import html
 import hashlib
-import gc
 import os
 import re
 import shutil
@@ -1929,10 +1928,6 @@ def _validate_ui_plan(actions):
     return problems
 IMAGE_PROVIDER = os.environ.get("CHATAPP_IMAGE_PROVIDER", "local").strip().lower()
 IMAGE_MODEL = os.environ.get("CHATAPP_IMAGE_MODEL", "gpt-image-2")
-LOCAL_IMAGE_MODEL = os.environ.get(
-    "CHATAPP_LOCAL_IMAGE_MODEL", "stable-diffusion-v1-5/stable-diffusion-v1-5"
-)
-LOCAL_IMAGE_SIZE = 512
 LOCAL_IMAGE_STEPS = int(os.environ.get("CHATAPP_LOCAL_IMAGE_STEPS", "24"))
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 IMAGE_PLAN_RE = re.compile(r"```imageplan\s*\n(.*?)\n```", re.DOTALL)
@@ -1940,8 +1935,6 @@ IMAGE_APPROVE_KEYWORDS = ("승인", "진행", "생성")
 IMAGE_APPLY_KEYWORDS = ("적용", "채택")
 _pending_image_plans = {}
 _pending_image_results = {}
-_local_pipeline = None
-_local_pipeline_is_edit = None
 
 _pending_ui_plans = {}  # room_id -> [{"file":..., "content":...}, ...] — 워커 재시작하면 초기화(의도적)
 
@@ -2007,74 +2000,99 @@ def _local_seed(prompt, source=None):
     return int.from_bytes(hashlib.sha256(material).digest()[:4], "big")
 
 
-def _load_local_pipeline(edit=False):
-    """무거운 모델은 승인된 첫 생성 시점에만 로드한다."""
-    global _local_pipeline, _local_pipeline_is_edit
-    try:
-        import torch
-        from diffusers import StableDiffusionImg2ImgPipeline, StableDiffusionPipeline
-    except ImportError as exc:
-        raise RuntimeError(
-            "로컬 이미지 생성 패키지가 없습니다. worker/requirements-image-local.txt를 설치해주세요"
-        ) from exc
-    if not torch.backends.mps.is_available():
-        raise RuntimeError("이 Mac에서 PyTorch MPS 가속을 사용할 수 없습니다")
-    if _local_pipeline is not None and _local_pipeline_is_edit == edit:
-        return _local_pipeline
-    # 16GB 메모리에서 txt2img와 img2img 모델을 동시에 들고 있지 않는다.
-    if _local_pipeline is not None:
-        del _local_pipeline
-        _local_pipeline = None
-        gc.collect()
-        torch.mps.empty_cache()
-    pipeline_class = StableDiffusionImg2ImgPipeline if edit else StableDiffusionPipeline
-    try:
-        pipeline = pipeline_class.from_pretrained(
-            LOCAL_IMAGE_MODEL,
-            # 이 M2에서 FP16은 NaN→검은 이미지가 되는 경우가 실측돼 FP32 사용.
-            torch_dtype=torch.float32,
-            use_safetensors=True,
-        )
-    except Exception as exc:  # 모델 다운로드/캐시 오류를 채팅에 이해하기 쉽게 전달
-        raise RuntimeError(f"로컬 이미지 모델을 불러오지 못했습니다: {exc}") from exc
-    pipeline.enable_attention_slicing()
-    pipeline = pipeline.to("mps")
-    _local_pipeline = pipeline
-    _local_pipeline_is_edit = edit
-    return pipeline
-
-
 def _generate_local_image(prompt, source=None):
-    try:
-        import torch
-        from PIL import Image, ImageOps
-    except ImportError as exc:
-        raise RuntimeError("로컬 이미지 생성 패키지가 올바르게 설치되지 않았습니다") from exc
+    """승인된 이미지 계획을 공용 로컬 ComfyUI 큐에서 생성한다.
+
+    워커 프로세스마다 Diffusers 모델을 다시 메모리에 올리지 않고, 이미 실행 중인
+    ComfyUI가 Civitai 체크포인트를 한 번만 적재해 프로필·방·편집 작업에 공유한다.
+    """
     source_path = None
     if source:
         source_path = UPLOADS_DIR / Path(source).name
         if not source_path.exists():
             raise RuntimeError("편집할 원본 이미지를 찾지 못했습니다")
-    pipeline = _load_local_pipeline(edit=bool(source_path))
-    generator = torch.Generator(device="cpu").manual_seed(_local_seed(prompt, source))
-    kwargs = {
-        "prompt": prompt,
-        "negative_prompt": "low quality, blurry, distorted, deformed, text, watermark",
-        "num_inference_steps": max(10, min(40, LOCAL_IMAGE_STEPS)),
-        "guidance_scale": 7.0,
-        "generator": generator,
+    base_url = os.environ.get("CHATAPP_COMFYUI_URL", "http://127.0.0.1:8188").rstrip("/")
+    def comfy(path, payload=None, timeout=30):
+        req = urllib.request.Request(
+            base_url + path,
+            data=json.dumps(payload).encode() if payload is not None else None,
+            headers={"Content-Type": "application/json"} if payload is not None else {},
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            return json.loads(response.read() or b"{}")
+    try:
+        models = comfy("/models/checkpoints", timeout=10)
+    except Exception as exc:
+        raise RuntimeError(f"로컬 ComfyUI에 연결할 수 없습니다: {exc}") from exc
+    preferred = os.environ.get("CHATAPP_COMFYUI_CHECKPOINT", "majicmixRealistic_v7.safetensors")
+    if not isinstance(models, list) or not models:
+        raise RuntimeError("ComfyUI에 사용할 체크포인트가 없습니다")
+    model = preferred if preferred in models else sorted(models)[0]
+    vaes = comfy("/models/vae", timeout=10)
+    preferred_vae = os.environ.get(
+        "CHATAPP_COMFYUI_VAE", "vaeFtMse840000EmaPruned_vaeFtMse840k.safetensors"
+    )
+    vae_name = preferred_vae if isinstance(vaes, list) and preferred_vae in vaes else None
+    vae_ref = ["12", 0] if vae_name else ["4", 2]
+    workflow = {
+        "3": {"class_type": "KSampler", "inputs": {
+            "seed": _local_seed(prompt, source), "steps": max(10, min(40, LOCAL_IMAGE_STEPS)),
+            "cfg": 7.0, "sampler_name": "dpmpp_2m", "scheduler": "karras",
+            "denoise": 0.62 if source_path else 1.0, "model": ["4", 0],
+            "positive": ["6", 0], "negative": ["7", 0],
+            "latent_image": ["11", 0] if source_path else ["5", 0],
+        }},
+        "4": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": model}},
+        "5": {"class_type": "EmptyLatentImage", "inputs": {
+            "width": 512, "height": 512, "batch_size": 1,
+        }},
+        "6": {"class_type": "CLIPTextEncode", "inputs": {"text": prompt, "clip": ["4", 1]}},
+        "7": {"class_type": "CLIPTextEncode", "inputs": {
+            "text": "low quality, blurry, distorted, deformed, bad hands, text, watermark",
+            "clip": ["4", 1],
+        }},
+        "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": vae_ref}},
+        "9": {"class_type": "SaveImage", "inputs": {
+            "filename_prefix": "tulpachat/persona", "images": ["8", 0],
+        }},
     }
+    if vae_name:
+        workflow["12"] = {"class_type": "VAELoader", "inputs": {"vae_name": vae_name}}
     if source_path:
-        with Image.open(source_path) as original:
-            kwargs["image"] = ImageOps.fit(
-                original.convert("RGB"), (LOCAL_IMAGE_SIZE, LOCAL_IMAGE_SIZE), Image.Resampling.LANCZOS
-            )
-        kwargs["strength"] = 0.7
-    result = pipeline(**kwargs)
-    if not result.images:
-        raise RuntimeError("안전 검사로 인해 생성할 수 있는 이미지가 없었습니다")
+        boundary, body = _multipart({"overwrite": "true"}, source_path)
+        req = urllib.request.Request(
+            base_url + "/upload/image", data=body,
+            headers={"Content-Type": f"multipart/form-data; boundary={boundary}"}, method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=60) as response:
+            uploaded = json.loads(response.read())
+        workflow["10"] = {"class_type": "LoadImage", "inputs": {"image": uploaded["name"]}}
+        workflow["11"] = {"class_type": "VAEEncode", "inputs": {
+            "pixels": ["10", 0], "vae": vae_ref,
+        }}
+    queued = comfy("/prompt", {"prompt": workflow})
+    if queued.get("node_errors") or not queued.get("prompt_id"):
+        raise RuntimeError(f"ComfyUI 작업 검증 실패: {queued.get('node_errors') or queued}")
+    prompt_id = queued["prompt_id"]
+    deadline = time.monotonic() + int(os.environ.get("CHATAPP_COMFYUI_TIMEOUT", "600"))
+    image = None
+    while time.monotonic() < deadline and image is None:
+        history = comfy(f"/history/{urllib.parse.quote(prompt_id)}", timeout=15).get(prompt_id, {})
+        for output in history.get("outputs", {}).values():
+            if output.get("images"):
+                image = output["images"][0]
+                break
+        if image is None:
+            time.sleep(1)
+    if image is None:
+        raise RuntimeError("ComfyUI 이미지 생성 시간이 초과됐습니다")
+    query = urllib.parse.urlencode({
+        "filename": image["filename"], "subfolder": image.get("subfolder", ""),
+        "type": image.get("type", "output"),
+    })
     filename = f"generated_{int(time.time())}_{os.urandom(4).hex()}.png"
-    result.images[0].save(UPLOADS_DIR / filename, format="PNG", optimize=True)
+    with urllib.request.urlopen(base_url + "/view?" + query, timeout=60) as response:
+        (UPLOADS_DIR / filename).write_bytes(response.read())
     return f"/uploads/{filename}"
 
 
@@ -2135,33 +2153,27 @@ def _generate_openai_image(prompt, source=None):
 def process_automatic_image_job(job):
     """서버가 승인 상태로 내준 프로필 작업을 이미지로 만든다.
 
-    ★ 2026-08-29: "GPT 토큰이 없는 경우에는 디퓨저 사용해서 이미지 생성해서
-    저장하도록 해줘" 요청 — 예전엔 무조건 OpenAI Images API(_generate_openai_image)만
-    썼고, OPENAI_API_KEY가 없거나 크레딧이 소진(insufficient_quota)되면 그대로
-    실패해서 아바타 없는 프로필이 계속 남았다. OpenAI를 먼저 시도하고, 어떤
-    이유로든 실패하면 채팅의 imageplan 흐름에서 이미 쓰던 로컬 Stable
-    Diffusion(_generate_local_image, 이 Mac의 MPS로 돈다)으로 자동 전환한다."""
+    기본은 공용 ComfyUI 큐에서 생성해 API 토큰을 쓰지 않는다. 운영자가
+    CHATAPP_IMAGE_PROVIDER=openai를 명시한 경우에만 OpenAI Images를 사용한다.
+    어느 공급자든 실제 실행은 서버가 소유자 승인 상태로 내준 작업에 한한다."""
     prompt = str(job["prompt"])[:4000]
-    engine = "openai"
-    openai_error = None
+    engine = "comfyui"
     try:
-        url = _generate_openai_image(prompt)
-    except Exception as exc:  # noqa: BLE001 — 로컬 디퓨저로 넘어가기 위한 의도적 전체 캐치
-        openai_error = exc
-        engine = "local"
-        print(f"⚠️ {job.get('persona_name')} OpenAI 이미지 생성 실패, 로컬 디퓨저로 전환: {exc}", flush=True)
-        try:
+        if IMAGE_PROVIDER == "openai":
+            engine = "openai"
+            url = _generate_openai_image(prompt)
+        else:
             url = _generate_local_image(prompt)
-        except Exception as local_exc:  # noqa: BLE001 — 실패를 영속화하고 워커는 계속 돈다
-            try:
-                _api(
-                    "/api/worker/image_jobs/complete", "POST",
-                    {"job_id": job["id"], "error": f"OpenAI 실패({openai_error}) / 로컬 디퓨저도 실패({local_exc})"[:1000]},
-                )
-            except Exception as report_exc:  # noqa: BLE001
-                print(f"⚠️ 이미지 작업 실패 상태 저장도 실패: {report_exc}", flush=True)
-            print(f"⚠️ {job.get('persona_name')} 프로필 이미지 생성 실패(OpenAI+로컬 디퓨저 모두): {local_exc}", flush=True)
-            return
+    except Exception as generation_exc:  # noqa: BLE001 — 실패를 영속화하고 워커는 계속 돈다
+        try:
+            _api(
+                "/api/worker/image_jobs/complete", "POST",
+                {"job_id": job["id"], "error": f"{engine} 이미지 생성 실패({generation_exc})"[:1000]},
+            )
+        except Exception as report_exc:  # noqa: BLE001
+            print(f"⚠️ 이미지 작업 실패 상태 저장도 실패: {report_exc}", flush=True)
+        print(f"⚠️ {job.get('persona_name')} 프로필 이미지 생성 실패({engine}): {generation_exc}", flush=True)
+        return
     try:
         _api("/api/worker/image_jobs/complete", "POST", {"job_id": job["id"], "url": url})
         print(f"🖼️ {job['persona_name']} 프로필 이미지 자동 생성·적용 완료({engine})", flush=True)

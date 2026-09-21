@@ -15,6 +15,7 @@ import json
 import math
 import os
 import re
+import shutil
 import time
 import urllib.error
 import urllib.parse
@@ -31,6 +32,46 @@ MANIFEST_NAME = "manifest.json"
 LOCATIONS = ("first", "walk", "quiet")
 _OPENAI_DISABLED_REASON = None
 _LAST_GENERATION_META = {}
+
+
+def _original_scene_images(work_dir):
+    """EPUB 제작 과정에서 추출된 원작 장면 이미지를 읽기 순서로 돌려준다.
+
+    `images/partN_sceneNNN[_pageNN].jpg`는 EPUB에 실제 수록되는 원본 장면이다.
+    dating_sim_images 아래의 생성물은 의도적으로 제외한다.
+    """
+    image_dir = work_dir / "images"
+    allowed = {".jpg", ".jpeg", ".png", ".webp"}
+    return sorted(
+        (path for path in image_dir.glob("**/*") if path.is_file() and path.suffix.lower() in allowed),
+        key=lambda path: tuple(
+            int(piece) if piece.isdigit() else piece.casefold()
+            for piece in re.split(r"(\d+)", path.name)
+        ),
+    )
+
+
+def _scene_reference(originals, scene, selected_index, selected_count):
+    """시나리오 흐름 위치와 장면 종류를 함께 써 서로 다른 원작 컷을 고른다."""
+    if not originals:
+        return None
+    location_offset = {"first": 0, "walk": 1, "quiet": 2}.get(scene.get("location"), 0)
+    if selected_count <= 1:
+        base = 0
+    else:
+        base = round(selected_index * (len(originals) - 1) / (selected_count - 1))
+    return originals[(base + location_offset) % len(originals)]
+
+
+def _copy_reference(source, output, key):
+    if not source:
+        return None
+    suffix = source.suffix.lower() if source.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"} else ".jpg"
+    filename = "reference-" + hashlib.sha256(key.encode()).hexdigest()[:12] + suffix
+    target = output / filename
+    if not target.is_file() or target.stat().st_size != source.stat().st_size:
+        shutil.copy2(source, target)
+    return filename
 
 
 def _clean(text, limit=700):
@@ -237,18 +278,28 @@ def _build_comfy_workflow(
 ):
     # 추가 커스텀 노드 없이 새 ComfyUI에서도 동작하는 API 형식이다.
     # 레퍼런스가 있으면 VAE img2img로 구도·인물성을 유지한다.
+    camera_directions = (
+        "wide environmental composition, full body in motion, strong location context",
+        "medium candid shot, eye-level three-quarter view, natural hand activity",
+        "over-the-shoulder composition, layered foreground and background depth",
+        "side-profile composition, off-center subject, visible surrounding activity",
+        "high-angle seated composition, expressive posture, environmental storytelling",
+        "low-angle dynamic composition, walking action, dramatic leading lines",
+    )
+    camera_direction = camera_directions[int.from_bytes(hashlib.sha256(prompt.encode()).digest()[:2], "big") % len(camera_directions)]
     local_prompt = (
         "photorealistic adult Japanese woman age 25, fully clothed, tasteful romance scene, "
         "natural face and hands, detailed skin, sharp focus, no text, "
         "shot on Canon EOS R5, 85mm f/1.4, golden hour lighting, "
+        + camera_direction + ", "
         + _clean(prompt.split("Visualize this specific narrative beat rather than a generic pose:")[-1], 180)
     )
     workflow = {
         "3": {"class_type": "KSampler", "inputs": {
             "seed": seed, "steps": 25, "cfg": 7.0, "sampler_name": "dpmpp_2m",
-            "scheduler": "karras", "denoise": 0.62 if reference_name else 1.0,
+            "scheduler": "karras", "denoise": 0.48 if reference_name else 1.0,
             "model": ["4", 0], "positive": ["6", 0], "negative": ["7", 0],
-            "latent_image": ["11", 0] if reference_name else ["5", 0],
+            "latent_image": ["14", 0] if reference_name else ["5", 0],
         }},
         "4": {"class_type": loader, "inputs": {
             "ckpt_name" if loader == "CheckpointLoaderSimple" else "model_path": model_name
@@ -267,6 +318,20 @@ def _build_comfy_workflow(
         workflow["10"] = {"class_type": "LoadImage", "inputs": {"image": reference_name}}
         workflow["11"] = {"class_type": "VAEEncode", "inputs": {
             "pixels": ["10", 0], "vae": ["12", 0] if vae_name else ["4", 2]
+        }}
+        # 먼저 텍스트만으로 장면의 구도 latent를 만든 뒤, 대표 초상화의
+        # latent를 22% 섞고 최종 img2img 패스를 수행한다. 얼굴·의상 단서는
+        # 남기되 참조 사진의 자세와 배경이 모든 장면에 복제되지 않게 한다.
+        workflow["5"] = {"class_type": "EmptyLatentImage", "inputs": {
+            "width": 512, "height": 768, "batch_size": 1
+        }}
+        workflow["13"] = {"class_type": "KSampler", "inputs": {
+            "seed": seed + 1, "steps": 12, "cfg": 7.0, "sampler_name": "dpmpp_2m",
+            "scheduler": "karras", "denoise": 1.0, "model": ["4", 0],
+            "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["5", 0],
+        }}
+        workflow["14"] = {"class_type": "LatentBlend", "inputs": {
+            "samples1": ["13", 0], "samples2": ["11", 0], "blend_factor": 0.78,
         }}
     else:
         workflow["5"] = {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 768, "batch_size": 1}}
@@ -356,6 +421,7 @@ def _local_generate(prompt, target, reference=None):
                     "sampler": sampler["sampler_name"], "scheduler": sampler["scheduler"],
                     "denoise": sampler["denoise"], "base_seed": base_seed,
                     "used_seed": seed, "attempt": attempt + 1,
+                    "composition_pass": "txt2img 12 steps + 78% text/22% reference latent + img2img",
                 },
             }
             return
@@ -376,6 +442,10 @@ def _valid_image(path):
 
 def _generate(prompt, target, reference=None):
     global _OPENAI_DISABLED_REASON
+    provider = os.environ.get("JP_DATING_IMAGE_PROVIDER", "comfyui").strip().lower()
+    if provider != "openai":
+        _local_generate(prompt, target, reference)
+        return "comfyui"
     try:
         if _OPENAI_DISABLED_REASON:
             raise RuntimeError(_OPENAI_DISABLED_REASON)
@@ -412,27 +482,39 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
                      "scene_limit": max_scenes, "assignments": {}, "scenes": manifest.get("scenes", {}),
                      "errors": []})
     portrait = output / "portrait.png"
-    cover_reference = next((path for name in ("cover.jpg", "cover.png", "cover.webp")
-                            if (path := work_dir / name).is_file()), None)
+    originals = _original_scene_images(work_dir)
+    cover_reference = originals[0] if originals else next((
+        path for name in ("cover.jpg", "cover.png", "cover.webp")
+        if (path := work_dir / name).is_file()
+    ), None)
+    portrait_reference_file = _copy_reference(cover_reference, output, "portrait")
     manifest["portrait_prompt"] = _prompt(work_dir.name)
-    manifest["portrait_reference"] = cover_reference.name if cover_reference else None
+    manifest["portrait_reference"] = portrait_reference_file
+    manifest["reference_source"] = "original_epub_scene" if originals else "cover_fallback"
     if force or not _valid_image(portrait):
         manifest["portrait_provider"] = generator(manifest["portrait_prompt"], portrait, cover_reference)
         if manifest["portrait_provider"] == "comfyui":
             manifest["portrait_effective_prompt"] = _LAST_GENERATION_META.get("effective_prompt", "")
             manifest["portrait_generation_settings"] = _LAST_GENERATION_META.get("generation_settings", {})
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-    for scene in plan["selected"]:
+    for selected_index, scene in enumerate(plan["selected"]):
         filename = _image_filename(scene["key"])
         target = output / filename
+        original_reference = _scene_reference(
+            originals, scene, selected_index, len(plan["selected"])
+        )
+        reference_file = _copy_reference(original_reference, output, scene["key"])
+        reference_path = output / reference_file if reference_file else cover_reference
         try:
             if force or not _valid_image(target):
-                provider = generator(_prompt(work_dir.name, scene), target, portrait)
+                provider = generator(_prompt(work_dir.name, scene), target, reference_path)
             else:
                 provider = manifest.get("scenes", {}).get(scene["key"], {}).get("provider", "existing")
             manifest["scenes"][scene["key"]] = {"file": filename, "provider": provider,
                                                      "day": scene["day"], "location": scene["location"],
-                                                     "prompt": _prompt(work_dir.name, scene)}
+                                                     "prompt": _prompt(work_dir.name, scene),
+                                                     "reference_file": reference_file,
+                                                     "reference_source": str(original_reference.relative_to(work_dir)) if original_reference else None}
             if provider == "comfyui" and _LAST_GENERATION_META:
                 manifest["scenes"][scene["key"]].update(_LAST_GENERATION_META)
         except Exception as exc:

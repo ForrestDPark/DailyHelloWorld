@@ -76,6 +76,40 @@ class ShiftAlarmApiTests(unittest.TestCase):
             )
         self.assertEqual(raised.exception.status_code, 422)
 
+    def test_notion_time_update_is_visible_from_local_status_immediately(self):
+        status = {"reminder_schedule": [{
+            "key": "walk", "label": "20분 걷는 날", "time": "18:00",
+            "times": {"시각": "18:00"},
+        }]}
+        table = {"results": [{"id": "table", "type": "table"}]}
+        rows = {"results": [
+            {"id": "header", "type": "table_row", "table_row": {"cells": [
+                [{"plain_text": "리마인더"}], [{"plain_text": "시각"}],
+            ]}},
+            {"id": "walk-row", "type": "table_row", "table_row": {"cells": [
+                [{"plain_text": "20분 걷는 날"}], [{"plain_text": "18:00"}],
+            ]}},
+        ]}
+        notion_calls = {"read": 0}
+        def notion_ordered(_token, path, method="GET", payload=None):
+            if path.startswith("blocks/") and path.endswith("/children?page_size=100"):
+                if notion_calls["read"] == 0:
+                    notion_calls["read"] += 1
+                    return table
+                return rows
+            return {"ok": True}
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(module, "SHIFT_ALARM_REMINDER_EDITOR_FILE", Path(directory) / "editor.json"), \
+             patch.object(module, "_read_shift_alarm_status", return_value=status), \
+             patch.object(module, "_shift_alarm_notion_token", return_value="hidden"), \
+             patch.object(module, "_notion_request", side_effect=notion_ordered):
+            result = module.update_shift_alarm_reminder_time(
+                module.ReminderTimeUpdate(label="20분 걷는 날", time="20:00"), owner_request()
+            )
+            merged = module._merge_reminder_editor(status)
+        self.assertTrue(result["synced"])
+        self.assertEqual(merged["reminder_schedule"][0]["time"], "20:00")
+
     def test_reminder_definition_crud_uses_owner_editor_file(self):
         status = {"reminder_schedule": [{"key": "laundry", "label": "빨래", "time": "11:30"}]}
         with tempfile.TemporaryDirectory() as directory, \

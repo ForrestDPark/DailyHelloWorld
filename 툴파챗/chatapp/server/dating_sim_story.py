@@ -1486,20 +1486,23 @@ def _comfy_effective_prompt(prompt):
         "Visualize this specific narrative beat rather than a generic pose:"
     )[-1]
     beat = re.sub(r"\[[^|\]]+\|([^\]]+)\]", r"\1", beat)
-    beat = re.sub(r"\s+", " ", beat).strip()[:24]
+    beat = re.sub(r"\s+", " ", beat).strip()[:180]
     return (
         "photorealistic adult Japanese woman age 25, fully clothed, tasteful romance scene, "
-        "natural face and hands, cinematic light, no text, " + beat
+        "natural face and hands, detailed skin, sharp focus, no text, "
+        "shot on Canon EOS R5, 85mm f/1.4, golden hour lighting, " + beat
     )
 
 
 def _comfy_generation_settings(prompt, has_reference):
     seed = int.from_bytes(hashlib.sha256(str(prompt or "").encode()).digest()[:8], "big") & ((1 << 63) - 1)
     return {
-        "model": "stable-diffusion-v1-5", "loader": "DiffusersLoader",
+        "model": "majicmixRealistic_v7.safetensors", "loader": "CheckpointLoaderSimple",
+        "vae": "vaeFtMse840000EmaPruned_vaeFtMse840k.safetensors",
         "width": 512, "height": 768, "steps": 25, "cfg": 7.0,
         "sampler": "dpmpp_2m", "scheduler": "karras",
-        "denoise": 0.62 if has_reference else 1.0, "base_seed": seed,
+        "denoise": 0.48 if has_reference else 1.0, "base_seed": seed,
+        "composition_pass": "txt2img 12 steps + 78% text/22% reference latent + img2img" if has_reference else "txt2img",
     }
 
 
@@ -1575,10 +1578,15 @@ def load_generated_images(title, book_id):
                    if (url := public(filename))}
     if not portrait and not assignments:
         return None
+    def reference_public(filename):
+        if not isinstance(filename, str) or not re.fullmatch(
+            r"reference-[0-9a-f]{12}\.(?:jpg|jpeg|png|webp)", filename
+        ):
+            return None
+        return (f"/api/dating-sim/books/{book_id}/image-references/{filename}"
+                if (image_dir / filename).is_file() else None)
     reference_name = manifest.get("portrait_reference")
-    reference_url = None
-    if isinstance(reference_name, str) and re.fullmatch(r"cover\.(?:jpg|png|webp)", reference_name):
-        reference_url = f"/api/dating-sim/books/{book_id}/image-references/{reference_name}"
+    reference_url = reference_public(reference_name)
     gallery = []
     if portrait:
         portrait_prompt = manifest.get("portrait_prompt") or _legacy_portrait_prompt(manifest.get("title") or title)
@@ -1607,7 +1615,9 @@ def load_generated_images(title, book_id):
         gallery.append({
             "key": scene_key, "kind": "scene",
             "label": f"흐름 {day} · {location}" if day else str(scene_key),
-            "image_url": image_url, "reference_url": portrait,
+            "image_url": image_url,
+            "reference_url": reference_public(record.get("reference_file")),
+            "reference_source": record.get("reference_source") or "",
             "prompt": record.get("prompt") or "",
             "effective_prompt": record.get("effective_prompt") or (
                 _comfy_effective_prompt(record.get("prompt")) if record.get("provider") == "comfyui" else record.get("prompt") or ""),
@@ -1643,9 +1653,11 @@ def generated_image_path(book_id, filename):
 
 
 def generated_image_reference_path(book_id, filename):
-    """관리자 생성 이력에서만 보여 줄 표지 참조본. 매니페스트가 실제로
-    portrait_reference로 기록한 cover 파일 하나만 허용한다."""
-    if not re.fullmatch(r"cover\.(?:jpg|png|webp)", filename or ""):
+    """관리자 생성 이력에서 보여 줄 원작 EPUB 참조본.
+
+    임의 파일 노출을 막기 위해 매니페스트에 등록된 reference 파일만 허용한다.
+    """
+    if not re.fullmatch(r"reference-[0-9a-f]{12}\.(?:jpg|jpeg|png|webp)", filename or ""):
         return None
     book = _find_book(book_id)
     if not book:
@@ -1658,9 +1670,14 @@ def generated_image_reference_path(book_id, filename):
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    if manifest.get("portrait_reference") != filename:
+    allowed = {manifest.get("portrait_reference")}
+    allowed.update(
+        record.get("reference_file") for record in (manifest.get("scenes") or {}).values()
+        if isinstance(record, dict)
+    )
+    if filename not in allowed:
         return None
-    target = folder / filename
+    target = manifest_path.parent / filename
     return target if target.is_file() else None
 
 

@@ -2344,7 +2344,27 @@ def update_shift_alarm_reminder_time(body: ReminderTimeUpdate, request: Request)
         cells.append([])
     cells[column_index] = [{"type": "text", "text": {"content": body.time}}]
     _notion_request(token, f"blocks/{target['id']}", "PATCH", {"table_row": {"cells": cells}})
-    return {"ok": True, "label": body.label, "profile": body.profile, "time": body.time}
+    # Notion 갱신 뒤 Shift Alarm의 1분 상태 파일 재생성을 기다리면 방금 저장한
+    # 시각이 화면에서 예전 값으로 되돌아온다. 같은 값을 로컬 오버라이드에도
+    # 원자적으로 기록해 다음 status 요청부터 즉시 같은 시각을 반환한다.
+    merged = _merge_reminder_editor(status)
+    schedule_item = next((item for item in merged.get("reminder_schedule", [])
+                          if item.get("label") == body.label), None)
+    if schedule_item and schedule_item.get("key"):
+        editor = _read_reminder_editor()
+        override = editor["items"].get(schedule_item["key"], {})
+        override = dict(override) if isinstance(override, dict) else {}
+        hour, minute = (int(part) for part in body.time.split(":"))
+        if body.profile == "시각":
+            override["time"] = {"hour": hour, "minute": minute}
+        else:
+            override.setdefault("profile_times", {})[body.profile] = {
+                "hour": hour, "minute": minute,
+            }
+        editor["items"][schedule_item["key"]] = override
+        _write_reminder_editor(editor)
+    return {"ok": True, "label": body.label, "profile": body.profile,
+            "time": body.time, "synced": True}
 
 
 def _today_reminder_block(token, status, label):
