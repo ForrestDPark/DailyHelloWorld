@@ -733,6 +733,16 @@ def dating_sim_generated_image(book_id: str, filename: str, request: Request):
     return FileResponse(str(target), media_type="image/png")
 
 
+@app.get("/api/dating-sim/books/{book_id}/image-references/{filename}")
+def dating_sim_generated_image_reference(book_id: str, filename: str, request: Request):
+    """시나리오 트리의 생성 이력에서만 쓰는 원본 표지 참조 이미지."""
+    _require_owner(request)
+    target = dating_sim_story.generated_image_reference_path(book_id, filename)
+    if not target:
+        raise HTTPException(status_code=404, detail="참고 이미지를 찾을 수 없습니다")
+    return FileResponse(str(target))
+
+
 class DatingSimLocationRequest(BaseModel):
     location: str
     story_id: str | None = None

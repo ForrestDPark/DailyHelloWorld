@@ -1464,6 +1464,21 @@ GENERATED_IMAGE_DIRNAME = "dating_sim_images"
 GENERATED_IMAGE_MANIFEST = "manifest.json"
 
 
+def _legacy_portrait_prompt(title):
+    """portrait_prompt 기록을 추가하기 직전 버전도 같은 고정 프롬프트를
+    사용했다. 기존 결과의 당시 문구를 정확히 복원해 생성 이력에 보여준다."""
+    safe_title = re.sub(r"\s+", " ", str(title or "")).strip()[:100]
+    return (
+        "Photorealistic Japanese romance visual novel still, adult Japanese woman age 25 or older, "
+        "natural facial anatomy, cinematic available light, coherent recurring character identity, "
+        "tasteful contemporary clothing, non-explicit, no text, no watermark. "
+        f"Source work identifier: {safe_title}. "
+        "Consistent waist-up character reference portrait, neutral background, approachable expression. "
+        "If a reference cover is supplied, preserve only the adult woman's recognizable face, hair and general styling; "
+        "replace the source setting and clothing with a tasteful non-explicit visual-novel portrait."
+    )
+
+
 def _generated_scenario_path(title):
     folder = _find_library_folder(title)
     return (folder / GENERATED_SCENARIO_FILENAME) if folder else None
@@ -1517,7 +1532,7 @@ def load_generated_scenario(title, expected_locations):
 
 
 def load_generated_images(title, book_id):
-    """작품 이미지 에이전트가 만든 매니페스트를 안전한 공개 URL로 바꾼다."""
+    """작품 이미지 에이전트 매니페스트를 안전한 URL과 관리자용 생성 이력으로 바꾼다."""
     folder = _find_library_folder(title)
     image_dir = folder / GENERATED_IMAGE_DIRNAME if folder else None
     path = image_dir / GENERATED_IMAGE_MANIFEST if image_dir else None
@@ -1534,7 +1549,40 @@ def load_generated_images(title, book_id):
     portrait = public(manifest.get("portrait"))
     assignments = {key: url for key, filename in (manifest.get("assignments") or {}).items()
                    if (url := public(filename))}
-    return {"portrait": portrait, "assignments": assignments} if portrait or assignments else None
+    if not portrait and not assignments:
+        return None
+    reference_name = manifest.get("portrait_reference")
+    reference_url = None
+    if isinstance(reference_name, str) and re.fullmatch(r"cover\.(?:jpg|png|webp)", reference_name):
+        reference_url = f"/api/dating-sim/books/{book_id}/image-references/{reference_name}"
+    gallery = []
+    if portrait:
+        gallery.append({
+            "key": "portrait", "kind": "portrait", "label": "대표 초상화",
+            "image_url": portrait, "reference_url": reference_url,
+            "prompt": manifest.get("portrait_prompt") or _legacy_portrait_prompt(manifest.get("title") or title),
+            "provider": manifest.get("portrait_provider") or "",
+        })
+    seen_files = set()
+    for scene_key, record in (manifest.get("scenes") or {}).items():
+        if not isinstance(record, dict):
+            continue
+        filename = record.get("file")
+        image_url = public(filename)
+        if not image_url or filename in seen_files:
+            continue
+        seen_files.add(filename)
+        day = record.get("day")
+        location = record.get("location") or ""
+        gallery.append({
+            "key": scene_key, "kind": "scene",
+            "label": f"흐름 {day} · {location}" if day else str(scene_key),
+            "image_url": image_url, "reference_url": portrait,
+            "prompt": record.get("prompt") or "",
+            "provider": record.get("provider") or "", "day": day,
+            "location": location,
+        })
+    return {"portrait": portrait, "assignments": assignments, "gallery": gallery}
 
 
 def generated_image_path(book_id, filename):
@@ -1557,6 +1605,28 @@ def generated_image_path(book_id, filename):
     if filename not in allowed:
         return None
     target = manifest_path.parent / filename
+    return target if target.is_file() else None
+
+
+def generated_image_reference_path(book_id, filename):
+    """관리자 생성 이력에서만 보여 줄 표지 참조본. 매니페스트가 실제로
+    portrait_reference로 기록한 cover 파일 하나만 허용한다."""
+    if not re.fullmatch(r"cover\.(?:jpg|png|webp)", filename or ""):
+        return None
+    book = _find_book(book_id)
+    if not book:
+        return None
+    folder = _find_library_folder(_book_title(book))
+    manifest_path = folder / GENERATED_IMAGE_DIRNAME / GENERATED_IMAGE_MANIFEST if folder else None
+    if not manifest_path or not manifest_path.is_file():
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if manifest.get("portrait_reference") != filename:
+        return None
+    target = folder / filename
     return target if target.is_file() else None
 
 
@@ -1749,7 +1819,8 @@ def story_for(story_id=None, seed_key=None):
             "scenes": scenes, "endings": endings,
             "day_openings": _daily_openings(seed_key, story_id, dialogue_name_jp, dialogue_name_ko),
             "map_actions": map_actions,
-            "scenario_source": scenario_source}
+            "scenario_source": scenario_source,
+            "generated_images": generated_images}
     if day_narration:
         story["day_narration"] = day_narration
     return story
@@ -1915,5 +1986,6 @@ def scenario_tree(story_id=None, seed_key=None):
         ],
         "vocab_pool": [{"ja": ja, "reading": reading, "ko": ko} for ja, reading, ko in vocab_pool],
         "report": report,
+        "generated_images": story.get("generated_images"),
         "days": days,
     }

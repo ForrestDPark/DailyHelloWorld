@@ -62,6 +62,39 @@ class DatingSimApiTests(unittest.TestCase):
             with self.assertRaises(HTTPException):
                 app.dating_sim_generated_image("a" * 20, "../secret.png", request())
 
+    def test_generated_image_history_includes_prompt_and_safe_references(self):
+        root = Path(self.temp.name) / "work" / "dating_sim_images"
+        root.mkdir(parents=True)
+        for filename in ("portrait.png", "scene-123456789abc.png"):
+            (root / filename).write_bytes(b"png")
+        (root.parent / "cover.jpg").write_bytes(b"jpg")
+        (root / "manifest.json").write_text(json.dumps({
+            "portrait": "portrait.png", "portrait_provider": "comfyui",
+            "portrait_prompt": "portrait prompt", "portrait_reference": "cover.jpg",
+            "assignments": {"1:first": "scene-123456789abc.png"},
+            "scenes": {"1:first": {"file": "scene-123456789abc.png",
+                "provider": "comfyui", "day": 1, "location": "first",
+                "prompt": "scene prompt"}},
+        }), encoding="utf-8")
+        with patch.object(dating_sim_story, "_find_library_folder", return_value=root.parent):
+            history = dating_sim_story.load_generated_images("TEST", "a" * 20)
+        self.assertEqual(len(history["gallery"]), 2)
+        self.assertEqual(history["gallery"][0]["prompt"], "portrait prompt")
+        self.assertTrue(history["gallery"][0]["reference_url"].endswith("/cover.jpg"))
+        self.assertEqual(history["gallery"][1]["reference_url"], history["portrait"])
+        self.assertEqual(history["gallery"][1]["prompt"], "scene prompt")
+
+        with patch.object(dating_sim_story, "_find_book", return_value=Path("book.epub")), \
+             patch.object(dating_sim_story, "_book_title", return_value="TEST"), \
+             patch.object(dating_sim_story, "_find_library_folder", return_value=root.parent):
+            owner = SimpleNamespace(state=SimpleNamespace(
+                user={"username": "admin", "is_owner": True}, can_write=True, share_guest=False))
+            response = app.dating_sim_generated_image_reference("a" * 20, "cover.jpg", owner)
+            self.assertEqual(Path(response.path), root.parent / "cover.jpg")
+            with self.assertRaises(HTTPException) as denied:
+                app.dating_sim_generated_image_reference("a" * 20, "cover.jpg", request())
+            self.assertEqual(denied.exception.status_code, 403)
+
     def test_new_player_starts_at_day_one_with_base_affection_and_no_pending_scene(self):
         state = app.dating_sim_state(request())
         self.assertEqual(state["day"], 1)

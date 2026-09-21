@@ -1201,6 +1201,110 @@ const VOCAB_CATEGORY_LABELS = {
   memory: "추억", plan: "계획", feeling: "감정", outcome: "결과", general: "일반",
 };
 
+function closeTreeImageDetail() {
+  document.querySelector(".tree-image-detail-overlay")?.remove();
+}
+
+function openTreeImageDetail(item) {
+  closeTreeImageDetail();
+  const overlay = document.createElement("div");
+  overlay.className = "tree-image-detail-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-label", `${item.label || "생성 이미지"} 생성 정보`);
+
+  const panel = document.createElement("div");
+  panel.className = "tree-image-detail";
+  const head = document.createElement("div");
+  head.className = "tree-image-detail-head";
+  const title = document.createElement("strong");
+  title.textContent = item.label || "생성 이미지";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "history-close-btn";
+  close.setAttribute("aria-label", "이미지 생성 정보 닫기");
+  close.textContent = "×";
+  close.addEventListener("click", closeTreeImageDetail);
+  head.append(title, close);
+
+  const resultBlock = document.createElement("section");
+  const resultLabel = document.createElement("h3");
+  resultLabel.textContent = "생성 결과";
+  const result = document.createElement("img");
+  result.src = item.image_url;
+  result.alt = `${item.label || "장면"} 생성 결과`;
+  resultBlock.append(resultLabel, result);
+  panel.append(head, resultBlock);
+
+  const referenceBlock = document.createElement("section");
+  const referenceLabel = document.createElement("h3");
+  referenceLabel.textContent = "생성 당시 참고 이미지";
+  referenceBlock.append(referenceLabel);
+  if (item.reference_url) {
+    const reference = document.createElement("img");
+    reference.src = item.reference_url;
+    reference.alt = `${item.label || "장면"} 생성 참고 이미지`;
+    referenceBlock.append(reference);
+  } else {
+    const empty = document.createElement("p");
+    empty.className = "tree-image-detail-empty";
+    empty.textContent = "참고 이미지 없이 생성했거나 이전 기록에 참고 파일이 남아 있지 않습니다.";
+    referenceBlock.append(empty);
+  }
+  panel.append(referenceBlock);
+
+  const info = document.createElement("section");
+  const infoLabel = document.createElement("h3");
+  infoLabel.textContent = "생성 프롬프트";
+  const provider = document.createElement("p");
+  provider.className = "tree-image-provider";
+  provider.textContent = item.provider ? `생성기: ${item.provider}` : "생성기 기록 없음";
+  const prompt = document.createElement("pre");
+  prompt.textContent = item.prompt || "이 이미지는 이전 형식으로 생성되어 당시 프롬프트가 매니페스트에 기록되지 않았습니다.";
+  info.append(infoLabel, provider, prompt);
+  panel.append(info);
+
+  overlay.append(panel);
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) closeTreeImageDetail();
+  });
+  document.body.append(overlay);
+  close.focus();
+}
+
+function renderScenarioImages(body, tree) {
+  const images = tree.generated_images?.gallery || [];
+  const head = document.createElement("div");
+  head.className = "tree-section-head";
+  head.textContent = "🖼️ 생성된 캐릭터·장면 이미지";
+  body.append(head);
+  if (!images.length) {
+    const empty = document.createElement("p");
+    empty.className = "tree-report-note";
+    empty.textContent = "이 작품에는 아직 생성된 이미지가 없습니다.";
+    body.append(empty);
+    return;
+  }
+  const gallery = document.createElement("div");
+  gallery.className = "tree-image-gallery";
+  for (const item of images) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "tree-image-card";
+    button.setAttribute("aria-label", `${item.label} 생성 정보 보기`);
+    const image = document.createElement("img");
+    image.src = item.image_url;
+    image.alt = item.label;
+    image.loading = "lazy";
+    const label = document.createElement("span");
+    label.textContent = item.label;
+    button.append(image, label);
+    button.addEventListener("click", () => openTreeImageDetail(item));
+    gallery.append(button);
+  }
+  body.append(gallery);
+}
+
 function renderScenarioReport(body, tree) {
   const report = tree.report;
   const head = document.createElement("div");
@@ -1331,6 +1435,7 @@ function renderScenarioTree(tree) {
   head.append(meta);
   body.append(head);
 
+  renderScenarioImages(body, tree);
   if (tree.report) renderScenarioReport(body, tree);
 
   const tocHead = document.createElement("div");
@@ -1441,10 +1546,16 @@ async function openScenarioTree() {
 
 $("tree-open-btn").addEventListener("click", openScenarioTree);
 $("tree-close-btn").addEventListener("click", () => {
+  closeTreeImageDetail();
   $("tree-overlay").classList.add("hidden");
 });
 $("tree-overlay").addEventListener("click", (event) => {
   if (event.target === $("tree-overlay")) $("tree-overlay").classList.add("hidden");
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && document.querySelector(".tree-image-detail-overlay")) {
+    closeTreeImageDetail();
+  }
 });
 
 updateListeningControls();

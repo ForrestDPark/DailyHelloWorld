@@ -370,9 +370,10 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
     portrait = output / "portrait.png"
     cover_reference = next((path for name in ("cover.jpg", "cover.png", "cover.webp")
                             if (path := work_dir / name).is_file()), None)
+    manifest["portrait_prompt"] = _prompt(work_dir.name)
+    manifest["portrait_reference"] = cover_reference.name if cover_reference else None
     if force or not _valid_image(portrait):
-        manifest["portrait_provider"] = generator(_prompt(work_dir.name), portrait, cover_reference)
-        manifest["portrait_reference"] = cover_reference.name if cover_reference else None
+        manifest["portrait_provider"] = generator(manifest["portrait_prompt"], portrait, cover_reference)
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     for scene in plan["selected"]:
         filename = _image_filename(scene["key"])
