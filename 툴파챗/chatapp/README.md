@@ -3918,3 +3918,8 @@ JOB_SYSTEM_ADDENDUM 계열 페르소나(매 턴 정규직/알바 두 카테고�
 - Civitai의 `vae-ft-mse-840000-ema-pruned / 840k`를 별도 `VAELoader`로 불러와 txt2img의 디코딩과 참조 이미지 img2img의 인코딩·디코딩에 동일하게 사용한다. `JP_COMFYUI_VAE`로 다른 VAE를 명시할 수도 있다.
 - 다운로드 파일은 Civitai 공식 API가 제공한 SHA-256과 대조하며, 체크포인트와 VAE 모두 피클 대신 SafeTensor 형식을 사용한다.
 - ComfyUI에 전달하던 장면 설명이 24글자에서 잘려 거의 모든 이미지가 비슷해지던 문제를 수정했다. 인물·장소·행동·표정에 필요한 장면 문맥을 SD 1.5의 CLIP 범위에 맞게 더 충분히 전달한다.
+
+# ComfyUI 실사 카메라 프롬프트 (2026-09-21)
+
+- 모든 작품 이미지의 ComfyUI 유효 프롬프트에 `shot on Canon EOS R5, 85mm f/1.4, golden hour lighting`을 고정 적용한다.
+- 카메라 설정은 장면별 문맥보다 앞의 고정 영역에 배치해 긴 장면 설명이 잘리더라도 렌즈와 조명 조건이 유지된다.

@@ -239,7 +239,8 @@ def _build_comfy_workflow(
     # 레퍼런스가 있으면 VAE img2img로 구도·인물성을 유지한다.
     local_prompt = (
         "photorealistic adult Japanese woman age 25, fully clothed, tasteful romance scene, "
-        "natural face and hands, cinematic light, detailed skin, sharp focus, no text, "
+        "natural face and hands, detailed skin, sharp focus, no text, "
+        "shot on Canon EOS R5, 85mm f/1.4, golden hour lighting, "
         + _clean(prompt.split("Visualize this specific narrative beat rather than a generic pose:")[-1], 180)
     )
     workflow = {

@@ -88,6 +88,8 @@ class DatingImageAgentTests(unittest.TestCase):
         self.assertEqual(workflow["8"]["inputs"]["vae"], ["12", 0])
         self.assertEqual(workflow["11"]["inputs"]["vae"], ["12", 0])
         self.assertIn("rainy bookshop reunion", workflow["6"]["inputs"]["text"])
+        self.assertIn("shot on Canon EOS R5, 85mm f/1.4", workflow["6"]["inputs"]["text"])
+        self.assertIn("golden hour lighting", workflow["6"]["inputs"]["text"])
 
     def test_civitai_checkpoint_is_preferred_when_installed(self):
         with patch.object(images, "_comfy_request", side_effect=lambda path: {
