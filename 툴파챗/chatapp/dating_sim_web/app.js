@@ -1255,7 +1255,7 @@ function openTreeImageDetail(item) {
 
   const info = document.createElement("section");
   const infoLabel = document.createElement("h3");
-  infoLabel.textContent = "생성 프롬프트";
+  infoLabel.textContent = "원본 계획 프롬프트";
   const provider = document.createElement("p");
   provider.className = "tree-image-provider";
   provider.textContent = item.provider ? `생성기: ${item.provider}` : "생성기 기록 없음";
@@ -1263,6 +1263,40 @@ function openTreeImageDetail(item) {
   prompt.textContent = item.prompt || "이 이미지는 이전 형식으로 생성되어 당시 프롬프트가 매니페스트에 기록되지 않았습니다.";
   info.append(infoLabel, provider, prompt);
   panel.append(info);
+
+  if (item.effective_prompt) {
+    const effective = document.createElement("section");
+    const effectiveLabel = document.createElement("h3");
+    effectiveLabel.textContent = "ComfyUI에 실제 전달된 프롬프트";
+    const effectiveText = document.createElement("pre");
+    effectiveText.textContent = item.effective_prompt;
+    effective.append(effectiveLabel, effectiveText);
+    panel.append(effective);
+  }
+
+  const settingsEntries = Object.entries(item.generation_settings || {});
+  if (settingsEntries.length) {
+    const settings = document.createElement("section");
+    settings.className = "tree-image-settings-section";
+    const settingsLabel = document.createElement("h3");
+    settingsLabel.textContent = "생성 설정";
+    const list = document.createElement("dl");
+    list.className = "tree-image-settings";
+    const labels = {
+      model: "모델", loader: "로더", width: "너비", height: "높이", steps: "스텝",
+      cfg: "CFG", sampler: "샘플러", scheduler: "스케줄러", denoise: "Denoise",
+      base_seed: "기본 시드", used_seed: "사용 시드", attempt: "시도 횟수",
+    };
+    for (const [key, value] of settingsEntries) {
+      const dt = document.createElement("dt");
+      dt.textContent = labels[key] || key;
+      const dd = document.createElement("dd");
+      dd.textContent = String(value);
+      list.append(dt, dd);
+    }
+    settings.append(settingsLabel, list);
+    panel.append(settings);
+  }
 
   overlay.append(panel);
   overlay.addEventListener("click", (event) => {

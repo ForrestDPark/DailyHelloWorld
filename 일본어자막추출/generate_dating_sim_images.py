@@ -28,6 +28,7 @@ IMAGE_DIR_NAME = "dating_sim_images"
 MANIFEST_NAME = "manifest.json"
 LOCATIONS = ("first", "walk", "quiet")
 _OPENAI_DISABLED_REASON = None
+_LAST_GENERATION_META = {}
 
 
 def _clean(text, limit=700):
@@ -289,6 +290,7 @@ def _comfy_wait_image(prompt_id, timeout):
 
 
 def _local_generate(prompt, target, reference=None):
+    global _LAST_GENERATION_META
     try:
         _comfy_request("/system_stats", timeout=5)
     except Exception as exc:
@@ -298,8 +300,9 @@ def _local_generate(prompt, target, reference=None):
     base_seed = int.from_bytes(hashlib.sha256(prompt.encode()).digest()[:8], "big") & ((1 << 63) - 1)
     timeout = int(os.environ.get("JP_COMFYUI_TIMEOUT", "600"))
     for attempt in range(4):
+        seed = base_seed + attempt * 104729
         workflow = _build_comfy_workflow(
-            prompt, model_name, base_seed + attempt * 104729, reference_name, loader=loader
+            prompt, model_name, seed, reference_name, loader=loader
         )
         queued = _comfy_request("/prompt", {"prompt": workflow}, timeout=30)
         if queued.get("node_errors"):
@@ -314,6 +317,17 @@ def _local_generate(prompt, target, reference=None):
         with urllib.request.urlopen(_comfy_base_url() + "/view?" + query, timeout=60) as response:
             target.write_bytes(response.read())
         if _valid_image(target):
+            sampler = workflow["3"]["inputs"]
+            _LAST_GENERATION_META = {
+                "effective_prompt": workflow["6"]["inputs"]["text"],
+                "generation_settings": {
+                    "model": model_name, "loader": loader, "width": 512, "height": 768,
+                    "steps": sampler["steps"], "cfg": sampler["cfg"],
+                    "sampler": sampler["sampler_name"], "scheduler": sampler["scheduler"],
+                    "denoise": sampler["denoise"], "base_seed": base_seed,
+                    "used_seed": seed, "attempt": attempt + 1,
+                },
+            }
             return
     raise RuntimeError("ComfyUI가 검은 또는 손상된 이미지를 반복 반환했습니다")
 
@@ -374,6 +388,9 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
     manifest["portrait_reference"] = cover_reference.name if cover_reference else None
     if force or not _valid_image(portrait):
         manifest["portrait_provider"] = generator(manifest["portrait_prompt"], portrait, cover_reference)
+        if manifest["portrait_provider"] == "comfyui":
+            manifest["portrait_effective_prompt"] = _LAST_GENERATION_META.get("effective_prompt", "")
+            manifest["portrait_generation_settings"] = _LAST_GENERATION_META.get("generation_settings", {})
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     for scene in plan["selected"]:
         filename = _image_filename(scene["key"])
@@ -386,6 +403,8 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
             manifest["scenes"][scene["key"]] = {"file": filename, "provider": provider,
                                                      "day": scene["day"], "location": scene["location"],
                                                      "prompt": _prompt(work_dir.name, scene)}
+            if provider == "comfyui" and _LAST_GENERATION_META:
+                manifest["scenes"][scene["key"]].update(_LAST_GENERATION_META)
         except Exception as exc:
             manifest["errors"].append({"scene": scene["key"], "error": str(exc)[:500]})
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")

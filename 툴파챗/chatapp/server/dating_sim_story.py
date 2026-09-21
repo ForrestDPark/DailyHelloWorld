@@ -1479,6 +1479,30 @@ def _legacy_portrait_prompt(title):
     )
 
 
+def _comfy_effective_prompt(prompt):
+    """현재 ComfyUI 워크플로가 CLIP에 실제 전달한 축약 프롬프트를 복원한다.
+    매니페스트의 원본 계획 프롬프트와 구분해 품질 문제를 진단할 수 있게 한다."""
+    beat = str(prompt or "").split(
+        "Visualize this specific narrative beat rather than a generic pose:"
+    )[-1]
+    beat = re.sub(r"\[[^|\]]+\|([^\]]+)\]", r"\1", beat)
+    beat = re.sub(r"\s+", " ", beat).strip()[:24]
+    return (
+        "photorealistic adult Japanese woman age 25, fully clothed, tasteful romance scene, "
+        "natural face and hands, cinematic light, no text, " + beat
+    )
+
+
+def _comfy_generation_settings(prompt, has_reference):
+    seed = int.from_bytes(hashlib.sha256(str(prompt or "").encode()).digest()[:8], "big") & ((1 << 63) - 1)
+    return {
+        "model": "stable-diffusion-v1-5", "loader": "DiffusersLoader",
+        "width": 512, "height": 768, "steps": 25, "cfg": 7.0,
+        "sampler": "dpmpp_2m", "scheduler": "karras",
+        "denoise": 0.62 if has_reference else 1.0, "base_seed": seed,
+    }
+
+
 def _generated_scenario_path(title):
     folder = _find_library_folder(title)
     return (folder / GENERATED_SCENARIO_FILENAME) if folder else None
@@ -1557,11 +1581,17 @@ def load_generated_images(title, book_id):
         reference_url = f"/api/dating-sim/books/{book_id}/image-references/{reference_name}"
     gallery = []
     if portrait:
+        portrait_prompt = manifest.get("portrait_prompt") or _legacy_portrait_prompt(manifest.get("title") or title)
+        portrait_provider = manifest.get("portrait_provider") or ""
         gallery.append({
             "key": "portrait", "kind": "portrait", "label": "대표 초상화",
             "image_url": portrait, "reference_url": reference_url,
-            "prompt": manifest.get("portrait_prompt") or _legacy_portrait_prompt(manifest.get("title") or title),
-            "provider": manifest.get("portrait_provider") or "",
+            "prompt": portrait_prompt,
+            "effective_prompt": manifest.get("portrait_effective_prompt") or (
+                _comfy_effective_prompt(portrait_prompt) if portrait_provider == "comfyui" else portrait_prompt),
+            "generation_settings": manifest.get("portrait_generation_settings") or (
+                _comfy_generation_settings(portrait_prompt, bool(reference_url)) if portrait_provider == "comfyui" else {}),
+            "provider": portrait_provider,
         })
     seen_files = set()
     for scene_key, record in (manifest.get("scenes") or {}).items():
@@ -1579,6 +1609,10 @@ def load_generated_images(title, book_id):
             "label": f"흐름 {day} · {location}" if day else str(scene_key),
             "image_url": image_url, "reference_url": portrait,
             "prompt": record.get("prompt") or "",
+            "effective_prompt": record.get("effective_prompt") or (
+                _comfy_effective_prompt(record.get("prompt")) if record.get("provider") == "comfyui" else record.get("prompt") or ""),
+            "generation_settings": record.get("generation_settings") or (
+                _comfy_generation_settings(record.get("prompt"), True) if record.get("provider") == "comfyui" else {}),
             "provider": record.get("provider") or "", "day": day,
             "location": location,
         })

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import base64
 import datetime
 import hashlib
@@ -22,6 +23,8 @@ from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path, PurePosixPath
 from xml.etree import ElementTree as ET
+
+import edge_tts
 
 ROOT = Path(__file__).resolve().parent
 STATIC_DIR = ROOT / "static"
@@ -308,6 +311,20 @@ class ReaderHandler(BaseHTTPRequestHandler):
             return self._json(200, {"ok": True}, {"Set-Cookie": f"{SESSION_COOKIE}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"})
         if path == "/api/rescan" and self._need_auth():
             self.app.library.scan(); return self._json(200, {"ok": True, "count": len(self.app.library.books)})
+        if path == "/api/tts" and self._need_auth():
+            try:
+                data = self._body()
+                text = str(data.get("text", "")).strip()
+                language = str(data.get("lang", "ja-JP"))
+            except (json.JSONDecodeError, TypeError, ValueError):
+                return self._json(400, {"detail": "읽을 문장이 올바르지 않습니다"})
+            if not text or len(text) > 3000:
+                return self._json(400, {"detail": "읽을 문장은 1~3000자여야 합니다"})
+            try:
+                filename = self.app.edge_tts(text, language)
+            except Exception as exc:
+                return self._json(503, {"detail": f"Edge TTS 생성 실패: {str(exc)[:180]}"})
+            return self._json(200, {"url": f"{self.app.base_path}/api/tts/{filename}", "voice": self.app.edge_voice(language)})
         self._json(404, {"ok": False})
 
     def do_PUT(self):
@@ -328,6 +345,13 @@ class ReaderHandler(BaseHTTPRequestHandler):
         path = self._path()
         if path == "/api/session": return self._json(200, {"authenticated": self._authenticated()})
         if path == "/api/config": return self._json(200, self.app.reader_config)
+        if path.startswith("/api/tts/") and self._need_auth():
+            filename = path.rsplit("/", 1)[-1]
+            if len(filename) != 68 or not filename.endswith(".mp3") or any(c not in "0123456789abcdef" for c in filename[:-4]):
+                return self._json(404, {"detail": "음성을 찾을 수 없습니다"})
+            target = self.app.tts_cache / filename
+            if not target.is_file(): return self._json(404, {"detail": "음성을 찾을 수 없습니다"})
+            return self._send_bytes(target.read_bytes(), "audio/mpeg")
         if path == "/api/books" and self._need_auth():
             self.app.library.scan_if_stale()
             books = sorted(self.app.library.books.values(), key=lambda b: b.modified, reverse=True)
@@ -406,6 +430,33 @@ class App:
             "speech_language": os.environ.get("WEB_READER_SPEECH_LANGUAGE", "ja-JP"),
         }
         self.secret = load_secret(); self.library = Library(roots); self.store = Store(STATE_DIR / "reader.db")
+        self.tts_cache = STATE_DIR / "edge_tts_cache"
+        self.tts_cache.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def edge_voice(language: str) -> str:
+        if language.lower().startswith("ko"):
+            return "ko-KR-SunHiNeural"
+        if language.lower().startswith("en"):
+            return "en-US-JennyNeural"
+        return "ja-JP-NanamiNeural"
+
+    def edge_tts(self, text: str, language: str) -> str:
+        """브라우저·페이지에 따라 음성이 바뀌지 않도록 언어별 Edge 음성을
+        하나로 고정하고, 같은 문장은 디스크 캐시에서 재사용한다."""
+        voice = self.edge_voice(language)
+        digest = hashlib.sha256(f"edge-v1\0{voice}\0{text}".encode()).hexdigest()
+        filename = digest + ".mp3"
+        target = self.tts_cache / filename
+        if target.is_file() and target.stat().st_size > 512:
+            return filename
+        temporary = self.tts_cache / f".{digest}.{os.getpid()}.{secrets.token_hex(4)}.tmp.mp3"
+        asyncio.run(edge_tts.Communicate(text, voice).save(str(temporary)))
+        if not temporary.is_file() or temporary.stat().st_size <= 512:
+            temporary.unlink(missing_ok=True)
+            raise RuntimeError("오디오를 받지 못했습니다")
+        os.replace(temporary, target)
+        return filename
 
     def chat_session_user(self, token: str) -> tuple[str, bool] | None:
         """같은 호스트의 유효한 툴파챗 로그인 계정을 서재 사용자로 인정한다."""

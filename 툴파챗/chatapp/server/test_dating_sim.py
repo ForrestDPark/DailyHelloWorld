@@ -83,6 +83,9 @@ class DatingSimApiTests(unittest.TestCase):
         self.assertTrue(history["gallery"][0]["reference_url"].endswith("/cover.jpg"))
         self.assertEqual(history["gallery"][1]["reference_url"], history["portrait"])
         self.assertEqual(history["gallery"][1]["prompt"], "scene prompt")
+        self.assertIn("photorealistic adult Japanese woman", history["gallery"][1]["effective_prompt"])
+        self.assertEqual(history["gallery"][1]["generation_settings"]["steps"], 25)
+        self.assertEqual(history["gallery"][1]["generation_settings"]["denoise"], 0.62)
 
         with patch.object(dating_sim_story, "_find_book", return_value=Path("book.epub")), \
              patch.object(dating_sim_story, "_book_title", return_value="TEST"), \

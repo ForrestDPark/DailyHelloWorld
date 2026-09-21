@@ -583,10 +583,17 @@ html, body {
   color: var(--text); background: rgba(0,0,0,0.28); border: 1px solid rgba(244,211,94,0.3);
 }
 .tree-image-provider, .tree-image-detail-empty { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.tree-image-settings {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 5px 10px;
+  margin: 0; padding: 10px; font-size: 11px; line-height: 1.45;
+  background: rgba(0,0,0,0.28); border: 1px solid rgba(244,211,94,0.3);
+}
+.tree-image-settings dt { color: var(--muted); }
+.tree-image-settings dd { margin: 0; color: var(--text); overflow-wrap: anywhere; }
 @media (min-width: 700px) {
   .tree-image-gallery { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .tree-image-detail { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; }
-  .tree-image-detail-head, .tree-image-detail section:last-child { grid-column: 1 / -1; }
+  .tree-image-detail-head, .tree-image-detail section:nth-child(n+4) { grid-column: 1 / -1; }
 }
 .tree-table-title { font-size: 11px; color: var(--accent); font-weight: 700; margin-top: 4px; }
 .tree-table {

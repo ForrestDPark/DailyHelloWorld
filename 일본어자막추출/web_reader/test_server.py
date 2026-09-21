@@ -87,5 +87,25 @@ class ReaderTests(unittest.TestCase):
             self.assertEqual(app.chat_session_user("user"), ("reader", False))
             self.assertIsNone(app.chat_session_user("missing"))
 
+    def test_edge_tts_uses_one_fixed_voice_per_language_and_caches(self):
+        class FakeCommunicate:
+            calls = []
+            def __init__(self, text, voice):
+                self.text, self.voice = text, voice
+                self.calls.append((text, voice))
+            async def save(self, path):
+                Path(path).write_bytes(b"mp3" * 300)
+
+        with tempfile.TemporaryDirectory() as td, patch.object(server.edge_tts, "Communicate", FakeCommunicate):
+            app = object.__new__(server.App)
+            app.tts_cache = Path(td)
+            first = app.edge_tts("こんにちは", "ja-JP")
+            second = app.edge_tts("こんにちは", "ja-JP")
+            korean = app.edge_tts("안녕하세요", "ko-KR")
+        self.assertEqual(first, second)
+        self.assertNotEqual(first, korean)
+        self.assertEqual(FakeCommunicate.calls.count(("こんにちは", "ja-JP-NanamiNeural")), 1)
+        self.assertIn(("안녕하세요", "ko-KR-SunHiNeural"), FakeCommunicate.calls)
+
 
 if __name__ == "__main__": unittest.main()
