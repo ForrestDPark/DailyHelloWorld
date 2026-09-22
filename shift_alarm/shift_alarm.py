@@ -5040,7 +5040,7 @@ def _speak_text(text):
     _SPEECH_QUEUE.put((text, volume))
 
 
-def notify_spoken(title, subtitle, message, speak_text=None, url=None):
+def notify_spoken(title, subtitle, message, speak_text=None, url=None, silent=False):
     """예고 없이 뜨는 알림(추천 공고·경진대회, 리마인더, 근무 알람, 메일 요약,
     동기화 실패 등)에만 쓴다 — 사람이 직접 클릭해서 생기는 즉각 반응성 알림
     (Elmedia 재생, Hue 등)은 rumps.notification을 그대로 쓴다(2026-08-14).
@@ -5054,16 +5054,24 @@ def notify_spoken(title, subtitle, message, speak_text=None, url=None):
     url: 지정하면 알림을 클릭(macOS의 "보기/Show")했을 때 이 주소를 바로
     연다 — "메일 알림이면 메일로, 툴파챗 알림이면 툴파챗으로 바로가기가
     되면 좋겠다" 요청(2026-08-27). rumps의 data 페이로드로 실어보내고,
-    ShiftAlarmApp의 @rumps.notifications 핸들러가 열어준다."""
-    rumps.notification(title, subtitle, message, data={"url": url} if url else None)
+    ShiftAlarmApp의 @rumps.notifications 핸들러가 열어준다.
+
+    silent: 지정하면 배너 알림음도, 음성 안내도 없이 화면 배너만 조용히
+    띄운다 — CPU 과부하 알림처럼 음성 안내가 너무 크다는 피드백(2026-09-23)."""
+    rumps.notification(
+        title, subtitle, message,
+        data={"url": url} if url else None,
+        sound=not silent,
+    )
     threading.Thread(
         target=_forward_mobile_notification,
         args=(title, subtitle, message, url), daemon=True,
     ).start()
-    _speak_text(
-        speak_text if speak_text is not None
-        else " ".join(part for part in (title, subtitle, message) if part)
-    )
+    if not silent:
+        _speak_text(
+            speak_text if speak_text is not None
+            else " ".join(part for part in (title, subtitle, message) if part)
+        )
 
 
 def _set_menu_item_color(menu_item, text, color):
@@ -6266,10 +6274,18 @@ class ShiftAlarmApp(rumps.App):
                     self._high_cpu_stuck.pop(key, None)
                 else:
                     outcome = "예외 대상이라 자동 종료하지 않음(일본어 자막추출/시스템 필수 프로세스)"
+                # ★ 2026-09-23: 알림만 뜨고 지나가면 나중에 뭐였는지 알 방법이
+                # 없다는 피드백 — launchd가 stdout을 shift_alarm.out.log로
+                # 리다이렉트하므로 print 한 줄이면 영구 기록이 된다.
+                print(
+                    f"⚠️ CPU 과부하: {name}(pid={pid}) {cpu:.0f}%, "
+                    f"{minutes}분째 붙잡힘 — {outcome} [{now.isoformat(timespec='seconds')}]"
+                )
                 notify_spoken(
                     "⚠️ CPU 과부하 감지",
                     f"{name} — {cpu:.0f}%, {minutes}분째 붙잡힘",
                     outcome,
+                    silent=True,
                 )
             AppHelper.callAfter(self.build_menu)
 
