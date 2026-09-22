@@ -56,9 +56,41 @@ def contains_material(text, material):
     return bool(needle and needle in plain_japanese(text))
 
 
+# ★ 2026-09-22 실제 사고: "학습카드의 표현은 이미 정제됐다"는 가정이
+# 틀렸다 — ABF-161_J의 216개 표현 중 7개가 원본에서 그대로 뽑힌 노골적
+# 성적 대사(性欲が溜まる, パンツ履いてんのか？, 中に入れたい 등)였다.
+# 이 프로젝트의 "원본 대사를 그대로 옮기지 않는다" 규칙은 성인 로맨스
+# 허용(build_day_prompt) 이후에도 유효하다 — 새로 쓰는 성인 맥락은
+# 허용해도 원본 노골적 대사를 "일본어 어순·어휘 유지"로 강제 복사하는 건
+# 다른 문제다. 실제로 이 표현들이 필수 재료로 배정된 요일에서 Claude가
+# "노골적인 성적 대사"라며 작성을 거부해 생성이 5회 재시도 끝에 실패했다
+# (DAY 8, 실측). 필수 재료 풀에서 이런 표현을 미리 걸러낸다 — 걸러진
+# 표현은 "필수"에서 빠질 뿐 어휘(vocabulary)나 다른 표현은 그대로 쓰인다.
+_EXPLICIT_EXPRESSION_KEYWORDS = (
+    "性欲", "性交", "挿入", "挿れ", "絶頂", "勃起", "愛液", "中出し", "中に入れ", "中に出",
+    "セックス", "オナニー", "フェラ", "クンニ", "パイズリ", "アナル",
+    "犯され", "犯す", "レイプ", "痴漢", "輪姦",
+    "おっぱい", "乳首", "クリトリス", "マンコ", "チンコ", "ペニス", "ヴァギナ",
+    "イッちゃ", "イク", "ハメ", "アヘ",
+    "パンツ履", "ショーツ",
+    "エッチ",
+    "舐め", "なめ回",
+    "飲ませ", "染み込んで", "飲んだっていい", "飲んでいい",
+    "妊娠させ", "孕ま", "種付け", "発情", "疼く", "うずく", "淫ら", "媚薬",
+)
+
+
+def _is_explicit_expression(text):
+    """원본에서 그대로 뽑힌 노골적 성적 대사인지 어휘 기반으로 판정한다.
+    정교한 분류가 아니라 안전 쪽으로 넓게 잡는 필터라, 애매한 표현은
+    필수 재료에서 빠지는 쪽을 택한다(빠져도 어휘·다른 표현은 그대로 쓰임)."""
+    return any(keyword in text for keyword in _EXPLICIT_EXPRESSION_KEYWORDS)
+
+
 def load_expressions(work_dir):
-    """학습카드의 표현(expressions)을 중복 없이 모은다 — 이미 학습용으로 정제된
-    문장이라 재료로 안전하게 쓴다."""
+    """학습카드의 표현(expressions)을 중복 없이 모은다. "학습용으로 정제된
+    문장"이라는 표기와 달리 노골적 성적 대사가 원본 그대로 섞여 있을 수
+    있어(위 주석 참고) _is_explicit_expression으로 걸러낸다."""
     try:
         cards = json.loads((work_dir / "scene_study_cards.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -67,7 +99,7 @@ def load_expressions(work_dir):
     for scene in (cards or {}).values():
         for e in (scene or {}).get("expressions", []) or []:
             ja, reading, ko = e.get("ja"), e.get("reading"), e.get("ko")
-            if ja and ko and ja not in seen:
+            if ja and ko and ja not in seen and not _is_explicit_expression(ja):
                 seen.add(ja)
                 out.append({"ja": ja, "reading": reading or "", "ko": ko})
     return out
