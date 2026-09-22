@@ -55,7 +55,7 @@ JOURNAL_PAGE_ID = "3b532a1e-ae80-80d6-b6ed-da0d0afba7a1"
 KST = timezone(timedelta(hours=9))
 
 STATUS_CHOICES = ["완료", "진행 중", "대기"]
-AGENT_CHOICES = ["Claude", "Codex"]
+AGENT_CHOICES = ["Claude", "Codex", "Gemini"]
 
 
 # ════════════════════════════════════════════════════════════

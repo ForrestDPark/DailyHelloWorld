@@ -1,9 +1,10 @@
-# session_journal — Claude·Codex 공용 작업 인계장 자동화
+# session_journal — Claude·Codex·Gemini 공용 작업 인계장 자동화
 
 "클로드코덱스 이력정리" Notion 페이지(https://app.notion.com/p/3b532a1eae8080d6b6edda0d0afba7a1)에
 작업 항목을 기록하고, 새 세션 시작 시 그 기록과 실제 Git 상태를 대조하는 공용 스크립트다.
 `이직시스템/`, `shift_alarm/`, `일본어자막추출/` 등 어떤 서브프로젝트에서 작업하든 이 스크립트
-하나로 공용 일지를 관리한다.
+하나로 공용 일지를 관리한다. 페이지 이름은 만들어진 시점 그대로지만, 실제로는 이 저장소에서
+작업하는 모든 AI 에이전트(2026-09-23부터 Gemini 포함)가 함께 쓰는 인계장이다.
 
 ## 배경
 
@@ -28,7 +29,7 @@ python3 session_journal/session_journal.py add \
   --next-prompt "다음 세션이 이어받을 때 쓸 프롬프트(선택)"
 ```
 
-- `--agent`: `Claude` 또는 `Codex`
+- `--agent`: `Claude` / `Codex` / `Gemini`
 - `--status`: `완료` / `진행 중` / `대기`
 - Git 커밋 해시·메시지·변경 파일·푸시 여부는 **저장소의 현재 HEAD를 자동으로 읽어** 붙인다
   (커밋 직후에 호출하는 걸 전제로 한다). 아직 커밋하지 않은 진행 중 작업을 기록할 때는
