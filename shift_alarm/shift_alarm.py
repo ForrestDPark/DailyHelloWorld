@@ -2237,9 +2237,22 @@ def _context_key_for_date(schedule, d):
 def _resolve_reminder_time(schedule, key, today):
     """리마인더 key의 오늘 실행 시각을 반환한다 — 오늘의 컨텍스트(위
     _context_key_for_date)에 맞는 시각표 칼럼 값이 있으면 그걸 쓰고,
-    없으면 기본 "시각" 칼럼(REMINDERS[key]["time"])으로 대체한다."""
+    없으면 기본 "시각" 칼럼(REMINDERS[key]["time"])으로 대체한다.
+
+    ★ 2026-09-23: "시각 바꿨는데 왜 바로 반영이 안되지" 신고 — 웹 대시보드에서
+    프로필별 시각을 저장하면 app.py가 Notion 시각표도 고치지만, 이 함수는
+    그동안 _REMINDER_CONTEXT_TIMES(같은 값을 Notion에서 다시 읽어와야 채워지는
+    캐시 — 1분 주기 _check_reminder_times_sync가 갱신)만 봐서 최대 1분까지
+    예전 시각이 그대로 적용됐다. app.py는 저장 직후 로컬 리마인더 편집기
+    파일(~/.shift_alarm_reminders.json)의 profile_times에도 같은 값을 같이
+    남겨두므로, 그걸 Notion 캐시보다 먼저 확인하면 대기 없이 바로 반영된다."""
     context = _context_key_for_date(schedule, today)
     if context:
+        local_override = _load_reminder_editor_items().get(key, {})
+        local_time = (local_override.get("profile_times", {}).get(context)
+                      if isinstance(local_override, dict) else None)
+        if local_time:
+            return local_time
         override = _REMINDER_CONTEXT_TIMES.get(key, {}).get(context)
         if override:
             return override

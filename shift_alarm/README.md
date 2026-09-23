@@ -1236,3 +1236,12 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - 이미 잘못 "complete"로 저장돼 있던 IPZZ-943의 `~/.tulpachat/jp_subtitle_extract/status.json`도 같은 로직으로 직접 `failed`로 정정했다. AI 사용량 한도는 "Sep 21st, 2026 12:00 AM에 다시 시도"라고 안내돼 있었고 오늘(9/23)은 이미 지났으므로, 같은 폴더에서 자막추출을 다시 실행하면(작업 자료가 보존돼 있어 처음부터 다시 할 필요 없음) 정상적으로 EPUB까지 끝날 가능성이 높다.
 - **범위 밖으로 남긴 것**: `subtitle_pipeline_body.sh`의 실패 분기(빠른 EPUB을 만들어 두고도 `library/`로 옮기지 않고 버리는 부분)는 건드리지 않았다 — 여러 단계가 얽힌 라이브 쉘 파이프라인을 실행 확인 없이 고치는 위험을 피하기 위해, 이번에는 "완료 판정의 정직성"만 고쳤다. 실패 시에도 빠른 EPUB을 `library/`로 옮기게 만드는 개선은 후속 작업으로 남겨둔다.
 
+## 100. 리마인더 프로필별 시각 수정이 최대 1분 지연되는 문제 수정 (★ 2026-09-23 추가)
+
+**사용자 신고**: "동찬이형한테 전화 시간 오후 11시로 바꿨는데 왜 바로 수정 및 동기화가 안되지? 바로 시각 바뀌게끔 만들어줘".
+
+- **원인**: 대시보드에서 근무 유형별(Swing/Day/GY 등) 시각을 수정하면 `app.py`의 `PUT /api/shift-alarm/reminder-time`이 (1) Notion "리마인더 시각표"를 직접 고치고 (2) 대시보드 자체 표시가 즉시 바뀌도록 로컬 `~/.shift_alarm_reminders.json`의 `profile_times`에도 같은 값을 같이 남긴다 — 주석에도 "다음 status 요청부터 즉시 같은 시각을 반환한다"고 적혀 있다. 그런데 실제 알람이 울리는 시각을 정하는 `shift_alarm.py`의 `_resolve_reminder_time()`은 이 `profile_times`를 전혀 읽지 않고, 오직 `_REMINDER_CONTEXT_TIMES`(Notion을 다시 읽어와야 채워지는 캐시 — `_check_reminder_times_sync`가 1분마다 갱신)만 봤다. 그 결과 대시보드 표시는 바로 바뀌어도, 실제 알람은 다음 1분 주기 Notion 재동기화 전까지 예전 시각 그대로 울렸다(운이 나쁘면 거의 1분 가까이).
+- **수정**: `_resolve_reminder_time()`이 `_REMINDER_CONTEXT_TIMES`를 보기 전에 로컬 `profile_times`를 먼저 확인하도록 순서를 바꿨다 — 저장 시점에 이미 로컬 파일에 같이 남는 값이라 Notion 재동기화를 기다릴 필요가 없다. 기존에도 "웹에서 지정한 시각(로컬 오버라이드)"이 근무표 자동 계산보다 항상 우선하는 설계였으므로(93·98번 항목 참고), Notion을 직접 수정해도 로컬 오버라이드가 있으면 그게 계속 이긴다는 특성은 그대로 유지된다 — 새로운 트레이드오프가 아니라 기존 우선순위 규칙을 프로필별 시각에도 일관되게 적용한 것뿐이다.
+- **확인 필요**: 정작 사용자가 저장을 시도한 `~/.shift_alarm_reminders.json`의 `call_dongchan` 항목에는 `profile_times`가 아예 없고 `time`도 19:00(23:00 아님)으로, 이번에 고친 지연 문제와는 별개로 그 저장 자체가 애초에 반영되지 않은 것으로 보인다 — Notion "리마인더 시각표" 페이지에 "📞 동찬이형한테 전화" 행이 없으면 `PUT /api/shift-alarm/reminder-time`이 409로 실패하는데(`update_shift_alarm_reminder_time`), 그 경우일 가능성이 있어 사용자에게 재시도 시 에러 메시지가 뜨는지 확인을 요청했다.
+
+
