@@ -85,6 +85,12 @@ SHIFT_ALARM_STATUS_FALLBACK_FILE = Path(os.path.expanduser(
 ))
 SHIFT_ALARM_DISMISSED_FILE = Path(os.path.expanduser("~/.tulpachat/shift_alarm_dismissed.json"))
 SHIFT_ALARM_REMINDER_EDITOR_FILE = Path(os.path.expanduser("~/.shift_alarm_reminders.json"))
+# shift_alarm.py의 notify_spoken()이 매 호출마다 이 파일을 읽어 muted면 배너음·
+# 음성 안내를 건너뛴다 — self.config(~/.shift_alarm_config.json)는 shift_alarm.py가
+# 주기적으로 통째로 덮어써서 웹 서버가 직접 쓰면 경쟁 상태가 생기므로(리마인더
+# 편집기와 같은 이유) 별도 파일로 뗐다(★ 2026-09-23).
+SHIFT_ALARM_MUTE_FILE = Path(os.path.expanduser("~/.shift_alarm_mute.json"))
+SHIFT_ALARM_OUT_LOG_FILE = Path(os.path.expanduser("~/Library/Logs/shift_alarm.out.log"))
 SHIFT_ALARM_NOTION_PAGE_ID = "3b532a1e-ae80-8034-90af-fd8c9b658711"
 SHIFT_ALARM_REMINDER_TIMES_PAGE_ID = "3d432a1e-ae80-8171-b8e1-e0d3c545a707"
 SUNZI_DISCUSSION_ROOM_ID = "custom_16ea779e1f"
@@ -2055,6 +2061,21 @@ def _write_reminder_editor(payload):
     temporary.replace(SHIFT_ALARM_REMINDER_EDITOR_FILE)
 
 
+def _read_shift_alarm_mute():
+    try:
+        payload = json.loads(SHIFT_ALARM_MUTE_FILE.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return {"muted": False}
+    return {"muted": bool(payload.get("muted"))} if isinstance(payload, dict) else {"muted": False}
+
+
+def _write_shift_alarm_mute(muted):
+    SHIFT_ALARM_MUTE_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = SHIFT_ALARM_MUTE_FILE.with_suffix(".tmp")
+    temporary.write_text(json.dumps({"muted": bool(muted)}, ensure_ascii=False), encoding="utf-8")
+    temporary.replace(SHIFT_ALARM_MUTE_FILE)
+
+
 def _reminder_display_label(label):
     """리마인더 이름 끝의 반복 설명은 제목에서 떼어 편집 UI의 규칙 칸으로
     보낸다. 원본 label은 Shift Alarm 체크 상태 연결을 위해 그대로 보존한다."""
@@ -2225,6 +2246,37 @@ def shift_alarm_status(request: Request):
             item for item in status.get("reminders_detailed", []) if item.get("label") not in hidden
         ]
     return _merge_reminder_editor(status)
+
+
+@app.get("/api/shift-alarm/mute")
+def get_shift_alarm_mute(request: Request):
+    _require_owner(request)
+    return _read_shift_alarm_mute()
+
+
+class ShiftAlarmMuteRequest(BaseModel):
+    muted: bool
+
+
+@app.put("/api/shift-alarm/mute")
+def set_shift_alarm_mute(body: ShiftAlarmMuteRequest, request: Request):
+    _require_owner(request)
+    _write_shift_alarm_mute(body.muted)
+    return {"ok": True, "muted": body.muted}
+
+
+@app.get("/api/shift-alarm/log")
+def get_shift_alarm_log(request: Request, lines: int = 200):
+    """CPU 과부하 자동종료 등 shift_alarm.py의 print() 출력을 그대로 보여준다
+    — launchd가 stdout을 이 파일로 리다이렉트하므로 웹앱에서 tail만 하면 된다."""
+    _require_owner(request)
+    count = max(1, min(lines, 1000))
+    try:
+        text = SHIFT_ALARM_OUT_LOG_FILE.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {"lines": []}
+    all_lines = [line for line in text.split("\n") if line]
+    return {"lines": all_lines[-count:]}
 
 
 def _validated_reminder_definition(body):

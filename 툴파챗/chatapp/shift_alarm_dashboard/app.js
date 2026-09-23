@@ -353,3 +353,17 @@ loadVideoDownload();
 setInterval(loadNowPlaying,5000);
 setInterval(loadVideoDownload,3000);
 $("notifications").addEventListener("click",async()=>{const center=$("notification-center"),opening=center.classList.contains("hidden");center.classList.toggle("hidden",!opening);$("notifications").setAttribute("aria-expanded",String(opening));if(opening)await loadNotifications()});$("notification-close").addEventListener("click",()=>{$("notification-center").classList.add("hidden");$("notifications").setAttribute("aria-expanded","false")});document.addEventListener("keydown",event=>{if(event.key==="Escape")$("notification-close").click()});$("refresh").addEventListener("click",()=>{load();loadSunziStatus();loadVideoDownload();loadNotifications()});$("time-profile").addEventListener("change",()=>currentStatus&&render(currentStatus));$("check-all").addEventListener("click",async()=>{if(!currentStatus?.daily_routine?.length||!confirm("남아 있는 오늘의 일일 루틴을 모두 체크할까요?"))return;$("check-all").disabled=true;try{const result=await api("/api/shift-alarm/routine/check-all",{method:"POST"});currentStatus.daily_routine.forEach(item=>item.checked=true);render(currentStatus);notice(`${result.updated}개 루틴을 체크했습니다.`)}catch(e){notice(e.message,true);$("check-all").disabled=false}});load();loadSunziStatus();loadNotifications();setInterval(loadSunziStatus,5000);setInterval(loadNotifications,30000);
+// ★ 2026-09-23: "shift alarm 음소거 기능이 웹앱에 있으면 좋겠어" 요청 — CPU
+// 과부하 알림 무음화(shift_alarm.py 쪽)와 별개로, 기상 알람을 포함해 전부
+// 음소거할 수 있는 전역 토글을 헤더에 둔다.
+function setMuteButton(muted){const button=$("mute-toggle");button.setAttribute("aria-pressed",String(muted));button.textContent=muted?"🔇":"🔔";button.title=muted?"Shift Alarm 음소거 중 — 눌러서 해제":"눌러서 Shift Alarm 음소거(기상 알람 포함)"}
+async function loadMuteState(){try{setMuteButton((await api("/api/shift-alarm/mute")).muted)}catch(e){}}
+$("mute-toggle").addEventListener("click",async()=>{const button=$("mute-toggle"),next=button.getAttribute("aria-pressed")!=="true";button.disabled=true;try{const data=await api("/api/shift-alarm/mute",{method:"PUT",body:JSON.stringify({muted:next})});setMuteButton(data.muted);notice(data.muted?"Shift Alarm을 음소거했습니다 — 기상 알람도 배너만 뜨고 소리는 안 납니다.":"Shift Alarm 음소거를 해제했습니다.")}catch(e){notice(e.message,true)}finally{button.disabled=false}});
+loadMuteState();
+// CPU 과부하 자동종료 등 shift_alarm.out.log를 웹에서 바로 확인 — 펼칠 때만
+// 불러오고(불필요한 폴링 없음), 새로고침 버튼으로 다시 불러올 수 있다.
+let shiftAlarmLogLoaded=false;
+function renderShiftAlarmLog(lines){$("shift-alarm-log").textContent=lines.length?lines.slice().reverse().join("\n"):"기록이 없습니다."}
+async function loadShiftAlarmLog(){try{renderShiftAlarmLog((await api("/api/shift-alarm/log?lines=300")).lines||[])}catch(e){$("shift-alarm-log").textContent="로그를 불러오지 못했습니다."}}
+$("log-panel").addEventListener("toggle",()=>{if($("log-panel").open&&!shiftAlarmLogLoaded){shiftAlarmLogLoaded=true;loadShiftAlarmLog()}});
+$("log-refresh").addEventListener("click",loadShiftAlarmLog);

@@ -1188,3 +1188,12 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - `notify_spoken()`에 `silent=True` 옵션을 추가했다 — `rumps.notification(..., sound=False)`로 배너음을 끄고 `_speak_text()` 호출 자체를 건너뛴다(화면 배너는 그대로 뜬다). 다른 알림(근무 알람, 리마인더 등)은 영향 없음.
 - 42번 항목의 CPU 과부하 알림(`_check_high_cpu_thread`)만 `silent=True`로 바꿔 소리·음성 없이 조용히 배너만 뜨도록 했다.
 - 같은 지점에 `print()`를 추가해 종료 시각·프로세스명·PID·CPU%·붙잡힌 시간·결과(자동 종료함/이미 종료됨/종료 실패/예외 대상)를 남긴다. launchd가 stdout을 `~/Library/Logs/shift_alarm.out.log`로 리다이렉트하므로 별도 인프라 없이 영구 기록이 된다.
+
+## 95. 🔇📜 툴파챗 웹앱에 Shift Alarm 음소거 토글 + 실행 로그 보기 추가 (★ 2026-09-23 추가)
+
+**사용자 요청**: "어 그리고 관련해서 로그 보기 랑 shift alarm 음소거 기능이 웹앱 에있으면 좋겠어". 음소거 범위를 확인한 결과 "전부 다(기상 알람 포함)" 선택 — 배너 알림음·음성 안내 없이 화면 배너만 뜨는 방식이며, 화면 배너 자체나 모바일 푸시는 켜져 있어도 그대로 온다.
+
+- `shift_alarm.py`: `~/.shift_alarm_mute.json`을 매 `notify_spoken()` 호출마다 읽는 `_is_alarm_muted()`를 추가했다. `self.config`(`~/.shift_alarm_config.json`)는 앱이 주기적으로 통째로 덮어써서 웹 서버가 직접 쓰면 경쟁 상태가 생기므로(리마인더 편집기 — 93번 항목 — 와 같은 이유) 별도 파일로 뗐다. `notify_spoken()`은 `silent = silent or _is_alarm_muted()`로 판단하므로, 94번 항목의 CPU 과부하 알림처럼 무음이 필요한 곳과 전역 음소거가 자연스럽게 겹친다. `_get_today_reminder_items()`의 `wake_shift` 등 기상 알람도 `_check_timed_reminders()`를 통해 결국 `notify_spoken()`을 타므로, 음소거 하나로 기상 알람까지 같이 꺼진다(사용자가 명시적으로 선택한 범위).
+- `툴파챗/chatapp/server/app.py`: `GET/PUT /api/shift-alarm/mute`(리마인더 편집기와 같은 원자적 파일 쓰기 패턴으로 `~/.shift_alarm_mute.json` 관리)와, `GET /api/shift-alarm/log?lines=N`(`~/Library/Logs/shift_alarm.out.log`를 그대로 tail — 별도 로그 인프라 없이 94번 항목에서 남긴 `print()` 출력을 그대로 노출) 두 엔드포인트를 추가했다. 둘 다 `_require_owner()`로 소유자만 접근 가능.
+- 대시보드(`shift_alarm_dashboard/`): 헤더에 🔔/🔇 토글 버튼(`#mute-toggle`)을 추가해 즉시 켜고 끌 수 있게 했고, "리마인더 관리" 아래에 접이식 "실행 로그" 패널(`#log-panel`)을 추가했다 — 펼칠 때만 불러오고(불필요한 폴링 없음) 새로고침 버튼으로 다시 조회하며, 최신 항목이 위로 오도록 역순 정렬한다.
+- 검증: `notify_spoken`용 `~/.shift_alarm_mute.json` 원자적 쓰기·읽기 왕복을 별도 스크립트로 확인. 웹 서버(`com.tulpachat.server`)·메뉴바 앱(`com.shiftalarm.menubar`) 둘 다 `launchctl kickstart`로 재시작해 에러 로그 없이 정상 기동하는 것, `curl`로 새 엔드포인트가 401(인증 필요 — 라우트 자체는 정상 등록됨)을 반환하는 것까지 확인.

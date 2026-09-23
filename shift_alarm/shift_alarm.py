@@ -1753,6 +1753,22 @@ def save_config(config):
         json.dump(config, f)
 
 
+MUTE_FILE = os.path.expanduser("~/.shift_alarm_mute.json")
+
+
+def _is_alarm_muted():
+    """웹앱(툴파챗 shift_alarm 대시보드)의 음소거 토글 상태를 읽는다. 이 파일은
+    웹 서버만 쓰고 shift_alarm.py는 매 알림마다 읽기만 하므로(self.config처럼
+    양쪽이 같은 파일을 통째로 덮어쓰지 않음) 경쟁 상태가 없다(★ 2026-09-23:
+    "shift alarm 음소거 기능이 웹앱에 있으면 좋겠어" 요청 — 기상 알람 포함
+    전부 음소거)."""
+    try:
+        with open(MUTE_FILE, "r", encoding="utf-8") as f:
+            return bool(json.load(f).get("muted"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError, ValueError):
+        return False
+
+
 # ════════════════════════════════════════════════════════════
 # 근무표 JSON 불러오기 + 오늘 근무 조회
 # ════════════════════════════════════════════════════════════
@@ -5057,7 +5073,10 @@ def notify_spoken(title, subtitle, message, speak_text=None, url=None, silent=Fa
     ShiftAlarmApp의 @rumps.notifications 핸들러가 열어준다.
 
     silent: 지정하면 배너 알림음도, 음성 안내도 없이 화면 배너만 조용히
-    띄운다 — CPU 과부하 알림처럼 음성 안내가 너무 크다는 피드백(2026-09-23)."""
+    띄운다 — CPU 과부하 알림처럼 음성 안내가 너무 크다는 피드백(2026-09-23).
+    웹앱의 음소거 토글(_is_alarm_muted())이 켜져 있으면 기상 알람을 포함해
+    모든 notify_spoken 호출이 silent=True와 동일하게 동작한다."""
+    silent = silent or _is_alarm_muted()
     rumps.notification(
         title, subtitle, message,
         data={"url": url} if url else None,
