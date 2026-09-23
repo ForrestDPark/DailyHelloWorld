@@ -1674,6 +1674,80 @@ function renderScenarioReport(body, tree, includeHeading = true) {
   }
 }
 
+// ★ 2026-09-23: "시나리오트리에 이미지생성하기 버튼 만들어서 이미지만
+// 생성해서 올릴수있게하자" 요청 — 매일 자동 에이전트(run_daily_dating_sim_agent.py)를
+// 기다리지 않고 관리자가 지금 바로 이 작품의 이미지 생성만(시나리오는 그대로)
+// 수동으로 돌릴 수 있게 한다. 여러 장을 생성하는 작업이라 몇 분 걸릴 수
+// 있어서, 서버는 백그라운드로 돌리고 여기서는 시작 후 주기적으로 상태를
+// 물어본다.
+let datingSimImageGenPollTimer = null;
+
+function stopDatingSimImageGenPoll() {
+  if (datingSimImageGenPollTimer) {
+    clearInterval(datingSimImageGenPollTimer);
+    datingSimImageGenPollTimer = null;
+  }
+}
+
+function renderImageGenerationControl(container, tree) {
+  const wrap = document.createElement("div");
+  wrap.className = "tree-image-generate";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "tree-image-generate-btn";
+  button.textContent = "🖼️ 이미지 생성하기";
+  const status = document.createElement("span");
+  status.className = "tree-image-generate-status";
+  wrap.append(button, status);
+  container.append(wrap);
+
+  const refreshStatus = async (initial = false) => {
+    let data;
+    try {
+      data = await api(`/api/dating-sim/scenario-tree/generate-images/status${storyQuery()}`);
+    } catch (e) {
+      stopDatingSimImageGenPoll();
+      button.disabled = false;
+      status.textContent = e.message;
+      return;
+    }
+    if (data.running) {
+      button.disabled = true;
+      status.textContent = "생성 중... (여러 장이라 몇 분 걸릴 수 있어요)";
+      if (!datingSimImageGenPollTimer) {
+        datingSimImageGenPollTimer = setInterval(refreshStatus, 8000);
+      }
+      return;
+    }
+    stopDatingSimImageGenPoll();
+    button.disabled = false;
+    if (data.returncode === 0 && !initial) {
+      status.textContent = "완료! 새로고침 중...";
+      await openScenarioTree();
+      return;
+    }
+    status.textContent = data.returncode != null && data.returncode !== 0
+      ? `실패(코드 ${data.returncode}) — 다시 시도해 주세요`
+      : "";
+  };
+
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    status.textContent = "생성 시작 중...";
+    try {
+      await api(`/api/dating-sim/scenario-tree/generate-images${storyQuery()}`, { method: "POST" });
+    } catch (e) {
+      button.disabled = false;
+      status.textContent = e.message;
+      return;
+    }
+    status.textContent = "생성 중... (여러 장이라 몇 분 걸릴 수 있어요)";
+    datingSimImageGenPollTimer = setInterval(refreshStatus, 8000);
+  });
+
+  refreshStatus(true);
+}
+
 function renderScenarioTree(tree) {
   const body = $("tree-body");
   body.replaceChildren();
@@ -1691,6 +1765,9 @@ function renderScenarioTree(tree) {
   body.append(head);
 
   const imageToggle = makeTreeToggle("🖼️ 생성된 캐릭터·장면 이미지");
+  if (tree.source_title) {
+    renderImageGenerationControl(imageToggle.content, tree);
+  }
   renderScenarioImages(imageToggle.content, tree, false);
   body.append(imageToggle.details);
 
@@ -1786,6 +1863,7 @@ function renderScenarioTree(tree) {
 }
 
 async function openScenarioTree() {
+  stopDatingSimImageGenPoll();
   $("tree-body").replaceChildren(Object.assign(document.createElement("p"), {
     className: "tree-loading", textContent: "불러오는 중...",
   }));
@@ -1803,10 +1881,14 @@ async function openScenarioTree() {
 $("tree-open-btn").addEventListener("click", openScenarioTree);
 $("tree-close-btn").addEventListener("click", () => {
   closeTreeImageDetail();
+  stopDatingSimImageGenPoll();
   $("tree-overlay").classList.add("hidden");
 });
 $("tree-overlay").addEventListener("click", (event) => {
-  if (event.target === $("tree-overlay")) $("tree-overlay").classList.add("hidden");
+  if (event.target === $("tree-overlay")) {
+    stopDatingSimImageGenPoll();
+    $("tree-overlay").classList.add("hidden");
+  }
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && document.querySelector(".tree-image-detail-overlay")) {

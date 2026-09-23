@@ -1707,6 +1707,24 @@ def generated_image_reference_path(book_id, filename):
     return target if target.is_file() else None
 
 
+def resolve_book_work_dir(story_id):
+    """story_id("book:<20자리 해시>")에서 book_id와, generate_dating_sim_images.py가
+    입력으로 받는 work_dir(일본어자막추출/library/<제목>)을 함께 돌려준다.
+
+    ★ 2026-09-23: "시나리오트리에 이미지생성하기 버튼 만들어서 이미지만
+    생성해서 올릴수있게하자" 요청 — 관리자가 매일 자동 에이전트를 기다리지
+    않고 지금 바로 특정 작품의 이미지 생성만 수동으로 돌릴 수 있게 하려면,
+    서버(app.py)가 이 작품의 실제 작업 폴더를 알아야 한다."""
+    match = BOOK_STORY_RE.fullmatch(story_id or "")
+    if not match:
+        return None, None
+    book_id = match.group(1)
+    book = _find_book(book_id)
+    if not book:
+        return book_id, None
+    return book_id, _find_library_folder(_book_title(book))
+
+
 def _scenes_from_generated(gen, character_name_ko, character_name_jp):
     """생성 캐시(dating_sim_scenario.json)를 엔진이 쓰는 scenes[day][location]
     구조로 변환한다. 대사는 ソイ/소이 자리표시자를 쓰고 여기서 실제 이름으로

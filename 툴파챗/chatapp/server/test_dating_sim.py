@@ -103,6 +103,66 @@ class DatingSimApiTests(unittest.TestCase):
                 app.dating_sim_generated_image_reference("a" * 20, "reference-222222222222.jpg", request())
             self.assertEqual(denied.exception.status_code, 403)
 
+    def test_resolve_book_work_dir_matches_book_story_id_to_library_folder(self):
+        folder = Path(self.temp.name) / "library" / "TEST"
+        book_id = "c" * 20
+        with patch.object(dating_sim_story, "_find_book", return_value=Path("book.epub")), \
+             patch.object(dating_sim_story, "_book_title", return_value="TEST"), \
+             patch.object(dating_sim_story, "_find_library_folder", return_value=folder):
+            self.assertEqual(dating_sim_story.resolve_book_work_dir(f"book:{book_id}"), (book_id, folder))
+        self.assertEqual(dating_sim_story.resolve_book_work_dir(None), (None, None))
+        self.assertEqual(dating_sim_story.resolve_book_work_dir("소이"), (None, None))
+        with patch.object(dating_sim_story, "_find_book", return_value=None):
+            self.assertEqual(dating_sim_story.resolve_book_work_dir(f"book:{book_id}"), (book_id, None))
+
+    def test_generate_images_endpoints_start_track_and_reject_owner_only(self):
+        # ★ 2026-09-23: "시나리오트리에 이미지생성하기 버튼 만들어서 이미지만
+        # 생성해서 올릴수있게하자" 요청 — 서브프로세스를 실제로 띄우지 않고
+        # 가짜 Popen으로 시작→진행 중→완료 상태 전이와 소유자 전용 접근을
+        # 검증한다.
+        work_dir = Path(self.temp.name) / "work"
+        work_dir.mkdir()
+        book_id = "d" * 20
+        owner = SimpleNamespace(state=SimpleNamespace(
+            user={"username": "admin", "is_owner": True}, can_write=True, share_guest=False))
+
+        class FakeProcess:
+            def __init__(self):
+                self.returncode = None
+
+            def poll(self):
+                return self.returncode
+
+        fake_process = FakeProcess()
+        with patch.object(dating_sim_story, "resolve_book_work_dir", return_value=(book_id, work_dir)), \
+             patch.object(app.subprocess, "Popen", return_value=fake_process) as popen:
+            started = app.dating_sim_generate_images_start(owner, f"book:{book_id}")
+            self.assertEqual(started, {"status": "started"})
+            command = popen.call_args[0][0]
+            self.assertEqual(command[0], app.DATING_SIM_IMAGE_PYTHON)
+            self.assertEqual(command[1], app.DATING_SIM_IMAGE_SCRIPT)
+            self.assertEqual(command[2], str(work_dir))
+            self.assertTrue((work_dir / "dating_sim_images" / "generation.log").is_file())
+
+            status = app.dating_sim_generate_images_status(owner, f"book:{book_id}")
+            self.assertEqual(status["running"], True)
+
+            with self.assertRaises(HTTPException) as busy:
+                app.dating_sim_generate_images_start(owner, f"book:{book_id}")
+            self.assertEqual(busy.exception.status_code, 409)
+
+            with self.assertRaises(HTTPException) as denied:
+                app.dating_sim_generate_images_status(request(), f"book:{book_id}")
+            self.assertEqual(denied.exception.status_code, 403)
+
+            fake_process.returncode = 0
+            status = app.dating_sim_generate_images_status(owner, f"book:{book_id}")
+            self.assertEqual(status["running"], False)
+            self.assertEqual(status["returncode"], 0)
+            # 완료 처리된 작업은 다시 시작할 수 있어야 한다(잔여 job 항목이 안 남음).
+            started_again = app.dating_sim_generate_images_start(owner, f"book:{book_id}")
+            self.assertEqual(started_again, {"status": "started"})
+
     def test_new_player_starts_at_day_one_with_base_affection_and_no_pending_scene(self):
         state = app.dating_sim_state(request())
         self.assertEqual(state["day"], 1)

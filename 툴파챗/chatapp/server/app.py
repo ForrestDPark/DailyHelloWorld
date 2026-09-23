@@ -990,6 +990,80 @@ def dating_sim_scenario_tree(request: Request, story_id: str | None = None):
         raise HTTPException(status_code=404, detail=str(exc))
 
 
+# ★ 2026-09-23: "시나리오트리에 이미지생성하기 버튼 만들어서 이미지만
+# 생성해서 올릴수있게하자" 요청 — 지금까지 미연시 이미지는 기상 알람이
+# 하루 한 작품씩 돌리는 백그라운드 에이전트(run_daily_dating_sim_agent.py)
+# 로만 생성됐다. 관리자가 시나리오 트리에서 특정 작품의 이미지 생성만
+# 지금 바로 수동으로 돌릴 수 있게, generate_dating_sim_images.py를
+# 서브프로세스로 띄운다. cv2/Pillow가 깔린 인터프리터가 이 서버의 venv가
+# 아니라 shift_alarm 파이프라인이 쓰는 anaconda 배포판이므로(★
+# SHIFT_ALARM_MEDIA_KEY_PYTHON과 같은 이유), 동일한 인터프리터를 그대로
+# 빌려 쓴다.
+DATING_SIM_IMAGE_PYTHON = "/opt/anaconda3/bin/python3"
+DATING_SIM_IMAGE_SCRIPT = str(REPO_ROOT / "일본어자막추출" / "generate_dating_sim_images.py")
+
+_dating_sim_image_jobs: dict[str, dict] = {}
+_dating_sim_image_jobs_lock = threading.Lock()
+
+
+def _dating_sim_image_job_status(book_id, work_dir):
+    with _dating_sim_image_jobs_lock:
+        job = _dating_sim_image_jobs.get(book_id)
+        if not job:
+            return {"running": False}
+        returncode = job["process"].poll()
+        if returncode is None:
+            return {"running": True, "started_at": job["started_at"]}
+        del _dating_sim_image_jobs[book_id]
+    job["log_file"].close()
+    log_tail = ""
+    try:
+        log_tail = job["log_path"].read_text(encoding="utf-8", errors="replace")[-800:]
+    except OSError:
+        pass
+    return {
+        "running": False, "returncode": returncode,
+        "started_at": job["started_at"], "log_tail": log_tail,
+    }
+
+
+@app.post("/api/dating-sim/scenario-tree/generate-images")
+def dating_sim_generate_images_start(request: Request, story_id: str | None = None):
+    """관리자 전용 — 이 작품의 이미지만(시나리오는 그대로) 지금 바로 생성한다.
+    generate_dating_sim_images.py는 이미 있는 파일을 건너뛰고 빠진 것만
+    채우므로, 첫 실행이든 재실행이든 그대로 호출하면 된다."""
+    _require_owner(request)
+    book_id, work_dir = dating_sim_story.resolve_book_work_dir(story_id or "")
+    if not work_dir:
+        raise HTTPException(status_code=404, detail="작품 폴더를 찾을 수 없습니다")
+    with _dating_sim_image_jobs_lock:
+        existing = _dating_sim_image_jobs.get(book_id)
+        if existing and existing["process"].poll() is None:
+            raise HTTPException(status_code=409, detail="이미 이미지 생성이 진행 중입니다")
+        image_dir = work_dir / "dating_sim_images"
+        image_dir.mkdir(parents=True, exist_ok=True)
+        log_path = image_dir / "generation.log"
+        log_file = open(log_path, "ab")
+        process = subprocess.Popen(
+            [DATING_SIM_IMAGE_PYTHON, DATING_SIM_IMAGE_SCRIPT, str(work_dir)],
+            stdout=log_file, stderr=subprocess.STDOUT,
+        )
+        _dating_sim_image_jobs[book_id] = {
+            "process": process, "log_file": log_file, "log_path": log_path,
+            "started_at": int(time.time()),
+        }
+    return {"status": "started"}
+
+
+@app.get("/api/dating-sim/scenario-tree/generate-images/status")
+def dating_sim_generate_images_status(request: Request, story_id: str | None = None):
+    _require_owner(request)
+    book_id, work_dir = dating_sim_story.resolve_book_work_dir(story_id or "")
+    if not work_dir:
+        raise HTTPException(status_code=404, detail="작품 폴더를 찾을 수 없습니다")
+    return _dating_sim_image_job_status(book_id, work_dir)
+
+
 # ★ 2026-09-17: "만남마다 나가기하면 그 진행상태가 세이브되서 다시 미연시
 # 누르면 이전 진행 이어가기, 새로운 만남 중에 선택해서 플레이할수있으면
 # 좋겠어" 요청 — 지금까지 /dating-sim/ 진입은 매번 서재의 무작위 EPUB으로
