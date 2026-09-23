@@ -114,6 +114,56 @@ class DatingImageAgentTests(unittest.TestCase):
         self.assertNotIn("152", single)
         self.assertEqual(single["14"]["inputs"]["samples2"], ["11", 0])
 
+    def test_comfy_workflow_uses_ipadapter_faceid_when_requested(self):
+        # ★ 2026-09-23: "인물고정법도 있을건데 그거참고해서" 요청 —
+        # IP-Adapter FaceID(얼굴 임베딩 기반) 경로는 img2img/LatentBlend를
+        # 전혀 쓰지 않고, 순수 txt2img latent에 얼굴 임베딩으로 패치한
+        # 모델을 그대로 물린다는 걸 검증한다.
+        workflow = images._build_comfy_workflow(
+            "a quiet cafe scene", "model.safetensors", 42,
+            ["ref-a.png", "ref-b.png"], use_ipadapter_faceid=True,
+        )
+        self.assertEqual(workflow["20"]["class_type"], "IPAdapterUnifiedLoaderFaceID")
+        self.assertEqual(workflow["20"]["inputs"]["preset"], "FACEID PLUS V2")
+        self.assertEqual(workflow["21"]["class_type"], "ImageBatch")
+        self.assertEqual(workflow["21"]["inputs"], {"image1": ["10", 0], "image2": ["110", 0]})
+        self.assertEqual(workflow["22"]["class_type"], "IPAdapterFaceID")
+        self.assertEqual(workflow["22"]["inputs"]["model"], ["20", 0])
+        self.assertEqual(workflow["22"]["inputs"]["ipadapter"], ["20", 1])
+        self.assertEqual(workflow["22"]["inputs"]["image"], ["21", 0])
+        self.assertEqual(workflow["22"]["inputs"]["weight"], 0.65)
+        # img2img 전용 노드(VAEEncode/LatentBlend)는 전혀 만들어지지 않는다.
+        self.assertNotIn("11", workflow)
+        self.assertNotIn("14", workflow)
+        self.assertEqual(workflow["3"]["inputs"]["model"], ["22", 0])
+        self.assertEqual(workflow["3"]["inputs"]["latent_image"], ["5", 0])
+        self.assertEqual(workflow["3"]["inputs"]["denoise"], 1.0)
+
+        # 레퍼런스가 한 장뿐이면 ImageBatch 없이 그 한 장을 그대로 물린다.
+        single = images._build_comfy_workflow(
+            "a quiet cafe scene", "model.safetensors", 42,
+            ["ref-a.png"], use_ipadapter_faceid=True,
+        )
+        self.assertNotIn("21", single)
+        self.assertEqual(single["22"]["inputs"]["image"], ["10", 0])
+
+        # use_ipadapter_faceid=False(기본값)면 예전 img2img 경로 그대로 유지.
+        fallback = images._build_comfy_workflow(
+            "a quiet cafe scene", "model.safetensors", 42, ["ref-a.png"],
+        )
+        self.assertNotIn("20", fallback)
+        self.assertEqual(fallback["3"]["inputs"]["model"], ["4", 0])
+
+    def test_local_generate_falls_back_when_ipadapter_node_missing(self):
+        # ★ 2026-09-23: 다른 환경(커스텀 노드 미설치)에서도 죽지 않고 예전
+        # img2img 방식으로 자동 폴백하는지 확인한다.
+        with patch.object(images, "_comfy_request", side_effect=lambda path, *a, **k: {}):
+            self.assertFalse(images._comfy_supports_ipadapter_faceid())
+        with patch.object(images, "_comfy_request", side_effect=lambda path, *a, **k: (
+            {"IPAdapterUnifiedLoaderFaceID": {}} if "IPAdapterUnifiedLoaderFaceID" in path else {}
+        )):
+            self.assertTrue(images._comfy_supports_ipadapter_faceid())
+
     def test_comfy_workflow_can_use_external_vae(self):
         workflow = images._build_comfy_workflow(
             "a rainy bookshop reunion with a shy smile",

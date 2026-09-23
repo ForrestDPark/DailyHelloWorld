@@ -389,9 +389,21 @@ def _comfy_vae_name():
     return ""
 
 
+def _comfy_supports_ipadapter_faceid():
+    # ★ 2026-09-23: ComfyUI_IPAdapter_plus 커스텀 노드가 없는 환경(다른 PC로
+    # 옮기거나 설치가 아직 안 된 경우)에서도 죽지 않고 예전 img2img+LatentBlend
+    # 방식으로 조용히 폴백하도록, 노드 등록 여부를 실행 시점에 확인한다.
+    try:
+        info = _comfy_request("/object_info/IPAdapterUnifiedLoaderFaceID", timeout=5)
+    except Exception:
+        return False
+    return "IPAdapterUnifiedLoaderFaceID" in info
+
+
 def _build_comfy_workflow(
     prompt, model_name, seed, reference_names=None,
     loader="CheckpointLoaderSimple", vae_name="",
+    use_ipadapter_faceid=False,
 ):
     # reference_names는 문자열 하나(예전 방식과 호환) 또는 여러 장의 리스트를
     # 받는다. ★ 2026-09-23: "얼굴이 나오는 사진은 되도록 많이 참조해서
@@ -419,16 +431,20 @@ def _build_comfy_workflow(
         + camera_direction + ", "
         + _clean(prompt.split("Visualize this specific narrative beat rather than a generic pose:")[-1], 180)
     )
+    ipadapter_mode = bool(reference_names) and use_ipadapter_faceid
+    blend_mode = bool(reference_names) and not use_ipadapter_faceid
     workflow = {
         "3": {"class_type": "KSampler", "inputs": {
             "seed": seed, "steps": 25, "cfg": 7.0, "sampler_name": "dpmpp_2m",
-            "scheduler": "karras", "denoise": 0.48 if reference_names else 1.0,
-            "model": ["4", 0], "positive": ["6", 0], "negative": ["7", 0],
-            "latent_image": ["14", 0] if reference_names else ["5", 0],
+            "scheduler": "karras", "denoise": 0.48 if blend_mode else 1.0,
+            "model": ["22", 0] if ipadapter_mode else ["4", 0],
+            "positive": ["6", 0], "negative": ["7", 0],
+            "latent_image": ["14", 0] if blend_mode else ["5", 0],
         }},
         "4": {"class_type": loader, "inputs": {
             "ckpt_name" if loader == "CheckpointLoaderSimple" else "model_path": model_name
         }},
+        "5": {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 768, "batch_size": 1}},
         "6": {"class_type": "CLIPTextEncode", "inputs": {"text": local_prompt, "clip": ["4", 1]}},
         "7": {"class_type": "CLIPTextEncode", "inputs": {
             "text": (
@@ -443,11 +459,46 @@ def _build_comfy_workflow(
     }
     if vae_name:
         workflow["12"] = {"class_type": "VAELoader", "inputs": {"vae_name": vae_name}}
-    if reference_names:
+    if ipadapter_mode:
+        # ★ 2026-09-23: "인물고정법도 있을건데 그거참고해서 만들면좋겠어" 요청 —
+        # IP-Adapter FaceID(InsightFace 얼굴 임베딩으로 모델 자체를 패치)로
+        # 바꿨다. img2img+LatentBlend와 달리 레퍼런스 사진의 화면 구도·자막
+        # 띠까지 latent로 섞이지 않고 "얼굴 특징"만 반영되므로, 텍스트만으로
+        # 만든 순수 txt2img(EmptyLatentImage, denoise=1.0)에 IPAdapterFaceID로
+        # 패치한 MODEL을 그대로 물린다. 레퍼런스가 여러 장이면 ImageBatch로
+        # 묶어 combine_embeds="average"로 얼굴 임베딩 자체를 평균 낸다 — 픽셀
+        # latent를 섞던 예전 방식보다 정체성이 훨씬 안정적으로 유지된다.
+        image_ids = []
+        for idx, name in enumerate(reference_names):
+            load_id = "10" if idx == 0 else f"1{idx}0"
+            workflow[load_id] = {"class_type": "LoadImage", "inputs": {"image": name}}
+            image_ids.append(load_id)
+        if len(image_ids) > 1:
+            workflow["21"] = {"class_type": "ImageBatch", "inputs": {
+                "image1": [image_ids[0], 0], "image2": [image_ids[1], 0],
+            }}
+            batched_image = ["21", 0]
+        else:
+            batched_image = [image_ids[0], 0]
+        workflow["20"] = {"class_type": "IPAdapterUnifiedLoaderFaceID", "inputs": {
+            "model": ["4", 0], "preset": "FACEID PLUS V2",
+            "lora_strength": 0.6, "provider": "CPU",
+        }}
+        # weight=0.65는 "레퍼런스 비중 65%로" 요청을 이 새 메커니즘에서도
+        # 같은 취지(레퍼런스를 과하게 강제하지 않기)로 이어받은 값이다 —
+        # img2img blend_factor와 수식은 다르지만 "정체성 반영 강도" 역할은 같다.
+        workflow["22"] = {"class_type": "IPAdapterFaceID", "inputs": {
+            "model": ["20", 0], "ipadapter": ["20", 1], "image": batched_image,
+            "weight": 0.65, "weight_faceidv2": 1.0, "weight_type": "linear",
+            "combine_embeds": "average", "start_at": 0.0, "end_at": 1.0,
+            "embeds_scaling": "V only",
+        }}
+    elif blend_mode:
         # 레퍼런스 사진마다 LoadImage+VAEEncode 쌍을 만든다. 첫 장은 예전과
         # 같은 노드 ID(10/11)를 그대로 쓰고, 추가 사진은 "1{idx}0"/"1{idx}1"로
         # 번호를 늘린다(12~14는 이미 VAE/샘플러/최종 블렌드가 쓰고 있어 겹치지
-        # 않게 피한다).
+        # 않게 피한다). IP-Adapter FaceID를 못 쓰는 환경(커스텀 노드 미설치
+        # 등)을 위한 폴백 경로다.
         encode_ids = []
         for idx, name in enumerate(reference_names):
             load_id, encode_id = ("10", "11") if idx == 0 else (f"1{idx}0", f"1{idx}1")
@@ -474,14 +525,6 @@ def _build_comfy_workflow(
         # LatentBlend는 samples1*blend_factor + samples2*(1-blend_factor)이고
         # samples1=텍스트(13번), samples2=레퍼런스 평균이라 레퍼런스 비중 65%를
         # 얻으려면 blend_factor를 0.35로 둬야 한다.
-        # ★ 2026-09-23: "레퍼런스로 80%비율로" 요청으로 처음엔 0.20(80%)이었는데,
-        # 같은 날 "얼굴이 전반적으로 좀 이상한데... 비율 65%로 낮춰줘" 재요청으로
-        # 0.35(65%)로 낮췄다 — 레퍼런스를 너무 강하게 강제하면 오히려 부자연스러운
-        # 얼굴이 나온다는 피드백. 자세·배경은 프롬프트가 담당(camera_direction
-        # 회전 + 장면별 영어 묘사).
-        workflow["5"] = {"class_type": "EmptyLatentImage", "inputs": {
-            "width": 512, "height": 768, "batch_size": 1
-        }}
         workflow["13"] = {"class_type": "KSampler", "inputs": {
             "seed": seed + 1, "steps": 12, "cfg": 7.0, "sampler_name": "dpmpp_2m",
             "scheduler": "karras", "denoise": 1.0, "model": ["4", 0],
@@ -490,13 +533,64 @@ def _build_comfy_workflow(
         workflow["14"] = {"class_type": "LatentBlend", "inputs": {
             "samples1": ["13", 0], "samples2": [combined_id, 0], "blend_factor": 0.35,
         }}
-    else:
-        workflow["5"] = {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 768, "batch_size": 1}}
     return workflow
 
 
-def _comfy_upload(reference):
+def _largest_face_bbox(rgb_image):
+    """PIL RGB 이미지에서 Haar cascade(정면+측면)로 가장 큰 얼굴의 (x, y, w, h)를
+    찾는다. IP-Adapter FaceID(InsightFace)는 OpenCV Haar보다 훨씬 엄격해서,
+    얼굴이 프레임 경계에서 잘려 있으면 "No face detected"로 실패한다(★
+    2026-09-23 277DCV-298 실측 — 원작 클로즈업 컷을 화면 중앙 기준으로만
+    자르니 얼굴 절반이 잘려 InsightFace가 인식하지 못했다). 이 bbox는
+    `_comfy_upload`가 화면 중앙이 아니라 "얼굴 중앙"을 기준으로 잘라내는 데
+    쓰인다."""
+    try:
+        import cv2
+        import numpy as np
+    except ImportError:
+        return None
+    array = cv2.cvtColor(np.array(rgb_image), cv2.COLOR_RGB2BGR)
+    gray = cv2.equalizeHist(cv2.cvtColor(array, cv2.COLOR_BGR2GRAY))
+    best = None
+    for cascade_name in ("haarcascade_frontalface_alt2.xml", "haarcascade_profileface.xml"):
+        cascade = _FACE_CASCADES.get(cascade_name)
+        if cascade is None:
+            cascade = cv2.CascadeClassifier(cv2.data.haarcascades + cascade_name)
+            _FACE_CASCADES[cascade_name] = cascade
+        for (x, y, w, h) in cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=4, minSize=(50, 50)):
+            if best is None or w * h > best[2] * best[3]:
+                best = (x, y, w, h)
+    return best
+
+
+def _face_centered_crop(image, target_size):
+    """화면 중앙이 아니라 검출된 얼굴 중앙을 기준으로 target_size 비율의
+    영역을 최대한 크게 잘라낸다. 얼굴이 검출되지 않으면 기존처럼 화면
+    중앙 기준(PIL ImageOps.fit과 동일한 로직)으로 대체한다."""
     from PIL import Image, ImageOps
+
+    target_w, target_h = target_size
+    width, height = image.size
+    target_ratio = target_w / target_h
+    if width / height > target_ratio:
+        crop_w, crop_h = height * target_ratio, height
+    else:
+        crop_w, crop_h = width, width / target_ratio
+    bbox = _largest_face_bbox(image)
+    if bbox:
+        fx, fy, fw, fh = bbox
+        center_x, center_y = fx + fw / 2, fy + fh / 2
+    else:
+        center_x, center_y = width / 2, height / 2
+    left = min(max(center_x - crop_w / 2, 0), width - crop_w)
+    top = min(max(center_y - crop_h / 2, 0), height - crop_h)
+    box = (int(left), int(top), int(left + crop_w), int(top + crop_h))
+    return image.resize(target_size, Image.Resampling.LANCZOS, box=box) if bbox else \
+        ImageOps.fit(image, target_size, Image.Resampling.LANCZOS)
+
+
+def _comfy_upload(reference):
+    from PIL import Image
 
     boundary = "----jpcomfy" + hashlib.sha1(str(time.time_ns()).encode()).hexdigest()
     source = reference.read_bytes()
@@ -513,7 +607,7 @@ def _comfy_upload(reference):
         top = int(height * 0.10)
         bottom = int(height * 0.82)
         cropped = rgb.crop((0, top, width, bottom)) if bottom > top else rgb
-        normalized = ImageOps.fit(cropped, (512, 768), Image.Resampling.LANCZOS)
+        normalized = _face_centered_crop(cropped, (512, 768))
         payload = io.BytesIO()
         normalized.save(payload, format="PNG", optimize=True)
         image_bytes = payload.getvalue()
@@ -564,12 +658,14 @@ def _local_generate(prompt, target, reference=None):
     # _build_comfy_workflow가 만든다.
     references = reference if isinstance(reference, (list, tuple)) else ([reference] if reference else [])
     reference_names = [_comfy_upload(ref) for ref in references if ref and ref.is_file()]
+    use_ipadapter_faceid = bool(reference_names) and _comfy_supports_ipadapter_faceid()
     base_seed = int.from_bytes(hashlib.sha256(prompt.encode()).digest()[:8], "big") & ((1 << 63) - 1)
     timeout = int(os.environ.get("JP_COMFYUI_TIMEOUT", "600"))
     for attempt in range(4):
         seed = base_seed + attempt * 104729
         workflow = _build_comfy_workflow(
-            prompt, model_name, seed, reference_names, loader=loader, vae_name=vae_name
+            prompt, model_name, seed, reference_names, loader=loader, vae_name=vae_name,
+            use_ipadapter_faceid=use_ipadapter_faceid,
         )
         queued = _comfy_request("/prompt", {"prompt": workflow}, timeout=30)
         if queued.get("node_errors"):
@@ -577,7 +673,19 @@ def _local_generate(prompt, target, reference=None):
         prompt_id = queued.get("prompt_id")
         if not prompt_id:
             raise RuntimeError(f"ComfyUI가 prompt_id를 반환하지 않았습니다: {queued}")
-        image = _comfy_wait_image(prompt_id, timeout)
+        try:
+            image = _comfy_wait_image(prompt_id, timeout)
+        except RuntimeError as exc:
+            # ★ 2026-09-23: InsightFace는 OpenCV Haar보다 훨씬 엄격해서, 얼굴
+            # 검출용으로 골라둔 레퍼런스 사진이라도 각도·조명에 따라 "No face
+            # detected"로 실패할 수 있다(277DCV-298 실측). 이 경우 남은 시도는
+            # 예전 img2img+LatentBlend 방식으로 전환해 생성이 아예 실패하지
+            # 않도록 한다.
+            if use_ipadapter_faceid and "No face detected" in str(exc):
+                use_ipadapter_faceid = False
+                continue
+            raise
+
         query = urllib.parse.urlencode({
             "filename": image["filename"], "subfolder": image.get("subfolder", ""), "type": image.get("type", "output")
         })
@@ -596,10 +704,13 @@ def _local_generate(prompt, target, reference=None):
                     "used_seed": seed, "attempt": attempt + 1,
                     "reference_count": len(reference_names),
                     "composition_pass": (
-                        f"txt2img 12 steps + 35% text/65% reference latent"
-                        f"({len(reference_names)}장 평균) + img2img"
-                        if len(reference_names) > 1 else
-                        "txt2img 12 steps + 35% text/65% reference latent + img2img"
+                        f"IP-Adapter FaceID (얼굴 임베딩 {len(reference_names)}장 평균) + txt2img"
+                        if use_ipadapter_faceid else (
+                            f"txt2img 12 steps + 35% text/65% reference latent"
+                            f"({len(reference_names)}장 평균) + img2img"
+                            if len(reference_names) > 1 else
+                            "txt2img 12 steps + 35% text/65% reference latent + img2img"
+                        )
                     ),
                 },
             }
