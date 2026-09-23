@@ -1027,27 +1027,42 @@ def _dating_sim_image_job_status(book_id, work_dir):
     }
 
 
+DATING_SIM_IMAGE_KEY_RE = re.compile(r"^[A-Za-z0-9_:-]{1,64}$")
+
+
 @app.post("/api/dating-sim/scenario-tree/generate-images")
-def dating_sim_generate_images_start(request: Request, story_id: str | None = None):
+def dating_sim_generate_images_start(
+    request: Request, story_id: str | None = None,
+    force: bool = False, force_key: str | None = None,
+):
     """관리자 전용 — 이 작품의 이미지만(시나리오는 그대로) 지금 바로 생성한다.
     generate_dating_sim_images.py는 이미 있는 파일을 건너뛰고 빠진 것만
-    채우므로, 첫 실행이든 재실행이든 그대로 호출하면 된다."""
+    채우므로, 아무 옵션 없이 호출하면 첫 실행이든 재실행이든 빠진 것만
+    채운다. force=true면 전부, force_key(예: portrait, 1:first)면 그
+    이미지 하나만 강제로 다시 만든다(★ 2026-09-23 "이미지 재생성 버튼...
+    전체재생성도 있고 사진눌렀을때 이사진만 재생성하기" 요청)."""
     _require_owner(request)
+    if force_key is not None and not DATING_SIM_IMAGE_KEY_RE.fullmatch(force_key):
+        raise HTTPException(status_code=400, detail="force_key 형식이 올바르지 않습니다")
     book_id, work_dir = dating_sim_story.resolve_book_work_dir(story_id or "")
     if not work_dir:
         raise HTTPException(status_code=404, detail="작품 폴더를 찾을 수 없습니다")
     with _dating_sim_image_jobs_lock:
         existing = _dating_sim_image_jobs.get(book_id)
-        if existing and existing["process"].poll() is None:
-            raise HTTPException(status_code=409, detail="이미 이미지 생성이 진행 중입니다")
+        if existing:
+            if existing["process"].poll() is None:
+                raise HTTPException(status_code=409, detail="이미 이미지 생성이 진행 중입니다")
+            existing["log_file"].close()
         image_dir = work_dir / "dating_sim_images"
         image_dir.mkdir(parents=True, exist_ok=True)
         log_path = image_dir / "generation.log"
         log_file = open(log_path, "ab")
-        process = subprocess.Popen(
-            [DATING_SIM_IMAGE_PYTHON, DATING_SIM_IMAGE_SCRIPT, str(work_dir)],
-            stdout=log_file, stderr=subprocess.STDOUT,
-        )
+        command = [DATING_SIM_IMAGE_PYTHON, DATING_SIM_IMAGE_SCRIPT, str(work_dir)]
+        if force:
+            command.append("--force")
+        elif force_key:
+            command.extend(["--force-key", force_key])
+        process = subprocess.Popen(command, stdout=log_file, stderr=subprocess.STDOUT)
         _dating_sim_image_jobs[book_id] = {
             "process": process, "log_file": log_file, "log_path": log_path,
             "started_at": int(time.time()),

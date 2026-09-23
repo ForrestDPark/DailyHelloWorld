@@ -1572,7 +1572,14 @@ def load_generated_images(title, book_id):
     def public(filename):
         if not isinstance(filename, str) or not re.fullmatch(r"(?:portrait|scene-[0-9a-f]{12})\.png", filename):
             return None
-        return f"/api/dating-sim/books/{book_id}/images/{filename}" if (image_dir / filename).is_file() else None
+        target = image_dir / filename
+        if not target.is_file():
+            return None
+        # ★ 2026-09-23: "이 사진만 재생성하기" 요청으로 파일명은 그대로 두고
+        # 내용만 덮어쓰는 재생성 경로가 생겼다. 파일명이 그대로면 브라우저가
+        # 예전 캐시를 계속 보여줄 수 있어, 파일 mtime을 캐시 무효화 쿼리로
+        # 붙인다(이 프로젝트 전반의 ?v= 캐시버스팅 관례와 같은 원리).
+        return f"/api/dating-sim/books/{book_id}/images/{filename}?t={int(target.stat().st_mtime)}"
     portrait = public(manifest.get("portrait"))
     assignments = {key: url for key, filename in (manifest.get("assignments") or {}).items()
                    if (url := public(filename))}

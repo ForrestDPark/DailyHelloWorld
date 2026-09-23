@@ -605,6 +605,7 @@ html, body {
   padding: 7px 12px; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
 }
 .tree-image-generate-btn:disabled { opacity: 0.5; cursor: default; }
+.tree-image-regenerate-btn { background: var(--accent); color: #fff; }
 .tree-image-generate-status { font-size: 11px; color: var(--muted); }
 .tree-image-gallery {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;

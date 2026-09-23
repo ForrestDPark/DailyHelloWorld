@@ -266,6 +266,35 @@ class DatingImageAgentTests(unittest.TestCase):
             self.assertEqual(len(calls), first_call_count)
             self.assertTrue(second["assignments"])
 
+    def test_force_keys_regenerates_only_the_selected_image(self):
+        # ★ 2026-09-23: "이미지 재생성 버튼... 전체재생성도 있고 사진눌렀을때
+        # 이사진만 재생성하기 버튼있게해줘" 요청 — force_keys에 담긴 키
+        # (portrait 또는 특정 장면 키)만 다시 만들고 나머지는 그대로
+        # 재사용하는지 검증한다.
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "TEST-002"
+            work.mkdir()
+            (work / "dating_sim_scenario.json").write_text(json.dumps(scenario(3)), encoding="utf-8")
+            calls = []
+            def fake_generator(prompt, target, reference=None):
+                calls.append(target.name)
+                target.write_bytes(b"fake-png" * 256)
+                return "test"
+            fake_translator = lambda scene, work_dir: scene["text"]
+            first = images.run_agent(work, max_scenes=5, generator=fake_generator, translator=fake_translator)
+            self.assertEqual(first["status"], "complete")
+            scene_key = next(iter(first["scenes"]))
+            calls.clear()
+
+            images.run_agent(work, max_scenes=5, generator=fake_generator, translator=fake_translator,
+                              force_keys={"portrait"})
+            self.assertEqual(calls, ["portrait.png"])
+            calls.clear()
+
+            images.run_agent(work, max_scenes=5, generator=fake_generator, translator=fake_translator,
+                              force_keys={scene_key})
+            self.assertEqual(calls, [images._image_filename(scene_key)])
+
 
 if __name__ == "__main__":
     unittest.main()

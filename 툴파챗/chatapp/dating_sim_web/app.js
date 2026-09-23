@@ -120,8 +120,11 @@ function openingBackdrop(opening, day) {
   ][(Math.max(1, Number(day) || 1) - 1) % 3];
 }
 
-function storyQuery() {
-  return storyId ? `?story_id=${encodeURIComponent(storyId)}` : "";
+function storyQuery(extra = {}) {
+  const params = new URLSearchParams(extra);
+  if (storyId) params.set("story_id", storyId);
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
 }
 
 async function api(url, options = {}) {
@@ -1380,6 +1383,7 @@ const VOCAB_CATEGORY_LABELS = {
 };
 
 function closeTreeImageDetail() {
+  stopDatingSimImageGenPoll();
   document.querySelector(".tree-image-detail-overlay")?.remove();
 }
 
@@ -1413,6 +1417,31 @@ function openTreeImageDetail(item) {
   result.alt = `${item.label || "장면"} 생성 결과`;
   resultBlock.append(resultLabel, result);
   panel.append(head, resultBlock);
+
+  // ★ 2026-09-23: "사진눌렀을때 이사진만 재생성하기 버튼있게해줘" 요청 —
+  // 이 사진 하나(item.key = "portrait" 또는 장면 키)만 강제로 다시 만든다.
+  if (item.key) {
+    const regenWrap = document.createElement("div");
+    regenWrap.className = "tree-image-generate";
+    const regenButton = document.createElement("button");
+    regenButton.type = "button";
+    regenButton.className = "tree-image-generate-btn tree-image-regenerate-btn";
+    regenButton.textContent = "🔁 이 사진만 재생성하기";
+    const regenStatus = document.createElement("span");
+    regenStatus.className = "tree-image-generate-status";
+    regenWrap.append(regenButton, regenStatus);
+    panel.append(regenWrap);
+
+    const tick = watchDatingSimImageJob(regenStatus, (busy) => { regenButton.disabled = busy; }, async () => {
+      closeTreeImageDetail();
+      await openScenarioTree();
+    });
+    regenButton.addEventListener("click", () => startDatingSimImageJob(
+      regenStatus, (busy) => { regenButton.disabled = busy; }, tick, { force_key: item.key },
+      "재생성 시작 중...", "재생성 중... (몇 분 걸릴 수 있어요)",
+    ));
+    tick(true);
+  }
 
   const referenceBlock = document.createElement("section");
   const referenceLabel = document.createElement("h3");
@@ -1689,63 +1718,111 @@ function stopDatingSimImageGenPoll() {
   }
 }
 
-function renderImageGenerationControl(container, tree) {
-  const wrap = document.createElement("div");
-  wrap.className = "tree-image-generate";
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "tree-image-generate-btn";
-  button.textContent = "🖼️ 이미지 생성하기";
-  const status = document.createElement("span");
-  status.className = "tree-image-generate-status";
-  wrap.append(button, status);
-  container.append(wrap);
-
-  const refreshStatus = async (initial = false) => {
+// ★ 2026-09-23(같은 날 재요청): "이미이미지가있을때 이미지 재생성 버튼을
+// 눙어거 재생성 하게 해줘 이미지전체재생성도 있고 사진눌렀을때 이사진만
+// 재생성하기 버튼있게해줘" — 시작/폴링/완료 처리를 세 곳(전체 생성,
+// 전체 강제 재생성, 사진 한 장만 재생성)이 공유하도록 공통 함수로 뺐다.
+// 서버 쪽 작업은 작품당 하나만 돌 수 있어서(app.py의 _dating_sim_image_jobs)
+// 폴링 타이머도 전역 하나만 쓴다.
+function watchDatingSimImageJob(status, setBusy, onSuccess) {
+  let seenRunning = false;
+  const tick = async (initial = false) => {
     let data;
     try {
       data = await api(`/api/dating-sim/scenario-tree/generate-images/status${storyQuery()}`);
     } catch (e) {
       stopDatingSimImageGenPoll();
-      button.disabled = false;
+      setBusy(false);
       status.textContent = e.message;
       return;
     }
     if (data.running) {
-      button.disabled = true;
-      status.textContent = "생성 중... (여러 장이라 몇 분 걸릴 수 있어요)";
+      seenRunning = true;
+      setBusy(true);
+      status.textContent = "생성 중... (몇 분 걸릴 수 있어요)";
       if (!datingSimImageGenPollTimer) {
-        datingSimImageGenPollTimer = setInterval(refreshStatus, 8000);
+        datingSimImageGenPollTimer = setInterval(tick, 8000);
       }
       return;
     }
     stopDatingSimImageGenPoll();
-    button.disabled = false;
-    if (data.returncode === 0 && !initial) {
-      status.textContent = "완료! 새로고침 중...";
-      await openScenarioTree();
+    setBusy(false);
+    if (data.returncode === 0) {
+      // initial=true(패널을 막 열었을 때)인데 이번 생애주기에 running을
+      // 한 번도 못 봤다면, 예전에 이미 끝난 작업을 지금 처음 조회한
+      // 것뿐이므로 새로고침을 또 트리거하지 않는다(무한 루프 방지).
+      if (seenRunning || !initial) {
+        status.textContent = "완료! 새로고침 중...";
+        await onSuccess();
+        return;
+      }
+      status.textContent = "";
       return;
     }
-    status.textContent = data.returncode != null && data.returncode !== 0
+    status.textContent = data.returncode != null
       ? `실패(코드 ${data.returncode}) — 다시 시도해 주세요`
       : "";
   };
+  return tick;
+}
 
-  button.addEventListener("click", async () => {
-    button.disabled = true;
-    status.textContent = "생성 시작 중...";
-    try {
-      await api(`/api/dating-sim/scenario-tree/generate-images${storyQuery()}`, { method: "POST" });
-    } catch (e) {
-      button.disabled = false;
-      status.textContent = e.message;
-      return;
-    }
-    status.textContent = "생성 중... (여러 장이라 몇 분 걸릴 수 있어요)";
-    datingSimImageGenPollTimer = setInterval(refreshStatus, 8000);
-  });
+async function startDatingSimImageJob(status, setBusy, tick, extraParams, startLabel, runningLabel) {
+  setBusy(true);
+  status.textContent = startLabel;
+  try {
+    await api(`/api/dating-sim/scenario-tree/generate-images${storyQuery(extraParams)}`, { method: "POST" });
+  } catch (e) {
+    setBusy(false);
+    status.textContent = e.message;
+    return;
+  }
+  status.textContent = runningLabel;
+  datingSimImageGenPollTimer = setInterval(tick, 8000);
+}
 
-  refreshStatus(true);
+function renderImageGenerationControl(container, tree) {
+  const wrap = document.createElement("div");
+  wrap.className = "tree-image-generate";
+  const genButton = document.createElement("button");
+  genButton.type = "button";
+  genButton.className = "tree-image-generate-btn";
+  genButton.textContent = "🖼️ 이미지 생성하기";
+
+  const hasImages = (tree.generated_images?.gallery || []).length > 0;
+  const regenButton = hasImages ? document.createElement("button") : null;
+  if (regenButton) {
+    regenButton.type = "button";
+    regenButton.className = "tree-image-generate-btn tree-image-regenerate-btn";
+    regenButton.textContent = "🔁 전체 이미지 재생성";
+  }
+
+  const status = document.createElement("span");
+  status.className = "tree-image-generate-status";
+  wrap.append(genButton);
+  if (regenButton) wrap.append(regenButton);
+  wrap.append(status);
+  container.append(wrap);
+
+  const setBusy = (busy) => {
+    genButton.disabled = busy;
+    if (regenButton) regenButton.disabled = busy;
+  };
+  const tick = watchDatingSimImageJob(status, setBusy, openScenarioTree);
+
+  genButton.addEventListener("click", () => startDatingSimImageJob(
+    status, setBusy, tick, {}, "생성 시작 중...", "생성 중... (여러 장이라 몇 분 걸릴 수 있어요)"
+  ));
+  if (regenButton) {
+    regenButton.addEventListener("click", () => {
+      if (!confirm("이미 만든 이미지를 전부 새로 만듭니다. 시간이 오래 걸릴 수 있어요. 계속할까요?")) return;
+      startDatingSimImageJob(
+        status, setBusy, tick, { force: "1" },
+        "재생성 시작 중...", "재생성 중... (전체라 시간이 오래 걸릴 수 있어요)",
+      );
+    });
+  }
+
+  tick(true);
 }
 
 function renderScenarioTree(tree) {

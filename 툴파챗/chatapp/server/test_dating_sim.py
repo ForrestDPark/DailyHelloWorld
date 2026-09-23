@@ -163,6 +163,41 @@ class DatingSimApiTests(unittest.TestCase):
             started_again = app.dating_sim_generate_images_start(owner, f"book:{book_id}")
             self.assertEqual(started_again, {"status": "started"})
 
+    def test_generate_images_force_and_force_key_build_the_right_command(self):
+        # ★ 2026-09-23: "이미지 재생성 버튼... 전체재생성도 있고 사진눌렀을때
+        # 이사진만 재생성하기 버튼있게해줘" 요청 — force=true면 --force가,
+        # force_key면 --force-key <키>가 서브프로세스 명령에 실제로 실리는지,
+        # 그리고 이상한 force_key는 400으로 막히는지 검증한다.
+        work_dir = Path(self.temp.name) / "work2"
+        work_dir.mkdir()
+        book_id = "e" * 20
+        owner = SimpleNamespace(state=SimpleNamespace(
+            user={"username": "admin", "is_owner": True}, can_write=True, share_guest=False))
+
+        class FakeProcess:
+            returncode = 0
+
+            def poll(self):
+                return self.returncode
+
+        with patch.object(dating_sim_story, "resolve_book_work_dir", return_value=(book_id, work_dir)), \
+             patch.object(app.subprocess, "Popen", return_value=FakeProcess()) as popen:
+            app.dating_sim_generate_images_start(owner, f"book:{book_id}", force=True)
+            self.assertIn("--force", popen.call_args[0][0])
+
+            app.dating_sim_generate_images_start(owner, f"book:{book_id}", force_key="1:first")
+            command = popen.call_args[0][0]
+            self.assertIn("--force-key", command)
+            self.assertEqual(command[command.index("--force-key") + 1], "1:first")
+
+            app.dating_sim_generate_images_start(owner, f"book:{book_id}", force_key="portrait")
+            command = popen.call_args[0][0]
+            self.assertEqual(command[command.index("--force-key") + 1], "portrait")
+
+            with self.assertRaises(HTTPException) as bad:
+                app.dating_sim_generate_images_start(owner, f"book:{book_id}", force_key="../etc/passwd")
+            self.assertEqual(bad.exception.status_code, 400)
+
     def test_new_player_starts_at_day_one_with_base_affection_and_no_pending_scene(self):
         state = app.dating_sim_state(request())
         self.assertEqual(state["day"], 1)

@@ -753,7 +753,12 @@ def _generate(prompt, target, reference=None):
 
 
 def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_generate,
-              translator=_visual_prompt_from_scene_text):
+              translator=_visual_prompt_from_scene_text, force_keys=None):
+    """force=True면 전부, force_keys(문자열 집합)에 담긴 키만이면 그 이미지만
+    강제로 다시 만든다(★ 2026-09-23 "이미지 재생성 버튼... 이 사진만
+    재생성하기" 요청) — "portrait"는 대표 초상화, 그 외는 장면 키
+    (예: "1:first")다. 둘 다 없으면 예전처럼 빠진 파일만 채운다."""
+    force_keys = force_keys or set()
     scenario_path = work_dir / "dating_sim_scenario.json"
     if not scenario_path.is_file():
         raise RuntimeError("dating_sim_scenario.json이 없어 이미지 장면을 고를 수 없습니다")
@@ -800,7 +805,7 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
         f"face_detected_fixed ({len(face_references)}장 평균)" if face_references
         else ("original_epub_scene" if originals else "cover_fallback")
     )
-    if force or not _valid_image(portrait):
+    if force or "portrait" in force_keys or not _valid_image(portrait):
         manifest["portrait_provider"] = generator(manifest["portrait_prompt"], portrait, reference_pool)
         if manifest["portrait_provider"] == "comfyui":
             manifest["portrait_effective_prompt"] = _LAST_GENERATION_META.get("effective_prompt", "")
@@ -814,7 +819,7 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
         filename = _image_filename(scene["key"])
         target = output / filename
         try:
-            if force or not _valid_image(target):
+            if force or scene["key"] in force_keys or not _valid_image(target):
                 # 영어 통일 + 표정·배경 자동 보완(★ 2026-09-23 요청)은 실제로
                 # 새로 생성할 때만 호출한다 — 이미 만든 장면을 재실행할 때마다
                 # 다시 부르지 않는다.
@@ -850,8 +855,13 @@ def main():
     parser.add_argument("work_dir")
     parser.add_argument("--max-scenes", type=int, default=int(os.environ.get("JP_DATING_IMAGE_MAX_SCENES", DEFAULT_MAX_SCENES)))
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--force-key", action="append", default=[],
+                         help="이 키(portrait 또는 예: 1:first)만 강제로 다시 만든다. 여러 번 줄 수 있다.")
     args = parser.parse_args()
-    manifest = run_agent(Path(args.work_dir).resolve(), max(4, min(args.max_scenes, 30)), args.force)
+    manifest = run_agent(
+        Path(args.work_dir).resolve(), max(4, min(args.max_scenes, 30)), args.force,
+        force_keys=set(args.force_key) or None,
+    )
     print(f"🖼️ 작품 이미지 에이전트: {manifest['status']} · 장면 {len(manifest['scenes'])}/{manifest['selected_count']}장")
     return 0 if manifest["status"] == "complete" else 1
 
