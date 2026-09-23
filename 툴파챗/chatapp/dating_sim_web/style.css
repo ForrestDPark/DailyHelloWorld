@@ -8,6 +8,10 @@
   --muted: #b6a8d8;
   --accent: #ff6fa5;
   --good: #6fe3a1;
+  /* ★ 2026-09-23: "일반단어는 초록, 서재 핵심 표현은 보라, 핵심단어는
+     빨강" 요청 — 단어카드 3단계 색상. */
+  --expression: #c792ea;
+  --key-word: #ff6b6b;
 }
 * { box-sizing: border-box; }
 html, body {
@@ -266,6 +270,16 @@ html, body {
   line-height: 1;
   color: var(--accent);
 }
+/* 핵심 표현(문장형)은 한 글자가 아니라 구절이라 44px 글자 하나 칸에 안 맞는다
+   — 전체 폭으로 펴고 글자 크기를 줄인다. 팝업 큰 글자 색도 본문의 초록·빨강·
+   보라와 맞춘다(구분되는 색을 쓰던 기존 --accent 대신). */
+.japanese-kanji-popover--expression .japanese-kanji-popover-glyph {
+  grid-column: 1 / -1;
+  font-size: 22px;
+  color: var(--expression);
+}
+.japanese-kanji-popover--key .japanese-kanji-popover-glyph { color: var(--key-word); }
+.japanese-kanji-popover--general .japanese-kanji-popover-glyph { color: var(--good); }
 .japanese-kanji-popover-readings { display: grid; gap: 8px; min-width: 0; }
 .japanese-kanji-popover-readings > div { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; align-items: baseline; }
 .japanese-kanji-popover-readings span {
@@ -315,14 +329,22 @@ html, body {
 /* ★ 2026-09-18: "쓰여진 그 단어는 대사에서 글자색상을 다르게... 다른
    한자 클릭이랑 다르게 단어클릭도 가능하고" 요청 — 표현 삽입 단어는
    낱글자 한자(점선 밑줄, 본문과 같은 색)와 구분되도록 색을 다르게 하고
-   실선 밑줄을 준다. */
+   실선 밑줄을 준다.
+   ★ 2026-09-23: "일반단어는 초록, 서재 핵심 표현은 보라, 핵심단어는
+   빨강" 요청 — 색상을 3단계로 나눈다. --general(초록)은 renderAnnotatedText가
+   자동 승격한 순수 한자 2글자+ 단어, --key(빨강)는 그 장면의 AI 지정
+   핵심단어(vocab_words), --expression(보라)은 서재 학습카드에서 온
+   핵심 표현(expressions_used, 문장형이라 여러 태그를 span 하나로 묶음)이다. */
 .vocab-word {
-  color: var(--good);
-  border-bottom: 1px solid var(--good);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
-.vocab-word rt { color: var(--good); }
+.vocab-word--general { color: var(--good); border-bottom: 1px solid var(--good); }
+.vocab-word--general rt { color: var(--good); }
+.vocab-word--key { color: var(--key-word); border-bottom: 1px solid var(--key-word); }
+.vocab-word--key rt { color: var(--key-word); }
+.vocab-word--expression { color: var(--expression); border-bottom: 1px solid var(--expression); }
+.vocab-word--expression rt { color: var(--expression); }
 
 /* ★ 2026-09-23: 단어 팝업 안에서 한자 하나하나를 눌러 낱글자 팝업으로
    이어가는 "글자별 보기" 줄 — glyph|readings 2열 그리드 아래 전체 폭으로 깐다. */

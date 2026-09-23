@@ -201,6 +201,12 @@ let sceneChoices = [];
 // 만나면 개별 한자 클릭 대신 단어 전체 클릭(단어 팝업)으로 바꾼다. ★
 // 2026-09-19: AI 생성 시나리오는 한 장면에 여러 단어가 들어가 배열로 관리.
 let sceneVocab = [];
+// ★ 2026-09-23: "서재에서 추출된 핵심 표현은 보라색으로" 요청 — 서재
+// 학습카드(scene_study_cards.json)의 expressions가 시나리오 생성 단계에서
+// scene.expressions_used로 내려온다. 문장형이라 태그 하나가 아니라 여러
+// [한자|읽기] 태그+조사에 걸쳐 나타날 수 있어 renderAnnotatedText에서
+// 평문(plain text) 좌표로 위치를 찾아 그룹으로 묶는다.
+let sceneExpr = [];
 
 function plainText(text) {
   return text.replace(/\[([^\]|]+)\|([^\]]+)\]/g, "$1");
@@ -482,11 +488,11 @@ function closeVocabPopover() {
   vocabPopover = null;
 }
 
-function showVocabWordPopover(word, anchor) {
+function showVocabWordPopover(word, anchor, wordKind = "general") {
   closeKanjiPopover();
   closeVocabPopover();
   const popover = document.createElement("section");
-  popover.className = "japanese-kanji-popover";
+  popover.className = `japanese-kanji-popover japanese-kanji-popover--${wordKind}`;
   popover.setAttribute("role", "dialog");
   popover.setAttribute("aria-label", `${word.ja} \ub2e8\uc5b4 \ub73b\uacfc \uc77d\uae30`);
   const close = document.createElement("button");
@@ -514,19 +520,39 @@ function showVocabWordPopover(word, anchor) {
   glyph.textContent = word.ja;
   const readings = document.createElement("div");
   readings.className = "japanese-kanji-popover-readings";
-  const rows = [
-    ["\ud6c8\uc74c", word.reading || "\ud574\ub2f9 \uc5c6\uc74c"],
-    ["\ub73b", word.ko || "\ud574\ub2f9 \uc5c6\uc74c"],
-  ];
-  for (const [label, displayValue] of rows) {
-    const row = document.createElement("div");
-    const heading = document.createElement("span");
-    heading.textContent = label;
-    const value = document.createElement("b");
-    value.lang = label === "\ud6c8\uc74c" ? "ja" : "ko";
-    value.textContent = displayValue;
-    row.append(heading, value);
-    readings.appendChild(row);
+  const readingRow = document.createElement("div");
+  const readingHeading = document.createElement("span");
+  readingHeading.textContent = "\ud6c8\uc74c";
+  const readingValueEl = document.createElement("b");
+  readingValueEl.lang = "ja";
+  readingValueEl.textContent = word.reading || "\ud574\ub2f9 \uc5c6\uc74c";
+  readingRow.append(readingHeading, readingValueEl);
+  readings.appendChild(readingRow);
+  const meaningRow = document.createElement("div");
+  const meaningHeading = document.createElement("span");
+  meaningHeading.textContent = "\ub73b";
+  const meaningValueEl = document.createElement("b");
+  meaningValueEl.lang = "ko";
+  meaningValueEl.textContent = word.ko || "\ubd88\ub7ec\uc624\ub294 \uc911\u2026";
+  meaningRow.append(meaningHeading, meaningValueEl);
+  readings.appendChild(meaningRow);
+  // \u2605 2026-09-23: "\ub73b\uc774 \uc548\ub098\uc640\uc11c \uc544\uc27d\ub124 \ub2e4\ub098\uc624\uac8c \ud574\uc918" \uc694\uccad \u2014 AI\uac00 \ub2e8\uc5b4 \ub73b\uc744
+  // \uc9c1\uc811 \uc900 sceneVocab \ud56d\ubaa9\uc774 \uc544\ub2c8\uba74(word.ko \uc5c6\uc74c) \ubcc4\ub3c4 \uc77c\ud55c\uc0ac\uc804 API\uac00 \uc5c6\uc5b4
+  // "\ud574\ub2f9 \uc5c6\uc74c"\ub9cc \ub5b4\ub2e4. \ub300\uc2e0 \uc774\ubbf8 \uc788\ub294 \ud55c\uc790 \ub0b1\uae00\uc790 \uc0ac\uc804(kanjidic)\uc5d0\uc11c \ub2e8\uc5b4\ub97c
+  // \uc774\ub8e8\ub294 \uae00\uc790 \uac01\uac01\uc758 \ub73b\u00b7\uc74c\uc744 \uc870\ud569\ud574 \uadfc\uc0ac\uce58\ub97c \ubcf4\uc5ec\uc900\ub2e4 \u2014 \uc815\ud655\ud55c \uc219\uc5b4 \ubc88\uc5ed\uc740
+  // \uc544\ub2c8\uc9c0\ub9cc \uc544\ubb34 \uc815\ubcf4\ub3c4 \uc5c6\ub294 \uac83\ubcf4\ub2e4\ub294 \ub0ab\ub2e4.
+  if (!word.ko) {
+    const chars = Array.from(word.ja).filter((ch) => KANJI_PATTERN.test(ch));
+    loadKanjiDictionary().then((dictionary) => {
+      if (!meaningValueEl.isConnected) return;
+      const glosses = chars
+        .map((ch) => {
+          const gloss = formatKoreanHanjaGloss(dictionary[ch] || {});
+          return gloss && gloss !== "\ud574\ub2f9 \uc5c6\uc74c" ? `${ch}(${gloss})` : null;
+        })
+        .filter(Boolean);
+      meaningValueEl.textContent = glosses.length ? glosses.join(" \u00b7 ") : "\ud574\ub2f9 \uc5c6\uc74c";
+    });
   }
   popover.append(close, favorite, glyph, readings);
   // ★ 2026-09-23: "그 팝오버 안에서 한자 하나하나의 클릭으로 이어갈 수
@@ -755,49 +781,159 @@ document.addEventListener("click", (event) => {
 
 // vocabWords: 학습 단어 하나(객체) 또는 여러 개(배열). ★ 2026-09-19: AI 생성
 // 시나리오는 한 장면에 여러 단어가 들어가므로 배열을 받아 태그별로 매칭한다.
-function renderAnnotatedText(element, text, vocabWords = null) {
-  element.replaceChildren();
-  const list = Array.isArray(vocabWords) ? vocabWords : (vocabWords ? [vocabWords] : []);
-  const wordByTag = new Map(list.map((w) => [`${w.ja}|${w.reading}`, w]));
-  const pattern = /\[([^\]|]+)\|([^\]]+)\]|\n/g;
+const ANNOTATION_PATTERN = /\[([^\]|]+)\|([^\]]+)\]|\n/g;
+
+// text를 [한자|읽기] 태그·일반 텍스트·줄바꿈 단위("unit")로 쪼개고, 각 단위가
+// 후리가나·조사를 뺀 "평문" 기준으로 어느 글자 구간([plainStart,plainEnd))에
+// 해당하는지 같이 기록한다. 핵심 표현(expressions_used)은 문장형이라 태그
+// 하나에 안 담기고 여러 태그+조사에 걸치므로, 평문 좌표로 위치를 찾아야
+// 어디서부터 어디까지 하나의 표현인지 알 수 있다.
+function splitAnnotatedUnits(text) {
+  const units = [];
   let cursor = 0;
-  for (const match of text.matchAll(pattern)) {
-    if (match.index > cursor) element.append(document.createTextNode(text.slice(cursor, match.index)));
+  let plainCursor = 0;
+  for (const match of text.matchAll(ANNOTATION_PATTERN)) {
+    if (match.index > cursor) {
+      const literal = text.slice(cursor, match.index);
+      units.push({ type: "text", value: literal, plainStart: plainCursor, plainEnd: plainCursor + literal.length });
+      plainCursor += literal.length;
+    }
     if (match[0] === "\n") {
-      element.append(document.createElement("br"));
+      units.push({ type: "br" });
     } else {
-      const ruby = document.createElement("ruby");
-      ruby.append(document.createTextNode(match[1]));
-      const rt = document.createElement("rt");
-      rt.textContent = match[2];
-      ruby.append(rt);
-      // ★ 2026-09-23: "두 개 이상의 한자로 이루어진 단어들은 단어카드가
-      // 적용되어서 초록색 글자처럼 클릭하면 팝오버가 보이게" 요청 — 원래는
-      // 그 장면의 학습 단어(sceneVocab)로 지정된 태그만 초록색+단어 팝업이
-      // 됐다. 후리가나 태그 자체가 이미 한자 묶음(복합어) 단위로 잘려 있으므로
-      // (예: [人形|にんぎょう]), 2글자 이상인 태그는 학습 단어 지정 여부와
-      // 무관하게 전부 단어 팝업 대상으로 삼는다 — 다만 sceneVocab에 있으면
-      // AI가 준 뜻(ko)을 쓰고, 없으면 뜻 없이(reading만) 만들어 팝업 안에서
-      // 글자별 보기로 보완한다.
-      const isPureMultiCharKanji = match[1].length >= 2 && Array.from(match[1]).every((ch) => KANJI_PATTERN.test(ch));
-      const word = wordByTag.get(`${match[1]}|${match[2]}`)
-        || (isPureMultiCharKanji ? { ja: match[1], reading: match[2], ko: null } : null);
-      if (word) {
-        ruby.classList.add("vocab-word");
-        ruby.dataset.vocabWord = "1";
-        ruby.tabIndex = 0;
-        ruby.setAttribute("role", "button");
-        ruby.setAttribute("aria-label", `${word.ja} 단어 뜻 보기`);
-        ruby.addEventListener("click", (event) => {
-          event.stopPropagation();
-          showVocabWordPopover(word, ruby);
-        });
-      }
-      element.append(ruby);
+      units.push({
+        type: "tag", kanji: match[1], reading: match[2],
+        plainStart: plainCursor, plainEnd: plainCursor + match[1].length,
+      });
+      plainCursor += match[1].length;
     }
     cursor = match.index + match[0].length;
   }
-  if (cursor < text.length) element.append(document.createTextNode(text.slice(cursor)));
+  if (cursor < text.length) {
+    const literal = text.slice(cursor);
+    units.push({ type: "text", value: literal, plainStart: plainCursor, plainEnd: plainCursor + literal.length });
+  }
+  return units;
+}
+
+function buildRuby(kanji, reading) {
+  const ruby = document.createElement("ruby");
+  ruby.append(document.createTextNode(kanji));
+  const rt = document.createElement("rt");
+  rt.textContent = reading;
+  ruby.append(rt);
+  return ruby;
+}
+
+// wordKind: "key"(빨강·핵심단어) | "expression"(보라·핵심표현) | "general"(초록·일반단어)
+function markAsWordCard(el, word, wordKind) {
+  el.classList.add("vocab-word", `vocab-word--${wordKind}`);
+  el.dataset.vocabWord = "1";
+  el.tabIndex = 0;
+  el.setAttribute("role", "button");
+  el.setAttribute("aria-label", `${word.ja} 단어 뜻 보기`);
+  el.addEventListener("click", (event) => {
+    event.stopPropagation();
+    showVocabWordPopover(word, el, wordKind);
+  });
+}
+
+// vocabWords: 그 장면의 핵심 단어(REMINDERS 아님, dating-sim 학습카드 vocabulary) —
+// 정확히 일치하는 태그만 빨강. expressions: 서재 학습카드의 핵심 표현(문장형) —
+// 평문 부분일치로 찾아 여러 태그에 걸쳐도 하나로 묶어 보라색. 둘 다 아니지만
+// 순수 한자 2글자 이상인 태그는 초록(일반단어)으로 자동 승격한다.
+// ★ 2026-09-23: "일반단어는 초록, 서재 핵심 표현은 보라, 핵심단어는 빨강" 요청.
+function renderAnnotatedText(element, text, vocabWords = null, expressions = null) {
+  element.replaceChildren();
+  const vocabList = Array.isArray(vocabWords) ? vocabWords : (vocabWords ? [vocabWords] : []);
+  const wordByTag = new Map(vocabList.map((w) => [`${w.ja}|${w.reading}`, w]));
+  const exprList = Array.isArray(expressions) ? expressions : (expressions ? [expressions] : []);
+
+  const units = splitAnnotatedUnits(text);
+  const plainText = units.filter((u) => u.type !== "br").map((u) => (u.type === "tag" ? u.kanji : u.value)).join("");
+
+  // 표현 구간을 평문에서 찾는다. 서로 겹치면(예: 짧은 표현이 긴 표현 안에 포함)
+  // 먼저 발견되거나 더 긴 쪽을 남기고 뒤엣것은 버린다 — 한 글자가 두 표현에
+  // 동시에 속하면 어느 팝업을 열지 애매해지므로 겹침을 허용하지 않는다.
+  const exprRanges = [];
+  for (const expr of exprList) {
+    const needle = expr?.ja;
+    if (!needle) continue;
+    const idx = plainText.indexOf(needle);
+    if (idx === -1) continue;
+    exprRanges.push({ start: idx, end: idx + needle.length, item: expr });
+  }
+  exprRanges.sort((a, b) => a.start - b.start || (b.end - b.start) - (a.end - a.start));
+  const acceptedExprRanges = [];
+  let lastEnd = -1;
+  for (const range of exprRanges) {
+    if (range.start >= lastEnd) {
+      acceptedExprRanges.push(range);
+      lastEnd = range.end;
+    }
+  }
+
+  function classifyUnit(unit) {
+    // 표현 범위 소속 여부를 먼저 본다 — 핵심단어(vocab_words) 태그가 우연히
+    // 어떤 핵심 표현의 구간 안에 들어 있으면, 표현 하나로 안 묶고 빨강 한
+    // 조각만 튀어나오는 대신 표현(보라) 그룹에 그대로 포함시킨다.
+    if (unit.type === "tag" || unit.type === "text") {
+      const range = acceptedExprRanges.find((r) => unit.plainStart < r.end && unit.plainEnd > r.start);
+      if (range) return { kind: "expression", item: range.item, rangeKey: `${range.start}-${range.end}` };
+    }
+    if (unit.type === "tag") {
+      const vocabWord = wordByTag.get(`${unit.kanji}|${unit.reading}`);
+      if (vocabWord) return { kind: "key", item: vocabWord };
+    }
+    if (unit.type === "tag" && unit.kanji.length >= 2 && Array.from(unit.kanji).every((ch) => KANJI_PATTERN.test(ch))) {
+      return { kind: "general", item: { ja: unit.kanji, reading: unit.reading, ko: null } };
+    }
+    return null;
+  }
+
+  let i = 0;
+  while (i < units.length) {
+    const unit = units[i];
+    if (unit.type === "br") {
+      element.append(document.createElement("br"));
+      i += 1;
+      continue;
+    }
+    const cls = classifyUnit(unit);
+    if (!cls) {
+      element.append(unit.type === "tag" ? buildRuby(unit.kanji, unit.reading) : document.createTextNode(unit.value));
+      i += 1;
+      continue;
+    }
+    if (cls.kind === "key" || cls.kind === "general") {
+      // vocab-word 매칭과 일반 승격은 항상 태그 하나(단일 [한자|읽기]) 단위다.
+      const ruby = buildRuby(unit.kanji, unit.reading);
+      markAsWordCard(ruby, cls.item, cls.kind);
+      element.append(ruby);
+      i += 1;
+      continue;
+    }
+    // expression: 같은 표현 구간(rangeKey)에 속하는 연속 단위를 한 span으로 묶는다
+    // — 조사·태그가 섞여 있어도 팝업 하나만 뜨게.
+    const rangeKey = cls.rangeKey;
+    const group = [];
+    let j = i;
+    while (j < units.length) {
+      const candidate = units[j];
+      if (candidate.type === "br") break;
+      const candidateCls = classifyUnit(candidate);
+      if (!candidateCls || candidateCls.kind !== "expression" || candidateCls.rangeKey !== rangeKey) break;
+      group.push(candidate);
+      j += 1;
+    }
+    const wrapper = document.createElement("span");
+    for (const groupUnit of group) {
+      wrapper.append(groupUnit.type === "tag" ? buildRuby(groupUnit.kanji, groupUnit.reading) : document.createTextNode(groupUnit.value));
+    }
+    markAsWordCard(wrapper, cls.item, "expression");
+    element.append(wrapper);
+    i = j;
+  }
   decorateKanji(element);
 }
 
@@ -834,7 +970,7 @@ function typeLine(text) {
     el.textContent = visibleText.slice(0, i);
     if (i >= visibleText.length) {
       stopTypewriter();
-      renderAnnotatedText(el, text, sceneVocab);
+      renderAnnotatedText(el, text, sceneVocab, sceneExpr);
       $("portrait").classList.remove("speaking");
       onLineFullyShown();
     }
@@ -871,7 +1007,7 @@ function advanceLine() {
     // 타자기 도중 클릭하면 그 줄을 즉시 완성해서 보여준다.
     stopTypewriter();
     const line = sceneLines[sceneLineIndex];
-    renderAnnotatedText($("dialogue-text"), typeof line === "string" ? line : line.text, sceneVocab);
+    renderAnnotatedText($("dialogue-text"), typeof line === "string" ? line : line.text, sceneVocab, sceneExpr);
     onLineFullyShown();
     return;
   }
@@ -903,7 +1039,7 @@ function renderChoices() {
     cursor.className = "choice-cursor";
     cursor.textContent = "▶";
     const label = document.createElement("span");
-    renderAnnotatedText(label, choice.text);
+    renderAnnotatedText(label, choice.text, sceneVocab, sceneExpr);
     button.append(cursor, label);
     button.addEventListener("click", () => chooseOption(index));
     list.append(button);
@@ -915,6 +1051,7 @@ function renderScene(state) {
   sceneLines = state.scene.lines;
   sceneChoices = state.scene.choices;
   sceneVocab = state.scene.vocab_words || (state.scene.vocab ? [state.scene.vocab] : []);
+  sceneExpr = state.scene.expressions_used || [];
   sceneLineIndex = 0;
   sceneLearningMarked = false;
   $("stage").dataset.location = state.scene.location;
@@ -1106,7 +1243,7 @@ function replayCurrentView() {
   if (typewriterTimer) {
     stopTypewriter();
     const line = sceneLines[sceneLineIndex];
-    renderAnnotatedText($("dialogue-text"), typeof line === "string" ? line : line.text, sceneVocab);
+    renderAnnotatedText($("dialogue-text"), typeof line === "string" ? line : line.text, sceneVocab, sceneExpr);
     onLineFullyShown();
     return Promise.resolve();
   }
