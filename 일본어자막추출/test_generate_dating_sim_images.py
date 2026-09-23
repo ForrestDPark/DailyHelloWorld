@@ -77,7 +77,10 @@ class DatingImageAgentTests(unittest.TestCase):
         self.assertEqual(edit_workflow["13"]["class_type"], "KSampler")
         self.assertEqual(edit_workflow["13"]["inputs"]["latent_image"], ["5", 0])
         self.assertEqual(edit_workflow["14"]["class_type"], "LatentBlend")
-        self.assertEqual(edit_workflow["14"]["inputs"]["blend_factor"], 0.78)
+        # LatentBlend는 samples1(텍스트, 13번)*blend_factor + samples2(레퍼런스,
+        # 11번)*(1-blend_factor)라, 레퍼런스 비중 80%를 얻으려면 blend_factor는
+        # 0.20이어야 한다(★ 2026-09-23 "레퍼런스로 80%비율로" 요청).
+        self.assertEqual(edit_workflow["14"]["inputs"]["blend_factor"], 0.20)
 
     def test_comfy_workflow_can_use_external_vae(self):
         workflow = images._build_comfy_workflow(
@@ -111,7 +114,7 @@ class DatingImageAgentTests(unittest.TestCase):
         self.assertEqual(len(plan["assignments"]), 14 * 3)
         self.assertEqual({item["location"] for item in plan["selected"]}, set(images.LOCATIONS))
 
-    def test_original_epub_scene_images_are_used_as_distinct_references(self):
+    def test_original_epub_scene_images_are_listed_in_order(self):
         with tempfile.TemporaryDirectory() as tmp:
             work = Path(tmp) / "TEST-001"
             source = work / "images"
@@ -122,9 +125,29 @@ class DatingImageAgentTests(unittest.TestCase):
             self.assertEqual([path.name for path in originals], [
                 "part1_scene001.jpg", "part1_scene002.jpg", "part1_scene003.jpg",
             ])
-            first = images._scene_reference(originals, {"location": "first"}, 0, 3)
-            last = images._scene_reference(originals, {"location": "quiet"}, 2, 3)
-            self.assertNotEqual(first, last)
+
+    def test_fixed_reference_selection_skips_faceless_or_undecodable_images(self):
+        # ★ 2026-09-23: "얼굴이 한 인물로 고정되면 좋겠어" 요청으로
+        # _scene_reference(장면마다 다른 원작 컷 순환)를 없애고
+        # _select_fixed_reference(얼굴이 잘 나온 사진 한 장 고정)로 바꿨다.
+        # 얼굴 사진 없이는 결정론적으로 재현 가능한 얼굴 검출 테스트를 만들
+        # 수 없으므로, 여기서는 얼굴이 없는 이미지에서 크래시 없이 None을
+        # 돌려주는 안전한 폴백 경로만 검증한다(실측 검증은 README 기록 참고).
+        try:
+            import cv2  # noqa: F401
+            from PIL import Image
+        except ImportError:
+            self.skipTest("OpenCV/Pillow not installed")
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "TEST-001"
+            source = work / "images"
+            source.mkdir(parents=True)
+            plain = source / "part1_scene001.jpg"
+            Image.new("RGB", (400, 300), (200, 200, 200)).save(plain)
+            broken = source / "part1_scene002.jpg"
+            broken.write_bytes(b"not a real image")
+            originals = images._original_scene_images(work)
+            self.assertEqual(images._select_fixed_reference(originals), None)
 
     def test_comfyui_is_default_and_openai_is_opt_in(self):
         with tempfile.TemporaryDirectory() as tmp, \
@@ -148,10 +171,14 @@ class DatingImageAgentTests(unittest.TestCase):
                 # 가짜 데이터로 재개 시 재호출되지 않는지만 확인한다.
                 target.write_bytes(b"fake-png" * 256)
                 return "test"
-            first = images.run_agent(work, max_scenes=5, generator=fake_generator)
+            # translator(영어 통일 + 표정·배경 자동 보완, ★ 2026-09-23)는 실제
+            # codex/claude CLI를 호출하므로, 테스트에서는 원문을 그대로
+            # 돌려주는 가짜로 바꿔 느려지거나 CLI 부재로 실패하지 않게 한다.
+            fake_translator = lambda scene, work_dir: scene["text"]
+            first = images.run_agent(work, max_scenes=5, generator=fake_generator, translator=fake_translator)
             self.assertEqual(first["status"], "complete")
             first_call_count = len(calls)
-            second = images.run_agent(work, max_scenes=5, generator=fake_generator)
+            second = images.run_agent(work, max_scenes=5, generator=fake_generator, translator=fake_translator)
             self.assertEqual(second["status"], "complete")
             self.assertEqual(len(calls), first_call_count)
             self.assertTrue(second["assignments"])
