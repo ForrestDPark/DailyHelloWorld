@@ -51,7 +51,7 @@ class DatingImageAgentTests(unittest.TestCase):
             marker = b"Content-Type: image/png\r\n\r\n"
             png = captured["body"].split(marker, 1)[1].split(b"\r\n------jpcomfy", 1)[0]
             with Image.open(images.io.BytesIO(png)) as normalized:
-                self.assertEqual(normalized.size, (512, 768))
+                self.assertEqual(normalized.size, (images.IMAGE_WIDTH, images.IMAGE_HEIGHT))
 
     def test_comfy_workflow_uses_core_nodes_and_reference_img2img(self):
         text_workflow = images._build_comfy_workflow("a quiet cafe scene", "model.safetensors", 42)

@@ -30,6 +30,11 @@ from ai_exec import run_ai_exec  # noqa: E402
 VERSION = 1
 DEFAULT_MAX_SCENES = 12
 IMAGE_DIR_NAME = "dating_sim_images"
+# ★ 2026-09-23: "가로로길게 생성하게끔 조정해줘" 요청 — 세로로 긴 512×768
+# 인물사진이 미연시 화면의 가로로 긴 박스에 눌려 들어가면서 머리·가슴이
+# 잘렸다. 생성 자체를 화면 박스와 같은 3:2 가로 비율로 바꾼다.
+IMAGE_WIDTH = 768
+IMAGE_HEIGHT = 512
 DEFAULT_CIVITAI_CHECKPOINT = "majicmixRealistic_v7.safetensors"
 DEFAULT_CIVITAI_VAE = "vaeFtMse840000EmaPruned_vaeFtMse840k.safetensors"
 MANIFEST_NAME = "manifest.json"
@@ -444,7 +449,7 @@ def _build_comfy_workflow(
         "4": {"class_type": loader, "inputs": {
             "ckpt_name" if loader == "CheckpointLoaderSimple" else "model_path": model_name
         }},
-        "5": {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 768, "batch_size": 1}},
+        "5": {"class_type": "EmptyLatentImage", "inputs": {"width": IMAGE_WIDTH, "height": IMAGE_HEIGHT, "batch_size": 1}},
         "6": {"class_type": "CLIPTextEncode", "inputs": {"text": local_prompt, "clip": ["4", 1]}},
         "7": {"class_type": "CLIPTextEncode", "inputs": {
             "text": (
@@ -607,7 +612,7 @@ def _comfy_upload(reference):
         top = int(height * 0.10)
         bottom = int(height * 0.82)
         cropped = rgb.crop((0, top, width, bottom)) if bottom > top else rgb
-        normalized = _face_centered_crop(cropped, (512, 768))
+        normalized = _face_centered_crop(cropped, (IMAGE_WIDTH, IMAGE_HEIGHT))
         payload = io.BytesIO()
         normalized.save(payload, format="PNG", optimize=True)
         image_bytes = payload.getvalue()
@@ -697,7 +702,7 @@ def _local_generate(prompt, target, reference=None):
                 "effective_prompt": workflow["6"]["inputs"]["text"],
                 "generation_settings": {
                     "model": model_name, "loader": loader, "vae": vae_name or "checkpoint embedded",
-                    "width": 512, "height": 768,
+                    "width": IMAGE_WIDTH, "height": IMAGE_HEIGHT,
                     "steps": sampler["steps"], "cfg": sampler["cfg"],
                     "sampler": sampler["sampler_name"], "scheduler": sampler["scheduler"],
                     "denoise": sampler["denoise"], "base_seed": base_seed,
