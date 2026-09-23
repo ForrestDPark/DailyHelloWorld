@@ -67,6 +67,35 @@ from AppKit import (
 from Foundation import NSMutableAttributedString, NSRange
 import Quartz
 
+
+class _TimestampedStream:
+    """launchd가 stdout/stderr를 shift_alarm.out.log/.err.log로 리다이렉트하는데,
+    개별 print() 호출에는 시각이 없어 웹 대시보드의 실행 로그(94·95번 항목)에서
+    언제 일어난 일인지 알 수 없었다 — 수백 곳의 print() 호출부를 일일이 고치는
+    대신 sys.stdout/stderr 자체를 감싸서 줄 단위로 시각을 자동으로 붙인다
+    (★ 2026-09-23: "실행로그는 시간대를 알수있게 해줘" 요청)."""
+
+    def __init__(self, stream):
+        self._stream = stream
+        self._at_line_start = True
+
+    def write(self, text):
+        for chunk in text.splitlines(keepends=True):
+            if self._at_line_start and chunk.strip("\n"):
+                self._stream.write(datetime.datetime.now().strftime("[%m-%d %H:%M:%S] "))
+            self._stream.write(chunk)
+            self._at_line_start = chunk.endswith("\n")
+
+    def flush(self):
+        self._stream.flush()
+
+    def isatty(self):
+        return self._stream.isatty()
+
+
+sys.stdout = _TimestampedStream(sys.stdout)
+sys.stderr = _TimestampedStream(sys.stderr)
+
 # ── 설정 파일 경로 ──────────────────────────────────────────
 CONFIG_FILE = os.path.expanduser("~/.shift_alarm_config.json")
 REMINDER_DISMISSED_FILE = os.path.expanduser("~/.tulpachat/shift_alarm_dismissed.json")
@@ -1294,18 +1323,36 @@ def _automatic_schedule_time(key, profile, fallback, path=REMINDER_EDITOR_FILE):
     return fallback
 
 
-def _generic_recurrence_due(recurrence, day):
-    """대시보드의 단순 반복 규칙이 오늘 실행 대상인지 결정론적으로 계산한다."""
+def _generic_recurrence_due(recurrence, day, schedule=None):
+    """대시보드의 단순 반복 규칙이 오늘 실행 대상인지 결정론적으로 계산한다.
+
+    off_block_start/off_block_end/day_shift_block_end 세 종류는 근무표를
+    참조하되 AI 호출은 전혀 없다 — Day→GY·GY→Swing처럼 전환별로 쪼개진
+    기상 알람과 달리 "휴무 시작일이면", "휴무 마지막날이면"처럼 전환
+    종류와 무관하게 매번 판정하는 제네릭 규칙이라 interval은 의미가 없고
+    무시한다(★ 2026-09-23: "ai 가 필요하지않는 주기설정들은 내가 직접
+    설정 가능하도록 해달라" 요청 — 실제로는 AI가 아니라 근무표 JSON
+    조회만 필요한 규칙과, 근무표와 완전히 무관한 고정 주기 규칙의
+    차이였다)."""
     if not isinstance(recurrence, dict):
         return False
     try:
         anchor = datetime.date.fromisoformat(str(recurrence.get("anchor")))
-        interval = max(1, int(recurrence.get("interval", 1)))
     except (TypeError, ValueError):
         return False
     if day < anchor:
         return False
     unit = recurrence.get("unit")
+    if unit == "off_block_start":
+        return schedule is not None and _is_off_block_start(schedule, day)
+    if unit == "off_block_end":
+        return schedule is not None and _is_off_block_end(schedule, day)
+    if unit == "day_shift_block_end":
+        return schedule is not None and _is_day_shift_block_end(schedule, day)
+    try:
+        interval = max(1, int(recurrence.get("interval", 1)))
+    except (TypeError, ValueError):
+        return False
     if unit == "daily":
         return True
     if unit == "days":
@@ -1769,6 +1816,33 @@ def _is_alarm_muted():
         return False
 
 
+WAKE_VOLUME_FILE = os.path.expanduser("~/.shift_alarm_wake_volume.json")
+
+
+def _apply_wake_alarm_volume():
+    """기상 알람(wake_ 접두사 리마인더)이 울리기 직전에만 호출한다. 웹앱
+    설정에서 켜져 있으면 macOS 시스템 음량을 저장된 값으로 강제 맞춘다 —
+    전날 밤 조용한 시간대 음량으로 낮춰둔 채 자면 기상 알람 음성 안내도
+    같이 작아져서 못 듣는 문제(★ 2026-09-23: "기상알람 음량 설정할수있게끔
+    설정버튼 만들어줘" 요청). 실패해도 알람 자체는 그대로 울려야 하므로
+    조용히 넘어간다."""
+    try:
+        with open(WAKE_VOLUME_FILE, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+        if not payload.get("enabled"):
+            return
+        percent = max(0, min(100, int(payload.get("percent", 80))))
+    except (FileNotFoundError, OSError, json.JSONDecodeError, ValueError, TypeError):
+        return
+    try:
+        subprocess.run(
+            ["/usr/bin/osascript", "-e", f"set volume output volume {percent}"],
+            timeout=10, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
 # ════════════════════════════════════════════════════════════
 # 근무표 JSON 불러오기 + 오늘 근무 조회
 # ════════════════════════════════════════════════════════════
@@ -2018,6 +2092,16 @@ def _is_off_block_start(schedule, d):
     """d가 휴무 블록의 첫날인지 (그 전날은 근무였는지) 반환."""
     return (get_shift_for_date(schedule, d) == "휴무"
             and get_shift_for_date(schedule, d - datetime.timedelta(days=1)) != "휴무")
+
+
+def _is_off_block_end(schedule, d):
+    """d가 휴무 블록의 마지막날인지 (내일은 근무인지) 반환 — _is_off_block_start의
+    대칭. ★ 2026-09-23: 대시보드 리마인더 편집기에서 "휴무 시작일"·"휴무 마지막날"을
+    전환 종류(Day→GY, GY→Swing 등)와 무관하게 직접 고를 수 있게 해달라는 요청으로
+    새로 뺀 제네릭 헬퍼 — 카톡 정리(kakao_cleanup)가 그동안 이 조건을 인라인으로
+    썼던 것과 동일하다."""
+    return (get_shift_for_date(schedule, d) == "휴무"
+            and get_shift_for_date(schedule, d + datetime.timedelta(days=1)) != "휴무")
 
 
 def _is_day_shift_block_end(schedule, d):
@@ -2491,7 +2575,7 @@ def _get_today_reminder_items(schedule, now=None):
             continue
         recurrence = definition.get("recurrence")
         if recurrence is not None:
-            if _generic_recurrence_due(recurrence, today):
+            if _generic_recurrence_due(recurrence, today, schedule):
                 by_key[key] = definition.get("label", key)
             else:
                 by_key.pop(key, None)
@@ -6387,6 +6471,8 @@ class ShiftAlarmApp(rumps.App):
             if self._last_timed_reminder_notified.get(key) == today:
                 continue
             self._last_timed_reminder_notified[key] = today
+            if key.startswith("wake_") and not _is_alarm_muted():
+                _apply_wake_alarm_volume()
             notify_spoken(label, "", "지금 할 시간이에요.")
 
     def _sync_daily_checklist_to_notion(self, today, todays):

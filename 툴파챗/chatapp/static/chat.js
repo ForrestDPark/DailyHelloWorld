@@ -44,6 +44,42 @@ function setPortalLayout(mode) {
 setPortalLayout(localStorage.getItem("portal-layout") === "grid" ? "grid" : "list");
 portalLayoutBtn?.addEventListener("click", () => setPortalLayout(portalServices?.classList.contains("grid-view") ? "list" : "grid"));
 
+// ★ "내가 최근에 가장 많이 실행한 순서대로 항목이 뜨면 좋겠어 근데 shift alarm 은
+// 항상 첫 항목으로" 요청 — 클릭할 때마다 이 브라우저 기준 방문 횟수를 세어두고
+// (portal-layout처럼 기기별 개인 취향이라 서버 동기화 없이 localStorage로 충분),
+// Shift Alarm만 고정 1번, 나머지는 방문 횟수 내림차순(동률이면 원래 순서 유지)으로
+// 다시 배치한다.
+function loadPortalVisitCounts() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem("portal-visit-counts") || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+function applyPortalOrder() {
+  if (!portalServices) return;
+  const counts = loadPortalVisitCounts();
+  const cards = [...portalServices.querySelectorAll(":scope > .portal-card")];
+  const pinned = cards.filter(card => card.classList.contains("shift-alarm"));
+  const rest = cards.filter(card => !card.classList.contains("shift-alarm"));
+  rest
+    .map((card, index) => ({card, index, count: counts[card.getAttribute("href")] || 0}))
+    .sort((a, b) => b.count - a.count || a.index - b.index)
+    .forEach(({card}) => portalServices.append(card));
+  pinned.forEach(card => portalServices.prepend(card));
+}
+portalServices?.querySelectorAll(":scope > .portal-card").forEach(card => {
+  card.addEventListener("click", () => {
+    const href = card.getAttribute("href");
+    if (!href) return;
+    const counts = loadPortalVisitCounts();
+    counts[href] = (counts[href] || 0) + 1;
+    localStorage.setItem("portal-visit-counts", JSON.stringify(counts));
+  });
+});
+applyPortalOrder();
+
 function setAiResponseStatus(waiting) {
   clearTimeout(aiStatusTimer);
   aiResponseStatus.classList.toggle("hidden", !waiting);

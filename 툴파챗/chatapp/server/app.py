@@ -91,6 +91,11 @@ SHIFT_ALARM_REMINDER_EDITOR_FILE = Path(os.path.expanduser("~/.shift_alarm_remin
 # 편집기와 같은 이유) 별도 파일로 뗐다(★ 2026-09-23).
 SHIFT_ALARM_MUTE_FILE = Path(os.path.expanduser("~/.shift_alarm_mute.json"))
 SHIFT_ALARM_OUT_LOG_FILE = Path(os.path.expanduser("~/Library/Logs/shift_alarm.out.log"))
+# shift_alarm.py가 wake_shift 등 "⏰ 기상 알람" 리마인더를 울리기 직전에 이 파일을
+# 읽어 enabled면 macOS 시스템 음량을 percent로 강제 설정한다 — 전날 밤 음량을
+# 낮춰두면 정작 기상 알람이 조용히 지나갈 수 있다는 문제(★ 2026-09-23: "기상알람
+# 음량 설정할수있게끔 설정버튼 만들어줘" 요청).
+SHIFT_ALARM_WAKE_VOLUME_FILE = Path(os.path.expanduser("~/.shift_alarm_wake_volume.json"))
 SHIFT_ALARM_NOTION_PAGE_ID = "3b532a1e-ae80-8034-90af-fd8c9b658711"
 SHIFT_ALARM_REMINDER_TIMES_PAGE_ID = "3d432a1e-ae80-8171-b8e1-e0d3c545a707"
 SUNZI_DISCUSSION_ROOM_ID = "custom_16ea779e1f"
@@ -98,6 +103,11 @@ SUNZI_LIGHT_PIPELINE_REQUEST = "📜 ShiftAlarm에서 오늘의 병법 구절 �
 SUNZI_PIPELINE_LOCK_DIR = Path("/private/tmp/com.forrest.codex-sunzi-nightly.lock")
 SUNZI_PIPELINE_STATUS_FILE = Path(os.path.expanduser("~/Library/Logs/CodexSunzi/status.json"))
 SUNZI_AUTOMATION_README = Path("/Users/forrestdpark/.codex-worktrees/sunzi-nightly/손자병법/README.md")
+# "구절편 전체보기" 팝오버용 — 야간 파이프라인 전용 worktree가 아니라 main에 실제
+# 병합된 본 저장소 쪽 파일을 읽는다(worktree는 미완료 커밋이 있을 수 있음).
+SUNZI_CHAPTER_DIR = REPO_ROOT / "손자병법"
+SUNZI_VERSE_FILE_RE = re.compile(r"^jiudi(\d+)_full_page\.md$")
+SUNZI_VERSE_SUMMARY_RE = re.compile(r'<details[^>]*>\s*<summary>(.*?)</summary>', re.DOTALL)
 NOTION_VERSION = "2022-06-28"
 # ★ "업데이트할 때마다 페이지를 재시작(새로고침)해야 하는 게 맞냐" 요청
 # (2026-08-28) — 서버 프로세스(app.py 등 백엔드 코드)가 바뀌면 재시작 시
@@ -303,11 +313,21 @@ class NoCacheStaticMiddleware(BaseHTTPMiddleware):
     캐시를 퍼지하고 우회 규칙까지 만들어도 브라우저 로컬 캐시는 그걸로 전혀
     안 고쳐졌다(서로 다른 계층). /static/·/uploads/ 요청에는 "no-cache"를
     강제해 매번 서버에 재검증(ETag)하게 한다 — 완전히 캐시를 끄는 게
-    아니라 "쓰기 전에 항상 물어보라"는 지시라 대역폭 낭비는 크지 않다."""
+    아니라 "쓰기 전에 항상 물어보라"는 지시라 대역폭 낭비는 크지 않다.
+
+    ★ 2026-09-23: "홈화면이 처음에 들어가면 느리게 나온다" 문의 — 로컬에서는
+    ETag 재검증이 몇 ms지만, 실제 네트워크(터널 경유)에서는 파일마다 매번
+    왕복이 붙어 체감 지연이 쌓인다. chat.js·style.css 등은 이미 파일을 고칠
+    때마다 URL의 `?v=` 값을 같이 올리는 관례가 있으므로(수정 즉시 새 URL =
+    캐시 무효화가 저절로 보장됨) `v=` 쿼리가 붙은 요청만 1년 불변 캐시로
+    바꾼다. `v=` 없는 요청(업로드 파일 등)은 기존처럼 매번 재검증한다."""
     async def dispatch(self, request, call_next):
         response = await call_next(request)
         if request.url.path.startswith(("/static/", "/uploads/", "/shift-alarm/static/", "/audio-editor/static/")):
-            response.headers["Cache-Control"] = "no-cache"
+            if request.query_params.get("v"):
+                response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            else:
+                response.headers["Cache-Control"] = "no-cache"
         if request.url.path == "/career/" or request.url.path.startswith("/career/static/"):
             # iOS 홈 화면 웹앱은 일반 탭보다 HTML/JS를 오래 보존하는 경우가 있다.
             # 커리어 보드는 소유자 전용이고 파일도 작으므로 매번 최신본을 받는다.
@@ -1448,6 +1468,30 @@ def _shift_alarm_notify_jp_subtitle_study_room(content):
         pass
 
 
+def _jp_subtitle_book_epub_exists(filename):
+    """subtitle_pipeline_body.sh의 SAFE_BASE_NAME 새니타이즈(`sed -E
+    's/[^0-9A-Za-z가-힣._-]+/_/g; s/^_+//; s/_+$//'`)를 그대로 재현해
+    library/<제목>/ 폴더에 실제 .epub가 있는지 확인한다.
+
+    ★ 2026-09-23: "자막추출 완료됬다는 표시있는데 실제 폴더내에는 epub 이
+    없어" 신고 — 원인은 refine_translations.py가 AI 사용량 한도로 실패하면
+    subtitle_pipeline_body.sh가 그 작품만 건너뛰고(continue) 최종 EPUB을
+    library/로 옮기는 단계를 스킵하는데, 완료 판정은 오직 `.done` 마커
+    파일(래퍼 스크립트가 배치 전체가 끝나면 개별 작품 성공 여부와 무관하게
+    무조건 남김)만 보고 있었다는 것 — 실제 산출물 존재를 다시 확인한다."""
+    if not filename:
+        return False
+    filename_no_ext = Path(filename).stem
+    safe_name = re.sub(r"[^0-9A-Za-z가-힣._-]+", "_", filename_no_ext).strip("_")
+    if not safe_name:
+        return False
+    book_dir = JP_SUBTITLE_DIR / "library" / safe_name
+    try:
+        return any(book_dir.glob("*.epub"))
+    except OSError:
+        return False
+
+
 def _shift_alarm_subtitle_status():
     try:
         status = json.loads(SHIFT_ALARM_SUBTITLE_STATUS_FILE.read_text(encoding="utf-8"))
@@ -1466,13 +1510,22 @@ def _shift_alarm_subtitle_status():
         if marker.exists():
             marker.unlink(missing_ok=True)
             shutil.rmtree(status.get("work_dir") or "", ignore_errors=True)
-            status.update(state="complete", stage="자막·번역·후리가나·Notion·EPUB 반영 완료",
-                          progress=100, completed_at=_now(), updated_at=_now())
-            _shift_alarm_subtitle_write_status(status)
-            _shift_alarm_notify_jp_subtitle_study_room(
-                "🔔 오늘 새 회차 자막 추출이 끝났습니다. "
-                "오늘 새로 처리한 회차의 줄거리와 재미있는 표현을 학습카드 위주로 소개해주세요."
-            )
+            if _jp_subtitle_book_epub_exists(status.get("filename")):
+                status.update(state="complete", stage="자막·번역·후리가나·Notion·EPUB 반영 완료",
+                              progress=100, completed_at=_now(), updated_at=_now())
+                _shift_alarm_subtitle_write_status(status)
+                _shift_alarm_notify_jp_subtitle_study_room(
+                    "🔔 오늘 새 회차 자막 추출이 끝났습니다. "
+                    "오늘 새로 처리한 회차의 줄거리와 재미있는 표현을 학습카드 위주로 소개해주세요."
+                )
+            else:
+                status.update(
+                    state="failed",
+                    stage="자막·번역까지는 됐지만 EPUB이 생성되지 않았습니다 — "
+                          "터미널 창 로그를 확인하세요(AI 사용량 한도로 중단됐을 수 있습니다)",
+                    updated_at=_now(),
+                )
+                _shift_alarm_subtitle_write_status(status)
         else:
             progress_update = _shift_alarm_subtitle_log_progress(status.get("job_id"))
             if progress_update and progress_update[0] != status.get("progress"):
@@ -2076,6 +2129,30 @@ def _write_shift_alarm_mute(muted):
     temporary.replace(SHIFT_ALARM_MUTE_FILE)
 
 
+def _read_shift_alarm_wake_volume():
+    try:
+        payload = json.loads(SHIFT_ALARM_WAKE_VOLUME_FILE.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        payload = {}
+    if not isinstance(payload, dict):
+        payload = {}
+    percent = payload.get("percent")
+    percent = max(0, min(100, int(percent))) if isinstance(percent, (int, float)) else 80
+    return {"enabled": bool(payload.get("enabled")), "percent": percent}
+
+
+def _write_shift_alarm_wake_volume(enabled, percent):
+    percent = max(0, min(100, int(percent)))
+    SHIFT_ALARM_WAKE_VOLUME_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = SHIFT_ALARM_WAKE_VOLUME_FILE.with_suffix(".tmp")
+    temporary.write_text(
+        json.dumps({"enabled": bool(enabled), "percent": percent}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    temporary.replace(SHIFT_ALARM_WAKE_VOLUME_FILE)
+    return {"enabled": bool(enabled), "percent": percent}
+
+
 def _reminder_display_label(label):
     """리마인더 이름 끝의 반복 설명은 제목에서 떼어 편집 UI의 규칙 칸으로
     보낸다. 원본 label은 Shift Alarm 체크 상태 연결을 위해 그대로 보존한다."""
@@ -2265,6 +2342,25 @@ def set_shift_alarm_mute(body: ShiftAlarmMuteRequest, request: Request):
     return {"ok": True, "muted": body.muted}
 
 
+@app.get("/api/shift-alarm/wake-volume")
+def get_shift_alarm_wake_volume(request: Request):
+    _require_owner(request)
+    return _read_shift_alarm_wake_volume()
+
+
+class ShiftAlarmWakeVolumeRequest(BaseModel):
+    enabled: bool
+    percent: int
+
+
+@app.put("/api/shift-alarm/wake-volume")
+def set_shift_alarm_wake_volume(body: ShiftAlarmWakeVolumeRequest, request: Request):
+    _require_owner(request)
+    if not 0 <= body.percent <= 100:
+        raise HTTPException(status_code=422, detail="음량은 0~100 사이여야 합니다")
+    return {"ok": True, **_write_shift_alarm_wake_volume(body.enabled, body.percent)}
+
+
 @app.get("/api/shift-alarm/log")
 def get_shift_alarm_log(request: Request, lines: int = 200):
     """CPU 과부하 자동종료 등 shift_alarm.py의 print() 출력을 그대로 보여준다
@@ -2285,7 +2381,10 @@ def _validated_reminder_definition(body):
         raise HTTPException(status_code=422, detail="리마인더 이름은 1~80자로 입력해주세요")
     if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", body.time or ""):
         raise HTTPException(status_code=422, detail="시각은 HH:MM 형식이어야 합니다")
-    if body.recurrence_unit not in {None, "daily", "days", "weeks", "months"}:
+    if body.recurrence_unit not in {
+        None, "daily", "days", "weeks", "months",
+        "off_block_start", "off_block_end", "day_shift_block_end",
+    }:
         raise HTTPException(status_code=422, detail="지원하지 않는 반복 주기입니다")
     if not 1 <= body.recurrence_interval <= 365:
         raise HTTPException(status_code=422, detail="반복 간격은 1~365 사이여야 합니다")
@@ -2573,7 +2672,43 @@ def _sunzi_light_pipeline_state(conn):
         "stage": pipeline.get("stage", "분석 대기"), "elapsed_seconds": elapsed_seconds,
         "updated_at": pipeline.get("updated_at"), "next_chapter": "구지편",
         "next_verse": next_verse,
+        "latest_verse": (next_verse - 1) if next_verse else None,
     }
+
+
+def _read_sunzi_verses():
+    """구지편 각 구절 파일에서 원문(한문)·독음(훈음) 쌍만 뽑아 구절 번호순으로
+    돌려준다 — "구절편 전체보기" 팝오버용(★ 2026-09-23 요청)."""
+    verses = []
+    try:
+        entries = list(SUNZI_CHAPTER_DIR.iterdir())
+    except OSError:
+        return verses
+    for path in entries:
+        match = SUNZI_VERSE_FILE_RE.match(path.name)
+        if not match:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        summary = SUNZI_VERSE_SUMMARY_RE.search(text)
+        if not summary or "<br>" not in summary.group(1):
+            continue
+        hanja_html, _, reading = summary.group(1).partition("<br>")
+        hanja = re.sub(r"<[^>]+>", "", hanja_html).strip()
+        reading = re.sub(r"<[^>]+>", "", reading).strip()
+        if not hanja or not reading:
+            continue
+        verses.append({"verse": int(match.group(1)), "hanja": hanja, "reading": reading})
+    verses.sort(key=lambda item: item["verse"])
+    return verses
+
+
+@app.get("/api/shift-alarm/sunzi-verses")
+def get_shift_alarm_sunzi_verses(request: Request):
+    _require_owner(request)
+    return {"chapter": "구지편", "verses": _read_sunzi_verses()}
 
 
 @app.get("/api/shift-alarm/sunzi-analysis")

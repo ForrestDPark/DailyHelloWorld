@@ -1197,3 +1197,42 @@ Shift Alarm 메뉴와 Scriptable 위젯의 추천 공고·경진대회를 누르
 - `툴파챗/chatapp/server/app.py`: `GET/PUT /api/shift-alarm/mute`(리마인더 편집기와 같은 원자적 파일 쓰기 패턴으로 `~/.shift_alarm_mute.json` 관리)와, `GET /api/shift-alarm/log?lines=N`(`~/Library/Logs/shift_alarm.out.log`를 그대로 tail — 별도 로그 인프라 없이 94번 항목에서 남긴 `print()` 출력을 그대로 노출) 두 엔드포인트를 추가했다. 둘 다 `_require_owner()`로 소유자만 접근 가능.
 - 대시보드(`shift_alarm_dashboard/`): 헤더에 🔔/🔇 토글 버튼(`#mute-toggle`)을 추가해 즉시 켜고 끌 수 있게 했고, "리마인더 관리" 아래에 접이식 "실행 로그" 패널(`#log-panel`)을 추가했다 — 펼칠 때만 불러오고(불필요한 폴링 없음) 새로고침 버튼으로 다시 조회하며, 최신 항목이 위로 오도록 역순 정렬한다.
 - 검증: `notify_spoken`용 `~/.shift_alarm_mute.json` 원자적 쓰기·읽기 왕복을 별도 스크립트로 확인. 웹 서버(`com.tulpachat.server`)·메뉴바 앱(`com.shiftalarm.menubar`) 둘 다 `launchctl kickstart`로 재시작해 에러 로그 없이 정상 기동하는 것, `curl`로 새 엔드포인트가 401(인증 필요 — 라우트 자체는 정상 등록됨)을 반환하는 것까지 확인.
+
+## 96. 대시보드 토글화·타임스탬프 로그·기상 알람 음량·병법 보기 팝오버 (★ 2026-09-23 추가)
+
+**사용자 요청 모음**: "영상가져오기 항목을 영상관리로 이름바꾸고 이것도 토글화해줘" / "일일루틴 체크리스트에서 전부체크하기 버튼이 토글안에 있는게 아니라 토글 바깥에 버튼이있으면 좋겠어" / "음악 음량 이랑 오늘의 리마인더도 토글화해줘" / "실행로그는 시간대를 알수있게 해줘" / "이거 기상알람 음량 설정할수있게끔 설정버튼 만들어줘"(범위 확인 결과: macOS 시스템 음량) / "오늘의 병법 분석도 토글화하고 '병법 보기'로 제목 바꾼다음 가장 최근 구절 이랑 그 구절편 전체보기 버튼 누르면 구절편 전체 구절이 팝오버로 떳으면 좋겠어 한문이랑 훈음이랑 보이게" / "전부체크하기 버튼 '전부 체크'로 바꿔줘".
+
+- **패널 토글화**: 영상관리(`#video-panel`)·음악·음량(`.media-panel`)·오늘의 리마인더·병법 보기(`.sunzi-panel`)를 전부 `<section>`에서 `<details><summary>`로 바꿨다. `<summary>` 안에 버튼/링크(전부 체크, Notion 링크, 기상 알람 음량 설정 ⚙️)를 넣은 곳은 클릭이 부모 `<summary>`까지 버블링돼 토글까지 같이 열리는 문제가 있어, 각 클릭 핸들러에 `event.preventDefault()`/`stopPropagation()`을 넣었다(`app.js`). 오늘의 리마인더·영상관리는 기본 펼침(`open`), 나머지는 기본 접힘 — 자주 보는 정보는 열어 두고 가끔 쓰는 조작은 접었다.
+- **실행 로그 타임스탬프**: `shift_alarm.py`에 `_TimestampedStream`을 추가해 `sys.stdout`/`sys.stderr`를 감싼다. 수백 곳에 흩어진 `print()` 호출부를 일일이 고치는 대신, 줄 단위로 `[MM-DD HH:MM:SS]`를 자동으로 붙인다 — 95번 항목의 실행 로그 뷰어가 그대로 이 시각을 보여준다.
+- **기상 알람 음량**: 새 파일 `~/.shift_alarm_wake_volume.json`(`{"enabled":bool,"percent":int}`)을 대시보드가 `GET/PUT /api/shift-alarm/wake-volume`으로 관리한다. `shift_alarm.py`의 `_check_timed_reminders()`가 `wake_`로 시작하는 키(기상 알람류)를 울리기 직전, 음소거가 아닐 때만 `_apply_wake_alarm_volume()`으로 `osascript`를 호출해 macOS 시스템 음량을 저장된 값으로 맞춘다 — 전날 밤 낮춰 둔 음량 그대로 기상 알람도 조용히 지나가는 문제를 막는다. MEDIA 패널 헤더의 ⚙️ 버튼이 다이얼로그를 연다.
+- **병법 보기 팝오버**: 새 엔드포인트 `GET /api/shift-alarm/sunzi-verses`가 `손자병법/jiudi*_full_page.md` 각 파일의 `<details><summary>한문(색상 span 포함)<br>훈음</summary>` 블록을 정규식으로 파싱해(태그 제거) 구절 번호순으로 반환한다 — 야간 파이프라인 전용 worktree가 아니라 main에 병합된 본 저장소 경로(`REPO_ROOT/손자병법`)를 읽는다. 기존 `/api/shift-alarm/sunzi-analysis`에도 `latest_verse`(= `next_verse - 1`)를 추가해 "가장 최근 구절"을 판별한다. 대시보드는 상태 폴링(5초 주기) 중 구절 목록을 한 번만 캐시해서 최신 구절의 한문·훈음을 패널에 바로 보여주고, "구절편 전체보기" 버튼은 이 캐시로 32구절 전체를 다이얼로그에 나열한다(재요청 없음).
+- 검증: `_read_sunzi_verses` 파싱 로직을 실제 파일 32개 전체에 대해 별도 스크립트로 실행해 빠짐없이 추출되는 것 확인(`<details color="orange_bg">`뿐 아니라 속성 없는 구버전 `<details>` 2개도 정규식을 완화해 포함). 두 서버(`com.shiftalarm.menubar`·`com.tulpachat.server`) 재시작 후 에러 로그 없음, 새 로그에 타임스탬프가 실제로 찍히는 것, 캐시 정책 변경(97번 항목) 이후에도 새 `enhancements.css`/`app.js`가 `?v=` 캐시 버스팅으로 즉시 반영되는 것까지 확인.
+
+## 97. 툴파챗 웹앱 홈 화면 체감 로딩 속도 개선 (★ 2026-09-23 추가)
+
+**사용자 요청**: "이거 툴파챗 웹앱 홈화면이 처음에 들어가면 느리게 나오는데 문제 해결해줘".
+
+- 로컬에서는 `index.html`·`style.css`·`chat.js`·`/api/whoami` 응답이 전부 10ms 미만이라 서버 연산 자체는 병목이 아니었다. 원인은 `NoCacheStaticMiddleware`(2026-08-26 추가, `/static/`·`/uploads/`·`/shift-alarm/static/`·`/audio-editor/static/` 전부에 `Cache-Control: no-cache` 강제)였다 — 캐시를 끄는 게 아니라 "매번 서버에 재검증(ETag)하라"는 지시라 로컬에서는 체감이 안 되지만, 실제 네트워크(터널 경유)에서는 chat.js(200KB)·style.css(80KB) 같은 큰 정적 파일마다 매번 왕복이 붙어 첫 진입 지연으로 쌓인다.
+- 해결: 이 저장소는 이미 파일을 고칠 때마다 URL의 `?v=날짜-설명` 값을 같이 올리는 관례가 있다(shift_alarm_dashboard·홈 화면 모두) — 즉 내용이 바뀌면 URL 자체가 바뀌므로 오래 캐시해도 안전하다. `NoCacheStaticMiddleware`가 `v=` 쿼리가 붙은 요청만 `Cache-Control: public, max-age=31536000, immutable`(1년 불변)로 바꾸고, `v=` 없는 요청(업로드 파일 등)은 기존 `no-cache`를 그대로 유지해 2026-08-26에 해결했던 "고쳐도 브라우저가 낡은 파일을 계속 쓰는" 문제를 재발시키지 않는다.
+- **주의**: 이 정책 때문에 `?v=` 붙은 정적 파일을 고치고 버전 문자열을 안 올리면, 이미 방문했던 브라우저는 최대 1년간 낡은 파일을 그대로 쓴다 — 앞으로 `chat.js`/`style.css`/`shift_alarm_dashboard`의 `app.js`·`enhancements.css`·`style.css`를 고칠 때마다 참조하는 HTML의 `?v=` 값을 반드시 같이 올려야 한다.
+- 검증: `curl -I`로 `?v=` 있는 요청은 `public, max-age=31536000, immutable`, 없는 요청은 기존과 동일한 `no-cache`가 나오는 것을 확인.
+
+## 98. 대시보드 세부 다듬기 + 리마인더 "근무표 연동" 반복 주기 직접 설정 (★ 2026-09-23 추가)
+
+**사용자 요청 모음**: "설정버튼이 토글이랑 붙어있어서 토글 열기가 힘들어 — 설정버튼은 토글 열어야 나오게" / "오늘의 리마인더 옆에 notion에서 보기 링크 없어도 되" / "영상관리 항목 밑에 설명하는글 없어도 될거같에" / "루틴 체크리스트로 바꾸고 (0/19)는 없어도 될거같아" / "전부체크하기 버튼 '전부 체크'로 바꿔줘" / "반복 항목에 '기본'이란 말은 왜 들어간건지 모르겠어 — 없어도 될거같아". 그리고 핵심 요청: "리마인더 관리에서 새 리마인더 추가할 때 주기설정 콤보박스에서 휴무시작일이라던가, 주간마지막날이라던가.. 이런 설정들은 없는거야? 해당 일정에서는 왜 그런 설정을 수정하는게 불가능한걸까? ai가 필요한 주기 설정과 그렇지 않은 주기 설정을 나눠서 설명해주고, ai가 필요하지 않는 주기설정들은 내가 직접 설정 가능하도록 갱신해달라".
+
+- **UI 다듬기**: 기상 알람 음량 ⚙️ 버튼을 MEDIA 패널 `<summary>`에서 본문(`.media-buttons`)으로 옮겨 토글 클릭과 겹치지 않게 했다. 오늘의 리마인더의 "Notion에서 보기" 링크, 영상관리 부제, 일일 루틴의 "(N/M)" 카운트 배지를 제거했다. "일일 루틴 체크리스트" → "루틴 체크리스트", "전부 체크하기" → "전부 체크"로 축약. 반복 열에서 사용자가 명시적으로 고르지 않은 항목에 붙던 "기본 · " 접두어를 뗐다(수정 다이얼로그의 드롭다운 옵션 라벨에는 "기본 · 자동 계산"을 그대로 남겨 — 거기서는 "명시적 선택이 아님"을 표시하는 게 의미가 있다).
+- **"AI가 필요한 주기" vs "그렇지 않은 주기" 설명**: 실제로는 **AI가 필요한 주기는 하나도 없다** — 전부 결정론적 파이썬 계산이다. 진짜 구분은 "근무표 JSON을 참조해야 하는 규칙"과 "근무표와 완전히 무관한 고정 주기 규칙"이다. 대시보드 드롭다운은 원래 후자(매일·N일·N주·N개월 간격)만 있었고, "휴무 시작일"·"휴무 마지막날"·"주간 근무 마지막날" 같은 근무표 연동 규칙은 `call_mom`·`kakao_cleanup`·`day_shift_last_day_routine`처럼 파이썬 코드 안에 하드코딩된 개별 함수(`_is_off_block_start`·`_is_day_shift_block_end` 등)로만 존재해 웹에서 고를 수 없었다.
+- **구현**: `shift_alarm.py`에 `_is_off_block_end(schedule, d)`(휴무 블록 마지막날 — `_is_off_block_start`의 대칭, `kakao_cleanup`이 그동안 인라인으로 쓰던 조건과 동일)를 새 제네릭 헬퍼로 뺐다. `_generic_recurrence_due(recurrence, day, schedule)`에 `off_block_start`·`off_block_end`·`day_shift_block_end` 세 유닛을 추가했다 — 이 세 유닛은 `interval`을 무시하고(전환 종류와 무관하게 패턴 자체로 판정하므로 "몇 번째마다"가 의미 없음) `anchor`(시작일)만 확인한다. `app.py`의 `_validated_reminder_definition`이 이 세 유닛을 허용 목록에 추가했다.
+- **효과**: 웹 리마인더 편집기에서 명시적으로 `recurrence`를 저장하면 `_get_today_reminder_items()`의 하드코딩된 판정보다 항상 우선하므로(93번 항목 참고), 사용자가 `call_mom`·`kakao_cleanup` 같은 기존 built-in 리마인더도 이 새 유닛으로 재지정해 직접 관리할 수 있게 됐다 — 새로 만드는 커스텀 리마인더뿐 아니라 기존 항목의 "수정 불가"도 해소된다. 다만 `wake_*` 기상 알람류(`auto_schedule: true`)는 근무 유형별로 시각 자체가 달라 이 메커니즘과 별개로 계속 잠겨 있다(의도된 동작).
+- 검증: `_is_off_block_start`/`_is_off_block_end`/`_is_day_shift_block_end`를 실제 근무표로 임포트해 실행 — 근무↔휴무 경계일에서 시작/마지막날이 동시에 True로 잡히는 1일짜리 휴무 블록까지 정확히 판별되는 것 확인.
+
+## 99. 자막추출 완료 표시가 실제 EPUB 부재와 어긋나는 문제 진단 + 수정 (★ 2026-09-23 추가)
+
+**사용자 신고**: "자막추출 완료됬다는 표시있는데 실제 폴더내에는 epub 이 없어 확인해주고 왜 안됬는데 체크가 됫는지 원인파악하고 수정해". IPZZ-943 작품이 대시보드에 "자막·번역·EPUB·Notion 반영 완료 100%"로 떠 있었지만 `일본어자막추출/library/IPZZ-943.../`에는 트랜스크립트·표지·이미지만 있고 `.epub`가 없었다.
+
+- **근본 원인**: `subtitle_pipeline_body.sh`가 `refine_translations.py`(AI 검수)를 호출하는데, 이 실행분은 Codex/Claude가 **AI 사용량 한도에 걸려** 45문장이 번역 실패 상태로 남았다(`❌ 번역 실패 45문장이 남아 최종 EPUB 생성을 중단합니다`, 로그 확인). 이 실패에서 파이프라인은 `continue`로 해당 작품만 건너뛰고 다음 항목으로 넘어가는데, "빠른(줄거리 없음) EPUB을 `library/`로 옮기는" 최종 단계가 그 건너뛴 코드 이후에 있어서 함께 스킵됐다 — 결과적으로 EPUB이 하나도 `library/`에 남지 않았다. 그런데 완료 판정(`app.py`의 `_shift_alarm_subtitle_status()`)은 배치 전체가 끝나면 래퍼 스크립트(`subtitle_notion_epub_only.sh`)가 **개별 작품의 성공 여부와 무관하게 무조건** 남기는 `/tmp/_jp_subtitle_run_<run_id>.done` 마커 파일의 존재만 보고 있었다.
+- **수정**: 새 헬퍼 `_jp_subtitle_book_epub_exists(filename)`이 `subtitle_pipeline_body.sh`의 `SAFE_BASE_NAME` 새니타이즈(`sed -E 's/[^0-9A-Za-z가-힣._-]+/_/g; s/^_+//; s/_+$//'`)를 파이썬 정규식으로 그대로 재현해 `library/<제목>/*.epub`가 실제로 있는지 확인한다. `.done` 마커를 봤을 때 이 확인이 실패하면 `state="complete"`가 아니라 `state="failed"`로 전환하고, 원인 추정("AI 사용량 한도로 중단됐을 수 있습니다")까지 stage 메시지에 남긴다.
+- 이미 잘못 "complete"로 저장돼 있던 IPZZ-943의 `~/.tulpachat/jp_subtitle_extract/status.json`도 같은 로직으로 직접 `failed`로 정정했다. AI 사용량 한도는 "Sep 21st, 2026 12:00 AM에 다시 시도"라고 안내돼 있었고 오늘(9/23)은 이미 지났으므로, 같은 폴더에서 자막추출을 다시 실행하면(작업 자료가 보존돼 있어 처음부터 다시 할 필요 없음) 정상적으로 EPUB까지 끝날 가능성이 높다.
+- **범위 밖으로 남긴 것**: `subtitle_pipeline_body.sh`의 실패 분기(빠른 EPUB을 만들어 두고도 `library/`로 옮기지 않고 버리는 부분)는 건드리지 않았다 — 여러 단계가 얽힌 라이브 쉘 파이프라인을 실행 확인 없이 고치는 위험을 피하기 위해, 이번에는 "완료 판정의 정직성"만 고쳤다. 실패 시에도 빠른 EPUB을 `library/`로 옮기게 만드는 개선은 후속 작업으로 남겨둔다.
+
