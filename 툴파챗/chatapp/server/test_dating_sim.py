@@ -901,6 +901,39 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         encounters = app.dating_sim_encounters(request("lister"))
         self.assertEqual(encounters, [])
 
+    def test_encounters_keeps_showing_a_book_with_real_progress_even_if_unprepared(self):
+        # ★ 2026-09-23: "미연시 이거미완료라고 아무것도 안보이는데 미완료여도
+        # 이전에 진행하던거는 계속볼수있게해줘" 요청 — prepared_book()이
+        # False(이미지·시나리오 생성이 아직 안 끝남)여도, 실제로 진행한
+        # 기록(장소 방문·선택으로 day가 늘어남)이 있으면 "이어하기"에서
+        # 사라지면 안 된다.
+        story_id = "book:" + "3" * 20
+        username = "progressor"
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", Path(directory)), \
+             patch.object(dating_sim_story, "_find_book", return_value=Path("/tmp/UNFINISHED.epub")), \
+             patch.object(dating_sim_story, "_book_title", return_value="UNFINISHED"), \
+             patch.object(dating_sim_story, "prepared_book", return_value=False):
+            app.dating_sim_visit(app.DatingSimLocationRequest(location="first", story_id=story_id), request(username))
+            story = app._dating_story(story_id, username)
+            choices = story["scenes"][1]["first"]["choices"]
+            index = next(i for i, choice in enumerate(choices) if choice["affection"] > 0)
+            app.dating_sim_choose(app.DatingSimChoiceRequest(choice_index=index, story_id=story_id), request(username))
+            encounters = app.dating_sim_encounters(request(username))
+        self.assertEqual([e["story_id"] for e in encounters], [story_id])
+
+    def test_encounters_still_hides_an_untouched_unprepared_book(self):
+        story_id = "book:" + "3" * 19 + "4"
+        username = "glancer"
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", Path(directory)), \
+             patch.object(dating_sim_story, "_find_book", return_value=Path("/tmp/UNFINISHED.epub")), \
+             patch.object(dating_sim_story, "_book_title", return_value="UNFINISHED"), \
+             patch.object(dating_sim_story, "prepared_book", return_value=False):
+            app.dating_sim_state(request(username), story_id)
+            encounters = app.dating_sim_encounters(request(username))
+        self.assertEqual(encounters, [])
+
     def test_book_character_profiles_are_stable_and_varied(self):
         profiles = [dating_sim_story.book_character_profile(f"book:{number:020x}")
                     for number in range(20)]
@@ -929,6 +962,34 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         self.assertEqual(profile["ko"], "고죠 렌")
         self.assertFalse(profile["is_alias"])
         self.assertIn("rainy-evening.png", profile["scene_images"]["walk"])
+
+    def test_book_character_name_uses_japanese_reading_not_literal_translation(self):
+        # ★ 2026-09-23: "이름이 화장실인건 이상하잖아 이름은 일본어 이름으로
+        # 읽어줘" 신고 — 277DCV-298에서 "これお手洗いです"(=이것은 화장실
+        # 입니다)라는 무관한 문장이 자기소개로 오인식되면서 이름이 "화장실"
+        # 로 떴다. 감지된 일본어 글자는 그대로 두되, 한국어 이름은 번역문이
+        # 아니라 발음(음역)으로 채워야 한다.
+        with tempfile.TemporaryDirectory() as directory:
+            library_dir = Path(directory)
+            work_dir = library_dir / "277DCV-298"
+            work_dir.mkdir()
+            (work_dir / "transcript_part1.jsonl").write_text(
+                json.dumps({"ja": "これお手洗いです", "ko": "이것은 화장실입니다.",
+                            "furigana": "これお手洗い(てあらい)です"}, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+            with patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", library_dir):
+                profile = dating_sim_story.book_character_profile(
+                    "book:" + "6" * 20, source_title="277DCV-298"
+                )
+        self.assertEqual(profile["jp"], "これお手洗い")
+        self.assertNotIn("화장실", profile["ko"])
+        self.assertNotEqual(profile["ko"], "이것은 화장실")
+
+    def test_japanese_name_romanization_uses_kanji_readings_not_meaning(self):
+        self.assertEqual(dating_sim_story._romanize_japanese_name("これお手洗い"), "고레오테아라이")
+        self.assertEqual(dating_sim_story._romanize_japanese_name("たかはし"), "다카하시")
+        self.assertEqual(dating_sim_story._romanize_japanese_name("さくら"), "사쿠라")
 
     def test_book_character_marks_generated_name_as_alias(self):
         with tempfile.TemporaryDirectory() as directory, \

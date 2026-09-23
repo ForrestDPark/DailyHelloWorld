@@ -12,8 +12,12 @@
 import datetime
 import hashlib
 import json
+import os
 import random
 import re
+import urllib.error
+import urllib.parse
+import urllib.request
 import zipfile
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -756,6 +760,67 @@ def _load_work_vocabulary(title):
     return list(seen.values())
 
 
+# ★ 2026-09-23: "한자 뜻 따로따로가아니라 한국말로번역한 뜻으로 다바꿔줘"
+# 요청 — 단어카드 팝오버가 AI 미지정 한자 합성어를 만나면(word.ko 없음)
+# 예전엔 한자 하나하나의 뜻을 "絵(그림 회) · 柄(자루 병)"처럼 이어붙여
+# 보여줬는데, 그건 합성어 전체의 실제 뜻이 아니라 어색했다. 구글 번역
+# (refine_translations.py의 비공식 gtx 엔드포인트와 같은 방식, API 키 불필요)
+# 으로 단어 전체를 한 번에 옮긴 결과를 보여주고 로컬에 캐시한다. 자막
+# 번역 파이프라인의 translation_memory.json(검수 통과분만 영구 저장,
+# [[jp-subtitle-translation-memory-design]])과는 별개의 가벼운 UI용
+# 캐시라 같은 검수 정책을 적용하지 않는다 — 여기는 문장이 아니라 짧은
+# 단어 하나의 사전적 뜻을 보여주는 보조 기능이라 오역의 파급력이 훨씬 작다.
+DATING_SIM_WORD_MEANING_CACHE = Path(os.path.expanduser("~/.tulpachat/dating_sim_word_meanings.json"))
+_word_meaning_cache = None
+
+
+def _load_word_meaning_cache():
+    global _word_meaning_cache
+    if _word_meaning_cache is None:
+        try:
+            _word_meaning_cache = json.loads(DATING_SIM_WORD_MEANING_CACHE.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            _word_meaning_cache = {}
+    return _word_meaning_cache
+
+
+def _save_word_meaning_cache(cache):
+    DATING_SIM_WORD_MEANING_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    temp = DATING_SIM_WORD_MEANING_CACHE.with_suffix(".tmp")
+    temp.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
+    temp.replace(DATING_SIM_WORD_MEANING_CACHE)
+
+
+def translate_word_meaning(word):
+    """word(일본어 한자 합성어) 전체의 한국어 뜻을 구글 번역으로 찾는다.
+    실패하면 빈 문자열을 돌려준다(프론트가 "뜻을 찾지 못했습니다"로 표시)."""
+    word = (word or "").strip()
+    if not word:
+        return ""
+    cache = _load_word_meaning_cache()
+    if word in cache:
+        return cache[word]
+    query = urllib.parse.urlencode({"client": "gtx", "sl": "ja", "tl": "ko", "dt": "t", "q": word})
+    meaning = ""
+    for endpoint in ("https://translate.googleapis.com/translate_a/single",
+                      "https://translate.google.com/translate_a/single"):
+        try:
+            request = urllib.request.Request(
+                f"{endpoint}?{query}", headers={"User-Agent": "Mozilla/5.0"},
+            )
+            with urllib.request.urlopen(request, timeout=10) as response:
+                data = json.load(response)
+            meaning = "".join(part[0] for part in data[0] if part[0]).strip()
+            if meaning:
+                break
+        except (OSError, urllib.error.URLError, ValueError, IndexError, TypeError, KeyError):
+            continue
+    if meaning and meaning != word:
+        cache[word] = meaning
+        _save_word_meaning_cache(cache)
+    return meaning
+
+
 def _load_work_expressions(title):
     """★ 2026-09-19: "시나리오트리에서 핵심표현이 사용된 장면과 안쓰인
     핵심표현도 보이게 해줘 학습단어처럼" 요청 — 학습카드의 핵심 표현
@@ -1298,6 +1363,138 @@ def _furigana_parentheses_to_tags(text):
     return re.sub(r"([一-龯々〆ヵヶ]+)\(([ぁ-ゖァ-ヺー]+)\)", r"[\1|\2]", text or "")
 
 
+# ★ 2026-09-23: "이름이 화장실인건 이상하잖아 이름은 일본어 이름으로 읽어줘
+# 한자이름을 일본어이름으로 발음하게해" 요청 — 자기소개 감지(아래
+# _profile_from_work_dialogue)가 대사 한 줄의 한국어 번역을 그대로 "이름"으로
+# 썼는데, ASR/번역이 자기소개가 아닌 문장(예: "これお手洗いです" = "이것은
+# 화장실입니다")을 잘못 집어내면 이름이 뜻풀이("화장실")로 뜨는 사고가
+# 났다. 자기소개 감지 자체(느슨한 휴리스틱)는 다른 작품에서 이미 통하고
+# 있어 건드리지 않고, 대신 "이름으로 채택한 일본어 글자를 한국어 번역이
+# 아니라 발음(음독/훈독 추정) 그대로 옮긴다"로 바꿔 어떤 문장이 잘못
+# 집혔어도 최소한 이름처럼 들리게 한다.
+_KANJI_DICT_PATH = Path(__file__).resolve().parent.parent / "static" / "data" / "kanjidic-readings.json"
+_kanji_dict_cache = None
+
+_KANA_TO_HANGUL = {
+    "あ": "아", "い": "이", "う": "우", "え": "에", "お": "오",
+    "か": "카", "き": "키", "く": "쿠", "け": "케", "こ": "코",
+    "さ": "사", "し": "시", "す": "스", "せ": "세", "そ": "소",
+    "た": "타", "ち": "치", "つ": "쓰", "て": "테", "と": "토",
+    "な": "나", "に": "니", "ぬ": "누", "ね": "네", "の": "노",
+    "は": "하", "ひ": "히", "ふ": "후", "へ": "헤", "ほ": "호",
+    "ま": "마", "み": "미", "む": "무", "め": "메", "も": "모",
+    "や": "야", "ゆ": "유", "よ": "요",
+    "ら": "라", "り": "리", "る": "루", "れ": "레", "ろ": "로",
+    "わ": "와", "ゐ": "이", "ゑ": "에", "を": "오",
+    "が": "가", "ぎ": "기", "ぐ": "구", "げ": "게", "ご": "고",
+    "ざ": "자", "じ": "지", "ず": "즈", "ぜ": "제", "ぞ": "조",
+    "だ": "다", "ぢ": "지", "づ": "즈", "で": "데", "ど": "도",
+    "ば": "바", "び": "비", "ぶ": "부", "べ": "베", "ぼ": "보",
+    "ぱ": "파", "ぴ": "피", "ぷ": "푸", "ぺ": "페", "ぽ": "포",
+}
+# 어두(단어 맨 앞)에서만 か・た행 무성 파열음이 평음으로 적히는 국립국어원
+# 표기 관례(예: たかはし→다카하시)를 근사한다. つ는 어두에서도 그대로 쓰.
+_KANA_TO_HANGUL_INITIAL = {
+    "か": "가", "き": "기", "く": "구", "け": "게", "こ": "고",
+    "た": "다", "ち": "지", "て": "데", "と": "도",
+}
+_YOON_TO_HANGUL = {
+    "きゃ": "캬", "きゅ": "큐", "きょ": "쿄", "しゃ": "샤", "しゅ": "슈", "しょ": "쇼",
+    "ちゃ": "차", "ちゅ": "추", "ちょ": "초", "にゃ": "냐", "にゅ": "뉴", "にょ": "뇨",
+    "ひゃ": "햐", "ひゅ": "휴", "ひょ": "효", "みゃ": "먀", "みゅ": "뮤", "みょ": "묘",
+    "りゃ": "랴", "りゅ": "류", "りょ": "료", "ぎゃ": "갸", "ぎゅ": "규", "ぎょ": "교",
+    "じゃ": "자", "じゅ": "주", "じょ": "조", "びゃ": "뱌", "びゅ": "뷰", "びょ": "뵤",
+    "ぴゃ": "퍄", "ぴゅ": "퓨", "ぴょ": "표",
+}
+_YOON_TO_HANGUL_INITIAL = {"きゃ": "갸", "きゅ": "규", "きょ": "교", "ちゃ": "자", "ちゅ": "주", "ちょ": "조"}
+
+
+def _load_kanji_dictionary():
+    global _kanji_dict_cache
+    if _kanji_dict_cache is None:
+        try:
+            data = json.loads(_KANJI_DICT_PATH.read_text(encoding="utf-8"))
+            _kanji_dict_cache = data.get("entries") or {}
+        except (OSError, ValueError):
+            _kanji_dict_cache = {}
+    return _kanji_dict_cache
+
+
+def _katakana_to_hiragana(text):
+    return "".join(
+        chr(ord(ch) - 0x60) if "ァ" <= ch <= "ヶ" else ch
+        for ch in text
+    )
+
+
+def _kanji_reading_guess(dictionary, ch):
+    """이름에 쓰인 한자 한 글자의 발음을 훈독(사람 이름에 흔함) 우선으로
+    추정한다 — 정확한 인명 나노리 독음까지는 없지만, 뜻풀이보다는 훨씬
+    이름처럼 들린다."""
+    entry = dictionary.get(ch) or {}
+    for reading in entry.get("kun") or []:
+        core = reading.strip("-").split(".")[0]
+        if core:
+            return core
+    for reading in entry.get("on") or []:
+        core = reading.strip("-")
+        if core:
+            return _katakana_to_hiragana(core)
+    return None
+
+
+def _japanese_name_reading(text):
+    """한자·가나가 섞인 일본어 이름 문자열을 순수 히라가나 발음으로 바꾼다
+    (한자는 kanjidic 훈독/음독 추정, 가나는 그대로/가타카나→히라가나)."""
+    dictionary = _load_kanji_dictionary()
+    out = []
+    for ch in text or "":
+        if "一" <= ch <= "龯" or ch in "々〆ヵヶ":
+            out.append(_kanji_reading_guess(dictionary, ch) or ch)
+        elif "ァ" <= ch <= "ヶ":
+            out.append(_katakana_to_hiragana(ch))
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def _hiragana_to_korean_name(reading):
+    """히라가나 발음 문자열을 한글 음역으로 옮긴다(어두 か・た행 평음화만
+    반영하는 단순화된 근사치 — 정밀한 외래어 표기법 전체 규칙은 아니다)."""
+    result = []
+    chars = list(reading or "")
+    i = 0
+    is_initial = True
+    while i < len(chars):
+        pair = "".join(chars[i:i + 2])
+        if pair in _YOON_TO_HANGUL:
+            table = _YOON_TO_HANGUL_INITIAL if is_initial else _YOON_TO_HANGUL
+            result.append(table.get(pair, _YOON_TO_HANGUL[pair]))
+            i += 2
+            is_initial = False
+            continue
+        ch = chars[i]
+        if ch == "ー" and result:
+            result.append(result[-1][-1])
+        elif ch in ("っ", "ッ"):
+            pass  # 촉음(장음/받침 근사) — 단순화를 위해 생략한다.
+        elif ch == "ん":
+            result.append("ㄴ")
+        elif ch in _KANA_TO_HANGUL:
+            table = _KANA_TO_HANGUL_INITIAL if is_initial else _KANA_TO_HANGUL
+            result.append(table.get(ch, _KANA_TO_HANGUL[ch]))
+        else:
+            result.append(ch)
+        i += 1
+        is_initial = False
+    return "".join(result)
+
+
+def _romanize_japanese_name(text):
+    """일본어 이름 문자열을 발음 그대로 한글로 옮긴다 — 뜻 번역이 아니다."""
+    return _hiragana_to_korean_name(_japanese_name_reading(text)) or text
+
+
 def _profile_from_work_dialogue(source_title):
     """작품의 실제 대사에서 명시적으로 자기소개한 여주 이름만 찾는다.
 
@@ -1346,14 +1543,19 @@ def _profile_from_work_dialogue(source_title):
         ja_match, ko_match = ja_intro.search(ja), ko_intro.search(ko)
         if not (ja_match and ko_match):
             continue
-        ko_name = ko_match.group(1).strip()
-        if any(word in ko_name for word in excluded):
+        ko_line_name = ko_match.group(1).strip()
+        if any(word in ko_line_name for word in excluded):
             continue
         ja_name = ja_match.group(1).removeprefix("私は")
         tagged = _furigana_parentheses_to_tags(str(row.get("furigana", "")))
         tagged_match = re.search(rf"({re.escape(ja_name)}|(?:\[[^\]]+\]|[ぁ-ゖァ-ヺー])+)(?=です)", tagged)
         full_jp = tagged_match.group(1) if tagged_match else ja_name
-        return {"jp": ja_name, "full_jp": full_jp, "ko": ko_name,
+        # ★ 2026-09-23: 한국어 줄("...입니다"/"...이라고 해요")은 이 행이
+        # 자기소개처럼 생겼는지 확인하는 신호로만 쓰고, 실제 "ko" 이름은 그
+        # 번역문이 아니라 일본어 이름의 발음을 한글로 옮긴 값을 쓴다 —
+        # 번역이 엉뚱한 문장(예: "화장실입니다")을 집었을 때도 최소한
+        # 이름처럼 들리게 하기 위해서다.
+        return {"jp": ja_name, "full_jp": full_jp, "ko": _romanize_japanese_name(ja_name),
                 "image": "/dating-sim/static/reina.png", "is_alias": False}
     return None
 

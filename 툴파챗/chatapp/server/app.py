@@ -1086,6 +1086,18 @@ def dating_sim_generate_images_status(request: Request, story_id: str | None = N
 # 홈에서 다시 들어갈 때마다 새 무작위 작품으로 튕겨서 방금 하던 이야기로
 # 못 돌아왔다). 리다이렉트를 없애고, 대신 진행 중인 만남 목록과 "새로운
 # 만남 시작" 선택지를 프론트(app.js)가 보여주게 두 엔드포인트를 추가한다.
+@app.get("/api/dating-sim/vocab-meaning")
+def dating_sim_vocab_meaning(request: Request, word: str):
+    """AI가 뜻을 직접 준 학습 단어가 아닌 한자 합성어 단어카드에서, 한자별
+    뜻을 짜깁기하는 대신 단어 전체의 한국어 번역을 보여준다(★ 2026-09-23
+    "한자 뜻 따로따로가아니라 한국말로번역한 뜻으로 다바꿔줘" 요청)."""
+    _require_signed_in_user(request)
+    word = (word or "").strip()
+    if not word or len(word) > 12:
+        raise HTTPException(status_code=400, detail="단어 형식이 올바르지 않습니다")
+    return {"word": word, "meaning": dating_sim_story.translate_word_meaning(word)}
+
+
 @app.get("/api/dating-sim/encounters")
 def dating_sim_encounters(request: Request):
     """로그인 계정이 지금까지 시작한 모든 만남(기본 이야기 + 작품별 이야기)의
@@ -1100,9 +1112,16 @@ def dating_sim_encounters(request: Request):
         encounters = []
         for row in rows:
             story_id = None if row["character_id"] == dating_sim_story.CHARACTER_ID else row["character_id"]
-            # 로비에는 임시 고정 템플릿과 아직 이미지 생성 중인 작품을 노출하지
-            # 않는다. 예전 진행 기록은 DB에 보존하되 완성되면 자동으로 다시 보인다.
-            if not story_id or not story_id.startswith("book:") or not dating_sim_story.prepared_book(story_id.split(":", 1)[1]):
+            if not story_id or not story_id.startswith("book:"):
+                continue
+            # ★ 2026-09-23: "미연시 이거미완료라고 아무것도 안보이는데
+            # 미완료여도 이전에 진행하던거는 계속볼수있게해줘" 요청 — 아직
+            # 시작 안 한(day=1·호감도=50 기본값 그대로인) 미완성 작품만
+            # 로비에서 숨기고, 이미 실제로 진행한(day가 늘었거나 호감도가
+            # 바뀌었거나 완결된) 작품은 이미지·시나리오 생성이 덜 끝났어도
+            # "이어하기"로 계속 볼 수 있게 한다.
+            has_real_progress = row["day"] > 1 or row["affection"] != 50 or bool(row["completed"])
+            if not has_real_progress and not dating_sim_story.prepared_book(story_id.split(":", 1)[1]):
                 continue
             try:
                 story = _dating_story(story_id, username)

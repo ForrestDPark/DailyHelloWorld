@@ -136,14 +136,19 @@ html, body {
 .map-tile-emoji { width: 34px; flex: none; font-size: 24px; text-align: center; }
 
 .portrait-box { display: flex; flex-direction: column; align-items: center; gap: 8px; margin: 8px 0 18px; }
+/* ★ 2026-09-23: "이거 사진이 짤리는데 화면에 맞춰서 사이즈조정해줘" 신고 —
+   정사각형 박스(1:1)에 세로로 긴 AI 생성 초상화(512×768, 2:3)를 object-fit:
+   cover로 욱여넣으면서 머리 위·가슴 아래가 크게 잘려 나갔다. 박스 비율을
+   실제 생성 이미지 비율(2:3)에 맞춰 잘림을 없앤다. */
 .portrait {
-  width: min(58vw, 220px); height: min(58vw, 220px);
+  width: min(58vw, 220px); aspect-ratio: 2 / 3; height: auto;
   display: grid; place-items: center;
   background: var(--panel-2);
   border: 4px solid var(--border);
   overflow: hidden;
 }
 .portrait img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.zoomable-portrait { cursor: zoom-in; }
 .portrait.speaking { animation: speaking .44s infinite steps(2); }
 .portrait.speaking img{animation:speaking-image .44s infinite steps(2)}
 .portrait.narrator{filter:brightness(.82) saturate(.9)}
@@ -217,7 +222,25 @@ html, body {
 @keyframes scene-walk{0%,100%{transform:translateX(-3px) rotate(-.4deg)}50%{transform:translateX(3px) rotate(.4deg)}}
 @keyframes scene-turn{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-3px) scale(1.012)}}
 @keyframes scene-breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.012)}}
-@media(min-width:700px){#game{max-width:410px}.portrait{width:190px;height:190px}#stage{padding-inline:16px}.dialogue-box{min-height:82px}}
+@media(min-width:700px){#game{max-width:410px}.portrait{width:190px}#stage{padding-inline:16px}.dialogue-box{min-height:82px}}
+
+/* ★ 2026-09-23: "사진클릭하면 사진확대되게해줘" 요청 — 초상화를 누르면
+   잘리지 않은 원본 비율 그대로 화면 가득 크게 보여준다. */
+.image-lightbox-overlay {
+  position: fixed; z-index: 10001; inset: 0;
+  padding: max(16px, env(safe-area-inset-top)) 14px max(16px, env(safe-area-inset-bottom));
+  display: grid; place-items: center; background: rgba(6, 4, 12, 0.9);
+}
+.image-lightbox-overlay img {
+  max-width: 100%; max-height: 100%; object-fit: contain;
+  border: 4px solid var(--border); background: #111;
+}
+.image-lightbox-close {
+  position: fixed; top: max(16px, env(safe-area-inset-top)); right: 16px;
+  width: 36px; height: 36px; border-radius: 50%; border: none;
+  background: var(--panel-2); color: var(--text); font-size: 20px; line-height: 1;
+  cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
 
 #ending-view { text-align: center; }
 #ending-view h2 { font-size: 14px; color: var(--good); margin-bottom: 14px; }

@@ -28,6 +28,44 @@ function setSafeImage(element, source, fallback="/dating-sim/static/reina.png") 
     element.src = fallback;
   };
   element.src = source || fallback;
+  // ★ 2026-09-23: "사진클릭하면 사진확대되게해줘" 요청 — 초상화를 누르면
+  // 잘리지 않은 원본 비율 그대로 크게 볼 수 있게 한다.
+  element.classList.add("zoomable-portrait");
+  // scene-view 전체에 "탭하면 다음 대사로 넘어가기" 핸들러가 걸려 있어서
+  // (아래 document.getElementById("scene-view") 리스너), 초상화를 눌렀을
+  // 때 확대와 대사 넘기기가 동시에 일어나지 않도록 이벤트 버블링을 막는다.
+  element.onclick = (event) => {
+    event.stopPropagation();
+    openImageLightbox(element.src, element.alt);
+  };
+}
+
+function closeImageLightbox() {
+  document.querySelector(".image-lightbox-overlay")?.remove();
+}
+
+function openImageLightbox(src, alt) {
+  if (!src) return;
+  closeImageLightbox();
+  const overlay = document.createElement("div");
+  overlay.className = "image-lightbox-overlay";
+  overlay.setAttribute("role", "dialog");
+  overlay.setAttribute("aria-modal", "true");
+  overlay.setAttribute("aria-label", alt || "이미지 확대 보기");
+  const img = document.createElement("img");
+  img.src = src;
+  img.alt = alt || "";
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "image-lightbox-close";
+  close.textContent = "×";
+  close.setAttribute("aria-label", "이미지 닫기");
+  close.addEventListener("click", closeImageLightbox);
+  overlay.append(img, close);
+  overlay.addEventListener("click", (event) => {
+    if (event.target === overlay) closeImageLightbox();
+  });
+  document.body.append(overlay);
 }
 
 function historyStorageKey() {
@@ -140,6 +178,21 @@ async function api(url, options = {}) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.detail || "요청을 처리하지 못했습니다");
   return data;
+}
+
+// ★ 2026-09-23: "한국말로번역한 뜻으로 다바꿔줘" 요청 — 단어 하나의 번역을
+// 매번 새로 조회하지 않도록 세션 안에서만 가볍게 캐시한다(서버 쪽에도
+// 영구 캐시가 따로 있음).
+const vocabMeaningCache = new Map();
+async function fetchVocabWordMeaning(word) {
+  if (vocabMeaningCache.has(word)) return vocabMeaningCache.get(word);
+  try {
+    const data = await api(`/api/dating-sim/vocab-meaning?word=${encodeURIComponent(word)}`);
+    vocabMeaningCache.set(word, data.meaning || "");
+    return data.meaning || "";
+  } catch (e) {
+    return "";
+  }
 }
 
 function showView(name) {
@@ -539,22 +592,15 @@ function showVocabWordPopover(word, anchor, wordKind = "general") {
   meaningValueEl.textContent = word.ko || "\ubd88\ub7ec\uc624\ub294 \uc911\u2026";
   meaningRow.append(meaningHeading, meaningValueEl);
   readings.appendChild(meaningRow);
-  // \u2605 2026-09-23: "\ub73b\uc774 \uc548\ub098\uc640\uc11c \uc544\uc27d\ub124 \ub2e4\ub098\uc624\uac8c \ud574\uc918" \uc694\uccad \u2014 AI\uac00 \ub2e8\uc5b4 \ub73b\uc744
-  // \uc9c1\uc811 \uc900 sceneVocab \ud56d\ubaa9\uc774 \uc544\ub2c8\uba74(word.ko \uc5c6\uc74c) \ubcc4\ub3c4 \uc77c\ud55c\uc0ac\uc804 API\uac00 \uc5c6\uc5b4
-  // "\ud574\ub2f9 \uc5c6\uc74c"\ub9cc \ub5b4\ub2e4. \ub300\uc2e0 \uc774\ubbf8 \uc788\ub294 \ud55c\uc790 \ub0b1\uae00\uc790 \uc0ac\uc804(kanjidic)\uc5d0\uc11c \ub2e8\uc5b4\ub97c
-  // \uc774\ub8e8\ub294 \uae00\uc790 \uac01\uac01\uc758 \ub73b\u00b7\uc74c\uc744 \uc870\ud569\ud574 \uadfc\uc0ac\uce58\ub97c \ubcf4\uc5ec\uc900\ub2e4 \u2014 \uc815\ud655\ud55c \uc219\uc5b4 \ubc88\uc5ed\uc740
-  // \uc544\ub2c8\uc9c0\ub9cc \uc544\ubb34 \uc815\ubcf4\ub3c4 \uc5c6\ub294 \uac83\ubcf4\ub2e4\ub294 \ub0ab\ub2e4.
+  // ★ 2026-09-23: "이렇게 한자 뜻 따로짜로가아니라 한국말로번역한 뜻으로
+  // 다바꿔줘" 요청 — AI가 단어 뜻을 직접 준 sceneVocab 항목이 아니면
+  // (word.ko 없음) 한자 낱글자 뜻을 "絵(그림 회) · 柄(자루 병)"처럼
+  // 짜깁기해 보여줬는데, 합성어 전체의 실제 뜻이 아니라 어색했다. 서버의
+  // 단어 전체 번역 API로 바꾼다.
   if (!word.ko) {
-    const chars = Array.from(word.ja).filter((ch) => KANJI_PATTERN.test(ch));
-    loadKanjiDictionary().then((dictionary) => {
+    fetchVocabWordMeaning(word.ja).then((meaning) => {
       if (!meaningValueEl.isConnected) return;
-      const glosses = chars
-        .map((ch) => {
-          const gloss = formatKoreanHanjaGloss(dictionary[ch] || {});
-          return gloss && gloss !== "\ud574\ub2f9 \uc5c6\uc74c" ? `${ch}(${gloss})` : null;
-        })
-        .filter(Boolean);
-      meaningValueEl.textContent = glosses.length ? glosses.join(" \u00b7 ") : "\ud574\ub2f9 \uc5c6\uc74c";
+      meaningValueEl.textContent = meaning || "뜻을 찾지 못했습니다";
     });
   }
   popover.append(close, favorite, glyph, readings);
@@ -1968,8 +2014,11 @@ $("tree-overlay").addEventListener("click", (event) => {
   }
 });
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && document.querySelector(".tree-image-detail-overlay")) {
+  if (event.key !== "Escape") return;
+  if (document.querySelector(".tree-image-detail-overlay")) {
     closeTreeImageDetail();
+  } else if (document.querySelector(".image-lightbox-overlay")) {
+    closeImageLightbox();
   }
 });
 
