@@ -60,42 +60,28 @@ def _original_scene_images(work_dir):
 # 넓은" 컷으로 보고 고정 인물 레퍼런스 후보에서 뺀다(아래 _face_reference_metrics
 # 참고). 실측: 전신 노출 장면은 0.01~0.06대, 정장·사복 차림 얼굴 위주 컷은
 # 0.1~0.3대로 뚜렷하게 갈린다.
-_MIN_FACE_TO_SKIN_RATIO = 0.08
-# 전체 프레임에서 피부색 픽셀이 이 비율을 넘으면 후보에서 뺀다. 실측(40장
-# 무작위 표본 + 직접 육안 확인): 옷을 입은 장면은 대체로 0.05~0.45대,
-# 노출이 심한 장면은 대체로 0.6대 이상이었다 — 사이(0.45~0.6)는 애매해서
-# 안전하게 보수적인 값(0.4)을 썼다. 완벽한 판별은 아니라서(얼굴만 크게
-# 잡힌 노출 장면은 통과할 수 있음) 얼굴/피부 비율과 같이 써서 서로 보완한다.
-_MAX_FULL_FRAME_SKIN_RATIO = 0.4
-
-
 def _face_reference_metrics(path):
     """OpenCV Haar cascade(정면+측면)로 가장 큰 얼굴의 넓이를, YCrCb 피부색
     임계값(학술적으로 흔히 쓰이는 간단한 피부색 검출법)으로 전체 피부 픽셀
-    수를 잰다. 반환값은 (얼굴 넓이, 얼굴/피부 비율, 프레임 전체 대비 피부
-    비율) — AI API를 전혀 안 쓰고 완전히 로컬에서 처리하므로 토큰이 들지
-    않는다.
+    수를 잰다. 반환값은 (얼굴 넓이, 얼굴/피부 비율) — 후자는 노출 여부
+    판단이 아니라 "얼굴이 화면을 얼마나 크게 차지하는 구도인지"를 보는
+    순수 품질 신호로만 쓴다(높을수록 얼굴 위주 구도). AI API를 전혀 안 쓰고
+    완전히 로컬에서 처리하므로 토큰이 들지 않는다.
 
-    ★ 2026-09-23: "인물 나온 사진만 추출하는것도 토큰안쓰고 가능할까" 요청으로
-    얼굴 검출부터 만들었는데, 실제로 이 원작(성인 영상 스크린샷) 중 "얼굴이
-    가장 크게 잡힌 컷"을 그냥 골랐더니 노출이 심한 장면이 뽑히는 걸 실측으로
-    확인했다(심지어 얼굴/피부 비율만으로도 못 걸러지는 클로즈업 노출 장면이
-    있었다) — 얼굴 크기 하나만 보지 않고, 얼굴/전체피부 비율과 프레임 전체
-    피부 비율 두 신호를 같이 써서 노출이 심한 컷을 걸러낸다. 참고: 이건
-    완벽한 NSFW 판별기가 아니라 색상·크기 기반 근사치라 오탐/누락이 있을 수
-    있다 — 결과 파일(manifest.json의 portrait_reference)은 사용 전에 한 번
-    눈으로 확인하는 걸 권장."""
+    ★ 2026-09-23: 원래는 노출이 심한 장면을 거르는 안전장치(얼굴/피부 비율
+    + 프레임 전체 피부 비율 임계값)도 있었지만, "노출장면있는사진을 굳이
+    거를필요없어 어차피 얼굴만 따오는거니까 안전장치 제거해도될거같아"
+    요청으로 뺐다 — img2img가 실제로는 얼굴만이 아니라 사진 전체(포즈·구도)를
+    80% 비중으로 반영한다는 점을 먼저 알렸고, 그래도 제거하기로 확정."""
     try:
         import cv2
     except ImportError:
-        return 0, 0.0, 1.0
+        return 0, 0.0
     image = cv2.imread(str(path))
     if image is None:
-        return 0, 0.0, 1.0
-    height, width = image.shape[:2]
+        return 0, 0.0
     ycrcb = cv2.cvtColor(image, cv2.COLOR_BGR2YCrCb)
     skin_pixels = float(cv2.inRange(ycrcb, (0, 133, 77), (255, 173, 127)).sum()) / 255.0
-    full_frame_ratio = skin_pixels / (height * width) if height * width > 0 else 1.0
     gray = cv2.equalizeHist(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY))
     best_face = 0
     for cascade_name in ("haarcascade_frontalface_alt2.xml", "haarcascade_profileface.xml"):
@@ -106,9 +92,9 @@ def _face_reference_metrics(path):
         for (_, _, w, h) in cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=4, minSize=(50, 50)):
             best_face = max(best_face, w * h)
     if best_face == 0:
-        return 0, 0.0, full_frame_ratio
+        return 0, 0.0
     face_to_skin_ratio = (best_face / skin_pixels) if skin_pixels > 0 else 0.0
-    return best_face, face_to_skin_ratio, full_frame_ratio
+    return best_face, face_to_skin_ratio
 
 
 # 고정 인물 레퍼런스로 최대 이만큼의 사진을 같이 쓴다. 사진 한 장에만
@@ -119,25 +105,22 @@ MAX_REFERENCE_IMAGES = 4
 
 
 def _select_fixed_references(originals, limit=MAX_REFERENCE_IMAGES):
-    """원작 컷 중 얼굴이 크고 뚜렷하면서 노출이 심하지 않은(두 가지 피부 비율
-    신호로 판단) 후보를 점수순으로 최대 limit장 골라, 모든 장면이 공유할
-    "고정 인물" 레퍼런스 묶음으로 삼는다.
+    """원작 컷 중 얼굴이 크고 뚜렷한 후보를 점수순으로 최대 limit장 골라,
+    모든 장면이 공유할 "고정 인물" 레퍼런스 묶음으로 삼는다. 노출 여부는
+    거르지 않는다(★ 2026-09-23 "노출장면있는사진을 굳이거를필요없어" 요청).
 
     ★ 2026-09-23: "얼굴이 한 인물로 고정되면 좋겠어" 요청 — 예전 _scene_reference()는
     장면마다 원작의 다른 컷을 순환시켜 참조로 썼는데, 그게 바로 장면마다 얼굴이
     조금씩 달라 보이던 원인이었다(매번 다른 사진을 참조하니 당연히 다른 얼굴이
     섞여 들어감). 처음에는 가장 잘 나온 사진 한 장만 썼는데, "한 장만 쓰면
-    정확도가 떨어지지 않냐"는 후속 요청으로 자격을 통과한 후보 여러 장을
+    정확도가 떨어지지 않냐"는 후속 요청으로 얼굴이 잘 나온 후보 여러 장을
     함께 골라(호출부가 VAE 인코딩 후 평균 latent를 만드는 데 씀) 한 장의
-    각도·조명 편향을 줄인다. 적당한 후보가 하나도 없으면(전부 노출 위주인
-    작품 등) 빈 리스트를 돌려주고 호출부가 예전 기본값(첫 원작 컷)으로
-    대체한다."""
+    각도·조명 편향을 줄인다. 얼굴이 하나도 검출되지 않으면 빈 리스트를
+    돌려주고 호출부가 예전 기본값(첫 원작 컷)으로 대체한다."""
     candidates = []
     for path in originals:
-        face_area, face_ratio, full_frame_ratio = _face_reference_metrics(path)
-        if face_area <= 0 or face_ratio < _MIN_FACE_TO_SKIN_RATIO:
-            continue
-        if full_frame_ratio > _MAX_FULL_FRAME_SKIN_RATIO:
+        face_area, face_ratio = _face_reference_metrics(path)
+        if face_area <= 0:
             continue
         candidates.append((face_area * face_ratio, path))
     candidates.sort(key=lambda item: item[0], reverse=True)
