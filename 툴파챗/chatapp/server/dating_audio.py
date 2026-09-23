@@ -32,12 +32,17 @@ INSTRUCTIONS = {
     ),
 }
 FURIGANA_RE = re.compile(r"\[([^\]|]+)\|([^\]]+)\]")
+# ★ 2026-09-24: "일본어 듣기 누르면 다 엣지tts로나와야하는데 아닌것도있네"
+# 확인 중 실측 — 작품별 AI 생성 대사 중 하나가 `[どこ]`처럼 "|" 없는
+# 깨진 후리가나 태그를 담고 있어서 FURIGANA_RE가 못 잡고 대괄호가 그대로
+# 남았다. 남은 단일 대괄호 묶음도 내용은 보존한 채 벗겨낸다.
+STRAY_BRACKET_RE = re.compile(r"\[([^\]]+)\]")
 JAPANESE_RE = re.compile(r"[\u3040-\u30ff\u3400-\u9fff]")
 
 
 def spoken_text(text: str) -> str:
     """화면 표기에서 후리가나와 한국어 번역을 제거한 실제 발화문을 만든다."""
-    surface = FURIGANA_RE.sub(r"\1", text or "")
+    surface = STRAY_BRACKET_RE.sub(r"\1", FURIGANA_RE.sub(r"\1", text or ""))
     return "。".join(
         line.strip() for line in surface.splitlines()
         if line.strip() and JAPANESE_RE.search(line)
@@ -66,6 +71,26 @@ def _book_template_story():
     finally:
         dating_sim_story._find_book = original_find
         dating_sim_story._book_title = original_title
+
+
+def _all_book_stories():
+    """서재의 모든 작품을 story_for()로 돌려준다(AI 생성 시나리오가 있으면
+    그 실제 대사, 없으면 고정 템플릿 — story_for() 자체가 이미 그 판단을
+    한다). ★ 2026-09-24: "일본어 듣기 누르면 다 엣지tts로나와야하는데
+    아닌것도있네" 신고 — build_catalog()가 지금까지 고정 템플릿·기본
+    프로필 이름 치환분만 커버해서, 작품마다 학습 단어를 녹여 AI가 새로
+    쓰는 실제 플레이 대사(대부분의 실제 재생 대사)는 카탈로그에 없어
+    브라우저 기본 TTS로 조용히 폴백했다. 실패한 개별 작품은 건너뛰고
+    나머지는 계속 처리한다."""
+    root = dating_sim_story.JAPANESE_EPUB_ROOT
+    if not root.is_dir():
+        return
+    for path in root.rglob("*.epub"):
+        try:
+            story_id = "book:" + dating_sim_story._book_id(path)
+            yield dating_sim_story.story_for(story_id, seed_key="audio-catalog")
+        except (ValueError, OSError, KeyError):
+            continue
 
 
 def build_catalog() -> list[tuple[str, str]]:
@@ -109,6 +134,18 @@ def build_catalog() -> list[tuple[str, str]]:
         for day_scenes in book_story["scenes"].values()
         for scene in day_scenes.values()
     )
+    for story in _all_book_stories():
+        female_sources.extend(
+            scene["lines"]
+            for day_scenes in story["scenes"].values()
+            for scene in day_scenes.values()
+        )
+        female_sources.append(story["endings"])
+        male_sources.extend(
+            scene["choices"]
+            for day_scenes in story["scenes"].values()
+            for scene in day_scenes.values()
+        )
     catalog = {
         (role, spoken)
         for role, sources in (("female", female_sources), ("male", male_sources))

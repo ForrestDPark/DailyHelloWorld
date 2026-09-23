@@ -2,14 +2,64 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from server import dating_audio
+from server import dating_audio, dating_sim_story
 
 
 class DatingAudioTests(unittest.TestCase):
     def test_spoken_text_removes_furigana_and_translation(self):
         text = "[私|わたし]はソイです。\n저는 소이예요."
         self.assertEqual(dating_audio.spoken_text(text), "私はソイです。")
+
+    def test_spoken_text_strips_stray_bracket_without_pipe(self):
+        # ★ 2026-09-24: "일본어 듣기 누르면 다 엣지tts로나와야하는데
+        # 아닌것도있네" 확인 중 실측 — 일부 AI 생성 대사가 `[どこ]`처럼
+        # "|" 없는 깨진 후리가나 태그를 담고 있어서, 정상 FURIGANA_RE만으론
+        # 대괄호가 그대로 남아 TTS 카탈로그 매칭이 실패했다.
+        self.assertEqual(dating_audio.spoken_text("もちろん。君が行きたいところなら[どこ]でも。"),
+                          "もちろん。君が行きたいところならどこでも。")
+
+    def test_catalog_includes_ai_generated_book_dialogue_not_just_templates(self):
+        # ★ 2026-09-24: "일본어 듣기 누르면 다 엣지tts로나와야하는데
+        # 아닌것도있네" 신고 — build_catalog()가 고정 템플릿·기본 프로필
+        # 이름 치환분만 커버해서, 실제 플레이에 나오는 작품별 AI 생성 대사는
+        # 카탈로그에 없어 브라우저 기본 TTS로 조용히 폴백했다.
+        # _all_book_stories()가 서재의 모든 작품(생성 시나리오 포함)을
+        # 실제로 반영하는지 검증한다.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            epub = root / "TESTWORK.epub"
+            epub.write_bytes(b"")
+            library_dir = root / "library" / "TESTWORK"
+            library_dir.mkdir(parents=True)
+            unique_line = "これは音声카탈로그テスト専用のユニークな台詞です"
+            scenario = {
+                "content_version": 2,
+                "coverage": {"complete": True},
+                "days": {
+                    str(day): {
+                        "narration": "",
+                        "scenes": {
+                            loc: {
+                                "lines": [unique_line] if (day == 1 and loc == "first") else ["普通の台詞です。"],
+                                "choices": [{"text": "選択肢一", "affection": 1},
+                                            {"text": "選択肢二", "affection": -1}],
+                            }
+                            for loc in ("first", "walk", "quiet")
+                        },
+                    }
+                    for day in range(1, dating_sim_story.TOTAL_DAYS + 1)
+                },
+            }
+            (library_dir / "dating_sim_scenario.json").write_text(
+                json.dumps(scenario, ensure_ascii=False), encoding="utf-8",
+            )
+            with patch.object(dating_sim_story, "JAPANESE_EPUB_ROOT", root), \
+                 patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", root / "library"), \
+                 patch.object(dating_sim_story, "_book_title", return_value="TESTWORK"):
+                catalog = dating_audio.build_catalog()
+        self.assertIn(("female", unique_line), catalog)
 
     def test_catalog_contains_all_unique_japanese_lines(self):
         catalog = dating_audio.build_catalog()

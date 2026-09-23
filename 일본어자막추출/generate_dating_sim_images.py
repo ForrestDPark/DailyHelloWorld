@@ -240,7 +240,8 @@ def _prompt(title, scene=None):
         "Photorealistic Japanese romance visual novel still, adult Japanese woman age 25 or older, "
         "natural facial anatomy, cinematic available light, coherent recurring character identity, "
         "modern Korean or Japanese everyday fashion (never Chinese hanfu, qipao, or other Chinese "
-        "traditional dress), tasteful contemporary clothing, non-explicit, no text, no watermark. "
+        "traditional dress), wearing a skirt or dress rather than jeans or trousers, "
+        "tasteful contemporary clothing, non-explicit, no text, no watermark. "
         f"Source work identifier: {_ascii_only(_clean(title, 100))}. "
     )
     if scene is None:
