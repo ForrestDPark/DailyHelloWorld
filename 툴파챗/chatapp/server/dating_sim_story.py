@@ -1621,11 +1621,23 @@ def load_generated_images(title, book_id):
         seen_files.add(filename)
         day = record.get("day")
         location = record.get("location") or ""
+        # ★ 2026-09-23: "참고이미지없다는데?" 신고 — 장면은 원작 컷이 아니라
+        # portrait.png를 고정 레퍼런스로 쓰는데(위 reference_pool 통일), reference_public()은
+        # "reference-<해시>.ext" 패턴만 인정해서 "portrait.png"는 항상 None으로
+        # 떨어졌다. portrait.png는 이미 위에서 계산한 portrait URL을 그대로 쓰고,
+        # 실제 참고 사진 여러 장(portrait_references)도 같이 보여준다.
+        scene_reference_file = record.get("reference_file")
+        if scene_reference_file == "portrait.png":
+            scene_reference_url = portrait
+            scene_reference_urls = reference_urls
+        else:
+            scene_reference_url = reference_public(scene_reference_file)
+            scene_reference_urls = [scene_reference_url] if scene_reference_url else []
         gallery.append({
             "key": scene_key, "kind": "scene",
             "label": f"흐름 {day} · {location}" if day else str(scene_key),
             "image_url": image_url,
-            "reference_url": reference_public(record.get("reference_file")),
+            "reference_url": scene_reference_url, "reference_urls": scene_reference_urls,
             "reference_source": record.get("reference_source") or "",
             "prompt": record.get("prompt") or "",
             "effective_prompt": record.get("effective_prompt") or (
@@ -1679,7 +1691,12 @@ def generated_image_reference_path(book_id, filename):
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
+    # ★ 2026-09-23: "참고 이미지 4장 중 1장만 뜨고 나머지 3장은 깨져서 뜬다"
+    # 신고 — 허용 목록이 portrait_reference(단수) 하나만 보고 있어서, 다중
+    # 레퍼런스 평균(portrait_references, 복수)에 쓰인 2~4번째 사진은 매번
+    # 404로 막혔다.
     allowed = {manifest.get("portrait_reference")}
+    allowed.update(manifest.get("portrait_references") or [])
     allowed.update(
         record.get("reference_file") for record in (manifest.get("scenes") or {}).values()
         if isinstance(record, dict)

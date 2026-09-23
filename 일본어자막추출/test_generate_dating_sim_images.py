@@ -78,9 +78,10 @@ class DatingImageAgentTests(unittest.TestCase):
         self.assertEqual(edit_workflow["13"]["inputs"]["latent_image"], ["5", 0])
         self.assertEqual(edit_workflow["14"]["class_type"], "LatentBlend")
         # LatentBlend는 samples1(텍스트, 13번)*blend_factor + samples2(레퍼런스,
-        # 11번)*(1-blend_factor)라, 레퍼런스 비중 80%를 얻으려면 blend_factor는
-        # 0.20이어야 한다(★ 2026-09-23 "레퍼런스로 80%비율로" 요청).
-        self.assertEqual(edit_workflow["14"]["inputs"]["blend_factor"], 0.20)
+        # 11번)*(1-blend_factor)라, 레퍼런스 비중 65%를 얻으려면 blend_factor는
+        # 0.35여야 한다(★ 2026-09-23 "비율 65%로 낮춰줘" 재요청 — 처음엔 80%로
+        # 시작했는데 얼굴이 부자연스럽다는 피드백으로 낮춤).
+        self.assertEqual(edit_workflow["14"]["inputs"]["blend_factor"], 0.35)
 
     def test_comfy_workflow_averages_multiple_reference_images_equally(self):
         # ★ 2026-09-23: "얼굴이 나오는 사진은 되도록 많이 참조해서 정확도를

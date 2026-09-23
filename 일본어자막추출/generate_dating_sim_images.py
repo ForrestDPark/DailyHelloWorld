@@ -101,7 +101,10 @@ def _face_reference_metrics(path):
 # 의존하면 그 한 장의 각도·조명·표정에 정확도가 좌우되므로(★ 2026-09-23
 # "얼굴이 나오는 사진은 되도록 많이 참조해서 정확도를 올리게끔" 요청),
 # 자격을 통과한 후보를 점수순으로 여러 장 모아 평균 latent를 만든다.
-MAX_REFERENCE_IMAGES = 4
+# ★ 2026-09-23(같은 날 재조정): "얼굴이 전반적으로 좀 이상한데 그냥 제일
+# 얼굴 잘나온사진 두개로만 참조해서" — 4장까지 평균 내니 서로 다른 각도·
+# 표정이 섞여 오히려 얼굴이 흐트러진다는 피드백으로 2장으로 줄였다.
+MAX_REFERENCE_IMAGES = 2
 
 
 def _select_fixed_references(originals, limit=MAX_REFERENCE_IMAGES):
@@ -224,10 +227,15 @@ def _image_filename(scene_key):
 
 
 def _prompt(title, scene=None):
+    # ★ 2026-09-23: "초상화에 항상 중국옷 입지말게하고 한국사람이나 일본사람으로
+    # 옷 입게 해줘" 요청 — "tasteful contemporary clothing"만으로는 모델이
+    # 종종 중국풍 한푸(넓은 소매, 교임깃, 허리띠)로 해석했다. 복장 국적을
+    # 명시적으로 지정하고, 부정 프롬프트에서도 중국풍 복식을 뺀다.
     common = (
         "Photorealistic Japanese romance visual novel still, adult Japanese woman age 25 or older, "
         "natural facial anatomy, cinematic available light, coherent recurring character identity, "
-        "tasteful contemporary clothing, non-explicit, no text, no watermark. "
+        "modern Korean or Japanese everyday fashion (never Chinese hanfu, qipao, or other Chinese "
+        "traditional dress), tasteful contemporary clothing, non-explicit, no text, no watermark. "
         f"Source work identifier: {_ascii_only(_clean(title, 100))}. "
     )
     if scene is None:
@@ -423,7 +431,11 @@ def _build_comfy_workflow(
         }},
         "6": {"class_type": "CLIPTextEncode", "inputs": {"text": local_prompt, "clip": ["4", 1]}},
         "7": {"class_type": "CLIPTextEncode", "inputs": {
-            "text": "nsfw, nude, child, low quality, blurry, distorted, deformed, bad hands, text, watermark",
+            "text": (
+                "nsfw, nude, child, low quality, blurry, distorted, deformed, bad hands, "
+                "text, watermark, caption, subtitle, logo, banner, letters, "
+                "chinese hanfu, qipao, cheongsam, chinese traditional dress"
+            ),
             "clip": ["4", 1],
         }},
         "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["12", 0] if vae_name else ["4", 2]}},
@@ -458,13 +470,15 @@ def _build_comfy_workflow(
             }}
             combined_id = blend_id
         # 먼저 텍스트만으로 장면의 구도 latent를 만든 뒤, 고정 인물 레퍼런스
-        # 평균 latent를 80% 섞고 최종 img2img 패스를 수행한다. ComfyUI
+        # 평균 latent를 65% 섞고 최종 img2img 패스를 수행한다. ComfyUI
         # LatentBlend는 samples1*blend_factor + samples2*(1-blend_factor)이고
-        # samples1=텍스트(13번), samples2=레퍼런스 평균이라 레퍼런스 비중 80%를
-        # 얻으려면 blend_factor를 0.20으로 낮춰야 한다(전에는 0.78 = 22%였음).
-        # ★ 2026-09-23: "레퍼런스로 80%비율로 해서 이미지 뽑은다음 고정 인물로
-        # 정한뒤에" 요청 — 얼굴을 강하게 고정하는 대신 자세·배경은 프롬프트가
-        # 담당(camera_direction 회전 + 장면별 영어 묘사)한다.
+        # samples1=텍스트(13번), samples2=레퍼런스 평균이라 레퍼런스 비중 65%를
+        # 얻으려면 blend_factor를 0.35로 둬야 한다.
+        # ★ 2026-09-23: "레퍼런스로 80%비율로" 요청으로 처음엔 0.20(80%)이었는데,
+        # 같은 날 "얼굴이 전반적으로 좀 이상한데... 비율 65%로 낮춰줘" 재요청으로
+        # 0.35(65%)로 낮췄다 — 레퍼런스를 너무 강하게 강제하면 오히려 부자연스러운
+        # 얼굴이 나온다는 피드백. 자세·배경은 프롬프트가 담당(camera_direction
+        # 회전 + 장면별 영어 묘사).
         workflow["5"] = {"class_type": "EmptyLatentImage", "inputs": {
             "width": 512, "height": 768, "batch_size": 1
         }}
@@ -474,7 +488,7 @@ def _build_comfy_workflow(
             "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["5", 0],
         }}
         workflow["14"] = {"class_type": "LatentBlend", "inputs": {
-            "samples1": ["13", 0], "samples2": [combined_id, 0], "blend_factor": 0.20,
+            "samples1": ["13", 0], "samples2": [combined_id, 0], "blend_factor": 0.35,
         }}
     else:
         workflow["5"] = {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 768, "batch_size": 1}}
@@ -488,7 +502,18 @@ def _comfy_upload(reference):
     source = reference.read_bytes()
     filename = "dating-reference-" + hashlib.sha1(source).hexdigest()[:12] + ".png"
     with Image.open(io.BytesIO(source)) as image:
-        normalized = ImageOps.fit(image.convert("RGB"), (512, 768), Image.Resampling.LANCZOS)
+        rgb = image.convert("RGB")
+        # ★ 2026-09-23: "화면에 글자같은거 안뜨게 해줘" 요청 — 원작 스크린샷은
+        # 위(로고·타이틀 배너)·아래(자막 띠)에 텍스트가 거의 항상 박혀 있는데,
+        # 이게 레퍼런스 latent에 그대로 인코딩돼 65% 비중으로 섞이면서 생성
+        # 이미지에도 뭉개진 가짜 글자 패턴으로 나타났다(부정 프롬프트의
+        # "text"만으로는 이미 레퍼런스에 구조로 박힌 내용을 못 지운다). 얼굴은
+        # 보통 위쪽 2/3 안에 있으므로 위·아래 자막 띠만 잘라내고 인코딩한다.
+        width, height = rgb.size
+        top = int(height * 0.10)
+        bottom = int(height * 0.82)
+        cropped = rgb.crop((0, top, width, bottom)) if bottom > top else rgb
+        normalized = ImageOps.fit(cropped, (512, 768), Image.Resampling.LANCZOS)
         payload = io.BytesIO()
         normalized.save(payload, format="PNG", optimize=True)
         image_bytes = payload.getvalue()
@@ -571,10 +596,10 @@ def _local_generate(prompt, target, reference=None):
                     "used_seed": seed, "attempt": attempt + 1,
                     "reference_count": len(reference_names),
                     "composition_pass": (
-                        f"txt2img 12 steps + 20% text/80% reference latent"
+                        f"txt2img 12 steps + 35% text/65% reference latent"
                         f"({len(reference_names)}장 평균) + img2img"
                         if len(reference_names) > 1 else
-                        "txt2img 12 steps + 20% text/80% reference latent + img2img"
+                        "txt2img 12 steps + 35% text/65% reference latent + img2img"
                     ),
                 },
             }
