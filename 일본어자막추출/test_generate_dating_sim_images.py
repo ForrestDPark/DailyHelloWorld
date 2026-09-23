@@ -164,6 +164,52 @@ class DatingImageAgentTests(unittest.TestCase):
         )):
             self.assertTrue(images._comfy_supports_ipadapter_faceid())
 
+    def test_local_generate_retries_with_fewer_references_before_falling_back(self):
+        # ★ 2026-09-23: "생성된 이미지 표정이 전부 일편적인데 다양하게" 요청 —
+        # 원인은 여러 장을 ImageBatch로 묶었을 때 한 장이라도 얼굴 인식에
+        # 실패하면 전체가 img2img(표정까지 레퍼런스에 고정됨)로 떨어지는
+        # 것이었다. 레퍼런스를 한 장으로 줄여 IP-Adapter를 한 번 더 시도한
+        # 뒤에야 img2img로 넘어가는지 검증한다.
+        with tempfile.TemporaryDirectory() as tmp:
+            ref_a, ref_b = Path(tmp) / "a.jpg", Path(tmp) / "b.jpg"
+            ref_a.write_bytes(b"a")
+            ref_b.write_bytes(b"b")
+            target = Path(tmp) / "out.png"
+            wait_calls = []
+
+            def fake_comfy_request(path, data=None, timeout=20):
+                if path == "/system_stats":
+                    return {}
+                if "IPAdapterUnifiedLoaderFaceID" in path:
+                    return {"IPAdapterUnifiedLoaderFaceID": {}}
+                if path == "/prompt":
+                    return {"prompt_id": f"id-{len(wait_calls)}"}
+                return {}
+
+            def fake_wait_image(prompt_id, timeout):
+                wait_calls.append(prompt_id)
+                if len(wait_calls) == 1:
+                    raise RuntimeError("ComfyUI 실행 실패: No face detected.")
+                return {"filename": "result.png", "subfolder": "tulpachat", "type": "output"}
+
+            class FakeResponse:
+                def __enter__(self): return self
+                def __exit__(self, *args): return False
+                def read(self): return b"fake-png-bytes" * 100
+
+            with patch.object(images, "_comfy_request", side_effect=fake_comfy_request), \
+                 patch.object(images, "_comfy_model_spec", return_value=("CheckpointLoaderSimple", "model.safetensors")), \
+                 patch.object(images, "_comfy_vae_name", return_value=""), \
+                 patch.object(images, "_comfy_upload", side_effect=["ref-a.png", "ref-b.png"]), \
+                 patch.object(images, "_comfy_wait_image", side_effect=fake_wait_image), \
+                 patch.object(images.urllib.request, "urlopen", return_value=FakeResponse()), \
+                 patch.object(images, "_valid_image", return_value=True):
+                images._local_generate("a prompt", target, [ref_a, ref_b])
+        self.assertEqual(len(wait_calls), 2)
+        settings = images._LAST_GENERATION_META["generation_settings"]
+        self.assertIn("IP-Adapter FaceID", settings["composition_pass"])
+        self.assertEqual(settings["reference_count"], 1)
+
     def test_comfy_workflow_can_use_external_vae(self):
         workflow = images._build_comfy_workflow(
             "a rainy bookshop reunion with a shy smile",

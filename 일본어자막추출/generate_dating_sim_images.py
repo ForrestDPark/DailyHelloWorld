@@ -594,6 +594,30 @@ def _face_centered_crop(image, target_size):
         ImageOps.fit(image, target_size, Image.Resampling.LANCZOS)
 
 
+def _brighten_if_dark(image, threshold=90, target=110, max_factor=2.2):
+    """어두운 레퍼런스 사진은 밝기를 끌어올려 얼굴 검출(OpenCV·InsightFace)
+    성공률을 높인다.
+
+    ★ 2026-09-23: "생성된 이미지 표정이 전부 일편적인데 다양하게" 요청 —
+    원인을 추적해보니, 어두운 원작 스크린샷은 InsightFace가 얼굴을 못 찾아
+    IP-Adapter FaceID(순수 txt2img라 표정이 프롬프트를 따라감) 경로를 못 타고
+    예전 img2img 폴백(레퍼런스 사진 자체를 65% 비중으로 섞음)으로 떨어지는데,
+    이때 레퍼런스 사진의 표정·구도까지 거의 그대로 옮겨붙는다 — 모든 장면이
+    같은 레퍼런스를 쓰니 표정도 전부 똑같아 보인 것. 얼굴 검출 성공률을
+    올려 IP-Adapter 경로를 더 자주 타게 하면(장면마다 프롬프트가 다른
+    표정·배경을 지시하므로) 표정 다양성 문제도 근본적으로 줄어든다."""
+    gray = image.convert("L")
+    pixels = gray.width * gray.height
+    if not pixels:
+        return image
+    mean_brightness = sum(gray.getdata()) / pixels
+    if mean_brightness >= threshold:
+        return image
+    from PIL import ImageEnhance
+    factor = min(max_factor, target / max(mean_brightness, 1))
+    return ImageEnhance.Brightness(image).enhance(factor)
+
+
 def _comfy_upload(reference):
     from PIL import Image
 
@@ -612,6 +636,7 @@ def _comfy_upload(reference):
         top = int(height * 0.10)
         bottom = int(height * 0.82)
         cropped = rgb.crop((0, top, width, bottom)) if bottom > top else rgb
+        cropped = _brighten_if_dark(cropped)
         normalized = _face_centered_crop(cropped, (IMAGE_WIDTH, IMAGE_HEIGHT))
         payload = io.BytesIO()
         normalized.save(payload, format="PNG", optimize=True)
@@ -683,11 +708,18 @@ def _local_generate(prompt, target, reference=None):
         except RuntimeError as exc:
             # ★ 2026-09-23: InsightFace는 OpenCV Haar보다 훨씬 엄격해서, 얼굴
             # 검출용으로 골라둔 레퍼런스 사진이라도 각도·조명에 따라 "No face
-            # detected"로 실패할 수 있다(277DCV-298 실측). 이 경우 남은 시도는
-            # 예전 img2img+LatentBlend 방식으로 전환해 생성이 아예 실패하지
-            # 않도록 한다.
+            # detected"로 실패할 수 있다(277DCV-298 실측). ImageBatch로 여러
+            # 장을 한 번에 넣으면 그중 한 장만 실패해도 전체가 실패하므로,
+            # 먼저 가장 점수가 높은 레퍼런스 한 장으로 줄여 IP-Adapter를 한
+            # 번 더 시도한다("생성된 이미지 표정이 전부 일편적인데 다양하게"
+            # 요청 — IP-Adapter 경로가 살아야 장면마다 프롬프트를 따라
+            # 표정이 달라진다). 그래도 실패해야 예전 img2img+LatentBlend로
+            # 전환해 생성이 아예 실패하지 않게 한다.
             if use_ipadapter_faceid and "No face detected" in str(exc):
-                use_ipadapter_faceid = False
+                if len(reference_names) > 1:
+                    reference_names = reference_names[:1]
+                else:
+                    use_ipadapter_faceid = False
                 continue
             raise
 
