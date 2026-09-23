@@ -461,7 +461,7 @@ async function toggleVocabFavorite(word, button) {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ language: "japanese", term: word.ja, meaning: word.ko, pronunciation: word.reading }),
+        body: JSON.stringify({ language: "japanese", term: word.ja, meaning: word.ko || "", pronunciation: word.reading }),
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const saved = await response.json();
@@ -529,6 +529,40 @@ function showVocabWordPopover(word, anchor) {
     readings.appendChild(row);
   }
   popover.append(close, favorite, glyph, readings);
+  // ★ 2026-09-23: "그 팝오버 안에서 한자 하나하나의 클릭으로 이어갈 수
+  // 있게" 요청 — 단어를 이루는 한자 각각을 다시 누르면(기존 낱글자 팝업과
+  // 완전히 같은 showKanjiPopover) 뜻·훈독·음독을 이어서 볼 수 있다.
+  const chars = Array.from(word.ja).filter((ch) => KANJI_PATTERN.test(ch));
+  if (chars.length > 1) {
+    const charsSection = document.createElement("div");
+    charsSection.className = "japanese-kanji-popover-word-chars";
+    const label = document.createElement("span");
+    label.textContent = "글자별 보기";
+    const charList = document.createElement("div");
+    charList.className = "japanese-kanji-popover-word-chars-list";
+    for (const ch of chars) {
+      const charButton = document.createElement("button");
+      charButton.type = "button";
+      charButton.className = "japanese-kanji-char";
+      charButton.lang = "ja";
+      charButton.textContent = ch;
+      charButton.setAttribute("aria-label", `${ch} 한자 뜻과 음 보기`);
+      charButton.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        // charButton은 이 팝업(vocabPopover) 안에 있어서 showKanjiPopover가
+        // 팝업을 닫는 순간 DOM에서 같이 제거된다 — 위치 계산용 사각형을
+        // 미리 붙잡아 두는 가짜 anchor로 넘긴다.
+        const rect = charButton.getBoundingClientRect();
+        const anchorProxy = { getBoundingClientRect: () => rect };
+        showKanjiPopover(ch, { sound: "불러오는 중…", meaning: "불러오는 중…", on: [], kun: [] }, anchorProxy);
+        const dictionary = await loadKanjiDictionary();
+        showKanjiPopover(ch, dictionary[ch] || { sound: "", meaning: "", on: [], kun: [] }, anchorProxy);
+      });
+      charList.append(charButton);
+    }
+    charsSection.append(label, charList);
+    popover.append(charsSection);
+  }
   document.body.appendChild(popover);
   vocabPopover = popover;
   const rect = anchor.getBoundingClientRect();
@@ -737,10 +771,17 @@ function renderAnnotatedText(element, text, vocabWords = null) {
       const rt = document.createElement("rt");
       rt.textContent = match[2];
       ruby.append(rt);
-      // 학습 단어와 일치하는 태그만 색상을 다르게 하고 단어 전체 클릭(단어
-      // 팝업)을 붙인다 — 같은 줄의 다른 한자는 그대로 decorateKanji의 낱글자
-      // 클릭을 쓴다.
-      const word = wordByTag.get(`${match[1]}|${match[2]}`);
+      // ★ 2026-09-23: "두 개 이상의 한자로 이루어진 단어들은 단어카드가
+      // 적용되어서 초록색 글자처럼 클릭하면 팝오버가 보이게" 요청 — 원래는
+      // 그 장면의 학습 단어(sceneVocab)로 지정된 태그만 초록색+단어 팝업이
+      // 됐다. 후리가나 태그 자체가 이미 한자 묶음(복합어) 단위로 잘려 있으므로
+      // (예: [人形|にんぎょう]), 2글자 이상인 태그는 학습 단어 지정 여부와
+      // 무관하게 전부 단어 팝업 대상으로 삼는다 — 다만 sceneVocab에 있으면
+      // AI가 준 뜻(ko)을 쓰고, 없으면 뜻 없이(reading만) 만들어 팝업 안에서
+      // 글자별 보기로 보완한다.
+      const isPureMultiCharKanji = match[1].length >= 2 && Array.from(match[1]).every((ch) => KANJI_PATTERN.test(ch));
+      const word = wordByTag.get(`${match[1]}|${match[2]}`)
+        || (isPureMultiCharKanji ? { ja: match[1], reading: match[2], ko: null } : null);
       if (word) {
         ruby.classList.add("vocab-word");
         ruby.dataset.vocabWord = "1";

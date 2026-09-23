@@ -324,6 +324,37 @@ html, body {
 }
 .vocab-word rt { color: var(--good); }
 
+/* ★ 2026-09-23: 단어 팝업 안에서 한자 하나하나를 눌러 낱글자 팝업으로
+   이어가는 "글자별 보기" 줄 — glyph|readings 2열 그리드 아래 전체 폭으로 깐다. */
+.japanese-kanji-popover-word-chars {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.japanese-kanji-popover-word-chars > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-family: -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans KR",sans-serif;
+}
+.japanese-kanji-popover-word-chars-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.japanese-kanji-popover-word-chars-list .japanese-kanji-char {
+  display: grid;
+  place-items: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 6px;
+  border: 2px solid var(--border);
+  background: var(--panel);
+  font-family: "Hiragino Kaku Gothic ProN", "Noto Sans KR", sans-serif;
+  font-size: 18px;
+}
+
 .lobby-hint {
   font-family: -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans KR",sans-serif;
   font-size: 14px;
