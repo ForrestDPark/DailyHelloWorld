@@ -1416,13 +1416,26 @@ function openTreeImageDetail(item) {
 
   const referenceBlock = document.createElement("section");
   const referenceLabel = document.createElement("h3");
-  referenceLabel.textContent = "생성 당시 참고 이미지";
+  // ★ 2026-09-23: "시나리오트리에서 무슨사진 참조해서 인물생성했는지 참조한
+  // 이미지들 확인할수있게해줘" 요청 — 고정 인물 레퍼런스가 여러 장(최대
+  // 4장) 평균으로 바뀌어서, 있으면 전부 나열한다(단일 레퍼런스였던 기존
+  // 기록은 reference_urls가 1개짜리 배열로 자연히 대체된다).
+  const referenceUrls = item.reference_urls?.length ? item.reference_urls : (item.reference_url ? [item.reference_url] : []);
+  referenceLabel.textContent = referenceUrls.length > 1
+    ? `생성 당시 참고 이미지 (${referenceUrls.length}장 평균)` : "생성 당시 참고 이미지";
   referenceBlock.append(referenceLabel);
-  if (item.reference_url) {
-    const reference = document.createElement("img");
-    reference.src = item.reference_url;
-    reference.alt = `${item.label || "장면"} 생성 참고 이미지`;
-    referenceBlock.append(reference);
+  if (referenceUrls.length) {
+    const grid = document.createElement("div");
+    grid.className = "tree-image-reference-grid";
+    referenceUrls.forEach((url, index) => {
+      const reference = document.createElement("img");
+      reference.src = url;
+      reference.alt = referenceUrls.length > 1
+        ? `${item.label || "장면"} 참고 이미지 ${index + 1}/${referenceUrls.length}`
+        : `${item.label || "장면"} 생성 참고 이미지`;
+      grid.append(reference);
+    });
+    referenceBlock.append(grid);
   } else {
     const empty = document.createElement("p");
     empty.className = "tree-image-detail-empty";

@@ -1587,13 +1587,22 @@ def load_generated_images(title, book_id):
                 if (image_dir / filename).is_file() else None)
     reference_name = manifest.get("portrait_reference")
     reference_url = reference_public(reference_name)
+    # ★ 2026-09-23: "시나리오트리에서 무슨사진 참조해서 인물생성했는지 참조한
+    # 이미지들 확인할수있게해줘" 요청 — 고정 인물 레퍼런스를 여러 장(최대
+    # MAX_REFERENCE_IMAGES) 평균 내도록 바뀌면서(generate_dating_sim_images.py)
+    # manifest에 portrait_references(복수)가 같이 남는다. 한 장뿐이던 예전
+    # 기록에는 이 필드가 없으므로 reference_url 하나로 자연히 대체된다.
+    reference_urls = [
+        url for filename in (manifest.get("portrait_references") or [])
+        if (url := reference_public(filename))
+    ] or ([reference_url] if reference_url else [])
     gallery = []
     if portrait:
         portrait_prompt = manifest.get("portrait_prompt") or _legacy_portrait_prompt(manifest.get("title") or title)
         portrait_provider = manifest.get("portrait_provider") or ""
         gallery.append({
             "key": "portrait", "kind": "portrait", "label": "대표 초상화",
-            "image_url": portrait, "reference_url": reference_url,
+            "image_url": portrait, "reference_url": reference_url, "reference_urls": reference_urls,
             "prompt": portrait_prompt,
             "effective_prompt": manifest.get("portrait_effective_prompt") or (
                 _comfy_effective_prompt(portrait_prompt) if portrait_provider == "comfyui" else portrait_prompt),

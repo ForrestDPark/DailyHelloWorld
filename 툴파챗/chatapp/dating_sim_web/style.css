@@ -630,6 +630,14 @@ html, body {
   display: block; width: 100%; max-height: 48vh; object-fit: contain; background: #111;
   border: 1px solid rgba(244,211,94,0.45);
 }
+/* ★ 2026-09-23: 고정 인물 레퍼런스가 여러 장으로 늘어나서(최대 4장 평균)
+   나란히 작게 보여준다 — 결과 이미지처럼 한 장씩 크게 볼 필요는 없다. */
+.tree-image-reference-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px;
+}
+.tree-image-reference-grid img {
+  max-height: 22vh; aspect-ratio: 2 / 3; object-fit: cover;
+}
 .tree-image-detail pre {
   margin: 7px 0 0; padding: 10px; overflow-wrap: anywhere; white-space: pre-wrap;
   font: 11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;

@@ -82,6 +82,37 @@ class DatingImageAgentTests(unittest.TestCase):
         # 0.20이어야 한다(★ 2026-09-23 "레퍼런스로 80%비율로" 요청).
         self.assertEqual(edit_workflow["14"]["inputs"]["blend_factor"], 0.20)
 
+    def test_comfy_workflow_averages_multiple_reference_images_equally(self):
+        # ★ 2026-09-23: "얼굴이 나오는 사진은 되도록 많이 참조해서 정확도를
+        # 올리게끔" 요청 — 레퍼런스 여러 장을 LatentBlend 사슬로 동일 가중치
+        # 평균 내는지 직접 계산으로 검증한다.
+        workflow = images._build_comfy_workflow(
+            "a quiet cafe scene", "model.safetensors", 42,
+            ["ref-a.png", "ref-b.png", "ref-c.png"],
+        )
+        # 첫 장은 예전 단일 레퍼런스와 같은 노드 ID(10/11)를 그대로 쓴다.
+        self.assertEqual(workflow["10"]["inputs"]["image"], "ref-a.png")
+        self.assertEqual(workflow["110"]["inputs"]["image"], "ref-b.png")
+        self.assertEqual(workflow["120"]["inputs"]["image"], "ref-c.png")
+        # 2번째 사진을 더할 때 blend_factor=1/2(두 장을 절반씩), 3번째를 더할
+        # 때 blend_factor=2/3(지금까지의 평균 2/3 + 새 사진 1/3) — 풀어보면
+        # 세 장이 각각 1/3씩 동일한 비중을 갖는 평균이 된다.
+        self.assertEqual(workflow["152"]["inputs"], {
+            "samples1": ["11", 0], "samples2": ["111", 0], "blend_factor": 1 / 2,
+        })
+        self.assertEqual(workflow["153"]["inputs"], {
+            "samples1": ["152", 0], "samples2": ["121", 0], "blend_factor": 2 / 3,
+        })
+        # 최종 블렌드(텍스트 20%/레퍼런스 평균 80%)는 3장 평균 latent(153)를 본다.
+        self.assertEqual(workflow["14"]["inputs"]["samples2"], ["153", 0])
+
+        # 한 장뿐이면 예전과 완전히 동일하게 동작한다(체인 블렌드 노드 없음).
+        single = images._build_comfy_workflow(
+            "a quiet cafe scene", "model.safetensors", 42, ["ref-a.png"],
+        )
+        self.assertNotIn("152", single)
+        self.assertEqual(single["14"]["inputs"]["samples2"], ["11", 0])
+
     def test_comfy_workflow_can_use_external_vae(self):
         workflow = images._build_comfy_workflow(
             "a rainy bookshop reunion with a shy smile",
@@ -129,10 +160,11 @@ class DatingImageAgentTests(unittest.TestCase):
     def test_fixed_reference_selection_skips_faceless_or_undecodable_images(self):
         # ★ 2026-09-23: "얼굴이 한 인물로 고정되면 좋겠어" 요청으로
         # _scene_reference(장면마다 다른 원작 컷 순환)를 없애고
-        # _select_fixed_reference(얼굴이 잘 나온 사진 한 장 고정)로 바꿨다.
-        # 얼굴 사진 없이는 결정론적으로 재현 가능한 얼굴 검출 테스트를 만들
-        # 수 없으므로, 여기서는 얼굴이 없는 이미지에서 크래시 없이 None을
-        # 돌려주는 안전한 폴백 경로만 검증한다(실측 검증은 README 기록 참고).
+        # _select_fixed_references(얼굴이 잘 나온 사진을 점수순으로 최대
+        # MAX_REFERENCE_IMAGES장 고정)로 바꿨다. 얼굴 사진 없이는 결정론적으로
+        # 재현 가능한 얼굴 검출 테스트를 만들 수 없으므로, 여기서는 얼굴이
+        # 없는 이미지에서 크래시 없이 빈 리스트를 돌려주는 안전한 폴백
+        # 경로만 검증한다(실측 검증은 README 기록 참고).
         try:
             import cv2  # noqa: F401
             from PIL import Image
@@ -147,7 +179,7 @@ class DatingImageAgentTests(unittest.TestCase):
             broken = source / "part1_scene002.jpg"
             broken.write_bytes(b"not a real image")
             originals = images._original_scene_images(work)
-            self.assertEqual(images._select_fixed_reference(originals), None)
+            self.assertEqual(images._select_fixed_references(originals), [])
 
     def test_comfyui_is_default_and_openai_is_opt_in(self):
         with tempfile.TemporaryDirectory() as tmp, \

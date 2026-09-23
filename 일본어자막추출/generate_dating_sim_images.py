@@ -111,28 +111,37 @@ def _face_reference_metrics(path):
     return best_face, face_to_skin_ratio, full_frame_ratio
 
 
-def _select_fixed_reference(originals):
+# 고정 인물 레퍼런스로 최대 이만큼의 사진을 같이 쓴다. 사진 한 장에만
+# 의존하면 그 한 장의 각도·조명·표정에 정확도가 좌우되므로(★ 2026-09-23
+# "얼굴이 나오는 사진은 되도록 많이 참조해서 정확도를 올리게끔" 요청),
+# 자격을 통과한 후보를 점수순으로 여러 장 모아 평균 latent를 만든다.
+MAX_REFERENCE_IMAGES = 4
+
+
+def _select_fixed_references(originals, limit=MAX_REFERENCE_IMAGES):
     """원작 컷 중 얼굴이 크고 뚜렷하면서 노출이 심하지 않은(두 가지 피부 비율
-    신호로 판단) 한 장을 골라, 모든 장면이 공유할 "고정 인물" 레퍼런스로
-    삼는다.
+    신호로 판단) 후보를 점수순으로 최대 limit장 골라, 모든 장면이 공유할
+    "고정 인물" 레퍼런스 묶음으로 삼는다.
 
     ★ 2026-09-23: "얼굴이 한 인물로 고정되면 좋겠어" 요청 — 예전 _scene_reference()는
     장면마다 원작의 다른 컷을 순환시켜 참조로 썼는데, 그게 바로 장면마다 얼굴이
     조금씩 달라 보이던 원인이었다(매번 다른 사진을 참조하니 당연히 다른 얼굴이
-    섞여 들어감). 이제 처음부터 얼굴이 잘 나온 사진 딱 하나만 골라 portrait와
-    모든 장면이 동일하게 참조하게 한다. 적당한 후보가 없으면(전부 노출 위주인
-    작품 등) None을 돌려주고 호출부가 예전 기본값(첫 원작 컷)으로 대체한다."""
-    best_path, best_score = None, 0
+    섞여 들어감). 처음에는 가장 잘 나온 사진 한 장만 썼는데, "한 장만 쓰면
+    정확도가 떨어지지 않냐"는 후속 요청으로 자격을 통과한 후보 여러 장을
+    함께 골라(호출부가 VAE 인코딩 후 평균 latent를 만드는 데 씀) 한 장의
+    각도·조명 편향을 줄인다. 적당한 후보가 하나도 없으면(전부 노출 위주인
+    작품 등) 빈 리스트를 돌려주고 호출부가 예전 기본값(첫 원작 컷)으로
+    대체한다."""
+    candidates = []
     for path in originals:
         face_area, face_ratio, full_frame_ratio = _face_reference_metrics(path)
         if face_area <= 0 or face_ratio < _MIN_FACE_TO_SKIN_RATIO:
             continue
         if full_frame_ratio > _MAX_FULL_FRAME_SKIN_RATIO:
             continue
-        score = face_area * face_ratio
-        if score > best_score:
-            best_path, best_score = path, score
-    return best_path
+        candidates.append((face_area * face_ratio, path))
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return [path for _, path in candidates[:limit]]
 
 
 def _copy_reference(source, output, key):
@@ -283,6 +292,11 @@ def _visual_prompt_from_scene_text(scene, work_dir):
 
 
 def _openai_generate(prompt, target, reference=None):
+    # OpenAI images/edits는 참조 이미지를 한 장만 받는다 — 여러 장(list)이
+    # 오면 점수가 가장 높은(정렬된 목록의 첫) 한 장만 쓴다. 여러 장을
+    # 평균 내는 건 ComfyUI(_local_generate) 경로에서만 지원한다.
+    if isinstance(reference, (list, tuple)):
+        reference = reference[0] if reference else None
     key = os.environ.get("OPENAI_API_KEY", "")
     if not key:
         raise RuntimeError("OPENAI_API_KEY가 설정되지 않았습니다")
@@ -385,9 +399,17 @@ def _comfy_vae_name():
 
 
 def _build_comfy_workflow(
-    prompt, model_name, seed, reference_name=None,
+    prompt, model_name, seed, reference_names=None,
     loader="CheckpointLoaderSimple", vae_name="",
 ):
+    # reference_names는 문자열 하나(예전 방식과 호환) 또는 여러 장의 리스트를
+    # 받는다. ★ 2026-09-23: "얼굴이 나오는 사진은 되도록 많이 참조해서
+    # 정확도를 올리게끔" 요청 — 한 장에만 기대면 그 한 장의 각도·조명·표정
+    # 편향이 그대로 인물 정체성에 반영되므로, 자격을 통과한 사진 여러 장을
+    # VAE로 각각 인코딩해 동일 가중치로 평균 낸 latent를 레퍼런스로 쓴다.
+    if isinstance(reference_names, str):
+        reference_names = [reference_names]
+    reference_names = [name for name in (reference_names or []) if name]
     # 추가 커스텀 노드 없이 새 ComfyUI에서도 동작하는 API 형식이다.
     # 레퍼런스가 있으면 VAE img2img로 구도·인물성을 유지한다.
     camera_directions = (
@@ -409,9 +431,9 @@ def _build_comfy_workflow(
     workflow = {
         "3": {"class_type": "KSampler", "inputs": {
             "seed": seed, "steps": 25, "cfg": 7.0, "sampler_name": "dpmpp_2m",
-            "scheduler": "karras", "denoise": 0.48 if reference_name else 1.0,
+            "scheduler": "karras", "denoise": 0.48 if reference_names else 1.0,
             "model": ["4", 0], "positive": ["6", 0], "negative": ["7", 0],
-            "latent_image": ["14", 0] if reference_name else ["5", 0],
+            "latent_image": ["14", 0] if reference_names else ["5", 0],
         }},
         "4": {"class_type": loader, "inputs": {
             "ckpt_name" if loader == "CheckpointLoaderSimple" else "model_path": model_name
@@ -426,16 +448,37 @@ def _build_comfy_workflow(
     }
     if vae_name:
         workflow["12"] = {"class_type": "VAELoader", "inputs": {"vae_name": vae_name}}
-    if reference_name:
-        workflow["10"] = {"class_type": "LoadImage", "inputs": {"image": reference_name}}
-        workflow["11"] = {"class_type": "VAEEncode", "inputs": {
-            "pixels": ["10", 0], "vae": ["12", 0] if vae_name else ["4", 2]
-        }}
-        # 먼저 텍스트만으로 장면의 구도 latent를 만든 뒤, 고정 인물 레퍼런스의
-        # latent를 80% 섞고 최종 img2img 패스를 수행한다. ComfyUI LatentBlend는
-        # samples1*blend_factor + samples2*(1-blend_factor)이고 samples1=텍스트
-        # (13번), samples2=레퍼런스(11번)라 레퍼런스 비중 80%를 얻으려면
-        # blend_factor를 0.20으로 낮춰야 한다(전에는 0.78 = 레퍼런스 22%였음).
+    if reference_names:
+        # 레퍼런스 사진마다 LoadImage+VAEEncode 쌍을 만든다. 첫 장은 예전과
+        # 같은 노드 ID(10/11)를 그대로 쓰고, 추가 사진은 "1{idx}0"/"1{idx}1"로
+        # 번호를 늘린다(12~14는 이미 VAE/샘플러/최종 블렌드가 쓰고 있어 겹치지
+        # 않게 피한다).
+        encode_ids = []
+        for idx, name in enumerate(reference_names):
+            load_id, encode_id = ("10", "11") if idx == 0 else (f"1{idx}0", f"1{idx}1")
+            workflow[load_id] = {"class_type": "LoadImage", "inputs": {"image": name}}
+            workflow[encode_id] = {"class_type": "VAEEncode", "inputs": {
+                "pixels": [load_id, 0], "vae": ["12", 0] if vae_name else ["4", 2]
+            }}
+            encode_ids.append(encode_id)
+        # 레퍼런스가 여러 장이면 LatentBlend를 사슬로 이어 동일 가중치 평균을
+        # 만든다 — k번째 사진을 더할 때 blend_factor=(k-1)/k로 두면(samples1=
+        # 지금까지의 평균, samples2=새 사진) 결과가 항상 "지금까지 더한 사진
+        # 전부를 똑같은 비중으로 평균한 값"이 된다(한 장뿐이면 그대로 그 한
+        # 장의 latent를 쓴다 — 예전 단일 레퍼런스 동작과 동일).
+        combined_id = encode_ids[0]
+        for k, encode_id in enumerate(encode_ids[1:], start=2):
+            blend_id = f"15{k}"
+            workflow[blend_id] = {"class_type": "LatentBlend", "inputs": {
+                "samples1": [combined_id, 0], "samples2": [encode_id, 0],
+                "blend_factor": (k - 1) / k,
+            }}
+            combined_id = blend_id
+        # 먼저 텍스트만으로 장면의 구도 latent를 만든 뒤, 고정 인물 레퍼런스
+        # 평균 latent를 80% 섞고 최종 img2img 패스를 수행한다. ComfyUI
+        # LatentBlend는 samples1*blend_factor + samples2*(1-blend_factor)이고
+        # samples1=텍스트(13번), samples2=레퍼런스 평균이라 레퍼런스 비중 80%를
+        # 얻으려면 blend_factor를 0.20으로 낮춰야 한다(전에는 0.78 = 22%였음).
         # ★ 2026-09-23: "레퍼런스로 80%비율로 해서 이미지 뽑은다음 고정 인물로
         # 정한뒤에" 요청 — 얼굴을 강하게 고정하는 대신 자세·배경은 프롬프트가
         # 담당(camera_direction 회전 + 장면별 영어 묘사)한다.
@@ -448,7 +491,7 @@ def _build_comfy_workflow(
             "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["5", 0],
         }}
         workflow["14"] = {"class_type": "LatentBlend", "inputs": {
-            "samples1": ["13", 0], "samples2": ["11", 0], "blend_factor": 0.20,
+            "samples1": ["13", 0], "samples2": [combined_id, 0], "blend_factor": 0.20,
         }}
     else:
         workflow["5"] = {"class_type": "EmptyLatentImage", "inputs": {"width": 512, "height": 768, "batch_size": 1}}
@@ -507,13 +550,18 @@ def _local_generate(prompt, target, reference=None):
         raise RuntimeError(f"ComfyUI 서버({_comfy_base_url()})에 연결할 수 없습니다: {exc}") from exc
     loader, model_name = _comfy_model_spec()
     vae_name = _comfy_vae_name() if loader == "CheckpointLoaderSimple" else ""
-    reference_name = _comfy_upload(reference) if reference and reference.is_file() else None
+    # reference는 단일 Path(예전 방식) 또는 여러 장의 list일 수 있다(★ 2026-09-23
+    # "얼굴이 나오는 사진은 되도록 많이 참조해서 정확도를 올리게끔" 요청) —
+    # 각각 ComfyUI에 업로드해서 파일명 목록을 만들고, 평균 latent는
+    # _build_comfy_workflow가 만든다.
+    references = reference if isinstance(reference, (list, tuple)) else ([reference] if reference else [])
+    reference_names = [_comfy_upload(ref) for ref in references if ref and ref.is_file()]
     base_seed = int.from_bytes(hashlib.sha256(prompt.encode()).digest()[:8], "big") & ((1 << 63) - 1)
     timeout = int(os.environ.get("JP_COMFYUI_TIMEOUT", "600"))
     for attempt in range(4):
         seed = base_seed + attempt * 104729
         workflow = _build_comfy_workflow(
-            prompt, model_name, seed, reference_name, loader=loader, vae_name=vae_name
+            prompt, model_name, seed, reference_names, loader=loader, vae_name=vae_name
         )
         queued = _comfy_request("/prompt", {"prompt": workflow}, timeout=30)
         if queued.get("node_errors"):
@@ -538,7 +586,13 @@ def _local_generate(prompt, target, reference=None):
                     "sampler": sampler["sampler_name"], "scheduler": sampler["scheduler"],
                     "denoise": sampler["denoise"], "base_seed": base_seed,
                     "used_seed": seed, "attempt": attempt + 1,
-                    "composition_pass": "txt2img 12 steps + 20% text/80% reference latent + img2img",
+                    "reference_count": len(reference_names),
+                    "composition_pass": (
+                        f"txt2img 12 steps + 20% text/80% reference latent"
+                        f"({len(reference_names)}장 평균) + img2img"
+                        if len(reference_names) > 1 else
+                        "txt2img 12 steps + 20% text/80% reference latent + img2img"
+                    ),
                 },
             }
             return
@@ -603,28 +657,39 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
     originals = _original_scene_images(work_dir)
     # ★ 2026-09-23: "인물 얼굴이나온사진만 추출... 고정 인물로 정한뒤에" 요청 —
     # 예전엔 장면마다 원작의 다른 컷을 순환 참조해서 얼굴이 흔들렸다. 이제
-    # 얼굴이 가장 잘 나온 사진 한 장만 OpenCV로 골라(토큰 없음) portrait를
-    # 만들고, 아래 장면 루프도 전부 그 portrait 하나만 공유 참조한다.
-    face_reference = _select_fixed_reference(originals)
-    cover_reference = face_reference or (originals[0] if originals else next((
+    # 자격을 통과한 얼굴 사진들만 OpenCV로 골라(토큰 없음) portrait를 만들고,
+    # 아래 장면 루프도 전부 그 portrait 하나만 공유 참조한다. 후속 요청
+    # "얼굴이 나오는 사진은 되도록 많이 참조해서 정확도를 올리게끔"에 따라
+    # 한 장이 아니라 자격을 통과한 후보 전부(최대 MAX_REFERENCE_IMAGES장)를
+    # 골라 _local_generate가 평균 latent를 만들게 한다.
+    face_references = _select_fixed_references(originals)
+    fallback_reference = originals[0] if originals else next((
         path for name in ("cover.jpg", "cover.png", "cover.webp")
         if (path := work_dir / name).is_file()
-    ), None))
-    portrait_reference_file = _copy_reference(cover_reference, output, "portrait")
+    ), None)
+    reference_pool = face_references or ([fallback_reference] if fallback_reference else [])
+    primary_reference = reference_pool[0] if reference_pool else None
+    portrait_reference_file = _copy_reference(primary_reference, output, "portrait")
+    portrait_reference_files = [portrait_reference_file] + [
+        _copy_reference(path, output, f"portrait-{index}")
+        for index, path in enumerate(reference_pool[1:], start=1)
+    ]
     manifest["portrait_prompt"] = _prompt(work_dir.name)
     manifest["portrait_reference"] = portrait_reference_file
+    manifest["portrait_references"] = [name for name in portrait_reference_files if name]
     manifest["reference_source"] = (
-        "face_detected_fixed" if face_reference else ("original_epub_scene" if originals else "cover_fallback")
+        f"face_detected_fixed ({len(face_references)}장 평균)" if face_references
+        else ("original_epub_scene" if originals else "cover_fallback")
     )
     if force or not _valid_image(portrait):
-        manifest["portrait_provider"] = generator(manifest["portrait_prompt"], portrait, cover_reference)
+        manifest["portrait_provider"] = generator(manifest["portrait_prompt"], portrait, reference_pool)
         if manifest["portrait_provider"] == "comfyui":
             manifest["portrait_effective_prompt"] = _LAST_GENERATION_META.get("effective_prompt", "")
             manifest["portrait_generation_settings"] = _LAST_GENERATION_META.get("generation_settings", {})
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     # 이후 모든 장면은 portrait.png(없으면 위에서 고른 얼굴 사진)를 동일하게
     # 참조한다 — 장면마다 다른 원작 컷을 쓰지 않는다.
-    fixed_reference_path = portrait if _valid_image(portrait) else cover_reference
+    fixed_reference_path = portrait if _valid_image(portrait) else primary_reference
     fixed_reference_file = "portrait.png" if _valid_image(portrait) else portrait_reference_file
     for scene in plan["selected"]:
         filename = _image_filename(scene["key"])
