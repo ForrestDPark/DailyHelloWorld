@@ -1012,6 +1012,18 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertEqual(result["urls"], ["https://example.com/1"])
         mock_subprocess.Popen.assert_not_called()
 
+    def test_open_random_sites_503_with_clear_message_when_bookmarks_file_is_locked(self):
+        # ★ 2026-09-24: "추천사이트보기 지금안되건데 왜안되는지알아봐주고" 신고 —
+        # 실측해보니 Chrome Bookmarks 파일이 macOS 개인정보 보호(TCC)로 막혀
+        # PermissionError가 났는데, 예전엔 이걸 "북마크 없음"과 똑같이 조용히
+        # 삼켜서 사용자가 원인을 알 수 없었다. 이제는 권한 문제를 구분해
+        # 명확한 메시지로 올려 보내는지 검증한다.
+        with patch("builtins.open", side_effect=PermissionError("Operation not permitted")):
+            with self.assertRaises(HTTPException) as raised:
+                module.open_shift_alarm_random_sites(owner_request())
+        self.assertEqual(raised.exception.status_code, 503)
+        self.assertIn("전체 디스크 접근 권한", raised.exception.detail)
+
     def test_random_sites_exclude_non_web_bookmarks(self):
         bookmarks_payload = {"roots": {"bookmark_bar": {"type": "folder", "name": "天", "children": [
             {"type": "url", "url": "javascript:alert(1)"},

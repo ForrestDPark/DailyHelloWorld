@@ -2022,6 +2022,12 @@ def _shift_alarm_save_random_bookmark_history(folder_name, visited_urls):
 
 
 def _shift_alarm_pick_random_bookmarks(n=3, folder_name=SHIFT_ALARM_RANDOM_BOOKMARK_FOLDER):
+    # ★ 2026-09-24: "추천사이트보기 지금안되건데 왜안되는지알아봐주고" 신고 —
+    # 실측해보니 Chrome Bookmarks 파일 자체가 macOS 개인정보 보호(TCC)로
+    # 막혀 PermissionError가 나고, 아래 except가 이를 "북마크 없음"과
+    # 똑같이 조용히 삼켜서 원인을 알 수 없었다. 권한 문제만 구분해 올려
+    # 보낸다 — 코드로 고칠 수 없는 문제(전체 디스크 접근 권한 필요)라
+    # 사용자가 원인을 바로 알 수 있게 하는 게 최선이다.
     try:
         with open(SHIFT_ALARM_CHROME_BOOKMARKS_PATH, encoding="utf-8") as file:
             data = json.load(file)
@@ -2053,6 +2059,12 @@ def _shift_alarm_pick_random_bookmarks(n=3, folder_name=SHIFT_ALARM_RANDOM_BOOKM
         selected = random.sample(unvisited, min(n, len(unvisited)))
         _shift_alarm_save_random_bookmark_history(folder_name, visited + selected)
         return selected
+    except PermissionError as exc:
+        raise RuntimeError(
+            "Chrome 북마크 파일에 접근할 권한이 없습니다 — 시스템 설정 > 개인정보 보호 및 "
+            "보안 > 전체 디스크 접근 권한에 이 서버의 Python(server/.venv/bin/python3)을 "
+            "추가해야 합니다"
+        ) from exc
     except (OSError, ValueError, TypeError):
         return []
 
@@ -2976,7 +2988,10 @@ def open_shift_alarm_random_sites(request: Request):
     # 정작 Mac 화면에서 창이 뜨는 셈이라 무의미했다. URL만 골라 돌려주고, 여는
     # 동작은 이 요청을 보낸 브라우저(app.js) 쪽에서 하게 바꿨다.
     _require_owner(request)
-    urls = _shift_alarm_pick_random_bookmarks(3)
+    try:
+        urls = _shift_alarm_pick_random_bookmarks(3)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     if not urls:
         raise HTTPException(status_code=409, detail="북마크를 불러올 수 없습니다")
     return {"ok": True, "message": f"{len(urls)}개 찾았습니다", "urls": urls}

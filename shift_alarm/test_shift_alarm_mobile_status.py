@@ -8,8 +8,26 @@ from shift_alarm import (
     _context_key_for_date, _parse_reminder_time_row, build_daily_routine, build_reminder_schedule,
     build_sleep_schedule,
     build_reminders_detailed, filter_dismissed_reminder_items, _effective_reminder_definitions,
-    _generic_recurrence_due,
+    _generic_recurrence_due, _post_shift_volume_time, POST_SHIFT_VOLUME_DELAY_HOURS,
 )
+
+
+class PostShiftVolumeTimeTests(unittest.TestCase):
+    # ★ 2026-09-24: "근무표기준으로 퇴근후 한시간뒤에는 맥음량 50%로
+    # 낮춰주면좋겠어" 요청 — 근무별 퇴근 시각 + 지연 시간 계산만 따로
+    # 검증한다(rumps 타이머 콜백 자체는 App 인스턴스가 필요해 여기서 안 다룸).
+    def test_day_shift_ends_at_2pm_so_target_is_3pm(self):
+        self.assertEqual(_post_shift_volume_time("Day"), (14 + POST_SHIFT_VOLUME_DELAY_HOURS, 0))
+
+    def test_swing_shift_ends_at_10pm_so_target_is_11pm(self):
+        self.assertEqual(_post_shift_volume_time("Swing"), (22 + POST_SHIFT_VOLUME_DELAY_HOURS, 0))
+
+    def test_gy_shift_ends_at_6am_so_target_is_7am(self):
+        self.assertEqual(_post_shift_volume_time("GY"), (6 + POST_SHIFT_VOLUME_DELAY_HOURS, 0))
+
+    def test_returns_none_for_unknown_or_day_off_shift(self):
+        self.assertIsNone(_post_shift_volume_time("휴무"))
+        self.assertIsNone(_post_shift_volume_time(None))
 
 
 class RemindersDetailedTests(unittest.TestCase):

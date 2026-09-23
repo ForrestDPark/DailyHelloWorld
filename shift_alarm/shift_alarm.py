@@ -1819,6 +1819,18 @@ def _is_alarm_muted():
 WAKE_VOLUME_FILE = os.path.expanduser("~/.shift_alarm_wake_volume.json")
 
 
+def _set_system_volume(percent):
+    """macOS 시스템 출력 음량을 percent(0~100)로 맞춘다. 실패해도 호출부의
+    알람·알림 자체는 그대로 진행돼야 하므로 조용히 넘어간다."""
+    try:
+        subprocess.run(
+            ["/usr/bin/osascript", "-e", f"set volume output volume {max(0, min(100, int(percent)))}"],
+            timeout=10, check=False,
+        )
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError):
+        pass
+
+
 def _apply_wake_alarm_volume():
     """기상 알람(wake_ 접두사 리마인더)이 울리기 직전에만 호출한다. 웹앱
     설정에서 켜져 있으면 macOS 시스템 음량을 저장된 값으로 강제 맞춘다 —
@@ -1831,16 +1843,10 @@ def _apply_wake_alarm_volume():
             payload = json.load(f)
         if not payload.get("enabled"):
             return
-        percent = max(0, min(100, int(payload.get("percent", 80))))
+        percent = payload.get("percent", 80)
     except (FileNotFoundError, OSError, json.JSONDecodeError, ValueError, TypeError):
         return
-    try:
-        subprocess.run(
-            ["/usr/bin/osascript", "-e", f"set volume output volume {percent}"],
-            timeout=10, check=False,
-        )
-    except (OSError, subprocess.SubprocessError):
-        pass
+    _set_system_volume(percent)
 
 
 # ════════════════════════════════════════════════════════════
@@ -5065,6 +5071,27 @@ def _in_time_window(now, start, end):
     return now >= start or now < end
 
 
+# ★ 2026-09-24: "근무표기준으로 퇴근후 한시간뒤에는 맥음량 50%로
+# 낮춰주면좋겠어" 요청 — _quiet_hours_window와 같은 방식으로 근무 종료
+# 시각에서 오프셋을 계산하지만, 이건 조용한 시간대 재생 볼륨 배율이 아니라
+# macOS 시스템 출력 음량 자체를 한 번 낮추는 별개 기능이다.
+POST_SHIFT_VOLUME_DELAY_HOURS = 1
+POST_SHIFT_VOLUME_PERCENT = 50
+
+
+def _post_shift_volume_time(shift):
+    """근무 `shift`의 퇴근 POST_SHIFT_VOLUME_DELAY_HOURS시간 뒤 시각을
+    (hour, minute)으로 돌려준다. 근무 정보가 없으면(휴무 등) None."""
+    work_hours = SHIFT_WORK_HOURS.get(shift)
+    if not work_hours:
+        return None
+    end_hour, end_minute = work_hours["end"]
+    target_minutes = (
+        end_hour * 60 + end_minute + POST_SHIFT_VOLUME_DELAY_HOURS * 60
+    ) % (24 * 60)
+    return divmod(target_minutes, 60)
+
+
 def _is_quiet_hours():
     """지금이 현재 근무 기준 조용한 시간대(퇴근 3시간 후 ~ 다음 기상 알람)인지."""
     shift = load_config().get("current_shift")
@@ -5333,6 +5360,13 @@ class ShiftAlarmApp(rumps.App):
         self._last_electronics_off_notified = None
         self.electronics_off_timer = rumps.Timer(self._check_electronics_off, 60)
         self.electronics_off_timer.start()
+
+        # ★ 2026-09-24: "근무표기준으로 퇴근후 한시간뒤에는 맥음량 50%로
+        # 낮춰주면좋겠어" 요청 — 근무별 퇴근 시각(SHIFT_WORK_HOURS[..]["end"])
+        # 1시간 뒤에 하루 한 번 시스템 음량을 50%로 낮춘다.
+        self._last_post_shift_volume_notified = None
+        self.post_shift_volume_timer = rumps.Timer(self._check_post_shift_volume_lower, 60)
+        self.post_shift_volume_timer.start()
 
         # 일본어 스터디방 — 저녁 9시에 오늘의 복습 트리거 (1분마다 시각 체크)
         self._last_jp_subtitle_review_notified = None
@@ -6020,6 +6054,24 @@ class ShiftAlarmApp(rumps.App):
             f"{current} 근무 기준",
             "지금부터 전자제품 전원을 꺼주세요."
         )
+
+    def _check_post_shift_volume_lower(self, _):
+        """1분마다 오늘 근무 기준 '퇴근 1시간 후' 시각인지 확인, 하루 한 번만
+        macOS 시스템 음량을 50%로 낮춘다(★ 2026-09-24 "근무표기준으로
+        퇴근후 한시간뒤에는 맥음량 50%로 낮춰주면좋겠어" 요청)."""
+        current = self.config.get("current_shift")
+        target = _post_shift_volume_time(current)
+        if not target:
+            return
+        target_hour, target_minute = target
+        now = datetime.datetime.now()
+        if now.hour != target_hour or now.minute != target_minute:
+            return
+        today = now.date()
+        if self._last_post_shift_volume_notified == today:
+            return
+        self._last_post_shift_volume_notified = today
+        _set_system_volume(POST_SHIFT_VOLUME_PERCENT)
 
     def _check_jp_subtitle_daily_review(self, _):
         """1분마다 오늘의 일본어 복습 시각인지 확인, 하루 한 번만 스터디방에

@@ -166,6 +166,17 @@ Gmail은 로컬 `gog`의 `pulpilisory@gmail.com` 읽기 전용 OAuth를 사용�
 
 **참고 (다른 자동화 설계 시 사용할 값):** 사용자는 보통 퇴근 후 4~5시간 뒤에는 잠들어있다고 함 → Day는 약 18:30~19:00, Swing은 약 02:30~03:00(다음날), GY는 약 10:30~11:00 이 "확실히 자고 있을 시간"의 기준점.
 
+## 7-1. 퇴근 후 시스템 음량 자동 하향 (`_post_shift_volume_time`, `POST_SHIFT_VOLUME_PERCENT`)
+★ 2026-09-24: "근무표기준으로 퇴근후 한시간뒤에는 맥음량 50%로 낮춰주면좋겠어" 요청 — 근무별 퇴근 시각(`SHIFT_WORK_HOURS[shift]["end"]`)에서 `POST_SHIFT_VOLUME_DELAY_HOURS`(1시간) 뒤, macOS 시스템 출력 음량을 `POST_SHIFT_VOLUME_PERCENT`(50%)로 한 번 낮춘다.
+
+| 근무 | 퇴근 | 음량 하향 시각 |
+|---|---|---|
+| Day | 14:00 | 15:00 |
+| Swing | 22:00 | 23:00 |
+| GY | 06:00(익일) | 07:00(익일) |
+
+휴무일엔 동작 안 함. 1분 주기 타이머(`_check_post_shift_volume_lower`)로 시각 일치 여부를 체크, 하루 한 번만 실행(`_last_post_shift_volume_notified`). 알림 음량만 낮추는 위 `QUIET_HOURS_AFTER_SHIFT_END`(음성 알림 재생 배율, afplay -v)와는 별개로, `_set_system_volume()`(osascript `set volume output volume`)으로 실제 시스템 볼륨 자체를 바꾼다 — 기상 알람 음량 설정(`_apply_wake_alarm_volume`)이 쓰던 것과 같은 헬퍼다.
+
 ## 8. 아침 학습 — ebook_reader.py (PDF/EPUB TTS 낭독 + 노션 기록)
 - `ebook_reader.py`: PDF/EPUB를 문장 단위로 잘라 edge-tts(영어 음성, `en-US-JennyNeural`, 속도 -10%)로 낭독. 원래 macOS 단축어로 실행하던 것을 shift_alarm.py 메뉴로 옮김.
 - **노션 토큰은 코드에 하드코딩하지 않고 macOS 키체인에서 읽음**: `security find-generic-password -a "$USER" -s "ebook_reader_notion_token" -w`. 토큰 등록/갱신: `security add-generic-password -a "$USER" -s "ebook_reader_notion_token" -w "<token>" -U`.
