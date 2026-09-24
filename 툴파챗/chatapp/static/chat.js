@@ -3023,37 +3023,91 @@ function showJpVocabWordPopover(word, anchor) {
 // 일치하면 색을 다르게 하고 단어 전체 클릭(단어 팝업)을 붙인다. 후리가나
 // 렌더링은 메시지 도착 시 곧장 일어나는데 단어 목록은 비동기로 오므로,
 // 목록이 늦게 도착해도 이미 그려진 말풍선까지 다시 훑어 놓치지 않는다.
+// ★ 2026-09-24: "동사표현도 색칠하고 단어장기능추가해" 요청 — 후리가나 한자 바로 뒤에
+// 붙는 활용 어미(怒る·怒られる·怖い·食べました 등)까지 한 단어(동사·형용사 표현)로 묶어
+// 색칠하고, 눌러서 뜻·훈음을 보고 단어장에 저장할 수 있게 한다. 형태소 분석기 없이
+// 흔한 활용형 어미만 긴 것부터 대조한다(조사 は·が·を 등은 절대 끌어오지 않는다).
+const JP_INFLECTION_PATTERN = new RegExp("^(?:" + [
+  "させられ[るたてない]", "られ[るたてない]", "させ[るたてない]", "され[るたてない]",
+  "[あかがさたなばまらわ]せ[るたてない]", "[あかがさたなばまらわ]れ[るたてない]",
+  "[えけげせてねべめれ](?:ませんでした|ました|ません|ます|なかった|ない|る|た|て)",
+  "ませんでした", "ました", "ません", "ます", "なかった", "ない",
+  "ていた", "ている", "てい[るたま]", "ちゃっ[たて]", "ちゃう", "じゃっ[たて]", "じゃう",
+  "[きぎしちにびみり]ました", "[きぎしちにびみり]ませんでした", "[きぎしちにびみり]ません", "[きぎしちにびみり]ます",
+  "[きぎしちにびみり]たい", "[きぎしちにびみり]そう",
+  "っ[たてち]", "ん[だで]", "[いきぎしちにびみりえけげせてねべめ][たて]",
+  "[あかがさたなばまらわ]ない", "[あかがさたなばまらわ]なかった",
+  "しい", "かった", "くない", "くて", "く", "い", "る", "う", "す", "つ", "ぬ", "ぶ", "む", "ぐ", "た", "て",
+].join("|") + ")");
+const JP_KANJI_RE = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u;
+
+function wrapVerbExpression(ruby) {
+  const next = ruby.nextSibling;
+  if (!next || next.nodeType !== Node.TEXT_NODE) return null;
+  const match = JP_INFLECTION_PATTERN.exec(next.nodeValue || "");
+  if (!match) return null;
+  const okurigana = match[0];
+  // 단독 "い/う/つ…"처럼 1글자 어미는 형용사·동사 끝일 때만 — 바로 뒤가 히라가나로 이어지는
+  // 조사·다른 단어의 시작이면(예: 人はい…) 오탐이므로 1글자 어미는 뒤가 히라가나가 아닐 때만 인정한다.
+  const rest = next.nodeValue.slice(okurigana.length);
+  if (okurigana.length === 1 && /^[ぁ-ゖ]/.test(rest) && !/^[ぁ-ゖ]*(?:[んだよねなさか]|$)/.test(rest)) return null;
+  const wrapper = document.createElement("span");
+  wrapper.className = "verb-word";
+  wrapper.lang = "ja";
+  ruby.parentNode.insertBefore(wrapper, ruby);
+  wrapper.appendChild(ruby);
+  wrapper.appendChild(document.createTextNode(okurigana));
+  next.nodeValue = rest;
+  if (!next.nodeValue) next.remove();
+  return {wrapper, okurigana};
+}
+
 function applyJpVocabHighlighting(container) {
   const rubies = container.querySelectorAll("ruby.message-furigana");
   for (const ruby of rubies) {
     const base = ruby.firstChild?.nodeValue || "";
-    // ★ 2026-09-24: "툴파챗 채팅에서도 단어 선택 가능하게해줘 미연시처럼" 요청 —
-    // 학습 단어가 아니어도 후리가나가 붙은 한자 합성어(2글자 이상)는 미연시처럼
-    // 단어 전체를 눌러 뜻(서버 번역)·훈음·글자별 한자를 볼 수 있게 한다.
-    if (Array.from(base).filter((ch) => /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u.test(ch)).length < 1) continue;
+    if (!JP_KANJI_RE.test(base)) continue;
     const rt = ruby.querySelector("rt");
     const reading = katakanaToHiragana(rt?.textContent || "");
-    const learned = jpVocabularyMap.get(base);
-    const isLearned = !!learned && (!rt || katakanaToHiragana(learned.reading) === reading);
-    ruby.classList.toggle("vocab-word", isLearned);
-    ruby.classList.add("word-card");
-    ruby.dataset.vocabWord = "1";
-    if (ruby.dataset.wordCard) continue;
+    let target = ruby;
+    let surface = base;
+    let surfaceReading = reading;
+    if (ruby.parentElement?.classList.contains("verb-word")) {
+      target = ruby.parentElement;
+      surface = target.textContent.replace(rt?.textContent || "", "");
+      surfaceReading = reading + surface.slice(base.length);
+    } else if (!ruby.dataset.wordCard) {
+      const wrapped = wrapVerbExpression(ruby);
+      if (wrapped) {
+        target = wrapped.wrapper;
+        surface = base + wrapped.okurigana;
+        surfaceReading = reading + wrapped.okurigana;
+      }
+    }
+    const learned = jpVocabularyMap.get(surface);
+    const isLearned = !!learned && (!rt || katakanaToHiragana(learned.reading) === surfaceReading);
+    target.classList.toggle("vocab-word", isLearned);
+    target.classList.add("word-card");
+    target.dataset.vocabWord = "1";
+    if (target.dataset.wordCard) continue;
+    target.dataset.wordCard = "1";
     ruby.dataset.wordCard = "1";
-    ruby.tabIndex = 0;
-    ruby.setAttribute("role", "button");
-    ruby.setAttribute("aria-label", `${base} 단어 뜻 보기`);
+    target.tabIndex = 0;
+    target.setAttribute("role", "button");
+    target.setAttribute("aria-label", `${surface} 단어 뜻 보기`);
     const open = (event) => {
       event.stopPropagation();
-      const known = jpVocabularyMap.get(base);
-      const currentReading = katakanaToHiragana(ruby.querySelector("rt")?.textContent || "");
-      const word = known && katakanaToHiragana(known.reading) === currentReading
-        ? known : {ja: base, reading: currentReading, ko: null};
-      showJpVocabWordPopover(word, ruby);
+      const known = jpVocabularyMap.get(surface);
+      const word = known && katakanaToHiragana(known.reading) === surfaceReading
+        ? known : {ja: surface, reading: surfaceReading, ko: null};
+      showJpVocabWordPopover(word, target);
     };
-    ruby.addEventListener("click", open);
-    ruby.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(event); }
+    target.addEventListener("click", open);
+    target.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && event.target === target || event.key === " " && event.target === target) {
+        event.preventDefault();
+        open(event);
+      }
     });
   }
 }

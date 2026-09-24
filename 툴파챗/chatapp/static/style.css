@@ -1783,3 +1783,12 @@ button.portal-card{font:inherit;text-align:left;cursor:pointer}
   font-family: "Hiragino Kaku Gothic ProN", "Noto Sans KR", sans-serif;
   font-size: 18px;
 }
+
+/* 동사·형용사 활용 표현(어미 포함)은 초록 실선 밑줄로 구분한다 */
+.verb-word.word-card {
+  color: #1f8a5b;
+  border-bottom: 1px solid color-mix(in srgb, #1f8a5b 70%, transparent);
+  cursor: pointer;
+}
+.verb-word.word-card rt { color: color-mix(in srgb, #1f8a5b 80%, var(--muted)); }
+.verb-word.word-card.vocab-word { color: var(--accent); }
