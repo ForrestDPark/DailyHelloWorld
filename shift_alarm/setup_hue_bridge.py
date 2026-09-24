@@ -23,7 +23,7 @@ def main():
     ip = sys.argv[1] if len(sys.argv) > 1 else discover_ip()
     print(f"Bridge: {ip}\n👉 지금 Bridge 윗면의 둥근 링크 버튼을 누르세요 (60초 대기)")
     context = ssl._create_unverified_context()
-    body = json.dumps({"devicetype": "shift_alarm#mac", "generateclientkey": False}).encode()
+    body = json.dumps({"devicetype": "shift_alarm#mac"}).encode()
     for attempt in range(1, 31):
         request = urllib.request.Request(f"https://{ip}/api", data=body, method="POST",
                                          headers={"Content-Type": "application/json"})
