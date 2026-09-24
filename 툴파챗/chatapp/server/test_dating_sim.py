@@ -940,7 +940,8 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         book_id = "5" * 20
         with tempfile.TemporaryDirectory() as directory, \
              patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", Path(directory)), \
-             patch.object(dating_sim_story, "prepared_book_ids", return_value=[book_id]), \
+             patch.object(dating_sim_story, "all_book_ids", return_value=[book_id]), \
+             patch.object(dating_sim_story, "book_readiness", return_value=(True, False, 10)), \
              patch.object(dating_sim_story, "_find_book", return_value=Path("/tmp/READY.epub")), \
              patch.object(dating_sim_story, "_book_title", return_value="READY"):
             stories = app.dating_sim_playable_stories(owner)
@@ -949,6 +950,8 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         self.assertEqual(denied.exception.status_code, 403)
         self.assertEqual([s["story_id"] for s in stories], [f"book:{book_id}"])
         self.assertFalse(stories[0]["started"])
+        self.assertFalse(stories[0]["ready"])  # 미완료도 목록에는 남는다
+        self.assertEqual(stories[0]["image_count"], 10)
         self.assertTrue(stories[0]["character_name"])
 
     def test_reference_candidates_list_and_regeneration_passes_selected_references(self):

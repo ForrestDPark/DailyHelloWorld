@@ -1027,6 +1027,29 @@ def _dating_sim_image_job_status(book_id, work_dir):
     }
 
 
+def _push_when_dating_sim_images_done(process, username, story_id, label):
+    """★ 2026-09-24: "미연시 이미지 재생성 완료되면 알람뜨게" 요청 — 생성 프로세스가 끝나면
+    화면을 떠나 있어도 웹 푸시로 알린다."""
+    if not hasattr(process, "wait"):
+        return
+    try:
+        returncode = process.wait()
+        ok = returncode == 0
+        conn = get_conn()
+        try:
+            _send_web_push_to_user(
+                conn, username,
+                "미연시 이미지 " + ("생성 완료" if ok else "생성 실패"),
+                f"{label} 이미지 재생성이 {'끝났어요' if ok else '실패했어요. 다시 시도해 주세요'}.",
+                f"/dating-sim/?book={story_id.split(':', 1)[-1]}",
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as exc:  # noqa: BLE001
+        print(f"⚠️ 미연시 이미지 완료 알림 실패: {exc}")
+
+
 DATING_SIM_IMAGE_KEY_RE = re.compile(r"^[A-Za-z0-9_:-]{1,64}$")
 
 
@@ -1077,6 +1100,11 @@ def dating_sim_generate_images_start(
         elif force_key:
             command.extend(["--force-key", force_key])
         process = subprocess.Popen(command, stdout=log_file, stderr=subprocess.STDOUT)
+        threading.Thread(
+            target=_push_when_dating_sim_images_done,
+            args=(process, _request_username(request), story_id or "", "인물·전체" if (force or reference or auto_references) else "이미지"),
+            daemon=True,
+        ).start()
         _dating_sim_image_jobs[book_id] = {
             "process": process, "log_file": log_file, "log_path": log_path,
             "started_at": int(time.time()),
@@ -1198,20 +1226,25 @@ def dating_sim_playable_stories(request: Request):
     finally:
         conn.close()
     stories = []
-    for book_id in dating_sim_story.prepared_book_ids():
+    for book_id in dating_sim_story.all_book_ids():
         story_id = f"book:{book_id}"
         try:
             story = _dating_story(story_id, username)
         except HTTPException:
             continue
+        scenario_ok, images_ok, image_count = dating_sim_story.book_readiness(book_id)
         row = progress.get(story_id)
         stories.append({
             "story_id": story_id, "character_name": story["name"],
             "character_image": story.get("character_image"),
             "started": bool(row), "day": min(row["day"], story["total_days"]) if row else 0,
             "total_days": story["total_days"], "completed": bool(row and row["completed"]),
+            # ★ 2026-09-24: 이미지·시나리오가 덜 끝난 작품도 목록에서 빼지 않고 미완료로 표시한다.
+            "ready": scenario_ok and images_ok, "scenario_ready": scenario_ok,
+            "images_ready": images_ok, "image_count": image_count,
         })
-    stories.sort(key=lambda item: (not item["started"], re.sub(r"\[([^|\]]+)\|[^\]]*\]", r"\1", item["character_name"] or "")))
+    stories.sort(key=lambda item: (not item["started"], not item["ready"],
+                                   re.sub(r"\[([^|\]]+)\|[^\]]*\]", r"\1", item["character_name"] or "")))
     return stories
 
 

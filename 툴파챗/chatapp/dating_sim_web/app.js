@@ -1243,11 +1243,11 @@ async function openStoryPopover(anchor) {
     pop.replaceChildren(Object.assign(document.createElement("p"), { className: "story-popover-empty", textContent: e.message }));
     return;
   }
-  const head = Object.assign(document.createElement("strong"), { textContent: `진행 가능한 미연시 ${stories.length}편` });
+  const head = Object.assign(document.createElement("strong"), { textContent: `미연시 ${stories.length}편 (완료 ${stories.filter((s) => s.ready).length}편)` });
   const list = document.createElement("div");
   list.className = "story-popover-list";
   if (!stories.length) {
-    list.append(Object.assign(document.createElement("p"), { className: "story-popover-empty", textContent: "아직 준비가 끝난 미연시가 없습니다" }));
+    list.append(Object.assign(document.createElement("p"), { className: "story-popover-empty", textContent: "서재에 미연시가 없습니다" }));
   }
   for (const item of stories) {
     const button = document.createElement("button");
@@ -1266,6 +1266,17 @@ async function openStoryPopover(anchor) {
     renderAnnotatedText(name, item.character_name);
     const status = document.createElement("small");
     status.textContent = item.completed ? "엔딩 완료" : item.started ? `DAY ${item.day}/${item.total_days} 진행 중` : "새로 시작";
+    if (!item.ready) {
+      // 이미지·시나리오가 덜 끝난 작품도 목록에 남기고 무엇이 모자란지 표시한다.
+      const missing = [];
+      if (!item.scenario_ready) missing.push("시나리오");
+      if (!item.images_ready) missing.push(`이미지 ${item.image_count}/42`);
+      const badge = document.createElement("em");
+      badge.className = "story-popover-badge";
+      badge.textContent = `미완료 · ${missing.join(" · ")}`;
+      status.append(" ", badge);
+      button.classList.add("incomplete");
+    }
     const text = document.createElement("span");
     text.className = "story-popover-text";
     text.append(name, status);
@@ -1963,6 +1974,20 @@ function stopDatingSimImageGenPoll() {
 // 전체 강제 재생성, 사진 한 장만 재생성)이 공유하도록 공통 함수로 뺐다.
 // 서버 쪽 작업은 작품당 하나만 돌 수 있어서(app.py의 _dating_sim_image_jobs)
 // 폴링 타이머도 전역 하나만 쓴다.
+// ★ 2026-09-24: "미연시 이미지 재생성 완료되면 알람뜨게" 요청 — 화면을 보고 있을 때는 짧은
+// 알림음과 안내창으로, 떠나 있을 때는 서버가 보내는 웹 푸시로 알린다.
+function notifyImageJobDone() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    osc.frequency.value = 880;
+    osc.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.25);
+  } catch (_) { /* 소리는 선택 사항 */ }
+  setTimeout(() => alert("🖼️ 미연시 이미지 재생성이 끝났어요!"), 50);
+}
+
 function watchDatingSimImageJob(status, setBusy, onSuccess) {
   let seenRunning = false;
   const tick = async (initial = false) => {
@@ -1992,6 +2017,7 @@ function watchDatingSimImageJob(status, setBusy, onSuccess) {
       // 것뿐이므로 새로고침을 또 트리거하지 않는다(무한 루프 방지).
       if (seenRunning || !initial) {
         status.textContent = "완료! 새로고침 중...";
+        notifyImageJobDone();
         await onSuccess();
         return;
       }

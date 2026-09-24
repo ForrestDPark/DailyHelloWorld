@@ -1637,6 +1637,40 @@ def prepared_book(book_id):
     return path
 
 
+def book_readiness(book_id):
+    """(시나리오 준비 여부, 이미지 준비 여부, 이미지 장수) — 미완료 작품을 목록에서
+    빼지 않고 상태만 표시하기 위한 상세판. prepared_book()과 같은 기준이다."""
+    path = _find_book(book_id)
+    if not path:
+        return False, False, 0
+    title = _book_title(path)
+    locations = ("first", "walk", "quiet")
+    scenario_ok = bool(load_generated_scenario(title, locations))
+    folder = _find_library_folder(title)
+    manifest_path = folder / GENERATED_IMAGE_DIRNAME / GENERATED_IMAGE_MANIFEST if folder else None
+    if not manifest_path or not manifest_path.is_file():
+        return scenario_ok, False, 0
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return scenario_ok, False, 0
+    image_dir = manifest_path.parent
+    expected = {f"{day}:{location}" for day in range(1, TOTAL_DAYS + 1) for location in locations}
+    assignments = manifest.get("assignments") or {}
+    ready = sum(1 for key in expected
+                if key in assignments and _image_file_ready(image_dir / str(assignments[key])))
+    portrait_ok = _image_file_ready(image_dir / str(manifest.get("portrait", "")))
+    images_ok = manifest.get("status") == "complete" and portrait_ok and ready == len(expected)
+    return scenario_ok, images_ok, ready
+
+
+def all_book_ids():
+    """서재의 모든 EPUB 공개 식별자(중복 제거·이름순)."""
+    if not JAPANESE_EPUB_ROOT.is_dir():
+        return []
+    return [_book_id(path) for path in sorted(JAPANESE_EPUB_ROOT.rglob("*.epub"))]
+
+
 def prepared_book_ids():
     """시나리오·이미지가 모두 준비된 EPUB들의 공개 식별자 목록(관리자 목록용)."""
     if not JAPANESE_EPUB_ROOT.is_dir():
