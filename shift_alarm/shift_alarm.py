@@ -1515,12 +1515,43 @@ HUE_COMMAND_PREFS = os.path.expanduser(
     "group.com.leporati.huecommand.shared.plist"
 )
 HUE_WAKE_ROOM_NAME = "거실1"
+HUE_OWN_CONFIG = os.path.expanduser("~/.shift_alarm_hue.json")
+
+
+def _hue_own_config():
+    try:
+        with open(HUE_OWN_CONFIG, encoding="utf-8") as file:
+            data = json.load(file)
+        return data if data.get("ip") and data.get("app_key") else None
+    except (OSError, ValueError):
+        return None
+
+
 
 
 def _hue_grouped_light_url(room_name):
     """Command 앱이 저장해둔 Bridge 연결 정보로 room_name의 grouped_light
     제어 URL과 요청 헤더/컨텍스트를 찾는다. toggle_hue_room()과
     set_hue_room_power() 둘 다 방을 찾는 과정은 같아서 여기로 뺐다."""
+    own = _hue_own_config()
+    if own:
+        # setup_hue_bridge.py로 발급한 전용 키 — 보호 폴더를 읽지 않으므로 launchd에서도 된다.
+        bridge_url = f"https://{own['ip']}/clip/v2/resource"
+        headers = {"hue-application-key": own["app_key"]}
+        context = ssl._create_unverified_context()
+        request = urllib.request.Request(f"{bridge_url}/room", headers=headers)
+        with urllib.request.urlopen(request, timeout=10, context=context) as response:
+            rooms_data = json.load(response).get("data", [])
+        room_resource = next(
+            (item for item in rooms_data if item.get("metadata", {}).get("name") == room_name), None)
+        if not room_resource:
+            raise ValueError(f"Hue 방을 찾을 수 없습니다: {room_name}")
+        grouped_light_id = next(
+            (item.get("rid") for item in room_resource.get("services", [])
+             if item.get("rtype") == "grouped_light"), None)
+        if not grouped_light_id:
+            raise RuntimeError("Hue 방의 조명 제어 대상을 찾지 못했습니다.")
+        return f"{bridge_url}/grouped_light/{grouped_light_id}", headers, context
     with open(HUE_COMMAND_PREFS, "rb") as file:
         prefs = plistlib.load(file)
     credentials = json.loads(prefs["shared_credentials"])
