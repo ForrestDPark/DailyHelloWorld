@@ -1511,6 +1511,18 @@ SHIFT_ALARM_SUBTITLE_STATUS_FILE = SHIFT_ALARM_SUBTITLE_DIR / "status.json"
 # shift_alarm.py의 JP_SUBTITLE_MARKER_TIMEOUT_SECONDS와 동일 — 영상 여러 개를
 # 이어붙여 처리하면 오래 걸릴 수 있어 넉넉히 3시간.
 SHIFT_ALARM_SUBTITLE_TIMEOUT_SECONDS = 3 * 60 * 60
+SHIFT_ALARM_SUBTITLE_STALE_GRACE_SECONDS = 120
+
+
+def _shift_alarm_subtitle_pipeline_alive():
+    """자막 파이프라인(subtitle_pipeline_body.sh) 프로세스가 하나라도 떠 있는지."""
+    try:
+        return subprocess.run(["/usr/bin/pgrep", "-f", "subtitle_pipeline_body.sh"],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5,
+                              check=False).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return True  # 확인 못 하면 살아 있다고 보고 기존 타임아웃에 맡긴다
+
 # shift_alarm.py의 JP_SUBTITLE_STUDY_ROOM_ID와 같은 방 — 완료되면 학습카드
 # 위주로 오늘 회차를 소개해달라는 트리거를 그대로 재사용한다.
 JP_SUBTITLE_STUDY_ROOM_ID = "custom_1fc73254c0"
@@ -1644,7 +1656,19 @@ def _shift_alarm_subtitle_status():
                 started = datetime.datetime.fromisoformat(status["created_at"])
             except (KeyError, ValueError):
                 started = None
-            if started and (datetime.datetime.now(datetime.timezone.utc) - started).total_seconds() > SHIFT_ALARM_SUBTITLE_TIMEOUT_SECONDS:
+            # ★ 2026-09-24: "자막 추출이 웹앱 5%에서 멈춰있다 — 맥 껐다 켜서 다 멈춘 것
+            # 같은데 다시 실행 버튼이 있으면 좋겠다" 신고 — 재부팅·창 닫기로 파이프라인이
+            # 죽어도 완료 마커가 없으면 3시간 타임아웃까지 "진행 중"으로 남아 새 추출을
+            # 막았다. 파이프라인 프로세스가 하나도 없고 시작한 지 2분이 지났으면
+            # "중단됨"으로 바꿔 바로 다시 실행할 수 있게 한다.
+            if (started and (datetime.datetime.now(datetime.timezone.utc) - started).total_seconds() > SHIFT_ALARM_SUBTITLE_STALE_GRACE_SECONDS
+                    and not _shift_alarm_subtitle_pipeline_alive()):
+                shutil.rmtree(status.get("work_dir") or "", ignore_errors=True)
+                status.update(state="interrupted",
+                              stage="Mac가 재시작되었거나 터미널 창이 닫혀 작업이 중단되었습니다 — 다시 실행할 수 있습니다",
+                              updated_at=_now())
+                _shift_alarm_subtitle_write_status(status)
+            elif started and (datetime.datetime.now(datetime.timezone.utc) - started).total_seconds() > SHIFT_ALARM_SUBTITLE_TIMEOUT_SECONDS:
                 status.update(state="failed", stage="시간이 오래 걸려 상태를 확인할 수 없습니다. Mac의 터미널 창을 직접 확인하세요")
                 _shift_alarm_subtitle_write_status(status)
     # ★ 2026-09-15: "jufe 194 는 이미 자막 추출되어있는데 버젓이 자막추출
@@ -1655,7 +1679,7 @@ def _shift_alarm_subtitle_status():
     # 상태 파일은 complete인데 DB엔 running·5%로 멈춰 있었음). 매 조회마다
     # 현재 상태를 무조건 다시 써서(level-triggered) 어느 경계를 놓쳤어도
     # 다음 폴링에서 저절로 맞춰지게 한다.
-    if status.get("file_id") and status.get("filename") and status.get("state") in ("running", "complete", "failed"):
+    if status.get("file_id") and status.get("filename") and status.get("state") in ("running", "complete", "failed", "interrupted"):
         _shift_alarm_update_processing(
             status["file_id"], status["filename"], subtitle_state=status["state"],
             subtitle_progress=status.get("progress") or 0, subtitle_stage=status.get("stage"),

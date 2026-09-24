@@ -1029,6 +1029,29 @@ class ShiftAlarmApiTests(unittest.TestCase):
                 self.assertEqual(module._shift_alarm_load_web_bookmarks(), ["https://x.example"])
                 self.assertTrue((Path(directory) / "web.json").is_file())
 
+    def test_dead_subtitle_job_becomes_interrupted_and_can_be_restarted(self):
+        # ★ 2026-09-24: "자막 추출이 웹앱 5%에서 멈춰있다 — 맥 꺼다 켜서 다 멈춘 것 같다"
+        # 파이프라인 프로세스가 없고 완료 마커도 없으면 3시간 기다리지 않고 대기 상태로 돌린다.
+        import datetime as _dt
+        old = (_dt.datetime.now(_dt.timezone.utc) - _dt.timedelta(minutes=30)).isoformat()
+        with tempfile.TemporaryDirectory() as directory:
+            status_file = Path(directory) / "status.json"
+            status = {"job_id": "j", "run_id": "nomarker0000", "file_id": "", "state": "running",
+                      "filename": "a.mp4", "work_dir": str(Path(directory) / "work"),
+                      "progress": 5, "stage": "x", "created_at": old, "updated_at": old}
+            status_file.write_text(json.dumps(status), encoding="utf-8")
+            with patch.object(module, "SHIFT_ALARM_SUBTITLE_STATUS_FILE", status_file), \
+                 patch.object(module, "SHIFT_ALARM_SUBTITLE_DIR", Path(directory)), \
+                 patch.object(module, "_shift_alarm_subtitle_pipeline_alive", return_value=False), \
+                 patch.object(module, "_shift_alarm_subtitle_log_progress", return_value=None):
+                self.assertEqual(module._shift_alarm_subtitle_status()["state"], "interrupted")
+            status_file.write_text(json.dumps(status), encoding="utf-8")
+            with patch.object(module, "SHIFT_ALARM_SUBTITLE_STATUS_FILE", status_file), \
+                 patch.object(module, "SHIFT_ALARM_SUBTITLE_DIR", Path(directory)), \
+                 patch.object(module, "_shift_alarm_subtitle_pipeline_alive", return_value=True), \
+                 patch.object(module, "_shift_alarm_subtitle_log_progress", return_value=None):
+                self.assertEqual(module._shift_alarm_subtitle_status()["state"], "running")
+
     def test_open_random_sites_409_when_no_bookmarks(self):
         with patch.object(module, "_shift_alarm_pick_random_bookmarks", return_value=[]):
             with self.assertRaises(HTTPException) as raised:

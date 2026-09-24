@@ -3380,9 +3380,46 @@ def show_text_input_panel(title, message, default_text=""):
     return handler.result
 
 
+def choose_jp_subtitle_video_files():
+    """macOS 파일 선택 다이얼로그로 영상 파일을 직접 고른다(여러 개 가능). 취소하면 [].
+
+    ★ 2026-09-24: "메뉴바에서 실행하려고해도 파일 클릭이 안되" 신고 — 기존 폴더 선택
+    (choose folder)은 파일이 회색으로 표시돼 클릭할 수 없다. 영상 파일을 바로 고른다.
+    activate가 없으면 메뉴바 앱(액세서리)의 대화상자가 뒤로 가서 눌리지 않는다."""
+    apple_script = (
+        'activate\n'
+        'set picked to choose file with prompt "자막을 추출할 영상 파일을 선택하세요" '
+        'of type {"public.movie"} with multiple selections allowed\n'
+        'set out to ""\n'
+        'repeat with f in picked\n'
+        'set out to out & POSIX path of f & linefeed\n'
+        'end repeat\n'
+        'return out'
+    )
+    try:
+        result = subprocess.run(["osascript", "-e", apple_script], capture_output=True, text=True, timeout=300)
+        return [line for line in result.stdout.split("\n") if line.strip()]
+    except Exception:
+        return []
+
+
+def stage_jp_subtitle_files(paths):
+    """고른 영상 파일만 담은 격리 작업 폴더를 만든다(원본은 하드링크, 안 되면 복사).
+    subtitle_notion_epub_only.sh는 폴더 안 영상을 전부 처리하므로 폴더가 필요하다."""
+    work_dir = os.path.expanduser(f"~/.tulpachat/jp_subtitle_extract/work/menubar_{uuid.uuid4().hex[:12]}")
+    os.makedirs(work_dir, exist_ok=True)
+    for path in paths:
+        target = os.path.join(work_dir, os.path.basename(path))
+        try:
+            os.link(path, target)
+        except OSError:
+            shutil.copy2(path, target)
+    return work_dir
+
+
 def choose_jp_subtitle_folder():
     """macOS 폴더 선택 다이얼로그로 일본어 영상 폴더를 고른다. 취소하면 None."""
-    apple_script = 'POSIX path of (choose folder with prompt "일본어 영상이 있는 폴더를 선택하세요")'
+    apple_script = 'activate\nPOSIX path of (choose folder with prompt "일본어 영상이 있는 폴더를 선택하세요")'
     try:
         result = subprocess.run(["osascript", "-e", apple_script], capture_output=True, text=True, timeout=120)
         path = result.stdout.strip()
@@ -7688,6 +7725,7 @@ class ShiftAlarmApp(rumps.App):
 
         media_menu = rumps.MenuItem("🎬 일본어·미디어 도구")
         media_menu.add(rumps.MenuItem("🏃 운동용 영상만 추출 (폴더 선택)", callback=self.run_jp_workout_only_now))
+        media_menu.add(rumps.MenuItem("📝 자막·번역·낭독판만 (파일 선택)", callback=self.run_jp_subtitle_stage2_files_now))
         media_menu.add(rumps.MenuItem("📝 자막·번역·낭독판만 (폴더 선택)", callback=self.run_jp_subtitle_stage2_now))
         media_menu.add(rumps.MenuItem(
             "📖 EPUB 폴더 → 낭독판 EPUB (문장 강조)",
@@ -8410,6 +8448,21 @@ class ShiftAlarmApp(rumps.App):
             if target_minutes else f" (앞뒤 여유 {highlight_pad}초)"
         )
         rumps.notification("운동용 영상만 추출", "시작됨", f"{folder}{minutes_note}\n새 터미널 창에서 진행 상황을 확인하세요.")
+
+    def run_jp_subtitle_stage2_files_now(self, _):
+        """영상 파일을 직접 골라 자막·번역·낭독판만 실행한다(메뉴바에서 파일이 안 눌리던 문제)."""
+        paths = choose_jp_subtitle_video_files()
+        if not paths:
+            return
+        try:
+            work_dir = stage_jp_subtitle_files(paths)
+        except OSError as exc:
+            rumps.alert("오류", f"작업 폴더를 만들지 못했습니다:\n{exc}")
+            return
+        if not run_jp_subtitle_stage2_only(work_dir):
+            rumps.alert("오류", f"스크립트를 찾을 수 없습니다:\n{JP_SUBTITLE_STAGE2_SCRIPT}")
+            return
+        rumps.notification("자막·번역·낭독판", "시작됨", f"{len(paths)}개 영상\n새 iTerm 창에서 진행 상황을 확인하세요.")
 
     def run_jp_subtitle_stage2_now(self, _):
         """운동용 영상 추출 없이 자막·번역·낭독판 EPUB만 단독으로 실행."""

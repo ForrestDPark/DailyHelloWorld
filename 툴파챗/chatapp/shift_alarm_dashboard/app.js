@@ -136,7 +136,7 @@ function observeVideoTransferState(item){const key=item.file_id||item.filename,c
 document.addEventListener("pointerdown",primeCompletionChime,{once:true,passive:true});
 function shortcutClipboardUrl(name){return `shortcuts://run-shortcut?name=${encodeURIComponent(name)}&input=clipboard`}
 function safariShortcutUrl(){return shortcutClipboardUrl("Safari로 다운로드")}
-function renderSubtitleExtraction(info={state:"idle"}){currentSubtitleExtraction=info;const el=$("subtitle-extraction-status"),state=info.state||"idle",percent=Math.max(0,Math.min(100,Number(info.progress)||0));el.dataset.state=state;el.classList.toggle("hidden",state==="idle");const shown=state==="complete"?100:percent;$("subtitle-extraction-percent").textContent=`${Math.round(shown)}%`;$("subtitle-extraction-bar").style.width=`${shown}%`;$("subtitle-extraction-stage").textContent=state==="running"?`🎬 자막 추출 중 — ${info.stage||"Mac에서 처리 중입니다"}`:state==="complete"?"✅ 자막·번역·EPUB·Notion 반영 완료":state==="failed"?`⚠️ ${info.stage||"자막 추출 상태를 확인하지 못했습니다"}`:"";$("subtitle-extraction-file").textContent=info.filename?`${info.filename}${state==="running"?" · 새 터미널 창에서 자세한 로그를 볼 수 있고, 이 화면을 닫아도 계속 진행됩니다.":""}`:""}
+function renderSubtitleExtraction(info={state:"idle"}){currentSubtitleExtraction=info;const el=$("subtitle-extraction-status"),state=info.state||"idle",percent=Math.max(0,Math.min(100,Number(info.progress)||0));el.dataset.state=state;el.classList.toggle("hidden",state==="idle");const shown=state==="complete"?100:percent;$("subtitle-extraction-percent").textContent=`${Math.round(shown)}%`;$("subtitle-extraction-bar").style.width=`${shown}%`;$("subtitle-extraction-stage").textContent=state==="running"?`🎬 자막 추출 중 — ${info.stage||"Mac에서 처리 중입니다"}`:state==="complete"?"✅ 자막·번역·EPUB·Notion 반영 완료":state==="failed"?`⚠️ ${info.stage||"자막 추출 상태를 확인하지 못했습니다"}`:state==="interrupted"?`⏸️ ${info.stage||"작업이 중단되었습니다 — 다시 실행할 수 있습니다"}`:"";$("subtitle-extraction-file").textContent=info.filename?`${info.filename}${state==="running"?" · 새 터미널 창에서 자세한 로그를 볼 수 있고, 이 화면을 닫아도 계속 진행됩니다.":""}`:""}
 function renderVideoLibrary(items=[]){
     lastVideoItems=items;
     const library=$("video-library");
@@ -211,14 +211,14 @@ function renderVideoLibrary(items=[]){
             const subtitleLabel=document.createElement("span"),subtitleTrack=document.createElement("i");
             subtitleStatus=document.createElement("div");
             subtitleStatus.className=`video-subtitle-state ${subtitleState}`;
-            subtitleLabel.textContent=subtitleState==="complete"?"✓ 자막 추출 완료":subtitleState==="running"?`자막 추출 중 ${Math.round(subtitleProgress)}%`:`자막 추출 실패 · 다시 실행할 수 있습니다`;
+            subtitleLabel.textContent=subtitleState==="complete"?"✓ 자막 추출 완료":subtitleState==="running"?`자막 추출 중 ${Math.round(subtitleProgress)}%`:subtitleState==="interrupted"?`자막 추출 중단됨 (${Math.round(subtitleProgress)}%에서 멈춤) · 다시 실행할 수 있습니다`:`자막 추출 실패 · 다시 실행할 수 있습니다`;
             subtitleTrack.style.width=`${subtitleState==="complete"?100:subtitleProgress}%`;
             subtitleStatus.append(subtitleLabel,subtitleTrack);
         }
         const extract=document.createElement("button");
         extract.type="button";
         extract.className="subtitle-extract-btn";
-        extract.textContent=isThisExtracting?`자막 추출 중 ${Math.round(subtitleProgress)}%`:subtitleState==="complete"?"✓ 자막 추출 완료":"🎬 자막 추출";
+        extract.textContent=isThisExtracting?`자막 추출 중 ${Math.round(subtitleProgress)}%`:subtitleState==="complete"?"✓ 자막 추출 완료":(subtitleState==="interrupted"||subtitleState==="failed")?"🔁 다시 실행":"🎬 자막 추출";
         extract.disabled=extractionRunning||subtitleState==="complete";
         extract.addEventListener("click",()=>videoAction(
             "extract_subtitle",
