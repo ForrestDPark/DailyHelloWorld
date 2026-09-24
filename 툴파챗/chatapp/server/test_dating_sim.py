@@ -953,6 +953,7 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         self.assertFalse(stories[0]["ready"])  # 미완료도 목록에는 남는다
         self.assertEqual(stories[0]["image_count"], 10)
         self.assertTrue(stories[0]["character_name"])
+        self.assertEqual(stories[0]["source_title"], "READY")
 
     def test_reference_candidates_list_and_regeneration_passes_selected_references(self):
         owner = SimpleNamespace(state=SimpleNamespace(

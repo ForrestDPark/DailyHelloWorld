@@ -1236,6 +1236,7 @@ def dating_sim_playable_stories(request: Request):
         row = progress.get(story_id)
         stories.append({
             "story_id": story_id, "character_name": story["name"],
+            "source_title": story.get("source_title"),
             "character_image": story.get("character_image"),
             "started": bool(row), "day": min(row["day"], story["total_days"]) if row else 0,
             "total_days": story["total_days"], "completed": bool(row and row["completed"]),

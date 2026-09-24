@@ -785,6 +785,12 @@ body.practice-open { overflow: hidden; }
 .story-popover-item:hover, .story-popover-item.current { background: rgba(255, 214, 240, .22); }
 .story-popover-item img { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; flex: none; }
 .story-popover-text { display: flex; flex-direction: column; min-width: 0; }
+.story-popover-name { color: #fff; }
+.story-popover-source {
+  display: -webkit-box; margin-top: 2px; overflow: hidden;
+  color: var(--border); font: 11px/1.35 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans KR",sans-serif;
+  -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+}
 .story-popover-text small { opacity: .75; }
 .story-popover-empty { margin: 4px; opacity: .8; }
 

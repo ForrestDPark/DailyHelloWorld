@@ -1552,6 +1552,9 @@ async function openStoryPopover(anchor) {
     const name = document.createElement("span");
     name.className = "story-popover-name";
     renderAnnotatedText(name, item.character_name);
+    const sourceTitle = document.createElement("span");
+    sourceTitle.className = "story-popover-source";
+    sourceTitle.textContent = item.source_title ? `원작 · ${item.source_title}` : "원작 정보 없음";
     const status = document.createElement("small");
     status.textContent = item.completed ? "엔딩 완료" : item.started ? `DAY ${item.day}/${item.total_days} 진행 중` : "새로 시작";
     if (!item.ready) {
@@ -1567,7 +1570,7 @@ async function openStoryPopover(anchor) {
     }
     const text = document.createElement("span");
     text.className = "story-popover-text";
-    text.append(name, status);
+    text.append(name, sourceTitle, status);
     button.append(text);
     button.addEventListener("click", () => {
       closeStoryPopover();
