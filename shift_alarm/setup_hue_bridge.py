@@ -24,11 +24,19 @@ def main():
     print(f"Bridge: {ip}\n👉 지금 Bridge 윗면의 둥근 링크 버튼을 누르세요 (60초 대기)")
     context = ssl._create_unverified_context()
     body = json.dumps({"devicetype": "shift_alarm#mac", "generateclientkey": False}).encode()
-    for _ in range(30):
+    for attempt in range(1, 31):
         request = urllib.request.Request(f"https://{ip}/api", data=body, method="POST",
                                          headers={"Content-Type": "application/json"})
-        with urllib.request.urlopen(request, timeout=10, context=context) as response:
-            result = json.load(response)[0]
+        try:
+            with urllib.request.urlopen(request, timeout=10, context=context) as response:
+                result = json.load(response)[0]
+        except Exception as exc:
+            print(f"[{attempt}/30] ❌ Bridge 연결 실패: {exc}")
+            print("   → 시스템 설정 > 개인정보 보호 및 보안 > 로컬 네트워크에서 Terminal이 켜져 있는지 확인하세요.")
+            time.sleep(2)
+            continue
+        if "error" in result:
+            print(f"[{attempt}/30] ⏳ 링크 버튼 대기 중... ({result['error'].get('description', '')})")
         if "success" in result:
             key = result["success"]["username"]
             fd = os.open(CONFIG, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
