@@ -1140,6 +1140,38 @@ def dating_sim_encounters(request: Request):
     return encounters
 
 
+@app.get("/api/dating-sim/playable-stories")
+def dating_sim_playable_stories(request: Request):
+    """관리자 전용 — 시나리오·이미지가 모두 준비되어 지금 바로 진행할 수 있는
+    미연시(작품별 이야기) 목록. 프론트의 "미연시 목록" 팝오버에서 골라 들어간다."""
+    _require_owner(request)
+    username = _request_username(request)
+    conn = get_conn()
+    try:
+        progress = {
+            row["character_id"]: row for row in
+            conn.execute("SELECT * FROM dating_sim_progress WHERE username=?", (username,)).fetchall()
+        }
+    finally:
+        conn.close()
+    stories = []
+    for book_id in dating_sim_story.prepared_book_ids():
+        story_id = f"book:{book_id}"
+        try:
+            story = _dating_story(story_id, username)
+        except HTTPException:
+            continue
+        row = progress.get(story_id)
+        stories.append({
+            "story_id": story_id, "character_name": story["name"],
+            "character_image": story.get("character_image"),
+            "started": bool(row), "day": min(row["day"], story["total_days"]) if row else 0,
+            "total_days": story["total_days"], "completed": bool(row and row["completed"]),
+        })
+    stories.sort(key=lambda item: (not item["started"], re.sub(r"\[([^|\]]+)\|[^\]]*\]", r"\1", item["character_name"] or "")))
+    return stories
+
+
 @app.post("/api/dating-sim/new")
 def dating_sim_new_encounter(request: Request):
     """아직 시작하지 않은 만남(기본 이야기 또는 서재의 작품) 하나를 무작위로

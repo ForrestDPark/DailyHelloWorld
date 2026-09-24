@@ -215,6 +215,7 @@ function renderHud(state) {
   $("affection-bar").style.width = `${Math.max(0, Math.min(100, state.affection))}%`;
   // 관리자 계정에서만 시나리오 트리 버튼을 보여준다(서버도 소유자만 허용).
   $("tree-open-btn").classList.toggle("hidden", !state.is_admin);
+  $("story-list-btn").classList.toggle("hidden", !state.is_admin);
 }
 
 function renderMap(state) {
@@ -1199,7 +1200,97 @@ function renderLobby(mostRecentEncounter) {
   continueBtn.append(info);
   continueBtn.onclick = () => enterStory(mostRecentEncounter.story_id);
   showView("lobby-view");
+  probeStoryListForAdmin();
 }
+
+// ── 관리자 전용: 진행 가능한(시나리오·이미지 준비 완료) 미연시 목록 팝오버 ──
+let playableStories = null;
+
+async function loadPlayableStories(force = false) {
+  if (!playableStories || force) playableStories = await api("/api/dating-sim/playable-stories");
+  return playableStories;
+}
+
+// 로비에는 관리자 여부가 없으므로 목록 API가 성공할 때만(=관리자) 버튼을 보여준다.
+async function probeStoryListForAdmin() {
+  try {
+    await loadPlayableStories();
+    $("lobby-story-list-btn").classList.remove("hidden");
+  } catch (_) {
+    $("lobby-story-list-btn").classList.add("hidden");
+  }
+}
+
+function closeStoryPopover() {
+  $("story-popover").classList.add("hidden");
+}
+
+async function openStoryPopover(anchor) {
+  const pop = $("story-popover");
+  if (!pop.classList.contains("hidden") && pop.dataset.anchor === anchor.id) return closeStoryPopover();
+  pop.dataset.anchor = anchor.id;
+  pop.replaceChildren(Object.assign(document.createElement("p"), { className: "story-popover-empty", textContent: "불러오는 중…" }));
+  pop.classList.remove("hidden");
+  const rect = anchor.getBoundingClientRect();
+  const width = Math.min(320, window.innerWidth - 16);
+  pop.style.width = `${width}px`;
+  pop.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
+  pop.style.top = `${rect.bottom + 6}px`;
+  let stories;
+  try {
+    stories = await loadPlayableStories(true);
+  } catch (e) {
+    pop.replaceChildren(Object.assign(document.createElement("p"), { className: "story-popover-empty", textContent: e.message }));
+    return;
+  }
+  const head = Object.assign(document.createElement("strong"), { textContent: `진행 가능한 미연시 ${stories.length}편` });
+  const list = document.createElement("div");
+  list.className = "story-popover-list";
+  if (!stories.length) {
+    list.append(Object.assign(document.createElement("p"), { className: "story-popover-empty", textContent: "아직 준비가 끝난 미연시가 없습니다" }));
+  }
+  for (const item of stories) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "story-popover-item";
+    if (item.story_id === storyId) button.classList.add("current");
+    if (item.character_image) {
+      const img = document.createElement("img");
+      img.src = item.character_image;
+      img.alt = "";
+      img.loading = "lazy";
+      button.append(img);
+    }
+    const name = document.createElement("span");
+    name.className = "story-popover-name";
+    renderAnnotatedText(name, item.character_name);
+    const status = document.createElement("small");
+    status.textContent = item.completed ? "엔딩 완료" : item.started ? `DAY ${item.day}/${item.total_days} 진행 중` : "새로 시작";
+    const text = document.createElement("span");
+    text.className = "story-popover-text";
+    text.append(name, status);
+    button.append(text);
+    button.addEventListener("click", () => {
+      closeStoryPopover();
+      if (item.story_id !== storyId) enterStory(item.story_id);
+    });
+    list.append(button);
+  }
+  pop.replaceChildren(head, list);
+}
+
+for (const id of ["story-list-btn", "lobby-story-list-btn"]) {
+  $(id).addEventListener("click", (event) => {
+    event.stopPropagation();
+    openStoryPopover($(id));
+  });
+}
+document.addEventListener("click", (event) => {
+  if (!event.target.closest("#story-popover")) closeStoryPopover();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeStoryPopover();
+});
 
 function enterStory(nextStoryId) {
   storyId = nextStoryId;

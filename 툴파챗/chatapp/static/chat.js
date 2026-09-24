@@ -2970,11 +2970,46 @@ function showJpVocabWordPopover(word, anchor) {
     heading.textContent = label;
     const value = document.createElement("b");
     value.lang = label === "훈음" ? "ja" : "ko";
-    value.textContent = displayValue;
+    value.textContent = label === "뜻" && !word.ko ? "불러오는 중…" : displayValue;
     row.append(heading, value);
     readings.appendChild(row);
+    if (label === "뜻" && !word.ko) {
+      fetchJpWordMeaning(word.ja).then((meaning) => {
+        if (meaning) word.ko = meaning; // 단어장 저장 시 함께 저장
+        if (value.isConnected) value.textContent = meaning || "뜻을 찾지 못했습니다";
+      });
+    }
   }
   popover.append(close, favorite, glyph, readings);
+  const kanjiChars = Array.from(word.ja).filter((ch) => /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u.test(ch));
+  if (kanjiChars.length > 1) {
+    const section = document.createElement("div");
+    section.className = "japanese-kanji-popover-word-chars";
+    const label = document.createElement("span");
+    label.textContent = "글자별 보기";
+    const list = document.createElement("div");
+    list.className = "japanese-kanji-popover-word-chars-list";
+    for (const ch of kanjiChars) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "japanese-kanji-char";
+      button.lang = "ja";
+      button.textContent = ch;
+      button.setAttribute("aria-label", `${ch} 한자 뜻과 음 보기`);
+      button.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        // 이 버튼은 단어 팝업 안에 있어 팝업이 닫히면 DOM에서 사라지므로 위치만 붙잡는다.
+        const rect = button.getBoundingClientRect();
+        const anchorProxy = {getBoundingClientRect: () => rect, isConnected: true};
+        showJapaneseKanjiPopover(ch, {sound: "불러오는 중…", meaning: "불러오는 중…", on: [], kun: []}, anchorProxy, true);
+        const dictionary = await loadJapaneseKanjiDictionary();
+        showJapaneseKanjiPopover(ch, dictionary[ch] || {sound: "", meaning: "", on: [], kun: []}, anchorProxy, true);
+      });
+      list.appendChild(button);
+    }
+    section.append(label, list);
+    popover.append(section);
+  }
   document.body.appendChild(popover);
   jpVocabWordPopover = popover;
   const rect = anchor.getBoundingClientRect();
@@ -2989,24 +3024,51 @@ function showJpVocabWordPopover(word, anchor) {
 // 렌더링은 메시지 도착 시 곧장 일어나는데 단어 목록은 비동기로 오므로,
 // 목록이 늦게 도착해도 이미 그려진 말풍선까지 다시 훑어 놓치지 않는다.
 function applyJpVocabHighlighting(container) {
-  if (!jpVocabularyMap.size) return;
-  const rubies = container.querySelectorAll("ruby.message-furigana:not([data-vocab-checked])");
+  const rubies = container.querySelectorAll("ruby.message-furigana");
   for (const ruby of rubies) {
-    ruby.dataset.vocabChecked = "1";
     const base = ruby.firstChild?.nodeValue || "";
-    const word = jpVocabularyMap.get(base);
-    if (!word) continue;
+    // ★ 2026-09-24: "툴파챗 채팅에서도 단어 선택 가능하게해줘 미연시처럼" 요청 —
+    // 학습 단어가 아니어도 후리가나가 붙은 한자 합성어(2글자 이상)는 미연시처럼
+    // 단어 전체를 눌러 뜻(서버 번역)·훈음·글자별 한자를 볼 수 있게 한다.
+    if (Array.from(base).filter((ch) => /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u.test(ch)).length < 1) continue;
     const rt = ruby.querySelector("rt");
-    if (rt && katakanaToHiragana(rt.textContent) !== katakanaToHiragana(word.reading)) continue;
-    ruby.classList.add("vocab-word");
+    const reading = katakanaToHiragana(rt?.textContent || "");
+    const learned = jpVocabularyMap.get(base);
+    const isLearned = !!learned && (!rt || katakanaToHiragana(learned.reading) === reading);
+    ruby.classList.toggle("vocab-word", isLearned);
+    ruby.classList.add("word-card");
     ruby.dataset.vocabWord = "1";
+    if (ruby.dataset.wordCard) continue;
+    ruby.dataset.wordCard = "1";
     ruby.tabIndex = 0;
     ruby.setAttribute("role", "button");
-    ruby.setAttribute("aria-label", `${word.ja} 단어 뜻 보기`);
-    ruby.addEventListener("click", (event) => {
+    ruby.setAttribute("aria-label", `${base} 단어 뜻 보기`);
+    const open = (event) => {
       event.stopPropagation();
+      const known = jpVocabularyMap.get(base);
+      const currentReading = katakanaToHiragana(ruby.querySelector("rt")?.textContent || "");
+      const word = known && katakanaToHiragana(known.reading) === currentReading
+        ? known : {ja: base, reading: currentReading, ko: null};
       showJpVocabWordPopover(word, ruby);
+    };
+    ruby.addEventListener("click", open);
+    ruby.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); open(event); }
     });
+  }
+}
+
+const jpWordMeaningCache = new Map();
+async function fetchJpWordMeaning(word) {
+  if (jpWordMeaningCache.has(word)) return jpWordMeaningCache.get(word);
+  try {
+    const response = await apiFetch(`/api/dating-sim/vocab-meaning?word=${encodeURIComponent(word)}`);
+    if (!response.ok) return "";
+    const meaning = (await response.json()).meaning || "";
+    jpWordMeaningCache.set(word, meaning);
+    return meaning;
+  } catch (error) {
+    return "";
   }
 }
 

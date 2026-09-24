@@ -1637,6 +1637,14 @@ def prepared_book(book_id):
     return path
 
 
+def prepared_book_ids():
+    """시나리오·이미지가 모두 준비된 EPUB들의 공개 식별자 목록(관리자 목록용)."""
+    if not JAPANESE_EPUB_ROOT.is_dir():
+        return []
+    return [_book_id(path) for path in sorted(JAPANESE_EPUB_ROOT.rglob("*.epub"))
+            if prepared_book(_book_id(path))]
+
+
 def random_book_id(exclude=None, prepared_only=True):
     """서재에 실제 존재하는 EPUB 하나의 공개 식별자를 무작위로 고른다.
     exclude를 주면(이미 시작한 만남들) 그 책들은 후보에서 뺀다 — "새로운

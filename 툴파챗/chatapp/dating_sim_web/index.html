@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/dating-sim/static/style.css?v=20260923-v26">
+<link rel="stylesheet" href="/dating-sim/static/style.css?v=20260924-v27">
 </head>
 <body>
   <div id="game">
@@ -15,6 +15,7 @@
       <div class="hud-top-row">
         <a class="back-link" href="/#home">← 나가기</a>
         <div class="hud-top-actions">
+          <button id="story-list-btn" type="button" class="history-open-btn hidden">📚 미연시 목록</button>
           <button id="tree-open-btn" type="button" class="history-open-btn hidden">🌳 시나리오 트리</button>
           <button id="history-open-btn" type="button" class="history-open-btn hidden">📜 이전 장면</button>
         </div>
@@ -38,6 +39,8 @@
         <div id="history-list" class="history-list"></div>
       </div>
     </div>
+
+    <div id="story-popover" class="story-popover hidden" role="dialog" aria-label="진행 가능한 미연시 목록"></div>
 
     <div id="tree-overlay" class="history-overlay hidden">
       <div class="history-panel tree-panel">
@@ -100,6 +103,7 @@
       <section id="lobby-view" class="hidden">
         <p class="lobby-hint">이어서 만날까요, 새로운 사람을 만날까요?</p>
         <button id="lobby-continue-btn" type="button" class="lobby-card hidden"></button>
+        <button id="lobby-story-list-btn" type="button" class="pixel-button lobby-new-btn hidden">📚 미연시 목록 (관리자)</button>
         <button id="lobby-new-btn" type="button" class="pixel-button lobby-new-btn">✨ 새로운 만남 시작하기</button>
       </section>
 
@@ -108,6 +112,6 @@
       </section>
     </main>
   </div>
-  <script src="/dating-sim/static/app.js?v=20260923-v30"></script>
+  <script src="/dating-sim/static/app.js?v=20260924-v31"></script>
 </body>
 </html>

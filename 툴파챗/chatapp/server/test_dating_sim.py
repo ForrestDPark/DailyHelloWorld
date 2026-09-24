@@ -934,6 +934,23 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
             encounters = app.dating_sim_encounters(request(username))
         self.assertEqual(encounters, [])
 
+    def test_playable_stories_lists_prepared_books_for_owner_only(self):
+        owner = SimpleNamespace(state=SimpleNamespace(
+            user={"username": "admin", "is_owner": True}, can_write=True, share_guest=False))
+        book_id = "5" * 20
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", Path(directory)), \
+             patch.object(dating_sim_story, "prepared_book_ids", return_value=[book_id]), \
+             patch.object(dating_sim_story, "_find_book", return_value=Path("/tmp/READY.epub")), \
+             patch.object(dating_sim_story, "_book_title", return_value="READY"):
+            stories = app.dating_sim_playable_stories(owner)
+            with self.assertRaises(HTTPException) as denied:
+                app.dating_sim_playable_stories(request("plain"))
+        self.assertEqual(denied.exception.status_code, 403)
+        self.assertEqual([s["story_id"] for s in stories], [f"book:{book_id}"])
+        self.assertFalse(stories[0]["started"])
+        self.assertTrue(stories[0]["character_name"])
+
     def test_book_character_profiles_are_stable_and_varied(self):
         profiles = [dating_sim_story.book_character_profile(f"book:{number:020x}")
                     for number in range(20)]
