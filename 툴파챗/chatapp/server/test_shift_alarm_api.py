@@ -992,68 +992,48 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertEqual(result["urls"], ["https://a.example", "https://b.example"])
         self.assertIn("2개", result["message"])
 
+    def test_web_bookmark_list_is_managed_and_used_for_random_sites(self):
+        # ★ 2026-09-24: "웹앱에서 내가 지정한 링크를 웹앱 북마크목록으로 관리" — Chrome과 분리된 자체 목록.
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(module, "SHIFT_ALARM_WEB_BOOKMARKS_FILE", str(Path(directory) / "web.json")), \
+             patch.object(module, "SHIFT_ALARM_BOOKMARK_URLS_EXPORT_FILE", str(Path(directory) / "none.json")), \
+             patch.object(module, "_shift_alarm_load_random_bookmark_history", return_value=[]), \
+             patch.object(module, "_shift_alarm_save_random_bookmark_history"):
+            self.assertEqual(module.list_shift_alarm_bookmarks(owner_request())["urls"], [])
+            module.add_shift_alarm_bookmark(module.ShiftAlarmBookmarkRequest(url="https://a.example/1"), owner_request())
+            module.add_shift_alarm_bookmark(module.ShiftAlarmBookmarkRequest(url="https://a.example/1"), owner_request())
+            module.add_shift_alarm_bookmark(module.ShiftAlarmBookmarkRequest(url="https://b.example/2"), owner_request())
+            with self.assertRaises(HTTPException) as bad:
+                module.add_shift_alarm_bookmark(module.ShiftAlarmBookmarkRequest(url="javascript:alert(1)"), owner_request())
+            self.assertEqual(bad.exception.status_code, 422)
+            self.assertEqual(module.list_shift_alarm_bookmarks(owner_request())["urls"], ["https://a.example/1", "https://b.example/2"])
+            picked = module.open_shift_alarm_random_sites(owner_request())["urls"]
+            self.assertEqual(sorted(picked), ["https://a.example/1", "https://b.example/2"])
+            module.update_shift_alarm_bookmark(module.ShiftAlarmBookmarkUpdateRequest(url="https://a.example/1", new_url="https://a.example/edited"), owner_request())
+            self.assertEqual(module.list_shift_alarm_bookmarks(owner_request())["urls"], ["https://a.example/edited", "https://b.example/2"])
+            with self.assertRaises(HTTPException) as dup:
+                module.update_shift_alarm_bookmark(module.ShiftAlarmBookmarkUpdateRequest(url="https://a.example/edited", new_url="https://b.example/2"), owner_request())
+            self.assertEqual(dup.exception.status_code, 409)
+            with self.assertRaises(HTTPException) as missing:
+                module.update_shift_alarm_bookmark(module.ShiftAlarmBookmarkUpdateRequest(url="https://none.example", new_url="https://c.example"), owner_request())
+            self.assertEqual(missing.exception.status_code, 404)
+            module.delete_shift_alarm_bookmark(module.ShiftAlarmBookmarkRequest(url="https://a.example/edited"), owner_request())
+            self.assertEqual(module.list_shift_alarm_bookmarks(owner_request())["urls"], ["https://b.example/2"])
+
+    def test_web_bookmarks_seed_from_previous_export_once(self):
+        with tempfile.TemporaryDirectory() as directory:
+            export = Path(directory) / "export.json"
+            export.write_text(json.dumps({"folder": "天", "urls": ["https://x.example", "ftp://bad"]}), encoding="utf-8")
+            with patch.object(module, "SHIFT_ALARM_WEB_BOOKMARKS_FILE", str(Path(directory) / "web.json")), \
+                 patch.object(module, "SHIFT_ALARM_BOOKMARK_URLS_EXPORT_FILE", str(export)):
+                self.assertEqual(module._shift_alarm_load_web_bookmarks(), ["https://x.example"])
+                self.assertTrue((Path(directory) / "web.json").is_file())
+
     def test_open_random_sites_409_when_no_bookmarks(self):
         with patch.object(module, "_shift_alarm_pick_random_bookmarks", return_value=[]):
             with self.assertRaises(HTTPException) as raised:
                 module.open_shift_alarm_random_sites(owner_request())
         self.assertEqual(raised.exception.status_code, 409)
-
-    def test_open_random_sites_does_not_open_chrome_on_server(self):
-        """서버 프로세스가 subprocess로 Chrome을 여는 부작용이 없어야 한다 — URL 선택은
-        _shift_alarm_pick_random_bookmarks만 호출하고, 여는 건 클라이언트 몫이다."""
-        bookmarks_payload = {"roots": {"bookmark_bar": {"type": "folder", "name": "天", "children": [
-            {"type": "url", "url": "https://example.com/1"},
-        ]}}}
-        with patch("builtins.open", mock_open(read_data=json.dumps(bookmarks_payload))), \
-             patch.object(module, "_shift_alarm_load_random_bookmark_history", return_value=[]), \
-             patch.object(module, "_shift_alarm_save_random_bookmark_history"), \
-             patch.object(module, "subprocess") as mock_subprocess:
-            result = module.open_shift_alarm_random_sites(owner_request())
-        self.assertEqual(result["urls"], ["https://example.com/1"])
-        mock_subprocess.Popen.assert_not_called()
-
-    def test_open_random_sites_503_with_clear_message_when_bookmarks_file_is_locked(self):
-        # ★ 2026-09-24: "추천사이트보기 지금안되건데 왜안되는지알아봐주고" 신고 —
-        # 실측해보니 Chrome Bookmarks 파일이 macOS 개인정보 보호(TCC)로 막혀
-        # PermissionError가 났는데, 예전엔 이걸 "북마크 없음"과 똑같이 조용히
-        # 삼켜서 사용자가 원인을 알 수 없었다. 이제는 권한 문제를 구분해
-        # 명확한 메시지로 올려 보내는지 검증한다.
-        with patch("builtins.open", side_effect=PermissionError("Operation not permitted")):
-            with self.assertRaises(HTTPException) as raised:
-                module.open_shift_alarm_random_sites(owner_request())
-        self.assertEqual(raised.exception.status_code, 503)
-        self.assertIn("전체 디스크 접근 권한", raised.exception.detail)
-
-    def test_random_sites_use_menubar_export_when_chrome_file_is_locked(self):
-        # ★ 2026-09-24: 웹서버는 TCC로 Chrome 북마크를 못 읽어도, 메뉴바가
-        # 내보낸 URL 목록으로 추천이 되는지 검증한다.
-        exported = {"folder": "天", "urls": ["https://x.example/1", "javascript:alert(1)", "https://x.example/2"]}
-        real_open = open
-
-        def fake_open(path, *args, **kwargs):
-            if str(path) == module.SHIFT_ALARM_CHROME_BOOKMARKS_PATH:
-                raise PermissionError("Operation not permitted")
-            if str(path) == module.SHIFT_ALARM_BOOKMARK_URLS_EXPORT_FILE:
-                return mock_open(read_data=json.dumps(exported))()
-            return real_open(path, *args, **kwargs)
-
-        with patch("builtins.open", fake_open), \
-             patch.object(module, "_shift_alarm_load_random_bookmark_history", return_value=[]), \
-             patch.object(module, "_shift_alarm_save_random_bookmark_history"):
-            result = module._shift_alarm_pick_random_bookmarks(3)
-        self.assertEqual(sorted(result), ["https://x.example/1", "https://x.example/2"])
-
-    def test_random_sites_exclude_non_web_bookmarks(self):
-        bookmarks_payload = {"roots": {"bookmark_bar": {"type": "folder", "name": "天", "children": [
-            {"type": "url", "url": "javascript:alert(1)"},
-            {"type": "url", "url": "file:///private/tmp/example"},
-            {"type": "url", "url": "https://safe.example/video"},
-        ]}}}
-        with patch("builtins.open", mock_open(read_data=json.dumps(bookmarks_payload))), \
-             patch.object(module, "_shift_alarm_load_random_bookmark_history", return_value=[]), \
-             patch.object(module, "_shift_alarm_save_random_bookmark_history"):
-            result = module._shift_alarm_pick_random_bookmarks(3)
-        self.assertEqual(result, ["https://safe.example/video"])
 
     def test_transport_sends_media_key_when_elmedia_running(self):
         with patch.object(module, "_shift_alarm_elmedia_running", return_value=True), \

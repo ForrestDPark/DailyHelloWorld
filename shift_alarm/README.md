@@ -177,6 +177,17 @@ Gmail은 로컬 `gog`의 `pulpilisory@gmail.com` 읽기 전용 OAuth를 사용�
 
 휴무일엔 동작 안 함. 1분 주기 타이머(`_check_post_shift_volume_lower`)로 시각 일치 여부를 체크, 하루 한 번만 실행(`_last_post_shift_volume_notified`). 알림 음량만 낮추는 위 `QUIET_HOURS_AFTER_SHIFT_END`(음성 알림 재생 배율, afplay -v)와는 별개로, `_set_system_volume()`(osascript `set volume output volume`)으로 실제 시스템 볼륨 자체를 바꾼다 — 기상 알람 음량 설정(`_apply_wake_alarm_volume`)이 쓰던 것과 같은 헬퍼다.
 
+## 7-2. 웹앱 자체 북마크 관리 (★ 2026-09-24)
+**사용자 요청**: "웹앱에서 내가 지정한 링크를 웹앱 북마크목록으로 관리하게 하자", "북마크 관리 항목도 새로 만들어서 CRUD".
+
+- **배경**: 웹서버·메뉴바(launchd 프로세스)가 macOS 권한(TCC)으로 Chrome `Bookmarks` 파일을 읽지 못했다(Full Disk Access 재부여·재부팅·`tccutil reset`으로도 해결 안 됨). Chrome과 분리해 웹앱이 자체 목록을 갖도록 바꿨다.
+- **저장소**: `~/.shift_alarm_web_bookmarks.json`(`{"urls": [...]}`). 파일이 없으면 이전에 내보낸 `~/.shift_alarm_bookmark_urls.json`(`export_bookmark_urls.py --html`로 만든 天 폴더 157개)로 한 번 채운다.
+- **API**(모두 소유자 전용): `GET/POST/PUT /api/shift-alarm/bookmarks`(목록·추가·수정), `POST /api/shift-alarm/bookmarks/delete`. http(s)만 허용, 중복은 거절(수정 시 409).
+- **추천 사이트 보기**(`/api/shift-alarm/media/open-sites`)는 이 목록에서 무작위 3개를 뽑는다(메뉴바와 공유하던 추천 이력 파일은 그대로 사용).
+- **UI**: 대시보드의 `북마크 관리` 토글 패널(추가 입력창·항목별 수정/삭제). `추천 사이트 보기` 버튼은 영상관리 토글 안에 있다.
+- 메뉴바의 🎲 추천 사이트 열기는 아직 Chrome 파일을 직접 읽는 방식이라 같은 권한 문제로 막혀 있다(별도 후속).
+- **Hue 조명**도 같은 원인(Command 앱 Group Container 읽기 막힘)이라 `setup_hue_bridge.py`로 Bridge에서 전용 앱 키를 발급(`~/.shift_alarm_hue.json`, 권한 600)해 우선 사용한다.
+
 ## 8. 아침 학습 — ebook_reader.py (PDF/EPUB TTS 낭독 + 노션 기록)
 - `ebook_reader.py`: PDF/EPUB를 문장 단위로 잘라 edge-tts(영어 음성, `en-US-JennyNeural`, 속도 -10%)로 낭독. 원래 macOS 단축어로 실행하던 것을 shift_alarm.py 메뉴로 옮김.
 - **노션 토큰은 코드에 하드코딩하지 않고 macOS 키체인에서 읽음**: `security find-generic-password -a "$USER" -s "ebook_reader_notion_token" -w`. 토큰 등록/갱신: `security add-generic-password -a "$USER" -s "ebook_reader_notion_token" -w "<token>" -U`.

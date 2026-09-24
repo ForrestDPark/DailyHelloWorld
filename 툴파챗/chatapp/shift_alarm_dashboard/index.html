@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#201b2f">
-  <title>Shift Alarm · 오늘의 컨트롤</title><link rel="stylesheet" href="/shift-alarm/static/style.css?v=20260908-sunzi-light-v1"><link rel="stylesheet" href="/shift-alarm/static/enhancements.css?v=20260923-sunzi-wakevol-v2">
+  <title>Shift Alarm · 오늘의 컨트롤</title><link rel="stylesheet" href="/shift-alarm/static/style.css?v=20260908-sunzi-light-v1"><link rel="stylesheet" href="/shift-alarm/static/enhancements.css?v=20260924-bookmarks-v2">
 </head>
 <body>
   <header><a href="/#systems">← 시스템</a><div><small>SHIFT ALARM</small><h1>오늘의 컨트롤</h1></div><span class="header-actions"><button id="mute-toggle" class="mute-toggle" type="button" aria-pressed="false" aria-label="Shift Alarm 음소거">🔔</button><button id="notifications" class="notification-button" type="button" aria-label="알림 보기" aria-expanded="false">알림<span id="notification-count" class="notification-count hidden"></span></button><button id="refresh" type="button">새로고침</button></span></header>
@@ -20,6 +20,10 @@
       <div class="media-buttons"><button id="play-favorites" type="button">⭐ 좋아요 재생</button><button id="play-classical" type="button">🎻 클래식 재생</button><button id="wake-volume-settings" class="icon-button" type="button" aria-label="기상 알람 음량 설정">⚙️ 기상 음량</button></div>
       <div class="transport-buttons"><button id="transport-previous" type="button" aria-label="이전곡">⏮️</button><button id="transport-playpause" type="button" aria-label="재생·일시정지">⏯️</button><button id="transport-next" type="button" aria-label="다음곡">⏭️</button></div>
       <div class="volume-slider-row"><span class="volume-icon" aria-hidden="true">🔈</span><input id="volume-slider" type="range" min="0" max="100" value="50" aria-label="시스템 음량" style="--val:50%"><span class="volume-icon" aria-hidden="true">🔊</span></div>
+    </details>
+    <details id="bookmark-panel" class="panel bookmark-panel"><summary><div><small>BOOKMARKS</small><h2>북마크 관리</h2></div><span id="bookmark-count" class="download-state">0개</span><span class="summary-arrow">⌄</span></summary>
+      <form id="bookmark-add-form" class="bookmark-add-form"><input id="bookmark-add-url" type="url" inputmode="url" placeholder="https://… 추천 사이트로 쓸 주소" maxlength="2048" required><button type="submit">추가</button></form>
+      <ul id="bookmark-list" class="bookmark-list"></ul>
     </details>
     <details id="video-panel" class="panel video-download-panel"><summary><div class="panel-head"><div><small>MAC → IPHONE</small><h2>영상관리</h2></div><span id="video-download-state" class="download-state">대기</span></div><span class="summary-arrow">⌄</span></summary>
       <div class="media-buttons"><button id="open-sites" type="button">🎲 추천 사이트 보기</button></div>
@@ -52,5 +56,5 @@
     <details id="log-panel" class="panel"><summary><div><small>SYSTEM</small><h2>실행 로그</h2></div><span class="summary-arrow">⌄</span></summary><div class="panel-head action-head"><p>CPU 과부하 자동종료 등 Shift Alarm 실행 기록입니다.</p><button id="log-refresh" type="button">새로고침</button></div><pre id="shift-alarm-log" class="log-view">펼치면 불러옵니다.</pre></details>
     <dialog id="wake-volume-dialog" class="reminder-edit-dialog"><form method="dialog" class="reminder-edit-sheet"><div class="reminder-edit-head"><div><small>SETTINGS</small><h2>기상 알람 음량</h2></div><button value="cancel" aria-label="닫기">×</button></div><p class="wake-volume-hint">기상 알람이 울리기 직전 macOS 시스템 음량을 아래 값으로 자동으로 맞춥니다.</p><label class="reminder-enabled"><input id="wake-volume-enabled" type="checkbox"> 기상 알람 때 음량 자동 조절 사용</label><label>음량<div class="volume-slider-row"><span class="volume-icon" aria-hidden="true">🔈</span><input id="wake-volume-slider" type="range" min="0" max="100" value="80" aria-label="기상 알람 음량" style="--val:80%"><span class="volume-icon" aria-hidden="true">🔊</span></div><span id="wake-volume-value" class="wake-volume-value">80%</span></label><div class="reminder-edit-actions"><button id="wake-volume-save" type="button">저장</button></div></form></dialog>
     <dialog id="reminder-edit-dialog" class="reminder-edit-dialog"><form method="dialog" class="reminder-edit-sheet"><div class="reminder-edit-head"><div><small>REMINDER</small><h2>리마인더 수정</h2></div><button value="cancel" aria-label="닫기">×</button></div><label>이름<input id="reminder-edit-label" maxlength="80"></label><label>시각<input id="reminder-edit-time" type="time"></label><label>반복 규칙<select id="reminder-edit-unit"></select></label><div id="reminder-edit-detail" class="reminder-edit-detail"><label>간격<input id="reminder-edit-interval" type="number" min="1" max="365"></label><label>시작일<input id="reminder-edit-anchor" type="date"></label></div><label class="reminder-enabled"><input id="reminder-edit-enabled" type="checkbox"> 리마인더 켜기</label><div class="reminder-edit-actions"><button id="reminder-edit-delete" type="button" class="danger-button">영구 삭제</button><button id="reminder-edit-save" type="button">저장</button></div></form></dialog>
-    <p id="updated" class="updated"></p></main><script src="/shift-alarm/static/app.js?v=20260923-reminder-recur-v2"></script>
+    <p id="updated" class="updated"></p></main><script src="/shift-alarm/static/app.js?v=20260924-bookmarks-v2"></script>
 </body></html>

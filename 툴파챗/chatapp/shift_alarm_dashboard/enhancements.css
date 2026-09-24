@@ -68,3 +68,5 @@
 .sunzi-panel .sunzi-copy{margin-top:2px}
 .wake-volume-hint{margin:0 0 2px;color:var(--muted);font-size:12px;line-height:1.5}
 .wake-volume-value{justify-self:end;color:var(--accent);font-variant-numeric:tabular-nums;font-weight:800}
+
+.bookmark-add-form{display:flex;gap:7px;margin:4px 0 10px}.bookmark-add-form input{flex:1;min-width:0}.bookmark-list{list-style:none;margin:0;padding:0;max-height:340px;overflow:auto;display:grid;gap:5px}.bookmark-list li{display:flex;align-items:center;gap:6px;padding:7px 9px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);font-size:11px}.bookmark-list li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}.bookmark-list li button{flex:none;padding:4px 9px;font-size:11px}

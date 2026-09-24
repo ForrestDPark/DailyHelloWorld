@@ -2022,46 +2022,50 @@ def _shift_alarm_save_random_bookmark_history(folder_name, visited_urls):
     os.replace(temp_path, SHIFT_ALARM_RANDOM_BOOKMARK_HISTORY_FILE)
 
 
-def _shift_alarm_pick_random_bookmarks(n=3, folder_name=SHIFT_ALARM_RANDOM_BOOKMARK_FOLDER):
-    # ★ 2026-09-24: "추천사이트보기 지금안되건데 왜안되는지알아봐주고" 신고 —
-    # 실측해보니 Chrome Bookmarks 파일 자체가 macOS 개인정보 보호(TCC)로
-    # 막혀 PermissionError가 나고, 아래 except가 이를 "북마크 없음"과
-    # 똑같이 조용히 삼켜서 원인을 알 수 없었다. 권한 문제만 구분해 올려
-    # 보낸다 — 코드로 고칠 수 없는 문제(전체 디스크 접근 권한 필요)라
-    # 사용자가 원인을 바로 알 수 있게 하는 게 최선이다.
+SHIFT_ALARM_WEB_BOOKMARKS_FILE = os.path.expanduser("~/.shift_alarm_web_bookmarks.json")
+
+
+def _shift_alarm_valid_bookmark_url(url):
+    parsed = urllib.parse.urlsplit(url or "")
+    return parsed.scheme in {"http", "https"} and bool(parsed.hostname) and len(url) <= 2048
+
+
+def _shift_alarm_load_web_bookmarks():
+    """웹앱이 직접 관리하는 추천 사이트 목록.
+
+    ★ 2026-09-24: "웹앱에서 내가 지정한 링크를 웹앱 북마크목록으로 관리하게 하자" —
+    Chrome Bookmarks 파일은 macOS 권한(TCC)으로 막혀 읽을 수 없어서, Chrome과
+    분리해 웹앱 자체 목록(~/.shift_alarm_web_bookmarks.json)을 쓴다. 파일이 없으면
+    이전에 내보낸 Chrome 天 폴더 목록(~/.shift_alarm_bookmark_urls.json)으로 한 번 채운다."""
     try:
+        with open(SHIFT_ALARM_WEB_BOOKMARKS_FILE, encoding="utf-8") as file:
+            urls = json.load(file).get("urls", [])
+    except FileNotFoundError:
         try:
-            with open(SHIFT_ALARM_CHROME_BOOKMARKS_PATH, encoding="utf-8") as file:
-                data = json.load(file)
-        except PermissionError:
-            # 서버(launchd headless)는 TCC로 원본을 못 읽는다 — GUI 앱인 메뉴바가
-            # 내보낸 URL 목록으로 대신한다(shift_alarm.export_bookmark_urls).
-            try:
-                with open(SHIFT_ALARM_BOOKMARK_URLS_EXPORT_FILE, encoding="utf-8") as file:
-                    exported = json.load(file)
-            except (OSError, ValueError):
-                raise PermissionError("bookmarks locked and no export available")
-            if exported.get("folder") != folder_name:
-                return []
-            data = {"roots": {"bookmark_bar": {"type": "folder", "name": folder_name, "children": [
-                {"type": "url", "url": url} for url in exported.get("urls", [])
-            ]}}}
-        roots = data.get("roots", {})
-        folder = None
-        for key in ("bookmark_bar", "other", "synced"):
-            if key in roots:
-                folder = _shift_alarm_find_bookmark_folder(roots[key], folder_name)
-                if folder:
-                    break
-        if not folder:
-            return []
-        urls = []
-        for url in dict.fromkeys(_shift_alarm_collect_all_bookmark_urls(folder)):
-            parsed = urllib.parse.urlsplit(url)
-            if parsed.scheme in {"http", "https"} and parsed.hostname:
-                urls.append(url)
-        if not urls:
-            return []
+            with open(SHIFT_ALARM_BOOKMARK_URLS_EXPORT_FILE, encoding="utf-8") as file:
+                urls = json.load(file).get("urls", [])
+        except (OSError, ValueError):
+            urls = []
+        urls = [url for url in urls if _shift_alarm_valid_bookmark_url(url)]
+        if urls:
+            _shift_alarm_save_web_bookmarks(urls)
+    except (OSError, ValueError):
+        return []
+    return list(dict.fromkeys(url for url in urls if _shift_alarm_valid_bookmark_url(url)))
+
+
+def _shift_alarm_save_web_bookmarks(urls):
+    temp_path = f"{SHIFT_ALARM_WEB_BOOKMARKS_FILE}.tmp"
+    with open(temp_path, "w", encoding="utf-8") as file:
+        json.dump({"urls": list(dict.fromkeys(urls))}, file, ensure_ascii=False, indent=1)
+    os.replace(temp_path, SHIFT_ALARM_WEB_BOOKMARKS_FILE)
+
+
+def _shift_alarm_pick_random_bookmarks(n=3, folder_name=SHIFT_ALARM_RANDOM_BOOKMARK_FOLDER):
+    urls = _shift_alarm_load_web_bookmarks()
+    if not urls:
+        return []
+    try:
         current_urls = set(urls)
         visited = [
             url for url in dict.fromkeys(_shift_alarm_load_random_bookmark_history(folder_name))
@@ -2074,12 +2078,6 @@ def _shift_alarm_pick_random_bookmarks(n=3, folder_name=SHIFT_ALARM_RANDOM_BOOKM
         selected = random.sample(unvisited, min(n, len(unvisited)))
         _shift_alarm_save_random_bookmark_history(folder_name, visited + selected)
         return selected
-    except PermissionError as exc:
-        raise RuntimeError(
-            "Chrome 북마크 파일에 접근할 권한이 없습니다 — 시스템 설정 > 개인정보 보호 및 "
-            "보안 > 전체 디스크 접근 권한에 이 서버의 Python(server/.venv/bin/python3)을 "
-            "추가해야 합니다"
-        ) from exc
     except (OSError, ValueError, TypeError):
         return []
 
@@ -3003,13 +3001,63 @@ def open_shift_alarm_random_sites(request: Request):
     # 정작 Mac 화면에서 창이 뜨는 셈이라 무의미했다. URL만 골라 돌려주고, 여는
     # 동작은 이 요청을 보낸 브라우저(app.js) 쪽에서 하게 바꿨다.
     _require_owner(request)
-    try:
-        urls = _shift_alarm_pick_random_bookmarks(3)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    urls = _shift_alarm_pick_random_bookmarks(3)
     if not urls:
-        raise HTTPException(status_code=409, detail="북마크를 불러올 수 없습니다")
+        raise HTTPException(status_code=409, detail="추천 사이트 목록이 비어 있습니다 — 북마크 관리에서 링크를 추가하세요")
     return {"ok": True, "message": f"{len(urls)}개 찾았습니다", "urls": urls}
+
+
+class ShiftAlarmBookmarkRequest(BaseModel):
+    url: str
+
+
+@app.get("/api/shift-alarm/bookmarks")
+def list_shift_alarm_bookmarks(request: Request):
+    _require_owner(request)
+    return {"urls": _shift_alarm_load_web_bookmarks()}
+
+
+@app.post("/api/shift-alarm/bookmarks")
+def add_shift_alarm_bookmark(body: ShiftAlarmBookmarkRequest, request: Request):
+    _require_owner(request)
+    url = body.url.strip()
+    if not _shift_alarm_valid_bookmark_url(url):
+        raise HTTPException(status_code=422, detail="http:// 또는 https:// 로 시작하는 올바른 주소를 입력하세요")
+    urls = _shift_alarm_load_web_bookmarks()
+    if url not in urls:
+        urls.append(url)
+        _shift_alarm_save_web_bookmarks(urls)
+    return {"ok": True, "urls": urls}
+
+
+class ShiftAlarmBookmarkUpdateRequest(BaseModel):
+    url: str
+    new_url: str
+
+
+@app.put("/api/shift-alarm/bookmarks")
+def update_shift_alarm_bookmark(body: ShiftAlarmBookmarkUpdateRequest, request: Request):
+    _require_owner(request)
+    new_url = body.new_url.strip()
+    if not _shift_alarm_valid_bookmark_url(new_url):
+        raise HTTPException(status_code=422, detail="http:// 또는 https:// 로 시작하는 올바른 주소를 입력하세요")
+    urls = _shift_alarm_load_web_bookmarks()
+    old_url = body.url.strip()
+    if old_url not in urls:
+        raise HTTPException(status_code=404, detail="수정할 북마크를 찾을 수 없습니다")
+    if new_url != old_url and new_url in urls:
+        raise HTTPException(status_code=409, detail="이미 있는 북마크입니다")
+    urls = [new_url if item == old_url else item for item in urls]
+    _shift_alarm_save_web_bookmarks(urls)
+    return {"ok": True, "urls": urls}
+
+
+@app.post("/api/shift-alarm/bookmarks/delete")
+def delete_shift_alarm_bookmark(body: ShiftAlarmBookmarkRequest, request: Request):
+    _require_owner(request)
+    urls = [item for item in _shift_alarm_load_web_bookmarks() if item != body.url.strip()]
+    _shift_alarm_save_web_bookmarks(urls)
+    return {"ok": True, "urls": urls}
 
 
 class ShiftAlarmTransportRequest(BaseModel):
