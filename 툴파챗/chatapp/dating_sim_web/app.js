@@ -487,6 +487,7 @@ let practiceMode = null;
 let writingChars = [];
 let writingIndex = 0;
 let writingScores = [];
+let writingPhrase = "";
 let writingDrawing = false;
 let speechRecognizer = null;
 
@@ -533,11 +534,11 @@ function openPractice(mode) {
   $("practice-continue").classList.add("hidden");
   $("writing-pane").classList.toggle("hidden", mode !== "writing");
   $("speaking-pane").classList.toggle("hidden", mode !== "speaking");
-  $("practice-title").textContent = mode === "writing" ? "손글씨 받아쓰기" : "발음 점수";
-  $("practice-kicker").textContent = mode === "writing" ? "한 글자씩 직접 써보기" : "듣고 그대로 말하기";
-  $("practice-target").textContent = mode === "writing" ? "대사를 듣고 글자를 써보세요" : line.text;
+  $("practice-title").textContent = mode === "writing" ? "문장 따라 쓰기" : "발음 점수";
+  $("practice-kicker").textContent = mode === "writing" ? "보고 듣고 문장 그대로 쓰기" : "듣고 그대로 말하기";
+  $("practice-target").textContent = line.text;
   $("practice-instruction").textContent = mode === "writing"
-    ? "대사를 한 번 들은 뒤, 화면에 손가락으로 한 글자씩 쓰세요. 채점하면 정답 글자가 나타납니다."
+    ? "화면의 일본어 문장을 보고 음성을 들은 뒤, 아래 칸에 문장 그대로 손으로 쓰세요."
     : "대사를 들은 뒤 녹음 시작을 누르고 일본어로 따라 말하세요. 인식된 문장과 원문을 비교합니다.";
   if (mode === "writing") startWritingPractice(line.text);
   else {
@@ -590,6 +591,7 @@ function clearWritingCanvas() {
 }
 
 function startWritingPractice(text) {
+  writingPhrase = text;
   writingChars = [...text].filter((char) => /[\u3040-\u30ff\u3400-\u9fff]/u.test(char));
   writingIndex = 0;
   writingScores = [];
@@ -600,12 +602,10 @@ function startWritingPractice(text) {
   playPracticeReference();
 }
 
-function updateWritingPrompt(reveal = false) {
-  const current = writingChars[writingIndex] || "";
-  $("writing-position").textContent = `${writingIndex + 1} / ${writingChars.length}`;
-  $("writing-average").textContent = writingScores.length
-    ? `평균 ${Math.round(writingScores.reduce((a, b) => a + b, 0) / writingScores.length)}점` : "";
-  $("practice-target").textContent = reveal ? `정답: ${current}` : "이 글자를 기억해서 써보세요";
+function updateWritingPrompt() {
+  $("writing-position").textContent = `문장 전체 · ${writingChars.length}글자`;
+  $("writing-average").textContent = writingScores.length ? `${Math.round(writingScores[0])}점` : "";
+  $("practice-target").textContent = writingPhrase;
 }
 
 function normalizedInk(imageData, size = 72) {
@@ -632,16 +632,25 @@ function normalizedInk(imageData, size = 72) {
   return Uint8Array.from({ length: size * size }, (_, i) => pixels[i * 4 + 3] > 25 ? 1 : 0);
 }
 
-function targetInk(character) {
+function targetPhraseInk(text) {
+  const characters = [...text].filter((char) => /[\u3040-\u30ff\u3400-\u9fff]/u.test(char));
   const canvas = document.createElement("canvas");
-  canvas.width = 300; canvas.height = 300;
+  canvas.width = 720; canvas.height = 500;
   const ctx = canvas.getContext("2d");
   ctx.fillStyle = "#fff";
-  ctx.font = '220px "Hiragino Sans", "Yu Gothic", sans-serif';
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(character, 150, 158);
-  return normalizedInk(ctx.getImageData(0, 0, 300, 300));
+  const columns = Math.min(8, Math.max(1, characters.length));
+  const rows = Math.max(1, Math.ceil(characters.length / columns));
+  const cellWidth = canvas.width / columns;
+  const cellHeight = canvas.height / rows;
+  const fontSize = Math.max(34, Math.min(cellWidth, cellHeight) * .76);
+  ctx.font = `${fontSize}px "Hiragino Sans", "Yu Gothic", sans-serif`;
+  characters.forEach((character, index) => {
+    const column = index % columns, row = Math.floor(index / columns);
+    ctx.fillText(character, (column + .5) * cellWidth, (row + .52) * cellHeight);
+  });
+  return normalizedInk(ctx.getImageData(0, 0, canvas.width, canvas.height));
 }
 
 function dilate(mask, radius = 3, size = 72) {
@@ -656,10 +665,10 @@ function dilate(mask, radius = 3, size = 72) {
   return out;
 }
 
-function handwritingScore(character) {
+function handwritingScore(text) {
   const canvas = $("writing-canvas");
   const user = normalizedInk(writingContext().getImageData(0, 0, canvas.width, canvas.height));
-  const target = targetInk(character);
+  const target = targetPhraseInk(text);
   if (!user || !target) return 0;
   const wideUser = dilate(user), wideTarget = dilate(target);
   let userCount = 0, targetCount = 0, userHit = 0, targetHit = 0;
@@ -673,29 +682,12 @@ function handwritingScore(character) {
 }
 
 function gradeWritingCharacter() {
-  if (!writingChars.length) return;
-  const score = handwritingScore(writingChars[writingIndex]);
-  writingScores.push(score);
-  updateWritingPrompt(true);
-  showPracticeResult(score, score >= 85 ? "모양이 아주 정확해요" : score >= 65 ? "좋아요. 획 위치를 조금만 다듬어보세요" : "정답 모양을 보고 한 번 더 써보세요");
+  if (!writingPhrase) return;
+  const score = handwritingScore(writingPhrase);
+  writingScores = [score];
+  updateWritingPrompt();
+  showPracticeResult(score, score >= 85 ? "문장을 아주 정확하게 썼어요" : score >= 65 ? "좋아요. 빠진 글자와 획 위치를 확인해보세요" : "위 문장을 보면서 천천히 다시 써보세요");
   $("writing-grade").classList.add("hidden");
-  $("writing-next").classList.remove("hidden");
-  $("writing-next").textContent = writingIndex === writingChars.length - 1 ? "전체 결과" : "다음 글자";
-}
-
-function nextWritingCharacter() {
-  if (writingIndex < writingChars.length - 1) {
-    writingIndex += 1;
-    clearWritingCanvas();
-    $("practice-result").classList.add("hidden");
-    $("writing-grade").classList.remove("hidden");
-    $("writing-next").classList.add("hidden");
-    updateWritingPrompt();
-    return;
-  }
-  const average = writingScores.reduce((a, b) => a + b, 0) / Math.max(1, writingScores.length);
-  $("practice-target").textContent = currentPracticeLine()?.text || "";
-  showPracticeResult(average, `${writingChars.length}글자 받아쓰기 완료`);
   $("writing-next").classList.add("hidden");
 }
 
@@ -1752,10 +1744,9 @@ $("speech-record").addEventListener("click", () => {
   else startSpeakingPractice();
 });
 $("writing-grade").addEventListener("click", gradeWritingCharacter);
-$("writing-next").addEventListener("click", nextWritingCharacter);
 $("writing-clear").addEventListener("click", () => {
   clearWritingCanvas();
-  if ($("writing-grade").classList.contains("hidden") && writingScores.length) writingScores.pop();
+  writingScores = [];
   $("writing-grade").classList.remove("hidden");
   $("writing-next").classList.add("hidden");
   $("practice-result").classList.add("hidden");
