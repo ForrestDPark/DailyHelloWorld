@@ -4642,12 +4642,21 @@ def write_alarm_script():
 # appKey는 실행 순간에만 읽고 파일·로그·Git에는 남기지 않는다.
 HUE_PREFS={shlex.quote(HUE_COMMAND_PREFS)}
 JQ={shlex.quote(jq_bin)}
-if [ -f "$HUE_PREFS" ]; then
-  HUE_CREDENTIALS=$(/usr/bin/plutil -extract shared_credentials raw -o - "$HUE_PREFS" 2>/dev/null | /usr/bin/base64 -D 2>/dev/null)
-  HUE_ROOMS=$(/usr/bin/plutil -extract shared_rooms raw -o - "$HUE_PREFS" 2>/dev/null | /usr/bin/base64 -D 2>/dev/null)
-  HUE_IP=$(printf '%s' "$HUE_CREDENTIALS" | $JQ -r '.[0].ip // empty' 2>/dev/null)
-  HUE_KEY=$(printf '%s' "$HUE_CREDENTIALS" | $JQ -r '.[0].appKey // empty' 2>/dev/null)
-  HUE_ROOM_ID=$(printf '%s' "$HUE_ROOMS" | $JQ -r --arg name {shlex.quote(HUE_WAKE_ROOM_NAME)} '.[] | select(.name == $name) | .id' 2>/dev/null | /usr/bin/head -1)
+HUE_OWN={shlex.quote(HUE_OWN_CONFIG)}
+if [ -f "$HUE_OWN" ] || [ -f "$HUE_PREFS" ]; then
+  if [ -f "$HUE_OWN" ]; then
+    # setup_hue_bridge.py로 발급한 전용 키 — macOS 보호 폴더를 읽지 않아 launchd에서도 된다.
+    HUE_IP=$($JQ -r '.ip // empty' "$HUE_OWN" 2>/dev/null)
+    HUE_KEY=$($JQ -r '.app_key // empty' "$HUE_OWN" 2>/dev/null)
+    HUE_ROOM_ID=$(/usr/bin/curl -ksS --connect-timeout 5 --max-time 10 "https://$HUE_IP/clip/v2/resource/room" \
+      -H "hue-application-key: $HUE_KEY" 2>/dev/null | $JQ -r --arg name {shlex.quote(HUE_WAKE_ROOM_NAME)} '.data[] | select(.metadata.name == $name) | .id' 2>/dev/null | /usr/bin/head -1)
+  else
+    HUE_CREDENTIALS=$(/usr/bin/plutil -extract shared_credentials raw -o - "$HUE_PREFS" 2>/dev/null | /usr/bin/base64 -D 2>/dev/null)
+    HUE_ROOMS=$(/usr/bin/plutil -extract shared_rooms raw -o - "$HUE_PREFS" 2>/dev/null | /usr/bin/base64 -D 2>/dev/null)
+    HUE_IP=$(printf '%s' "$HUE_CREDENTIALS" | $JQ -r '.[0].ip // empty' 2>/dev/null)
+    HUE_KEY=$(printf '%s' "$HUE_CREDENTIALS" | $JQ -r '.[0].appKey // empty' 2>/dev/null)
+    HUE_ROOM_ID=$(printf '%s' "$HUE_ROOMS" | $JQ -r --arg name {shlex.quote(HUE_WAKE_ROOM_NAME)} '.[] | select(.name == $name) | .id' 2>/dev/null | /usr/bin/head -1)
+  fi
   if [ -n "$HUE_IP" ] && [ -n "$HUE_KEY" ] && [ -n "$HUE_ROOM_ID" ]; then
     HUE_ROOM=$(/usr/bin/curl -ksS --connect-timeout 5 --max-time 10 \
       "https://$HUE_IP/clip/v2/resource/room/$HUE_ROOM_ID" \
