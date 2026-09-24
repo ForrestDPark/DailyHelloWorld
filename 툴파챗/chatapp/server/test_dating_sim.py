@@ -951,6 +951,34 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         self.assertFalse(stories[0]["started"])
         self.assertTrue(stories[0]["character_name"])
 
+    def test_reference_candidates_list_and_regeneration_passes_selected_references(self):
+        owner = SimpleNamespace(state=SimpleNamespace(
+            user={"username": "admin", "is_owner": True}, can_write=True, share_guest=False))
+        story_id = "book:" + "6" * 20
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            (work / "images").mkdir()
+            for name in ("part1_scene001.jpg", "part1_scene002.jpg"):
+                (work / "images" / name).write_bytes(b"x" * 2048)
+            with patch.object(dating_sim_story, "resolve_book_work_dir", return_value=("6" * 20, work)):
+                listing = app.dating_sim_reference_candidates(owner, story_id)
+                self.assertEqual([c["name"] for c in listing["candidates"]],
+                                 ["part1_scene001.jpg", "part1_scene002.jpg"])
+                with self.assertRaises(HTTPException) as denied:
+                    app.dating_sim_reference_candidates(request("plain"), story_id)
+                self.assertEqual(denied.exception.status_code, 403)
+                with self.assertRaises(HTTPException) as bad:
+                    app.dating_sim_generate_images_start(owner, story_id, reference=["../secret.jpg"])
+                self.assertEqual(bad.exception.status_code, 400)
+                with patch.object(app.subprocess, "Popen") as popen:
+                    popen.return_value.poll.return_value = 0
+                    app.dating_sim_generate_images_start(owner, story_id, reference=["part1_scene002.jpg"])
+                command = popen.call_args[0][0]
+        self.assertIn("--reference", command)
+        self.assertIn("part1_scene002.jpg", command)
+        self.assertIn("portrait", command)
+        app._dating_sim_image_jobs.pop("6" * 20, None)
+
     def test_book_character_profiles_are_stable_and_varied(self):
         profiles = [dating_sim_story.book_character_profile(f"book:{number:020x}")
                     for number in range(20)]

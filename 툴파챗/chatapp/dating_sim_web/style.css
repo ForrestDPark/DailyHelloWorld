@@ -725,3 +725,13 @@ html, body {
 .story-popover-text { display: flex; flex-direction: column; min-width: 0; }
 .story-popover-text small { opacity: .75; }
 .story-popover-empty { margin: 4px; opacity: .8; }
+
+/* 참고 이미지 직접 선택 */
+.reference-picker { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.reference-picker-body { display: flex; flex-direction: column; gap: 8px; }
+.reference-picker-body.hidden { display: none; }
+.reference-picker-grid { max-height: 45vh; overflow-y: auto; }
+.reference-picker-item { position: relative; display: block; cursor: pointer; border: 2px solid transparent; }
+.reference-picker-item.picked { border-color: #f4d35e; }
+.reference-picker-item img { width: 100%; display: block; }
+.reference-picker-item input { position: absolute; top: 6px; left: 6px; width: 22px; height: 22px; accent-color: #f4d35e; }

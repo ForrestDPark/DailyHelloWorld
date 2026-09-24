@@ -1524,6 +1524,107 @@ function closeTreeImageDetail() {
   document.querySelector(".tree-image-detail-overlay")?.remove();
 }
 
+// ★ 2026-09-24: "참고이미지 다시추출하기버튼눌러서 참고할수있는 이미지를 내가 직접
+// 선택할수있도록 이미지 전부 띄워주고 내가 체크한이미지로 재생성" 요청 — 원작 컷
+// 전부를 띄워 최대 4장을 체크하고, 그 컷들로 인물(portrait)만 또는 전체를 다시 만든다.
+const MAX_PICKED_REFERENCES = 4;
+
+function buildReferencePicker(item) {
+  const wrap = document.createElement("div");
+  wrap.className = "reference-picker";
+  const openButton = document.createElement("button");
+  openButton.type = "button";
+  openButton.className = "tree-image-generate-btn";
+  openButton.textContent = "🔎 참고 이미지 다시 추출하기";
+  const body = document.createElement("div");
+  body.className = "reference-picker-body hidden";
+  wrap.append(openButton, body);
+
+  openButton.addEventListener("click", async () => {
+    if (!body.classList.contains("hidden")) return body.classList.add("hidden");
+    body.classList.remove("hidden");
+    body.replaceChildren(Object.assign(document.createElement("p"), { className: "tree-image-detail-empty", textContent: "후보를 불러오는 중…" }));
+    let data;
+    try {
+      data = await api(`/api/dating-sim/scenario-tree/reference-candidates${storyQuery()}`);
+    } catch (e) {
+      body.replaceChildren(Object.assign(document.createElement("p"), { className: "tree-image-detail-empty", textContent: e.message }));
+      return;
+    }
+    const picked = new Set(data.selected);
+    const grid = document.createElement("div");
+    grid.className = "tree-image-reference-grid reference-picker-grid";
+    const counter = document.createElement("p");
+    counter.className = "tree-image-detail-empty";
+    const status = document.createElement("span");
+    status.className = "tree-image-generate-status";
+    const buttons = [];
+    const refresh = () => {
+      counter.textContent = `원작 컷 ${data.candidates.length}장 중 ${picked.size}/${MAX_PICKED_REFERENCES}장 선택`
+        + (data.selected.length ? " · 지금은 직접 고른 사진을 쓰는 중" : " · 지금은 자동 선별 중");
+      for (const b of buttons) if (b.needsPick) b.el.disabled = picked.size === 0;
+    };
+    for (const candidate of data.candidates) {
+      const label = document.createElement("label");
+      label.className = "reference-picker-item";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = picked.has(candidate.name);
+      const img = document.createElement("img");
+      img.src = candidate.url;
+      img.loading = "lazy";
+      img.alt = candidate.name;
+      box.addEventListener("change", () => {
+        if (box.checked && picked.size >= MAX_PICKED_REFERENCES) {
+          box.checked = false;
+          status.textContent = `최대 ${MAX_PICKED_REFERENCES}장까지 고를 수 있어요`;
+          return;
+        }
+        status.textContent = "";
+        if (box.checked) picked.add(candidate.name); else picked.delete(candidate.name);
+        label.classList.toggle("picked", box.checked);
+        refresh();
+      });
+      label.classList.toggle("picked", box.checked);
+      label.append(img, box);
+      grid.append(label);
+    }
+    const actions = document.createElement("div");
+    actions.className = "tree-image-generate";
+    const setBusy = (busy) => { for (const b of buttons) b.el.disabled = busy || (b.needsPick && picked.size === 0); };
+    let tick;
+    const run = (extra, label) => () => {
+      const params = new URLSearchParams(extra);
+      for (const name of picked) if (extra.__pick) params.append("reference", name);
+      params.delete("__pick");
+      startDatingSimImageJob(status, setBusy, tick, params, `${label} 시작 중...`, `${label} 중... (몇 분 걸릴 수 있어요)`);
+    };
+    const defs = [
+      ["✅ 체크한 사진으로 인물만 재생성", { __pick: "1" }, "인물 재생성", true],
+      ["✅ 체크한 사진으로 전체 재생성", { __pick: "1", force: "true" }, "전체 재생성", true],
+      ["↩️ 자동 선별로 되돌리기", { auto_references: "true" }, "자동 선별 인물 재생성", false],
+    ];
+    for (const [text, extra, label, needsPick] of defs) {
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "tree-image-generate-btn";
+      el.textContent = text;
+      el.addEventListener("click", run(extra, label));
+      buttons.push({ el, needsPick });
+      actions.append(el);
+    }
+    actions.append(status);
+    tick = watchDatingSimImageJob(status, setBusy, async () => {
+      closeTreeImageDetail();
+      await openScenarioTree();
+    });
+    body.replaceChildren(counter, grid, actions);
+    refresh();
+    tick(true);
+  });
+  return wrap;
+}
+
 function openTreeImageDetail(item) {
   closeTreeImageDetail();
   const overlay = document.createElement("div");
@@ -1609,6 +1710,7 @@ function openTreeImageDetail(item) {
     referenceBlock.append(empty);
   }
   panel.append(referenceBlock);
+  referenceBlock.append(buildReferencePicker(item));
 
   const info = document.createElement("section");
   const infoLabel = document.createElement("h3");

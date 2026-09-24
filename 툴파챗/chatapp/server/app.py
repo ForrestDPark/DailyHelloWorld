@@ -51,7 +51,7 @@ import uuid
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -1034,6 +1034,7 @@ DATING_SIM_IMAGE_KEY_RE = re.compile(r"^[A-Za-z0-9_:-]{1,64}$")
 def dating_sim_generate_images_start(
     request: Request, story_id: str | None = None,
     force: bool = False, force_key: str | None = None,
+    reference: list[str] | None = Query(default=None), auto_references: bool = False,
 ):
     """관리자 전용 — 이 작품의 이미지만(시나리오는 그대로) 지금 바로 생성한다.
     generate_dating_sim_images.py는 이미 있는 파일을 건너뛰고 빠진 것만
@@ -1058,6 +1059,19 @@ def dating_sim_generate_images_start(
         log_path = image_dir / "generation.log"
         log_file = open(log_path, "ab")
         command = [DATING_SIM_IMAGE_PYTHON, DATING_SIM_IMAGE_SCRIPT, str(work_dir)]
+        # ★ 2026-09-24: 관리자가 직접 고른 원작 컷으로 인물(portrait)을 다시 만든다.
+        if isinstance(reference, list) and reference:
+            allowed = set(dating_sim_story.reference_candidates(work_dir))
+            if any(name not in allowed for name in reference) or len(reference) > 4:
+                raise HTTPException(status_code=400, detail="참고 이미지 선택이 올바르지 않습니다(최대 4장)")
+            for name in reference:
+                command.extend(["--reference", name])
+            if not force and not force_key:
+                command.extend(["--force-key", "portrait"])
+        elif auto_references:
+            command.append("--auto-references")
+            if not force and not force_key:
+                command.extend(["--force-key", "portrait"])
         if force:
             command.append("--force")
         elif force_key:
@@ -1068,6 +1082,35 @@ def dating_sim_generate_images_start(
             "started_at": int(time.time()),
         }
     return {"status": "started"}
+
+
+@app.get("/api/dating-sim/scenario-tree/reference-candidates")
+def dating_sim_reference_candidates(request: Request, story_id: str | None = None):
+    """관리자 전용 — 인물 참고 이미지로 고를 수 있는 원작 컷 전부와 현재 직접 고른 목록."""
+    _require_owner(request)
+    _, work_dir = dating_sim_story.resolve_book_work_dir(story_id or "")
+    if not work_dir:
+        raise HTTPException(status_code=404, detail="작품 폴더를 찾을 수 없습니다")
+    selected = set(dating_sim_story.selected_references(work_dir))
+    return {
+        "selected": sorted(selected),
+        "candidates": [
+            {"name": name, "selected": name in selected,
+             "url": f"/api/dating-sim/scenario-tree/reference-candidates/file?story_id={urllib.parse.quote(story_id or '')}"
+                    f"&name={urllib.parse.quote(name)}"}
+            for name in dating_sim_story.reference_candidates(work_dir)
+        ],
+    }
+
+
+@app.get("/api/dating-sim/scenario-tree/reference-candidates/file")
+def dating_sim_reference_candidate_file(request: Request, name: str, story_id: str | None = None):
+    _require_owner(request)
+    _, work_dir = dating_sim_story.resolve_book_work_dir(story_id or "")
+    target = dating_sim_story.reference_candidate_path(work_dir, name) if work_dir else None
+    if not target:
+        raise HTTPException(status_code=404, detail="참고 후보 이미지를 찾을 수 없습니다")
+    return FileResponse(str(target))
 
 
 @app.get("/api/dating-sim/scenario-tree/generate-images/status")

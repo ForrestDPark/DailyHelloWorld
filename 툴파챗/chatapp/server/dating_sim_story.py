@@ -1924,6 +1924,37 @@ def generated_image_reference_path(book_id, filename):
     return target if target.is_file() else None
 
 
+REFERENCE_CANDIDATE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
+
+
+def reference_candidates(work_dir):
+    """인물 참고 이미지로 고를 수 있는 원작 컷 전부(images/ 기준 상대 경로, 읽기 순서)."""
+    image_dir = Path(work_dir) / "images"
+    if not image_dir.is_dir():
+        return []
+    paths = [p for p in image_dir.glob("**/*")
+             if p.is_file() and p.suffix.lower() in REFERENCE_CANDIDATE_SUFFIXES]
+    paths.sort(key=lambda p: tuple(int(x) if x.isdigit() else x.casefold()
+                                   for x in re.split(r"(\d+)", p.relative_to(image_dir).as_posix())))
+    return [p.relative_to(image_dir).as_posix() for p in paths]
+
+
+def selected_references(work_dir):
+    """관리자가 이전에 직접 고른 참고 이미지 목록(없으면 자동 선별 중)."""
+    manifest_path = Path(work_dir) / GENERATED_IMAGE_DIRNAME / GENERATED_IMAGE_MANIFEST
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [name for name in manifest.get("custom_references") or [] if isinstance(name, str)]
+
+
+def reference_candidate_path(work_dir, name):
+    if name not in set(reference_candidates(work_dir)):
+        return None
+    return Path(work_dir) / "images" / name
+
+
 def resolve_book_work_dir(story_id):
     """story_id("book:<20자리 해시>")에서 book_id와, generate_dating_sim_images.py가
     입력으로 받는 work_dir(일본어자막추출/library/<제목>)을 함께 돌려준다.

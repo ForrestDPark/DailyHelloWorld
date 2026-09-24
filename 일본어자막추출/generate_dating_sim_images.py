@@ -44,6 +44,10 @@ _LAST_GENERATION_META = {}
 _FACE_CASCADES = {}
 
 
+def _relative_original_name(work_dir, path):
+    return path.relative_to(work_dir / "images").as_posix()
+
+
 def _original_scene_images(work_dir):
     """EPUB 제작 과정에서 추출된 원작 장면 이미지를 읽기 순서로 돌려준다.
 
@@ -791,7 +795,7 @@ def _generate(prompt, target, reference=None):
 
 
 def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_generate,
-              translator=_visual_prompt_from_scene_text, force_keys=None):
+              translator=_visual_prompt_from_scene_text, force_keys=None, references=None):
     """force=True면 전부, force_keys(문자열 집합)에 담긴 키만이면 그 이미지만
     강제로 다시 만든다(★ 2026-09-23 "이미지 재생성 버튼... 이 사진만
     재생성하기" 요청) — "portrait"는 대표 초상화, 그 외는 장면 키
@@ -806,11 +810,15 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
     output.mkdir(parents=True, exist_ok=True)
     manifest_path = output / MANIFEST_NAME
     manifest = {}
-    if manifest_path.is_file() and not force:
+    previous_custom_references = []
+    if manifest_path.is_file():
         try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            previous = json.loads(manifest_path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
-            manifest = {}
+            previous = {}
+        previous_custom_references = list(previous.get("custom_references") or [])
+        if not force:
+            manifest = previous
     manifest.update({"version": VERSION, "status": "running", "title": work_dir.name,
                      "portrait": "portrait.png", "selected_count": len(plan["selected"]),
                      "scene_limit": max_scenes, "assignments": {}, "scenes": manifest.get("scenes", {}),
@@ -824,7 +832,18 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
     # "얼굴이 나오는 사진은 되도록 많이 참조해서 정확도를 올리게끔"에 따라
     # 한 장이 아니라 자격을 통과한 후보 전부(최대 MAX_REFERENCE_IMAGES장)를
     # 골라 _local_generate가 평균 latent를 만들게 한다.
-    face_references = _select_fixed_references(originals)
+    # ★ 2026-09-24: "참고이미지 다시추출하기 버튼눌러서 참고할수있는 이미지를 내가 직접
+    # 선택" 요청 — 관리자가 고른 원작 컷(custom_references, images/ 기준 상대 경로)이
+    # 있으면 자동 선별 대신 그 컷들로 인물을 만든다. 고른 목록은 매니페스트에 남겨
+    # 이후 재생성에도 이어 쓰고, 빈 목록으로 다시 고르면 자동 선별로 돌아간다.
+    by_relative = {_relative_original_name(work_dir, path): path for path in originals}
+    if references is not None:
+        custom_names = [name for name in references if name in by_relative]
+    else:
+        custom_names = [name for name in previous_custom_references if name in by_relative]
+    manifest["custom_references"] = custom_names
+    face_references = ([by_relative[name] for name in custom_names] if custom_names
+                       else _select_fixed_references(originals))
     fallback_reference = originals[0] if originals else next((
         path for name in ("cover.jpg", "cover.png", "cover.webp")
         if (path := work_dir / name).is_file()
@@ -840,7 +859,8 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
     manifest["portrait_reference"] = portrait_reference_file
     manifest["portrait_references"] = [name for name in portrait_reference_files if name]
     manifest["reference_source"] = (
-        f"face_detected_fixed ({len(face_references)}장 평균)" if face_references
+        (f"user_selected ({len(face_references)}장 평균)" if custom_names
+         else f"face_detected_fixed ({len(face_references)}장 평균)") if face_references
         else ("original_epub_scene" if originals else "cover_fallback")
     )
     if force or "portrait" in force_keys or not _valid_image(portrait):
@@ -895,10 +915,16 @@ def main():
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--force-key", action="append", default=[],
                          help="이 키(portrait 또는 예: 1:first)만 강제로 다시 만든다. 여러 번 줄 수 있다.")
+    parser.add_argument("--reference", action="append", default=None,
+                         help="인물 참고 이미지로 쓸 원작 컷(images/ 기준 상대 경로). 여러 번 줄 수 있고 주면 자동 선별 대신 쓴다.")
+    parser.add_argument("--auto-references", action="store_true",
+                         help="이전에 고른 참고 이미지를 지우고 자동 선별로 되돌린다.")
     args = parser.parse_args()
+    if args.auto_references and args.reference is None:
+        args.reference = []
     manifest = run_agent(
         Path(args.work_dir).resolve(), max(4, min(args.max_scenes, 30)), args.force,
-        force_keys=set(args.force_key) or None,
+        force_keys=set(args.force_key) or None, references=args.reference,
     )
     print(f"🖼️ 작품 이미지 에이전트: {manifest['status']} · 장면 {len(manifest['scenes'])}/{manifest['selected_count']}장")
     return 0 if manifest["status"] == "complete" else 1
