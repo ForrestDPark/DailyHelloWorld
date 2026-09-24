@@ -1244,7 +1244,9 @@ def dating_sim_playable_stories(request: Request):
             "ready": scenario_ok and images_ok, "scenario_ready": scenario_ok,
             "images_ready": images_ok, "image_count": image_count,
         })
-    stories.sort(key=lambda item: (not item["started"], not item["ready"],
+    # 목록의 가장 중요한 기준은 실제 시나리오 완성 여부다. 이미지가 아직
+    # 덜 만들어졌거나 플레이를 시작하지 않았더라도 완성 시나리오를 위에 둔다.
+    stories.sort(key=lambda item: (not item["scenario_ready"], not item["ready"], not item["started"],
                                    re.sub(r"\[([^|\]]+)\|[^\]]*\]", r"\1", item["character_name"] or "")))
     return stories
 

@@ -955,6 +955,31 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         self.assertTrue(stories[0]["character_name"])
         self.assertEqual(stories[0]["source_title"], "READY")
 
+    def test_playable_stories_puts_completed_scenarios_first(self):
+        owner = SimpleNamespace(state=SimpleNamespace(
+            user={"username": "admin", "is_owner": True}, can_write=True, share_guest=False))
+        book_ids = ["7" * 20, "8" * 20, "9" * 20]
+        readiness = {
+            book_ids[0]: (False, False, 0),
+            book_ids[1]: (True, False, 10),
+            book_ids[2]: (True, True, 42),
+        }
+
+        def find_book(book_id):
+            return Path(f"/tmp/{book_id}.epub")
+
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", Path(directory)), \
+             patch.object(dating_sim_story, "all_book_ids", return_value=book_ids), \
+             patch.object(dating_sim_story, "book_readiness", side_effect=lambda book_id: readiness[book_id]), \
+             patch.object(dating_sim_story, "_find_book", side_effect=find_book), \
+             patch.object(dating_sim_story, "_book_title", side_effect=lambda path: path.stem):
+            stories = app.dating_sim_playable_stories(owner)
+
+        self.assertEqual([item["story_id"] for item in stories], [
+            f"book:{book_ids[2]}", f"book:{book_ids[1]}", f"book:{book_ids[0]}",
+        ])
+
     def test_reference_candidates_list_and_regeneration_passes_selected_references(self):
         owner = SimpleNamespace(state=SimpleNamespace(
             user={"username": "admin", "is_owner": True}, can_write=True, share_guest=False))
