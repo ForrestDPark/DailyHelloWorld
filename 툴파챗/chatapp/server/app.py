@@ -1075,13 +1075,12 @@ def dating_sim_teacher_tip(request: Request, story_id: str | None = None):
             vocab_items = scene.get("vocab_words") or ([scene.get("vocab")] if scene.get("vocab") else [])
             for vocab in vocab_items:
                 if isinstance(vocab, dict):
-                    terms.extend([vocab.get("ja"), vocab.get("word"), vocab.get("ko")])
+                    terms.extend([vocab.get("ja"), vocab.get("word")])
             for expression in scene.get("expressions_used") or []:
                 if isinstance(expression, dict):
-                    terms.extend([expression.get("ja"), expression.get("text"), expression.get("ko")])
+                    terms.extend([expression.get("ja"), expression.get("text")])
                 else:
                     terms.append(expression)
-        source_title = story.get("source_title") or ""
         candidates = conn.execute(
             "SELECT content FROM messages WHERE sender=? ORDER BY id DESC LIMIT 500",
             ("일본어 선생님",),
@@ -1091,7 +1090,21 @@ def dating_sim_teacher_tip(request: Request, story_id: str | None = None):
         ).fetchone()
     finally:
         conn.close()
-    needles = [str(value).strip() for value in [*terms, source_title] if str(value or "").strip()]
+    # 작품 제목만 같거나 짧은 번역어가 우연히 겹치는 것은 장면 관련 설명이
+    # 아니다. 현재 장면에 실제로 쓰인 일본어 표기만 남기고, 한 글자짜리
+    # 표기는 오탐 가능성이 높아 제외한다.
+    needles = []
+    for value in terms:
+        term = str(value or "").strip()
+        term = re.sub(r"\[([^\]|]+)\|[^\]]+\]", r"\1", term)
+        compact = re.sub(r"\s+", "", term)
+        has_kanji = bool(re.search(r"[\u3400-\u9fff]", compact))
+        if not re.search(r"[\u3040-\u30ff\u3400-\u9fff]", compact):
+            continue
+        if (has_kanji and len(compact) < 2) or (not has_kanji and len(compact) < 4):
+            continue
+        if compact not in needles:
+            needles.append(compact)
     for candidate in candidates:
         content = candidate["content"] or ""
         matched = next((term for term in needles if term.casefold() in content.casefold()), None)
@@ -1108,8 +1121,12 @@ def dating_sim_teacher_tip(request: Request, story_id: str | None = None):
             excerpt = "…" + excerpt
         if end < len(clean):
             excerpt += "…"
-        return {"content": excerpt, "avatar_url": persona["avatar_url"] if persona else None}
-    return None
+        return {
+            "content": excerpt,
+            "avatar_url": persona["avatar_url"] if persona else None,
+            "matched_term": matched,
+        }
+    return {"content": None, "avatar_url": persona["avatar_url"] if persona else None}
 
 
 @app.get("/api/dating-sim/scenario-tree")

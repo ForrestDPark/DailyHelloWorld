@@ -1512,21 +1512,55 @@ function renderScene(state) {
   typeLine(sceneLines[0]);
 }
 
+function setTeacherTipAvatar(source) {
+  const avatar = $("teacher-tip-avatar");
+  avatar.onerror = () => {
+    avatar.onerror = null;
+    avatar.src = "/dating-sim/static/reina.png";
+  };
+  avatar.onclick = null;
+  avatar.classList.remove("zoomable-portrait");
+  avatar.src = source || "/dating-sim/static/reina.png";
+}
+
 async function renderTeacherTip(state) {
   const box = $("teacher-tip");
+  const trigger = $("teacher-tip-trigger");
+  const bubble = $("teacher-tip-bubble");
   const requestId = ++teacherTipRequest;
+  box.classList.remove("has-tip");
   box.classList.add("hidden");
+  bubble.classList.add("hidden");
+  trigger.setAttribute("aria-expanded", "false");
+  trigger.setAttribute("aria-disabled", "true");
+  trigger.setAttribute("aria-label", "일본어 선생님 도움말");
+  $("teacher-tip-text").textContent = "";
   if (!state.is_admin || !state.source_title) return;
+  setTeacherTipAvatar(null);
+  box.classList.remove("hidden");
   try {
     const tip = await api(`/api/dating-sim/teacher-tip${storyQuery()}`);
-    if (requestId !== teacherTipRequest || !tip?.content) return;
+    if (requestId !== teacherTipRequest) return;
+    setTeacherTipAvatar(tip.avatar_url);
+    if (!tip?.content) return;
     $("teacher-tip-text").textContent = tip.content;
-    setSafeImage($("teacher-tip-avatar"), tip.avatar_url, "/dating-sim/static/reina.png");
-    box.classList.remove("hidden");
+    box.classList.add("has-tip");
+    trigger.setAttribute("aria-disabled", "false");
+    trigger.setAttribute("aria-label", "현재 장면과 관련된 일본어 선생님 설명 보기");
   } catch (_) {
     // 관련 과거 발언이 없거나 조회할 수 없어도 게임 진행은 그대로 유지한다.
   }
 }
+
+$("teacher-tip-trigger").addEventListener("click", (event) => {
+  event.stopPropagation();
+  const box = $("teacher-tip");
+  if (!box.classList.contains("has-tip")) return;
+  const bubble = $("teacher-tip-bubble");
+  const opening = bubble.classList.contains("hidden");
+  bubble.classList.toggle("hidden", !opening);
+  $("teacher-tip-trigger").setAttribute("aria-expanded", String(opening));
+});
 
 function renderChoiceResult(state) {
   const delta = state.choice_result.affection_delta;

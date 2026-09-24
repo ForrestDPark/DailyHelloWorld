@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/dating-sim/static/style.css?v=20260925-v39">
+<link rel="stylesheet" href="/dating-sim/static/style.css?v=20260925-v40">
 </head>
 <body>
   <div id="game">
@@ -79,8 +79,11 @@
           <button id="dialogue-next" type="button" class="dialogue-next hidden">▼</button>
         </div>
         <aside id="teacher-tip" class="teacher-tip hidden" aria-live="polite">
-          <img id="teacher-tip-avatar" alt="일본어 선생님">
-          <div><strong>일본어 선생님</strong><p id="teacher-tip-text"></p></div>
+          <button id="teacher-tip-trigger" class="teacher-tip-trigger" type="button" aria-label="일본어 선생님 도움말" aria-expanded="false">
+            <img id="teacher-tip-avatar" alt="일본어 선생님">
+            <span class="teacher-tip-sparkle" aria-hidden="true">✦</span>
+          </button>
+          <div id="teacher-tip-bubble" class="teacher-tip-bubble hidden"><strong>일본어 선생님</strong><p id="teacher-tip-text"></p></div>
         </aside>
         <div id="choice-list" class="choice-list hidden"></div>
       </section>
@@ -149,6 +152,6 @@
       <button id="practice-continue" type="button" class="practice-continue hidden">점수 확인하고 다음 대사</button>
     </section>
   </div>
-  <script src="/dating-sim/static/app.js?v=20260925-v44"></script>
+  <script src="/dating-sim/static/app.js?v=20260925-v45"></script>
 </body>
 </html>

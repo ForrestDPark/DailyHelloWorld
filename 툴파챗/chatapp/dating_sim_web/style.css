@@ -830,12 +830,38 @@ body.practice-open { overflow: hidden; }
 .story-popover-badge { font-style: normal; font-size: 10px; padding: 1px 5px; margin-left: 2px; color: #1d1a2b; background: #f4d35e; border-radius: 4px; }
 
 .teacher-tip {
-  display: flex; align-items: flex-start; gap: 10px; margin: 10px 4px 14px;
-  padding: 10px 12px; border: 2px solid var(--border); border-radius: 12px;
+  position: relative; display: flex; align-items: flex-end; gap: 9px;
+  width: fit-content; max-width: calc(100% - 8px); margin: 10px 4px 14px;
+}
+.teacher-tip.hidden { display: none; }
+.teacher-tip-trigger {
+  position: relative; width: 48px; height: 48px; flex: none; padding: 0;
+  border: 0; border-radius: 50%; background: transparent; cursor: default;
+}
+.teacher-tip-trigger img { width: 48px; height: 48px; border-radius: 50%; object-fit: cover; border: 2px solid var(--muted); }
+.teacher-tip.has-tip .teacher-tip-trigger { cursor: pointer; animation: teacher-tip-pulse 1.7s ease-in-out infinite; }
+.teacher-tip.has-tip .teacher-tip-trigger img { border-color: var(--accent); }
+.teacher-tip-sparkle {
+  position: absolute; right: -3px; top: -7px; display: none; color: var(--border);
+  font-size: 22px; line-height: 1; text-shadow: 0 0 8px var(--accent);
+}
+.teacher-tip.has-tip .teacher-tip-sparkle { display: block; animation: teacher-tip-sparkle 1s steps(2, end) infinite; }
+.teacher-tip-bubble {
+  position: relative; max-width: min(420px, calc(100vw - 88px)); padding: 10px 12px;
+  border: 2px solid var(--border); border-radius: 12px;
   background: color-mix(in srgb, var(--panel) 92%, #fff 8%);
   box-shadow: 3px 3px 0 rgba(0, 0, 0, .22);
 }
-.teacher-tip.hidden { display: none; }
-.teacher-tip img { width: 42px; height: 42px; flex: none; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent); }
+.teacher-tip-bubble.hidden { display: none; }
+.teacher-tip-bubble::before {
+  content: ""; position: absolute; left: -9px; bottom: 13px; width: 14px; height: 14px;
+  border-left: 2px solid var(--border); border-bottom: 2px solid var(--border);
+  background: var(--panel); transform: rotate(45deg);
+}
 .teacher-tip strong { display: block; color: var(--accent); font-size: 12px; margin-bottom: 4px; }
 .teacher-tip p { margin: 0; color: var(--text); font-size: 14px; line-height: 1.55; white-space: pre-line; }
+@keyframes teacher-tip-pulse { 50% { transform: scale(1.08); filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 75%, transparent)); } }
+@keyframes teacher-tip-sparkle { 50% { opacity: .35; transform: rotate(18deg) scale(.8); } }
+@media (prefers-reduced-motion: reduce) {
+  .teacher-tip.has-tip .teacher-tip-trigger, .teacher-tip.has-tip .teacher-tip-sparkle { animation: none; }
+}
