@@ -1085,9 +1085,21 @@ def dating_sim_scenario_tree(request: Request, story_id: str | None = None):
 # 빌려 쓴다.
 DATING_SIM_IMAGE_PYTHON = "/opt/anaconda3/bin/python3"
 DATING_SIM_IMAGE_SCRIPT = str(REPO_ROOT / "일본어자막추출" / "generate_dating_sim_images.py")
+DATING_SIM_IMAGE_BACKLOG_SCRIPT = str(REPO_ROOT / "일본어자막추출" / "generate_missing_dating_sim_images.py")
+DATING_SIM_IMAGE_BACKLOG_STATE = Path(os.path.expanduser("~/.tulpachat/dating_sim_image_backlog.json"))
+DATING_SIM_IMAGE_BACKLOG_LOG = Path(os.path.expanduser("~/.tulpachat/dating_sim_image_backlog.log"))
 
 _dating_sim_image_jobs: dict[str, dict] = {}
 _dating_sim_image_jobs_lock = threading.Lock()
+_dating_sim_image_backlog_job: dict | None = None
+
+
+def _dating_sim_image_backlog_state():
+    try:
+        data = json.loads(DATING_SIM_IMAGE_BACKLOG_STATE.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
 
 
 def _dating_sim_image_job_status(book_id, work_dir):
@@ -1132,6 +1144,34 @@ def _push_when_dating_sim_images_done(process, username, story_id, label):
             conn.close()
     except Exception as exc:  # noqa: BLE001
         print(f"⚠️ 미연시 이미지 완료 알림 실패: {exc}")
+
+
+def _push_when_dating_sim_image_backlog_done(process, username):
+    global _dating_sim_image_backlog_job
+    try:
+        returncode = process.wait()
+        state = _dating_sim_image_backlog_state()
+        completed = int(state.get("completed") or 0)
+        failed = int(state.get("failed") or 0)
+        conn = get_conn()
+        try:
+            _send_web_push_to_user(
+                conn, username,
+                "미연시 잔여 이미지 생성 완료" if returncode == 0 else "미연시 잔여 이미지 생성 확인 필요",
+                f"완료 {completed}편 · 실패 {failed}편",
+                "/dating-sim/",
+            )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as exc:  # noqa: BLE001
+        print(f"⚠️ 미연시 잔여 이미지 완료 알림 실패: {exc}")
+    finally:
+        with _dating_sim_image_jobs_lock:
+            job = _dating_sim_image_backlog_job
+            if job and job.get("process") is process:
+                job["log_file"].close()
+                _dating_sim_image_backlog_job = None
 
 
 DATING_SIM_IMAGE_KEY_RE = re.compile(r"^[A-Za-z0-9_:-]{1,64}$")
@@ -1232,6 +1272,45 @@ def dating_sim_generate_images_status(request: Request, story_id: str | None = N
     if not work_dir:
         raise HTTPException(status_code=404, detail="작품 폴더를 찾을 수 없습니다")
     return _dating_sim_image_job_status(book_id, work_dir)
+
+
+@app.post("/api/dating-sim/generate-missing-images")
+def dating_sim_generate_missing_images(request: Request):
+    """관리자 전용 — 시나리오 완성·이미지 미완성 작품 전체를 순차 생성한다."""
+    global _dating_sim_image_backlog_job
+    _require_owner(request)
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8188/system_stats", timeout=3):
+            pass
+    except (OSError, urllib.error.URLError) as exc:
+        raise HTTPException(status_code=503, detail="ComfyUI가 꺼져 있습니다. Mac에서 ComfyUI를 먼저 실행해 주세요") from exc
+    with _dating_sim_image_jobs_lock:
+        if any(job["process"].poll() is None for job in _dating_sim_image_jobs.values()):
+            raise HTTPException(status_code=409, detail="개별 작품 이미지 생성이 진행 중입니다")
+        if _dating_sim_image_backlog_job and _dating_sim_image_backlog_job["process"].poll() is None:
+            raise HTTPException(status_code=409, detail="미완성 작품 이미지 생성이 이미 진행 중입니다")
+        DATING_SIM_IMAGE_BACKLOG_STATE.parent.mkdir(parents=True, exist_ok=True)
+        DATING_SIM_IMAGE_BACKLOG_STATE.unlink(missing_ok=True)
+        log_file = open(DATING_SIM_IMAGE_BACKLOG_LOG, "ab")
+        process = subprocess.Popen(
+            [DATING_SIM_IMAGE_PYTHON, DATING_SIM_IMAGE_BACKLOG_SCRIPT],
+            stdout=log_file, stderr=subprocess.STDOUT,
+        )
+        _dating_sim_image_backlog_job = {"process": process, "log_file": log_file, "started_at": int(time.time())}
+        threading.Thread(target=_push_when_dating_sim_image_backlog_done,
+                         args=(process, _request_username(request)), daemon=True).start()
+    return {"status": "started"}
+
+
+@app.get("/api/dating-sim/generate-missing-images/status")
+def dating_sim_generate_missing_images_status(request: Request):
+    _require_owner(request)
+    with _dating_sim_image_jobs_lock:
+        job = _dating_sim_image_backlog_job
+        running = bool(job and job["process"].poll() is None)
+    state = _dating_sim_image_backlog_state()
+    state["running"] = running
+    return state
 
 
 # ★ 2026-09-17: "만남마다 나가기하면 그 진행상태가 세이브되서 다시 미연시

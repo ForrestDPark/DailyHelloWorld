@@ -693,6 +693,9 @@ body.practice-open { overflow: hidden; }
 .tree-image-generate-btn:disabled { opacity: 0.5; cursor: default; }
 .tree-image-regenerate-btn { background: var(--accent); color: #fff; }
 .tree-image-generate-status { font-size: 11px; color: var(--muted); }
+.story-image-backlog{display:grid;gap:5px;margin:10px 0;padding:10px;border:1px solid var(--border);background:var(--panel-2)}
+.story-image-backlog button{min-height:40px;border:0;border-radius:4px;background:var(--good);color:#1c1030;font:inherit;font-size:11px;font-weight:800;cursor:pointer}
+.story-image-backlog button:disabled{opacity:.58;cursor:default}.story-image-backlog span{color:var(--muted);font-size:10px;line-height:1.45}
 .tree-image-gallery {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
 }

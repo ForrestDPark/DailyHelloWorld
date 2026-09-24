@@ -1556,6 +1556,7 @@ function renderLobby(mostRecentEncounter) {
 
 // ── 관리자 전용: 진행 가능한(시나리오·이미지 준비 완료) 미연시 목록 팝오버 ──
 let playableStories = null;
+let missingImagePollTimer = null;
 
 async function loadPlayableStories(force = false) {
   if (!playableStories || force) playableStories = await api("/api/dating-sim/playable-stories");
@@ -1595,6 +1596,60 @@ async function openStoryPopover(anchor) {
     return;
   }
   const head = Object.assign(document.createElement("strong"), { textContent: `미연시 ${stories.length}편 (완료 ${stories.filter((s) => s.ready).length}편)` });
+  const imageMissing = stories.filter((item) => item.scenario_ready && !item.images_ready);
+  const bulk = document.createElement("section");
+  bulk.className = "story-image-backlog";
+  const bulkButton = document.createElement("button");
+  bulkButton.type = "button";
+  bulkButton.textContent = `이미지 미완성 작품 ${imageMissing.length}편 생성`;
+  bulkButton.disabled = imageMissing.length === 0;
+  const bulkStatus = document.createElement("span");
+  bulkStatus.textContent = imageMissing.length ? "ComfyUI로 빠진 이미지만 순서대로 생성합니다" : "이미지 생성이 모두 완료됐습니다";
+  bulk.append(bulkButton, bulkStatus);
+
+  const stopBulkPoll = () => {
+    if (missingImagePollTimer) clearInterval(missingImagePollTimer);
+    missingImagePollTimer = null;
+  };
+  const pollBulk = async () => {
+    try {
+      const state = await api("/api/dating-sim/generate-missing-images/status");
+      if (state.running) {
+        bulkButton.disabled = true;
+        bulkButton.textContent = `생성 중 ${state.completed || 0}/${state.total || imageMissing.length}`;
+        bulkStatus.textContent = state.current
+          ? `${state.current} 처리 중 · 실패 ${state.failed || 0}편`
+          : "대상 작품을 확인하는 중…";
+        return;
+      }
+      stopBulkPoll();
+      if (["complete", "partial", "failed"].includes(state.status)) {
+        bulkButton.disabled = false;
+        bulkButton.textContent = state.status === "complete" ? "잔여 이미지 생성 완료" : "실패 작품 다시 시도";
+        bulkStatus.textContent = `완료 ${state.completed || 0}편 · 실패 ${state.failed || 0}편${state.error ? ` · ${state.error}` : ""}`;
+        playableStories = null;
+      }
+    } catch (error) {
+      stopBulkPoll();
+      bulkButton.disabled = false;
+      bulkStatus.textContent = error.message;
+    }
+  };
+  bulkButton.addEventListener("click", async () => {
+    if (!confirm(`시나리오가 완성됐지만 이미지가 덜 만들어진 ${imageMissing.length}편을 순서대로 생성할까요? Mac의 ComfyUI가 켜져 있어야 합니다.`)) return;
+    bulkButton.disabled = true;
+    bulkButton.textContent = "작업 시작 중…";
+    bulkStatus.textContent = "ComfyUI 연결을 확인하고 있습니다";
+    try {
+      await api("/api/dating-sim/generate-missing-images", { method: "POST" });
+      await pollBulk();
+      if (!missingImagePollTimer) missingImagePollTimer = setInterval(pollBulk, 5000);
+    } catch (error) {
+      bulkButton.disabled = false;
+      bulkButton.textContent = `이미지 미완성 작품 ${imageMissing.length}편 생성`;
+      bulkStatus.textContent = error.message;
+    }
+  });
   const list = document.createElement("div");
   list.className = "story-popover-list";
   if (!stories.length) {
@@ -1641,7 +1696,8 @@ async function openStoryPopover(anchor) {
     });
     list.append(button);
   }
-  pop.replaceChildren(head, list);
+  pop.replaceChildren(head, bulk, list);
+  pollBulk();
 }
 
 for (const id of ["story-list-btn", "lobby-story-list-btn"]) {
