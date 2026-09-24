@@ -20,6 +20,11 @@ class DatingAudioTests(unittest.TestCase):
         self.assertEqual(dating_audio.spoken_text("もちろん。君が行きたいところなら[どこ]でも。"),
                           "もちろん。君が行きたいところならどこでも。")
 
+    def test_spoken_text_strips_incomplete_furigana_delimiters(self):
+        spoken = dating_audio.spoken_text("一緒に読みたいと[思|おもってたの。")
+        self.assertNotIn("[", spoken)
+        self.assertNotIn("|", spoken)
+
     def test_catalog_includes_ai_generated_book_dialogue_not_just_templates(self):
         # ★ 2026-09-24: "일본어 듣기 누르면 다 엣지tts로나와야하는데
         # 아닌것도있네" 신고 — build_catalog()가 고정 템플릿·기본 프로필

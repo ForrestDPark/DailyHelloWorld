@@ -200,6 +200,10 @@ function showView(name) {
     $(id).classList.toggle("hidden", id !== name);
   }
   $("listening-controls").classList.toggle("hidden", name === "loading-view" || name === "lobby-view");
+  if (name !== "scene-view") {
+    $("writing-practice").disabled = true;
+    $("speaking-practice").disabled = true;
+  }
 }
 
 function renderHud(state) {
@@ -473,6 +477,287 @@ async function loadAudioManifest() {
     audioManifest = {};
   }
   updateListeningControls();
+}
+
+// ── 현재 대사 받아쓰기·말하기 연습 ────────────────────────────────
+// 앱 서버나 사용자 API 키를 쓰지 않는다. 쓰기는 Canvas의 글자 윤곽 유사도,
+// 말하기는 브라우저가 제공하는 일본어 음성 인식 결과와 원문 편집 거리로
+// 채점한다. 음성 인식 처리 위치는 Safari/Chrome의 기기·브라우저 정책을 따른다.
+let practiceMode = null;
+let writingChars = [];
+let writingIndex = 0;
+let writingScores = [];
+let writingDrawing = false;
+let speechRecognizer = null;
+
+function currentPracticeLine() {
+  if ($("scene-view").classList.contains("hidden") || !sceneLines.length) return null;
+  const raw = sceneLines[sceneLineIndex];
+  const line = typeof raw === "string" ? { speaker: "character", text: raw } : raw;
+  const text = japaneseText(line.text);
+  return text ? { text, role: line.speaker === "narrator" ? "male" : "female" } : null;
+}
+
+function updatePracticeButtons() {
+  const enabled = !!currentPracticeLine() && !typewriterTimer;
+  $("writing-practice").disabled = !enabled;
+  $("speaking-practice").disabled = !enabled;
+}
+
+function closePractice() {
+  speechRecognizer?.abort?.();
+  speechRecognizer = null;
+  practiceMode = null;
+  $("practice-overlay").classList.add("hidden");
+  document.body.classList.remove("practice-open");
+}
+
+function showPracticeResult(score, detail) {
+  const box = $("practice-result");
+  const rounded = Math.max(0, Math.min(100, Math.round(score)));
+  box.className = `practice-result score-${rounded >= 85 ? "great" : rounded >= 65 ? "good" : "retry"}`;
+  box.textContent = `${rounded}점 · ${detail}`;
+  $("practice-continue").classList.remove("hidden");
+  $("practice-continue").textContent = sceneLineIndex < sceneLines.length - 1
+    ? "점수 확인하고 다음 대사" : "점수 확인하고 선택지로 돌아가기";
+}
+
+function openPractice(mode) {
+  const line = currentPracticeLine();
+  if (!line) return;
+  if (!recordedAudio.paused || window.speechSynthesis?.speaking) stopListening({ turnOff: false });
+  practiceMode = mode;
+  $("practice-overlay").classList.remove("hidden");
+  document.body.classList.add("practice-open");
+  $("practice-result").classList.add("hidden");
+  $("practice-continue").classList.add("hidden");
+  $("writing-pane").classList.toggle("hidden", mode !== "writing");
+  $("speaking-pane").classList.toggle("hidden", mode !== "speaking");
+  $("practice-title").textContent = mode === "writing" ? "손글씨 받아쓰기" : "발음 점수";
+  $("practice-kicker").textContent = mode === "writing" ? "한 글자씩 직접 써보기" : "듣고 그대로 말하기";
+  $("practice-target").textContent = mode === "writing" ? "대사를 듣고 글자를 써보세요" : line.text;
+  $("practice-instruction").textContent = mode === "writing"
+    ? "대사를 한 번 들은 뒤, 화면에 손가락으로 한 글자씩 쓰세요. 채점하면 정답 글자가 나타납니다."
+    : "대사를 들은 뒤 녹음 시작을 누르고 일본어로 따라 말하세요. 인식된 문장과 원문을 비교합니다.";
+  if (mode === "writing") startWritingPractice(line.text);
+  else {
+    $("speech-transcript").textContent = "먼저 대사를 듣고 녹음을 시작하세요.";
+    $("speech-meter-bar").style.width = "0%";
+    playPracticeReference();
+  }
+}
+
+function playPracticeReference() {
+  const line = currentPracticeLine();
+  if (!line) return Promise.resolve();
+  const url = audioManifest[line.role]?.[line.text];
+  if (url) {
+    recordedAudio.src = url;
+    return recordedAudio.play().catch(() => speakPracticeWithDevice(line.text, line.role));
+  }
+  return speakPracticeWithDevice(line.text, line.role);
+}
+
+function speakPracticeWithDevice(text, role) {
+  if (!("speechSynthesis" in window)) return Promise.resolve();
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "ja-JP";
+  utterance.rate = role === "female" ? 0.9 : 0.86;
+  utterance.pitch = role === "female" ? 1.18 : 0.92;
+  const voice = japaneseVoice(role);
+  if (voice) utterance.voice = voice;
+  return new Promise((resolve) => {
+    utterance.onend = resolve;
+    utterance.onerror = resolve;
+    window.speechSynthesis.speak(utterance);
+  });
+}
+
+function writingContext() {
+  const canvas = $("writing-canvas");
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  context.lineCap = "round";
+  context.lineJoin = "round";
+  context.strokeStyle = "#f5f0ff";
+  context.lineWidth = 18;
+  return context;
+}
+
+function clearWritingCanvas() {
+  const canvas = $("writing-canvas");
+  writingContext().clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function startWritingPractice(text) {
+  writingChars = [...text].filter((char) => /[\u3040-\u30ff\u3400-\u9fff]/u.test(char));
+  writingIndex = 0;
+  writingScores = [];
+  $("writing-next").classList.add("hidden");
+  $("writing-grade").classList.remove("hidden");
+  clearWritingCanvas();
+  updateWritingPrompt();
+  playPracticeReference();
+}
+
+function updateWritingPrompt(reveal = false) {
+  const current = writingChars[writingIndex] || "";
+  $("writing-position").textContent = `${writingIndex + 1} / ${writingChars.length}`;
+  $("writing-average").textContent = writingScores.length
+    ? `평균 ${Math.round(writingScores.reduce((a, b) => a + b, 0) / writingScores.length)}점` : "";
+  $("practice-target").textContent = reveal ? `정답: ${current}` : "이 글자를 기억해서 써보세요";
+}
+
+function normalizedInk(imageData, size = 72) {
+  const { data, width, height } = imageData;
+  let minX = width, minY = height, maxX = -1, maxY = -1;
+  for (let y = 0; y < height; y += 2) for (let x = 0; x < width; x += 2) {
+    if (data[(y * width + x) * 4 + 3] > 20) {
+      minX = Math.min(minX, x); minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+    }
+  }
+  if (maxX < 0) return null;
+  const source = document.createElement("canvas");
+  source.width = width; source.height = height;
+  source.getContext("2d").putImageData(imageData, 0, 0);
+  const out = document.createElement("canvas");
+  out.width = size; out.height = size;
+  const ctx = out.getContext("2d");
+  const boxW = Math.max(1, maxX - minX + 1), boxH = Math.max(1, maxY - minY + 1);
+  const scale = Math.min((size - 8) / boxW, (size - 8) / boxH);
+  const dw = boxW * scale, dh = boxH * scale;
+  ctx.drawImage(source, minX, minY, boxW, boxH, (size - dw) / 2, (size - dh) / 2, dw, dh);
+  const pixels = ctx.getImageData(0, 0, size, size).data;
+  return Uint8Array.from({ length: size * size }, (_, i) => pixels[i * 4 + 3] > 25 ? 1 : 0);
+}
+
+function targetInk(character) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 300; canvas.height = 300;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#fff";
+  ctx.font = '220px "Hiragino Sans", "Yu Gothic", sans-serif';
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(character, 150, 158);
+  return normalizedInk(ctx.getImageData(0, 0, 300, 300));
+}
+
+function dilate(mask, radius = 3, size = 72) {
+  const out = new Uint8Array(mask.length);
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    if (!mask[y * size + x]) continue;
+    for (let dy = -radius; dy <= radius; dy++) for (let dx = -radius; dx <= radius; dx++) {
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && nx < size && ny >= 0 && ny < size) out[ny * size + nx] = 1;
+    }
+  }
+  return out;
+}
+
+function handwritingScore(character) {
+  const canvas = $("writing-canvas");
+  const user = normalizedInk(writingContext().getImageData(0, 0, canvas.width, canvas.height));
+  const target = targetInk(character);
+  if (!user || !target) return 0;
+  const wideUser = dilate(user), wideTarget = dilate(target);
+  let userCount = 0, targetCount = 0, userHit = 0, targetHit = 0;
+  for (let i = 0; i < user.length; i++) {
+    if (user[i]) { userCount++; if (wideTarget[i]) userHit++; }
+    if (target[i]) { targetCount++; if (wideUser[i]) targetHit++; }
+  }
+  const precision = userHit / Math.max(1, userCount);
+  const recall = targetHit / Math.max(1, targetCount);
+  return 100 * (2 * precision * recall / Math.max(0.001, precision + recall));
+}
+
+function gradeWritingCharacter() {
+  if (!writingChars.length) return;
+  const score = handwritingScore(writingChars[writingIndex]);
+  writingScores.push(score);
+  updateWritingPrompt(true);
+  showPracticeResult(score, score >= 85 ? "모양이 아주 정확해요" : score >= 65 ? "좋아요. 획 위치를 조금만 다듬어보세요" : "정답 모양을 보고 한 번 더 써보세요");
+  $("writing-grade").classList.add("hidden");
+  $("writing-next").classList.remove("hidden");
+  $("writing-next").textContent = writingIndex === writingChars.length - 1 ? "전체 결과" : "다음 글자";
+}
+
+function nextWritingCharacter() {
+  if (writingIndex < writingChars.length - 1) {
+    writingIndex += 1;
+    clearWritingCanvas();
+    $("practice-result").classList.add("hidden");
+    $("writing-grade").classList.remove("hidden");
+    $("writing-next").classList.add("hidden");
+    updateWritingPrompt();
+    return;
+  }
+  const average = writingScores.reduce((a, b) => a + b, 0) / Math.max(1, writingScores.length);
+  $("practice-target").textContent = currentPracticeLine()?.text || "";
+  showPracticeResult(average, `${writingChars.length}글자 받아쓰기 완료`);
+  $("writing-next").classList.add("hidden");
+}
+
+function normalizedSpeechText(text) {
+  return [...String(text || "").normalize("NFKC")].map((char) => {
+    const code = char.charCodeAt(0);
+    return code >= 0x30a1 && code <= 0x30f6 ? String.fromCharCode(code - 0x60) : char;
+  }).join("").replace(/[^\u3040-\u309f\u3400-\u9fff]/gu, "");
+}
+
+function editDistance(a, b) {
+  const prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let left = i, diagonal = prev[0]; prev[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const up = prev[j];
+      const value = Math.min(up + 1, left + 1, diagonal + (a[i - 1] === b[j - 1] ? 0 : 1));
+      diagonal = up; prev[j] = value; left = value;
+    }
+  }
+  return prev[b.length];
+}
+
+function startSpeakingPractice() {
+  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Recognition) {
+    $("speech-transcript").textContent = "이 브라우저는 일본어 음성 인식을 지원하지 않습니다. iPhone에서는 최신 Safari로 열어 다시 시도해 주세요.";
+    showPracticeResult(0, "음성 인식 미지원");
+    return;
+  }
+  speechRecognizer?.abort?.();
+  const line = currentPracticeLine();
+  if (!line) return;
+  const recognition = new Recognition();
+  speechRecognizer = recognition;
+  recognition.lang = "ja-JP";
+  recognition.interimResults = true;
+  recognition.continuous = false;
+  $("speech-record").textContent = "■ 녹음 중지";
+  $("speech-record").classList.add("recording");
+  $("speech-transcript").textContent = "듣고 있어요…";
+  recognition.onresult = (event) => {
+    const transcript = [...event.results].map((result) => result[0]?.transcript || "").join("");
+    $("speech-transcript").textContent = transcript || "듣고 있어요…";
+    const target = normalizedSpeechText(line.text), spoken = normalizedSpeechText(transcript);
+    const score = 100 * (1 - editDistance(target, spoken) / Math.max(1, target.length, spoken.length));
+    $("speech-meter-bar").style.width = `${Math.max(0, score)}%`;
+    if (event.results[event.results.length - 1].isFinal) {
+      showPracticeResult(score, score >= 85 ? "원문과 거의 같아요" : score >= 65 ? "잘 들렸어요. 빠진 소리를 다시 확인해보세요" : "대사를 다시 듣고 천천히 말해보세요");
+    }
+  };
+  const finish = () => {
+    $("speech-record").textContent = "● 다시 녹음";
+    $("speech-record").classList.remove("recording");
+    speechRecognizer = null;
+  };
+  recognition.onend = finish;
+  recognition.onerror = (event) => {
+    finish();
+    $("speech-transcript").textContent = event.error === "not-allowed" ? "마이크 권한을 허용해 주세요." : "음성을 인식하지 못했어요. 다시 시도해 주세요.";
+  };
+  recognition.start();
 }
 
 // ★ 2026-09-17: "미연시에서도 한자클릭하면 팝업뜨게해줘" 요청 — 채팅
@@ -996,6 +1281,8 @@ function stopTypewriter() {
 
 function typeLine(text) {
   stopTypewriter();
+  $("writing-practice").disabled = true;
+  $("speaking-practice").disabled = true;
   const line = typeof text === "string" ? { speaker: "character", text } : text;
   text = line.text;
   const narrator = line.speaker === "narrator";
@@ -1036,6 +1323,7 @@ function onLineFullyShown() {
     $("dialogue-next").classList.remove("hidden");
   }
   if (listeningMode) speakCurrentLine();
+  updatePracticeButtons();
 }
 
 async function markCurrentSceneSeen() {
@@ -1438,6 +1726,68 @@ $("listening-stop").addEventListener("click", (event) => {
   event.stopPropagation();
   stopListening();
 });
+$("writing-practice").addEventListener("click", (event) => {
+  event.stopPropagation();
+  openPractice("writing");
+});
+$("speaking-practice").addEventListener("click", (event) => {
+  event.stopPropagation();
+  openPractice("speaking");
+});
+$("practice-close").addEventListener("click", closePractice);
+$("practice-continue").addEventListener("click", () => {
+  const canAdvance = sceneLineIndex < sceneLines.length - 1;
+  closePractice();
+  if (canAdvance) advanceLine();
+});
+$("practice-overlay").addEventListener("click", (event) => {
+  if (event.target === $("practice-overlay")) closePractice();
+});
+$("speech-listen").addEventListener("click", playPracticeReference);
+$("speech-record").addEventListener("click", () => {
+  if (speechRecognizer) speechRecognizer.stop();
+  else startSpeakingPractice();
+});
+$("writing-grade").addEventListener("click", gradeWritingCharacter);
+$("writing-next").addEventListener("click", nextWritingCharacter);
+$("writing-clear").addEventListener("click", () => {
+  clearWritingCanvas();
+  if ($("writing-grade").classList.contains("hidden") && writingScores.length) writingScores.pop();
+  $("writing-grade").classList.remove("hidden");
+  $("writing-next").classList.add("hidden");
+  $("practice-result").classList.add("hidden");
+  $("practice-continue").classList.add("hidden");
+  updateWritingPrompt();
+});
+
+const writingCanvas = $("writing-canvas");
+function writingPoint(event) {
+  const rect = writingCanvas.getBoundingClientRect();
+  return {
+    x: (event.clientX - rect.left) * writingCanvas.width / rect.width,
+    y: (event.clientY - rect.top) * writingCanvas.height / rect.height,
+  };
+}
+writingCanvas.addEventListener("pointerdown", (event) => {
+  event.preventDefault();
+  writingDrawing = true;
+  writingCanvas.setPointerCapture(event.pointerId);
+  const point = writingPoint(event);
+  const context = writingContext();
+  context.beginPath();
+  context.moveTo(point.x, point.y);
+});
+writingCanvas.addEventListener("pointermove", (event) => {
+  if (!writingDrawing) return;
+  event.preventDefault();
+  const point = writingPoint(event);
+  const context = writingContext();
+  context.lineTo(point.x, point.y);
+  context.stroke();
+});
+for (const eventName of ["pointerup", "pointercancel", "pointerleave"]) {
+  writingCanvas.addEventListener(eventName, () => { writingDrawing = false; });
+}
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) stopListening();
 });
@@ -2234,7 +2584,9 @@ $("tree-overlay").addEventListener("click", (event) => {
 });
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
-  if (document.querySelector(".tree-image-detail-overlay")) {
+  if (!$("practice-overlay").classList.contains("hidden")) {
+    closePractice();
+  } else if (document.querySelector(".tree-image-detail-overlay")) {
     closeTreeImageDetail();
   } else if (document.querySelector(".image-lightbox-overlay")) {
     closeImageLightbox();

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/dating-sim/static/style.css?v=20260924-v30">
+<link rel="stylesheet" href="/dating-sim/static/style.css?v=20260924-v32">
 </head>
 <body>
   <div id="game">
@@ -57,6 +57,8 @@
         <button id="listening-toggle" type="button" aria-pressed="false">일본어 듣기</button>
         <button id="listening-replay" type="button">다시 듣기</button>
         <button id="listening-stop" type="button" disabled>정지</button>
+        <button id="writing-practice" type="button" disabled>쓰기</button>
+        <button id="speaking-practice" type="button" disabled>말하기</button>
         <span id="listening-status" aria-live="polite">꺼짐</span>
       </div>
       <section id="map-view" class="hidden">
@@ -112,6 +114,36 @@
       </section>
     </main>
   </div>
-  <script src="/dating-sim/static/app.js?v=20260924-v34"></script>
+
+  <div id="practice-overlay" class="practice-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="practice-title">
+    <section class="practice-panel">
+      <header class="practice-head">
+        <div><small id="practice-kicker">일본어 연습</small><h2 id="practice-title">받아쓰기</h2></div>
+        <button id="practice-close" type="button" aria-label="연습 창 닫기">×</button>
+      </header>
+      <p id="practice-instruction" class="practice-instruction"></p>
+      <div id="practice-target" class="practice-target" aria-live="polite"></div>
+      <div id="writing-pane" class="practice-pane hidden">
+        <div class="writing-progress"><span id="writing-position"></span><span id="writing-average"></span></div>
+        <canvas id="writing-canvas" width="640" height="440" aria-label="손가락으로 일본어 글자를 쓰는 영역"></canvas>
+        <div class="practice-actions">
+          <button id="writing-clear" type="button">지우기</button>
+          <button id="writing-grade" type="button" class="primary">채점</button>
+          <button id="writing-next" type="button" class="hidden">다음 글자</button>
+        </div>
+      </div>
+      <div id="speaking-pane" class="practice-pane hidden">
+        <div class="speech-meter" aria-hidden="true"><i id="speech-meter-bar"></i></div>
+        <p id="speech-transcript" class="speech-transcript">먼저 대사를 듣고 녹음을 시작하세요.</p>
+        <div class="practice-actions">
+          <button id="speech-listen" type="button">대사 듣기</button>
+          <button id="speech-record" type="button" class="primary">● 녹음 시작</button>
+        </div>
+      </div>
+      <div id="practice-result" class="practice-result hidden" aria-live="polite"></div>
+      <button id="practice-continue" type="button" class="practice-continue hidden">점수 확인하고 다음 대사</button>
+    </section>
+  </div>
+  <script src="/dating-sim/static/app.js?v=20260924-v36"></script>
 </body>
 </html>

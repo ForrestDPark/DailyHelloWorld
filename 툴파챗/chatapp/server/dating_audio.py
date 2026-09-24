@@ -43,6 +43,10 @@ JAPANESE_RE = re.compile(r"[\u3040-\u30ff\u3400-\u9fff]")
 def spoken_text(text: str) -> str:
     """화면 표기에서 후리가나와 한국어 번역을 제거한 실제 발화문을 만든다."""
     surface = STRAY_BRACKET_RE.sub(r"\1", FURIGANA_RE.sub(r"\1", text or ""))
+    # 생성 중간본에 닫는 `]`가 빠진 `[思|おもってたの` 같은 조각이 들어와도
+    # TTS 카탈로그 키에 마크업 기호가 남지 않게 한다. 정상 태그는 위에서 이미
+    # 표면형으로 바뀌었고, 여기서는 복구 불가능한 잔여 구분자만 제거한다.
+    surface = surface.translate(str.maketrans("", "", "[|]"))
     return "。".join(
         line.strip() for line in surface.splitlines()
         if line.strip() and JAPANESE_RE.search(line)
