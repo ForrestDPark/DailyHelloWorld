@@ -488,6 +488,7 @@ let writingChars = [];
 let writingIndex = 0;
 let writingScores = [];
 let writingPhrase = "";
+let writingChunks = [];
 let writingDrawing = false;
 let speechRecognizer = null;
 
@@ -593,6 +594,10 @@ function clearWritingCanvas() {
 function startWritingPractice(text) {
   writingPhrase = text;
   writingChars = [...text].filter((char) => /[\u3040-\u30ff\u3400-\u9fff]/u.test(char));
+  writingChunks = [];
+  for (let index = 0; index < writingChars.length; index += 6) {
+    writingChunks.push(writingChars.slice(index, index + 6).join(""));
+  }
   writingIndex = 0;
   writingScores = [];
   $("writing-next").classList.add("hidden");
@@ -603,9 +608,12 @@ function startWritingPractice(text) {
 }
 
 function updateWritingPrompt() {
-  $("writing-position").textContent = `문장 전체 · ${writingChars.length}글자`;
-  $("writing-average").textContent = writingScores.length ? `${Math.round(writingScores[0])}점` : "";
+  const chunk = writingChunks[writingIndex] || "";
+  $("writing-position").textContent = `쓰기 ${writingIndex + 1}/${writingChunks.length} · ${chunk}`;
+  $("writing-average").textContent = writingScores.length
+    ? `지금까지 평균 ${Math.round(writingScores.reduce((a, b) => a + b, 0) / writingScores.length)}점` : "";
   $("practice-target").textContent = writingPhrase;
+  $("writing-grade").textContent = writingIndex < writingChunks.length - 1 ? "이어 쓰기" : "전체 채점";
 }
 
 function normalizedInk(imageData, size = 72) {
@@ -682,11 +690,23 @@ function handwritingScore(text) {
 }
 
 function gradeWritingCharacter() {
-  if (!writingPhrase) return;
-  const score = handwritingScore(writingPhrase);
-  writingScores = [score];
+  const chunk = writingChunks[writingIndex];
+  if (!chunk) return;
+  const score = handwritingScore(chunk);
+  writingScores.push(score);
+  if (writingIndex < writingChunks.length - 1) {
+    writingIndex += 1;
+    clearWritingCanvas();
+    updateWritingPrompt();
+    const box = $("practice-result");
+    box.className = `practice-result score-${score >= 85 ? "great" : score >= 65 ? "good" : "retry"}`;
+    box.textContent = `${Math.round(score)}점 · 앞 칸을 저장했어요. 다음 부분을 이어서 쓰세요.`;
+    $("practice-continue").classList.add("hidden");
+    return;
+  }
+  const average = writingScores.reduce((a, b) => a + b, 0) / Math.max(1, writingScores.length);
   updateWritingPrompt();
-  showPracticeResult(score, score >= 85 ? "문장을 아주 정확하게 썼어요" : score >= 65 ? "좋아요. 빠진 글자와 획 위치를 확인해보세요" : "위 문장을 보면서 천천히 다시 써보세요");
+  showPracticeResult(average, average >= 85 ? "문장을 아주 정확하게 썼어요" : average >= 65 ? "좋아요. 빠진 글자와 획 위치를 확인해보세요" : "위 문장을 보면서 천천히 다시 써보세요");
   $("writing-grade").classList.add("hidden");
   $("writing-next").classList.add("hidden");
 }
@@ -1746,9 +1766,11 @@ $("speech-record").addEventListener("click", () => {
 $("writing-grade").addEventListener("click", gradeWritingCharacter);
 $("writing-clear").addEventListener("click", () => {
   clearWritingCanvas();
-  writingScores = [];
-  $("writing-grade").classList.remove("hidden");
-  $("writing-next").classList.add("hidden");
+  if (writingIndex >= writingChunks.length - 1 && $("writing-grade").classList.contains("hidden")) {
+    writingScores.pop();
+    $("writing-grade").classList.remove("hidden");
+    $("practice-continue").classList.add("hidden");
+  }
   $("practice-result").classList.add("hidden");
   $("practice-continue").classList.add("hidden");
   updateWritingPrompt();
