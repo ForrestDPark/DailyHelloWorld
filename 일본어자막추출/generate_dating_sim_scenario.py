@@ -77,6 +77,9 @@ _EXPLICIT_EXPRESSION_KEYWORDS = (
     "舐め", "なめ回",
     "飲ませ", "染み込んで", "飲んだっていい", "飲んでいい",
     "妊娠させ", "孕ま", "種付け", "発情", "疼く", "うずく", "淫ら", "媚薬",
+    # ★ 2026-09-24: IPZZ-943 DAY 2가 필수 표현 しゃぶってて 하나 때문에 5회 재시도 끝에
+    # 실패했다(같은 재료로 계속 거부됨) — 같은 계열의 원본 노골적 표현을 더 걸러낸다.
+    "しゃぶ", "咥え", "くわえ", "ぶっかけ", "顔射", "ごっくん", "手コキ", "騎乗", "潮吹", "喘ぎ", "喘い",
 )
 
 
@@ -302,12 +305,14 @@ def generate_for_work(work_dir, log=print):
 
     partial_path = work_dir / "dating_sim_scenario.partial.json"
     days = {}
+    skipped_expressions = set()
     partial_version = ds.GENERATED_SCENARIO_VERSION
     if partial_path.is_file():
         try:
             partial = json.loads(partial_path.read_text(encoding="utf-8"))
             if partial.get("content_version") == partial_version:
                 days = partial.get("days", {})
+                skipped_expressions = set(partial.get("skipped_expressions", []))
         except (OSError, ValueError):
             days = {}
 
@@ -321,39 +326,58 @@ def generate_for_work(work_dir, log=print):
         topic = ds.DAY_TOPICS.get(day, "")
         arc_hint = ds.DAY_NARRATION.get(day, "").split("\n")[-1]
         base_prompt = build_day_prompt(title.split("_")[0], day, topic, arc_hint, words, exprs, is_first)
-        prompt = base_prompt
         day_obj = None
         max_attempts = 5
-        for attempt in range(max_attempts):
-            try:
-                stdout, engine = run_ai_exec(prompt, str(work_dir), timeout=600)
-            except RuntimeError as exc:
-                log(f"   ⚠️ DAY {day} AI 호출 실패({exc})")
+        ai_failed = False
+        # ★ 2026-09-24: 같은 필수 재료로 5번 다 실패하면(예: 순화 규칙과 충돌하는 표현) 그
+        # 요일은 영원히 못 넘어간다. 마지막에 계속 빠진 필수 "표현"만 사용 불가로 빼고
+        # 나머지 재료로 한 번 더 생성한다(어휘·다른 표현은 그대로 필수).
+        for fallback_round in range(2):
+            base_prompt = build_day_prompt(title.split("_")[0], day, topic, arc_hint, words, exprs, is_first)
+            prompt = base_prompt
+            last_missing = []
+            for attempt in range(max_attempts):
+                try:
+                    stdout, engine = run_ai_exec(prompt, str(work_dir), timeout=600)
+                except RuntimeError as exc:
+                    log(f"   ⚠️ DAY {day} AI 호출 실패({exc})")
+                    ai_failed = True
+                    break
+                match = re.search(r"\{.*\}", stdout, re.S)
+                try:
+                    candidate = json.loads(match.group(0)) if match else None
+                except json.JSONDecodeError:
+                    candidate = None
+                if candidate and validate_day(candidate, words, exprs):
+                    day_obj = candidate
+                    break
+                missing = missing_day_materials(candidate or {}, words, exprs)
+                last_missing = missing
+                if attempt + 1 < max_attempts:
+                    previous = json.dumps(candidate, ensure_ascii=False) if candidate else "(유효한 JSON 없음)"
+                    prompt = (base_prompt
+                              + "\n\n★ 아래 이전 출력을 최소한으로 고쳐 다시 JSON만 출력하라. "
+                                "빠진 재료는 지정 장소의 lines에 자연스럽게 추가하고 다른 필수 재료는 지우지 마라. "
+                                "형식도 함께 다시 확인하라.\n"
+                              + "누락: " + "; ".join(missing)
+                              + "\n이전 출력: " + previous)
+                    preview = "; ".join(missing[:3]) or "JSON 구조 오류"
+                    log(f"   ↻ DAY {day} 재시도 {attempt + 2}/{max_attempts} — {preview}")
+            if day_obj or ai_failed or fallback_round == 1:
                 break
-            match = re.search(r"\{.*\}", stdout, re.S)
-            try:
-                candidate = json.loads(match.group(0)) if match else None
-            except json.JSONDecodeError:
-                candidate = None
-            if candidate and validate_day(candidate, words, exprs):
-                day_obj = candidate
+            stuck = [e for e in exprs if any(e["ja"] in item for item in last_missing)]
+            if not stuck:
                 break
-            missing = missing_day_materials(candidate or {}, words, exprs)
-            if attempt + 1 < max_attempts:
-                previous = json.dumps(candidate, ensure_ascii=False) if candidate else "(유효한 JSON 없음)"
-                prompt = (base_prompt
-                          + "\n\n★ 아래 이전 출력을 최소한으로 고쳐 다시 JSON만 출력하라. "
-                            "빠진 재료는 지정 장소의 lines에 자연스럽게 추가하고 다른 필수 재료는 지우지 마라. "
-                            "형식도 함께 다시 확인하라.\n"
-                          + "누락: " + "; ".join(missing)
-                          + "\n이전 출력: " + previous)
-                preview = "; ".join(missing[:3]) or "JSON 구조 오류"
-                log(f"   ↻ DAY {day} 재시도 {attempt + 2}/{max_attempts} — {preview}")
+            log(f"   ⚠️ DAY {day}: 계속 반영되지 않는 필수 표현 {len(stuck)}개를 사용 불가로 빼고 다시 생성합니다 — "
+                + ", ".join(e["ja"] for e in stuck))
+            skipped_expressions.update(e["ja"] for e in stuck)
+            exprs = [e for e in exprs if e not in stuck]
         if not day_obj:
             log(f"❌ {title}: DAY {day} 생성 실패 — 중간 저장본은 남김, 재실행 시 이어감")
             return False
         days[str(day)] = finalize_day(day, day_obj, vocab_pool, expressions)
-        partial_path.write_text(json.dumps({"content_version": partial_version, "days": days}, ensure_ascii=False, indent=1), encoding="utf-8")
+        partial_path.write_text(json.dumps({"content_version": partial_version, "days": days,
+                                                  "skipped_expressions": sorted(skipped_expressions)}, ensure_ascii=False, indent=1), encoding="utf-8")
         used = sum(len(days[str(day)]["scenes"][loc].get("vocab_used", [])) for loc, _ in BOOK_LOCATIONS)
         log(f"   ✅ DAY {day} 생성 완료 (단어 {used}개 삽입)")
 
@@ -364,7 +388,8 @@ def generate_for_work(work_dir, log=print):
             used_ja.update(w["ja"] for w in scene.get("vocab_used", []))
             used_expr.update(e["ja"] for e in scene.get("expressions_used", []))
     missing_words = [w["ja"] for w in vocab_pool if w["ja"] not in used_ja]
-    missing_expressions = [e["ja"] for e in expressions if e["ja"] not in used_expr]
+    missing_expressions = [e["ja"] for e in expressions
+                           if e["ja"] not in used_expr and e["ja"] not in skipped_expressions]
     if missing_words or missing_expressions:
         log(f"❌ {title}: 전수 활용 검증 실패 — 단어 {len(missing_words)}개, 표현 {len(missing_expressions)}개 누락")
         return False

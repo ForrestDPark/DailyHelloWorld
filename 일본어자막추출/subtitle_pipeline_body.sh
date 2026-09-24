@@ -1676,6 +1676,10 @@ done
 # 먼저 시킨 자막 생성을 전부 마친 다음에 학습카드 누락 회차를 복구한다.
 run_study_card_recovery
 
+# 시나리오·이미지가 중간에 멈춘 미연시(AI 일시 오류 등)도 이어서 만든다.
+echo "\n🎮 미연시 미완성 작품 이어서 생성 확인 중..."
+/opt/anaconda3/bin/python3 "${SCRIPT_DIR}/resume_dating_sim_backlog.py" || echo "⚠️ 미연시 이어서 생성 중 오류(무시하고 계속)"
+
 echo "\n=================================================="
 echo "🎉 모든 영상 처리 완료! (완료 ${COMPLETED_COUNT}개 / 시도 ${#ATTEMPTED_FILES[@]}개)"
 echo "=================================================="
