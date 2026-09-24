@@ -462,6 +462,24 @@ body.practice-open { overflow: hidden; }
   font-family: "Hiragino Kaku Gothic ProN", "Noto Sans KR", sans-serif;
   font-size: 18px;
 }
+.japanese-sentence-word {
+  min-height: 42px;
+  padding: 5px 10px;
+  border: 2px solid var(--border);
+  background: var(--panel);
+  color: var(--expression);
+  font-family: "Hiragino Kaku Gothic ProN", "Noto Sans JP", "Noto Sans KR", sans-serif;
+  font-size: 18px;
+  cursor: pointer;
+}
+.japanese-sentence-word rt {
+  color: var(--muted);
+  font-size: 9px;
+}
+.japanese-sentence-word:focus-visible {
+  outline: 3px solid var(--good);
+  outline-offset: 2px;
+}
 
 .lobby-hint {
   font-family: -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans KR",sans-serif;

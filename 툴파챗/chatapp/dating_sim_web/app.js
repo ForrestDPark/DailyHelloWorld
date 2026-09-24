@@ -961,6 +961,42 @@ function showVocabWordPopover(word, anchor, wordKind = "general") {
     });
   }
   popover.append(close, favorite, glyph, readings);
+  // 문장형 표현은 팝오버 안에서도 다시 단어 단위로 살펴볼 수 있게 한다.
+  // renderAnnotatedText가 표현을 묶을 때 원래 [표기|읽기] 태그를
+  // components로 보존하므로, 冷蔵庫の中… 같은 표현에서 冷蔵庫를 누르면
+  // 단어 전체 읽기·뜻 팝오버로 한 단계 들어갈 수 있다.
+  const components = Array.isArray(word.components)
+    ? word.components.filter((item) => item?.ja && Array.from(item.ja).some((ch) => KANJI_PATTERN.test(ch)))
+    : [];
+  if (components.length) {
+    const wordsSection = document.createElement("div");
+    wordsSection.className = "japanese-kanji-popover-word-chars japanese-kanji-popover-sentence-words";
+    const wordsLabel = document.createElement("span");
+    wordsLabel.textContent = "문장 속 단어";
+    const wordsList = document.createElement("div");
+    wordsList.className = "japanese-kanji-popover-word-chars-list";
+    const seen = new Set();
+    for (const component of components) {
+      const key = `${component.ja}|${component.reading || ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const wordButton = document.createElement("button");
+      wordButton.type = "button";
+      wordButton.className = "japanese-sentence-word";
+      wordButton.lang = "ja";
+      wordButton.append(buildRuby(component.ja, component.reading || ""));
+      wordButton.setAttribute("aria-label", `${component.ja} 단어 뜻 보기`);
+      wordButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const rect = wordButton.getBoundingClientRect();
+        const anchorProxy = { getBoundingClientRect: () => rect };
+        showVocabWordPopover(component, anchorProxy, "general");
+      });
+      wordsList.append(wordButton);
+    }
+    wordsSection.append(wordsLabel, wordsList);
+    popover.append(wordsSection);
+  }
   // ★ 2026-09-23: "그 팝오버 안에서 한자 하나하나의 클릭으로 이어갈 수
   // 있게" 요청 — 단어를 이루는 한자 각각을 다시 누르면(기존 낱글자 팝업과
   // 완전히 같은 showKanjiPopover) 뜻·훈독·음독을 이어서 볼 수 있다.
@@ -1336,7 +1372,10 @@ function renderAnnotatedText(element, text, vocabWords = null, expressions = nul
     for (const groupUnit of group) {
       wrapper.append(groupUnit.type === "tag" ? buildRuby(groupUnit.kanji, groupUnit.reading) : document.createTextNode(groupUnit.value));
     }
-    markAsWordCard(wrapper, cls.item, "expression");
+    const components = group
+      .filter((groupUnit) => groupUnit.type === "tag" && Array.from(groupUnit.kanji).some((ch) => KANJI_PATTERN.test(ch)))
+      .map((groupUnit) => ({ ja: groupUnit.kanji, reading: groupUnit.reading, ko: null }));
+    markAsWordCard(wrapper, { ...cls.item, components }, "expression");
     element.append(wrapper);
     i = j;
   }
