@@ -491,6 +491,8 @@ let writingPhrase = "";
 let writingChunks = [];
 let writingDrawing = false;
 let speechRecognizer = null;
+let speechStopTimer = null;
+let latestSpeechTranscript = "";
 
 function currentPracticeLine() {
   if ($("scene-view").classList.contains("hidden") || !sceneLines.length) return null;
@@ -507,8 +509,13 @@ function updatePracticeButtons() {
 }
 
 function closePractice() {
+  clearTimeout(speechStopTimer);
+  speechStopTimer = null;
   speechRecognizer?.abort?.();
   speechRecognizer = null;
+  $("speech-record").textContent = "● 녹음 시작";
+  $("speech-record").disabled = false;
+  $("speech-record").classList.remove("recording");
   practiceMode = null;
   $("practice-overlay").classList.add("hidden");
   document.body.classList.remove("practice-open");
@@ -739,6 +746,9 @@ function startSpeakingPractice() {
     return;
   }
   speechRecognizer?.abort?.();
+  clearTimeout(speechStopTimer);
+  speechStopTimer = null;
+  latestSpeechTranscript = "";
   const line = currentPracticeLine();
   if (!line) return;
   const recognition = new Recognition();
@@ -750,7 +760,9 @@ function startSpeakingPractice() {
   $("speech-record").classList.add("recording");
   $("speech-transcript").textContent = "듣고 있어요…";
   recognition.onresult = (event) => {
+    if (speechRecognizer !== recognition) return;
     const transcript = [...event.results].map((result) => result[0]?.transcript || "").join("");
+    latestSpeechTranscript = transcript;
     $("speech-transcript").textContent = transcript || "듣고 있어요…";
     const target = normalizedSpeechText(line.text), spoken = normalizedSpeechText(transcript);
     const score = 100 * (1 - editDistance(target, spoken) / Math.max(1, target.length, spoken.length));
@@ -760,16 +772,55 @@ function startSpeakingPractice() {
     }
   };
   const finish = () => {
+    if (speechRecognizer !== recognition) return;
+    clearTimeout(speechStopTimer);
+    speechStopTimer = null;
     $("speech-record").textContent = "● 다시 녹음";
+    $("speech-record").disabled = false;
     $("speech-record").classList.remove("recording");
     speechRecognizer = null;
   };
   recognition.onend = finish;
   recognition.onerror = (event) => {
+    if (speechRecognizer !== recognition) return;
     finish();
     $("speech-transcript").textContent = event.error === "not-allowed" ? "마이크 권한을 허용해 주세요." : "음성을 인식하지 못했어요. 다시 시도해 주세요.";
   };
-  recognition.start();
+  try {
+    recognition.start();
+  } catch (error) {
+    finish();
+    $("speech-transcript").textContent = "녹음을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.";
+  }
+}
+
+function stopSpeakingPractice() {
+  const recognition = speechRecognizer;
+  if (!recognition) return;
+
+  // iOS Safari에서는 stop() 뒤 onend가 오지 않는 경우가 있다. 버튼은 사용자의
+  // 터치 즉시 복구하고, 남아 있는 인식 세션은 짧은 유예 뒤 abort()로 정리한다.
+  speechRecognizer = null;
+  $("speech-record").textContent = "● 다시 녹음";
+  $("speech-record").disabled = false;
+  $("speech-record").classList.remove("recording");
+  if (latestSpeechTranscript) {
+    const line = currentPracticeLine();
+    if (line) {
+      const target = normalizedSpeechText(line.text);
+      const spoken = normalizedSpeechText(latestSpeechTranscript);
+      const score = 100 * (1 - editDistance(target, spoken) / Math.max(1, target.length, spoken.length));
+      showPracticeResult(score, score >= 85 ? "원문과 거의 같아요" : score >= 65 ? "잘 들렸어요. 빠진 소리를 다시 확인해보세요" : "대사를 다시 듣고 천천히 말해보세요");
+    }
+  } else {
+    $("speech-transcript").textContent = "녹음을 멈췄어요. 인식된 말이 없으면 다시 녹음해 주세요.";
+  }
+  try { recognition.stop(); } catch (_) { /* 이미 끝난 세션 */ }
+  clearTimeout(speechStopTimer);
+  speechStopTimer = setTimeout(() => {
+    try { recognition.abort(); } catch (_) { /* WebKit 종료 완료 */ }
+    speechStopTimer = null;
+  }, 700);
 }
 
 // ★ 2026-09-17: "미연시에서도 한자클릭하면 팝업뜨게해줘" 요청 — 채팅
@@ -1760,7 +1811,7 @@ $("practice-overlay").addEventListener("click", (event) => {
 });
 $("speech-listen").addEventListener("click", playPracticeReference);
 $("speech-record").addEventListener("click", () => {
-  if (speechRecognizer) speechRecognizer.stop();
+  if (speechRecognizer) stopSpeakingPractice();
   else startSpeakingPractice();
 });
 $("writing-grade").addEventListener("click", gradeWritingCharacter);
