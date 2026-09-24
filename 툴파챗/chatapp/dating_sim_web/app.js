@@ -1605,7 +1605,17 @@ async function openStoryPopover(anchor) {
   bulkButton.disabled = imageMissing.length === 0;
   const bulkStatus = document.createElement("span");
   bulkStatus.textContent = imageMissing.length ? "ComfyUI로 빠진 이미지만 순서대로 생성합니다" : "이미지 생성이 모두 완료됐습니다";
-  bulk.append(bulkButton, bulkStatus);
+  const progress = document.createElement("div");
+  progress.className = "story-image-progress";
+  progress.setAttribute("role", "progressbar");
+  progress.setAttribute("aria-valuemin", "0");
+  progress.setAttribute("aria-valuemax", "100");
+  const progressBar = document.createElement("i");
+  progress.append(progressBar);
+  const progressLabel = document.createElement("b");
+  progressLabel.className = "story-image-progress-label";
+  progressLabel.textContent = "0%";
+  bulk.append(bulkButton, progress, progressLabel, bulkStatus);
 
   const stopBulkPoll = () => {
     if (missingImagePollTimer) clearInterval(missingImagePollTimer);
@@ -1615,15 +1625,25 @@ async function openStoryPopover(anchor) {
     try {
       const state = await api("/api/dating-sim/generate-missing-images/status");
       if (state.running) {
+        const percent = Math.max(0, Math.min(100, Number(state.percent) || 0));
         bulkButton.disabled = true;
         bulkButton.textContent = `생성 중 ${state.completed || 0}/${state.total || imageMissing.length}`;
+        progressBar.style.width = `${percent}%`;
+        progress.setAttribute("aria-valuenow", String(percent));
+        progressLabel.textContent = `${percent}%`;
+        const imageCount = state.current_image_total
+          ? ` · 이미지 ${state.current_images || 0}/${state.current_image_total}` : "";
         bulkStatus.textContent = state.current
-          ? `${state.current} 처리 중 · 실패 ${state.failed || 0}편`
+          ? `${state.current} 처리 중${imageCount} · 실패 ${state.failed || 0}편`
           : "대상 작품을 확인하는 중…";
         return;
       }
       stopBulkPoll();
       if (["complete", "partial", "failed"].includes(state.status)) {
+        const percent = Math.max(0, Math.min(100, Number(state.percent) || 0));
+        progressBar.style.width = `${percent}%`;
+        progress.setAttribute("aria-valuenow", String(percent));
+        progressLabel.textContent = `${percent}%`;
         bulkButton.disabled = false;
         bulkButton.textContent = state.status === "complete" ? "잔여 이미지 생성 완료" : "실패 작품 다시 시도";
         bulkStatus.textContent = `완료 ${state.completed || 0}편 · 실패 ${state.failed || 0}편${state.error ? ` · ${state.error}` : ""}`;
@@ -1639,6 +1659,8 @@ async function openStoryPopover(anchor) {
     if (!confirm(`시나리오가 완성됐지만 이미지가 덜 만들어진 ${imageMissing.length}편을 순서대로 생성할까요? Mac의 ComfyUI가 켜져 있어야 합니다.`)) return;
     bulkButton.disabled = true;
     bulkButton.textContent = "작업 시작 중…";
+    progressBar.style.width = "1%";
+    progressLabel.textContent = "1%";
     bulkStatus.textContent = "ComfyUI 연결을 확인하고 있습니다";
     try {
       await api("/api/dating-sim/generate-missing-images", { method: "POST" });

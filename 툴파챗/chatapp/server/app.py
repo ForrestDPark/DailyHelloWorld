@@ -1102,6 +1102,43 @@ def _dating_sim_image_backlog_state():
         return {}
 
 
+def _dating_sim_image_backlog_progress(state, running):
+    """작품 단위 상태에 현재 작품의 매니페스트 장수와 전체 백분율을 더한다."""
+    payload = dict(state)
+    total = max(0, int(payload.get("total") or 0))
+    completed = max(0, int(payload.get("completed") or 0))
+    failed = max(0, int(payload.get("failed") or 0))
+    current_fraction = 0.0
+    current_name = payload.get("current")
+    if running and isinstance(current_name, str):
+        library = REPO_ROOT / "일본어자막추출" / "library"
+        work_dir = library / current_name
+        try:
+            if work_dir.parent == library and work_dir.is_dir():
+                manifest_path = work_dir / "dating_sim_images" / "manifest.json"
+                manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.is_file() else {}
+                image_dir = work_dir / "dating_sim_images"
+                generated = int(bool(manifest.get("portrait") and (image_dir / manifest["portrait"]).is_file()))
+                generated += sum(
+                    1 for record in (manifest.get("scenes") or {}).values()
+                    if isinstance(record, dict) and isinstance(record.get("file"), str)
+                    and (image_dir / record["file"]).is_file()
+                )
+                target = max(1, 1 + int(manifest.get("selected_count") or 0))
+                payload["current_images"] = min(generated, target)
+                payload["current_image_total"] = target
+                current_fraction = min(1.0, generated / target)
+        except (OSError, ValueError, TypeError):
+            pass
+    processed = completed + failed
+    if running and payload.get("current_index"):
+        processed = max(processed, int(payload["current_index"]) - 1)
+    payload["percent"] = min(100, round((processed + current_fraction) / total * 100)) if total else 0
+    if not running and payload.get("status") in {"complete", "partial"}:
+        payload["percent"] = 100
+    return payload
+
+
 def _dating_sim_image_job_status(book_id, work_dir):
     with _dating_sim_image_jobs_lock:
         job = _dating_sim_image_jobs.get(book_id)
@@ -1308,7 +1345,7 @@ def dating_sim_generate_missing_images_status(request: Request):
     with _dating_sim_image_jobs_lock:
         job = _dating_sim_image_backlog_job
         running = bool(job and job["process"].poll() is None)
-    state = _dating_sim_image_backlog_state()
+    state = _dating_sim_image_backlog_progress(_dating_sim_image_backlog_state(), running)
     state["running"] = running
     return state
 

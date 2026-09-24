@@ -696,6 +696,7 @@ body.practice-open { overflow: hidden; }
 .story-image-backlog{display:grid;gap:5px;margin:10px 0;padding:10px;border:1px solid var(--border);background:var(--panel-2)}
 .story-image-backlog button{min-height:40px;border:0;border-radius:4px;background:var(--good);color:#1c1030;font:inherit;font-size:11px;font-weight:800;cursor:pointer}
 .story-image-backlog button:disabled{opacity:.58;cursor:default}.story-image-backlog span{color:var(--muted);font-size:10px;line-height:1.45}
+.story-image-progress{height:8px;overflow:hidden;border:1px solid var(--border);border-radius:999px;background:#130c21}.story-image-progress i{display:block;width:0;height:100%;background:linear-gradient(90deg,var(--good),var(--accent));transition:width .35s ease}.story-image-progress-label{color:var(--border);font-size:11px;text-align:right}
 .tree-image-gallery {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
 }
