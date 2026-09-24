@@ -4274,6 +4274,7 @@ def _save_random_bookmark_history(folder_name, visited_urls):
 
 
 BOOKMARK_URLS_EXPORT_FILE = os.path.expanduser("~/.shift_alarm_bookmark_urls.json")
+BOOKMARK_EXPORT_APP = os.path.expanduser("~/Applications/ShiftAlarmBookmarkExport.app")
 
 
 def export_bookmark_urls(folder_name=RANDOM_BOOKMARK_FOLDER):
@@ -4284,8 +4285,15 @@ def export_bookmark_urls(folder_name=RANDOM_BOOKMARK_FOLDER):
     (GUI 앱인 이 메뉴바 앱은 읽힘), 서버가 이 파일을 대신 읽게 한다.
     비밀 없는 URL 목록만 담는다."""
     try:
-        with open(CHROME_BOOKMARKS_PATH, encoding="utf-8") as file:
-            roots = json.load(file).get("roots", {})
+        try:
+            with open(CHROME_BOOKMARKS_PATH, encoding="utf-8") as file:
+                roots = json.load(file).get("roots", {})
+        except PermissionError:
+            # 이 프로세스가 launchd로 떠서 TCC에 막혔다 — Full Disk Access를 준
+            # 앱 번들(osacompile applet)이 export_bookmark_urls.py를 대신 실행한다.
+            if os.path.isdir(BOOKMARK_EXPORT_APP):
+                subprocess.run(["/usr/bin/open", "-g", "-j", BOOKMARK_EXPORT_APP], timeout=10, check=False)
+            return False
         folder = None
         for key in ("bookmark_bar", "other", "synced"):
             if key in roots:
