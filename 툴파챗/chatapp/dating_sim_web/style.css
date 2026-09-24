@@ -411,6 +411,12 @@ body.practice-open { overflow: hidden; }
   cursor: pointer;
 }
 .japanese-kanji-favorite.active { color: var(--border); }
+.japanese-kanji-sound {
+  grid-column: 1 / -1; justify-self: start; min-height: 36px; padding: 6px 11px;
+  border: 2px solid var(--border); background: var(--panel-2); color: var(--text);
+  font: 700 12px/1.2 -apple-system,BlinkMacSystemFont,"Hiragino Sans",sans-serif;
+  cursor: pointer;
+}
 
 /* ★ 2026-09-18: "쓰여진 그 단어는 대사에서 글자색상을 다르게... 다른
    한자 클릭이랑 다르게 단어클릭도 가능하고" 요청 — 표현 삽입 단어는

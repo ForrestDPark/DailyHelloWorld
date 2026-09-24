@@ -927,6 +927,15 @@ function showVocabWordPopover(word, anchor, wordKind = "general") {
     favorite.setAttribute("aria-label", active ? `${word.ja} \ub2e8\uc5b4\uc7a5\uc5d0\uc11c \uc81c\uac70` : `${word.ja} \ub2e8\uc5b4\uc7a5\uc5d0 \uc800\uc7a5`);
   });
   favorite.addEventListener("click", () => toggleVocabFavorite(word, favorite));
+  const sound = document.createElement("button");
+  sound.type = "button";
+  sound.className = "japanese-kanji-sound";
+  sound.textContent = "🔊 발음";
+  sound.setAttribute("aria-label", `${word.ja} 발음 듣기`);
+  sound.addEventListener("click", (event) => {
+    event.stopPropagation();
+    void speakPracticeWithDevice(word.ja, "female");
+  });
   const glyph = document.createElement("strong");
   glyph.className = "japanese-kanji-popover-glyph";
   glyph.lang = "ja";
@@ -960,7 +969,7 @@ function showVocabWordPopover(word, anchor, wordKind = "general") {
       meaningValueEl.textContent = meaning || "뜻을 찾지 못했습니다";
     });
   }
-  popover.append(close, favorite, glyph, readings);
+  popover.append(close, favorite, sound, glyph, readings);
   // 문장형 표현은 팝오버 안에서도 다시 단어 단위로 살펴볼 수 있게 한다.
   // renderAnnotatedText가 표현을 묶을 때 원래 [표기|읽기] 태그를
   // components로 보존하므로, 冷蔵庫の中… 같은 표현에서 冷蔵庫를 누르면
@@ -1141,6 +1150,15 @@ function showKanjiPopover(character, reading, anchor) {
     favorite.setAttribute("aria-label", active ? `${character} 단어장에서 제거` : `${character} 단어장에 저장`);
   });
   favorite.addEventListener("click", () => toggleKanjiFavorite(character, favorite));
+  const sound = document.createElement("button");
+  sound.type = "button";
+  sound.className = "japanese-kanji-sound";
+  sound.textContent = "🔊 발음";
+  sound.setAttribute("aria-label", `${character} 발음 듣기`);
+  sound.addEventListener("click", (event) => {
+    event.stopPropagation();
+    void speakPracticeWithDevice(character, "female");
+  });
   const glyph = document.createElement("strong");
   glyph.className = "japanese-kanji-popover-glyph";
   glyph.lang = "ja";
@@ -1162,7 +1180,7 @@ function showKanjiPopover(character, reading, anchor) {
     row.append(heading, value);
     readings.appendChild(row);
   }
-  popover.append(close, favorite, glyph, readings);
+  popover.append(close, favorite, sound, glyph, readings);
   document.body.appendChild(popover);
   kanjiPopover = popover;
   const rect = anchor.getBoundingClientRect();

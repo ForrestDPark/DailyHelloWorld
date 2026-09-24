@@ -607,7 +607,7 @@ def vocabulary_dashboard(request: Request):
 @app.get("/vocabulary/static/{filename}")
 def vocabulary_static(filename: str, request: Request):
     _require_signed_in_user(request)
-    if filename not in {"style.css", "app.js", "manifest.webmanifest"}:
+    if filename not in {"style.css", "practice.css", "app.js", "manifest.webmanifest"}:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(VOCABULARY_WEB_DIR / filename))
 

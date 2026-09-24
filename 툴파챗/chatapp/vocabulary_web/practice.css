@@ -1,0 +1,24 @@
+.hidden { display: none !important; }
+.word-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.word-actions button { min-height: 34px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--soft); color: var(--accent); font-weight: 750; }
+body.practice-open { overflow: hidden; }
+.practice { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom)); background: #0b0714d9; backdrop-filter: blur(8px); }
+.practice-panel { width: min(440px,100%); max-height: 94dvh; overflow-y: auto; padding: 18px; border-radius: 24px; border: 1px solid var(--line); background: var(--card); box-shadow: 0 22px 70px #0008; }
+.practice-panel>header { position: static; padding: 0 0 12px; background: transparent; backdrop-filter: none; border: 0; }
+.practice-panel>header h2 { margin: 3px 0 0; }
+.practice-panel>header button { width: 42px; height: 42px; border: 0; border-radius: 13px; background: var(--soft); color: var(--accent); font-size: 24px; }
+.practice-target { min-height: 62px; display: grid; place-items: center; margin: 4px 0 10px; padding: 12px; border-radius: 14px; background: #0b0714; color: #f4d35e; font: 700 25px/1.5 "Hiragino Sans","Yu Gothic",sans-serif; text-align: center; }
+.practice-guide { color: var(--muted); font-size: 14px; line-height: 1.55; }
+#write-canvas { display: block; width: 100%; height: min(42dvh,290px); border: 2px solid var(--accent); border-radius: 14px; background-color: #090611; background-image: linear-gradient(#ffffff18 1px,transparent 1px),linear-gradient(90deg,#ffffff18 1px,transparent 1px); background-size: 50% 50%; touch-action: none; }
+.practice-buttons { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; margin-top: 10px; }
+.practice-buttons button { min-height: 48px; border: 1px solid var(--line); border-radius: 13px; background: var(--soft); color: var(--accent); font-weight: 800; }
+.practice-buttons button.primary { background: var(--accent); color: white; }
+.practice-buttons button.recording { background: #c83f5c; color: white; animation: record-pulse 1s infinite; }
+.speech-meter { height: 13px; overflow: hidden; border-radius: 8px; background: var(--soft); }
+.speech-meter i { display: block; width: 0; height: 100%; background: linear-gradient(90deg,var(--accent),#54d59c); transition: width .25s; }
+#speech-result { min-height: 72px; padding: 12px; border-radius: 13px; background: var(--bg); color: var(--text); font-size: 17px; line-height: 1.55; }
+.practice-score { margin: 12px 0 0; padding: 12px; border: 1px solid currentColor; border-radius: 12px; font-weight: 800; }
+.practice-score.score-great { color: #31a66f; }.practice-score.score-good { color: #c58b13; }.practice-score.score-retry { color: #d64f72; }
+@keyframes record-pulse { 50% { opacity: .68; } }
+@media(max-width:650px){.word{align-items:start}.word-actions button{flex:1;padding-inline:6px}.practice-panel{padding:15px}}
+@media(prefers-reduced-motion:reduce){.practice-buttons button.recording{animation:none}}
