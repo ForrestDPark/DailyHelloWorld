@@ -1478,6 +1478,7 @@ SHIFT_ALARM_ELMEDIA_AUDIO_EXTENSIONS = {
 SHIFT_ALARM_CHROME_BOOKMARKS_PATH = os.path.expanduser(
     "~/Library/Application Support/Google/Chrome/Default/Bookmarks"
 )
+SHIFT_ALARM_BOOKMARK_URLS_EXPORT_FILE = os.path.expanduser("~/.shift_alarm_bookmark_urls.json")
 SHIFT_ALARM_RANDOM_BOOKMARK_FOLDER = "天"
 SHIFT_ALARM_RANDOM_BOOKMARK_HISTORY_FILE = os.path.expanduser(
     "~/.shift_alarm_random_bookmark_history.json"
@@ -2029,8 +2030,22 @@ def _shift_alarm_pick_random_bookmarks(n=3, folder_name=SHIFT_ALARM_RANDOM_BOOKM
     # 보낸다 — 코드로 고칠 수 없는 문제(전체 디스크 접근 권한 필요)라
     # 사용자가 원인을 바로 알 수 있게 하는 게 최선이다.
     try:
-        with open(SHIFT_ALARM_CHROME_BOOKMARKS_PATH, encoding="utf-8") as file:
-            data = json.load(file)
+        try:
+            with open(SHIFT_ALARM_CHROME_BOOKMARKS_PATH, encoding="utf-8") as file:
+                data = json.load(file)
+        except PermissionError:
+            # 서버(launchd headless)는 TCC로 원본을 못 읽는다 — GUI 앱인 메뉴바가
+            # 내보낸 URL 목록으로 대신한다(shift_alarm.export_bookmark_urls).
+            try:
+                with open(SHIFT_ALARM_BOOKMARK_URLS_EXPORT_FILE, encoding="utf-8") as file:
+                    exported = json.load(file)
+            except (OSError, ValueError):
+                raise PermissionError("bookmarks locked and no export available")
+            if exported.get("folder") != folder_name:
+                return []
+            data = {"roots": {"bookmark_bar": {"type": "folder", "name": folder_name, "children": [
+                {"type": "url", "url": url} for url in exported.get("urls", [])
+            ]}}}
         roots = data.get("roots", {})
         folder = None
         for key in ("bookmark_bar", "other", "synced"):

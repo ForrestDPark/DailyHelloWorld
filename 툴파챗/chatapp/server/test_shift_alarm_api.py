@@ -1024,6 +1024,25 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 503)
         self.assertIn("전체 디스크 접근 권한", raised.exception.detail)
 
+    def test_random_sites_use_menubar_export_when_chrome_file_is_locked(self):
+        # ★ 2026-09-24: 웹서버는 TCC로 Chrome 북마크를 못 읽어도, 메뉴바가
+        # 내보낸 URL 목록으로 추천이 되는지 검증한다.
+        exported = {"folder": "天", "urls": ["https://x.example/1", "javascript:alert(1)", "https://x.example/2"]}
+        real_open = open
+
+        def fake_open(path, *args, **kwargs):
+            if str(path) == module.SHIFT_ALARM_CHROME_BOOKMARKS_PATH:
+                raise PermissionError("Operation not permitted")
+            if str(path) == module.SHIFT_ALARM_BOOKMARK_URLS_EXPORT_FILE:
+                return mock_open(read_data=json.dumps(exported))()
+            return real_open(path, *args, **kwargs)
+
+        with patch("builtins.open", fake_open), \
+             patch.object(module, "_shift_alarm_load_random_bookmark_history", return_value=[]), \
+             patch.object(module, "_shift_alarm_save_random_bookmark_history"):
+            result = module._shift_alarm_pick_random_bookmarks(3)
+        self.assertEqual(sorted(result), ["https://x.example/1", "https://x.example/2"])
+
     def test_random_sites_exclude_non_web_bookmarks(self):
         bookmarks_payload = {"roots": {"bookmark_bar": {"type": "folder", "name": "天", "children": [
             {"type": "url", "url": "javascript:alert(1)"},

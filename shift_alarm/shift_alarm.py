@@ -4273,6 +4273,37 @@ def _save_random_bookmark_history(folder_name, visited_urls):
     os.replace(temp_path, RANDOM_BOOKMARK_HISTORY_FILE)
 
 
+BOOKMARK_URLS_EXPORT_FILE = os.path.expanduser("~/.shift_alarm_bookmark_urls.json")
+
+
+def export_bookmark_urls(folder_name=RANDOM_BOOKMARK_FOLDER):
+    """추천 사이트 폴더의 URL 목록만 홈 폴더 JSON으로 내보낸다.
+
+    ★ 2026-09-24: "shift alarm 웹앱에서 추천사이트보기하면 안되" — 웹서버는
+    launchd headless 프로세스라 macOS가 Chrome Bookmarks 읽기를 막는데
+    (GUI 앱인 이 메뉴바 앱은 읽힘), 서버가 이 파일을 대신 읽게 한다.
+    비밀 없는 URL 목록만 담는다."""
+    try:
+        with open(CHROME_BOOKMARKS_PATH, encoding="utf-8") as file:
+            roots = json.load(file).get("roots", {})
+        folder = None
+        for key in ("bookmark_bar", "other", "synced"):
+            if key in roots:
+                folder = _find_bookmark_folder(roots[key], folder_name)
+                if folder:
+                    break
+        if not folder:
+            return False
+        urls = list(dict.fromkeys(_collect_all_bookmark_urls(folder)))
+        temp_path = BOOKMARK_URLS_EXPORT_FILE + ".tmp"
+        with open(temp_path, "w", encoding="utf-8") as file:
+            json.dump({"folder": folder_name, "urls": urls}, file, ensure_ascii=False)
+        os.replace(temp_path, BOOKMARK_URLS_EXPORT_FILE)
+        return True
+    except (OSError, ValueError, TypeError):
+        return False
+
+
 def pick_random_bookmarks(n=3, folder_name=RANDOM_BOOKMARK_FOLDER):
     """해당 폴더의 모든 URL을 한 번씩 추천하기 전에는 같은 URL을 다시 뽑지 않는다."""
     try:
@@ -5478,6 +5509,11 @@ class ShiftAlarmApp(rumps.App):
         )
         self.bookmark_refresh_timer.start()
         self._auto_refresh_bookmarks(None)
+
+        # 웹서버용 추천 사이트 URL 목록 내보내기(시작 시 + 5분마다)
+        self.bookmark_export_timer = rumps.Timer(lambda _: export_bookmark_urls(), 5 * 60)
+        self.bookmark_export_timer.start()
+        threading.Thread(target=export_bookmark_urls, daemon=True).start()
 
         # 급여 실시간 갱신 (30초마다)
         self.earnings_timer = rumps.Timer(self._refresh_earnings, 30)
