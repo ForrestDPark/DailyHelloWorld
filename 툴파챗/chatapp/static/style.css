@@ -1742,6 +1742,7 @@ button.portal-card{font:inherit;text-align:left;cursor:pointer}
 .portal-card.english .portal-card-mark{background:linear-gradient(145deg,#4b7fd0,#294f94)}
 .portal-card.dating-sim .portal-card-mark{background:linear-gradient(145deg,#ff6fa5,#7a2856)}
 .portal-card.audio-editor .portal-card-mark{background:linear-gradient(145deg,#f26c82,#8b3147)}
+.portal-card.mp3-player .portal-card-mark{background:linear-gradient(145deg,#8d70ef,#49319c)}
 .portal-card.battle-sim .portal-card-mark{background:linear-gradient(145deg,#bd8b3f,#543416)}
 
 /* 2026-09-20 홈: 큰 관리자 인사말 대신 목록/격자 전환 가능한 압축 런처 */

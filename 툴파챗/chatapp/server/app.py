@@ -26,6 +26,7 @@ worker/persona_worker.py가 이 서버를 폴링해서 처리한다(자세한 �
 기존 Basic Auth(APP_USERNAME/APP_PASSWORD)는 shift_alarm.py가 소유자 자격으로
 /api/all_messages를 폴링할 때 여전히 쓰므로(브라우저 로그인 세션이 없는
 백그라운드 프로세스라 쿠키를 못 씀) 소유자 전용 대체 인증 경로로 남겨뒀다."""
+import asyncio
 import base64
 import datetime
 import hashlib
@@ -60,7 +61,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from pywebpush import WebPushException, webpush
 
-from server import ai_keys, audio_editor, auth, battle_sim_story, dating_sim_story, oauth
+from server import ai_keys, audio_editor, auth, battle_sim_story, dating_sim_story, mp3_player, oauth
 from server.db import get_conn, init_db
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -73,6 +74,7 @@ VOCABULARY_WEB_DIR = BASE_DIR / "vocabulary_web"
 DATING_SIM_WEB_DIR = BASE_DIR / "dating_sim_web"
 DATING_SIM_AUDIO_DIR = DATING_SIM_WEB_DIR / "audio"
 AUDIO_EDITOR_WEB_DIR = BASE_DIR / "audio_editor_web"
+MP3_PLAYER_WEB_DIR = BASE_DIR / "mp3_player_web"
 BATTLE_SIM_WEB_DIR = BASE_DIR / "battle_sim_web"
 SHIFT_ALARM_STATUS_FILE = Path(os.path.expanduser(
     "~/Library/Mobile Documents/com~apple~CloudDocs/ShiftAlarmStatus/status.json"
@@ -323,7 +325,7 @@ class NoCacheStaticMiddleware(BaseHTTPMiddleware):
     바꾼다. `v=` 없는 요청(업로드 파일 등)은 기존처럼 매번 재검증한다."""
     async def dispatch(self, request, call_next):
         response = await call_next(request)
-        if request.url.path.startswith(("/static/", "/uploads/", "/shift-alarm/static/", "/audio-editor/static/")):
+        if request.url.path.startswith(("/static/", "/uploads/", "/shift-alarm/static/", "/audio-editor/static/", "/mp3-player/static/")):
             if request.query_params.get("v"):
                 response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
             else:
@@ -699,6 +701,88 @@ async def export_edited_audio(
     except (OSError, subprocess.TimeoutExpired) as exc:
         shutil.rmtree(job_dir, ignore_errors=True)
         raise HTTPException(status_code=500, detail="오디오 편집 중 오류가 발생했습니다") from exc
+
+
+@app.get("/mp3-player")
+def mp3_player_redirect():
+    return RedirectResponse("/mp3-player/", status_code=307)
+
+
+@app.get("/mp3-player/")
+def mp3_player_dashboard(request: Request):
+    _require_signed_in_user(request)
+    return FileResponse(str(MP3_PLAYER_WEB_DIR / "index.html"))
+
+
+@app.get("/mp3-player/static/{filename}")
+def mp3_player_static(filename: str, request: Request):
+    _require_signed_in_user(request)
+    if filename not in {"style.css", "app.js", "manifest.webmanifest"}:
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
+    return FileResponse(str(MP3_PLAYER_WEB_DIR / filename))
+
+
+@app.post("/api/mp3-player/generate-lrc")
+async def generate_mp3_lrc(request: Request, file: UploadFile = File(...)):
+    """선택한 MP3를 로컬 whisper.cpp로 전사하고 동기화 LRC를 반환한다."""
+    _require_signed_in_user(request)
+    original_name = Path(file.filename or "audio.mp3").name
+    if Path(original_name).suffix.lower() != ".mp3":
+        raise HTTPException(status_code=422, detail="MP3 파일만 가사를 생성할 수 있습니다")
+    whisper = Path("/opt/homebrew/bin/whisper-cli")
+    model_candidates = [
+        Path("/opt/homebrew/share/whisper-cpp/models/ggml-medium.bin"),
+        Path("/opt/homebrew/share/whisper-cpp/models/ggml-small.bin"),
+    ]
+    model = next((candidate for candidate in model_candidates if candidate.is_file()), None)
+    ffmpeg = shutil.which("ffmpeg")
+    if not whisper.is_file() or model is None or not ffmpeg:
+        raise HTTPException(status_code=503, detail="Mac의 로컬 Whisper 또는 FFmpeg가 준비되지 않았습니다")
+
+    work_root = Path(os.path.expanduser("~/.tulpachat/mp3_player"))
+    work_root.mkdir(parents=True, exist_ok=True)
+    job_dir = Path(tempfile.mkdtemp(prefix="lyrics-", dir=work_root))
+    source = job_dir / "source.mp3"
+    wave = job_dir / "source.wav"
+    output_prefix = job_dir / "lyrics"
+    size = 0
+    try:
+        with source.open("wb") as destination:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > 250 * 1024 * 1024:
+                    raise HTTPException(status_code=413, detail="MP3는 최대 250MB까지 처리할 수 있습니다")
+                destination.write(chunk)
+        if size < 128:
+            raise HTTPException(status_code=422, detail="비어 있거나 손상된 MP3입니다")
+        converted = await asyncio.to_thread(
+            subprocess.run,
+            [ffmpeg, "-y", "-v", "error", "-i", str(source), "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", str(wave)],
+            capture_output=True, text=True, timeout=300,
+        )
+        if converted.returncode != 0 or not wave.is_file():
+            raise HTTPException(status_code=422, detail="MP3 음성을 분석 형식으로 바꾸지 못했습니다")
+        transcribed = await asyncio.to_thread(
+            subprocess.run,
+            [str(whisper), "-m", str(model), "-f", str(wave), "-l", "auto", "-osrt", "-of", str(output_prefix)],
+            capture_output=True, text=True, timeout=1800,
+        )
+        srt = output_prefix.with_suffix(".srt")
+        if transcribed.returncode != 0 or not srt.is_file():
+            raise HTTPException(status_code=422, detail="Whisper가 가사를 인식하지 못했습니다")
+        try:
+            lrc = mp3_player.srt_to_lrc(srt.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return Response(content=lrc, media_type="text/plain; charset=utf-8")
+    except HTTPException:
+        raise
+    except subprocess.TimeoutExpired as exc:
+        raise HTTPException(status_code=504, detail="가사 생성 시간이 30분을 초과했습니다") from exc
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail="로컬 가사 생성 중 파일 오류가 발생했습니다") from exc
+    finally:
+        shutil.rmtree(job_dir, ignore_errors=True)
 
 
 # ★ 2026-09-15: "미연시 시스템 하나 만들어봤으면 좋겠어" 요청 — 선택지+호감도+

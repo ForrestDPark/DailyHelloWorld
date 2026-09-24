@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#f5f1ff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#100d18" media="(prefers-color-scheme: dark)">
+  <title>MP3 가사 플레이어</title>
+  <link rel="manifest" href="/mp3-player/static/manifest.webmanifest">
+  <link rel="stylesheet" href="/mp3-player/static/style.css?v=20260924-v1">
+</head>
+<body>
+  <header><a href="/#systems" aria-label="시스템으로 돌아가기">‹</a><h1>MP3 가사 플레이어</h1><button id="lyrics-toggle" type="button" disabled>가사</button></header>
+  <main>
+    <section id="empty" class="empty">
+      <div class="disc" aria-hidden="true"><i></i></div>
+      <h2>음악과 가사를 함께</h2><p>iPhone 파일 앱에서 MP3를 선택하세요.<br>파일은 재생할 때 기기 안에 머뭅니다.</p>
+      <label class="pick primary"><input id="audio-file" type="file" accept="audio/mpeg,.mp3">MP3 불러오기</label>
+    </section>
+    <section id="player" class="player hidden">
+      <div class="track"><div class="mini-disc" aria-hidden="true"></div><div><strong id="title"></strong><small id="meta"></small></div><label class="replace"><input id="replace-file" type="file" accept="audio/mpeg,.mp3">다른 곡</label></div>
+      <section id="lyrics-card" class="lyrics-card">
+        <div class="lyrics-head"><div><small>SYNCED LYRICS</small><h2>가사</h2></div><span id="lyrics-state">가사를 불러오세요</span></div>
+        <div id="lyrics" class="lyrics" aria-live="polite"><p class="lyrics-empty">LRC 파일을 적용하거나<br>로컬 Whisper로 만들어 보세요.</p></div>
+      </section>
+      <div class="seek-row"><span id="current">0:00</span><input id="seek" type="range" min="0" max="1000" value="0" aria-label="재생 위치"><span id="duration">0:00</span></div>
+      <div class="controls"><button id="back" type="button" aria-label="10초 뒤로">−10</button><button id="play" class="play" type="button" aria-label="재생">▶</button><button id="forward" type="button" aria-label="10초 앞으로">+10</button></div>
+      <div class="options"><label>속도 <select id="rate"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label><button id="follow" type="button" aria-pressed="true">자동 스크롤 켬</button></div>
+      <section class="lyrics-tools"><label class="pick"><input id="lrc-file" type="file" accept=".lrc,text/plain">LRC 적용</label><button id="generate" type="button">로컬 Whisper로 LRC 생성</button><button id="download-lrc" class="hidden" type="button">LRC 저장</button></section>
+      <p class="privacy">LRC 적용과 재생은 기기 안에서 처리합니다. 자동 생성할 때만 선택한 MP3를 내 Mac 서버로 보내며, 변환 직후 임시 파일을 삭제합니다.</p>
+    </section>
+  </main>
+  <div id="status" class="status hidden" role="status" aria-live="polite"></div>
+  <audio id="audio" preload="metadata"></audio>
+  <script src="/mp3-player/static/app.js?v=20260924-v1"></script>
+</body>
+</html>
