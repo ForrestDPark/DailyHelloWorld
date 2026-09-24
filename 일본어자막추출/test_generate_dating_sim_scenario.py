@@ -81,6 +81,39 @@ class DatingScenarioGenerationTest(unittest.TestCase):
         for ja in safe_examples:
             self.assertIn(ja, loaded, f"안전한 표현이 잘못 걸러짐: {ja}")
 
+    def test_repair_missing_materials_updates_scene_and_coverage_metadata(self):
+        days = {
+            "2": {
+                "scenes": {
+                    "first": {
+                        "lines": ["今日は静かですね。\n오늘은 조용하네요."],
+                        "vocab_used": [],
+                        "expressions_used": [],
+                    }
+                }
+            }
+        }
+        words = [{"ja": "約束", "reading": "やくそく", "ko": "약속"}]
+        expressions = [{"ja": "また会いましょう", "reading": "またあいましょう", "ko": "다시 만나요"}]
+
+        generator.repair_missing_materials(days, words, expressions)
+
+        scene = days["2"]["scenes"]["first"]
+        self.assertIn("約束", scene["lines"][0])
+        self.assertIn("약속", scene["lines"][0])
+        self.assertIn("また会いましょう", scene["lines"][0])
+        self.assertIn("다시 만나요", scene["lines"][0])
+        self.assertEqual(words, scene["vocab_used"])
+        self.assertEqual(expressions, scene["expressions_used"])
+
+    def test_select_shard_partitions_targets_without_overlap(self):
+        targets = [Path(str(index)) for index in range(8)]
+        shards = [generator.select_shard(targets, index, 3) for index in range(3)]
+        self.assertEqual(targets, sorted(sum(shards, []), key=lambda item: int(item.name)))
+        self.assertFalse(set(shards[0]) & set(shards[1]))
+        with self.assertRaises(ValueError):
+            generator.select_shard(targets, 3, 3)
+
 
 if __name__ == "__main__":
     unittest.main()

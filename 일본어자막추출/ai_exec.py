@@ -35,7 +35,8 @@ CLAUDE_BIN = "/opt/homebrew/bin/claude"
 def _run_one(engine, prompt, cwd, timeout):
     if engine == "codex":
         cmd = [
-            CODEX_BIN, "exec", "--ephemeral", "--sandbox", "read-only",
+            CODEX_BIN, "exec", "--ignore-user-config", "--ignore-rules",
+            "--ephemeral", "--sandbox", "read-only",
             "--skip-git-repo-check", "-c", "notify=[]", "-C", str(cwd), "-",
         ]
     else:

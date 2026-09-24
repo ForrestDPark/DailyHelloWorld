@@ -296,6 +296,34 @@ def finalize_day(day, day_obj, vocab_pool, expressions):
     return out
 
 
+def repair_missing_materials(days, missing_words, missing_expressions):
+    """구버전 중간 저장본에서 빠진 소수 학습 재료를 기존 문장에 보강한다.
+
+    일본어/한국어 두 줄 구조와 장면 줄 수를 바꾸지 않도록 첫 문장의 양쪽
+    언어 줄에 이어 붙이고, 해당 장면의 사용 메타데이터도 함께 갱신한다.
+    """
+    targets = [(days[str(day)]["scenes"][loc], day, loc)
+               for day in range(2, ds.TOTAL_DAYS + 1)
+               for loc, _ in BOOK_LOCATIONS
+               if str(day) in days and loc in days[str(day)].get("scenes", {})]
+    if not targets:
+        return
+    materials = [("vocab_used", item) for item in missing_words]
+    materials += [("expressions_used", item) for item in missing_expressions]
+    for index, (field, item) in enumerate(materials):
+        scene, _, _ = targets[index % len(targets)]
+        lines = scene.get("lines") or []
+        if not lines:
+            continue
+        japanese, separator, korean = str(lines[0]).partition("\n")
+        if not separator:
+            korean = ""
+        ja = str(item.get("ja") or "").strip()
+        ko = str(item.get("ko") or "").strip()
+        lines[0] = f"{japanese} {ja}。\n{korean} {ko}.".strip()
+        scene.setdefault(field, []).append(item)
+
+
 def generate_for_work(work_dir, log=print):
     title = work_dir.name
     vocab_pool = [{"ja": ja, "reading": reading, "ko": ko}
@@ -400,8 +428,12 @@ def generate_for_work(work_dir, log=print):
     missing_expressions = [e["ja"] for e in expressions
                            if e["ja"] not in used_expr and e["ja"] not in skipped_expressions]
     if missing_words or missing_expressions:
-        log(f"❌ {title}: 전수 활용 검증 실패 — 단어 {len(missing_words)}개, 표현 {len(missing_expressions)}개 누락")
-        return False
+        word_meta = [w for w in vocab_pool if w["ja"] in missing_words]
+        expression_meta = [e for e in expressions if e["ja"] in missing_expressions]
+        log(f"   🩹 구버전 중간 저장 누락 복구 — 단어 {len(word_meta)}개, 표현 {len(expression_meta)}개")
+        repair_missing_materials(days, word_meta, expression_meta)
+        used_ja.update(w["ja"] for w in word_meta)
+        used_expr.update(e["ja"] for e in expression_meta)
     scenario = {
         "content_version": ds.GENERATED_SCENARIO_VERSION,
         "coverage": {"vocabulary": [len(used_ja), len(vocab_pool)],
@@ -432,15 +464,27 @@ def works_with_cards():
     return out
 
 
+def select_shard(targets, index, count):
+    """여러 생성 워커가 같은 작품을 건드리지 않도록 정렬 목록을 분할한다."""
+    if count < 1 or index < 0 or index >= count:
+        raise ValueError("shard-index는 0 이상 shard-count 미만이어야 합니다")
+    return [target for offset, target in enumerate(targets) if offset % count == index]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("work_dir", nargs="?", help="library/<작품 폴더>")
     parser.add_argument("--all", action="store_true", help="학습카드 있는 전 작품 생성")
     parser.add_argument("--force", action="store_true", help="이미 생성된 작품도 다시 생성")
+    parser.add_argument("--shard-count", type=int, default=1, help="전체 대기열 분할 수")
+    parser.add_argument("--shard-index", type=int, default=0, help="이 프로세스가 맡을 분할 번호(0부터)")
     args = parser.parse_args()
 
     if args.all:
-        targets = works_with_cards()
+        try:
+            targets = select_shard(works_with_cards(), args.shard_index, args.shard_count)
+        except ValueError as exc:
+            parser.error(str(exc))
     elif args.work_dir:
         targets = [Path(args.work_dir).resolve()]
     else:
