@@ -14,29 +14,15 @@ class NotifyTulpaChatTest(unittest.TestCase):
         markdown = "<!-- sunzi-analysis-mode: light -->\n## 1. 원문\n## 2. 주석\n## 3. 교차\n## 5. 적용\n"
         self.assertEqual(notify.victorious_commanders(markdown, "九地之變"), [])
 
-    def test_verse_25_hanja_dictionary_is_complete(self):
-        page = Path(__file__).with_name("jiudi25_full_page.md")
-        number, original, subtitle = notify.read_page(page)
-        self.assertEqual(number, 25)
-        lesson = notify.build_hanja_lesson(page.read_text(encoding="utf-8"), original, subtitle)
-        self.assertIn("| [[red]]變[[/red]] | 변할 | 변 |", lesson)
-        self.assertIn("| [[red]]察[[/red]] | 살필 | 찰 |", lesson)
-
-    def test_verse_26_hanja_dictionary_is_complete(self):
-        page = Path(__file__).with_name("jiudi26_full_page.md")
-        number, original, subtitle = notify.read_page(page)
-        self.assertEqual(number, 26)
-        lesson = notify.build_hanja_lesson(page.read_text(encoding="utf-8"), original, subtitle)
-        self.assertIn("| [[red]]凡[[/red]] | 무릇 | 범 |", lesson)
-        self.assertIn("| [[red]]絶[[/red]] | 끊을 | 절 |", lesson)
-        self.assertIn("| [[red]]衢[[/red]] | 네거리 | 구 |", lesson)
-
     def test_discussion_key_changes_only_for_explicit_republish(self):
         stable = notify.discussion_dedupe_key(24, "format-v1", False)
         self.assertEqual(stable, notify.discussion_dedupe_key(24, "format-v2", False))
         self.assertNotEqual(stable, notify.discussion_dedupe_key(24, "format-v2", True))
 
-    def test_hanja_lesson_prepares_reading_literal_and_glosses(self):
+    def test_hanja_lesson_prepares_reading_and_literal_without_a_table(self):
+        # ★ 2026-09-24: "한자선생님이 한자 뜻 표 작성하는거있는데 이제 표는
+        # 작성안해도될거같아" 요청 — 글자별 훈·음 표 절을 없앴으니, 그
+        # 표 마크업이 더 이상 나오지 않는지도 함께 확인한다.
         page = Path(__file__).with_name("jiudi22_full_page.md")
         markdown = page.read_text(encoding="utf-8")
         _number, original, subtitle = notify.read_page(page)
@@ -48,8 +34,8 @@ class NotifyTulpaChatTest(unittest.TestCase):
         self.assertIn("[[orange]]직역[[/orange]]\n\n", lesson)
         self.assertIn("易居(역기거)", lesson)
         self.assertIn("梯", lesson)
-        self.assertIn("| [[red]]易[[/red]] | 바꿀 | 역 |", lesson)
-        self.assertIn("| [[red]]梯[[/red]] | 사다리 | 제 |", lesson)
+        self.assertNotIn("모든 한자의 훈과 음", lesson)
+        self.assertNotIn("| 한자 | 훈 | 음 |", lesson)
 
     def test_all_images_are_separated_and_preserved_in_order(self):
         page = Path(__file__).with_name("jiudi22_full_page.md")
