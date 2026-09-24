@@ -1060,6 +1060,58 @@ def dating_sim_state(request: Request, story_id: str | None = None):
     return payload
 
 
+@app.get("/api/dating-sim/teacher-tip")
+def dating_sim_teacher_tip(request: Request, story_id: str | None = None):
+    """현재 장면과 겹치는 일본어 선생님의 실제 과거 발언을 짧게 돌려준다."""
+    _require_owner(request)
+    username = _request_username(request)
+    story = _dating_story(story_id, username)
+    conn = get_conn()
+    try:
+        row = _dating_sim_row(conn, username, story)
+        terms = []
+        if row.get("pending_location") and not row.get("completed"):
+            scene = story["scenes"].get(row["day"], {}).get(row["pending_location"], {})
+            vocab_items = scene.get("vocab_words") or ([scene.get("vocab")] if scene.get("vocab") else [])
+            for vocab in vocab_items:
+                if isinstance(vocab, dict):
+                    terms.extend([vocab.get("ja"), vocab.get("word"), vocab.get("ko")])
+            for expression in scene.get("expressions_used") or []:
+                if isinstance(expression, dict):
+                    terms.extend([expression.get("ja"), expression.get("text"), expression.get("ko")])
+                else:
+                    terms.append(expression)
+        source_title = story.get("source_title") or ""
+        candidates = conn.execute(
+            "SELECT content FROM messages WHERE sender=? ORDER BY id DESC LIMIT 500",
+            ("일본어 선생님",),
+        ).fetchall()
+        persona = conn.execute(
+            "SELECT avatar_url FROM personas WHERE name=?", ("일본어 선생님",)
+        ).fetchone()
+    finally:
+        conn.close()
+    needles = [str(value).strip() for value in [*terms, source_title] if str(value or "").strip()]
+    for candidate in candidates:
+        content = candidate["content"] or ""
+        matched = next((term for term in needles if term.casefold() in content.casefold()), None)
+        if not matched:
+            continue
+        clean = re.sub(r"https?://\S+", "", content)
+        clean = re.sub(r"\[\[/?(?:blue|red)\]\]", "", clean)
+        clean = re.sub(r"\s+", " ", clean).strip()
+        index = clean.casefold().find(matched.casefold())
+        start = max(0, index - 90)
+        end = min(len(clean), index + len(matched) + 150)
+        excerpt = clean[start:end].strip(" ·-/")
+        if start:
+            excerpt = "…" + excerpt
+        if end < len(clean):
+            excerpt += "…"
+        return {"content": excerpt, "avatar_url": persona["avatar_url"] if persona else None}
+    return None
+
+
 @app.get("/api/dating-sim/scenario-tree")
 def dating_sim_scenario_tree(request: Request, story_id: str | None = None):
     """★ 2026-09-18: 관리자 전용 — 한 이야기의 전체 시나리오 구조(요일·장소·

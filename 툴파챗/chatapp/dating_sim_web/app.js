@@ -11,6 +11,7 @@ let choiceInFlight = false;
 let mapOpeningText = "";
 let sceneCharacterImage = "";
 let sceneLearningMarked = false;
+let teacherTipRequest = 0;
 
 // ★ 2026-09-17: "이전장면보기버튼이없는데... 아니 이전장면 대사말고" 요청 —
 // 대사창 안 ◀ 뒤로가기(현재 장면 안에서만 동작)와는 별개로, 이미 끝낸
@@ -217,6 +218,13 @@ function renderHud(state) {
   $("affection-value").textContent = state.affection;
   $("affection-value").parentElement.setAttribute("aria-label", `호감도 ${state.affection}점`);
   $("affection-bar").style.width = `${Math.max(0, Math.min(100, state.affection))}%`;
+  const sourceLink = $("source-epub-link");
+  const sourceBookId = String(state.story_id || "").match(/^book:([0-9a-f]{20})$/)?.[1];
+  sourceLink.classList.toggle("hidden", !sourceBookId);
+  if (sourceBookId) {
+    sourceLink.href = `/epub/?book=${encodeURIComponent(sourceBookId)}`;
+    sourceLink.setAttribute("aria-label", `${state.source_title || "원작"} EPUB로 이동`);
+  }
   // 관리자 계정에서만 시나리오 트리 버튼을 보여준다(서버도 소유자만 허용).
   $("tree-open-btn").classList.toggle("hidden", !state.is_admin);
   $("story-list-btn").classList.toggle("hidden", !state.is_admin);
@@ -1460,8 +1468,25 @@ function renderScene(state) {
   sceneCharacterImage = state.scene.character_image || state.character_image || "";
   setSafeImage($("portrait-image"), sceneCharacterImage);
   showView("scene-view");
+  renderTeacherTip(state);
   updateListeningControls(listeningMode ? "대기 중" : "꺼짐");
   typeLine(sceneLines[0]);
+}
+
+async function renderTeacherTip(state) {
+  const box = $("teacher-tip");
+  const requestId = ++teacherTipRequest;
+  box.classList.add("hidden");
+  if (!state.is_admin || !state.source_title) return;
+  try {
+    const tip = await api(`/api/dating-sim/teacher-tip${storyQuery()}`);
+    if (requestId !== teacherTipRequest || !tip?.content) return;
+    $("teacher-tip-text").textContent = tip.content;
+    setSafeImage($("teacher-tip-avatar"), tip.avatar_url, "/dating-sim/static/reina.png");
+    box.classList.remove("hidden");
+  } catch (_) {
+    // 관련 과거 발언이 없거나 조회할 수 없어도 게임 진행은 그대로 유지한다.
+  }
 }
 
 function renderChoiceResult(state) {
@@ -1712,9 +1737,18 @@ async function openStoryPopover(anchor) {
     text.className = "story-popover-text";
     text.append(name, sourceTitle, status);
     button.append(text);
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
+      if (!item.ready) {
+        const reason = !item.scenario_ready
+          ? "시나리오가 아직 완성되지 않아 열 수 없습니다."
+          : `장면 이미지가 ${item.image_count}/42장 준비되어 아직 열 수 없습니다.`;
+        bulkStatus.textContent = `${plainText(item.character_name)}: ${reason} 위 생성 버튼에서 진행률을 확인하세요.`;
+        bulkStatus.setAttribute("role", "alert");
+        bulk.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        return;
+      }
       closeStoryPopover();
-      if (item.story_id !== storyId) enterStory(item.story_id);
+      await enterStory(item.story_id);
     });
     list.append(button);
   }
@@ -1735,9 +1769,12 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closeStoryPopover();
 });
 
-function enterStory(nextStoryId) {
+async function enterStory(nextStoryId) {
   storyId = nextStoryId;
-  loadState();
+  const sourceBookId = String(storyId || "").match(/^book:([0-9a-f]{20})$/)?.[1];
+  const nextUrl = sourceBookId ? `/dating-sim/?book=${encodeURIComponent(sourceBookId)}` : "/dating-sim/";
+  history.replaceState(null, "", nextUrl);
+  await loadState();
 }
 
 async function boot() {
@@ -2314,13 +2351,24 @@ function renderScenarioImages(body, tree, includeHeading = true) {
     label.textContent = item.label;
     button.append(image, label);
     let touchedAt = 0;
+    let touchStart = null;
     const activate = (event) => {
       event.preventDefault();
       event.stopPropagation();
       openTreeImageDetail(item);
     };
+    button.addEventListener("touchstart", (event) => {
+      const touch = event.changedTouches[0];
+      touchStart = touch ? { x: touch.clientX, y: touch.clientY } : null;
+    }, { passive: true });
     button.addEventListener("touchend", (event) => {
       touchedAt = Date.now();
+      const touch = event.changedTouches[0];
+      const moved = touchStart && touch
+        ? Math.hypot(touch.clientX - touchStart.x, touch.clientY - touchStart.y)
+        : 0;
+      touchStart = null;
+      if (moved > 10) return;
       activate(event);
     }, { passive: false });
     button.addEventListener("click", (event) => {

@@ -810,3 +810,14 @@ body.practice-open { overflow: hidden; }
 .reference-picker-item input { position: absolute; top: 6px; left: 6px; width: 22px; height: 22px; accent-color: #f4d35e; }
 .story-popover-item.incomplete { opacity: .85; border-style: dashed; }
 .story-popover-badge { font-style: normal; font-size: 10px; padding: 1px 5px; margin-left: 2px; color: #1d1a2b; background: #f4d35e; border-radius: 4px; }
+
+.teacher-tip {
+  display: flex; align-items: flex-start; gap: 10px; margin: 10px 4px 14px;
+  padding: 10px 12px; border: 2px solid var(--border); border-radius: 12px;
+  background: color-mix(in srgb, var(--panel) 92%, #fff 8%);
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, .22);
+}
+.teacher-tip.hidden { display: none; }
+.teacher-tip img { width: 42px; height: 42px; flex: none; border-radius: 50%; object-fit: cover; border: 2px solid var(--accent); }
+.teacher-tip strong { display: block; color: var(--accent); font-size: 12px; margin-bottom: 4px; }
+.teacher-tip p { margin: 0; color: var(--text); font-size: 14px; line-height: 1.55; white-space: pre-line; }
