@@ -750,6 +750,8 @@ class ShiftAlarmApiTests(unittest.TestCase):
                 result = module.get_notifications(signed_in_request())
         self.assertEqual(result["items"][0]["type"], "chat")
         self.assertEqual(result["items"][0]["url"], "/#room=room-a")
+        self.assertEqual(result["items"][0]["room_id"], "room-a")
+        self.assertEqual(result["items"][0]["last_message_id"], 2)
         self.assertEqual(result["unread_count"], len(module.SYSTEM_UPDATE_NOTIFICATIONS) + 1)
 
     def test_system_notification_read_is_account_specific(self):

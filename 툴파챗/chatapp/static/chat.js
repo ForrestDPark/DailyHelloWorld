@@ -1235,7 +1235,7 @@ function getLastRead(roomId) {
   return Math.max(serverValue, accountValue, legacyValue);
 }
 function markRoomRead(roomId, messageId) {
-  if (!messageId) return;
+  if (!messageId) return Promise.resolve(false);
   const accountKey = lastReadKey(roomId);
   const accountValue = parseInt(localStorage.getItem(accountKey) || "0", 10);
   if (messageId > accountValue) {
@@ -1246,14 +1246,30 @@ function markRoomRead(roomId, messageId) {
   // 로컬 값이 이미 앞서 있어도 서버가 뒤처졌다면 반드시 업로드한다. 예전에는
   // getLastRead()의 최댓값만 비교해 이 경우 서버 동기화를 영원히 건너뛰었다.
   if (messageId > serverValue) {
-    apiFetch("/api/read-state", {
+    return apiFetch("/api/read-state", {
       method: "PUT", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({room_id: roomId, last_message_id: messageId}),
       keepalive: true,
     }).then((res) => {
       if (res.ok && room) room.last_read_id = Math.max(room.last_read_id || 0, messageId);
-    }).catch(() => {});
+      dismissRoomPushNotifications(roomId);
+      return res.ok;
+    }).catch(() => false);
   }
+  dismissRoomPushNotifications(roomId);
+  return Promise.resolve(true);
+}
+
+function dismissRoomPushNotifications(roomId) {
+  if (!("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.ready.then((registration) => registration.getNotifications())
+    .then((notifications) => {
+      const encoded = encodeURIComponent(roomId);
+      notifications.forEach((notification) => {
+        const url = String(notification.data?.url || "");
+        if (url.includes(`#room=${encoded}`) || url.includes(`#room=${roomId}`)) notification.close();
+      });
+    }).catch(() => {});
 }
 
 window.addEventListener("pagehide", () => {
@@ -1963,6 +1979,16 @@ function renderPortalNotifications(data) {
           method: "PUT", headers: {"Content-Type": "application/json"},
           body: JSON.stringify({notification_id: item.id}),
         }).catch(() => null);
+      } else if (item.type === "chat" && item.unread && item.room_id && item.last_message_id) {
+        // 알림에서 실제 대화를 열었다면 그 알림이 가리키는 마지막 메시지까지
+        // 서버 읽음 위치를 먼저 확정한다. 이전에는 방만 열고 읽음 저장은
+        // 스크롤 이벤트에 맡겨, 이미 확인한 알림이 재접속 때마다 되살아났다.
+        await markRoomRead(item.room_id, Number(item.last_message_id));
+        const remaining = notificationCache.filter((entry) => entry.id !== item.id);
+        renderPortalNotifications({
+          items: remaining,
+          unread_count: remaining.filter((entry) => entry.unread).length,
+        });
       }
       location.href = item.url;
     });

@@ -6478,6 +6478,7 @@ def get_notifications(request: Request):
         items.append({
             "id": f"chat:{room['room_id']}:{last_id}",
             "type": "chat", "title": room["label"],
+            "room_id": room["room_id"], "last_message_id": last_id,
             "body": f"읽지 않은 메시지 {count}개" + (
                 f" · {room['last_message']}" if room.get("last_message") else ""
             ),
