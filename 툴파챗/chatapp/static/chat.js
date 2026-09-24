@@ -2928,7 +2928,7 @@ function closeJpVocabWordPopover() {
   jpVocabWordPopover = null;
 }
 
-function showJpVocabWordPopover(word, anchor) {
+function showJpVocabWordPopover(word, anchor, stem = null) {
   closeJapaneseKanjiPopover();
   closeJpVocabWordPopover();
   const popover = document.createElement("section");
@@ -2981,8 +2981,34 @@ function showJpVocabWordPopover(word, anchor) {
     }
   }
   popover.append(close, favorite, glyph, readings);
+  // 활용 어미가 붙은 표현이면 어간 단어(한자 부분)도 따로 눌러 볼 수 있게 한다.
+  if (stem && stem.ja !== word.ja) {
+    const stemSection = document.createElement("div");
+    stemSection.className = "japanese-kanji-popover-word-chars";
+    const stemLabel = document.createElement("span");
+    stemLabel.textContent = "단어 보기";
+    const stemList = document.createElement("div");
+    stemList.className = "japanese-kanji-popover-word-chars-list";
+    const stemButton = document.createElement("button");
+    stemButton.type = "button";
+    stemButton.className = "japanese-kanji-char";
+    stemButton.lang = "ja";
+    stemButton.textContent = stem.ja;
+    stemButton.setAttribute("aria-label", `${stem.ja} 단어 뜻 보기`);
+    stemButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const rect = stemButton.getBoundingClientRect();
+      const known = jpVocabularyMap.get(stem.ja);
+      const stemWord = known && katakanaToHiragana(known.reading) === stem.reading
+        ? known : {ja: stem.ja, reading: stem.reading, ko: null};
+      showJpVocabWordPopover(stemWord, {getBoundingClientRect: () => rect, isConnected: true});
+    });
+    stemList.appendChild(stemButton);
+    stemSection.append(stemLabel, stemList);
+    popover.append(stemSection);
+  }
   const kanjiChars = Array.from(word.ja).filter((ch) => /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u.test(ch));
-  if (kanjiChars.length > 1) {
+  if (kanjiChars.length > 1 || (stem && stem.ja !== word.ja && kanjiChars.length >= 1)) {
     const section = document.createElement("div");
     section.className = "japanese-kanji-popover-word-chars";
     const label = document.createElement("span");
@@ -3100,7 +3126,7 @@ function applyJpVocabHighlighting(container) {
       const known = jpVocabularyMap.get(surface);
       const word = known && katakanaToHiragana(known.reading) === surfaceReading
         ? known : {ja: surface, reading: surfaceReading, ko: null};
-      showJpVocabWordPopover(word, target);
+      showJpVocabWordPopover(word, target, surface !== base ? {ja: base, reading} : null);
     };
     target.addEventListener("click", open);
     target.addEventListener("keydown", (event) => {
