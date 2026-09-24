@@ -49,7 +49,7 @@ def _run_one(engine, prompt, cwd, timeout):
     )
 
 
-def run_ai_exec(prompt, cwd, timeout=600, primary=None):
+def run_ai_exec(prompt, cwd, timeout=600, primary=None, engines=None):
     """primary 엔진으로 먼저 시도하고, 실패하면(종료 코드 비정상 또는 빈 응답)
     나머지 하나로 자동 전환한다. 성공한 stdout 텍스트와 실제 사용된 엔진 이름을
     (stdout, engine) 튜플로 반환한다. 둘 다 실패하면 두 엔진의 에러를 합쳐
@@ -58,9 +58,14 @@ def run_ai_exec(prompt, cwd, timeout=600, primary=None):
     primary를 안 주면(기본값) 매 호출마다 ai_usage.pick_less_used_engine()으로
     지금 사용량이 더 낮은 쪽을 1순위로 고른다 — 호출 하나하나가 이전 호출들의
     소진 상태를 반영해 적응적으로 움직인다."""
-    if primary is None:
-        primary = ai_usage.pick_less_used_engine(default="codex")
-    order = ["codex", "claude"] if primary == "codex" else ["claude", "codex"]
+    if engines:
+        # ★ 2026-09-24: 미연시 시나리오는 Codex 전용 — engines=["codex"]처럼 허용 엔진을
+        # 제한하면 폴백 없이 그 엔진만 쓴다(실패하면 RuntimeError).
+        order = list(engines)
+    else:
+        if primary is None:
+            primary = ai_usage.pick_less_used_engine(default="codex")
+        order = ["codex", "claude"] if primary == "codex" else ["claude", "codex"]
     errors = []
     for i, engine in enumerate(order):
         try:

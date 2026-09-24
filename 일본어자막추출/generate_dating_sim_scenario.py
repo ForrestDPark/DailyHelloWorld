@@ -36,6 +36,13 @@ import dating_sim_story as ds  # noqa: E402
 sys.path.insert(0, str(SCRIPT_DIR))
 from ai_exec import run_ai_exec  # noqa: E402
 
+# ★ 2026-09-24: "클로드는 일본어대사추출에만 작업하고 미연시 스토리추출은 하지마" —
+# 시나리오 생성은 Codex 전용이다(Claude 폴백 없음). Codex를 못 쓰는 상태면 이 플래그를
+# 세우고 남은 작품 시도를 멈춰, 호출부(resume_dating_sim_backlog 등)가 이미지 생성만
+# 이어가다가 Codex가 살아나면 빈 부분을 채우게 한다.
+EXIT_CODEX_UNAVAILABLE = 75
+codex_unavailable = False
+
 BOOK_LOCATIONS = [
     ("first", "우연히 마주친 곳(서점·길모퉁이 등)"),
     ("walk", "함께 걷는 길·공원·강변"),
@@ -338,10 +345,12 @@ def generate_for_work(work_dir, log=print):
             last_missing = []
             for attempt in range(max_attempts):
                 try:
-                    stdout, engine = run_ai_exec(prompt, str(work_dir), timeout=600)
+                    stdout, engine = run_ai_exec(prompt, str(work_dir), timeout=600, engines=["codex"])
                 except RuntimeError as exc:
-                    log(f"   ⚠️ DAY {day} AI 호출 실패({exc})")
+                    log(f"   ⚠️ DAY {day} Codex 호출 실패({exc})")
                     ai_failed = True
+                    global codex_unavailable
+                    codex_unavailable = True
                     break
                 match = re.search(r"\{.*\}", stdout, re.S)
                 try:
@@ -459,7 +468,12 @@ def main():
         except Exception as exc:  # noqa: BLE001
             print(f"❌ {work_dir.name}: 예외 {exc}")
             fail += 1
+        if codex_unavailable:
+            print("⏸️ Codex를 쓸 수 없어 남은 작품의 시나리오 생성은 건너뜁니다(Claude로는 만들지 않음)")
+            break
     print(f"\n완료 — 성공 {ok}개, 실패 {fail}개")
+    if codex_unavailable:
+        return EXIT_CODEX_UNAVAILABLE
     return 0 if fail == 0 else 1
 
 
