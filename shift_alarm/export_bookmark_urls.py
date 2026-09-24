@@ -33,7 +33,11 @@ def find(node, name):
     return None
 
 
-BOOKMARKS_HTML = os.path.expanduser("~/bookmarks.html")
+BOOKMARKS_HTML = next(
+    (os.path.expanduser(p) for p in ("~/bookmarks.html", "~/Downloads/bookmarks.html")
+     if os.path.isfile(os.path.expanduser(p))),
+    os.path.expanduser("~/bookmarks.html"),
+)
 
 
 def urls_from_html(path, folder_name):
