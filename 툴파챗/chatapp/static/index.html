@@ -30,7 +30,7 @@
      페이지 로드는 chat.js가 부팅 후 유휴 시간에 백그라운드로 미리 시작). -->
 <link rel="preconnect" href="https://sunzi-strategy-notes.pulpilisory.chatgpt.site" crossorigin>
 <link rel="dns-prefetch" href="https://sunzi-strategy-notes.pulpilisory.chatgpt.site">
-<link rel="stylesheet" href="/static/style.css?v=20260925-update-history-v1"><link rel="stylesheet" href="/static/icon-layout.css?v=20260926-system-history-v5">
+<link rel="stylesheet" href="/static/style.css?v=20260925-update-history-v1"><link rel="stylesheet" href="/static/icon-layout.css?v=20260926-history-icons-v6">
 <!-- ★ "새 메시지 알림(웹 푸시)" 요청(2026-08-27) — iOS Safari는 PWA로
      "홈 화면에 추가"돼 있어야만 웹 푸시가 동작한다. manifest.json이 그
      설치 가능 상태를 만든다. -->
@@ -111,7 +111,7 @@
         <a class="portal-card memo" href="/memo/"><span class="portal-card-mark"><svg class="memo-branch-icon" viewBox="0 0 48 48" aria-hidden="true"><path class="memo-branch-lines" d="M15 15 9 9m24 6 6-6M15 33l-6 6m24-6 6 6M24 13V7M13 24H7m28 0h6M24 35v6"/><circle class="memo-branch-node" cx="8" cy="8" r="3"/><circle class="memo-branch-node" cx="40" cy="8" r="3"/><circle class="memo-branch-node" cx="8" cy="40" r="3"/><circle class="memo-branch-node" cx="40" cy="40" r="3"/><circle class="memo-branch-node memo-branch-node-small" cx="24" cy="6" r="2"/><circle class="memo-branch-node memo-branch-node-small" cx="6" cy="24" r="2"/><circle class="memo-branch-node memo-branch-node-small" cx="42" cy="24" r="2"/><circle class="memo-branch-node memo-branch-node-small" cx="24" cy="42" r="2"/><path class="memo-bubble" d="M14 13.5h20a5 5 0 0 1 5 5v9a5 5 0 0 1-5 5H25l-6.5 5v-5H14a5 5 0 0 1-5-5v-9a5 5 0 0 1 5-5Z"/><path class="memo-bubble-mark" d="M16 21h16M16 26h10"/></svg></span><div><small>CONNECTED NOTES</small><h2>메모 시스템</h2><p>채팅의 유용한 메시지를 저장하고 생각을 가지처럼 확장</p></div><i>→</i></a>
       </section>
       <section id="portal-update-history" class="portal-update-history" aria-labelledby="portal-update-title">
-        <div class="portal-update-head"><div><small id="portal-update-title">SYSTEM HISTORY</small></div><div class="portal-update-head-actions"><span id="portal-update-count"></span><button id="portal-update-refresh" type="button" aria-label="업데이트 기록 새로고침">↻ 새로고침</button><button id="portal-update-toggle" type="button" aria-expanded="true" aria-controls="portal-update-list"><i aria-hidden="true">⌃</i><span class="sr-only">접기 또는 펼치기</span></button></div></div>
+        <div class="portal-update-head"><div><small id="portal-update-title">SYSTEM HISTORY</small></div><div class="portal-update-head-actions"><span id="portal-update-count"></span><button id="portal-update-refresh" type="button" aria-label="Refresh history" title="Refresh history">↻</button><button id="portal-update-toggle" type="button" aria-label="Collapse history" title="Collapse history" aria-expanded="true" aria-controls="portal-update-list"><i aria-hidden="true">⌃</i></button></div></div>
         <div id="portal-update-list" class="portal-update-list"><p>업데이트 기록을 불러오는 중입니다.</p></div>
       </section>
     </main>
@@ -348,6 +348,6 @@
   </div>
 
   <link rel="stylesheet" href="/static/style.css?v=20260925-message-fold-v2">
-  <script src="/static/chat.js?v=20260926-natum-brand-v4"></script>
+  <script src="/static/chat.js?v=20260926-history-icons-v5"></script>
 </body>
 </html>

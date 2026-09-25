@@ -2101,7 +2101,7 @@ async function loadDirectoryData() {
 async function loadSystemUpdateHistory({manual = false} = {}) {
   const list = document.getElementById("portal-update-list");
   const refresh = document.getElementById("portal-update-refresh");
-  if (manual) { refresh.disabled = true; refresh.textContent = "↻ 확인 중"; }
+  if (manual) { refresh.disabled = true; refresh.classList.add("is-refreshing"); }
   try {
     const data = await (await apiFetch(`/api/system/updates?_=${Date.now()}`, {cache:"no-store"})).json();
     const items = data.items || [];
@@ -2136,7 +2136,7 @@ async function loadSystemUpdateHistory({manual = false} = {}) {
     document.getElementById("portal-update-count").textContent = "새로고침 실패";
     console.error(error);
   } finally {
-    if (manual) { refresh.disabled = false; refresh.textContent = "↻ 새로고침"; }
+    if (manual) { refresh.disabled = false; refresh.classList.remove("is-refreshing"); }
   }
 }
 
@@ -2147,6 +2147,8 @@ document.getElementById("portal-update-refresh").addEventListener("click", () =>
 function setSystemUpdateCollapsed(collapsed) {
   systemUpdateHistory.classList.toggle("collapsed", collapsed);
   systemUpdateToggle.setAttribute("aria-expanded", String(!collapsed));
+  systemUpdateToggle.setAttribute("aria-label", collapsed ? "Expand history" : "Collapse history");
+  systemUpdateToggle.title = collapsed ? "Expand history" : "Collapse history";
   systemUpdateToggle.querySelector("i").textContent = collapsed ? "⌄" : "⌃";
   localStorage.setItem(SYSTEM_UPDATE_COLLAPSED_KEY, collapsed ? "1" : "0");
 }
