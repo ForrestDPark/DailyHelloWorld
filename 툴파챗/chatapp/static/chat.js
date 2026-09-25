@@ -2105,7 +2105,8 @@ async function loadSystemUpdateHistory({manual = false} = {}) {
   try {
     const data = await (await apiFetch(`/api/system/updates?_=${Date.now()}`, {cache:"no-store"})).json();
     const items = data.items || [];
-    const synced = new Intl.DateTimeFormat("ko-KR", {hour:"2-digit",minute:"2-digit",second:"2-digit"}).format(new Date());
+    const syncedAt = new Date();
+    const synced = `${String(syncedAt.getHours()).padStart(2, "0")}:${String(syncedAt.getMinutes()).padStart(2, "0")}`;
     document.getElementById("portal-update-count").textContent = `${items.length}건 · ${synced}`;
     list.replaceChildren();
     for (const item of items) {
