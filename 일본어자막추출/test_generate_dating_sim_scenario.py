@@ -62,6 +62,18 @@ class DatingScenarioGenerationTest(unittest.TestCase):
         self.assertIn("walk 표현: 競合", missing)
         self.assertIn("walk 문법: ～みたい", missing)
 
+    def test_literal_grammar_template_marker_is_rejected_from_dialogue(self):
+        candidate = self._candidate()
+        candidate["scenes"]["first"]["lines"][1] = "どこで待ったらいいですか？\n어디서 기다리면 될까요?"
+        self.assertTrue(generator.validate_day(candidate))
+
+        candidate["scenes"]["first"]["lines"][1] = "～たらいい？\n~하면 될까요?"
+        self.assertFalse(generator.validate_day(candidate))
+
+        candidate = self._candidate()
+        candidate["scenes"]["quiet"]["choices"][0]["text"] = "～みたいですね。\n~인 것 같네요."
+        self.assertFalse(generator.validate_day(candidate))
+
     def test_load_grammar_patterns_extracts_tilde_forms(self):
         with tempfile.TemporaryDirectory() as directory:
             work_dir = Path(directory)

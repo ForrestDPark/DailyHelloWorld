@@ -311,6 +311,13 @@ def validate_day(day_obj, words=None, expressions=None, grammar_patterns=None):
             return False
         if not isinstance(choices, list) or len(choices) != 2:
             return False
+        # `～たらいい？` 같은 표기는 학습카드의 문형 템플릿일 뿐이다.
+        # 실제 시나리오에는 `どこで待ったらいいですか？`처럼 빈자리를
+        # 채운 완성 문장만 허용한다. 문형 메타데이터(pattern)는 예외다.
+        visible_texts = list(lines)
+        visible_texts.extend(str(c.get("text") or "") for c in choices if isinstance(c, dict))
+        if any("～" in text or "~" in text for text in visible_texts):
+            return False
         tones = {c.get("tone") for c in choices if isinstance(c, dict) and c.get("text", "").strip()}
         if tones != {"positive", "negative"}:
             return False
@@ -413,13 +420,16 @@ def generate_for_work(work_dir, log=print):
             days = {}
 
     for day in range(1, total_days + 1):
-        if str(day) in days:
-            log(f"   ↪️ DAY {day} 중간 저장본 재사용")
-            continue
         is_first = day == 1
         words = [] if is_first else word_by_day.get(day, [])
         exprs = [] if is_first else expr_by_day.get(day, [])
         grammars = [] if is_first else grammar_by_day.get(day, [])
+        if str(day) in days:
+            if validate_day(days[str(day)], words, exprs, grammars):
+                log(f"   ↪️ DAY {day} 중간 저장본 재사용")
+                continue
+            log(f"   ♻️ DAY {day} 중간 저장본 검증 실패 — 완성 문장으로 다시 생성")
+            days.pop(str(day), None)
         topic = ds.DAY_TOPICS.get(day, "")
         arc_hint = ds.DAY_NARRATION.get(day, "").split("\n")[-1]
         previous = days.get(str(day - 1), {})
