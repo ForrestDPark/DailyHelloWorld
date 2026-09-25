@@ -45,7 +45,9 @@ _FACE_CASCADES = {}
 
 
 def _relative_original_name(work_dir, path):
-    return path.relative_to(work_dir / "images").as_posix()
+    image_dir = work_dir / "images"
+    return (path.relative_to(image_dir).as_posix() if image_dir in path.parents
+            else f"../{path.name}")
 
 
 def _original_scene_images(work_dir):
@@ -56,8 +58,16 @@ def _original_scene_images(work_dir):
     """
     image_dir = work_dir / "images"
     allowed = {".jpg", ".jpeg", ".png", ".webp"}
+    paths = [
+        path for path in image_dir.glob("**/*")
+        if path.is_file() and path.suffix.lower() in allowed
+    ]
+    paths.extend(
+        path for name in ("cover_original.jpg", "cover.jpg", "cover.png", "cover.webp")
+        if (path := work_dir / name).is_file()
+    )
     return sorted(
-        (path for path in image_dir.glob("**/*") if path.is_file() and path.suffix.lower() in allowed),
+        paths,
         key=lambda path: tuple(
             int(piece) if piece.isdigit() else piece.casefold()
             for piece in re.split(r"(\d+)", path.name)
@@ -92,14 +102,38 @@ def _face_reference_metrics(path):
     ycrcb = cv2.cvtColor(image, cv2.COLOR_BGR2YCrCb)
     skin_pixels = float(cv2.inRange(ycrcb, (0, 133, 77), (255, 173, 127)).sum()) / 255.0
     gray = cv2.equalizeHist(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY))
-    best_face = 0
+    detected = []
     for cascade_name in ("haarcascade_frontalface_alt2.xml", "haarcascade_profileface.xml"):
         cascade = _FACE_CASCADES.get(cascade_name)
         if cascade is None:
             cascade = cv2.CascadeClassifier(cv2.data.haarcascades + cascade_name)
             _FACE_CASCADES[cascade_name] = cascade
-        for (_, _, w, h) in cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=4, minSize=(50, 50)):
-            best_face = max(best_face, w * h)
+        for (x, y, w, h) in cascade.detectMultiScale(gray, scaleFactor=1.05, minNeighbors=5, minSize=(60, 60)):
+            detected.append((x, y, w, h))
+    # 정면/측면 검출기가 같은 얼굴을 중복 검출할 수 있으므로 중심이 가까운
+    # 사각형은 하나로 합친다. 서로 떨어진 얼굴이 둘 이상이면 남녀가 함께
+    # 나온 컷일 가능성이 높아 고정 여주 레퍼런스에서 제외한다.
+    faces = []
+    for box in sorted(detected, key=lambda item: item[2] * item[3], reverse=True):
+        x, y, w, h = box
+        cx, cy = x + w / 2, y + h / 2
+        if any(abs(cx - (ox + ow / 2)) < max(w, ow) * .35
+               and abs(cy - (oy + oh / 2)) < max(h, oh) * .35
+               for ox, oy, ow, oh in faces):
+            continue
+        faces.append(box)
+    if len(faces) != 1:
+        return 0, 0.0
+    x, y, w, h = faces[0]
+    # 신체 일부나 사물을 얼굴로 잘못 잡는 Haar 오탐을 줄이기 위해 검출 영역
+    # 안에 눈이 하나도 없으면 후보에서 제외한다.
+    eye = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_eye.xml")
+    if len(eye.detectMultiScale(gray[y:y + h, x:x + w], scaleFactor=1.08,
+                                minNeighbors=4, minSize=(12, 12))) == 0:
+        return 0, 0.0
+    best_face = w * h
+    if best_face / float(image.shape[0] * image.shape[1]) < 0.015:
+        return 0, 0.0
     if best_face == 0:
         return 0, 0.0
     face_to_skin_ratio = (best_face / skin_pixels) if skin_pixels > 0 else 0.0
@@ -134,7 +168,15 @@ def _select_fixed_references(originals, limit=MAX_REFERENCE_IMAGES):
         face_area, face_ratio = _face_reference_metrics(path)
         if face_area <= 0:
             continue
-        candidates.append((face_area * face_ratio, path))
+        try:
+            import cv2
+            image = cv2.imread(str(path))
+            sharpness = cv2.Laplacian(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), cv2.CV_64F).var()
+        except Exception:  # 손상 이미지·OpenCV 미설치 시 해당 품질값만 중립 처리
+            sharpness = 1.0
+        if sharpness < 20:
+            continue
+        candidates.append((face_area * face_ratio * min(3.0, sharpness / 80.0), path))
     candidates.sort(key=lambda item: item[0], reverse=True)
     return [path for _, path in candidates[:limit]]
 
@@ -844,10 +886,10 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
     manifest["custom_references"] = custom_names
     face_references = ([by_relative[name] for name in custom_names] if custom_names
                        else _select_fixed_references(originals))
-    fallback_reference = originals[0] if originals else next((
-        path for name in ("cover.jpg", "cover.png", "cover.webp")
+    fallback_reference = next((
+        path for name in ("cover_original.jpg", "cover.jpg", "cover.png", "cover.webp")
         if (path := work_dir / name).is_file()
-    ), None)
+    ), originals[0] if originals else None)
     reference_pool = face_references or ([fallback_reference] if fallback_reference else [])
     primary_reference = reference_pool[0] if reference_pool else None
     portrait_reference_file = _copy_reference(primary_reference, output, "portrait")
@@ -863,12 +905,32 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
          else f"face_detected_fixed ({len(face_references)}장 평균)") if face_references
         else ("original_epub_scene" if originals else "cover_fallback")
     )
-    if force or "portrait" in force_keys or not _valid_image(portrait):
+    portrait_needed = force or "portrait" in force_keys or not _valid_image(portrait)
+    scene_target_keys = {
+        scene["key"] for scene in plan["selected"]
+        if force or scene["key"] in force_keys
+        or not _valid_image(output / _image_filename(scene["key"]))
+    }
+    progress_total = int(portrait_needed) + len(scene_target_keys)
+    progress_done = 0
+
+    def update_progress(current):
+        percent = round(progress_done / progress_total * 100) if progress_total else 100
+        manifest["job_progress"] = {
+            "done": progress_done, "total": progress_total,
+            "percent": min(100, percent), "current": current,
+        }
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    update_progress("준비 중" if progress_total else "완료 확인 중")
+    if portrait_needed:
+        update_progress("대표 초상화 생성 중")
         manifest["portrait_provider"] = generator(manifest["portrait_prompt"], portrait, reference_pool)
         if manifest["portrait_provider"] == "comfyui":
             manifest["portrait_effective_prompt"] = _LAST_GENERATION_META.get("effective_prompt", "")
             manifest["portrait_generation_settings"] = _LAST_GENERATION_META.get("generation_settings", {})
-        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        progress_done += 1
+        update_progress("대표 초상화 완료")
     # 이후 모든 장면은 portrait.png(없으면 위에서 고른 얼굴 사진)를 동일하게
     # 참조한다 — 장면마다 다른 원작 컷을 쓰지 않는다.
     fixed_reference_path = portrait if _valid_image(portrait) else primary_reference
@@ -878,6 +940,7 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
         target = output / filename
         try:
             if force or scene["key"] in force_keys or not _valid_image(target):
+                update_progress(f"장면 {progress_done + 1}/{progress_total} · {scene['key']}")
                 # 영어 통일 + 표정·배경 자동 보완(★ 2026-09-23 요청)은 실제로
                 # 새로 생성할 때만 호출한다 — 이미 만든 장면을 재실행할 때마다
                 # 다시 부르지 않는다.
@@ -897,12 +960,19 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
                 manifest["scenes"][scene["key"]].update(_LAST_GENERATION_META)
         except Exception as exc:
             manifest["errors"].append({"scene": scene["key"], "error": str(exc)[:500]})
+        if scene["key"] in scene_target_keys:
+            progress_done += 1
+            update_progress(f"장면 {progress_done}/{progress_total} 완료")
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     for scene_key, selected_key in plan["assignments"].items():
         record = manifest["scenes"].get(selected_key)
         if record and (output / record["file"]).is_file():
             manifest["assignments"][scene_key] = record["file"]
     manifest["status"] = "complete" if not manifest["errors"] else "partial"
+    manifest["job_progress"] = {
+        "done": progress_total, "total": progress_total, "percent": 100,
+        "current": "생성 완료" if not manifest["errors"] else "오류 포함 완료",
+    }
     manifest["updated_at"] = int(time.time())
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return manifest

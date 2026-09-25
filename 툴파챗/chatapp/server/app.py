@@ -198,9 +198,14 @@ WEBAPP_UPDATE_HISTORY = (
 
 def _git_update_history(limit=80):
     """main 저장소의 완료 커밋을 사용자용 업데이트 기록으로 변환한다."""
+    git = next((candidate for candidate in (
+        "/opt/homebrew/bin/git", "/usr/local/bin/git", shutil.which("git"),
+    ) if candidate and Path(candidate).is_file()), None)
+    if not git:
+        return []
     try:
         result = subprocess.run(
-            ["git", "log", f"-{limit}", "--date=iso-strict",
+            [git, "log", f"-{limit}", "--date=iso-strict",
              "--pretty=format:%x1e%H%x1f%cI%x1f%s", "--name-only", "--", "."],
             cwd=REPO_ROOT, capture_output=True, text=True, timeout=5, check=True,
         )
@@ -835,7 +840,9 @@ async def generate_mp3_lrc(request: Request, file: UploadFile = File(...)):
         Path("/opt/homebrew/share/whisper-cpp/models/ggml-small.bin"),
     ]
     model = next((candidate for candidate in model_candidates if candidate.is_file()), None)
-    ffmpeg = shutil.which("ffmpeg")
+    ffmpeg = next((candidate for candidate in (
+        "/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", shutil.which("ffmpeg"),
+    ) if candidate and Path(candidate).is_file()), None)
     if not whisper.is_file() or model is None or not ffmpeg:
         raise HTTPException(status_code=503, detail="Mac의 로컬 Whisper 또는 FFmpeg가 준비되지 않았습니다")
 
@@ -864,7 +871,7 @@ async def generate_mp3_lrc(request: Request, file: UploadFile = File(...)):
             raise HTTPException(status_code=422, detail="MP3 음성을 분석 형식으로 바꾸지 못했습니다")
         transcribed = await asyncio.to_thread(
             subprocess.run,
-            [str(whisper), "-m", str(model), "-f", str(wave), "-l", "auto", "-osrt", "-of", str(output_prefix)],
+            [str(whisper), "-m", str(model), "-f", str(wave), "-l", "ja", "-osrt", "-of", str(output_prefix)],
             capture_output=True, text=True, timeout=1800,
         )
         srt = output_prefix.with_suffix(".srt")
@@ -872,6 +879,8 @@ async def generate_mp3_lrc(request: Request, file: UploadFile = File(...)):
             raise HTTPException(status_code=422, detail="Whisper가 가사를 인식하지 못했습니다")
         try:
             lrc = mp3_player.srt_to_lrc(srt.read_text(encoding="utf-8"))
+            if mp3_player.lyric_line_count(lrc) < 2:
+                raise ValueError("노래 가사를 충분히 인식하지 못했습니다. 보컬이 더 선명한 파일이나 직접 받은 LRC를 사용해주세요")
         except (OSError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return Response(content=lrc, media_type="text/plain; charset=utf-8")
@@ -1387,13 +1396,26 @@ def _dating_sim_image_backlog_progress(state, running):
 
 
 def _dating_sim_image_job_status(book_id, work_dir):
+    progress = {"done": 0, "total": 0, "percent": 0, "current": "준비 중"}
+    try:
+        manifest_path = work_dir / "dating_sim_images" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        saved = manifest.get("job_progress") or {}
+        progress = {
+            "done": max(0, int(saved.get("done") or 0)),
+            "total": max(0, int(saved.get("total") or 0)),
+            "percent": max(0, min(100, int(saved.get("percent") or 0))),
+            "current": str(saved.get("current") or "생성 중"),
+        }
+    except (OSError, ValueError, TypeError):
+        pass
     with _dating_sim_image_jobs_lock:
         job = _dating_sim_image_jobs.get(book_id)
         if not job:
-            return {"running": False}
+            return {"running": False, **progress}
         returncode = job["process"].poll()
         if returncode is None:
-            return {"running": True, "started_at": job["started_at"]}
+            return {"running": True, "started_at": job["started_at"], **progress}
         del _dating_sim_image_jobs[book_id]
     job["log_file"].close()
     log_tail = ""
@@ -1403,7 +1425,7 @@ def _dating_sim_image_job_status(book_id, work_dir):
         pass
     return {
         "running": False, "returncode": returncode,
-        "started_at": job["started_at"], "log_tail": log_tail,
+        "started_at": job["started_at"], "log_tail": log_tail, **progress,
     }
 
 

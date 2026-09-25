@@ -306,6 +306,8 @@ class DatingImageAgentTests(unittest.TestCase):
             fake_translator = lambda scene, work_dir: scene["text"]
             first = images.run_agent(work, max_scenes=5, generator=fake_generator, translator=fake_translator)
             self.assertEqual(first["status"], "complete")
+            self.assertEqual(first["job_progress"]["percent"], 100)
+            self.assertEqual(first["job_progress"]["done"], first["job_progress"]["total"])
             first_call_count = len(calls)
             second = images.run_agent(work, max_scenes=5, generator=fake_generator, translator=fake_translator)
             self.assertEqual(second["status"], "complete")
@@ -335,6 +337,10 @@ class DatingImageAgentTests(unittest.TestCase):
             images.run_agent(work, max_scenes=5, generator=fake_generator, translator=fake_translator,
                               force_keys={"portrait"})
             self.assertEqual(calls, ["portrait.png"])
+            manifest = json.loads((work / "dating_sim_images" / "manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["job_progress"], {
+                "done": 1, "total": 1, "percent": 100, "current": "생성 완료",
+            })
             calls.clear()
 
             images.run_agent(work, max_scenes=5, generator=fake_generator, translator=fake_translator,

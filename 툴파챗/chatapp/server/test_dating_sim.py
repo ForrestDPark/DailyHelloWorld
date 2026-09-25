@@ -146,6 +146,12 @@ class DatingSimApiTests(unittest.TestCase):
 
             status = app.dating_sim_generate_images_status(owner, f"book:{book_id}")
             self.assertEqual(status["running"], True)
+            (work_dir / "dating_sim_images" / "manifest.json").write_text(json.dumps({
+                "job_progress": {"done": 3, "total": 10, "percent": 30, "current": "장면 4/10"},
+            }), encoding="utf-8")
+            status = app.dating_sim_generate_images_status(owner, f"book:{book_id}")
+            self.assertEqual(status["percent"], 30)
+            self.assertEqual(status["current"], "장면 4/10")
 
             with self.assertRaises(HTTPException) as busy:
                 app.dating_sim_generate_images_start(owner, f"book:{book_id}")
@@ -993,10 +999,11 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
             (work / "images").mkdir()
             for name in ("part1_scene001.jpg", "part1_scene002.jpg"):
                 (work / "images" / name).write_bytes(b"x" * 2048)
+            (work / "cover_original.jpg").write_bytes(b"cover" * 512)
             with patch.object(dating_sim_story, "resolve_book_work_dir", return_value=("6" * 20, work)):
                 listing = app.dating_sim_reference_candidates(owner, story_id)
                 self.assertEqual([c["name"] for c in listing["candidates"]],
-                                 ["part1_scene001.jpg", "part1_scene002.jpg"])
+                                 ["../cover_original.jpg", "part1_scene001.jpg", "part1_scene002.jpg"])
                 with self.assertRaises(HTTPException) as denied:
                     app.dating_sim_reference_candidates(request("plain"), story_id)
                 self.assertEqual(denied.exception.status_code, 403)
