@@ -1,4 +1,4 @@
-const CACHE_NAME = "tulpachat-shell-20260914-hanja-v3";
+const CACHE_NAME = "tulpachat-shell-20260925-shift-push-v1";
 const OFFLINE_URL = "/static/offline.html";
 
 // 서버 재시작 중에도 설치된 웹앱이 흰 화면만 보이지 않도록 정비 안내 화면은
@@ -34,6 +34,10 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(title, {
       body: data.body || "",
       tag: data.url || "tulpachat",
+      renotify: true,
+      vibrate: [250, 120, 250],
+      icon: "/static/app-icon-192.png",
+      badge: "/static/app-icon-192.png",
       data: { url: data.url || "/" },
     })
   );
