@@ -1817,11 +1817,6 @@ async function openStoryPopover(anchor) {
   pop.dataset.anchor = anchor.id;
   pop.replaceChildren(Object.assign(document.createElement("p"), { className: "story-popover-empty", textContent: "불러오는 중…" }));
   pop.classList.remove("hidden");
-  const rect = anchor.getBoundingClientRect();
-  const width = Math.min(320, window.innerWidth - 16);
-  pop.style.width = `${width}px`;
-  pop.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`;
-  pop.style.top = `${rect.bottom + 6}px`;
   let stories;
   try {
     stories = await loadPlayableStories(true);
@@ -1829,16 +1824,39 @@ async function openStoryPopover(anchor) {
     pop.replaceChildren(Object.assign(document.createElement("p"), { className: "story-popover-empty", textContent: e.message }));
     return;
   }
-  const head = Object.assign(document.createElement("strong"), { textContent: `미연시 ${stories.length}편 (완료 ${stories.filter((s) => s.ready).length}편)` });
+  const readyStories = stories.filter((item) => item.ready);
   const imageMissing = stories.filter((item) => item.scenario_ready && !item.images_ready);
+  const scenarioMissing = stories.filter((item) => !item.scenario_ready);
+  const head = document.createElement("header");
+  head.className = "story-popover-head";
+  const heading = document.createElement("div");
+  heading.innerHTML = `<strong>작품 제작 현황</strong><small>플레이 가능 여부와 내 진행 기록을 따로 표시합니다</small>`;
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "story-popover-close";
+  close.setAttribute("aria-label", "목록 닫기");
+  close.textContent = "×";
+  close.addEventListener("click", closeStoryPopover);
+  head.append(heading, close);
+  const summary = document.createElement("section");
+  summary.className = "story-status-summary";
+  for (const [label, value, tone] of [
+    ["전체 작품", stories.length, "all"], ["지금 플레이 가능", readyStories.length, "ready"],
+    ["이미지 준비 중", imageMissing.length, "images"], ["시나리오 준비 중", scenarioMissing.length, "scenario"],
+  ]) {
+    const chip = document.createElement("span");
+    chip.dataset.tone = tone;
+    chip.innerHTML = `<small>${label}</small><b>${value}편</b>`;
+    summary.append(chip);
+  }
   const bulk = document.createElement("section");
   bulk.className = "story-image-backlog";
   const bulkButton = document.createElement("button");
   bulkButton.type = "button";
-  bulkButton.textContent = `이미지 미완성 작품 ${imageMissing.length}편 생성`;
+  bulkButton.textContent = `이미지 준비 중 ${imageMissing.length}편 이어서 생성`;
   bulkButton.disabled = imageMissing.length === 0;
   const bulkStatus = document.createElement("span");
-  bulkStatus.textContent = imageMissing.length ? "ComfyUI로 빠진 이미지만 순서대로 생성합니다" : "이미지 생성이 모두 완료됐습니다";
+  bulkStatus.textContent = imageMissing.length ? "시나리오는 완성됐고 이미지가 부족한 작품만 처리합니다" : "이미지가 필요한 작품이 없습니다";
   const progress = document.createElement("div");
   progress.className = "story-image-progress";
   progress.setAttribute("role", "progressbar");
@@ -1908,6 +1926,29 @@ async function openStoryPopover(anchor) {
   });
   const list = document.createElement("div");
   list.className = "story-popover-list";
+  const filters = document.createElement("nav");
+  filters.className = "story-status-filters";
+  filters.setAttribute("aria-label", "작품 제작 상태 필터");
+  const filterDefinitions = [
+    ["ready", `플레이 가능 ${readyStories.length}`],
+    ["images", `이미지 준비 ${imageMissing.length}`],
+    ["scenario", `시나리오 준비 ${scenarioMissing.length}`],
+    ["all", `전체 ${stories.length}`],
+  ];
+  for (const [key, label] of filterDefinitions) {
+    const filter = document.createElement("button");
+    filter.type = "button";
+    filter.dataset.filter = key;
+    filter.textContent = label;
+    filter.classList.toggle("active", key === "ready");
+    filter.addEventListener("click", () => {
+      filters.querySelectorAll("button").forEach((item) => item.classList.toggle("active", item === filter));
+      list.querySelectorAll(".story-popover-item").forEach((item) => {
+        item.classList.toggle("hidden", key !== "all" && item.dataset.productionState !== key);
+      });
+    });
+    filters.append(filter);
+  }
   if (!stories.length) {
     list.append(Object.assign(document.createElement("p"), { className: "story-popover-empty", textContent: "서재에 미연시가 없습니다" }));
   }
@@ -1915,6 +1956,8 @@ async function openStoryPopover(anchor) {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "story-popover-item";
+    button.dataset.productionState = item.ready ? "ready" : item.scenario_ready ? "images" : "scenario";
+    button.classList.toggle("hidden", !item.ready);
     if (item.story_id === storyId) button.classList.add("current");
     if (item.character_image) {
       const img = document.createElement("img");
@@ -1929,22 +1972,25 @@ async function openStoryPopover(anchor) {
     const sourceTitle = document.createElement("span");
     sourceTitle.className = "story-popover-source";
     sourceTitle.textContent = item.source_title ? `원작 · ${item.source_title}` : "원작 정보 없음";
+    const production = document.createElement("em");
+    production.className = "story-production-status";
+    production.dataset.state = button.dataset.productionState;
+    production.textContent = item.ready ? "플레이 가능" : item.scenario_ready
+      ? `이미지 준비 중 · ${item.image_count}/42장` : "시나리오 준비 중";
     const status = document.createElement("small");
-    status.textContent = item.completed ? "엔딩 완료" : item.started ? `DAY ${item.day}/${item.total_days} 진행 중` : "새로 시작";
+    status.textContent = item.completed ? "내 진행 · 엔딩 완료" : item.started
+      ? `내 진행 · DAY ${item.day}/${item.total_days}` : "내 진행 · 아직 시작하지 않음";
     if (!item.ready) {
       // 이미지·시나리오가 덜 끝난 작품도 목록에 남기고 무엇이 모자란지 표시한다.
       const missing = [];
       if (!item.scenario_ready) missing.push("시나리오");
       if (!item.images_ready) missing.push(`이미지 ${item.image_count}/42`);
-      const badge = document.createElement("em");
-      badge.className = "story-popover-badge";
-      badge.textContent = `미완료 · ${missing.join(" · ")}`;
-      status.append(" ", badge);
+      status.title = `준비되지 않은 항목: ${missing.join(", ")}`;
       button.classList.add("incomplete");
     }
     const text = document.createElement("span");
     text.className = "story-popover-text";
-    text.append(name, sourceTitle, status);
+    text.append(name, sourceTitle, production, status);
     button.append(text);
     button.addEventListener("click", async () => {
       if (!item.ready) {
@@ -1961,7 +2007,7 @@ async function openStoryPopover(anchor) {
     });
     list.append(button);
   }
-  pop.replaceChildren(head, bulk, list);
+  pop.replaceChildren(head, summary, filters, bulk, list);
   pollBulk();
 }
 
