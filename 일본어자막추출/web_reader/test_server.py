@@ -149,10 +149,12 @@ class ReaderTests(unittest.TestCase):
             first = app.edge_tts("こんにちは", "ja-JP")
             second = app.edge_tts("こんにちは", "ja-JP")
             korean = app.edge_tts("안녕하세요", "ko-KR")
+            english = app.edge_tts("Good morning", "en-US")
         self.assertEqual(first, second)
         self.assertNotEqual(first, korean)
         self.assertEqual(FakeCommunicate.calls.count(("こんにちは", "ja-JP-NanamiNeural")), 1)
         self.assertIn(("안녕하세요", "ko-KR-SunHiNeural"), FakeCommunicate.calls)
+        self.assertIn(("Good morning", "en-US-JennyNeural"), FakeCommunicate.calls)
 
 
 if __name__ == "__main__": unittest.main()

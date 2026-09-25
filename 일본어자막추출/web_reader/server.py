@@ -428,7 +428,9 @@ class App:
             "cover_glyph": os.environ.get("WEB_READER_COVER_GLYPH", "本"),
             "dock_label": os.environ.get("WEB_READER_DOCK_LABEL", "서재"),
             "speech_language": os.environ.get("WEB_READER_SPEECH_LANGUAGE", "ja-JP"),
+            "speech_provider": "edge-tts",
         }
+        self.reader_config["speech_voice"] = self.edge_voice(self.reader_config["speech_language"])
         self.secret = load_secret(); self.library = Library(roots); self.store = Store(STATE_DIR / "reader.db")
         self.tts_cache = STATE_DIR / "edge_tts_cache"
         self.tts_cache.mkdir(parents=True, exist_ok=True)
