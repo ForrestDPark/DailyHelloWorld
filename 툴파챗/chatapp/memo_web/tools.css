@@ -162,3 +162,30 @@
   cursor: grabbing;
   transition: box-shadow .15s, transform .15s;
 }
+
+.memo-preview-dialog .dialog-head { align-items: flex-start; }
+.memo-preview-dialog .dialog-head > div { min-width: 0; }
+.memo-preview-dialog .dialog-head small {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: .16em;
+}
+.memo-preview-dialog .dialog-head h2 {
+  margin: 4px 0 5px;
+  overflow-wrap: anywhere;
+}
+.memo-preview-dialog time { color: var(--muted); font-size: 12px; }
+.memo-preview-content {
+  max-height: min(55vh, 520px);
+  margin-top: 18px;
+  padding: 16px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--panel) 88%, var(--bg));
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#preview-open { background: var(--accent); color: #fff; border-color: transparent; }
