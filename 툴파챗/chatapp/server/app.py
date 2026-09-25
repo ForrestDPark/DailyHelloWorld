@@ -39,6 +39,7 @@ import re
 import secrets
 import shutil
 import socket
+import ssl
 import sqlite3
 import subprocess
 import sys
@@ -61,7 +62,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from pywebpush import WebPushException, webpush
 
-from server import ai_keys, audio_editor, auth, battle_sim_story, dating_sim_story, mp3_player, oauth
+from server import ai_keys, audio_editor, auth, battle_sim_story, dating_audio, dating_sim_story, mp3_player, oauth
 from server.db import get_conn, init_db
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -74,6 +75,7 @@ VOCABULARY_WEB_DIR = BASE_DIR / "vocabulary_web"
 MEMO_WEB_DIR = BASE_DIR / "memo_web"
 DATING_SIM_WEB_DIR = BASE_DIR / "dating_sim_web"
 DATING_SIM_AUDIO_DIR = DATING_SIM_WEB_DIR / "audio"
+_dating_sim_tts_lock = threading.Lock()
 AUDIO_EDITOR_WEB_DIR = BASE_DIR / "audio_editor_web"
 MP3_PLAYER_WEB_DIR = BASE_DIR / "mp3_player_web"
 BATTLE_SIM_WEB_DIR = BASE_DIR / "battle_sim_web"
@@ -99,6 +101,10 @@ SHIFT_ALARM_OUT_LOG_FILE = Path(os.path.expanduser("~/Library/Logs/shift_alarm.o
 # 낮춰두면 정작 기상 알람이 조용히 지나갈 수 있다는 문제(★ 2026-09-23: "기상알람
 # 음량 설정할수있게끔 설정버튼 만들어줘" 요청).
 SHIFT_ALARM_WAKE_VOLUME_FILE = Path(os.path.expanduser("~/.shift_alarm_wake_volume.json"))
+SHIFT_ALARM_ROUTINE_HISTORY_FILE = Path(os.path.expanduser("~/.shift_alarm_routine_history.jsonl"))
+SHIFT_ALARM_ROUTINE_SIGNAL_FILE = Path(os.path.expanduser("~/.shift_alarm_routine_signal.json"))
+SHIFT_ALARM_HUE_CONFIG_FILE = Path(os.path.expanduser("~/.shift_alarm_hue.json"))
+SHIFT_ALARM_HUE_ROOM_NAME = "거실1"
 SHIFT_ALARM_NOTION_PAGE_ID = "3b532a1e-ae80-8034-90af-fd8c9b658711"
 SHIFT_ALARM_REMINDER_TIMES_PAGE_ID = "3d432a1e-ae80-8171-b8e1-e0d3c545a707"
 SUNZI_DISCUSSION_ROOM_ID = "custom_16ea779e1f"
@@ -169,6 +175,24 @@ SYSTEM_UPDATE_NOTIFICATIONS = (
         "body": "세로 스크롤·자동 읽기·현재 구절 강조와 후리가나 표시를 개선했습니다.",
         "url": "/epub/", "created_at": "2026-09-07T18:00:00+09:00",
     },
+)
+
+# 알림 읽음 여부와 무관하게 시스템 화면에서 계속 볼 수 있는 제품 변경 이력.
+# 사용자에게 의미 있는 완료 단위만 기록하고 최신순으로 반환한다.
+WEBAPP_UPDATE_HISTORY = (
+    {"created_at": "2026-09-25T11:25:00+09:00", "system": "툴파챗", "title": "전체 업데이트 타임라인", "body": "시스템 화면에서 Shift Alarm뿐 아니라 웹앱 전체 변경 내용을 최신순으로 확인할 수 있습니다.", "url": "/#systems"},
+    {"created_at": "2026-09-25T11:10:00+09:00", "system": "Shift Alarm", "title": "아이폰·Apple Watch 알림", "body": "맥 알림을 웹 푸시로 전달하고 아이폰·워치 알림 구독 버튼과 진동 요청을 추가했습니다.", "url": "/shift-alarm/"},
+    {"created_at": "2026-09-25T10:57:00+09:00", "system": "Shift Alarm", "title": "일일 루틴 알림 시각 학습", "body": "같은 근무 유형의 최근 전부 체크 완료 시각을 학습해 10분 전에 알립니다.", "url": "/shift-alarm/"},
+    {"created_at": "2026-09-25T10:35:00+09:00", "system": "Shift Alarm", "title": "리마인더 시각 자동 학습", "body": "모든 리마인더 체크 시각을 기록하고 다음 같은 근무 주기의 알림 시각에 반영합니다.", "url": "/shift-alarm/"},
+    {"created_at": "2026-09-25T09:55:00+09:00", "system": "Shift Alarm", "title": "AI 사용량과 생활 기록 UI", "body": "Codex·Claude 사용량을 정돈하고 운기조식·흡연 횟수와 마지막 기록 시각을 추가했습니다.", "url": "/shift-alarm/"},
+    {"created_at": "2026-09-25T09:30:00+09:00", "system": "Shift Alarm", "title": "북마크 관리 개선", "body": "최근 추가한 북마크가 먼저 보이며 검색어 중심 목록과 추가·수정·삭제를 지원합니다.", "url": "/shift-alarm/"},
+    {"created_at": "2026-09-25T09:15:00+09:00", "system": "Shift Alarm", "title": "모바일 패널 UI 정리", "body": "토글 높이·색상·배지 정렬을 통일하고 패널 순서를 직접 바꿀 수 있게 했습니다.", "url": "/shift-alarm/"},
+    {"created_at": "2026-09-25T09:05:00+09:00", "system": "손자병법", "title": "구절 휠 탐색 개선", "body": "현재 구절을 크게 표시하고 전후 구절을 시계 휠처럼 탐색하도록 개선했습니다.", "url": "/#sunzi"},
+    {"created_at": "2026-09-25T08:50:00+09:00", "system": "Shift Alarm", "title": "생활 리듬 그래프", "body": "기상·루틴 완료·리마인더 체크 시간을 기간별 그래프로 볼 수 있게 했습니다.", "url": "/shift-alarm/"},
+    {"created_at": "2026-09-24T12:10:00+09:00", "system": "일본어 학습", "title": "미연시 진행 상태와 학습 표현", "body": "제작 단계별 진행률·중단 이유·재실행과 장면 대사 기반 학습 표현을 보강했습니다.", "url": "/epub/"},
+    {"created_at": "2026-09-24T11:56:00+09:00", "system": "Shift Alarm", "title": "근무표와 오늘 근무 상세", "body": "오늘 근무 시간과 월간 D·S·G·휴무 근무표, 날짜별 리마인더를 함께 표시합니다.", "url": "/shift-alarm/"},
+    {"created_at": "2026-09-09T00:00:00+09:00", "system": "툴파챗", "title": "통합 알림 센터", "body": "시스템 업데이트와 읽지 않은 메시지를 한곳에서 확인할 수 있게 했습니다.", "url": "/#home"},
+    {"created_at": "2026-09-07T18:00:00+09:00", "system": "일본어 학습", "title": "EPUB 리더 개선", "body": "세로 스크롤·자동 읽기·현재 구절 강조와 후리가나 표시를 개선했습니다.", "url": "/epub/"},
 )
 
 SESSION_COOKIE_NAME = "tulpa_session"
@@ -627,7 +651,7 @@ def memo_dashboard(request: Request):
 @app.get("/memo/static/{filename}")
 def memo_static(filename: str, request: Request):
     _require_signed_in_user(request)
-    if filename not in {"style.css", "app.js", "manifest.webmanifest"}:
+    if filename not in {"style.css", "colors.css", "tools.css", "app.js", "manifest.webmanifest"}:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(MEMO_WEB_DIR / filename))
 
@@ -853,6 +877,48 @@ def dating_sim_audio(filename: str, request: Request):
     return FileResponse(str(target))
 
 
+@app.get("/api/dating-sim/tts")
+async def dating_sim_tts(
+    request: Request,
+    text: str = Query(min_length=1, max_length=400),
+    role: str = Query(default="female"),
+    language: str = Query(default="ja"),
+):
+    """매니페스트에 없는 대사도 Edge TTS로 즉시 만들어 재생한다.
+
+    작품별 생성 시나리오는 현재 약 2만 개 발화로 늘어 사전 생성 목록만으로는
+    누락이 생긴다. 로그인 사용자 요청만 받고, 언어·역할·본문 해시로 캐시해
+    같은 문장은 다시 생성하지 않는다.
+    """
+    _require_signed_in_user(request)
+    if role not in {"female", "male"}:
+        raise HTTPException(status_code=400, detail="지원하지 않는 음성 역할입니다")
+    if language not in {"ja", "ko", "en"}:
+        raise HTTPException(status_code=400, detail="지원하지 않는 음성 언어입니다")
+    cleaned = re.sub(r"\s+", " ", text).strip()
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="읽을 문장이 없습니다")
+    digest = hashlib.sha256(f"edge-v1\0{language}\0{role}\0{cleaned}".encode("utf-8")).hexdigest()[:20]
+    target = DATING_SIM_AUDIO_DIR / f"{digest}.mp3"
+
+    def ensure_clip():
+        if target.is_file() and target.stat().st_size:
+            return
+        with _dating_sim_tts_lock:
+            if target.is_file() and target.stat().st_size:
+                return
+            audio = dating_audio.request_edge_speech(role, cleaned, language=language)
+            temporary = target.with_suffix(".mp3.tmp")
+            temporary.write_bytes(audio)
+            temporary.replace(target)
+
+    try:
+        await asyncio.to_thread(ensure_clip)
+    except Exception as error:
+        raise HTTPException(status_code=502, detail="음성을 생성하지 못했습니다") from error
+    return FileResponse(str(target), media_type="audio/mpeg", headers={"Cache-Control": "private, max-age=31536000"})
+
+
 @app.get("/api/dating-sim/books/{book_id}/images/{filename}")
 def dating_sim_generated_image(book_id: str, filename: str, request: Request):
     """로그인 사용자에게 작품 이미지 에이전트가 등록한 결과만 제공한다."""
@@ -947,7 +1013,7 @@ def _dating_sim_row(conn, username, story):
 
 
 def _dating_materials(story):
-    """이야기 전체에서 실제로 쓰이는 고유 학습 단어·표현 목록."""
+    """이야기 전체에서 실제로 쓰이는 고유 학습 단어·표현·문법 목록."""
     materials = set()
     for day_scenes in story.get("scenes", {}).values():
         for scene in day_scenes.values():
@@ -1023,7 +1089,9 @@ def _dating_sim_state_payload(row, story, username=None):
     payload = {
         "story_id": story["id"], "story_title": story["title"],
         "source_title": story.get("source_title"),
-        "character_name": story["name"], "character_image": story.get("character_image"),
+        "character_name": story["name"],
+        "character_name_ko": story.get("character_name_ko", ""),
+        "character_image": story.get("character_image"),
         "day": current_day, "total_days": story["total_days"],
         "affection": row["affection"],
         "day_opening": day_opening,
@@ -1098,17 +1166,19 @@ def dating_sim_teacher_tip(request: Request, story_id: str | None = None):
         terms = []
         if row.get("pending_location") and not row.get("completed"):
             scene = story["scenes"].get(row["day"], {}).get(row["pending_location"], {})
+            for line in scene.get("lines") or []:
+                terms.append(("line", line))
             vocab_items = scene.get("vocab_words") or ([scene.get("vocab")] if scene.get("vocab") else [])
             for vocab in vocab_items:
                 if isinstance(vocab, dict):
-                    terms.extend([vocab.get("ja"), vocab.get("word")])
+                    terms.extend(("vocab", value) for value in (vocab.get("ja"), vocab.get("word")))
             for expression in scene.get("expressions_used") or []:
                 if isinstance(expression, dict):
-                    terms.extend([expression.get("ja"), expression.get("text")])
+                    terms.extend(("expression", value) for value in (expression.get("ja"), expression.get("text")))
                 else:
-                    terms.append(expression)
+                    terms.append(("expression", expression))
         candidates = conn.execute(
-            "SELECT content FROM messages WHERE sender=? ORDER BY id DESC LIMIT 500",
+            "SELECT id,room_id,content FROM messages WHERE sender=? ORDER BY id DESC LIMIT 500",
             ("일본어 선생님",),
         ).fetchall()
         persona = conn.execute(
@@ -1119,23 +1189,46 @@ def dating_sim_teacher_tip(request: Request, story_id: str | None = None):
     # 작품 제목만 같거나 짧은 번역어가 우연히 겹치는 것은 장면 관련 설명이
     # 아니다. 현재 장면에 실제로 쓰인 일본어 표기만 남기고, 한 글자짜리
     # 표기는 오탐 가능성이 높아 제외한다.
+    common_terms = {"今日", "昨日", "明日", "本当", "何か", "大丈夫", "自分", "時間", "一緒", "今から"}
     needles = []
-    for value in terms:
+    for kind, value in terms:
         term = str(value or "").strip()
         term = re.sub(r"\[([^\]|]+)\|[^\]]+\]", r"\1", term)
-        compact = re.sub(r"\s+", "", term)
+        term = re.sub(r"([\u3400-\u9fff々〆ヶ]+)\{[\u3040-\u30ffー]+\}", r"\1", term)
+        compact = re.sub(r"[\s、。！？!?「」『』…・]", "", term)
         has_kanji = bool(re.search(r"[\u3400-\u9fff]", compact))
         if not re.search(r"[\u3040-\u30ff\u3400-\u9fff]", compact):
             continue
+        if compact in common_terms:
+            continue
         if (has_kanji and len(compact) < 2) or (not has_kanji and len(compact) < 4):
             continue
-        if compact not in needles:
-            needles.append(compact)
+        if kind == "line" and len(compact) < 6:
+            continue
+        if not any(existing[1] == compact for existing in needles):
+            needles.append((kind, compact))
+    best = None
     for candidate in candidates:
         content = candidate["content"] or ""
-        matched = next((term for term in needles if term.casefold() in content.casefold()), None)
-        if not matched:
+        searchable = re.sub(r"\[([^\]|]+)\|[^\]]+\]", r"\1", content)
+        searchable = re.sub(r"([\u3400-\u9fff々〆ヶ]+)\{[\u3040-\u30ffー]+\}", r"\1", searchable)
+        searchable = re.sub(r"[\s、。！？!?「」『』…・]", "", searchable).casefold()
+        matches = [(kind, term) for kind, term in needles if term.casefold() in searchable]
+        score = sum(
+            (14 + len(term)) if kind == "line" else
+            (10 + len(term)) if kind == "expression" else (2 + min(len(term), 6))
+            for kind, term in matches
+        )
+        # 단어 하나만 우연히 겹친 메시지는 제외한다. 정확한 대사·표현 하나 또는
+        # 서로 다른 학습 단어 두 개 이상이 함께 있어야 장면 관련 설명으로 본다.
+        strong_match = any(kind in ("line", "expression") for kind, _term in matches)
+        if not strong_match and len(matches) < 2:
             continue
+        if best is None or score > best[0]:
+            best = (score, candidate, max(matches, key=lambda item: len(item[1]))[1])
+    if best:
+        _score, candidate, matched = best
+        content = candidate["content"] or ""
         clean = re.sub(r"https?://\S+", "", content)
         clean = re.sub(r"\[\[/?(?:blue|red)\]\]", "", clean)
         clean = re.sub(r"\s+", " ", clean).strip()
@@ -1151,8 +1244,11 @@ def dating_sim_teacher_tip(request: Request, story_id: str | None = None):
             "content": excerpt,
             "avatar_url": persona["avatar_url"] if persona else None,
             "matched_term": matched,
+            "source_room_id": candidate["room_id"],
+            "source_message_id": candidate["id"],
         }
-    return {"content": None, "avatar_url": persona["avatar_url"] if persona else None}
+    return {"content": None, "avatar_url": persona["avatar_url"] if persona else None,
+            "source_room_id": None, "source_message_id": None}
 
 
 @app.get("/api/dating-sim/scenario-tree")
@@ -1453,7 +1549,7 @@ def dating_sim_generate_missing_images_status(request: Request):
 # 못 돌아왔다). 리다이렉트를 없애고, 대신 진행 중인 만남 목록과 "새로운
 # 만남 시작" 선택지를 프론트(app.js)가 보여주게 두 엔드포인트를 추가한다.
 @app.get("/api/dating-sim/vocab-meaning")
-def dating_sim_vocab_meaning(request: Request, word: str):
+def dating_sim_vocab_meaning(request: Request, word: str, context: str = ""):
     """AI가 뜻을 직접 준 학습 단어가 아닌 한자 합성어 단어카드에서, 한자별
     뜻을 짜깁기하는 대신 단어 전체의 한국어 번역을 보여준다(★ 2026-09-23
     "한자 뜻 따로따로가아니라 한국말로번역한 뜻으로 다바꿔줘" 요청)."""
@@ -1461,7 +1557,9 @@ def dating_sim_vocab_meaning(request: Request, word: str):
     word = (word or "").strip()
     if not word or len(word) > 12:
         raise HTTPException(status_code=400, detail="단어 형식이 올바르지 않습니다")
-    return {"word": word, "meaning": dating_sim_story.translate_word_meaning(word)}
+    if len(context) > 500:
+        raise HTTPException(status_code=400, detail="문맥이 너무 깁니다")
+    return {"word": word, "meaning": dating_sim_story.translate_word_meaning(word, context)}
 
 
 @app.get("/api/dating-sim/encounters")
@@ -1820,7 +1918,7 @@ def shift_alarm_dashboard(request: Request):
 @app.get("/shift-alarm/static/{filename}")
 def shift_alarm_static(filename: str, request: Request):
     _require_owner(request)
-    if filename not in {"style.css", "enhancements.css", "app.js"}:
+    if filename not in {"style.css", "enhancements.css", "pipeline.css", "pipeline-recovery.css", "sunzi-wheel.css", "reminder-ui.css", "routine-chart.css", "shift-schedule.css", "shift-day-reminders.css", "home-control.css", "bottom-tabs.css", "panel-reorder.css", "panel-polish.css", "summary-actions.css", "app.js"}:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(SHIFT_ALARM_DASHBOARD_DIR / filename))
 
@@ -1954,6 +2052,29 @@ SHIFT_ALARM_SUBTITLE_PROGRESS_MARKERS = [
 ]
 
 
+def _process_is_alive(pid):
+    try:
+        os.kill(int(pid), 0)
+        return True
+    except (OSError, TypeError, ValueError):
+        return False
+
+
+def _shift_alarm_scenario_failure_reason(log_path=None):
+    """사용자에게 내부 로그 대신 복구에 필요한 원인만 짧게 알려준다."""
+    try:
+        tail = Path(log_path).read_text(encoding="utf-8", errors="ignore")[-12000:].lower()
+    except (OSError, TypeError):
+        tail = ""
+    if "usage limit" in tail or "rate limit" in tail or "quota" in tail or "429" in tail:
+        return "AI 사용량 한도 또는 요청 제한으로 시나리오 생성이 중단되었습니다. 잠시 후 다시 실행해주세요."
+    if "timed out" in tail or "timeout" in tail:
+        return "AI 응답 시간이 초과되어 시나리오 생성이 중단되었습니다. 다시 실행하면 기존 EPUB은 재사용합니다."
+    if "network" in tail or "connection" in tail:
+        return "네트워크 연결 문제로 시나리오 생성이 중단되었습니다. 연결을 확인한 뒤 다시 실행해주세요."
+    return "시나리오 생성 프로세스가 결과 파일을 만들기 전에 종료되었습니다. 기존 자막·번역·EPUB은 그대로 두고 이 단계만 다시 실행할 수 있습니다."
+
+
 def _shift_alarm_subtitle_log_progress(job_id):
     if not job_id:
         return None
@@ -1972,6 +2093,60 @@ def _shift_alarm_subtitle_log_progress(job_id):
         if marker in content and (best is None or percent > best[0]):
             best = (percent, stage)
     return best
+
+
+def _shift_alarm_subtitle_production_steps(status):
+    """자막 → 미연시 시나리오 → 이미지 생성의 실제 단계별 진행 상태."""
+    content = ""
+    job_id = status.get("job_id")
+    if job_id:
+        try:
+            matches = list(JP_SUBTITLE_LOG_DIR.glob(f"*_{job_id}.log"))
+            if matches:
+                content = matches[0].read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            pass
+    filename = status.get("filename") or ""
+    safe_name = re.sub(r"[^0-9A-Za-z가-힣._-]+", "_", Path(filename).stem).strip("_")
+    book_dir = JP_SUBTITLE_DIR / "library" / safe_name if safe_name else None
+    scenario_ready = bool(book_dir and (book_dir / "dating_sim_scenario.json").is_file())
+    scenario_retry_state = status.get("scenario_retry_state")
+    scenario_running = (
+        scenario_retry_state == "running"
+        or ("미연시 시나리오 생성 중" in content and not scenario_ready
+            and status.get("state") == "running" and _shift_alarm_subtitle_pipeline_alive())
+    )
+    scenario_failed = not scenario_ready and (
+        scenario_retry_state == "failed"
+        or ("미연시 시나리오 생성 중" in content and not scenario_running)
+    )
+    image_current = image_target = 0
+    images_complete = "작품 이미지 생성·미연시 연결 완료" in content
+    if book_dir:
+        try:
+            manifest = json.loads((book_dir / "dating_sim_images" / "manifest.json").read_text(encoding="utf-8"))
+            image_target = int(manifest.get("selected_count") or 0)
+            image_current = len(manifest.get("scenes") or [])
+            images_complete = images_complete or bool(image_target and image_current >= image_target)
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            pass
+    image_running = scenario_ready and not images_complete and (
+        "작품 이미지 에이전트" in content or "미연시 시나리오 생성 완료" in content
+    )
+    subtitle_complete = scenario_running or scenario_ready or "미연시 시나리오 생성 중" in content
+    pipeline_state = status.get("state", "idle")
+    return [
+        {"key": "subtitle", "label": "자막·번역·EPUB", "state": "complete" if subtitle_complete or pipeline_state == "complete" else pipeline_state,
+         "progress": 100 if subtitle_complete or pipeline_state == "complete" else min(100, int(status.get("progress") or 0))},
+        {"key": "scenario", "label": "미연시 시나리오",
+         "state": "complete" if scenario_ready else "running" if scenario_running else "failed" if scenario_failed else "pending",
+         "progress": 100 if scenario_ready else 45 if scenario_running or scenario_failed else 0,
+         "reason": status.get("scenario_retry_reason") or (_shift_alarm_scenario_failure_reason() if scenario_failed else None),
+         "retryable": scenario_failed},
+        {"key": "images", "label": "미연시 이미지", "state": "complete" if images_complete else "running" if image_running else "pending",
+         "progress": 100 if images_complete else round(image_current / image_target * 100) if image_target else 10 if image_running else 0,
+         "current": image_current, "total": image_target},
+    ]
 
 
 def _shift_alarm_subtitle_write_status(status):
@@ -2091,6 +2266,25 @@ def _shift_alarm_subtitle_status():
             subtitle_progress=status.get("progress") or 0, subtitle_stage=status.get("stage"),
             subtitle_completed_at=status.get("completed_at"),
         )
+    if status.get("scenario_retry_state") == "running":
+        safe_name = re.sub(
+            r"[^0-9A-Za-z가-힣._-]+", "_", Path(status.get("filename") or "").stem
+        ).strip("_")
+        scenario_path = JP_SUBTITLE_DIR / "library" / safe_name / "dating_sim_scenario.json"
+        if safe_name and scenario_path.is_file():
+            status.update(
+                scenario_retry_state="complete", scenario_retry_reason=None,
+                scenario_retry_completed_at=_now(), updated_at=_now(),
+            )
+            _shift_alarm_subtitle_write_status(status)
+        elif not _process_is_alive(status.get("scenario_retry_pid")):
+            reason = _shift_alarm_scenario_failure_reason(status.get("scenario_retry_log"))
+            status.update(
+                scenario_retry_state="failed", scenario_retry_reason=reason,
+                updated_at=_now(),
+            )
+            _shift_alarm_subtitle_write_status(status)
+    status["production_steps"] = _shift_alarm_subtitle_production_steps(status)
     return status
 
 
@@ -2532,6 +2726,36 @@ def _shift_alarm_elmedia_running():
     return result.returncode == 0
 
 
+SHIFT_ALARM_ELMEDIA_STATUS_HELPER = REPO_ROOT / "shift_alarm" / "ElmediaStatusHelper.app"
+SHIFT_ALARM_ELMEDIA_STATUS_FILE = Path(os.path.expanduser("~/.shift_alarm_elmedia_status.txt"))
+
+
+def _shift_alarm_elmedia_playing():
+    """Elmedia 창 존재가 아니라 실제 재생 상태를 helper의 UI 신호로 확인한다."""
+    if not _shift_alarm_elmedia_running() or not SHIFT_ALARM_ELMEDIA_STATUS_HELPER.exists():
+        return False
+    SHIFT_ALARM_ELMEDIA_STATUS_FILE.unlink(missing_ok=True)
+    try:
+        subprocess.Popen(
+            ["/usr/bin/open", "-na", str(SHIFT_ALARM_ELMEDIA_STATUS_HELPER)],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        return False
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        if SHIFT_ALARM_ELMEDIA_STATUS_FILE.is_file():
+            time.sleep(0.1)
+            try:
+                return "elapsed time" in SHIFT_ALARM_ELMEDIA_STATUS_FILE.read_text(
+                    encoding="utf-8", errors="ignore"
+                ).lower()
+            except OSError:
+                return False
+        time.sleep(0.1)
+    return False
+
+
 # ★ 2026-09-14: "재생중일때 일시정지랑 다음곡 이전곡 넘어가는 버튼도있으면
 # 좋겠어" — Elmedia는 샌드박스 빌드라 표준 AppleScript pause 동사가 없어서
 # (shift_alarm.py의 ★2026-08-29 항목과 같은 제약) 시스템 전체 미디어 키
@@ -2644,6 +2868,53 @@ def _shift_alarm_set_volume(percent):
     return percent
 
 
+def _shift_alarm_hue_grouped_light():
+    try:
+        config = json.loads(SHIFT_ALARM_HUE_CONFIG_FILE.read_text(encoding="utf-8"))
+        ip, app_key = config["ip"], config["app_key"]
+    except (FileNotFoundError, OSError, KeyError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=503, detail="Hue 연결 정보가 없습니다") from exc
+    context = ssl._create_unverified_context()
+    headers = {"hue-application-key": app_key}
+    base = f"https://{ip}/clip/v2/resource"
+    try:
+        request = urllib.request.Request(f"{base}/room", headers=headers)
+        with urllib.request.urlopen(request, timeout=10, context=context) as response:
+            rooms = json.load(response).get("data", [])
+    except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=503, detail="Hue Bridge에 연결하지 못했습니다") from exc
+    room = next((item for item in rooms if item.get("metadata", {}).get("name") == SHIFT_ALARM_HUE_ROOM_NAME), None)
+    grouped_id = next((service.get("rid") for service in (room or {}).get("services", []) if service.get("rtype") == "grouped_light"), None)
+    if not grouped_id:
+        raise HTTPException(status_code=404, detail=f"Hue {SHIFT_ALARM_HUE_ROOM_NAME} 조명을 찾지 못했습니다")
+    return f"{base}/grouped_light/{grouped_id}", headers, context
+
+
+def _shift_alarm_hue_state():
+    url, headers, context = _shift_alarm_hue_grouped_light()
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=10, context=context) as response:
+            payload = json.load(response)
+    except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=503, detail="조명 상태를 확인하지 못했습니다") from exc
+    if payload.get("errors") or not payload.get("data"):
+        raise HTTPException(status_code=503, detail="조명 상태를 확인하지 못했습니다")
+    return bool(payload["data"][0].get("on", {}).get("on"))
+
+
+def _shift_alarm_set_hue_power(on):
+    url, headers, context = _shift_alarm_hue_grouped_light()
+    request = urllib.request.Request(url, data=json.dumps({"on": {"on": bool(on)}}).encode("utf-8"), method="PUT", headers={**headers, "Content-Type": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=10, context=context) as response:
+            payload = json.load(response)
+    except (OSError, urllib.error.URLError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=503, detail="조명 전원을 변경하지 못했습니다") from exc
+    if payload.get("errors"):
+        raise HTTPException(status_code=503, detail="조명 전원을 변경하지 못했습니다")
+    return bool(on)
+
+
 def _read_shift_alarm_status():
     saw_file = False
     for status_file in (SHIFT_ALARM_STATUS_FILE, SHIFT_ALARM_STATUS_FALLBACK_FILE):
@@ -2659,6 +2930,203 @@ def _read_shift_alarm_status():
             return payload
     detail = "Shift Alarm 상태 파일을 읽을 수 없습니다" if saw_file else "Shift Alarm 상태 파일이 아직 없습니다"
     raise HTTPException(status_code=503, detail=detail)
+
+
+def _record_shift_alarm_routine_completion(status, source="web_check_all"):
+    routine_date = status.get("routine_date")
+    completed_at = datetime.datetime.now().isoformat(timespec="seconds")
+    event = {
+        "event_type": "routine_complete",
+        "routine_date": routine_date,
+        "wake_time": status.get("wake_time"),
+        "completed_at": completed_at,
+        "source": source,
+    }
+    if not routine_date:
+        return False
+    try:
+        SHIFT_ALARM_ROUTINE_HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with SHIFT_ALARM_ROUTINE_HISTORY_FILE.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(event, ensure_ascii=False) + "\n")
+        return True
+    except OSError:
+        return False
+
+
+def _write_shift_alarm_routine_signal(status, completed_at=None):
+    """웹 전부 체크 완료를 같은 Mac의 메뉴바 앱에 즉시 전달한다."""
+    completed_at = completed_at or datetime.datetime.now().isoformat(timespec="seconds")
+    payload = {
+        "routine_date": status.get("routine_date"),
+        "completed_at": completed_at,
+        "source": "web_check_all",
+    }
+    if not payload["routine_date"]:
+        return False
+    try:
+        SHIFT_ALARM_ROUTINE_SIGNAL_FILE.parent.mkdir(parents=True, exist_ok=True)
+        temporary = SHIFT_ALARM_ROUTINE_SIGNAL_FILE.with_suffix(".tmp")
+        temporary.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+        temporary.replace(SHIFT_ALARM_ROUTINE_SIGNAL_FILE)
+        return True
+    except OSError:
+        return False
+
+
+def _record_shift_alarm_reminder_check(status, label, source="web_reminder", checked_at=None):
+    """모든 리마인더 체크 시각을 append-only로 보존한다."""
+    checked_at = checked_at or datetime.datetime.now()
+    event = {
+        "event_type": "reminder_checked",
+        "routine_date": status.get("date") or checked_at.date().isoformat(),
+        "checked_at": checked_at.isoformat(timespec="seconds"),
+        "label": str(label),
+        "wake_time": status.get("wake_time"),
+        "source": source,
+    }
+    try:
+        SHIFT_ALARM_ROUTINE_HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with SHIFT_ALARM_ROUTINE_HISTORY_FILE.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(event, ensure_ascii=False) + "\n")
+        return True
+    except OSError:
+        return False
+
+
+def _learn_shift_alarm_reminder_time(status, label, checked_at=None):
+    """체크한 시각을 현재 근무 프로필의 다음 알림 시각으로 저장한다."""
+    checked_at = checked_at or datetime.datetime.now()
+    merged = _merge_reminder_editor(status)
+    item = next((entry for entry in merged.get("reminder_schedule", [])
+                 if entry.get("label") == label), None)
+    if not item or not item.get("key"):
+        return False
+    profile = status.get("reminder_time_profile")
+    if profile not in SHIFT_ALARM_TIME_PROFILES:
+        profile = "시각"
+    editor = _read_reminder_editor()
+    override = editor["items"].get(item["key"], {})
+    override = dict(override) if isinstance(override, dict) else {}
+    learned_time = {"hour": checked_at.hour, "minute": checked_at.minute}
+    if profile == "시각":
+        override["time"] = learned_time
+    else:
+        profile_times = dict(override.get("profile_times", {}))
+        profile_times[profile] = learned_time
+        override["profile_times"] = profile_times
+    override["last_checked_at"] = checked_at.isoformat(timespec="seconds")
+    editor["items"][item["key"]] = override
+    _write_reminder_editor(editor)
+    return True
+
+
+def _record_shift_alarm_habit_click(kind):
+    labels = {"breathing": "운기조식", "smoking": "흡연"}
+    if kind not in labels:
+        raise HTTPException(status_code=422, detail="지원하지 않는 기록 종류입니다")
+    clicked_at = datetime.datetime.now()
+    event = {
+        "event_type": "habit_click",
+        "routine_date": clicked_at.date().isoformat(),
+        "clicked_at": clicked_at.isoformat(timespec="seconds"),
+        "kind": kind,
+        "label": labels[kind],
+        "source": "shift_alarm_dashboard",
+    }
+    try:
+        SHIFT_ALARM_ROUTINE_HISTORY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with SHIFT_ALARM_ROUTINE_HISTORY_FILE.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(event, ensure_ascii=False) + "\n")
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail="생활 기록을 저장하지 못했습니다") from exc
+    return event
+
+
+def _read_shift_alarm_routine_history(limit=30):
+    by_date = {}
+    try:
+        lines = SHIFT_ALARM_ROUTINE_HISTORY_FILE.read_text(encoding="utf-8").splitlines()
+    except (FileNotFoundError, OSError):
+        lines = []
+    for line in lines:
+        try:
+            item = json.loads(line)
+            routine_date = item.get("routine_date")
+            event_type = item.get("event_type", "routine_complete")
+            timestamp_key = "clicked_at" if event_type == "habit_click" else (
+                "checked_at" if event_type in ("melatonin_checked", "reminder_checked") else "completed_at"
+            )
+            event_at = datetime.datetime.fromisoformat(item.get(timestamp_key, ""))
+        except (json.JSONDecodeError, TypeError, ValueError):
+            continue
+        if not routine_date:
+            continue
+        day = by_date.setdefault(routine_date, {})
+        if event_type == "reminder_checked":
+            day.setdefault("reminder_checked", []).append((event_at, item))
+            continue
+        if event_type == "habit_click":
+            day.setdefault("habit_click", []).append((event_at, item))
+            continue
+        if event_type == "routine_complete":
+            latest = day.get("routine_complete_latest")
+            if latest is None or event_at > latest[0]:
+                day["routine_complete_latest"] = (event_at, item)
+        previous = day.get(event_type)
+        if previous is None or event_at < previous[0]:
+            day[event_type] = (event_at, item)
+    records = []
+    for routine_date, events in sorted(by_date.items(), reverse=True)[:limit]:
+        routine_event = events.get("routine_complete")
+        melatonin_event = events.get("melatonin_checked")
+        reminder_events = sorted(events.get("reminder_checked", []), key=lambda pair: pair[0])
+        habit_clicks = sorted(events.get("habit_click", []), key=lambda pair: pair[0])
+        completed_at, routine_item = routine_event if routine_event else (None, {})
+        latest_completed = events.get("routine_complete_latest")
+        latest_completed_at = latest_completed[0] if latest_completed else completed_at
+        melatonin_at, _melatonin_item = melatonin_event if melatonin_event else (None, {})
+        reminder_checks = [{
+            "label": event.get("label", "리마인더"),
+            "checked_at": event_at.isoformat(timespec="seconds"),
+            "time": event_at.strftime("%H:%M"),
+        } for event_at, event in reminder_events]
+        habit_events = [{
+            "kind": event.get("kind"),
+            "label": event.get("label") or ("운기조식" if event.get("kind") == "breathing" else "흡연"),
+            "clicked_at": event_at.isoformat(timespec="seconds"),
+            "time": event_at.strftime("%H:%M:%S"),
+        } for event_at, event in habit_clicks]
+        if not melatonin_at:
+            melatonin_at = next(
+                (event_at for event_at, event in reminder_events if "멜라토닌" in str(event.get("label"))),
+                None,
+            )
+        wake_time = routine_item.get("wake_time") or next(
+            (event.get("wake_time") for _at, event in reminder_events if event.get("wake_time")), None
+        )
+        minutes_after_wake = None
+        if wake_time and completed_at:
+            try:
+                wake_at = datetime.datetime.combine(
+                    datetime.date.fromisoformat(routine_date),
+                    datetime.time.fromisoformat(wake_time),
+                )
+                minutes_after_wake = max(0, round((completed_at - wake_at).total_seconds() / 60))
+            except (TypeError, ValueError):
+                pass
+        records.append({
+            "routine_date": routine_date,
+            "wake_time": wake_time,
+            "completed_at": completed_at.isoformat(timespec="seconds") if completed_at else None,
+            "completed_time": completed_at.strftime("%H:%M") if completed_at else None,
+            "latest_completed_time": latest_completed_at.strftime("%H:%M") if latest_completed_at else None,
+            "melatonin_checked_at": melatonin_at.isoformat(timespec="seconds") if melatonin_at else None,
+            "melatonin_time": melatonin_at.strftime("%H:%M") if melatonin_at else None,
+            "reminder_checks": reminder_checks,
+            "habit_events": habit_events,
+            "minutes_after_wake": minutes_after_wake,
+        })
+    return records
 
 
 def _read_reminder_editor():
@@ -3109,6 +3577,10 @@ def update_shift_alarm_reminder_check(body: ReminderCheckUpdate, request: Reques
     _notion_request(token, f"blocks/{target['id']}", "PATCH", {"to_do": {
         "rich_text": target.get("to_do", {}).get("rich_text", []), "checked": body.checked,
     }})
+    if body.checked:
+        checked_at = datetime.datetime.now()
+        _record_shift_alarm_reminder_check(status, body.label, checked_at=checked_at)
+        _learn_shift_alarm_reminder_time(status, body.label, checked_at)
     return {"ok": True, "label": body.label, "checked": body.checked}
 
 
@@ -3178,7 +3650,26 @@ def check_all_shift_alarm_routine(request: Request):
         if rollback_failed:
             detail = "일일 루틴이 일부만 반영됐을 수 있습니다. Notion에서 확인해주세요"
         raise HTTPException(status_code=502, detail=detail) from exc
+    completed_at = datetime.datetime.now().isoformat(timespec="seconds")
+    _record_shift_alarm_routine_completion(status)
+    _write_shift_alarm_routine_signal(status, completed_at)
     return {"ok": True, "updated": len(targets)}
+
+
+@app.get("/api/shift-alarm/routine-history")
+def get_shift_alarm_routine_history(request: Request, limit: int = Query(30, ge=7, le=366)):
+    _require_owner(request)
+    return {"records": _read_shift_alarm_routine_history(limit)}
+
+
+class ShiftAlarmHabitClickRequest(BaseModel):
+    kind: str
+
+
+@app.post("/api/shift-alarm/habit-click")
+def record_shift_alarm_habit_click(body: ShiftAlarmHabitClickRequest, request: Request):
+    _require_owner(request)
+    return {"ok": True, "event": _record_shift_alarm_habit_click(body.kind)}
 
 
 def _sunzi_light_pipeline_state(conn):
@@ -3373,6 +3864,22 @@ def get_shift_alarm_volume(request: Request):
     return {"percent": percent}
 
 
+class ShiftAlarmLightRequest(BaseModel):
+    on: bool
+
+
+@app.get("/api/shift-alarm/home/light")
+def get_shift_alarm_light(request: Request):
+    _require_owner(request)
+    return {"room": SHIFT_ALARM_HUE_ROOM_NAME, "on": _shift_alarm_hue_state()}
+
+
+@app.put("/api/shift-alarm/home/light")
+def set_shift_alarm_light(body: ShiftAlarmLightRequest, request: Request):
+    _require_owner(request)
+    return {"ok": True, "room": SHIFT_ALARM_HUE_ROOM_NAME, "on": _shift_alarm_set_hue_power(body.on)}
+
+
 class ShiftAlarmVolumeRequest(BaseModel):
     percent: Optional[int] = None
     delta: Optional[int] = None
@@ -3420,8 +3927,8 @@ def shift_alarm_now_playing(request: Request):
     # 없다. 실행 중 여부(pgrep)와 마지막으로 우리가 연 재생목록 기록을 합쳐
     # 근사한다 — Elmedia가 떠 있지 않으면 재생목록도 의미 없으니 null.
     _require_owner(request)
-    running = _shift_alarm_elmedia_running()
-    return {"running": running, "playlist": _shift_alarm_load_now_playing() if running else None}
+    playing = _shift_alarm_elmedia_playing()
+    return {"running": playing, "playlist": _shift_alarm_load_now_playing() if playing else None}
 
 
 @app.post("/api/shift-alarm/media/open-sites")
@@ -3690,6 +4197,37 @@ def act_on_shift_alarm_library_video(file_id: str, body: ShiftAlarmVideoActionRe
             subtitle_started_at=_now(), subtitle_completed_at=None,
         )
         return {"ok": True, "message": f"{path.name} 자막 추출을 시작했습니다. Mac에서 새 터미널 창이 열립니다."}
+    if body.action == "retry_dating_scenario":
+        status = _shift_alarm_subtitle_status()
+        if status.get("file_id") != file_id:
+            raise HTTPException(status_code=409, detail="현재 표시된 작업과 영상이 일치하지 않습니다")
+        if status.get("scenario_retry_state") == "running" and _process_is_alive(status.get("scenario_retry_pid")):
+            raise HTTPException(status_code=409, detail="미연시 시나리오를 이미 다시 생성하고 있습니다")
+        safe_name = re.sub(r"[^0-9A-Za-z가-힣._-]+", "_", path.stem).strip("_")
+        book_dir = JP_SUBTITLE_DIR / "library" / safe_name
+        generator = JP_SUBTITLE_DIR / "generate_dating_sim_scenario.py"
+        if not book_dir.is_dir():
+            raise HTTPException(status_code=409, detail="완성된 자막·번역·EPUB 폴더를 찾을 수 없습니다")
+        if not generator.is_file():
+            raise HTTPException(status_code=503, detail="미연시 시나리오 생성기를 찾을 수 없습니다")
+        log_path = book_dir / "dating_sim_scenario_retry.log"
+        try:
+            log_handle = open(log_path, "ab", buffering=0)
+            process = subprocess.Popen(
+                ["/opt/anaconda3/bin/python3", str(generator), str(book_dir)],
+                stdin=subprocess.DEVNULL, stdout=log_handle, stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+            log_handle.close()
+        except OSError as exc:
+            raise HTTPException(status_code=503, detail="미연시 시나리오 재실행을 시작하지 못했습니다") from exc
+        status.update(
+            scenario_retry_state="running", scenario_retry_pid=process.pid,
+            scenario_retry_log=str(log_path), scenario_retry_reason=None,
+            scenario_retry_started_at=_now(), updated_at=_now(),
+        )
+        _shift_alarm_subtitle_write_status(status)
+        return {"ok": True, "message": "기존 자막·번역·EPUB을 유지하고 미연시 시나리오만 다시 시작했습니다."}
     if body.action == "mark_photo_shortcut":
         executed_at = _now()
         _shift_alarm_update_processing(file_id, path.name, photo_shortcut_at=executed_at)
@@ -5253,10 +5791,14 @@ class MemoDocumentUpdate(BaseModel):
 class MemoNodeCreate(BaseModel):
     parent_id: Optional[int] = None
     content: str
+    position_x: Optional[float] = None
+    position_y: Optional[float] = None
 
 
 class MemoNodeUpdate(BaseModel):
     content: str
+    position_x: Optional[float] = None
+    position_y: Optional[float] = None
 
 
 def _memo_user(request):
@@ -5278,7 +5820,7 @@ def _memo_document_payload(conn, username):
     ids = [document["id"] for document in documents]
     placeholders = ",".join("?" for _ in ids)
     nodes = [dict(row) for row in conn.execute(
-        f"""SELECT id,memo_id,parent_id,content,sort_order,created_at,updated_at
+        f"""SELECT id,memo_id,parent_id,content,sort_order,position_x,position_y,created_at,updated_at
             FROM memo_nodes WHERE memo_id IN ({placeholders})
             ORDER BY sort_order,id""", ids
     ).fetchall()]
@@ -5380,9 +5922,11 @@ def create_memo_node(memo_id: int, body: MemoNodeCreate, request: Request):
     if body.parent_id is not None and not conn.execute("SELECT 1 FROM memo_nodes WHERE id=? AND memo_id=?", (body.parent_id, memo_id)).fetchone():
         conn.close(); raise HTTPException(status_code=400, detail="상위 메모가 올바르지 않습니다")
     order = conn.execute("SELECT COALESCE(MAX(sort_order),-1)+1 AS n FROM memo_nodes WHERE memo_id=? AND parent_id IS ?", (memo_id, body.parent_id)).fetchone()["n"]
+    position_x = body.position_x if body.position_x is None else max(100, min(2300, body.position_x))
+    position_y = body.position_y if body.position_y is None else max(80, min(1720, body.position_y))
     now = _now(); cursor = conn.execute(
-        "INSERT INTO memo_nodes(memo_id,parent_id,content,sort_order,created_at,updated_at) VALUES(?,?,?,?,?,?)",
-        (memo_id, body.parent_id, content, order, now, now),
+        "INSERT INTO memo_nodes(memo_id,parent_id,content,sort_order,position_x,position_y,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?)",
+        (memo_id, body.parent_id, content, order, position_x, position_y, now, now),
     ); conn.execute("UPDATE memo_documents SET updated_at=? WHERE id=?", (now, memo_id)); conn.commit(); node_id = cursor.lastrowid; conn.close()
     return {"ok": True, "id": node_id}
 
@@ -5394,7 +5938,13 @@ def update_memo_node(node_id: int, body: MemoNodeUpdate, request: Request):
     conn = get_conn(); row = conn.execute("""SELECT n.memo_id FROM memo_nodes n JOIN memo_documents m ON m.id=n.memo_id
         WHERE n.id=? AND m.username=?""", (node_id, user["username"])).fetchone()
     if not row: conn.close(); raise HTTPException(status_code=404, detail="파생 메모를 찾을 수 없습니다")
-    now = _now(); conn.execute("UPDATE memo_nodes SET content=?,updated_at=? WHERE id=?", (content, now, node_id)); conn.execute("UPDATE memo_documents SET updated_at=? WHERE id=?", (now, row["memo_id"])); conn.commit(); conn.close()
+    now = _now()
+    if body.position_x is not None and body.position_y is not None:
+        position_x = max(100, min(2300, body.position_x)); position_y = max(80, min(1720, body.position_y))
+        conn.execute("UPDATE memo_nodes SET content=?,position_x=?,position_y=?,updated_at=? WHERE id=?", (content, position_x, position_y, now, node_id))
+    else:
+        conn.execute("UPDATE memo_nodes SET content=?,updated_at=? WHERE id=?", (content, now, node_id))
+    conn.execute("UPDATE memo_documents SET updated_at=? WHERE id=?", (now, row["memo_id"])); conn.commit(); conn.close()
     return {"ok": True}
 
 
@@ -6205,6 +6755,18 @@ def _delete_custom_room(conn, room_id):
     conn.execute("DELETE FROM room_restart_notice WHERE room_id = ?", (room_id,))
 
 
+def _clear_persona_room(conn, room_id):
+    """파생되는 페르소나 1:1 방은 페르소나 자체를 지우지 않고 대화만 비운다."""
+    conn.execute("DELETE FROM messages WHERE room_id = ?", (room_id,))
+    conn.execute("DELETE FROM pending_turns WHERE room_id = ?", (room_id,))
+    conn.execute("DELETE FROM room_invites WHERE room_id = ?", (room_id,))
+    conn.execute("DELETE FROM room_persona_exclusions WHERE room_id = ?", (room_id,))
+    conn.execute("DELETE FROM room_notices WHERE room_id = ?", (room_id,))
+    conn.execute("DELETE FROM room_restart_notice WHERE room_id = ?", (room_id,))
+    conn.execute("DELETE FROM room_read_state WHERE room_id = ?", (room_id,))
+    conn.execute("DELETE FROM user_room_backgrounds WHERE room_id = ?", (room_id,))
+
+
 @app.post("/api/rooms/{room_id}/leave")
 def leave_room(room_id: str, request: Request):
     """"채팅방 나가기 기능 있게 해달라" 요청(2026-08-28). 내가 만든 방이
@@ -6277,6 +6839,15 @@ def delete_room(room_id: str, request: Request):
     conn = get_conn()
     row = conn.execute("SELECT owner_username FROM custom_rooms WHERE room_id = ?", (room_id,)).fetchone()
     if not row:
+        persona = conn.execute("SELECT owner_username FROM personas WHERE name = ?", (room_id,)).fetchone()
+        if persona:
+            if not (is_owner_request or persona["owner_username"] == username):
+                conn.close()
+                raise HTTPException(status_code=403, detail="이 대화를 삭제할 권한이 없습니다")
+            _clear_persona_room(conn, room_id)
+            conn.commit()
+            conn.close()
+            return {"ok": True, "cleared": True}
         if room_id != GROUP_ROOM_ID and _is_notion_group_room(conn, room_id):
             if not is_owner_request:
                 conn.close()
@@ -6642,6 +7213,13 @@ def list_rooms(request: Request):
 
 class NotificationReadUpdate(BaseModel):
     notification_id: str
+
+
+@app.get("/api/system/updates")
+def get_system_updates(request: Request):
+    """웹앱 전체의 사용자용 변경 이력을 최신순으로 반환한다."""
+    _require_signed_in_user(request)
+    return {"items": sorted(WEBAPP_UPDATE_HISTORY, key=lambda item: item["created_at"], reverse=True)}
 
 
 @app.get("/api/notifications")

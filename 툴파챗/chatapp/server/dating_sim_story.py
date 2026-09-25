@@ -772,6 +772,11 @@ def _load_work_vocabulary(title):
 # 단어 하나의 사전적 뜻을 보여주는 보조 기능이라 오역의 파급력이 훨씬 작다.
 DATING_SIM_WORD_MEANING_CACHE = Path(os.path.expanduser("~/.tulpachat/dating_sim_word_meanings.json"))
 _word_meaning_cache = None
+# 작품 시나리오에서 반복 검증된 기본 명사. 외부 번역 서비스가 잠시 끊겨도
+# 화면에 이미 번역된 단어가 팝업에서 다시 "뜻 없음"이 되지 않게 한다.
+DATING_SIM_CONTEXT_GLOSSES = {
+    "紙袋": "종이봉투",
+}
 
 
 def _load_word_meaning_cache():
@@ -791,7 +796,7 @@ def _save_word_meaning_cache(cache):
     temp.replace(DATING_SIM_WORD_MEANING_CACHE)
 
 
-def translate_word_meaning(word):
+def translate_word_meaning(word, context=""):
     """word(일본어 한자 합성어) 전체의 한국어 뜻을 구글 번역으로 찾는다.
     실패하면 빈 문자열을 돌려준다(프론트가 "뜻을 찾지 못했습니다"로 표시)."""
     word = (word or "").strip()
@@ -800,6 +805,11 @@ def translate_word_meaning(word):
     cache = _load_word_meaning_cache()
     if word in cache:
         return cache[word]
+    if word in DATING_SIM_CONTEXT_GLOSSES:
+        meaning = DATING_SIM_CONTEXT_GLOSSES[word]
+        cache[word] = meaning
+        _save_word_meaning_cache(cache)
+        return meaning
     query = urllib.parse.urlencode({"client": "gtx", "sl": "ja", "tl": "ko", "dt": "t", "q": word})
     meaning = ""
     for endpoint in ("https://translate.googleapis.com/translate_a/single",
@@ -818,7 +828,10 @@ def translate_word_meaning(word):
     if meaning and meaning != word:
         cache[word] = meaning
         _save_word_meaning_cache(cache)
-    return meaning
+    # 번역 서비스가 실패하더라도 현재 대사의 한국어 번역은 이미 검수 가능한
+    # 문맥 정보다. 단어 하나의 뜻으로 오인시키지 않도록 문맥임을 명시한다.
+    context = re.sub(r"\s+", " ", context or "").strip()
+    return f"문맥: {context}" if context else meaning
 
 
 def _load_work_expressions(title):

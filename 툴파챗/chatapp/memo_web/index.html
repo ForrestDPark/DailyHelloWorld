@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171321"><title>메모 시스템</title>
-  <link rel="stylesheet" href="/memo/static/style.css?v=20260925-memo-v1">
+  <link rel="stylesheet" href="/memo/static/style.css?v=20260925-memo-v1"><link rel="stylesheet" href="/memo/static/voice.css?v=20260925-stop-v1">
 </head>
 <body>
   <header class="topbar"><a href="/#home" aria-label="홈으로">←</a><div><small>CONNECTED NOTES</small><h1>메모 시스템</h1></div><button id="new-memo">＋ 새 메모</button></header>
@@ -13,7 +13,7 @@
     <section id="editor" class="editor hidden">
       <div class="editor-head"><div><span id="source-label" class="source-label"></span><input id="memo-title" maxlength="160" aria-label="메모 제목"></div><div class="head-actions"><button id="save-root">저장</button><button id="delete-root" class="danger">삭제</button></div></div>
       <article id="source-card" class="source-card hidden"><small>채팅 원문</small><strong id="source-sender"></strong><p id="source-content"></p></article>
-      <label class="root-note"><span>내 메모</span><textarea id="memo-note" maxlength="12000" placeholder="원문에서 떠오른 생각을 적어보세요"></textarea></label>
+      <label class="root-note"><span>내 메모 <button id="memo-voice" class="voice-button" type="button" aria-label="음성으로 메모 입력">🎙️ 음성</button></span><textarea id="memo-note" maxlength="12000" placeholder="원문에서 떠오른 생각을 적어보세요"></textarea></label>
       <div class="branch-toolbar"><div><small>MIND MAP</small><h2>생각 지도</h2></div><button id="add-root-node">＋ 가지 만들기</button></div>
       <div id="mindmap-viewport" class="mindmap-viewport" aria-label="드래그와 핀치 확대가 가능한 마인드맵">
         <div class="mindmap-grid"></div>
@@ -23,7 +23,7 @@
       </div>
     </section>
   </main>
-  <dialog id="node-dialog"><form method="dialog"><div class="dialog-head"><h2 id="node-dialog-title">파생 메모</h2><button value="cancel" aria-label="닫기">×</button></div><textarea id="node-content" maxlength="6000" placeholder="생각, 할 일, 연결할 아이디어를 적어보세요"></textarea><div class="dialog-actions"><button value="cancel">취소</button><button id="node-save" value="default">저장</button></div></form></dialog>
+  <dialog id="node-dialog"><form method="dialog"><div class="dialog-head"><h2 id="node-dialog-title">파생 메모</h2><span><button id="node-voice" class="voice-button" type="button" aria-label="음성으로 파생 메모 입력">🎙️ 음성</button><button value="cancel" aria-label="닫기">×</button></span></div><textarea id="node-content" maxlength="6000" placeholder="생각, 할 일, 연결할 아이디어를 적어보세요"></textarea><div class="dialog-actions"><button value="cancel">취소</button><button id="node-save" value="default">저장</button></div></form></dialog>
   <div id="toast" class="toast hidden" role="status"></div>
-  <script src="/memo/static/app.js?v=20260925-mindmap-v2"></script>
+  <script src="/memo/static/app.js?v=20260925-voice-stop-v1"></script>
 </body></html>

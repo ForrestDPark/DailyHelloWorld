@@ -7,6 +7,7 @@ let speechSequence = 0;
 let audioManifest = {};
 const recordedAudio = new Audio();
 let pendingPlaybackResolve = null;
+let localizedSpeechSequence = 0;
 let choiceInFlight = false;
 let mapOpeningText = "";
 let sceneCharacterImage = "";
@@ -185,15 +186,25 @@ async function api(url, options = {}) {
 // 매번 새로 조회하지 않도록 세션 안에서만 가볍게 캐시한다(서버 쪽에도
 // 영구 캐시가 따로 있음).
 const vocabMeaningCache = new Map();
-async function fetchVocabWordMeaning(word) {
+async function fetchVocabWordMeaning(word, context = "") {
   if (vocabMeaningCache.has(word)) return vocabMeaningCache.get(word);
   try {
-    const data = await api(`/api/dating-sim/vocab-meaning?word=${encodeURIComponent(word)}`);
+    const params = new URLSearchParams({ word });
+    if (context) params.set("context", context);
+    const data = await api(`/api/dating-sim/vocab-meaning?${params}`);
     vocabMeaningCache.set(word, data.meaning || "");
     return data.meaning || "";
   } catch (e) {
     return "";
   }
+}
+
+function currentKoreanTranslation() {
+  const raw = sceneLines[sceneLineIndex];
+  const text = typeof raw === "string" ? raw : raw?.text;
+  return String(text || "").split("\n")
+    .filter((line) => !/[\u3040-\u30ff\u3400-\u9fff]/.test(line))
+    .join(" ").trim();
 }
 
 function showView(name) {
@@ -301,6 +312,90 @@ function japaneseVoice(role = "female") {
   return japanese.find((voice) => male.test(voice.name)) || japanese[0] || null;
 }
 
+function localizedVoice(lang, role = "female") {
+  const voices = window.speechSynthesis?.getVoices?.() || [];
+  const prefix = lang.toLowerCase().split("-")[0];
+  const matching = voices.filter((voice) => voice.lang?.toLowerCase().startsWith(prefix));
+  if (prefix === "ja") return japaneseVoice(role);
+  const female = /SunHi|Yuna|Female|여성/i;
+  const male = /InJoon|Hyunsu|Male|남성/i;
+  return matching.find((voice) => (role === "female" ? female : male).test(voice.name)) || matching[0] || null;
+}
+
+// iOS WebKit은 긴 SpeechSynthesisUtterance를 중간에서 조용히 끊는 경우가
+// 있어 문장부호와 길이를 기준으로 나눈 뒤, 각 조각의 onend에서 다음 조각을
+// 재생한다. 일본어 읽기와 한국어 뜻을 한 번의 사용자 클릭 안에서 순서대로
+// 끝까지 들려주는 공통 경로다.
+function speechChunks(text, maxLength = 70) {
+  const normalized = String(text || "").replace(/\s+/g, " ").trim();
+  if (!normalized) return [];
+  const sentences = normalized.match(/[^。！？!?；;,.、]+[。！？!?；;,.、]?/g) || [normalized];
+  const chunks = [];
+  for (const sentence of sentences) {
+    let rest = sentence.trim();
+    while (rest.length > maxLength) {
+      let cut = rest.lastIndexOf(" ", maxLength);
+      if (cut < Math.floor(maxLength * 0.5)) cut = maxLength;
+      chunks.push(rest.slice(0, cut).trim());
+      rest = rest.slice(cut).trim();
+    }
+    if (rest) chunks.push(rest);
+  }
+  return chunks;
+}
+
+function edgeAudioUrl(text, role = "female", lang = "ja-JP") {
+  const params = new URLSearchParams({
+    text: String(text || "").trim(),
+    role,
+    language: lang.toLowerCase().startsWith("ko") ? "ko" : "ja",
+  });
+  return `/api/dating-sim/tts?${params}`;
+}
+
+function speakLocalizedSequence(parts, button = null) {
+  if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) return Promise.resolve(false);
+  const sequence = ++localizedSpeechSequence;
+  const queue = parts.flatMap((part) => speechChunks(part.text).map((text) => ({ ...part, text })));
+  window.speechSynthesis.cancel();
+  if (!recordedAudio.paused) recordedAudio.pause();
+  if (button) {
+    button.disabled = true;
+    button.dataset.originalLabel ||= button.textContent;
+    button.textContent = "🔊 재생 중…";
+  }
+  return new Promise((resolve) => {
+    const finish = (completed) => {
+      if (button?.isConnected) {
+        button.disabled = false;
+        button.textContent = button.dataset.originalLabel || "🔊 발음";
+      }
+      resolve(completed);
+    };
+    const next = () => {
+      if (sequence !== localizedSpeechSequence) return finish(false);
+      const part = queue.shift();
+      if (!part) return finish(true);
+      recordedAudio.src = edgeAudioUrl(part.text, part.role, part.lang);
+      recordedAudio.onended = () => window.setTimeout(next, 35);
+      recordedAudio.onerror = () => {
+        recordedAudio.onerror = null;
+        const utterance = new SpeechSynthesisUtterance(part.text);
+        utterance.lang = part.lang;
+        utterance.rate = part.lang.startsWith("ko") ? 0.92 : (part.role === "male" ? 0.86 : 0.9);
+        utterance.pitch = part.role === "male" ? 0.92 : 1.08;
+        const voice = localizedVoice(part.lang, part.role);
+        if (voice) utterance.voice = voice;
+        utterance.onend = () => window.setTimeout(next, 35);
+        utterance.onerror = () => window.setTimeout(next, 35);
+        window.speechSynthesis.speak(utterance);
+      };
+      recordedAudio.play().catch(() => recordedAudio.onerror?.());
+    };
+    next();
+  });
+}
+
 function updateListeningControls(status = listeningMode ? "듣는 중" : "꺼짐") {
   const supported = Object.values(audioManifest).some((clips) => Object.keys(clips || {}).length > 0) ||
     ("speechSynthesis" in window && "SpeechSynthesisUtterance" in window);
@@ -332,7 +427,7 @@ function playStandalone(text, role, status) {
   text = japaneseText(text);
   if (!text || !listeningMode) return Promise.resolve();
   const sequence = ++speechSequence;
-  const recordedUrl = audioManifest[role]?.[text];
+    const recordedUrl = audioManifest[role]?.[text] || edgeAudioUrl(text, role, "ja-JP");
   return new Promise((resolve) => {
     let settled = false;
     const finish = () => {
@@ -447,11 +542,7 @@ function speakCurrentLine() {
   }
   const sequence = ++speechSequence;
   const role = line.speaker === "narrator" ? "male" : "female";
-  const recordedUrl = audioManifest[role]?.[text];
-  if (!recordedUrl) {
-    speakWithDevice(text, line, sequence);
-    return;
-  }
+  const recordedUrl = audioManifest[role]?.[text] || edgeAudioUrl(text, role, "ja-JP");
   window.speechSynthesis?.cancel();
   recordedAudio.src = recordedUrl;
   recordedAudio.onplay = () => {
@@ -567,28 +658,13 @@ function openPractice(mode) {
 function playPracticeReference() {
   const line = currentPracticeLine();
   if (!line) return Promise.resolve();
-  const url = audioManifest[line.role]?.[line.text];
-  if (url) {
-    recordedAudio.src = url;
-    return recordedAudio.play().catch(() => speakPracticeWithDevice(line.text, line.role));
-  }
-  return speakPracticeWithDevice(line.text, line.role);
+  const url = audioManifest[line.role]?.[line.text] || edgeAudioUrl(line.text, line.role, "ja-JP");
+  recordedAudio.src = url;
+  return recordedAudio.play().catch(() => speakPracticeWithDevice(line.text, line.role));
 }
 
 function speakPracticeWithDevice(text, role) {
-  if (!("speechSynthesis" in window)) return Promise.resolve();
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = "ja-JP";
-  utterance.rate = role === "female" ? 0.9 : 0.86;
-  utterance.pitch = role === "female" ? 1.18 : 0.92;
-  const voice = japaneseVoice(role);
-  if (voice) utterance.voice = voice;
-  return new Promise((resolve) => {
-    utterance.onend = resolve;
-    utterance.onerror = resolve;
-    window.speechSynthesis.speak(utterance);
-  });
+  return speakLocalizedSequence([{ text, lang: "ja-JP", role }]);
 }
 
 function writingContext() {
@@ -934,7 +1010,10 @@ function showVocabWordPopover(word, anchor, wordKind = "general") {
   sound.setAttribute("aria-label", `${word.ja} 발음 듣기`);
   sound.addEventListener("click", (event) => {
     event.stopPropagation();
-    void speakPracticeWithDevice(word.ja, "female");
+    const japanese = word.reading || word.ja;
+    const parts = [{ text: japanese, lang: "ja-JP", role: "female" }];
+    if (word.ko) parts.push({ text: word.ko, lang: "ko-KR", role: "female" });
+    void speakLocalizedSequence(parts, sound);
   });
   const glyph = document.createElement("strong");
   glyph.className = "japanese-kanji-popover-glyph";
@@ -964,9 +1043,10 @@ function showVocabWordPopover(word, anchor, wordKind = "general") {
   // 짜깁기해 보여줬는데, 합성어 전체의 실제 뜻이 아니라 어색했다. 서버의
   // 단어 전체 번역 API로 바꾼다.
   if (!word.ko) {
-    fetchVocabWordMeaning(word.ja).then((meaning) => {
+    fetchVocabWordMeaning(word.ja, currentKoreanTranslation()).then((meaning) => {
       if (!meaningValueEl.isConnected) return;
       meaningValueEl.textContent = meaning || "뜻을 찾지 못했습니다";
+      if (meaning && !meaning.startsWith("문맥:")) word.ko = meaning;
     });
   }
   popover.append(close, favorite, sound, glyph, readings);
@@ -1157,7 +1237,14 @@ function showKanjiPopover(character, reading, anchor) {
   sound.setAttribute("aria-label", `${character} 발음 듣기`);
   sound.addEventListener("click", (event) => {
     event.stopPropagation();
-    void speakPracticeWithDevice(character, "female");
+    const japaneseReadings = [...(reading.kun || []), ...(reading.on || []).map(katakanaToHiragana)]
+      .map((value) => String(value).replace(/[.\-]/g, "").trim()).filter(Boolean);
+    const parts = [{ text: japaneseReadings.join("、") || character, lang: "ja-JP", role: "female" }];
+    const korean = formatKoreanHanjaGloss(reading);
+    if (korean && korean !== "해당 없음" && korean !== "불러오는 중…") {
+      parts.push({ text: korean, lang: "ko-KR", role: "female" });
+    }
+    void speakLocalizedSequence(parts, sound);
   });
   const glyph = document.createElement("strong");
   glyph.className = "japanese-kanji-popover-glyph";
@@ -1407,6 +1494,22 @@ function stopTypewriter() {
   }
 }
 
+function renderSpeakerName(element, state) {
+  element.replaceChildren();
+  const japanese = document.createElement("span");
+  japanese.className = "speaker-name-jp";
+  renderAnnotatedText(japanese, state?.character_name || "");
+  element.append(japanese);
+  const koreanText = String(state?.character_name_ko || "").trim();
+  if (koreanText) {
+    const korean = document.createElement("span");
+    korean.className = "speaker-name-ko";
+    korean.lang = "ko";
+    korean.textContent = koreanText;
+    element.append(korean);
+  }
+}
+
 function typeLine(text) {
   stopTypewriter();
   $("writing-practice").disabled = true;
@@ -1416,7 +1519,7 @@ function typeLine(text) {
   const narrator = line.speaker === "narrator";
   const speakerName = $("speaker-name");
   if (narrator) speakerName.textContent = "主人公 · 나";
-  else renderAnnotatedText(speakerName, latestState?.character_name || "");
+  else renderSpeakerName(speakerName, latestState);
   $("portrait").classList.toggle("narrator", narrator);
   setSafeImage(
     $("portrait-image"),
@@ -1560,6 +1663,8 @@ async function renderTeacherTip(state) {
   trigger.setAttribute("aria-disabled", "true");
   trigger.setAttribute("aria-label", "일본어 선생님 도움말");
   $("teacher-tip-text").textContent = "";
+  $("teacher-tip-source").classList.add("hidden");
+  $("teacher-tip-source").removeAttribute("href");
   if (!state.is_admin || !state.source_title) return;
   setTeacherTipAvatar(null);
   box.classList.remove("hidden");
@@ -1568,7 +1673,11 @@ async function renderTeacherTip(state) {
     if (requestId !== teacherTipRequest) return;
     setTeacherTipAvatar(tip.avatar_url);
     if (!tip?.content) return;
-    $("teacher-tip-text").textContent = tip.content;
+    const annotated=String(tip.content)
+      .replace(/([\u3400-\u9fff々〆ヶ]+)\{([\u3040-\u30ffー]+)\}/g,"[$1|$2]")
+      .replace(/\{([^{}]+)\}/g,"（$1）");
+    renderAnnotatedText($("teacher-tip-text"),annotated);
+    if(tip.source_room_id&&tip.source_message_id){const source=$("teacher-tip-source");source.href=`/#room=${encodeURIComponent(tip.source_room_id)}&message=${encodeURIComponent(tip.source_message_id)}`;source.classList.remove("hidden")}
     box.classList.add("has-tip");
     trigger.setAttribute("aria-disabled", "false");
     trigger.setAttribute("aria-label", "현재 장면과 관련된 일본어 선생님 설명 보기");
@@ -1589,7 +1698,7 @@ $("teacher-tip-trigger").addEventListener("click", (event) => {
 
 function renderChoiceResult(state) {
   const delta = state.choice_result.affection_delta;
-  renderAnnotatedText($("result-speaker-name"), state.character_name);
+  renderSpeakerName($("result-speaker-name"), state);
   $("stage").dataset.location = state.choice_result.location || "result";
   $("stage").dataset.day = state.day;
   setSafeImage($("result-portrait-image"), state.choice_result.character_image || state.character_image);
@@ -1605,7 +1714,7 @@ function renderChoiceResult(state) {
 function renderEnding(state) {
   $("ending-title").textContent = state.ending.title;
   renderAnnotatedText($("ending-text"), state.ending.lines.join("\n"));
-  renderAnnotatedText($("ending-speaker-name"), state.character_name);
+  renderSpeakerName($("ending-speaker-name"), state);
   setSafeImage($("ending-portrait-image"), state.character_image);
   showView("ending-view");
 }

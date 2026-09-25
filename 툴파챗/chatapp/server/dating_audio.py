@@ -19,6 +19,8 @@ from server import dating_sim_story
 MODEL = "gpt-4o-mini-tts"
 VOICES = {"female": "marin", "male": "cedar"}
 EDGE_VOICES = {"female": "ja-JP-NanamiNeural", "male": "ja-JP-KeitaNeural"}
+EDGE_KOREAN_VOICES = {"female": "ko-KR-SunHiNeural", "male": "ko-KR-InJoonNeural"}
+EDGE_ENGLISH_VOICES = {"female": "en-US-JennyNeural", "male": "en-US-GuyNeural"}
 INSTRUCTIONS = {
     "female": (
         "Speak in natural Japanese with a warm, clear, charming young adult female voice. "
@@ -200,14 +202,27 @@ def request_speech(api_key: str, role: str, text: str, voice: str | None = None)
         raise RuntimeError(f"OpenAI 음성 API 오류 ({error.code}): {detail}") from error
 
 
-def request_edge_speech(role: str, text: str, voice: str | None = None) -> bytes:
-    """Edge TTS의 일본어 성별 음성을 MP3 바이트로 생성한다."""
+def request_edge_speech(
+    role: str,
+    text: str,
+    voice: str | None = None,
+    *,
+    language: str = "ja",
+) -> bytes:
+    """Edge TTS의 일본어·한국어·영어 성별 음성을 MP3 바이트로 생성한다."""
     if role not in EDGE_VOICES:
         raise ValueError("지원하지 않는 미연시 음성 역할입니다")
+    voices = {
+        "ja": EDGE_VOICES,
+        "ko": EDGE_KOREAN_VOICES,
+        "en": EDGE_ENGLISH_VOICES,
+    }.get(language)
+    if voices is None:
+        raise ValueError("지원하지 않는 음성 언어입니다")
 
     async def collect() -> bytes:
         chunks = []
-        communicator = edge_tts.Communicate(text, voice or EDGE_VOICES[role])
+        communicator = edge_tts.Communicate(text, voice or voices[role])
         async for item in communicator.stream():
             if item.get("type") == "audio" and item.get("data"):
                 chunks.append(item["data"])

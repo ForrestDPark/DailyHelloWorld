@@ -97,6 +97,14 @@ class DatingAudioTests(unittest.TestCase):
             self.assertEqual(manifest["model"], "edge-tts")
             self.assertEqual(manifest["voices"], dating_audio.EDGE_VOICES)
 
+    def test_edge_korean_voices_are_available_for_full_translation_reading(self):
+        self.assertEqual(dating_audio.EDGE_KOREAN_VOICES["female"], "ko-KR-SunHiNeural")
+        self.assertEqual(dating_audio.EDGE_KOREAN_VOICES["male"], "ko-KR-InJoonNeural")
+
+    def test_edge_english_voices_match_the_natural_dating_sim_voice_family(self):
+        self.assertEqual(dating_audio.EDGE_ENGLISH_VOICES["female"], "en-US-JennyNeural")
+        self.assertEqual(dating_audio.EDGE_ENGLISH_VOICES["male"], "en-US-GuyNeural")
+
 
 if __name__ == "__main__":
     unittest.main()
