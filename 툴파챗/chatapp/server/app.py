@@ -71,6 +71,7 @@ CAREER_DATA_DIR = REPO_ROOT / "이직시스템" / "data"
 CAREER_SYSTEM_DIR = REPO_ROOT / "이직시스템"
 SHIFT_ALARM_DASHBOARD_DIR = BASE_DIR / "shift_alarm_dashboard"
 VOCABULARY_WEB_DIR = BASE_DIR / "vocabulary_web"
+MEMO_WEB_DIR = BASE_DIR / "memo_web"
 DATING_SIM_WEB_DIR = BASE_DIR / "dating_sim_web"
 DATING_SIM_AUDIO_DIR = DATING_SIM_WEB_DIR / "audio"
 AUDIO_EDITOR_WEB_DIR = BASE_DIR / "audio_editor_web"
@@ -325,7 +326,7 @@ class NoCacheStaticMiddleware(BaseHTTPMiddleware):
     바꾼다. `v=` 없는 요청(업로드 파일 등)은 기존처럼 매번 재검증한다."""
     async def dispatch(self, request, call_next):
         response = await call_next(request)
-        if request.url.path.startswith(("/static/", "/uploads/", "/shift-alarm/static/", "/audio-editor/static/", "/mp3-player/static/")):
+        if request.url.path.startswith(("/static/", "/uploads/", "/shift-alarm/static/", "/audio-editor/static/", "/mp3-player/static/", "/memo/static/")):
             if request.query_params.get("v"):
                 response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
             else:
@@ -610,6 +611,25 @@ def vocabulary_static(filename: str, request: Request):
     if filename not in {"style.css", "practice.css", "app.js", "manifest.webmanifest"}:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(VOCABULARY_WEB_DIR / filename))
+
+
+@app.get("/memo")
+def memo_redirect():
+    return RedirectResponse("/memo/", status_code=307)
+
+
+@app.get("/memo/")
+def memo_dashboard(request: Request):
+    _require_signed_in_user(request)
+    return FileResponse(str(MEMO_WEB_DIR / "index.html"))
+
+
+@app.get("/memo/static/{filename}")
+def memo_static(filename: str, request: Request):
+    _require_signed_in_user(request)
+    if filename not in {"style.css", "app.js", "manifest.webmanifest"}:
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
+    return FileResponse(str(MEMO_WEB_DIR / filename))
 
 
 @app.get("/audio-editor")
@@ -5212,6 +5232,179 @@ def delete_vocabulary_entry(entry_id: int, request: Request):
     conn = get_conn(); cursor = conn.execute("DELETE FROM vocabulary_entries WHERE id=? AND username=?", (entry_id, user["username"])); conn.commit(); conn.close()
     if not cursor.rowcount: raise HTTPException(status_code=404, detail="단어를 찾을 수 없습니다")
     return {"ok": True}
+
+
+class MemoDocumentCreate(BaseModel):
+    title: str = "새 메모"
+    note: str = ""
+
+
+class MemoDocumentUpdate(BaseModel):
+    title: str
+    note: str = ""
+
+
+class MemoNodeCreate(BaseModel):
+    parent_id: Optional[int] = None
+    content: str
+
+
+class MemoNodeUpdate(BaseModel):
+    content: str
+
+
+def _memo_user(request):
+    user = getattr(request.state, "user", None)
+    if not user:
+        raise HTTPException(status_code=401, detail="로그인이 필요합니다")
+    return user
+
+
+def _memo_document_payload(conn, username):
+    documents = [dict(row) for row in conn.execute(
+        """SELECT id,source_message_id,source_room_id,source_sender,source_content,
+                  title,note,created_at,updated_at
+           FROM memo_documents WHERE username=? ORDER BY updated_at DESC,id DESC""",
+        (username,),
+    ).fetchall()]
+    if not documents:
+        return []
+    ids = [document["id"] for document in documents]
+    placeholders = ",".join("?" for _ in ids)
+    nodes = [dict(row) for row in conn.execute(
+        f"""SELECT id,memo_id,parent_id,content,sort_order,created_at,updated_at
+            FROM memo_nodes WHERE memo_id IN ({placeholders})
+            ORDER BY sort_order,id""", ids
+    ).fetchall()]
+    grouped = {memo_id: [] for memo_id in ids}
+    for node in nodes:
+        grouped[node["memo_id"]].append(node)
+    for document in documents:
+        document["nodes"] = grouped[document["id"]]
+    return documents
+
+
+@app.get("/api/me/memos")
+def list_memos(request: Request):
+    user = _memo_user(request)
+    conn = get_conn()
+    documents = _memo_document_payload(conn, user["username"])
+    conn.close()
+    return documents
+
+
+@app.post("/api/me/memos")
+def create_memo(body: MemoDocumentCreate, request: Request):
+    user = _memo_user(request)
+    title, note = body.title.strip(), body.note.strip()
+    if not title or len(title) > 160 or len(note) > 12000:
+        raise HTTPException(status_code=400, detail="제목은 1~160자, 메모는 12000자 이하로 입력하세요")
+    now = _now(); conn = get_conn()
+    cursor = conn.execute(
+        "INSERT INTO memo_documents(username,title,note,created_at,updated_at) VALUES(?,?,?,?,?)",
+        (user["username"], title, note, now, now),
+    )
+    conn.commit(); memo_id = cursor.lastrowid; conn.close()
+    return {"ok": True, "id": memo_id}
+
+
+@app.post("/api/me/memos/from-message/{message_id}")
+def create_memo_from_message(message_id: int, request: Request):
+    user = _memo_user(request); conn = get_conn()
+    message = conn.execute(
+        "SELECT id,room_id,sender,content,created_at FROM messages WHERE id=?", (message_id,)
+    ).fetchone()
+    if not message:
+        conn.close(); raise HTTPException(status_code=404, detail="메시지를 찾을 수 없습니다")
+    _ensure_message_visible(conn, message, user["username"], bool(user["is_owner"]))
+    existing = conn.execute(
+        "SELECT id FROM memo_documents WHERE username=? AND source_message_id=?",
+        (user["username"], message_id),
+    ).fetchone()
+    now = _now()
+    if existing:
+        conn.execute(
+            "UPDATE memo_documents SET source_content=?,source_sender=?,source_room_id=?,updated_at=? WHERE id=?",
+            (message["content"], message["sender"], message["room_id"], now, existing["id"]),
+        )
+        memo_id, created = existing["id"], False
+    else:
+        preview = re.sub(r"\s+", " ", message["content"]).strip()[:36]
+        title = f"{message['sender']} · {preview}" if preview else f"{message['sender']}의 메시지"
+        cursor = conn.execute(
+            """INSERT INTO memo_documents
+               (username,source_message_id,source_room_id,source_sender,source_content,title,note,created_at,updated_at)
+               VALUES(?,?,?,?,?,?,?,?,?)""",
+            (user["username"], message_id, message["room_id"], message["sender"], message["content"], title, "", now, now),
+        )
+        memo_id, created = cursor.lastrowid, True
+    conn.commit(); conn.close()
+    return {"ok": True, "id": memo_id, "created": created}
+
+
+@app.put("/api/me/memos/{memo_id}")
+def update_memo(memo_id: int, body: MemoDocumentUpdate, request: Request):
+    user = _memo_user(request); title, note = body.title.strip(), body.note.strip()
+    if not title or len(title) > 160 or len(note) > 12000:
+        raise HTTPException(status_code=400, detail="제목은 1~160자, 메모는 12000자 이하로 입력하세요")
+    conn = get_conn(); cursor = conn.execute(
+        "UPDATE memo_documents SET title=?,note=?,updated_at=? WHERE id=? AND username=?",
+        (title, note, _now(), memo_id, user["username"]),
+    ); conn.commit(); conn.close()
+    if not cursor.rowcount: raise HTTPException(status_code=404, detail="메모를 찾을 수 없습니다")
+    return {"ok": True}
+
+
+@app.delete("/api/me/memos/{memo_id}")
+def delete_memo(memo_id: int, request: Request):
+    user = _memo_user(request); conn = get_conn()
+    owned = conn.execute("SELECT 1 FROM memo_documents WHERE id=? AND username=?", (memo_id, user["username"])).fetchone()
+    if not owned: conn.close(); raise HTTPException(status_code=404, detail="메모를 찾을 수 없습니다")
+    conn.execute("DELETE FROM memo_nodes WHERE memo_id=?", (memo_id,))
+    conn.execute("DELETE FROM memo_documents WHERE id=?", (memo_id,)); conn.commit(); conn.close()
+    return {"ok": True}
+
+
+@app.post("/api/me/memos/{memo_id}/nodes")
+def create_memo_node(memo_id: int, body: MemoNodeCreate, request: Request):
+    user = _memo_user(request); content = body.content.strip()
+    if not content or len(content) > 6000: raise HTTPException(status_code=400, detail="파생 메모는 1~6000자로 입력하세요")
+    conn = get_conn(); owned = conn.execute("SELECT 1 FROM memo_documents WHERE id=? AND username=?", (memo_id, user["username"])).fetchone()
+    if not owned: conn.close(); raise HTTPException(status_code=404, detail="메모를 찾을 수 없습니다")
+    if body.parent_id is not None and not conn.execute("SELECT 1 FROM memo_nodes WHERE id=? AND memo_id=?", (body.parent_id, memo_id)).fetchone():
+        conn.close(); raise HTTPException(status_code=400, detail="상위 메모가 올바르지 않습니다")
+    order = conn.execute("SELECT COALESCE(MAX(sort_order),-1)+1 AS n FROM memo_nodes WHERE memo_id=? AND parent_id IS ?", (memo_id, body.parent_id)).fetchone()["n"]
+    now = _now(); cursor = conn.execute(
+        "INSERT INTO memo_nodes(memo_id,parent_id,content,sort_order,created_at,updated_at) VALUES(?,?,?,?,?,?)",
+        (memo_id, body.parent_id, content, order, now, now),
+    ); conn.execute("UPDATE memo_documents SET updated_at=? WHERE id=?", (now, memo_id)); conn.commit(); node_id = cursor.lastrowid; conn.close()
+    return {"ok": True, "id": node_id}
+
+
+@app.put("/api/me/memo-nodes/{node_id}")
+def update_memo_node(node_id: int, body: MemoNodeUpdate, request: Request):
+    user = _memo_user(request); content = body.content.strip()
+    if not content or len(content) > 6000: raise HTTPException(status_code=400, detail="파생 메모는 1~6000자로 입력하세요")
+    conn = get_conn(); row = conn.execute("""SELECT n.memo_id FROM memo_nodes n JOIN memo_documents m ON m.id=n.memo_id
+        WHERE n.id=? AND m.username=?""", (node_id, user["username"])).fetchone()
+    if not row: conn.close(); raise HTTPException(status_code=404, detail="파생 메모를 찾을 수 없습니다")
+    now = _now(); conn.execute("UPDATE memo_nodes SET content=?,updated_at=? WHERE id=?", (content, now, node_id)); conn.execute("UPDATE memo_documents SET updated_at=? WHERE id=?", (now, row["memo_id"])); conn.commit(); conn.close()
+    return {"ok": True}
+
+
+@app.delete("/api/me/memo-nodes/{node_id}")
+def delete_memo_node(node_id: int, request: Request):
+    user = _memo_user(request); conn = get_conn()
+    row = conn.execute("""SELECT n.memo_id FROM memo_nodes n JOIN memo_documents m ON m.id=n.memo_id
+        WHERE n.id=? AND m.username=?""", (node_id, user["username"])).fetchone()
+    if not row: conn.close(); raise HTTPException(status_code=404, detail="파생 메모를 찾을 수 없습니다")
+    ids = [r["id"] for r in conn.execute("""WITH RECURSIVE subtree(id) AS (
+        SELECT id FROM memo_nodes WHERE id=? UNION ALL
+        SELECT n.id FROM memo_nodes n JOIN subtree s ON n.parent_id=s.id)
+        SELECT id FROM subtree""", (node_id,)).fetchall()]
+    conn.execute(f"DELETE FROM memo_nodes WHERE id IN ({','.join('?' for _ in ids)})", ids)
+    conn.execute("UPDATE memo_documents SET updated_at=? WHERE id=?", (_now(), row["memo_id"])); conn.commit(); conn.close()
+    return {"ok": True, "deleted": len(ids)}
 
 
 @app.get("/api/jp-vocabulary")

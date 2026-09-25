@@ -183,6 +183,38 @@ def init_db():
             UNIQUE(username, language, term),
             FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS memo_documents (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            source_message_id INTEGER,
+            source_room_id TEXT,
+            source_sender TEXT NOT NULL DEFAULT '',
+            source_content TEXT NOT NULL DEFAULT '',
+            title TEXT NOT NULL DEFAULT '',
+            note TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE,
+            FOREIGN KEY (source_message_id) REFERENCES messages(id) ON DELETE SET NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_memo_documents_source
+            ON memo_documents(username, source_message_id)
+            WHERE source_message_id IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS idx_memo_documents_user_updated
+            ON memo_documents(username, updated_at DESC);
+        CREATE TABLE IF NOT EXISTS memo_nodes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            memo_id INTEGER NOT NULL,
+            parent_id INTEGER,
+            content TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (memo_id) REFERENCES memo_documents(id) ON DELETE CASCADE,
+            FOREIGN KEY (parent_id) REFERENCES memo_nodes(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_memo_nodes_memo
+            ON memo_nodes(memo_id, parent_id, sort_order, id);
         CREATE TABLE IF NOT EXISTS user_ai_credentials (
             username TEXT NOT NULL,
             provider TEXT NOT NULL,

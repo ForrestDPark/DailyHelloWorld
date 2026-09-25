@@ -3880,6 +3880,7 @@ function openMessageMenu(message, hostEl, x, y) {
   if (canWrite) addAction("답장하기", () => setReplyTarget(message.is_persona ? message.sender : null, message));
   addAction("선택 복사", () => openSelectiveCopy(message.content));
   addAction("복사", () => navigator.clipboard.writeText(message.content).catch(() => {}));
+  if (myUsername) addAction("메모장에 붙이기", () => saveMessageToMemo(message));
   addAction("프로필 보기", () => showProfilePopup(message));
   if (message.is_persona) {
     addAction("🔊 읽어주기", () => playMessageTts(message));
@@ -3902,6 +3903,19 @@ function openMessageMenu(message, hostEl, x, y) {
   const rect = menu.getBoundingClientRect();
   menu.style.left = `${Math.max(8, Math.min(x, innerWidth - rect.width - 8))}px`;
   menu.style.top = `${Math.max(8, Math.min(y, innerHeight - rect.height - 8))}px`;
+}
+
+async function saveMessageToMemo(message) {
+  try {
+    const response = await apiFetch(`/api/me/memos/from-message/${message.id}`, {method: "POST"});
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.detail || "메모를 저장하지 못했습니다");
+    if (confirm(result.created ? "메모장에 저장했습니다. 지금 열까요?" : "이미 저장된 메모입니다. 지금 열까요?")) {
+      location.href = `/memo/?memo=${encodeURIComponent(result.id)}`;
+    }
+  } catch (error) {
+    alert(error.message || "메모를 저장하지 못했습니다");
+  }
 }
 
 document.addEventListener("pointerdown", (event) => { if (messageMenu && !messageMenu.contains(event.target)) closeMessageMenu(); });
