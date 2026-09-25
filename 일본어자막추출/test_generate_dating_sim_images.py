@@ -154,15 +154,56 @@ class DatingImageAgentTests(unittest.TestCase):
         self.assertNotIn("20", fallback)
         self.assertEqual(fallback["3"]["inputs"]["model"], ["4", 0])
 
-    def test_local_generate_falls_back_when_ipadapter_node_missing(self):
-        # ★ 2026-09-23: 다른 환경(커스텀 노드 미설치)에서도 죽지 않고 예전
-        # img2img 방식으로 자동 폴백하는지 확인한다.
+    def test_local_generate_detects_when_ipadapter_node_missing(self):
         with patch.object(images, "_comfy_request", side_effect=lambda path, *a, **k: {}):
             self.assertFalse(images._comfy_supports_ipadapter_faceid())
         with patch.object(images, "_comfy_request", side_effect=lambda path, *a, **k: (
             {"IPAdapterUnifiedLoaderFaceID": {}} if "IPAdapterUnifiedLoaderFaceID" in path else {}
         )):
             self.assertTrue(images._comfy_supports_ipadapter_faceid())
+
+    def test_local_generate_drops_reference_instead_of_blending_when_faceid_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            reference = Path(tmp) / "face.jpg"
+            reference.write_bytes(b"face")
+            target = Path(tmp) / "out.png"
+            workflows = []
+            waits = 0
+
+            def fake_comfy_request(path, data=None, timeout=20):
+                if path == "/system_stats": return {}
+                if "IPAdapterUnifiedLoaderFaceID" in path: return {"IPAdapterUnifiedLoaderFaceID": {}}
+                if path == "/prompt":
+                    workflows.append(data["prompt"])
+                    return {"prompt_id": str(len(workflows))}
+                return {}
+
+            def fake_wait_image(prompt_id, timeout):
+                nonlocal waits
+                waits += 1
+                if waits == 1:
+                    raise RuntimeError("ComfyUI 실행 실패: No face detected.")
+                return {"filename": "result.png", "subfolder": "", "type": "output"}
+
+            class FakeResponse:
+                def __enter__(self): return self
+                def __exit__(self, *args): return False
+                def read(self): return b"png" * 500
+
+            with patch.object(images, "_comfy_request", side_effect=fake_comfy_request), \
+                 patch.object(images, "_comfy_model_spec", return_value=("CheckpointLoaderSimple", "model.safetensors")), \
+                 patch.object(images, "_comfy_vae_name", return_value=""), \
+                 patch.object(images, "_comfy_upload", return_value="face.png"), \
+                 patch.object(images, "_comfy_wait_image", side_effect=fake_wait_image), \
+                 patch.object(images.urllib.request, "urlopen", return_value=FakeResponse()), \
+                 patch.object(images, "_valid_image", return_value=True):
+                images._local_generate("portrait", target, reference)
+
+        self.assertIn("22", workflows[0])
+        self.assertNotIn("22", workflows[1])
+        self.assertNotIn("14", workflows[1])
+        self.assertEqual(images._LAST_GENERATION_META["generation_settings"]["reference_count"], 0)
+        self.assertEqual(images._LAST_GENERATION_META["generation_settings"]["composition_pass"], "txt2img (얼굴 참고 제외)")
 
     def test_local_generate_retries_with_fewer_references_before_falling_back(self):
         # ★ 2026-09-23: "생성된 이미지 표정이 전부 일편적인데 다양하게" 요청 —
@@ -313,6 +354,33 @@ class DatingImageAgentTests(unittest.TestCase):
             self.assertEqual(second["status"], "complete")
             self.assertEqual(len(calls), first_call_count)
             self.assertTrue(second["assignments"])
+
+    def test_agent_does_not_use_cover_when_no_face_reference_qualifies(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow not installed")
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "TEST-NO-FACE"
+            (work / "images").mkdir(parents=True)
+            (work / "dating_sim_scenario.json").write_text(json.dumps(scenario(1)), encoding="utf-8")
+            Image.new("RGB", (400, 300), "gray").save(work / "cover.jpg")
+            Image.new("RGB", (400, 300), "gray").save(work / "images" / "part1_scene001.jpg")
+            portrait_references = []
+
+            def fake_generator(prompt, target, reference=None):
+                if target.name == "portrait.png":
+                    portrait_references.append(reference)
+                target.write_bytes(b"fake-png" * 256)
+                return "test"
+
+            result = images.run_agent(
+                work, max_scenes=1, generator=fake_generator,
+                translator=lambda scene, work_dir: scene["text"],
+            )
+            self.assertEqual(portrait_references, [[]])
+            self.assertEqual(result["reference_source"], "text_only_no_qualified_face")
+            self.assertIsNone(result["portrait_reference"])
 
     def test_force_keys_regenerates_only_the_selected_image(self):
         # ★ 2026-09-23: "이미지 재생성 버튼... 전체재생성도 있고 사진눌렀을때
