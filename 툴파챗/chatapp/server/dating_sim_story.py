@@ -1855,6 +1855,11 @@ def load_generated_images(title, book_id):
         manifest = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
+    quality_checks = manifest.get("quality_checks") or {}
+    quality_enforced = bool(quality_checks)
+    def quality_passed(key):
+        report = quality_checks.get(key)
+        return not quality_enforced or (isinstance(report, dict) and report.get("passed") is True)
     def public(filename):
         if not isinstance(filename, str) or not re.fullmatch(r"(?:portrait|scene-[0-9a-f]{12})\.png", filename):
             return None
@@ -1866,9 +1871,13 @@ def load_generated_images(title, book_id):
         # 예전 캐시를 계속 보여줄 수 있어, 파일 mtime을 캐시 무효화 쿼리로
         # 붙인다(이 프로젝트 전반의 ?v= 캐시버스팅 관례와 같은 원리).
         return f"/api/dating-sim/books/{book_id}/images/{filename}?t={int(target.stat().st_mtime)}"
-    portrait = public(manifest.get("portrait"))
+    portrait = public(manifest.get("portrait")) if quality_passed("portrait") else None
+    passed_scene_files = {
+        record.get("file") for key, record in (manifest.get("scenes") or {}).items()
+        if isinstance(record, dict) and quality_passed(key)
+    }
     assignments = {key: url for key, filename in (manifest.get("assignments") or {}).items()
-                   if (url := public(filename))}
+                   if filename in passed_scene_files and (url := public(filename))}
     if not portrait and not assignments:
         return None
     def reference_public(filename):
@@ -1906,6 +1915,8 @@ def load_generated_images(title, book_id):
     seen_files = set()
     for scene_key, record in (manifest.get("scenes") or {}).items():
         if not isinstance(record, dict):
+            continue
+        if not quality_passed(scene_key):
             continue
         filename = record.get("file")
         image_url = public(filename)
