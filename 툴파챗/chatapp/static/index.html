@@ -30,7 +30,7 @@
      페이지 로드는 chat.js가 부팅 후 유휴 시간에 백그라운드로 미리 시작). -->
 <link rel="preconnect" href="https://sunzi-strategy-notes.pulpilisory.chatgpt.site" crossorigin>
 <link rel="dns-prefetch" href="https://sunzi-strategy-notes.pulpilisory.chatgpt.site">
-<link rel="stylesheet" href="/static/style.css?v=20260925-update-history-v1"><link rel="stylesheet" href="/static/icon-layout.css?v=20260926-natum-brand-v2">
+<link rel="stylesheet" href="/static/style.css?v=20260925-update-history-v1"><link rel="stylesheet" href="/static/icon-layout.css?v=20260926-natum-glow-v3">
 <!-- ★ "새 메시지 알림(웹 푸시)" 요청(2026-08-27) — iOS Safari는 PWA로
      "홈 화면에 추가"돼 있어야만 웹 푸시가 동작한다. manifest.json이 그
      설치 가능 상태를 만든다. -->
@@ -93,7 +93,7 @@
 
   <!-- 개인 시스템 전체의 시작점. 긴 친구/방 목록은 각각 별도 화면으로 분리한다. -->
   <div id="home-view" class="hidden">
-    <header class="portal-header"><a class="portal-brand" href="#home"><span>N</span><b>나툼 <small>NaTum</small></b></a><div class="portal-header-actions"><button id="portal-layout-btn" type="button" class="subtle-button portal-layout-button" aria-label="목록 보기로 전환">☰ 목록</button><button id="portal-notifications-btn" type="button" class="portal-notification-button" aria-label="알림 보기" aria-expanded="false"><svg aria-hidden="true"><use href="#icon-bell"/></svg><span id="portal-notification-badge" class="notification-count hidden"></span></button><button id="portal-account-btn" type="button" class="subtle-button">내 프로필</button></div></header>
+    <header class="portal-header"><a class="portal-brand" href="#home"><img class="portal-brand-icon" src="/static/app-icon-192.png?v=20260926-natum-v2" alt=""><b>나툼 <small>NaTum</small></b></a><div class="portal-header-actions"><button id="portal-layout-btn" type="button" class="subtle-button portal-layout-button" aria-label="목록 보기로 전환">☰ 목록</button><button id="portal-notifications-btn" type="button" class="portal-notification-button" aria-label="알림 보기" aria-expanded="false"><svg aria-hidden="true"><use href="#icon-bell"/></svg><span id="portal-notification-badge" class="notification-count hidden"></span></button><button id="portal-account-btn" type="button" class="subtle-button">내 프로필</button></div></header>
     <aside id="portal-notification-center" class="notification-center hidden" aria-label="알림"><div class="notification-center-head"><div><small>NOTIFICATIONS</small><h2>알림</h2></div><button id="portal-notification-close" type="button" aria-label="알림 닫기"><svg aria-hidden="true"><use href="#icon-close"/></svg></button></div><div id="portal-notification-list" class="notification-list"></div></aside>
     <main class="portal-main">
       <section class="portal-services icon-view" aria-label="시스템 바로가기">
