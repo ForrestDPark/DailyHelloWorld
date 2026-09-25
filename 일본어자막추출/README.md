@@ -693,6 +693,7 @@ limit`)하면서 Claude 폴백도 같이 오류가 나 세 편 모두 번역 검
 - Codex를 못 쓰는 상태(토큰 소진 등)면 시나리오 스크립트가 종료 코드 75로 멈춘다. 이미지 생성은 AI가 필요 없으므로 시나리오가 끝난 작품은 계속 진행된다.
 - `resume_dating_sim_backlog.py`가 자막 파이프라인 종료 직전에 실행된다: ① 시나리오가 끝난 작품의 이미지 → ② 시나리오가 빈 작품(최근·중간 저장본 우선)을 Codex로 생성 후 바로 이미지. Codex가 막혀 있으면 멈추고, 토큰이 돌아온 뒤 다음 실행이 빈 작품부터 자동으로 채운다.
 - **미연시 시나리오 상시 보충(2026-09-26)**: `com.tulpachat.dating-scenario-backlog` LaunchAgent가 로그인 직후와 1시간마다 `run_dating_scenario_backlog.py`를 호출한다. 사용자가 매번 “완성해”라고 요청하지 않아도 학습카드가 있지만 시나리오가 미완성인 작품을 전부 찾아 `generate_dating_sim_scenario.py --all`로 이어서 만든다. 완성본은 건너뛰고 `.partial.json`부터 재개한다. 공용 원자 잠금과 실제 프로세스 검색을 함께 사용하므로 수동 일괄 생성·기상 알람 에이전트·이 자동 작업은 서로 겹치지 않는다. Codex가 일시적으로 막히면 실패로 소진하지 않고 다음 예약 때 다시 시도한다. 상태는 `~/.tulpachat/dating_scenario_backlog.json`, 로그는 `~/Library/Logs/TulpaChat/dating-scenario-backlog*.log`에서 확인한다.
+- **겹침 이미지 자동 품질검사·복구(2026-09-26)**: 생성 프롬프트가 `duplicate face`, `double exposure`, `overlapping bodies`, `collage`, `split screen`을 명시적으로 금지한다. 생성 파일은 바로 공개 파일로 쓰지 않고 임시 후보로 받은 뒤 손상·빈 화면·복수 얼굴을 로컬 OpenCV로 검사한다. 통과할 때만 원자적으로 승격하며, 실패하면 다른 시드로 최대 6회 자동 재생성한다. 끝까지 실패한 파일은 `complete`로 표시하거나 화면에 배정하지 않는다. 매시간 상시 보충 작업의 마지막에는 `audit_dating_sim_images.py`가 기존 작품까지 전수 검사해 불량 키만 다시 만들며, 결과는 `~/.tulpachat/dating_image_quality_audit.json`과 각 작품 `manifest.json`의 `quality_status`·`quality_checks`에 남긴다.
 - 필수 표현이 반복 실패하면 그 표현만 제외하고 재생성한다(제외 목록은 `dating_sim_scenario.partial.json`에 보존).
 
 ## 미연시 시나리오 전체 누락분 생성 안정화 (2026-09-24)

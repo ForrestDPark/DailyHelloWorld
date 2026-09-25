@@ -74,11 +74,14 @@ def main() -> int:
             [str(agent.PYTHON), str(agent.ROOT / GENERATOR_NAME), "--all"],
             check=False,
         )
+        quality_result = subprocess.run([
+            str(agent.PYTHON), str(agent.ROOT / "audit_dating_sim_images.py"), "--lock-held",
+        ], check=False)
         status = "waiting_for_codex" if result.returncode == 75 else (
-            "complete" if result.returncode == 0 else "failed"
+            "complete" if result.returncode == 0 and quality_result.returncode == 0 else "failed"
         )
-        save_state(status, exit_code=result.returncode)
-        return 0 if result.returncode in (0, 75) else result.returncode
+        save_state(status, exit_code=result.returncode, quality_exit_code=quality_result.returncode)
+        return 0 if result.returncode in (0, 75) and quality_result.returncode in (0, 1) else result.returncode
     finally:
         agent.LOCK.unlink(missing_ok=True)
 

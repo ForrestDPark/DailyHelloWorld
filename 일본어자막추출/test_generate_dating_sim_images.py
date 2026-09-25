@@ -27,6 +27,30 @@ def scenario(days=14):
 
 
 class DatingImageAgentTests(unittest.TestCase):
+    def test_quality_report_rejects_multiple_distinct_faces(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "candidate.png"
+            target.write_bytes(b"fake-png" * 256)
+            with patch.object(images, "_valid_image", return_value=True), \
+                 patch.object(images, "_detect_face_boxes", return_value=[
+                     (10, 10, 80, 80), (250, 20, 75, 75),
+                 ]):
+                report = images.image_quality_report(target)
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["face_count"], 2)
+        self.assertIn("겹침", report["reasons"][0])
+
+    def test_quality_report_accepts_single_or_undetected_face(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "candidate.png"
+            target.write_bytes(b"fake-png" * 256)
+            with patch.object(images, "_valid_image", return_value=True), \
+                 patch.object(images, "_detect_face_boxes", return_value=[(10, 10, 80, 80)]):
+                self.assertTrue(images.image_quality_report(target)["passed"])
+            with patch.object(images, "_valid_image", return_value=True), \
+                 patch.object(images, "_detect_face_boxes", return_value=[]):
+                self.assertTrue(images.image_quality_report(target)["passed"])
+
     def test_comfy_reference_upload_normalizes_large_image(self):
         try:
             from PIL import Image
@@ -347,6 +371,7 @@ class DatingImageAgentTests(unittest.TestCase):
             fake_translator = lambda scene, work_dir: scene["text"]
             first = images.run_agent(work, max_scenes=5, generator=fake_generator, translator=fake_translator)
             self.assertEqual(first["status"], "complete")
+            self.assertEqual(first["quality_status"], "passed")
             self.assertEqual(first["job_progress"]["percent"], 100)
             self.assertEqual(first["job_progress"]["done"], first["job_progress"]["total"])
             first_call_count = len(calls)

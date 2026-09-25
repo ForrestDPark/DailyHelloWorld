@@ -33,7 +33,8 @@ def images_complete(folder):
     data = _read_json(folder / "dating_sim_images" / "manifest.json")
     image_dir = folder / "dating_sim_images"
     files = [data.get("portrait"), *(data.get("assignments") or {}).values()]
-    return (data.get("status") == "complete" and len(data.get("assignments") or {}) >= 42
+    return (data.get("status") == "complete" and data.get("quality_status") == "passed"
+            and len(data.get("assignments") or {}) >= 42
             and all(isinstance(name, str) and (image_dir / name).is_file()
                     and (image_dir / name).stat().st_size >= 1024 for name in files))
 

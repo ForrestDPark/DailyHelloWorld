@@ -547,6 +547,9 @@ chatapp/
 > 건너뛴다. 수동 생성기나 일일 제작 에이전트가 실행 중이면 이번 회차는 건너뛰어
 > 중복 실행을 막는다. 구현·설치 원본은
 > `일본어자막추출/run_dating_scenario_backlog.py`와 동명의 plist에 있다.
+> 같은 주기의 마지막 단계에서 기존 생성 이미지를 전수 품질검사한다. 복수 얼굴·
+> 이중 노출·겹침 가능성이 감지된 장면은 해당 장면만 다른 시드로 재생성하며,
+> 검사 통과 이미지에만 `quality_status=passed`를 부여해 완성본으로 노출한다.
 
 `shift_alarm.py`와 같은 방식으로 LaunchAgent 3개가 등록돼 있다 — 재부팅해도
 자동으로 뜨고, 크래시하면 launchd가 다시 살린다(`KeepAlive.SuccessfulExit=false`).

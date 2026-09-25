@@ -29,6 +29,7 @@ from ai_exec import run_ai_exec  # noqa: E402
 
 VERSION = 1
 DEFAULT_MAX_SCENES = 12
+MAX_QUALITY_ATTEMPTS = 6
 IMAGE_DIR_NAME = "dating_sim_images"
 # ★ 2026-09-23: "가로로길게 생성하게끔 조정해줘" 요청 — 세로로 긴 512×768
 # 인물사진이 미연시 화면의 가로로 긴 박스에 눌려 들어가면서 머리·가슴이
@@ -42,6 +43,63 @@ LOCATIONS = ("first", "walk", "quiet")
 _OPENAI_DISABLED_REASON = None
 _LAST_GENERATION_META = {}
 _FACE_CASCADES = {}
+
+
+def _deduplicate_face_boxes(boxes):
+    """정면·측면 검출기가 같은 얼굴을 두 번 센 결과를 하나로 합친다."""
+    faces = []
+    for box in sorted(boxes, key=lambda item: item[2] * item[3], reverse=True):
+        x, y, w, h = box
+        cx, cy = x + w / 2, y + h / 2
+        if any(abs(cx - (ox + ow / 2)) < max(w, ow) * .42
+               and abs(cy - (oy + oh / 2)) < max(h, oh) * .42
+               for ox, oy, ow, oh in faces):
+            continue
+        faces.append(tuple(int(value) for value in box))
+    return faces
+
+
+def _detect_face_boxes(path):
+    """생성 이미지에서 서로 다른 얼굴 위치를 찾는다.
+
+    이 미연시 이미지는 여주인공 한 명을 보여주는 단독 장면이므로 서로 떨어진
+    얼굴이 둘 이상이면 이중 노출·인물 포개짐·콜라주 오류로 취급한다.
+    """
+    try:
+        import cv2
+    except ImportError:
+        return []
+    image = cv2.imread(str(path))
+    if image is None:
+        return []
+    gray = cv2.equalizeHist(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY))
+    detected = []
+    minimum = max(36, min(image.shape[:2]) // 12)
+    for cascade_name in ("haarcascade_frontalface_alt2.xml", "haarcascade_profileface.xml"):
+        cascade = _FACE_CASCADES.get(cascade_name)
+        if cascade is None:
+            cascade = cv2.CascadeClassifier(cv2.data.haarcascades + cascade_name)
+            _FACE_CASCADES[cascade_name] = cascade
+        detected.extend(cascade.detectMultiScale(
+            gray, scaleFactor=1.04, minNeighbors=4, minSize=(minimum, minimum),
+        ))
+    return _deduplicate_face_boxes(detected)
+
+
+def image_quality_report(path):
+    """화면에 공개해도 되는 생성 이미지인지 로컬에서 판정한다.
+
+    외부 AI 호출 없이 손상·빈 화면과 복수 얼굴을 검사한다. 얼굴을 못 찾은
+    측면·전신 장면은 허용하지만, 둘 이상 찾으면 겹침 가능성이 높아 거부한다.
+    """
+    reasons = []
+    if not _valid_image(path):
+        reasons.append("손상되었거나 내용이 없는 이미지")
+        return {"passed": False, "reasons": reasons, "face_count": 0}
+    faces = _detect_face_boxes(path)
+    if len(faces) > 1:
+        reasons.append(f"서로 떨어진 얼굴 {len(faces)}개 감지(겹침·이중 인물 가능성)")
+    return {"passed": not reasons, "reasons": reasons, "face_count": len(faces)}
 
 
 def _relative_original_name(work_dir, path):
@@ -501,6 +559,8 @@ def _build_comfy_workflow(
         "7": {"class_type": "CLIPTextEncode", "inputs": {
             "text": (
                 "nsfw, nude, child, low quality, blurry, distorted, deformed, bad hands, "
+                "multiple people, two women, duplicate person, duplicate face, extra face, "
+                "double exposure, ghost face, overlapping bodies, collage, split screen, "
                 "text, watermark, caption, subtitle, logo, banner, letters, "
                 "chinese hanfu, qipao, cheongsam, chinese traditional dress"
             ),
@@ -744,7 +804,9 @@ def _local_generate(prompt, target, reference=None):
         reference_names = []
     base_seed = int.from_bytes(hashlib.sha256(prompt.encode()).digest()[:8], "big") & ((1 << 63) - 1)
     timeout = int(os.environ.get("JP_COMFYUI_TIMEOUT", "600"))
-    for attempt in range(4):
+    quality_failures = []
+    candidate = target.with_name(f".{target.stem}.quality-candidate{target.suffix or '.png'}")
+    for attempt in range(MAX_QUALITY_ATTEMPTS):
         seed = base_seed + attempt * 104729
         workflow = _build_comfy_workflow(
             prompt, model_name, seed, reference_names, loader=loader, vae_name=vae_name,
@@ -784,8 +846,10 @@ def _local_generate(prompt, target, reference=None):
             "filename": image["filename"], "subfolder": image.get("subfolder", ""), "type": image.get("type", "output")
         })
         with urllib.request.urlopen(_comfy_base_url() + "/view?" + query, timeout=60) as response:
-            target.write_bytes(response.read())
-        if _valid_image(target):
+            candidate.write_bytes(response.read())
+        quality = image_quality_report(candidate)
+        if quality["passed"]:
+            candidate.replace(target)
             sampler = workflow["3"]["inputs"]
             _LAST_GENERATION_META = {
                 "effective_prompt": workflow["6"]["inputs"]["text"],
@@ -806,10 +870,20 @@ def _local_generate(prompt, target, reference=None):
                             "txt2img 12 steps + 35% text/65% reference latent + img2img"
                         ))
                     ),
+                    "quality_attempts": attempt + 1,
                 },
+                "quality": quality,
             }
             return
-    raise RuntimeError("ComfyUI가 검은 또는 손상된 이미지를 반복 반환했습니다")
+        quality_failures.append({"attempt": attempt + 1, **quality})
+        candidate.unlink(missing_ok=True)
+        print(f"   ♻️ 이미지 품질검사 실패 {attempt + 1}/{MAX_QUALITY_ATTEMPTS}: "
+              f"{', '.join(quality['reasons'])} — 다른 시드로 재생성", flush=True)
+    candidate.unlink(missing_ok=True)
+    raise RuntimeError(
+        f"이미지 품질검사를 {MAX_QUALITY_ATTEMPTS}회 통과하지 못했습니다: "
+        f"{quality_failures[-1]['reasons'] if quality_failures else '알 수 없는 오류'}"
+    )
 
 
 def _valid_image(path):
@@ -833,8 +907,17 @@ def _generate(prompt, target, reference=None):
     try:
         if _OPENAI_DISABLED_REASON:
             raise RuntimeError(_OPENAI_DISABLED_REASON)
-        _openai_generate(prompt, target, reference)
-        return "openai"
+        for attempt in range(MAX_QUALITY_ATTEMPTS):
+            _openai_generate(prompt, target, reference)
+            quality = image_quality_report(target)
+            if quality["passed"]:
+                _LAST_GENERATION_META.update({"quality": quality,
+                                              "quality_attempts": attempt + 1})
+                return "openai"
+            target.unlink(missing_ok=True)
+            print(f"   ♻️ OpenAI 이미지 품질검사 실패 {attempt + 1}/{MAX_QUALITY_ATTEMPTS}: "
+                  f"{', '.join(quality['reasons'])}", flush=True)
+        raise RuntimeError("OpenAI 이미지가 품질검사를 반복 통과하지 못했습니다")
     except Exception as openai_error:
         if "no credits remaining" in str(openai_error).lower() or "quota" in str(openai_error).lower():
             _OPENAI_DISABLED_REASON = str(openai_error)
@@ -874,7 +957,7 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
     manifest.update({"version": VERSION, "status": "running", "title": work_dir.name,
                      "portrait": "portrait.png", "selected_count": len(plan["selected"]),
                      "scene_limit": max_scenes, "assignments": {}, "scenes": manifest.get("scenes", {}),
-                     "errors": []})
+                     "errors": [], "quality_status": "checking"})
     portrait = output / "portrait.png"
     originals = _original_scene_images(work_dir)
     # ★ 2026-09-23: "인물 얼굴이나온사진만 추출... 고정 인물로 정한뒤에" 요청 —
@@ -978,7 +1061,21 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
         record = manifest["scenes"].get(selected_key)
         if record and (output / record["file"]).is_file():
             manifest["assignments"][scene_key] = record["file"]
-    manifest["status"] = "complete" if not manifest["errors"] else "partial"
+    quality_records = {}
+    portrait_quality = image_quality_report(portrait)
+    quality_records["portrait"] = portrait_quality
+    for scene_key, record in manifest["scenes"].items():
+        quality_records[scene_key] = image_quality_report(output / str(record.get("file", "")))
+    failed_quality = {key: report for key, report in quality_records.items() if not report["passed"]}
+    manifest["quality_checks"] = quality_records
+    manifest["quality_status"] = "passed" if not failed_quality else "failed"
+    manifest["quality_checked_at"] = int(time.time())
+    if failed_quality:
+        manifest["errors"].extend(
+            {"scene": key, "error": " / ".join(report["reasons"])}
+            for key, report in failed_quality.items()
+        )
+    manifest["status"] = "complete" if not manifest["errors"] and not failed_quality else "partial"
     manifest["job_progress"] = {
         "done": progress_total, "total": progress_total, "percent": 100,
         "current": "생성 완료" if not manifest["errors"] else "오류 포함 완료",

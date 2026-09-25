@@ -37,9 +37,16 @@ class DailyDatingSimAgentTests(unittest.TestCase):
                     (image_dir / name).write_bytes(b"x" * 1024)
                     assignments[f"{day}:{loc}"] = name
             (image_dir / "manifest.json").write_text(json.dumps({
-                "status": "complete", "portrait": "portrait.png", "assignments": assignments,
+                "status": "complete", "quality_status": "passed",
+                "portrait": "portrait.png", "assignments": assignments,
             }), encoding="utf-8")
             self.assertTrue(agent.images_complete(work))
+            manifest = json.loads((image_dir / "manifest.json").read_text(encoding="utf-8"))
+            manifest["quality_status"] = "failed"
+            (image_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+            self.assertFalse(agent.images_complete(work))
+            manifest["quality_status"] = "passed"
+            (image_dir / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
             (image_dir / "1-first.png").unlink()
             self.assertFalse(agent.images_complete(work))
 
