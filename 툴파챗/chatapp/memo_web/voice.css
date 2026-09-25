@@ -1,0 +1,35 @@
+.root-note > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.voice-button {
+  padding: 7px 10px;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.voice-button.listening {
+  border-color: #d9536f;
+  background: #d9536f;
+  color: #fff;
+  animation: memo-pulse 1s ease-in-out infinite;
+}
+
+.voice-button.listening:disabled {
+  opacity: .75;
+  cursor: wait;
+}
+
+.dialog-head > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+@keyframes memo-pulse {
+  50% { opacity: .65; }
+}

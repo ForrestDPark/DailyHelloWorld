@@ -218,10 +218,33 @@ body.practice-open { overflow: hidden; }
 @keyframes speaking { 0%, 100% { transform: translateY(0); filter: brightness(1); } 50% { transform: translateY(-3px); filter: brightness(1.08); } }
 @keyframes speaking-image{0%,100%{filter:brightness(1)}50%{filter:brightness(1.1)}}
 .speaker-name {
-  font-size: 10px;
-  padding: 4px 10px;
-  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+  min-width: 140px;
+  padding: 9px 16px;
+  border: 3px solid var(--border);
+  background: #fff4cf;
   color: #24101c;
+  box-shadow: 4px 4px 0 rgba(0,0,0,.34);
+  font-size: clamp(16px, 4.6vw, 21px);
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+}
+.speaker-name .speaker-name-jp { color: #301d55; }
+.speaker-name .speaker-name-ko {
+  padding-left: 10px;
+  border-left: 2px solid rgba(48,29,85,.3);
+  color: #7b2144;
+  font-size: .82em;
+  white-space: nowrap;
+}
+.speaker-name rt { color: #6b4d87; font-size: .55em; line-height: 1; }
+@media (prefers-color-scheme: dark) {
+  .speaker-name { background: #fff0bd; color: #17101f; }
 }
 .dialogue-box {
   position: relative;
@@ -866,6 +889,7 @@ body.practice-open { overflow: hidden; }
 }
 .teacher-tip strong { display: block; color: var(--accent); font-size: 12px; margin-bottom: 4px; }
 .teacher-tip p { margin: 0; color: var(--text); font-size: 14px; line-height: 1.55; white-space: pre-line; }
+.teacher-tip-source{display:block;margin-top:10px;padding:8px 10px;border:1px solid var(--accent);border-radius:8px;color:var(--accent);font-size:12px;font-weight:800;text-align:center;text-decoration:none}.teacher-tip-source.hidden{display:none}.teacher-tip-source:active{transform:translateY(1px);background:color-mix(in srgb,var(--accent) 12%,transparent)}
 @keyframes teacher-tip-pulse { 50% { transform: scale(1.08); filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 75%, transparent)); } }
 @keyframes teacher-tip-sparkle { 50% { opacity: .35; transform: rotate(18deg) scale(.8); } }
 @media (prefers-reduced-motion: reduce) {
