@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.tulpachat.dating-scenario-backlog</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/anaconda3/bin/python3</string>
+        <string>/Users/forrestdpark/Desktop/PDG/DailyHelloWorld_/일본어자막추출/run_dating_scenario_backlog.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/forrestdpark/Desktop/PDG/DailyHelloWorld_</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>StartInterval</key>
+    <integer>3600</integer>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>LowPriorityIO</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/forrestdpark/Library/Logs/TulpaChat/dating-scenario-backlog.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/forrestdpark/Library/Logs/TulpaChat/dating-scenario-backlog.error.log</string>
+</dict>
+</plist>
