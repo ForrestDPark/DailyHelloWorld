@@ -27,7 +27,7 @@
      페이지 로드는 chat.js가 부팅 후 유휴 시간에 백그라운드로 미리 시작). -->
 <link rel="preconnect" href="https://sunzi-strategy-notes.pulpilisory.chatgpt.site" crossorigin>
 <link rel="dns-prefetch" href="https://sunzi-strategy-notes.pulpilisory.chatgpt.site">
-<link rel="stylesheet" href="/static/style.css?v=20260924-mp3-player-v1">
+<link rel="stylesheet" href="/static/style.css?v=20260925-update-history-v1"><link rel="stylesheet" href="/static/icon-layout.css?v=20260925-unread-badge-v1">
 <!-- ★ "새 메시지 알림(웹 푸시)" 요청(2026-08-27) — iOS Safari는 PWA로
      "홈 화면에 추가"돼 있어야만 웹 푸시가 동작한다. manifest.json이 그
      설치 가능 상태를 만든다. -->
@@ -90,12 +90,12 @@
 
   <!-- 개인 시스템 전체의 시작점. 긴 친구/방 목록은 각각 별도 화면으로 분리한다. -->
   <div id="home-view" class="hidden">
-    <header class="portal-header"><a class="portal-brand" href="#home"><span>T</span><b>나의 작업실</b></a><div class="portal-header-actions"><button id="portal-layout-btn" type="button" class="subtle-button portal-layout-button" aria-label="격자 보기로 전환">▦ 격자</button><button id="portal-notifications-btn" type="button" class="portal-notification-button" aria-label="알림 보기" aria-expanded="false"><svg aria-hidden="true"><use href="#icon-bell"/></svg><span id="portal-notification-badge" class="notification-count hidden"></span></button><button id="portal-account-btn" type="button" class="subtle-button">내 프로필</button></div></header>
+    <header class="portal-header"><a class="portal-brand" href="#home"><span>T</span><b>나의 작업실</b></a><div class="portal-header-actions"><button id="portal-layout-btn" type="button" class="subtle-button portal-layout-button" aria-label="목록 보기로 전환">☰ 목록</button><button id="portal-notifications-btn" type="button" class="portal-notification-button" aria-label="알림 보기" aria-expanded="false"><svg aria-hidden="true"><use href="#icon-bell"/></svg><span id="portal-notification-badge" class="notification-count hidden"></span></button><button id="portal-account-btn" type="button" class="subtle-button">내 프로필</button></div></header>
     <aside id="portal-notification-center" class="notification-center hidden" aria-label="알림"><div class="notification-center-head"><div><small>NOTIFICATIONS</small><h2>알림</h2></div><button id="portal-notification-close" type="button" aria-label="알림 닫기"><svg aria-hidden="true"><use href="#icon-close"/></svg></button></div><div id="portal-notification-list" class="notification-list"></div></aside>
     <main class="portal-main">
-      <section class="portal-services list-view" aria-label="시스템 바로가기">
+      <section class="portal-services icon-view" aria-label="시스템 바로가기">
         <a class="portal-card shift-alarm" href="/shift-alarm/"><span class="portal-card-mark">⏰</span><div><small>DAILY CONTROL</small><h2>Shift Alarm</h2><p>오늘 근무 · 날씨 · 리마인더 시각 · 일일 루틴</p></div><i>→</i></a>
-        <a id="portal-chat-link" class="portal-card chat" href="#chats"><span class="portal-card-mark">T</span><div><small>CONVERSATION</small><h2>툴파챗</h2><p>안 읽은 대화 <b id="portal-unread">0</b>개 · 최근 대화 이어가기</p></div><i>→</i></a>
+        <a id="portal-chat-link" class="portal-card chat" href="#chats"><span class="portal-card-mark">T<span id="portal-chat-unread" class="portal-app-badge hidden"></span></span><div><small>CONVERSATION</small><h2>툴파챗</h2><p>안 읽은 메시지 <b id="portal-unread">0</b>개 · 최근 대화 이어가기</p></div><i>→</i></a>
         <a class="portal-card japanese" href="/epub/"><span class="portal-card-mark">本</span><div><small>JAPANESE LIBRARY</small><h2>일본어 학습</h2><p>EPUB <b id="portal-japanese-count">불러오는 중</b> · 오늘의 회차와 표현 복습</p></div><i>→</i></a>
         <a class="portal-card english" href="/english/"><span class="portal-card-mark">A</span><div><small>ENGLISH LIBRARY</small><h2>영어 학습</h2><p>원서 EPUB · 이어서 읽기 · 다른 작품 선택</p></div><i>→</i></a>
         <a id="portal-sunzi-link" class="portal-card sunzi" href="#sunzi"><span class="portal-card-mark">孫</span><div><small>STRATEGY NOTES</small><h2>손자병법</h2><p>구지편 분석 목록 · 역사 사례 · 13편 전체 목차</p></div><i>→</i></a>
@@ -108,7 +108,7 @@
         <a class="portal-card memo" href="/memo/"><span class="portal-card-mark">✦</span><div><small>CONNECTED NOTES</small><h2>메모 시스템</h2><p>채팅의 유용한 메시지를 저장하고 생각을 가지처럼 확장</p></div><i>→</i></a>
       </section>
       <section id="portal-update-history" class="portal-update-history hidden" aria-labelledby="portal-update-title">
-        <div class="portal-update-head"><div><small>SYSTEM HISTORY</small><h2 id="portal-update-title">툴파챗 업데이트 기록</h2></div><button id="portal-update-toggle" type="button" aria-expanded="true" aria-controls="portal-update-list"><span id="portal-update-count"></span><i aria-hidden="true">⌃</i></button></div>
+        <div class="portal-update-head"><div><small>SYSTEM HISTORY</small><h2 id="portal-update-title">툴파챗 업데이트 기록</h2></div><div class="portal-update-head-actions"><span id="portal-update-count"></span><button id="portal-update-refresh" type="button" aria-label="업데이트 기록 새로고침">↻ 새로고침</button><button id="portal-update-toggle" type="button" aria-expanded="true" aria-controls="portal-update-list"><i aria-hidden="true">⌃</i><span class="sr-only">접기 또는 펼치기</span></button></div></div>
         <div id="portal-update-list" class="portal-update-list"><p>업데이트 기록을 불러오는 중입니다.</p></div>
       </section>
     </main>
@@ -345,6 +345,6 @@
   </div>
 
   <link rel="stylesheet" href="/static/style.css?v=20260925-message-fold-v2">
-  <script src="/static/chat.js?v=20260925-message-fold-v2"></script>
+  <script src="/static/chat.js?v=20260925-update-refresh-v1"></script>
 </body>
 </html>

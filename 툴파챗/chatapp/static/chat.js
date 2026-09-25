@@ -33,16 +33,19 @@ const portalServices = document.querySelector(".portal-services");
 const portalLayoutBtn = document.getElementById("portal-layout-btn");
 function setPortalLayout(mode) {
   const grid = mode === "grid";
+  const icons = mode === "icons";
   portalServices?.classList.toggle("grid-view", grid);
-  portalServices?.classList.toggle("list-view", !grid);
+  portalServices?.classList.toggle("icon-view", icons);
+  portalServices?.classList.toggle("list-view", !grid && !icons);
   if (portalLayoutBtn) {
-    portalLayoutBtn.textContent = grid ? "☰ 목록" : "▦ 격자";
-    portalLayoutBtn.setAttribute("aria-label", grid ? "목록 보기로 전환" : "격자 보기로 전환");
+    portalLayoutBtn.textContent = mode === "list" ? "▦ 격자" : mode === "grid" ? "◉ 아이콘" : "☰ 목록";
+    portalLayoutBtn.setAttribute("aria-label", mode === "list" ? "격자 보기로 전환" : mode === "grid" ? "아이콘 보기로 전환" : "목록 보기로 전환");
   }
-  localStorage.setItem("portal-layout", grid ? "grid" : "list");
+  localStorage.setItem("portal-layout-v2", mode);
 }
-setPortalLayout(localStorage.getItem("portal-layout") === "grid" ? "grid" : "list");
-portalLayoutBtn?.addEventListener("click", () => setPortalLayout(portalServices?.classList.contains("grid-view") ? "list" : "grid"));
+const savedPortalLayout=localStorage.getItem("portal-layout-v2");
+setPortalLayout(["list","grid","icons"].includes(savedPortalLayout)?savedPortalLayout:"icons");
+portalLayoutBtn?.addEventListener("click",()=>setPortalLayout(portalServices?.classList.contains("list-view")?"grid":portalServices?.classList.contains("grid-view")?"icons":"list"));
 
 // ★ "내가 최근에 가장 많이 실행한 순서대로 항목이 뜨면 좋겠어 근데 shift alarm 은
 // 항상 첫 항목으로" 요청 — 클릭할 때마다 이 브라우저 기준 방문 횟수를 세어두고
@@ -706,7 +709,7 @@ async function subscribeToPush() {
     alert("서버에 웹 푸시가 아직 설정되지 않았습니다.");
     return;
   }
-  const reg = await navigator.serviceWorker.register("/static/sw.js?v=20260914-hanja-v3", { updateViaCache: "none" });
+  const reg = await navigator.serviceWorker.register("/static/sw.js?v=20260925-shift-push-v1", { updateViaCache: "none" });
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: _urlBase64ToUint8Array(public_key),
@@ -1272,8 +1275,13 @@ async function initAuth() {
 }
 
 function parseRoomFromHash() {
-  const m = location.hash.match(/^#room=(.+)$/);
+  const m = location.hash.match(/^#room=([^&]+)(?:&message=\d+)?$/);
   return m ? decodeURIComponent(m[1]) : null;
+}
+
+function parseMessageFromHash() {
+  const m = location.hash.match(/(?:^|&)message=(\d+)(?:&|$)/);
+  return m ? Number(m[1]) : null;
 }
 
 // ★ "이거 좀 정신건강에 무서우니까 캐릭터이름 뒤에 (가상) 붙여달라"는 요청
@@ -1684,9 +1692,16 @@ function renderRoomItem(r) {
     };
     makeSwipeable(item, content, [pinAction, { label: "삭제", className: "danger", onClick: doDeleteGroupRoom }]);
   } else if (pinAction) {
-    // 위 두 분기에 안 걸리는 방(페르소나 1:1 방 등)은 예전엔 스와이프 액션이
-    // 아예 없었다 — 고정 핀만이라도 쓸 수 있게 최소한으로 스와이프 가능하게 한다.
-    makeSwipeable(item, content, [pinAction]);
+    const actionsConfig=[pinAction];
+    if (!r.is_group_room && (amOwner || r.is_mine)) {
+      const roomTitle=roomLabel;
+      actionsConfig.push({label:"삭제",className:"danger",onClick:async()=>{
+        if(!confirm(`"${roomTitle}" 대화를 삭제할까요? 대화 기록은 사라지지만 친구는 그대로 유지됩니다.`))return;
+        try{const response=await apiFetch(`/api/rooms/${encodeURIComponent(r.room_id)}`,{method:"DELETE"});if(!response.ok)throw new Error("delete-failed");pinnedRooms.delete(r.room_id);localStorage.setItem(PINNED_ROOMS_STORAGE_KEY,JSON.stringify([...pinnedRooms]));await showRoomList()}
+        catch(e){if(e.message!=="unauthorized"&&e.message!=="forbidden")alert("삭제 실패")}
+      }});
+    }
+    makeSwipeable(item, content, actionsConfig);
   }
   if (listMode === "chats") attachRoomReorder(item, content);
   return item;
@@ -2083,18 +2098,15 @@ async function loadDirectoryData() {
   return rooms;
 }
 
-async function showPortalHome(focusSystems = false) {
-  currentRoom = null;
-  pollGeneration += 1;
-  if (activePollController) activePollController.abort();
-  if (pollTimer) clearTimeout(pollTimer);
-  authView.classList.add("hidden"); chatView.classList.add("hidden"); roomListView.classList.add("hidden"); sunziView.classList.add("hidden"); homeView.classList.remove("hidden");
-async function loadSystemUpdateHistory() {
+async function loadSystemUpdateHistory({manual = false} = {}) {
   const list = document.getElementById("portal-update-list");
+  const refresh = document.getElementById("portal-update-refresh");
+  if (manual) { refresh.disabled = true; refresh.textContent = "↻ 확인 중"; }
   try {
-    const data = await (await apiFetch("/api/system/updates")).json();
+    const data = await (await apiFetch(`/api/system/updates?_=${Date.now()}`, {cache:"no-store"})).json();
     const items = data.items || [];
-    document.getElementById("portal-update-count").textContent = `${items.length}건`;
+    const synced = new Intl.DateTimeFormat("ko-KR", {hour:"2-digit",minute:"2-digit",second:"2-digit"}).format(new Date());
+    document.getElementById("portal-update-count").textContent = `${items.length}건 · ${synced}`;
     list.replaceChildren();
     for (const item of items) {
       const link = document.createElement("a");
@@ -2121,13 +2133,17 @@ async function loadSystemUpdateHistory() {
     if (!items.length) list.textContent = "아직 기록된 업데이트가 없습니다.";
   } catch (error) {
     list.textContent = "업데이트 기록을 불러오지 못했습니다.";
+    document.getElementById("portal-update-count").textContent = "새로고침 실패";
     console.error(error);
+  } finally {
+    if (manual) { refresh.disabled = false; refresh.textContent = "↻ 새로고침"; }
   }
 }
 
 const SYSTEM_UPDATE_COLLAPSED_KEY = "tulpachat_system_updates_collapsed";
 const systemUpdateHistory = document.getElementById("portal-update-history");
 const systemUpdateToggle = document.getElementById("portal-update-toggle");
+document.getElementById("portal-update-refresh").addEventListener("click", () => loadSystemUpdateHistory({manual:true}));
 function setSystemUpdateCollapsed(collapsed) {
   systemUpdateHistory.classList.toggle("collapsed", collapsed);
   systemUpdateToggle.setAttribute("aria-expanded", String(!collapsed));
@@ -2142,14 +2158,22 @@ setInterval(() => {
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && location.hash === "#systems") loadSystemUpdateHistory();
 });
+
+async function showPortalHome(focusSystems = false) {
+  currentRoom = null;
+  pollGeneration += 1;
+  if (activePollController) activePollController.abort();
+  if (pollTimer) clearTimeout(pollTimer);
+  authView.classList.add("hidden"); chatView.classList.add("hidden"); roomListView.classList.add("hidden"); sunziView.classList.add("hidden"); homeView.classList.remove("hidden");
   const greetingName = document.getElementById("portal-greeting-name");
   if (greetingName) greetingName.textContent = myDisplayName || myUsername || "오늘도";
   try {
     const rooms = await loadDirectoryData();
-    // 메시지 ID는 서버 전체에서 증가하므로 두 ID의 차이는 메시지 개수가 아니다.
-    // 마지막 메시지가 읽음 기준보다 새로운 "방"만 세어 과장된 숫자를 피한다.
-    const unread = rooms.reduce((sum, room) => sum + (Number(room.last_message_id || 0) > getLastRead(room.room_id) ? 1 : 0), 0);
+    const unreadRooms=rooms.filter(room=>Number(room.last_message_id||0)>getLastRead(room.room_id));
+    const counts=await Promise.all(unreadRooms.map(async room=>{try{const response=await apiFetch(`/api/messages?room_id=${encodeURIComponent(room.room_id)}&since_id=${getLastRead(room.room_id)}&count_only=true`);const data=await response.json();return Number(data.count)||0}catch(e){return 1}}));
+    const unread=counts.reduce((sum,count)=>sum+count,0),appBadge=document.getElementById("portal-chat-unread");
     document.getElementById("portal-unread").textContent = unread;
+    appBadge.textContent=unread>99?"99+":String(unread);appBadge.classList.toggle("hidden",unread===0);
   } catch (error) { console.error(error); }
   fetch("/epub/api/books", {credentials:"same-origin"}).then((response) => response.ok ? response.json() : Promise.reject(new Error("library"))).then((books) => {
     const count = document.getElementById("portal-japanese-count");
@@ -2164,6 +2188,9 @@ document.addEventListener("visibilitychange", () => {
     }).catch(() => { document.getElementById("portal-vocab-count").textContent = String(items.length); });
   });
   loadPortalNotifications();
+  const updateHistory = document.getElementById("portal-update-history");
+  updateHistory.classList.toggle("hidden", !focusSystems);
+  if (focusSystems) loadSystemUpdateHistory();
   maybeShowPwaInstallPrompt();
   if (focusSystems) document.querySelector(".portal-services")?.scrollIntoView({behavior:"smooth", block:"start"});
 }
@@ -2178,9 +2205,6 @@ const PWA_INSTALL_REMIND_MS = 3 * 24 * 60 * 60 * 1000;
 const pwaInstallOverlay = document.getElementById("pwa-install-overlay");
 const pwaInstallAction = document.getElementById("pwa-install-action");
 const pwaInstallSteps = document.getElementById("pwa-install-steps");
-  const updateHistory = document.getElementById("portal-update-history");
-  updateHistory.classList.toggle("hidden", !focusSystems);
-  if (focusSystems) loadSystemUpdateHistory();
 
 function isInstalledPwa() {
   return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
@@ -4287,7 +4311,11 @@ async function poll() {
       // 안 되므로, 진짜 새로 도착한 메시지에만 자동 읽어주기를 적용한다.
       if (!initialLoad && m.is_persona && isAutoReadOn(roomAtRequest)) enqueueAutoRead(m);
     }
-    if (initialLoad) positionAtLastRead();
+    if (initialLoad) {
+      const linkedMessageId=parseMessageFromHash();
+      if(linkedMessageId) requestAnimationFrame(()=>scrollToMessage(linkedMessageId));
+      else positionAtLastRead();
+    }
     else if (messages.length) requestAnimationFrame(markVisibleMessagesRead);
   } catch (e) {
     if (e.name === "AbortError") return;
@@ -4498,7 +4526,7 @@ window.addEventListener("hashchange", route);
 // 알림 허용 여부와 관계없이 서비스 워커를 설치한다. 그래야 서버 재시작 중
 // PWA를 다시 열어도 흰 화면 대신 정비 안내를 표시할 수 있다.
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/static/sw.js?v=20260914-hanja-v3", { updateViaCache: "none" }).catch((error) => console.error("service worker", error));
+  navigator.serviceWorker.register("/static/sw.js?v=20260925-shift-push-v1", { updateViaCache: "none" }).catch((error) => console.error("service worker", error));
 }
 
 initAuth().then((ok) => {
