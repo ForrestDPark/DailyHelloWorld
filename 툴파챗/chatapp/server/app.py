@@ -160,7 +160,7 @@ SYSTEM_UPDATE_NOTIFICATIONS = (
     {
         "id": "system:2026-09-09:notification-center",
         "title": "통합 알림 센터가 생겼습니다",
-        "body": "시스템 업데이트와 읽지 않은 툴파챗 메시지를 나투다에서 한곳에 모아 확인할 수 있습니다.",
+        "body": "시스템 업데이트와 읽지 않은 툴파챗 메시지를 나툼에서 한곳에 모아 확인할 수 있습니다.",
         "url": "/#home", "created_at": "2026-09-09T00:00:00+09:00",
     },
     {
@@ -180,7 +180,7 @@ SYSTEM_UPDATE_NOTIFICATIONS = (
 # 알림 읽음 여부와 무관하게 시스템 화면에서 계속 볼 수 있는 제품 변경 이력.
 # 사용자에게 의미 있는 완료 단위만 기록하고 최신순으로 반환한다.
 WEBAPP_UPDATE_HISTORY = (
-    {"created_at": "2026-09-25T11:25:00+09:00", "system": "나투다", "title": "전체 업데이트 타임라인", "body": "시스템 화면에서 Shift Alarm뿐 아니라 웹앱 전체 변경 내용을 최신순으로 확인할 수 있습니다.", "url": "/#systems"},
+    {"created_at": "2026-09-25T11:25:00+09:00", "system": "나툼", "title": "전체 업데이트 타임라인", "body": "시스템 화면에서 Shift Alarm뿐 아니라 웹앱 전체 변경 내용을 최신순으로 확인할 수 있습니다.", "url": "/#systems"},
     {"created_at": "2026-09-25T11:10:00+09:00", "system": "Shift Alarm", "title": "아이폰·Apple Watch 알림", "body": "맥 알림을 웹 푸시로 전달하고 아이폰·워치 알림 구독 버튼과 진동 요청을 추가했습니다.", "url": "/shift-alarm/"},
     {"created_at": "2026-09-25T10:57:00+09:00", "system": "Shift Alarm", "title": "일일 루틴 알림 시각 학습", "body": "같은 근무 유형의 최근 전부 체크 완료 시각을 학습해 10분 전에 알립니다.", "url": "/shift-alarm/"},
     {"created_at": "2026-09-25T10:35:00+09:00", "system": "Shift Alarm", "title": "리마인더 시각 자동 학습", "body": "모든 리마인더 체크 시각을 기록하고 다음 같은 근무 주기의 알림 시각에 반영합니다.", "url": "/shift-alarm/"},
@@ -191,7 +191,7 @@ WEBAPP_UPDATE_HISTORY = (
     {"created_at": "2026-09-25T08:50:00+09:00", "system": "Shift Alarm", "title": "생활 리듬 그래프", "body": "기상·루틴 완료·리마인더 체크 시간을 기간별 그래프로 볼 수 있게 했습니다.", "url": "/shift-alarm/"},
     {"created_at": "2026-09-24T12:10:00+09:00", "system": "일본어 학습", "title": "미연시 진행 상태와 학습 표현", "body": "제작 단계별 진행률·중단 이유·재실행과 장면 대사 기반 학습 표현을 보강했습니다.", "url": "/epub/"},
     {"created_at": "2026-09-24T11:56:00+09:00", "system": "Shift Alarm", "title": "근무표와 오늘 근무 상세", "body": "오늘 근무 시간과 월간 D·S·G·휴무 근무표, 날짜별 리마인더를 함께 표시합니다.", "url": "/shift-alarm/"},
-    {"created_at": "2026-09-09T00:00:00+09:00", "system": "나투다", "title": "통합 알림 센터", "body": "시스템 업데이트와 읽지 않은 메시지를 한곳에서 확인할 수 있게 했습니다.", "url": "/#home"},
+    {"created_at": "2026-09-09T00:00:00+09:00", "system": "나툼", "title": "통합 알림 센터", "body": "시스템 업데이트와 읽지 않은 메시지를 한곳에서 확인할 수 있게 했습니다.", "url": "/#home"},
     {"created_at": "2026-09-07T18:00:00+09:00", "system": "일본어 학습", "title": "EPUB 리더 개선", "body": "세로 스크롤·자동 읽기·현재 구절 강조와 후리가나 표시를 개선했습니다.", "url": "/epub/"},
 )
 
@@ -238,7 +238,7 @@ def _git_update_history(limit=80):
         elif "이직시스템" in joined:
             system, url = "이직 시스템", "/career/"
         else:
-            system, url = "나투다", "/#systems"
+            system, url = "나툼", "/#systems"
         items.append({
             "id": f"git:{commit_hash}", "created_at": created_at,
             "system": system, "title": title,
@@ -423,7 +423,7 @@ class NoCacheStaticMiddleware(BaseHTTPMiddleware):
         return response
 
 
-app = FastAPI(title="나투다")
+app = FastAPI(title="나툼 · NaTum")
 app.add_middleware(SessionAuthMiddleware)
 app.add_middleware(NoCacheStaticMiddleware)
 init_db()
