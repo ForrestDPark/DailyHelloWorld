@@ -195,6 +195,62 @@ WEBAPP_UPDATE_HISTORY = (
     {"created_at": "2026-09-07T18:00:00+09:00", "system": "일본어 학습", "title": "EPUB 리더 개선", "body": "세로 스크롤·자동 읽기·현재 구절 강조와 후리가나 표시를 개선했습니다.", "url": "/epub/"},
 )
 
+
+def _git_update_history(limit=80):
+    """main 저장소의 완료 커밋을 사용자용 업데이트 기록으로 변환한다."""
+    try:
+        result = subprocess.run(
+            ["git", "log", f"-{limit}", "--date=iso-strict",
+             "--pretty=format:%x1e%H%x1f%cI%x1f%s", "--name-only", "--", "."],
+            cwd=REPO_ROOT, capture_output=True, text=True, timeout=5, check=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+
+    items = []
+    for record in result.stdout.split("\x1e"):
+        lines = [line.strip() for line in record.strip().splitlines() if line.strip()]
+        if not lines:
+            continue
+        header = lines[0].split("\x1f", 2)
+        if len(header) != 3:
+            continue
+        commit_hash, created_at, title = header
+        paths = lines[1:]
+        joined = "\n".join(paths)
+        if "shift_alarm" in joined:
+            system, url = "Shift Alarm", "/shift-alarm/"
+        elif "손자병법" in joined:
+            system, url = "손자병법", "/#sunzi"
+        elif "vocabulary_web" in joined:
+            system, url = "단어장", "/vocabulary/"
+        elif "memo_web" in joined:
+            system, url = "메모", "/memo/"
+        elif "dating_sim" in joined:
+            system, url = "미연시", "/dating-sim/"
+        elif "일본어자막추출" in joined:
+            system, url = "학습 서재", "/epub/"
+        elif "이직시스템" in joined:
+            system, url = "이직 시스템", "/career/"
+        else:
+            system, url = "툴파챗", "/#systems"
+        items.append({
+            "id": f"git:{commit_hash}", "created_at": created_at,
+            "system": system, "title": title,
+            "body": f"관련 파일 {len(paths)}개가 메인에 반영됐습니다.", "url": url,
+        })
+    return items
+
+
+def _current_webapp_update_history():
+    """수동 과거 기록과 Git 완료 기록을 합쳐 최신순으로 반환한다."""
+    merged = [*WEBAPP_UPDATE_HISTORY, *_git_update_history()]
+    unique = {}
+    for item in merged:
+        key = item.get("id") or (item["created_at"], item["title"])
+        unique[key] = item
+    return sorted(unique.values(), key=lambda item: item["created_at"], reverse=True)
+
 SESSION_COOKIE_NAME = "tulpa_session"
 SESSION_COOKIE_MAX_AGE = auth.SESSION_MAX_AGE_SECONDS  # 180일
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_가-힣]{2,20}$")
@@ -651,7 +707,7 @@ def memo_dashboard(request: Request):
 @app.get("/memo/static/{filename}")
 def memo_static(filename: str, request: Request):
     _require_signed_in_user(request)
-    if filename not in {"style.css", "colors.css", "tools.css", "app.js", "manifest.webmanifest"}:
+    if filename not in {"style.css", "colors.css", "tools.css", "voice.css", "app.js", "manifest.webmanifest"}:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(MEMO_WEB_DIR / filename))
 
@@ -7219,7 +7275,7 @@ class NotificationReadUpdate(BaseModel):
 def get_system_updates(request: Request):
     """웹앱 전체의 사용자용 변경 이력을 최신순으로 반환한다."""
     _require_signed_in_user(request)
-    return {"items": sorted(WEBAPP_UPDATE_HISTORY, key=lambda item: item["created_at"], reverse=True)}
+    return {"items": _current_webapp_update_history()}
 
 
 @app.get("/api/notifications")
