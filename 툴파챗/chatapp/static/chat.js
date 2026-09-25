@@ -2190,6 +2190,13 @@ async function showPortalHome(focusSystems = false) {
       document.getElementById("portal-vocab-count").textContent = String(items.length + words.length);
     }).catch(() => { document.getElementById("portal-vocab-count").textContent = String(items.length); });
   });
+  apiFetch("/api/dating-sim/playable-stories").then((response) => response.json()).then((stories) => {
+    const unplayed = stories.filter((story) => story.ready && !story.started).length;
+    const badge = document.getElementById("portal-dating-unplayed");
+    badge.textContent = unplayed > 99 ? "99+" : String(unplayed);
+    badge.classList.toggle("hidden", unplayed === 0);
+    badge.setAttribute("aria-label", `아직 시작하지 않은 미연시 ${unplayed}편`);
+  }).catch(() => document.getElementById("portal-dating-unplayed")?.classList.add("hidden"));
   loadPortalNotifications();
   const updateHistory = document.getElementById("portal-update-history");
   updateHistory.classList.remove("hidden");
