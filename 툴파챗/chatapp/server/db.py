@@ -502,6 +502,9 @@ def init_db():
     # 반응이 달린 턴은 일반 대화 흐름을 그대로 타지 않고 짧은 감상만 답하므로,
     # 워커가 이 값의 유무로 두 경로를 구분한다(비어있으면 평소와 동일).
     _ensure_column(conn, "pending_turns", "reaction_emoji", "TEXT")
+    # 생각 지도에서 드래그해 놓은 카드 위치를 기기 재접속 뒤에도 유지한다.
+    _ensure_column(conn, "memo_nodes", "position_x", "REAL")
+    _ensure_column(conn, "memo_nodes", "position_y", "REAL")
     conn.commit()
     conn.close()
 
