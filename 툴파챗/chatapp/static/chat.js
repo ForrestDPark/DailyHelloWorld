@@ -92,6 +92,54 @@ function setAiResponseStatus(waiting) {
 }
 aiStatusRetry.addEventListener("click", () => { pollGeneration += 1; poll(); });
 const messageSearch = document.getElementById("message-search");
+const chatHeader = document.querySelector(".chat-header");
+const chatSearchBtn = document.getElementById("chat-search-btn");
+const chatMenuBtn = document.getElementById("chat-menu-btn");
+const chatHeaderMenu = document.getElementById("chat-header-menu");
+
+function closeChatSearch({ clear = false } = {}) {
+  chatHeader.classList.remove("searching");
+  messageSearch.classList.add("hidden");
+  chatSearchBtn.setAttribute("aria-expanded", "false");
+  chatSearchBtn.setAttribute("aria-label", "메시지 검색 열기");
+  if (clear && messageSearch.value) {
+    messageSearch.value = "";
+    messageSearch.dispatchEvent(new Event("input"));
+  }
+}
+
+function closeChatHeaderMenu() {
+  chatHeaderMenu.classList.add("hidden");
+  chatMenuBtn.setAttribute("aria-expanded", "false");
+}
+
+chatSearchBtn.addEventListener("click", () => {
+  const opening = !chatHeader.classList.contains("searching");
+  closeChatHeaderMenu();
+  if (!opening) return closeChatSearch({ clear: true });
+  chatHeader.classList.add("searching");
+  chatSearchBtn.setAttribute("aria-expanded", "true");
+  chatSearchBtn.setAttribute("aria-label", "메시지 검색 닫기");
+  messageSearch.classList.remove("hidden");
+  messageSearch.focus();
+});
+
+chatMenuBtn.addEventListener("click", (event) => {
+  event.stopPropagation();
+  closeChatSearch({ clear: true });
+  const opening = chatHeaderMenu.classList.contains("hidden");
+  chatHeaderMenu.classList.toggle("hidden", !opening);
+  chatMenuBtn.setAttribute("aria-expanded", String(opening));
+});
+chatHeaderMenu.addEventListener("click", (event) => {
+  if (event.target.closest("button")) closeChatHeaderMenu();
+});
+document.addEventListener("click", (event) => {
+  if (!chatHeaderMenu.contains(event.target) && event.target !== chatMenuBtn) closeChatHeaderMenu();
+});
+messageSearch.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closeChatSearch({ clear: true });
+});
 messageSearch.addEventListener("input", () => {
   const query = messageSearch.value.trim().toLocaleLowerCase("ko-KR");
   for (const message of messagesEl.querySelectorAll(".msg, .msg-system")) {
@@ -2390,6 +2438,8 @@ async function showChatView(roomId) {
   messagesEl.innerHTML = "";
   applyChatBackground(null);
   messageSearch.value = "";
+  closeChatSearch();
+  closeChatHeaderMenu();
   scrollBottomBtn.classList.add("hidden");
   roomListView.classList.add("hidden");
   chatView.classList.remove("hidden");

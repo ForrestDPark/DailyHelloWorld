@@ -36,6 +36,7 @@
 <link rel="apple-touch-icon" href="/static/app-icon-180.png">
 <link rel="stylesheet" href="/static/notice-toggle.css?v=20260925-v1">
 <link rel="stylesheet" href="/static/composer-compact.css?v=20260925-v2">
+<link rel="stylesheet" href="/static/chat-header-menu.css?v=20260925-v1">
 </head>
 <body>
   <svg class="icon-sprite" aria-hidden="true">
@@ -45,6 +46,8 @@
     <symbol id="icon-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></symbol>
     <symbol id="icon-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.6 9a2.6 2.6 0 1 1 3.6 2.4c-.8.4-1.2 1-1.2 2M12 17.6h.01"/></symbol>
     <symbol id="icon-back" viewBox="0 0 24 24"><path d="m14.5 5-7 7 7 7"/></symbol>
+    <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></symbol>
+    <symbol id="icon-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
     <symbol id="icon-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="9" r="1.5"/><path d="m5.5 17 4.2-4.2 3.1 3.1 2.3-2.3 3.4 3.4"/></symbol>
     <!-- ★ 2026-08-29: "프로필 이미지랑 배경이미지 아이콘이 똑같아서 이상해"
          피드백 — 예전엔 icon-image와 거의 같은(사각형+원+산 모양) "사진" 도상을
@@ -182,13 +185,17 @@
     <header class="chat-header">
       <button id="back-btn" type="button" aria-label="채팅방 목록으로" class="icon-button"><svg><use href="#icon-back"/></svg></button>
       <h1 id="room-title"></h1>
-      <input id="message-search" type="search" placeholder="메시지 검색" aria-label="현재 채팅방 메시지 검색">
-      <button id="thumbnail-btn" type="button" aria-label="대표사진 변경" class="icon-button hidden"><svg><use href="#icon-image"/></svg></button>
-      <input id="thumbnail-input" type="file" accept="image/*" class="hidden">
-      <button id="chat-bg-btn" type="button" aria-label="내 채팅 배경 변경" class="icon-button hidden"><svg><use href="#icon-wallpaper"/></svg></button>
-      <button id="auto-read-btn" type="button" aria-label="자동 읽어주기 켜기" class="icon-button"><svg><use href="#icon-speaker"/></svg></button>
-      <button id="invite-btn" type="button" aria-label="참여자 보기 및 초대" class="icon-button hidden"><svg><use href="#icon-users"/></svg></button>
+      <input id="message-search" class="hidden" type="search" placeholder="메시지 검색" aria-label="현재 채팅방 메시지 검색">
+      <button id="chat-search-btn" type="button" aria-label="메시지 검색 열기" aria-expanded="false" class="icon-button"><svg><use href="#icon-search"/></svg></button>
+      <button id="chat-menu-btn" type="button" aria-label="채팅방 기능 메뉴" aria-expanded="false" class="icon-button"><svg><use href="#icon-menu"/></svg></button>
     </header>
+    <div id="chat-header-menu" class="hidden" role="menu" aria-label="채팅방 기능">
+      <button id="thumbnail-btn" type="button" role="menuitem" class="hidden"><svg><use href="#icon-image"/></svg><span>대표사진 변경</span></button>
+      <input id="thumbnail-input" type="file" accept="image/*" class="hidden">
+      <button id="chat-bg-btn" type="button" role="menuitem" class="hidden"><svg><use href="#icon-wallpaper"/></svg><span>내 채팅 배경</span></button>
+      <button id="auto-read-btn" type="button" role="menuitem"><svg><use href="#icon-speaker"/></svg><span>자동 읽어주기</span></button>
+      <button id="invite-btn" type="button" role="menuitem" class="hidden"><svg><use href="#icon-users"/></svg><span>참여자 보기·초대</span></button>
+    </div>
     <div id="room-notice" class="hidden collapsed">
       <button id="room-notice-toggle" type="button" aria-expanded="false" aria-controls="room-notice-text" aria-label="공지사항 펼치기" title="공지사항 펼치기"><svg aria-hidden="true"><use href="#icon-pin"/></svg></button>
       <span id="room-notice-text"></span>
@@ -328,6 +335,6 @@
     </div>
   </div>
 
-  <script src="/static/chat.js?v=20260925-read-sync-notice-v1"></script>
+  <script src="/static/chat.js?v=20260925-header-menu-v1"></script>
 </body>
 </html>
