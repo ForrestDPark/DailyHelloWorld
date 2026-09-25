@@ -23,7 +23,8 @@
       </div>
     </section>
   </main>
+  <dialog id="memo-preview-dialog" class="memo-preview-dialog"><form method="dialog"><div class="dialog-head"><div><small>MEMO</small><h2 id="preview-title">메모</h2><time id="preview-date"></time></div><button value="cancel" aria-label="닫기">×</button></div><div id="preview-content" class="memo-preview-content"></div><div class="dialog-actions"><button value="cancel">닫기</button><button id="preview-open" type="button">생각 지도 열기</button></div></form></dialog>
   <dialog id="node-dialog"><form method="dialog"><div class="dialog-head"><h2 id="node-dialog-title">파생 메모</h2><span><button id="node-voice" class="voice-button" type="button" aria-label="음성으로 파생 메모 입력">🎙️ 음성</button><button value="cancel" aria-label="닫기">×</button></span></div><textarea id="node-content" maxlength="6000" placeholder="생각, 할 일, 연결할 아이디어를 적어보세요"></textarea><div class="dialog-actions"><button value="cancel">취소</button><button id="node-save" value="default">저장</button></div></form></dialog>
   <div id="toast" class="toast hidden" role="status"></div>
-  <script src="/memo/static/app.js?v=20260925-node-drag-v3"></script>
+  <script src="/memo/static/app.js?v=20260926-preview-list-v4"></script>
 </body></html>
