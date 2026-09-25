@@ -1,0 +1,47 @@
+/* 채팅방 공지는 평소 핀 아이콘만 보이고, 사용자가 눌렀을 때만 본문을 연다. */
+#room-notice-text {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+}
+
+#room-notice-toggle {
+  align-self: flex-start;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, var(--border));
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  color: var(--accent);
+  font-size: 0;
+}
+
+#room-notice-toggle svg {
+  width: 19px;
+  height: 19px;
+  transition: transform .18s ease;
+}
+
+#room-notice:not(.collapsed) #room-notice-toggle svg { transform: rotate(-45deg); }
+
+#room-notice.collapsed {
+  width: 44px;
+  min-height: 44px;
+  padding: 4px;
+  gap: 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+#room-notice.collapsed #room-notice-text { display: none; }
+#room-notice.collapsed #room-notice-toggle { width: 36px; height: 36px; }
+#room-notice-toggle:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  outline-offset: 2px;
+}

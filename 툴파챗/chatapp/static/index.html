@@ -34,6 +34,7 @@
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#6d8fff">
 <link rel="apple-touch-icon" href="/static/app-icon-180.png">
+<link rel="stylesheet" href="/static/notice-toggle.css?v=20260925-v1">
 </head>
 <body>
   <svg class="icon-sprite" aria-hidden="true">
@@ -187,10 +188,9 @@
       <button id="auto-read-btn" type="button" aria-label="자동 읽어주기 켜기" class="icon-button"><svg><use href="#icon-speaker"/></svg></button>
       <button id="invite-btn" type="button" aria-label="참여자 보기 및 초대" class="icon-button hidden"><svg><use href="#icon-users"/></svg></button>
     </header>
-    <div id="room-notice" class="hidden">
-      <span id="room-notice-icon" aria-hidden="true"><svg><use href="#icon-pin"/></svg></span>
+    <div id="room-notice" class="hidden collapsed">
+      <button id="room-notice-toggle" type="button" aria-expanded="false" aria-controls="room-notice-text" aria-label="공지사항 펼치기" title="공지사항 펼치기"><svg aria-hidden="true"><use href="#icon-pin"/></svg></button>
       <span id="room-notice-text"></span>
-      <button id="room-notice-toggle" type="button" class="hidden" aria-expanded="false">더보기</button>
     </div>
     <div id="invite-panel" class="hidden">
       <div class="panel-drag-handle" aria-hidden="true"></div>
@@ -327,6 +327,6 @@
     </div>
   </div>
 
-  <script src="/static/chat.js?v=20260925-read-sync-v2"></script>
+  <script src="/static/chat.js?v=20260925-read-sync-notice-v1"></script>
 </body>
 </html>

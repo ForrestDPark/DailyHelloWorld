@@ -2454,10 +2454,10 @@ async function loadRoomNotice(roomId, isGroupMeetingRoom) {
   const notice = document.getElementById("room-notice");
   const noticeText = document.getElementById("room-notice-text");
   const noticeToggle = document.getElementById("room-notice-toggle");
-  notice.classList.remove("expanded");
-  noticeToggle.classList.add("hidden");
-  noticeToggle.textContent = "더보기";
+  notice.classList.add("collapsed");
   noticeToggle.setAttribute("aria-expanded", "false");
+  noticeToggle.setAttribute("aria-label", "공지사항 펼치기");
+  noticeToggle.title = "공지사항 펼치기";
   if (!isGroupMeetingRoom) {
     notice.classList.add("hidden");
     return;
@@ -2465,17 +2465,16 @@ async function loadRoomNotice(roomId, isGroupMeetingRoom) {
   try {
     const res = await apiFetch(`/api/rooms/${encodeURIComponent(roomId)}/notice`);
     const data = await res.json();
+    // 방을 빠르게 옮긴 사이 도착한 이전 방의 공지를 현재 방에 표시하지 않는다.
+    if (currentRoom !== roomId) return;
     if (data && data.content) {
       noticeText.textContent = data.content;
       notice.classList.remove("hidden");
-      requestAnimationFrame(() => {
-        const isOverflowing = noticeText.scrollHeight > noticeText.clientHeight + 1;
-        noticeToggle.classList.toggle("hidden", !isOverflowing);
-      });
     } else {
       notice.classList.add("hidden");
     }
   } catch (e) {
+    if (currentRoom !== roomId) return;
     notice.classList.add("hidden");
     if (e.message !== "unauthorized" && e.message !== "forbidden") console.error(e);
   }
@@ -2484,9 +2483,11 @@ async function loadRoomNotice(roomId, isGroupMeetingRoom) {
 document.getElementById("room-notice-toggle").addEventListener("click", () => {
   const notice = document.getElementById("room-notice");
   const toggle = document.getElementById("room-notice-toggle");
-  const expanded = notice.classList.toggle("expanded");
-  toggle.textContent = expanded ? "접기" : "더보기";
+  const expanded = notice.classList.toggle("collapsed") === false;
   toggle.setAttribute("aria-expanded", String(expanded));
+  const label = expanded ? "공지사항 접기" : "공지사항 펼치기";
+  toggle.setAttribute("aria-label", label);
+  toggle.title = label;
 });
 
 async function toggleInvitePanel() {
