@@ -5,3 +5,4 @@
 .portal-services.icon-view .portal-card div{min-width:0;width:100%}.portal-services.icon-view .portal-card small,.portal-services.icon-view .portal-card p,.portal-services.icon-view .portal-card>i{display:none}
 .portal-services.icon-view .portal-card h2{overflow:hidden;margin:0;font-size:13px;line-height:1.3;text-overflow:ellipsis;white-space:nowrap}.portal-services.icon-view .portal-card:hover{transform:translateY(-2px)}
 @media(max-width:650px){.portal-services.icon-view{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.portal-services.icon-view .portal-card{min-height:108px;padding:12px 5px;border-radius:17px}.portal-services.icon-view .portal-card-mark{width:48px;height:48px;border-radius:15px;font-size:19px}.portal-services.icon-view .portal-card h2{font-size:11px}}
+.portal-brand b{display:flex;align-items:baseline;gap:6px}.portal-brand b small,.auth-title small{color:var(--muted);font-size:.52em;font-weight:750;letter-spacing:.04em}

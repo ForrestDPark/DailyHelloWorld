@@ -709,7 +709,7 @@ async function subscribeToPush() {
     alert("서버에 웹 푸시가 아직 설정되지 않았습니다.");
     return;
   }
-  const reg = await navigator.serviceWorker.register("/static/sw.js?v=20260925-natuda-brand-v1", { updateViaCache: "none" });
+  const reg = await navigator.serviceWorker.register("/static/sw.js?v=20260926-natum-brand-v2", { updateViaCache: "none" });
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: _urlBase64ToUint8Array(public_key),
@@ -2122,7 +2122,7 @@ async function loadSystemUpdateHistory({manual = false} = {}) {
       time.dateTime = item.created_at;
       time.textContent = Number.isNaN(created.getTime()) ? item.created_at : new Intl.DateTimeFormat("ko-KR", {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}).format(created);
       copy.className = "portal-update-copy";
-      system.textContent = item.system || "나투다";
+      system.textContent = item.system || "나툼";
       title.textContent = item.title || "업데이트";
       body.textContent = item.body || "";
       arrow.textContent = "→";
@@ -4526,7 +4526,7 @@ window.addEventListener("hashchange", route);
 // 알림 허용 여부와 관계없이 서비스 워커를 설치한다. 그래야 서버 재시작 중
 // PWA를 다시 열어도 흰 화면 대신 정비 안내를 표시할 수 있다.
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/static/sw.js?v=20260925-natuda-brand-v1", { updateViaCache: "none" }).catch((error) => console.error("service worker", error));
+  navigator.serviceWorker.register("/static/sw.js?v=20260926-natum-brand-v2", { updateViaCache: "none" }).catch((error) => console.error("service worker", error));
 }
 
 initAuth().then((ok) => {

@@ -3,22 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>나투다</title>
+<title>나툼 · NaTum</title>
 <!-- ★ "카톡 링크 공유할 때 미리보기·앱 설명이 있으면 좋겠다" 요청(2026-08-26)
      — Open Graph/Twitter Card 태그. "/"는 인증 없이 누구나(카톡 미리보기
      크롤러 포함) 접근 가능한 공개 경로라 별도 서버 처리 없이 정적 HTML만으로
      충분하다. og:url은 넣지 않았다 — Cloudflare Quick Tunnel URL이 재시작마다
      바뀌어 이 파일에 고정 값을 넣을 수 없고, 크롤러는 보통 실제 접속한 주소를
      og:url 대신 써도 카드 렌더링에 문제 없다. -->
-<meta name="description" content="머릿속 생각을 현실의 형태로 드러내는 나만의 작업실 — 나투다">
+<meta name="description" content="머릿속 생각을 현실의 형태로 드러내는 나만의 작업실 — 나툼 NaTum">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="나투다">
-<meta property="og:title" content="나투다">
+<meta property="og:site_name" content="나툼 · NaTum">
+<meta property="og:title" content="나툼 · NaTum">
 <meta property="og:description" content="상상과 생각을 대화·학습·메모·도구의 형태로 현실에 구현하는 개인 작업실">
 <meta property="og:image" content="/static/og-image.png">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="나투다">
+<meta name="twitter:title" content="나툼 · NaTum">
 <meta name="twitter:description" content="머릿속 생각을 현실의 형태로 드러내는 나만의 작업실">
+<meta name="application-name" content="나툼">
+<meta name="apple-mobile-web-app-title" content="나툼">
+<meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="twitter:image" content="/static/og-image.png">
 <!-- ★ 2026-09-12: "손자병법 탭 누르면 화면 뜨는 시간이 오래 걸린다" 지적 —
      이 탭은 외부(chatgpt.site) 사이트를 iframe으로 불러오는데, 클릭한
@@ -27,13 +30,13 @@
      페이지 로드는 chat.js가 부팅 후 유휴 시간에 백그라운드로 미리 시작). -->
 <link rel="preconnect" href="https://sunzi-strategy-notes.pulpilisory.chatgpt.site" crossorigin>
 <link rel="dns-prefetch" href="https://sunzi-strategy-notes.pulpilisory.chatgpt.site">
-<link rel="stylesheet" href="/static/style.css?v=20260925-update-history-v1"><link rel="stylesheet" href="/static/icon-layout.css?v=20260925-unread-badge-v1">
+<link rel="stylesheet" href="/static/style.css?v=20260925-update-history-v1"><link rel="stylesheet" href="/static/icon-layout.css?v=20260926-natum-brand-v2">
 <!-- ★ "새 메시지 알림(웹 푸시)" 요청(2026-08-27) — iOS Safari는 PWA로
      "홈 화면에 추가"돼 있어야만 웹 푸시가 동작한다. manifest.json이 그
      설치 가능 상태를 만든다. -->
-<link rel="manifest" href="/manifest.json">
+<link rel="manifest" href="/manifest.json?v=20260926-natum-v2">
 <meta name="theme-color" content="#6d8fff">
-<link rel="apple-touch-icon" href="/static/app-icon-180.png">
+<link rel="apple-touch-icon" href="/static/app-icon-180.png?v=20260926-natum-v2">
 <link rel="stylesheet" href="/static/notice-toggle.css?v=20260925-v1">
 <link rel="stylesheet" href="/static/composer-compact.css?v=20260925-v2">
 <link rel="stylesheet" href="/static/chat-header-menu.css?v=20260925-v1">
@@ -68,7 +71,7 @@
   <div id="auth-view" class="hidden">
     <div class="auth-card">
       <div class="auth-brand-mark" aria-hidden="true">N</div>
-      <h1 class="auth-title">나투다</h1>
+      <h1 class="auth-title">나툼 <small>NaTum</small></h1>
       <p class="auth-subtitle">머릿속 생각을 현실의 형태로 드러내는 나만의 작업실</p>
       <div id="auth-tabs">
         <button type="button" class="auth-tab active" data-mode="login">로그인</button>
@@ -90,7 +93,7 @@
 
   <!-- 개인 시스템 전체의 시작점. 긴 친구/방 목록은 각각 별도 화면으로 분리한다. -->
   <div id="home-view" class="hidden">
-    <header class="portal-header"><a class="portal-brand" href="#home"><span>N</span><b>나투다</b></a><div class="portal-header-actions"><button id="portal-layout-btn" type="button" class="subtle-button portal-layout-button" aria-label="목록 보기로 전환">☰ 목록</button><button id="portal-notifications-btn" type="button" class="portal-notification-button" aria-label="알림 보기" aria-expanded="false"><svg aria-hidden="true"><use href="#icon-bell"/></svg><span id="portal-notification-badge" class="notification-count hidden"></span></button><button id="portal-account-btn" type="button" class="subtle-button">내 프로필</button></div></header>
+    <header class="portal-header"><a class="portal-brand" href="#home"><span>N</span><b>나툼 <small>NaTum</small></b></a><div class="portal-header-actions"><button id="portal-layout-btn" type="button" class="subtle-button portal-layout-button" aria-label="목록 보기로 전환">☰ 목록</button><button id="portal-notifications-btn" type="button" class="portal-notification-button" aria-label="알림 보기" aria-expanded="false"><svg aria-hidden="true"><use href="#icon-bell"/></svg><span id="portal-notification-badge" class="notification-count hidden"></span></button><button id="portal-account-btn" type="button" class="subtle-button">내 프로필</button></div></header>
     <aside id="portal-notification-center" class="notification-center hidden" aria-label="알림"><div class="notification-center-head"><div><small>NOTIFICATIONS</small><h2>알림</h2></div><button id="portal-notification-close" type="button" aria-label="알림 닫기"><svg aria-hidden="true"><use href="#icon-close"/></svg></button></div><div id="portal-notification-list" class="notification-list"></div></aside>
     <main class="portal-main">
       <section class="portal-services icon-view" aria-label="시스템 바로가기">
@@ -108,7 +111,7 @@
         <a class="portal-card memo" href="/memo/"><span class="portal-card-mark">✦</span><div><small>CONNECTED NOTES</small><h2>메모 시스템</h2><p>채팅의 유용한 메시지를 저장하고 생각을 가지처럼 확장</p></div><i>→</i></a>
       </section>
       <section id="portal-update-history" class="portal-update-history" aria-labelledby="portal-update-title">
-        <div class="portal-update-head"><div><small>SYSTEM HISTORY</small><h2 id="portal-update-title">나투다 업데이트 기록</h2></div><div class="portal-update-head-actions"><span id="portal-update-count"></span><button id="portal-update-refresh" type="button" aria-label="업데이트 기록 새로고침">↻ 새로고침</button><button id="portal-update-toggle" type="button" aria-expanded="true" aria-controls="portal-update-list"><i aria-hidden="true">⌃</i><span class="sr-only">접기 또는 펼치기</span></button></div></div>
+        <div class="portal-update-head"><div><small>SYSTEM HISTORY</small><h2 id="portal-update-title">나툼 업데이트 기록</h2></div><div class="portal-update-head-actions"><span id="portal-update-count"></span><button id="portal-update-refresh" type="button" aria-label="업데이트 기록 새로고침">↻ 새로고침</button><button id="portal-update-toggle" type="button" aria-expanded="true" aria-controls="portal-update-list"><i aria-hidden="true">⌃</i><span class="sr-only">접기 또는 펼치기</span></button></div></div>
         <div id="portal-update-list" class="portal-update-list"><p>업데이트 기록을 불러오는 중입니다.</p></div>
       </section>
     </main>
@@ -119,8 +122,8 @@
     <div class="pwa-install-card">
       <button id="pwa-install-close" class="pwa-install-close" type="button" aria-label="설치 안내 닫기">×</button>
       <div class="pwa-install-icon" aria-hidden="true">N</div>
-      <p class="pwa-install-kicker">NATUDA WORKSPACE</p>
-      <h2 id="pwa-install-title">홈 화면에 나투다를 설치할까요?</h2>
+      <p class="pwa-install-kicker">NATUM WORKSPACE</p>
+      <h2 id="pwa-install-title">홈 화면에 나툼을 설치할까요?</h2>
       <p id="pwa-install-description">브라우저 탭 없이 앱처럼 바로 열고, 새 메시지 알림도 받을 수 있어요.</p>
       <div id="pwa-install-steps" class="pwa-install-steps hidden"></div>
       <button id="pwa-install-action" class="pwa-install-action" type="button">홈 화면에 설치</button>
@@ -136,7 +139,7 @@
   <!-- 방 목록 (카카오톡 채팅 목록처럼) -->
   <div id="room-list-view" class="hidden">
     <header>
-      <h1><button id="home-brand-btn" type="button" class="header-brand-mark" aria-label="나투다 홈으로">N</button><span id="main-view-title">친구</span></h1>
+      <h1><button id="home-brand-btn" type="button" class="header-brand-mark" aria-label="나툼 홈으로">N</button><span id="main-view-title">친구</span></h1>
       <button id="notify-btn" type="button" aria-label="새 메시지 알림 받기" class="icon-button hidden"><svg><use href="#icon-bell"/></svg></button>
       <div id="account-chip" class="hidden">
         <button id="account-name-btn" type="button" aria-label="내 프로필 수정">
@@ -345,6 +348,6 @@
   </div>
 
   <link rel="stylesheet" href="/static/style.css?v=20260925-message-fold-v2">
-  <script src="/static/chat.js?v=20260925-natuda-brand-v3"></script>
+  <script src="/static/chat.js?v=20260926-natum-brand-v4"></script>
 </body>
 </html>
