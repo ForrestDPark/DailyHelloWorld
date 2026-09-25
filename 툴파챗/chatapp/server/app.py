@@ -7674,7 +7674,28 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
         (room_id, hanja_teacher_name, _now()),
     )
     kahneman_name = "데니얼 카너먼"
+    li_ling_name = "리링"
     if body.analysis_mode in {"light", "full"}:
+        li_ling = conn.execute("SELECT name FROM personas WHERE name = ?", (li_ling_name,)).fetchone()
+        if not li_ling:
+            li_ling_prompt = (
+                "당신은 중국 고문헌학자 리링(李零)의 연구 관점을 재현한 가상 토론 페르소나입니다. "
+                "손자병법의 판본·자구·문장 구조·편장 연결·고대 군사제도 가운데 이번 구절을 "
+                "이해하는 데 가장 중요한 한 가지를 짧게 설명하세요. 전통 주석가인 것처럼 말하지 "
+                "말고, 확인되지 않은 직접 인용이나 쪽수를 만들지 마세요. 판본 차이가 없으면 억지로 "
+                "이문을 만들지 말고 문장 구조, 앞뒤 구절의 연결, 현대 적용의 한계 중 하나를 고르세요. "
+                "매 분석에서 한 번만, 앞선 발언을 되풀이하지 않는 자연스러운 대화체 2~4문장으로 말하세요."
+            )
+            conn.execute(
+                "INSERT INTO personas (name, notion_page_id, system_prompt, group_name, owner_username, description, synced_at) "
+                "VALUES (?, '', ?, NULL, ?, ?, ?)",
+                (li_ling_name, li_ling_prompt, APP_USERNAME or "automation",
+                 "손자병법의 판본·자구·편장 구조를 짚는 현대 문헌학 관점", _now()),
+            )
+        conn.execute(
+            "INSERT OR IGNORE INTO room_invites (room_id, persona_name, invited_at) VALUES (?, ?, ?)",
+            (room_id, li_ling_name, _now()),
+        )
         kahneman = conn.execute("SELECT name FROM personas WHERE name = ?", (kahneman_name,)).fetchone()
         if not kahneman:
             kahneman_prompt = (
@@ -7818,7 +7839,7 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
     if body.analysis_mode == "light":
         # 아홉 명을 모두 발언시키지 않는다. 구절마다 순환하는 네 명을 후보로 세우고,
         # 워커가 앞선 대화와 겹치면 NONE으로 조용히 건너뛴다. 카너먼은 사용자의
-        # 명시 요청에 따라 마지막 후보로 유지한다.
+        # 명시 요청에 따라 리링과 카너먼을 마지막 필수 후보로 유지한다.
         available = [name for name in traditional_commentator_order if name in targets]
         digest_offset = int.from_bytes(digest[4:8], "big") % len(available)
         rotated = available[digest_offset:] + available[:digest_offset]
@@ -7828,14 +7849,25 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
             raise HTTPException(status_code=409, detail="라이트 토론 주석가 후보군 누락: " + ", ".join(
                 name for name in traditional_commentator_order if name not in available
             ))
-        if kahneman_name in targets:
-            notified.append(kahneman_name)
-        else:
+        missing_required = [name for name in (li_ling_name, kahneman_name) if name not in targets]
+        if missing_required:
             conn.close()
-            raise HTTPException(status_code=409, detail="라이트 토론의 카너먼 페르소나가 없습니다")
+            raise HTTPException(
+                status_code=409,
+                detail="라이트 토론의 필수 페르소나가 없습니다: " + ", ".join(missing_required),
+            )
+        notified.extend((li_ling_name, kahneman_name))
     else:
-        priority = ["데니얼 카너먼", "손무", "조조", "두목", "두우", "매요신", "클라우제비츠", "한니발", "한신"]
-        notified = [name for name in priority if name in targets and name not in commander_names][:6]
+        priority = ["손무", "조조", "두목", "두우", "매요신", "클라우제비츠", "한니발", "한신"]
+        notified = [name for name in priority if name in targets and name not in commander_names][:5]
+        missing_required = [name for name in (li_ling_name, kahneman_name) if name not in targets]
+        if missing_required:
+            conn.close()
+            raise HTTPException(
+                status_code=409,
+                detail="전체 토론의 필수 페르소나가 없습니다: " + ", ".join(missing_required),
+            )
+        notified.extend((li_ling_name, kahneman_name))
     if not notified:
         notified = [name for name in targets if name not in commander_names][:5]
     conn.execute(

@@ -22,6 +22,7 @@ BATTLE_COMMANDER_PREFERENCES = {
     "거록": "항우",
 }
 TRADITIONAL_COMMENTATORS = {"조조", "이전", "두목", "매요신", "장예", "왕석", "가림", "두우", "진호"}
+LI_LING_NAME = "리링"
 
 
 def plain(value: str) -> str:
@@ -348,11 +349,17 @@ def main() -> None:
     if is_light and not result.get("duplicate"):
         notified = result.get("notified") or []
         traditional = [name for name in notified if name in TRADITIONAL_COMMENTATORS]
-        if len(notified) != 5 or len(traditional) != 4 or notified[-1:] != ["데니얼 카너먼"]:
+        if (
+            len(notified) != 6
+            or len(traditional) != 4
+            or notified[-2:] != [LI_LING_NAME, "데니얼 카너먼"]
+        ):
             raise RuntimeError(
                 "Tulpa Chat 라이트 선택형 토론 큐 불일치: "
-                f"기대 전통 주석가 4명+카너먼, 실제 {notified}"
+                f"기대 전통 주석가 4명+리링+카너먼, 실제 {notified}"
             )
+    if not result.get("duplicate") and LI_LING_NAME not in (result.get("notified") or []):
+        raise RuntimeError("Tulpa Chat 토론 큐에 필수 현대 연구자 리링이 없습니다")
     print(json.dumps(result, ensure_ascii=False))
 
 
