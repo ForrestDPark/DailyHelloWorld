@@ -1,0 +1,164 @@
+/* 데스크톱 생각 지도: 본문과 도구가 겹치지 않도록 카드 폭과 액션 행을 분리한다. */
+.node-card {
+  width: 300px;
+  min-height: 96px;
+  padding: 16px;
+}
+.node-card.root { width: 330px; }
+.node-card p {
+  display: block;
+  max-height: none;
+  overflow: visible;
+  margin-bottom: 14px;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.node-card.collapsed p,
+.node-card.root.root-collapsed p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.node-actions {
+  position: static;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding-top: 9px;
+  border-top: 1px solid color-mix(in srgb, currentColor 13%, transparent);
+}
+.node-actions button { flex: 0 0 auto; min-width: 38px; }
+.node-link-handle {
+  margin-left: auto;
+  width: 34px;
+  height: 34px;
+  padding: 0 !important;
+  border-radius: 50% !important;
+  cursor: crosshair;
+  font-size: 19px !important;
+  touch-action: none;
+}
+.link-ghost {
+  z-index: 8;
+  display: grid;
+  min-height: 82px;
+  place-items: center;
+  border-style: dashed;
+  color: var(--muted);
+  pointer-events: none;
+}
+.mindmap-stage path.link-preview {
+  stroke: var(--accent);
+  stroke-width: 4;
+  stroke-dasharray: 9 7;
+}
+.root-note > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.voice-button {
+  padding: 7px 10px;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+  color: var(--accent);
+  white-space: nowrap;
+}
+.voice-button.listening {
+  border-color: #d9536f;
+  background: #d9536f;
+  color: #fff;
+  animation: memo-pulse 1s ease-in-out infinite;
+}
+.voice-button.listening:disabled {
+  opacity: .75;
+  cursor: wait;
+}
+.dialog-head > span { display: flex; align-items: center; gap: 7px; }
+@keyframes memo-pulse { 50% { opacity: .65; } }
+
+@media (max-width: 720px) {
+  .node-card { width: 225px; padding: 13px; }
+  .node-card.root { width: 250px; }
+  .node-actions { gap: 5px; }
+  .node-actions button { padding: 6px 7px; }
+}
+
+/* SimpleMind 계열의 중립 캔버스와 색상별 가지 */
+.mindmap-viewport {
+  border-color: #d8dde6;
+  background: #f7f9fc;
+  box-shadow: inset 0 0 0 1px #fff, 0 10px 28px rgba(34, 48, 72, .08);
+}
+.mindmap-grid {
+  background-image: radial-gradient(circle, #cfd6e2 1px, transparent 1.2px);
+  opacity: .58;
+}
+.mindmap-stage path {
+  stroke: var(--branch-color, #9aa7b8);
+  stroke-width: 4;
+}
+.node-card,
+.node-card.root {
+  border: 2px solid var(--node-accent, #9aa7b8);
+  border-left-width: 8px;
+  border-radius: 14px;
+  background: #fff;
+  color: #202631;
+  box-shadow: 0 8px 22px rgba(38, 50, 70, .12);
+}
+.node-card.root small { color: #7a8492; opacity: 1; }
+.node-card.root p { opacity: 1; }
+.node-card .node-actions {
+  border-top-color: color-mix(in srgb, var(--node-accent) 24%, transparent);
+}
+.node-card .node-actions button,
+.node-card.root .node-actions button {
+  border-color: color-mix(in srgb, var(--node-accent) 42%, #d8dde6);
+  background: color-mix(in srgb, var(--node-accent) 10%, #fff);
+  color: #394250;
+}
+.node-link-handle {
+  border-color: var(--node-accent) !important;
+  background: var(--node-accent) !important;
+  color: #fff !important;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mindmap-viewport {
+    border-color: #3a414b;
+    background: #171a20;
+    box-shadow: inset 0 0 0 1px #2b3038;
+  }
+  .mindmap-grid {
+    background-image: radial-gradient(circle, #424954 1px, transparent 1.2px);
+  }
+  .node-card,
+  .node-card.root {
+    background: #242930;
+    color: #f1f3f6;
+    box-shadow: 0 9px 24px rgba(0, 0, 0, .3);
+  }
+  .node-card.root small { color: #aab2bf; }
+  .node-card .node-actions button,
+  .node-card.root .node-actions button {
+    background: color-mix(in srgb, var(--node-accent) 15%, #242930);
+    color: #edf0f5;
+  }
+}
+
+.node-card[data-node-id] {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.node-card.dragging {
+  z-index: 8;
+  transform: translate(-50%, -50%) scale(1.04);
+  box-shadow: 0 22px 55px rgba(0, 0, 0, .38);
+  cursor: grabbing;
+  transition: box-shadow .15s, transform .15s;
+}

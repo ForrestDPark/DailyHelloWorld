@@ -48,5 +48,29 @@ class MemoApiTests(unittest.TestCase):
         deleted = app.delete_memo_node(parent["id"], request())
         self.assertEqual(deleted["deleted"], 2)
 
+    def test_drag_created_node_keeps_canvas_position(self):
+        memo = app.create_memo(app.MemoDocumentCreate(title="배치 메모"), request())
+        created = app.create_memo_node(
+            memo["id"],
+            app.MemoNodeCreate(content="드래그한 카드", position_x=640.5, position_y=420.25),
+            request(),
+        )
+        node = next(item for item in app.list_memos(request())[0]["nodes"] if item["id"] == created["id"])
+        self.assertEqual(node["position_x"], 640.5)
+        self.assertEqual(node["position_y"], 420.25)
+
+    def test_dragging_existing_node_updates_canvas_position(self):
+        memo = app.create_memo(app.MemoDocumentCreate(title="재배치 메모"), request())
+        created = app.create_memo_node(
+            memo["id"], app.MemoNodeCreate(content="옮길 카드"), request()
+        )
+        app.update_memo_node(
+            created["id"],
+            app.MemoNodeUpdate(content="옮길 카드", position_x=980.0, position_y=760.0),
+            request(),
+        )
+        node = next(item for item in app.list_memos(request())[0]["nodes"] if item["id"] == created["id"])
+        self.assertEqual((node["position_x"], node["position_y"]), (980.0, 760.0))
+
 
 if __name__ == "__main__": unittest.main()
