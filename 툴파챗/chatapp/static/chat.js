@@ -2153,10 +2153,10 @@ function setSystemUpdateCollapsed(collapsed) {
 systemUpdateToggle.addEventListener("click", () => setSystemUpdateCollapsed(!systemUpdateHistory.classList.contains("collapsed")));
 setSystemUpdateCollapsed(localStorage.getItem(SYSTEM_UPDATE_COLLAPSED_KEY) === "1");
 setInterval(() => {
-  if (location.hash === "#systems" && document.visibilityState === "visible") loadSystemUpdateHistory();
+  if ((location.hash === "#systems" || location.hash === "#home" || !location.hash) && document.visibilityState === "visible") loadSystemUpdateHistory();
 }, 30000);
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && location.hash === "#systems") loadSystemUpdateHistory();
+  if (document.visibilityState === "visible" && (location.hash === "#systems" || location.hash === "#home" || !location.hash)) loadSystemUpdateHistory();
 });
 
 async function showPortalHome(focusSystems = false) {
@@ -2189,8 +2189,8 @@ async function showPortalHome(focusSystems = false) {
   });
   loadPortalNotifications();
   const updateHistory = document.getElementById("portal-update-history");
-  updateHistory.classList.toggle("hidden", !focusSystems);
-  if (focusSystems) loadSystemUpdateHistory();
+  updateHistory.classList.remove("hidden");
+  loadSystemUpdateHistory();
   maybeShowPwaInstallPrompt();
   if (focusSystems) document.querySelector(".portal-services")?.scrollIntoView({behavior:"smooth", block:"start"});
 }
