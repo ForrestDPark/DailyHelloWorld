@@ -233,7 +233,9 @@ function renderHud(state) {
   const sourceBookId = String(state.story_id || "").match(/^book:([0-9a-f]{20})$/)?.[1];
   sourceLink.classList.toggle("hidden", !sourceBookId);
   if (sourceBookId) {
-    sourceLink.href = `/epub/?book=${encodeURIComponent(sourceBookId)}`;
+    const sourceParams = new URLSearchParams({ book: sourceBookId });
+    if (state.source_title) sourceParams.set("title", state.source_title);
+    sourceLink.href = `/epub/?${sourceParams}`;
     sourceLink.setAttribute("aria-label", `${state.source_title || "원작"} EPUB로 이동`);
   }
   // 관리자 계정에서만 시나리오 트리 버튼을 보여준다(서버도 소유자만 허용).
