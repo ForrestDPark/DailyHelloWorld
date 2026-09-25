@@ -541,6 +541,13 @@ chatapp/
 
 ## launchd로 상시 구동 (server / tunnel / worker 3개)
 
+> **미연시 시나리오 자동 보충(2026-09-26)**: 별도 LaunchAgent
+> `com.tulpachat.dating-scenario-backlog`가 로그인 직후와 1시간마다 일본어 학습
+> 라이브러리를 확인한다. 미완성 시나리오는 중간 저장본부터 이어서 만들고 완성본은
+> 건너뛴다. 수동 생성기나 일일 제작 에이전트가 실행 중이면 이번 회차는 건너뛰어
+> 중복 실행을 막는다. 구현·설치 원본은
+> `일본어자막추출/run_dating_scenario_backlog.py`와 동명의 plist에 있다.
+
 `shift_alarm.py`와 같은 방식으로 LaunchAgent 3개가 등록돼 있다 — 재부팅해도
 자동으로 뜨고, 크래시하면 launchd가 다시 살린다(`KeepAlive.SuccessfulExit=false`).
 
