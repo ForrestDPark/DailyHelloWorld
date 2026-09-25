@@ -6,3 +6,15 @@
 .portal-services.icon-view .portal-card h2{overflow:hidden;margin:0;font-size:13px;line-height:1.3;text-overflow:ellipsis;white-space:nowrap}.portal-services.icon-view .portal-card:hover{transform:translateY(-2px)}
 @media(max-width:650px){.portal-services.icon-view{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.portal-services.icon-view .portal-card{min-height:108px;padding:12px 5px;border-radius:17px}.portal-services.icon-view .portal-card-mark{width:48px;height:48px;border-radius:15px;font-size:19px}.portal-services.icon-view .portal-card h2{font-size:11px}}
 .portal-brand b{display:flex;align-items:baseline;gap:6px}.portal-brand b small,.auth-title small{color:var(--muted);font-size:.52em;font-weight:750;letter-spacing:.04em}
+
+/* NaTum 아이콘의 보라빛을 홈 전체에 은은하게 잇는 시각 체계 */
+#home-view{background:radial-gradient(circle at 4% 2%,rgba(132,79,255,.22),transparent 24%),radial-gradient(circle at 96% 18%,rgba(101,52,220,.12),transparent 28%),var(--bg)}
+.portal-brand-icon{width:44px;height:44px;flex:0 0 44px;border-radius:50%;object-fit:cover;box-shadow:0 0 0 1px rgba(190,157,255,.62),0 0 14px rgba(140,80,255,.64),0 7px 18px rgba(41,19,83,.38)}
+.portal-header{border-bottom-color:color-mix(in srgb,var(--accent) 34%,var(--border));box-shadow:0 10px 30px rgba(86,44,150,.09)}
+.portal-services .portal-card{border-color:color-mix(in srgb,var(--accent) 27%,var(--border));box-shadow:inset 0 0 0 1px rgba(184,151,255,.035),0 0 18px rgba(115,67,205,.075),var(--shadow-soft)}
+.portal-services .portal-card:hover,.portal-services .portal-card:focus-visible{border-color:color-mix(in srgb,var(--accent) 58%,var(--border));box-shadow:0 0 24px rgba(127,76,230,.2),var(--shadow)}
+.portal-services .portal-card-mark{box-shadow:0 0 0 1px rgba(218,201,255,.16),0 0 15px color-mix(in srgb,var(--accent) 28%,transparent)}
+.portal-update-history{border-color:color-mix(in srgb,var(--accent) 34%,var(--border));box-shadow:inset 0 0 28px rgba(116,66,210,.035),0 0 26px rgba(116,66,210,.1),var(--shadow-soft)}
+.portal-dock{border-color:color-mix(in srgb,var(--accent) 34%,var(--border));box-shadow:0 0 26px rgba(111,63,198,.16),0 14px 40px rgba(35,24,55,.22)}
+.portal-update-head h2{word-break:keep-all}
+@media(max-width:650px){.portal-brand-icon{width:42px;height:42px;flex-basis:42px}.portal-update-head{gap:10px}.portal-update-head h2{max-width:150px;font-size:20px;line-height:1.18}}
