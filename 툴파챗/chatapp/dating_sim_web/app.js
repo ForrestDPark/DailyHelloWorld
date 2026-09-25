@@ -218,6 +218,14 @@ function showView(name) {
   }
 }
 
+function extractSourceWorkCode(sourceTitle) {
+  const title = String(sourceTitle || "").toUpperCase();
+  // 부제나 파일 처리 표식은 검색 결과를 흐리므로 작품 식별 코드만 사용한다.
+  // EBOD-952, JUFE_194, 277DCV-298처럼 숫자로 시작하는 코드도 지원한다.
+  const match = title.match(/\b(?=[A-Z0-9_-]*[A-Z])[A-Z0-9]{2,12}[-_ ]\d{2,6}\b/);
+  return match ? match[0].replace(/[_ ]/g, "-") : "";
+}
+
 function renderHud(state) {
   latestState = state;
   $("hud-title").textContent = "미연시";
@@ -240,12 +248,13 @@ function renderHud(state) {
   }
   const sourceVideoLink = $("source-video-link");
   const sourceTitle = String(state.source_title || "").trim();
-  sourceVideoLink.classList.toggle("hidden", !sourceTitle);
-  if (sourceTitle) {
+  const sourceWorkCode = extractSourceWorkCode(sourceTitle);
+  sourceVideoLink.classList.toggle("hidden", !sourceWorkCode);
+  if (sourceWorkCode) {
     const videoSearch = new URL("https://kr47.topgirl.co/video/search/");
-    videoSearch.searchParams.set("keyword", sourceTitle);
+    videoSearch.searchParams.set("keyword", sourceWorkCode);
     sourceVideoLink.href = videoSearch.toString();
-    sourceVideoLink.setAttribute("aria-label", `${sourceTitle} 영상 원본을 Safari에서 검색`);
+    sourceVideoLink.setAttribute("aria-label", `${sourceWorkCode} 영상 원본을 Safari에서 검색`);
   }
   // 관리자 계정에서만 시나리오 트리 버튼을 보여준다(서버도 소유자만 허용).
   $("tree-open-btn").classList.toggle("hidden", !state.is_admin);
