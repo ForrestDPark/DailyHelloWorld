@@ -9,6 +9,7 @@ import base64
 import datetime
 import hashlib
 import hmac
+import html
 import json
 import mimetypes
 import os
@@ -25,6 +26,7 @@ from pathlib import Path, PurePosixPath
 from xml.etree import ElementTree as ET
 
 import edge_tts
+import fitz
 
 ROOT = Path(__file__).resolve().parent
 STATIC_DIR = ROOT / "static"
@@ -67,10 +69,12 @@ class Book:
     cover: str | None
     modified: float
     size: int
+    kind: str = "epub"
 
     def public(self, progress: dict | None = None, base_path: str = "") -> dict:
         return {
             "id": self.id, "title": self.title, "chapters": len(self.spine),
+            "kind": self.kind,
             "modified": int(self.modified), "size": self.size,
             "cover_url": f"{base_path}/api/books/{self.id}/cover" if self.cover else None,
             "has_audio": any(self.audio),
@@ -153,9 +157,24 @@ def parse_book(path: Path) -> Book:
         return Book(_book_id(path), path.resolve(), title, opf_path, spine, audio, cover, stat.st_mtime, stat.st_size)
 
 
+def parse_pdf(path: Path) -> Book:
+    """PDF는 목록 스캔 때 페이지 수·제목만 읽고 본문은 페이지 요청 시 추출한다."""
+    with fitz.open(path) as document:
+        page_count = document.page_count
+        if page_count < 1:
+            raise ValueError("페이지가 없는 PDF입니다")
+        metadata = document.metadata or {}
+        title = str(metadata.get("title") or "").strip() or path.stem
+    stat = path.stat()
+    spine = tuple(f"pdf-page/{index}" for index in range(page_count))
+    return Book(_book_id(path), path.resolve(), title, "", spine,
+                tuple(() for _ in spine), None, stat.st_mtime, stat.st_size, "pdf")
+
+
 class Library:
-    def __init__(self, roots: list[Path]):
+    def __init__(self, roots: list[Path], include_pdf: bool = False):
         self.roots = roots
+        self.include_pdf = include_pdf
         self.books: dict[str, Book] = {}
         self.last_scan_monotonic = 0.0
         self.scan()
@@ -170,12 +189,15 @@ class Library:
                 current = selected.get(key)
                 if current is None or ("낭독판" in path.stem and "낭독판" not in current.stem and "읽어주기" not in current.stem):
                     selected[key] = path
+            if self.include_pdf:
+                for path in sorted(root.rglob("*.pdf")):
+                    selected.setdefault(_product_key(path), path)
         books = {}
         for path in selected.values():
             try:
-                book = parse_book(path)
+                book = parse_pdf(path) if path.suffix.casefold() == ".pdf" else parse_book(path)
                 books[book.id] = book
-            except (OSError, KeyError, ValueError, zipfile.BadZipFile, ET.ParseError):
+            except (OSError, KeyError, ValueError, RuntimeError, zipfile.BadZipFile, ET.ParseError):
                 continue
         self.books = books
         self.last_scan_monotonic = time.monotonic()
@@ -373,8 +395,10 @@ class ReaderHandler(BaseHTTPRequestHandler):
             except OSError: resource_version = int(book.modified * 1_000_000_000)
             chapters = [{
                 "index": i,
-                "url": f"{self.app.base_path}/api/books/{book.id}/resource/{urllib.parse.quote(href, safe='/')}?v={resource_version}",
-                "audio": [{
+                "url": (f"{self.app.base_path}/api/books/{book.id}/pdf-page/{i}?v={resource_version}"
+                        if book.kind == "pdf" else
+                        f"{self.app.base_path}/api/books/{book.id}/resource/{urllib.parse.quote(href, safe='/')}?v={resource_version}"),
+                "audio": [] if book.kind == "pdf" else [{
                     "url": f"{self.app.base_path}/api/books/{book.id}/resource/{urllib.parse.quote(clip['member'], safe='/')}?v={resource_version}",
                     "begin": clip["begin"], "end": clip["end"], "target": clip["target"],
                 } for clip in book.audio[i]],
@@ -383,7 +407,28 @@ class ReaderHandler(BaseHTTPRequestHandler):
         if action == "progress": return self._json(200, self.app.progress_for(book, *(self._principal() or ("", False))))
         if action == "cover" and book.cover: return self._resource(book, book.cover)
         if action == "download":
-            return self._send_bytes(book.path.read_bytes(), "application/epub+zip", f"attachment; filename*=UTF-8''{urllib.parse.quote(book.path.name)}")
+            mime = "application/pdf" if book.kind == "pdf" else "application/epub+zip"
+            return self._send_bytes(book.path.read_bytes(), mime, f"attachment; filename*=UTF-8''{urllib.parse.quote(book.path.name)}")
+        if action == "pdf-page" and book.kind == "pdf" and len(parts) == 5:
+            try:
+                page_index = int(parts[4])
+                with fitz.open(book.path) as document:
+                    if page_index < 0 or page_index >= document.page_count:
+                        return self._json(404, {"detail": "PDF 페이지를 찾을 수 없습니다"})
+                    text = document.load_page(page_index).get_text("text").strip()
+                paragraphs = [line.strip() for line in text.splitlines() if line.strip()]
+                content = "".join(f"<p>{html.escape(line)}</p>" for line in paragraphs)
+                if not content:
+                    content = '<p class="pdf-empty">이 페이지에는 추출 가능한 텍스트가 없습니다.</p>'
+                page = ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
+                        "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+                        "<style>body{font-family:Georgia,serif;line-height:1.7}p{margin:.65em 0}"
+                        ".pdf-empty{color:#777;font-style:italic}</style></head><body>"
+                        f"<h1>{page_index + 1}</h1>{content}</body></html>").encode("utf-8")
+                csp = "default-src 'none'; style-src 'unsafe-inline';"
+                return self._send_bytes(page, "text/html; charset=utf-8", csp=csp, cache_control="private, no-cache")
+            except (OSError, ValueError, RuntimeError):
+                return self._json(500, {"detail": "PDF 텍스트를 읽지 못했습니다"})
         if action == "resource" and len(parts) > 4: return self._resource(book, "/".join(parts[4:]))
         return self._json(404, {"detail": "자료를 찾을 수 없습니다"})
 
@@ -431,7 +476,7 @@ class App:
             "speech_provider": "edge-tts",
         }
         self.reader_config["speech_voice"] = self.edge_voice(self.reader_config["speech_language"])
-        self.secret = load_secret(); self.library = Library(roots); self.store = Store(STATE_DIR / "reader.db")
+        self.secret = load_secret(); self.library = Library(roots, include_pdf=self.reader_config["kind"] == "english"); self.store = Store(STATE_DIR / "reader.db")
         self.tts_cache = STATE_DIR / "edge_tts_cache"
         self.tts_cache.mkdir(parents=True, exist_ok=True)
 

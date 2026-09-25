@@ -23,6 +23,15 @@ def make_epub(path: Path, title="테스트 책", readaloud=False):
             z.writestr("OEBPS/audio/1.m4a", b"audio")
 
 
+def make_pdf(path: Path, title="PDF 테스트 책"):
+    document = server.fitz.open()
+    document.set_metadata({"title": title})
+    page = document.new_page()
+    page.insert_text((72, 72), "Original English text is readable.")
+    document.save(path)
+    document.close()
+
+
 class ReaderTests(unittest.TestCase):
     def test_parse_and_scan(self):
         with tempfile.TemporaryDirectory() as td:
@@ -37,6 +46,19 @@ class ReaderTests(unittest.TestCase):
             make_epub(root / "ABC-001 — 제목_낭독판.epub")
             make_epub(root / "old" / "ABC-001_읽어주기.epub")
             self.assertEqual(len(server.Library([root]).books), 1)
+
+    def test_pdf_is_included_only_for_pdf_enabled_library(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); make_pdf(root / "original.pdf")
+            self.assertEqual(len(server.Library([root]).books), 0)
+            library = server.Library([root], include_pdf=True)
+            self.assertEqual(len(library.books), 1)
+            book = next(iter(library.books.values()))
+            self.assertEqual(book.kind, "pdf")
+            self.assertEqual(book.title, "PDF 테스트 책")
+            self.assertEqual(book.spine, ("pdf-page/0",))
+            with server.fitz.open(book.path) as document:
+                self.assertIn("Original English text", document[0].get_text("text"))
 
     def test_smil_audio_is_connected_to_spine_page(self):
         with tempfile.TemporaryDirectory() as td:
