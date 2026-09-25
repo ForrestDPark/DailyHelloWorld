@@ -736,6 +736,12 @@ def _local_generate(prompt, target, reference=None):
     references = reference if isinstance(reference, (list, tuple)) else ([reference] if reference else [])
     reference_names = [_comfy_upload(ref) for ref in references if ref and ref.is_file()]
     use_ipadapter_faceid = bool(reference_names) and _comfy_supports_ipadapter_faceid()
+    # 얼굴 고정용 사진을 픽셀 latent로 섞으면 두 사람의 얼굴·손·배경이 한
+    # 화면에 포개지는 심각한 합성 오류가 난다(FSDSS-873_J 실측). FaceID를
+    # 쓸 수 없는 환경에서는 정체성 유지보다 정상적인 인체가 우선이므로
+    # 참고 사진을 버리고 순수 txt2img로 생성한다.
+    if reference_names and not use_ipadapter_faceid:
+        reference_names = []
     base_seed = int.from_bytes(hashlib.sha256(prompt.encode()).digest()[:8], "big") & ((1 << 63) - 1)
     timeout = int(os.environ.get("JP_COMFYUI_TIMEOUT", "600"))
     for attempt in range(4):
@@ -766,6 +772,10 @@ def _local_generate(prompt, target, reference=None):
                 if len(reference_names) > 1:
                     reference_names = reference_names[:1]
                 else:
+                    # 마지막 한 장도 얼굴로 인식하지 못했다면 img2img로 사진
+                    # 자체를 섞지 않는다. 잘못된 얼굴 중첩 대신 참고 없는
+                    # txt2img로 안전하게 다시 시도한다.
+                    reference_names = []
                     use_ipadapter_faceid = False
                 continue
             raise
@@ -789,12 +799,12 @@ def _local_generate(prompt, target, reference=None):
                     "reference_count": len(reference_names),
                     "composition_pass": (
                         f"IP-Adapter FaceID (얼굴 임베딩 {len(reference_names)}장 평균) + txt2img"
-                        if use_ipadapter_faceid else (
+                        if use_ipadapter_faceid else ("txt2img (얼굴 참고 제외)" if not reference_names else (
                             f"txt2img 12 steps + 35% text/65% reference latent"
                             f"({len(reference_names)}장 평균) + img2img"
                             if len(reference_names) > 1 else
                             "txt2img 12 steps + 35% text/65% reference latent + img2img"
-                        )
+                        ))
                     ),
                 },
             }
@@ -886,11 +896,11 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
     manifest["custom_references"] = custom_names
     face_references = ([by_relative[name] for name in custom_names] if custom_names
                        else _select_fixed_references(originals))
-    fallback_reference = next((
-        path for name in ("cover_original.jpg", "cover.jpg", "cover.png", "cover.webp")
-        if (path := work_dir / name).is_file()
-    ), originals[0] if originals else None)
-    reference_pool = face_references or ([fallback_reference] if fallback_reference else [])
+    # 얼굴 검증을 통과한 사진이 없을 때 표지나 첫 장면을 억지로 쓰지 않는다.
+    # FSDSS-873_J에서는 첫 장면이 남성 표지였고, 이를 여성 초상화 프롬프트와
+    # 합치면서 여러 얼굴이 겹친 기괴한 결과가 생성됐다. 이 경우 참고 없는
+    # 초상화를 먼저 만든 뒤 그 정상 초상화를 모든 장면의 기준으로 사용한다.
+    reference_pool = face_references
     primary_reference = reference_pool[0] if reference_pool else None
     portrait_reference_file = _copy_reference(primary_reference, output, "portrait")
     portrait_reference_files = [portrait_reference_file] + [
@@ -903,7 +913,7 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
     manifest["reference_source"] = (
         (f"user_selected ({len(face_references)}장 평균)" if custom_names
          else f"face_detected_fixed ({len(face_references)}장 평균)") if face_references
-        else ("original_epub_scene" if originals else "cover_fallback")
+        else "text_only_no_qualified_face"
     )
     portrait_needed = force or "portrait" in force_keys or not _valid_image(portrait)
     scene_target_keys = {
