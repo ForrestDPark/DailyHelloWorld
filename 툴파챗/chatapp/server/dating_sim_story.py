@@ -2010,9 +2010,23 @@ def reference_candidates(work_dir):
         return []
     paths = [p for p in image_dir.glob("**/*")
              if p.is_file() and p.suffix.lower() in REFERENCE_CANDIDATE_SUFFIXES]
-    paths.sort(key=lambda p: tuple(int(x) if x.isdigit() else x.casefold()
-                                   for x in re.split(r"(\d+)", p.relative_to(image_dir).as_posix())))
-    return [p.relative_to(image_dir).as_posix() for p in paths]
+    # 자막 파이프라인이 장면 대표 컷만 images/에 추린 작품도 있으므로 EPUB
+    # 표지 원본도 직접 고를 수 있는 후보에 포함한다.
+    paths.extend(
+        path for name in ("cover_original.jpg", "cover.jpg", "cover.png", "cover.webp")
+        if (path := Path(work_dir) / name).is_file()
+    )
+    paths.sort(key=lambda p: tuple(
+        int(x) if x.isdigit() else x.casefold()
+        for x in re.split(
+            r"(\d+)",
+            p.relative_to(image_dir).as_posix() if image_dir in p.parents else f"../{p.name}",
+        )
+    ))
+    return [
+        p.relative_to(image_dir).as_posix() if image_dir in p.parents else f"../{p.name}"
+        for p in paths
+    ]
 
 
 def selected_references(work_dir):
@@ -2028,7 +2042,9 @@ def selected_references(work_dir):
 def reference_candidate_path(work_dir, name):
     if name not in set(reference_candidates(work_dir)):
         return None
-    return Path(work_dir) / "images" / name
+    target = (Path(work_dir) / "images" / name).resolve()
+    root = Path(work_dir).resolve()
+    return target if target.is_file() and (target == root or root in target.parents) else None
 
 
 def resolve_book_work_dir(story_id):

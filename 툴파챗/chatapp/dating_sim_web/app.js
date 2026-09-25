@@ -2308,6 +2308,7 @@ function buildReferencePicker(item) {
     counter.className = "tree-image-detail-empty";
     const status = document.createElement("span");
     status.className = "tree-image-generate-status";
+    const progress = createImageJobProgress();
     const buttons = [];
     const refresh = () => {
       counter.textContent = `원작 컷 ${data.candidates.length}장 중 ${picked.size}/${MAX_PICKED_REFERENCES}장 선택`
@@ -2363,11 +2364,11 @@ function buildReferencePicker(item) {
       buttons.push({ el, needsPick });
       actions.append(el);
     }
-    actions.append(status);
+    actions.append(progress.track, progress.label, status);
     tick = watchDatingSimImageJob(status, setBusy, async () => {
       closeTreeImageDetail();
       await openScenarioTree();
-    });
+    }, progress);
     body.replaceChildren(counter, grid, actions);
     refresh();
     tick(true);
@@ -2417,13 +2418,14 @@ function openTreeImageDetail(item) {
     regenButton.textContent = "🔁 이 사진만 재생성하기";
     const regenStatus = document.createElement("span");
     regenStatus.className = "tree-image-generate-status";
-    regenWrap.append(regenButton, regenStatus);
+    const regenProgress = createImageJobProgress();
+    regenWrap.append(regenButton, regenProgress.track, regenProgress.label, regenStatus);
     panel.append(regenWrap);
 
     const tick = watchDatingSimImageJob(regenStatus, (busy) => { regenButton.disabled = busy; }, async () => {
       closeTreeImageDetail();
       await openScenarioTree();
-    });
+    }, regenProgress);
     regenButton.addEventListener("click", () => startDatingSimImageJob(
       regenStatus, (busy) => { regenButton.disabled = busy; }, tick, { force_key: item.key },
       "재생성 시작 중...", "재생성 중... (몇 분 걸릴 수 있어요)",
@@ -2764,7 +2766,32 @@ function notifyImageJobDone() {
   setTimeout(() => alert("🖼️ 미연시 이미지 재생성이 끝났어요!"), 50);
 }
 
-function watchDatingSimImageJob(status, setBusy, onSuccess) {
+function createImageJobProgress() {
+  const track = document.createElement("div");
+  track.className = "tree-image-job-progress";
+  track.setAttribute("role", "progressbar");
+  track.setAttribute("aria-valuemin", "0");
+  track.setAttribute("aria-valuemax", "100");
+  track.setAttribute("aria-valuenow", "0");
+  const bar = document.createElement("i");
+  const label = document.createElement("b");
+  label.className = "tree-image-job-progress-label";
+  label.textContent = "0%";
+  track.append(bar);
+  return { track, bar, label };
+}
+
+function updateImageJobProgress(progress, data) {
+  if (!progress) return;
+  const percent = Math.max(0, Math.min(100, Number(data?.percent) || 0));
+  progress.bar.style.width = `${percent}%`;
+  progress.label.textContent = Number(data?.total) > 0
+    ? `${Number(data.done) || 0}/${Number(data.total)} · ${percent}%`
+    : `${percent}%`;
+  progress.track.setAttribute("aria-valuenow", String(percent));
+}
+
+function watchDatingSimImageJob(status, setBusy, onSuccess, progress = null) {
   let seenRunning = false;
   const tick = async (initial = false) => {
     let data;
@@ -2779,7 +2806,8 @@ function watchDatingSimImageJob(status, setBusy, onSuccess) {
     if (data.running) {
       seenRunning = true;
       setBusy(true);
-      status.textContent = "생성 중... (몇 분 걸릴 수 있어요)";
+      updateImageJobProgress(progress, data);
+      status.textContent = data.current || "생성 중... (몇 분 걸릴 수 있어요)";
       if (!datingSimImageGenPollTimer) {
         datingSimImageGenPollTimer = setInterval(tick, 8000);
       }
@@ -2788,6 +2816,7 @@ function watchDatingSimImageJob(status, setBusy, onSuccess) {
     stopDatingSimImageGenPoll();
     setBusy(false);
     if (data.returncode === 0) {
+      updateImageJobProgress(progress, { ...data, percent: 100 });
       // initial=true(패널을 막 열었을 때)인데 이번 생애주기에 running을
       // 한 번도 못 봤다면, 예전에 이미 끝난 작업을 지금 처음 조회한
       // 것뿐이므로 새로고침을 또 트리거하지 않는다(무한 루프 방지).
@@ -2839,16 +2868,17 @@ function renderImageGenerationControl(container, tree) {
 
   const status = document.createElement("span");
   status.className = "tree-image-generate-status";
+  const progress = createImageJobProgress();
   wrap.append(genButton);
   if (regenButton) wrap.append(regenButton);
-  wrap.append(status);
+  wrap.append(progress.track, progress.label, status);
   container.append(wrap);
 
   const setBusy = (busy) => {
     genButton.disabled = busy;
     if (regenButton) regenButton.disabled = busy;
   };
-  const tick = watchDatingSimImageJob(status, setBusy, openScenarioTree);
+  const tick = watchDatingSimImageJob(status, setBusy, openScenarioTree, progress);
 
   genButton.addEventListener("click", () => startDatingSimImageJob(
     status, setBusy, tick, {}, "생성 시작 중...", "생성 중... (여러 장이라 몇 분 걸릴 수 있어요)"
