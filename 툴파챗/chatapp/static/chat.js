@@ -2006,10 +2006,10 @@ async function loadPortalNotifications() {
 async function loadDirectoryData() {
   const rooms = await (await apiFetch("/api/rooms")).json();
   roomsCache = new Map(rooms.map((room) => [room.room_id, room]));
-  for (const room of rooms) {
+  await Promise.all(rooms.map(async (room) => {
     const knownRead = getLastRead(room.room_id);
-    if (knownRead) markRoomRead(room.room_id, knownRead);
-  }
+    if (knownRead) await markRoomRead(room.room_id, knownRead);
+  }));
   try { usersCache = await (await apiFetch("/api/users")).json(); }
   catch (error) { usersCache = []; if (error.message !== "unauthorized" && error.message !== "forbidden") console.error(error); }
   return rooms;
