@@ -2089,6 +2089,59 @@ async function showPortalHome(focusSystems = false) {
   if (activePollController) activePollController.abort();
   if (pollTimer) clearTimeout(pollTimer);
   authView.classList.add("hidden"); chatView.classList.add("hidden"); roomListView.classList.add("hidden"); sunziView.classList.add("hidden"); homeView.classList.remove("hidden");
+async function loadSystemUpdateHistory() {
+  const list = document.getElementById("portal-update-list");
+  try {
+    const data = await (await apiFetch("/api/system/updates")).json();
+    const items = data.items || [];
+    document.getElementById("portal-update-count").textContent = `${items.length}건`;
+    list.replaceChildren();
+    for (const item of items) {
+      const link = document.createElement("a");
+      const time = document.createElement("time");
+      const copy = document.createElement("span");
+      const system = document.createElement("small");
+      const title = document.createElement("strong");
+      const body = document.createElement("span");
+      const arrow = document.createElement("i");
+      const created = new Date(item.created_at);
+      link.className = "portal-update-item";
+      link.href = item.url || "#systems";
+      time.dateTime = item.created_at;
+      time.textContent = Number.isNaN(created.getTime()) ? item.created_at : new Intl.DateTimeFormat("ko-KR", {month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}).format(created);
+      copy.className = "portal-update-copy";
+      system.textContent = item.system || "툴파챗";
+      title.textContent = item.title || "업데이트";
+      body.textContent = item.body || "";
+      arrow.textContent = "→";
+      copy.append(system, title, body);
+      link.append(time, copy, arrow);
+      list.append(link);
+    }
+    if (!items.length) list.textContent = "아직 기록된 업데이트가 없습니다.";
+  } catch (error) {
+    list.textContent = "업데이트 기록을 불러오지 못했습니다.";
+    console.error(error);
+  }
+}
+
+const SYSTEM_UPDATE_COLLAPSED_KEY = "tulpachat_system_updates_collapsed";
+const systemUpdateHistory = document.getElementById("portal-update-history");
+const systemUpdateToggle = document.getElementById("portal-update-toggle");
+function setSystemUpdateCollapsed(collapsed) {
+  systemUpdateHistory.classList.toggle("collapsed", collapsed);
+  systemUpdateToggle.setAttribute("aria-expanded", String(!collapsed));
+  systemUpdateToggle.querySelector("i").textContent = collapsed ? "⌄" : "⌃";
+  localStorage.setItem(SYSTEM_UPDATE_COLLAPSED_KEY, collapsed ? "1" : "0");
+}
+systemUpdateToggle.addEventListener("click", () => setSystemUpdateCollapsed(!systemUpdateHistory.classList.contains("collapsed")));
+setSystemUpdateCollapsed(localStorage.getItem(SYSTEM_UPDATE_COLLAPSED_KEY) === "1");
+setInterval(() => {
+  if (location.hash === "#systems" && document.visibilityState === "visible") loadSystemUpdateHistory();
+}, 30000);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && location.hash === "#systems") loadSystemUpdateHistory();
+});
   const greetingName = document.getElementById("portal-greeting-name");
   if (greetingName) greetingName.textContent = myDisplayName || myUsername || "오늘도";
   try {
@@ -2125,6 +2178,9 @@ const PWA_INSTALL_REMIND_MS = 3 * 24 * 60 * 60 * 1000;
 const pwaInstallOverlay = document.getElementById("pwa-install-overlay");
 const pwaInstallAction = document.getElementById("pwa-install-action");
 const pwaInstallSteps = document.getElementById("pwa-install-steps");
+  const updateHistory = document.getElementById("portal-update-history");
+  updateHistory.classList.toggle("hidden", !focusSystems);
+  if (focusSystems) loadSystemUpdateHistory();
 
 function isInstalledPwa() {
   return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
