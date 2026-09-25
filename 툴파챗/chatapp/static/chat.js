@@ -92,6 +92,26 @@ function setAiResponseStatus(waiting) {
 }
 aiStatusRetry.addEventListener("click", () => { pollGeneration += 1; poll(); });
 const messageSearch = document.getElementById("message-search");
+const listMenuBtn = document.getElementById("list-menu-btn");
+const listHeaderMenu = document.getElementById("list-header-menu");
+
+function closeListHeaderMenu() {
+  listHeaderMenu.classList.add("hidden");
+  listMenuBtn.setAttribute("aria-expanded", "false");
+}
+
+listMenuBtn.addEventListener("click", (event) => {
+  event.stopPropagation();
+  const opening = listHeaderMenu.classList.contains("hidden");
+  listHeaderMenu.classList.toggle("hidden", !opening);
+  listMenuBtn.setAttribute("aria-expanded", String(opening));
+});
+listHeaderMenu.addEventListener("click", (event) => {
+  if (event.target.closest("button")) closeListHeaderMenu();
+});
+document.addEventListener("click", (event) => {
+  if (!listHeaderMenu.contains(event.target) && event.target !== listMenuBtn) closeListHeaderMenu();
+});
 const chatHeader = document.querySelector(".chat-header");
 const chatSearchBtn = document.getElementById("chat-search-btn");
 const chatMenuBtn = document.getElementById("chat-menu-btn");
