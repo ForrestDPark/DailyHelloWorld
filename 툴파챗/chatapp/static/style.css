@@ -1661,6 +1661,25 @@ main#messages {
 .msg { max-width: min(82%, 620px); gap: 4px; }
 .msg .sender { padding: 0 6px; font-size: 11px; font-weight: 650; opacity: .68; }
 .msg .body { padding: 10px 14px; border-radius: 18px; line-height: 1.55; box-shadow: var(--shadow-soft); }
+.msg .body.message-collapsible { position: relative; cursor: pointer; transition: max-height .2s ease; }
+.msg .body.message-collapsible.message-collapsed {
+  max-height: var(--message-collapsed-height);
+  overflow: hidden;
+}
+.msg .body.message-collapsible.message-collapsed::after {
+  content: "…";
+  position: absolute;
+  right: 10px;
+  bottom: 7px;
+  min-width: 46px;
+  padding-left: 26px;
+  text-align: right;
+  font-weight: 800;
+  background: linear-gradient(90deg, transparent, var(--bubble-persona) 48%);
+}
+.msg-user .body.message-collapsible.message-collapsed::after { background: linear-gradient(90deg, transparent, var(--bubble-user) 48%); }
+.msg-other .body.message-collapsible.message-collapsed::after { background: linear-gradient(90deg, transparent, var(--bubble-other) 48%); }
+.msg .body.message-collapsible.message-expanded { max-height: none; }
 .msg-user .body { background: var(--bubble-user); border-bottom-right-radius: 6px; }
 .msg-persona .body { border: 1px solid var(--border); border-bottom-left-radius: 6px; }
 .msg-other .body { border-bottom-left-radius: 6px; }
