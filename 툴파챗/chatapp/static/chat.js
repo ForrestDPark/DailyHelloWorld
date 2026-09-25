@@ -174,16 +174,6 @@ messageSearch.addEventListener("input", () => {
 // 지난 대화를 읽고 있을 때만 의미가 있다.
 const scrollBottomBtn = document.getElementById("scroll-bottom-btn");
 const SCROLL_BOTTOM_THRESHOLD_PX = 120;
-let messageExpandGuardUntil = 0;
-
-function collapseExpandedMessages(exceptBody = null) {
-  for (const body of messagesEl.querySelectorAll(".body.message-collapsible.message-expanded")) {
-    if (body === exceptBody) continue;
-    body.classList.remove("message-expanded");
-    body.classList.add("message-collapsed");
-    body.setAttribute("aria-expanded", "false");
-  }
-}
 
 function updateScrollBottomVisibility() {
   const distanceFromBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight;
@@ -236,7 +226,6 @@ function markVisibleMessagesRead() {
 }
 
 messagesEl.addEventListener("scroll", () => {
-  if (performance.now() > messageExpandGuardUntil) collapseExpandedMessages();
   if (readVisibilityFrame !== null) return;
   readVisibilityFrame = requestAnimationFrame(() => {
     updateScrollBottomVisibility();
@@ -4124,11 +4113,9 @@ function appendMessage(m, forceScroll = false, suppressScroll = false) {
     if (Number(body.dataset.suppressToggleUntil || 0) > performance.now()) return;
     if (event.target.closest("a, button, img, video, audio, .japanese-kanji-char, .vocab-word, .message-reply-quote")) return;
     const expanding = body.classList.contains("message-collapsed");
-    collapseExpandedMessages(body);
     body.classList.toggle("message-collapsed", !expanding);
     body.classList.toggle("message-expanded", expanding);
     body.setAttribute("aria-expanded", String(expanding));
-    messageExpandGuardUntil = performance.now() + 180;
   });
   const time = document.createElement("div");
   time.className = "msg-time";
@@ -4161,10 +4148,32 @@ function appendMessage(m, forceScroll = false, suppressScroll = false) {
   });
   messagesEl.appendChild(el);
   requestAnimationFrame(() => requestAnimationFrame(() => {
+    const bodyRect = body.getBoundingClientRect();
+    const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
+    const visualLines = [];
+    let textNode;
+    while ((textNode = walker.nextNode())) {
+      if (!textNode.textContent.trim()) continue;
+      // ruby의 rt(후리가나)는 본문 한 줄 위에 얹히는 주석이므로 별도 줄로
+      // 세지 않는다. 그렇지 않으면 네 줄 접기가 실제로는 두세 줄에서 잘린다.
+      if (textNode.parentElement?.closest("rt")) continue;
+      const range = document.createRange();
+      range.selectNodeContents(textNode);
+      for (const rect of range.getClientRects()) {
+        if (!rect.width || !rect.height) continue;
+        let line = visualLines.find((candidate) => Math.abs(candidate.top - rect.top) < 3);
+        if (!line) { line = {top: rect.top, bottom: rect.bottom}; visualLines.push(line); }
+        else line.bottom = Math.max(line.bottom, rect.bottom);
+      }
+    }
+    visualLines.sort((a, b) => a.top - b.top);
     const style = getComputedStyle(body);
-    const lineHeight = Number.parseFloat(style.lineHeight) || 24;
-    const verticalPadding = (Number.parseFloat(style.paddingTop) || 0) + (Number.parseFloat(style.paddingBottom) || 0);
-    const collapsedHeight = lineHeight * 4 + verticalPadding;
+    const bottomPadding = Number.parseFloat(style.paddingBottom) || 0;
+    const bottomBorder = Number.parseFloat(style.borderBottomWidth) || 0;
+    const fourthLine = visualLines[3];
+    const collapsedHeight = fourthLine
+      ? fourthLine.bottom - bodyRect.top + bottomPadding + bottomBorder + 30
+      : (Number.parseFloat(style.lineHeight) || 24) * 4 + bottomPadding + 30;
     if (body.scrollHeight > collapsedHeight + 3) {
       body.style.setProperty("--message-collapsed-height", `${collapsedHeight}px`);
       body.classList.add("message-collapsible", "message-collapsed");

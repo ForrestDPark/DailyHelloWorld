@@ -1669,16 +1669,19 @@ main#messages {
 .msg .body.message-collapsible.message-collapsed::after {
   content: "…";
   position: absolute;
-  right: 10px;
-  bottom: 7px;
-  min-width: 46px;
-  padding-left: 26px;
-  text-align: right;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 24px;
+  padding-right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   font-weight: 800;
-  background: linear-gradient(90deg, transparent, var(--bubble-persona) 48%);
+  background: var(--bubble-persona);
 }
-.msg-user .body.message-collapsible.message-collapsed::after { background: linear-gradient(90deg, transparent, var(--bubble-user) 48%); }
-.msg-other .body.message-collapsible.message-collapsed::after { background: linear-gradient(90deg, transparent, var(--bubble-other) 48%); }
+.msg-user .body.message-collapsible.message-collapsed::after { background: var(--bubble-user); }
+.msg-other .body.message-collapsible.message-collapsed::after { background: var(--bubble-other); }
 .msg .body.message-collapsible.message-expanded { max-height: none; }
 .msg-user .body { background: var(--bubble-user); border-bottom-right-radius: 6px; }
 .msg-persona .body { border: 1px solid var(--border); border-bottom-left-radius: 6px; }
