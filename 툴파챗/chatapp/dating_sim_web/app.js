@@ -1517,7 +1517,14 @@ function renderScene(state) {
   sceneLines = state.scene.lines;
   sceneChoices = state.scene.choices;
   sceneVocab = state.scene.vocab_words || (state.scene.vocab ? [state.scene.vocab] : []);
-  sceneExpr = state.scene.expressions_used || [];
+  sceneExpr = [
+    ...(state.scene.expressions_used || []),
+    ...(state.scene.grammar_used || []).map((item) => ({
+      ja: item.evidence,
+      reading: "",
+      ko: `${item.pattern} · ${item.explanation}`,
+    })),
+  ];
   sceneLineIndex = 0;
   sceneLearningMarked = false;
   $("stage").dataset.location = state.scene.location;
@@ -2489,8 +2496,10 @@ function renderScenarioReport(body, tree, includeHeading = true) {
     `학습카드 ${c.study_card_scenes}장면`,
     `학습 단어 ${report.vocabulary_pool_count}개`,
     `핵심 표현 ${c.expressions_total}개`,
+    `문법 문형 ${c.grammar_total || 0}개`,
     `시나리오 활용 단어 ${report.vocabulary_used_count}개`,
     `시나리오 활용 표현 ${report.expression_used_count || 0}개`,
+    `시나리오 활용 문법 ${report.grammar_used_count || 0}개`,
   ];
   for (const text of chips) {
     const chip = document.createElement("span");
@@ -2502,7 +2511,7 @@ function renderScenarioReport(body, tree, includeHeading = true) {
 
   const note = document.createElement("p");
   note.className = "tree-report-note";
-  note.textContent = "시나리오는 원작 대사를 그대로 옮기지 않습니다. 학습카드에서 뽑은 단어만 매일 하나씩 상황 속에 녹여 씁니다(아래 표의 초록 줄).";
+  note.textContent = "시나리오는 원작 대사를 그대로 옮기지 않습니다. 학습카드의 단어·핵심 표현·문법 문형을 새로운 서사와 대사 속에 활용합니다.";
   body.append(note);
 
   // 표 1 — 요일별 시나리오 구성
@@ -2582,6 +2591,30 @@ function renderScenarioReport(body, tree, includeHeading = true) {
     details.append(makeTreeTable(["표현", "뜻"], unusedExpressions.map((entry) => [
       `${entry.ja}${entry.reading ? ` (${entry.reading})` : ""}`,
       entry.ko,
+    ])));
+    body.append(details);
+  }
+
+  const grammar = report.grammar_usage || [];
+  const usedGrammar = grammar.filter((entry) => entry.used_days.length);
+  const unusedGrammar = grammar.filter((entry) => !entry.used_days.length);
+  if (usedGrammar.length) {
+    const heading = document.createElement("div");
+    heading.className = "tree-table-title";
+    heading.textContent = `시나리오에 쓰인 문법 문형 (${usedGrammar.length}개)`;
+    body.append(heading);
+    body.append(makeTreeTable(["문형", "설명", "활용 흐름"], usedGrammar.map((entry) => [
+      entry.pattern, entry.explanation, entry.used_days.map((day) => `흐름 ${day}`).join(", "),
+    ])));
+  }
+  if (unusedGrammar.length) {
+    const details = document.createElement("details");
+    details.className = "tree-unused";
+    const summaryEl = document.createElement("summary");
+    summaryEl.textContent = `시나리오에 아직 안 쓰인 문법 문형 ${unusedGrammar.length}개`;
+    details.append(summaryEl);
+    details.append(makeTreeTable(["문형", "설명"], unusedGrammar.map((entry) => [
+      entry.pattern, entry.explanation,
     ])));
     body.append(details);
   }
@@ -2736,7 +2769,7 @@ function renderScenarioTree(tree) {
     : tree.character_name);
   head.append(workTitle);
   const meta = document.createElement("span");
-  meta.textContent = `${tree.total_days}개 장면 흐름 · 학습 단어 ${tree.vocab_pool.length}개`;
+  meta.textContent = `${tree.total_days}개 장면 흐름 · 단어 ${tree.vocab_pool.length}개 · 문법 ${tree.report?.grammar_pool_count || 0}개`;
   head.append(meta);
   body.append(head);
 

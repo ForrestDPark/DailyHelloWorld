@@ -957,6 +957,9 @@ def _dating_materials(story):
             for expression in scene.get("expressions_used") or []:
                 if expression.get("ja"):
                     materials.add(("expression", expression["ja"]))
+            for grammar in scene.get("grammar_used") or []:
+                if grammar.get("pattern"):
+                    materials.add(("grammar", grammar["pattern"]))
     return materials
 
 
@@ -969,6 +972,9 @@ def _dating_mark_scene_seen(conn, username, story, scene):
     for expression in scene.get("expressions_used") or []:
         if expression.get("ja"):
             rows.append((username, story["id"], "expression", expression["ja"], now))
+    for grammar in scene.get("grammar_used") or []:
+        if grammar.get("pattern"):
+            rows.append((username, story["id"], "grammar", grammar["pattern"], now))
     if rows:
         conn.executemany(
             "INSERT OR IGNORE INTO dating_sim_learning_seen "

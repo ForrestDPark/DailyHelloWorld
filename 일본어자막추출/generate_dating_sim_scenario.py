@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""작품별 미연시 시나리오를 학습카드(어휘+표현)를 전부 녹여 AI로 새로 생성한다.
+"""작품별 미연시 시나리오를 학습카드(어휘+표현+문법)를 전부 녹여 AI로 새로 생성한다.
 
 ★ 2026-09-19: "학습단어를 전부다 사용하게끔 시나리오를 수정... 시나리오가 너무
 고정되어있는거같은데 학습단어를 토대로 시나리오를 전부 새로 구성했으면 좋겠어"
@@ -115,6 +115,31 @@ def load_expressions(work_dir):
     return out
 
 
+GRAMMAR_PATTERN_RE = re.compile(r"「([^」]*[～~][^」]*)」")
+
+
+def load_grammar_patterns(work_dir):
+    """학습카드의 문법 설명에서 실제 연습할 `～` 문형을 뽑는다.
+
+    설명 전체를 대사에 복사하는 대신 문형과 설명을 분리하고, 생성기가 해당
+    문형을 활용한 실제 문장을 evidence로 제출하게 한다.
+    """
+    try:
+        cards = json.loads((work_dir / "scene_study_cards.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    seen, out = set(), []
+    for scene in (cards or {}).values():
+        for entry in (scene or {}).get("grammar", []) or []:
+            explanation = entry if isinstance(entry, str) else str((entry or {}).get("text") or "")
+            for matched in GRAMMAR_PATTERN_RE.findall(explanation):
+                pattern = matched.replace("~", "～").strip()
+                if pattern and pattern not in seen:
+                    seen.add(pattern)
+                    out.append({"pattern": pattern, "explanation": explanation})
+    return out
+
+
 def assign_round_robin(items, day_count, per_day):
     """items를 요일별로 per_day개씩 순서대로 배정(순환)한다. 남으면 다음
     요일로 계속 돌려 최대한 많이 배정한다."""
@@ -143,7 +168,8 @@ def distribute_locations(items):
     return assigned
 
 
-def build_day_prompt(character_ko, day, topic, arc_hint, words, expressions, is_first_day):
+def build_day_prompt(character_ko, day, topic, arc_hint, words, expressions, is_first_day,
+                     grammar_patterns=None, continuity_context=""):
     schema_example = json.dumps({
         "narration": "[今日|きょう]は[雨|あめ]が[降|ふ]っていた。\n오늘은 비가 내리고 있었다.",
         "scenes": {
@@ -155,6 +181,9 @@ def build_day_prompt(character_ko, day, topic, arc_hint, words, expressions, is_
                 "choices": [
                     {"text": "[僕|ぼく]も[会|あ]いたかったです。\n저도 보고 싶었어요.", "tone": "positive"},
                     {"text": "그냥 지나가던 길이었어요.", "tone": "negative"},
+                ],
+                "grammar_evidence": [
+                    {"pattern": "～たらいい？", "quote": "どこで待ったらいいですか。"}
                 ],
             },
             "walk": {"lines": ["..."], "choices": [{"text": "...", "tone": "positive"}, {"text": "...", "tone": "negative"}]},
@@ -168,10 +197,14 @@ def build_day_prompt(character_ko, day, topic, arc_hint, words, expressions, is_
     def fmt_exprs(es):
         return "\n".join(f"- {e['ja']} = {e['ko']}" for e in es) or "- (없음)"
 
+    def fmt_grammar(items):
+        return "\n".join(f"- {item['pattern']} = {item['explanation']}" for item in items) or "- (없음)"
+
     # 단어와 표현을 장면별로 확정 배정한다. AI가 임의로 고르는 후보 목록이
     # 아니라, 그 장면의 lines에 모두 실어야 하는 체크리스트다.
     loc_words = distribute_locations(words)
     loc_expressions = distribute_locations(expressions)
+    loc_grammar = distribute_locations(grammar_patterns or [])
 
     loc_blocks = []
     for loc, desc in BOOK_LOCATIONS:
@@ -179,6 +212,7 @@ def build_day_prompt(character_ko, day, topic, arc_hint, words, expressions, is_
             f"[{loc}] {desc}\n"
             f"이 장소 lines에 반드시 모두 넣을 학습 단어:\n{fmt_words(loc_words[loc])}\n"
             f"이 장소 lines에 반드시 모두 넣을 핵심 표현:\n{fmt_exprs(loc_expressions[loc])}"
+            f"\n이 장소 lines에 반드시 활용할 문법 문형:\n{fmt_grammar(loc_grammar[loc])}"
         )
     loc_section = "\n\n".join(loc_blocks)
 
@@ -201,14 +235,21 @@ def build_day_prompt(character_ko, day, topic, arc_hint, words, expressions, is_
   일괄 배제하지 않는다. 다만 미성년자, 강압, 비동의, 착취 상황은 만들지 마라.
 - 각 장소에 배정된 학습 단어와 핵심 표현을 그 장소의 lines에 하나도 빠짐없이 실제로 써라.
   핵심 표현의 일본어 어순과 어휘는 유지하되 주변 문맥과 한국어 번역은 장면에 맞게 연결하라.
+- 배정된 문법 문형도 그 장소의 lines에 자연스러운 실제 활용형으로 모두 써라. `～` 자체를
+  출력하지 말고 앞말을 채운 완성 문장을 쓰며, grammar_evidence에 pattern과 실제 일본어
+  문장에서 그대로 인용한 quote를 기록하라. quote는 lines에 문자 그대로 존재해야 한다.
 - 독자에게 DAY, n일차, n일째, n日目처럼 날짜를 세는 표현을 노출하지 마라. 사건의 전후 관계와
   장소 변화만으로 흐름이 자연스럽게 이어지게 써라.
 - 모든 대사·나레이션·선택지는 "일본어\\n한국어" 두 줄로 쓴다(한 문자열 안에 \\n 하나).
 - 한자에는 반드시 [한자|요미가나] 형식으로 후리가나를 단다(한자 덩어리에만, 예:
   [久|ひさ]しぶり, [約束|やくそく]). 히라가나·가타카나·조사에는 달지 않는다. 한국어 줄에는
   후리가나를 넣지 않는다.
-- 각 장면(scene)의 lines는 4~7줄. 마지막 줄은 반드시 두 선택지가 자연스럽게 답이 되는
+- 각 장면(scene)의 lines는 6~9줄. 첫 줄은 직전 사건의 결과나 현재 행동으로 시작하고,
+  중간에는 작은 오해·발견·결정 중 하나가 발생해야 한다. 마지막 줄은 반드시 두 선택지가 자연스럽게 답이 되는
   질문이나 화제여야 한다.
+- first → walk → quiet가 독립된 세 에피소드처럼 끊기지 않게, 앞 장면의 선택·물건·약속·감정
+  중 하나가 다음 장면의 원인이 되도록 연결하라. narration은 3~5문장으로 환경, 플레이어의
+  속마음, 직전 사건이 남긴 문제를 보여주되 결론을 먼저 설명하지 마라.
 - 선택지는 정확히 2개: 하나는 호감이 오르는 다정/진솔한 답(tone:positive), 하나는
   거리를 두는 무뚝뚝/회피 답(tone:negative). 두 선택지는 반드시 바로 앞 마지막 대사에
   플레이어가 말로 답하는 1인칭 문장이어야 한다. 갑자기 장소로 이동하거나 상대를 부르거나
@@ -219,6 +260,7 @@ def build_day_prompt(character_ko, day, topic, arc_hint, words, expressions, is_
 
 오늘(DAY {day}) 이야기 주제: {topic}
 전개 톤 가이드(참고용, 그대로 베끼지 말 것): {arc_hint}
+직전 흐름에서 이어받을 사실(없으면 첫 만남부터 시작): {continuity_context or '(없음)'}
 {first_rule}
 
 장소별 지정 재료:
@@ -228,12 +270,13 @@ def build_day_prompt(character_ko, day, topic, arc_hint, words, expressions, is_
 {schema_example}"""
 
 
-def missing_day_materials(day_obj, words, expressions):
+def missing_day_materials(day_obj, words, expressions, grammar_patterns=None):
     """배정 재료를 해당 장소의 lines에서 찾는다. 선택지나 번역에만 우연히
     등장한 것은 학습 표현을 시나리오 대사에 활용한 것으로 세지 않는다."""
     missing = []
     word_map = distribute_locations(words)
     expression_map = distribute_locations(expressions)
+    grammar_map = distribute_locations(grammar_patterns or [])
     scenes = day_obj.get("scenes", {}) if isinstance(day_obj, dict) else {}
     for loc, _ in BOOK_LOCATIONS:
         lines = (scenes.get(loc) or {}).get("lines") or []
@@ -242,10 +285,17 @@ def missing_day_materials(day_obj, words, expressions):
             for item in items:
                 if not contains_material(joined, item):
                     missing.append(f"{loc} {kind}: {item['ja']}")
+        evidence = (scenes.get(loc) or {}).get("grammar_evidence") or []
+        for item in grammar_map[loc]:
+            match = next((entry for entry in evidence
+                          if isinstance(entry, dict) and entry.get("pattern") == item["pattern"]), None)
+            quote = str((match or {}).get("quote") or "").strip()
+            if not quote or not contains_material(joined, {"ja": quote}):
+                missing.append(f"{loc} 문법: {item['pattern']}")
     return missing
 
 
-def validate_day(day_obj, words=None, expressions=None):
+def validate_day(day_obj, words=None, expressions=None, grammar_patterns=None):
     if not isinstance(day_obj, dict):
         return False
     scenes = day_obj.get("scenes")
@@ -264,10 +314,10 @@ def validate_day(day_obj, words=None, expressions=None):
         tones = {c.get("tone") for c in choices if isinstance(c, dict) and c.get("text", "").strip()}
         if tones != {"positive", "negative"}:
             return False
-    return not missing_day_materials(day_obj, words or [], expressions or [])
+    return not missing_day_materials(day_obj, words or [], expressions or [], grammar_patterns or [])
 
 
-def finalize_day(day, day_obj, vocab_pool, expressions):
+def finalize_day(day, day_obj, vocab_pool, expressions, grammar_patterns):
     """AI 출력(tone 기반 선택지)을 엔진 스키마(affection 점수)로 변환하고,
     실제로 대사에 등장한 학습 단어를 스캔해 vocab_used로 기록한다."""
     out = {"scenes": {}}
@@ -287,11 +337,20 @@ def finalize_day(day, day_obj, vocab_pool, expressions):
         joined = "\n".join(lines)
         vocab_used = [meta for meta in vocab_pool if contains_material(joined, meta)]
         expressions_used = [meta for meta in expressions if contains_material(joined, meta)]
+        grammar_by_pattern = {item["pattern"]: item for item in grammar_patterns}
+        grammar_used = []
+        for evidence in sc.get("grammar_evidence") or []:
+            meta = grammar_by_pattern.get(str(evidence.get("pattern") or "")) if isinstance(evidence, dict) else None
+            quote = str(evidence.get("quote") or "").strip() if isinstance(evidence, dict) else ""
+            if meta and quote and contains_material(joined, {"ja": quote}):
+                grammar_used.append({**meta, "evidence": quote})
         scene = {"lines": lines, "choices": choices}
         if vocab_used:
             scene["vocab_used"] = vocab_used
         if expressions_used:
             scene["expressions_used"] = expressions_used
+        if grammar_used:
+            scene["grammar_used"] = grammar_used
         out["scenes"][loc] = scene
     return out
 
@@ -332,11 +391,13 @@ def generate_for_work(work_dir, log=print):
         log(f"❌ {title}: 학습 단어가 없어 생성 불가(학습카드 먼저 생성 필요)")
         return False
     expressions = load_expressions(work_dir)
+    grammar_patterns = load_grammar_patterns(work_dir)
     total_days = ds.TOTAL_DAYS
     # 96단어를 2~14일차(13일)에 골고루 → 하루 약 8개, 장소당 2~3개.
     per_day = max(3, -(-len(vocab_pool) // (total_days - 1)))
     word_by_day = assign_round_robin(vocab_pool, total_days, per_day)
     expr_by_day = assign_round_robin(expressions, total_days, max(2, -(-len(expressions) // (total_days - 1))))
+    grammar_by_day = assign_round_robin(grammar_patterns, total_days, max(1, -(-len(grammar_patterns) // (total_days - 1))))
 
     partial_path = work_dir / "dating_sim_scenario.partial.json"
     days = {}
@@ -358,9 +419,15 @@ def generate_for_work(work_dir, log=print):
         is_first = day == 1
         words = [] if is_first else word_by_day.get(day, [])
         exprs = [] if is_first else expr_by_day.get(day, [])
+        grammars = [] if is_first else grammar_by_day.get(day, [])
         topic = ds.DAY_TOPICS.get(day, "")
         arc_hint = ds.DAY_NARRATION.get(day, "").split("\n")[-1]
-        base_prompt = build_day_prompt(title.split("_")[0], day, topic, arc_hint, words, exprs, is_first)
+        previous = days.get(str(day - 1), {})
+        previous_lines = [line for scene in (previous.get("scenes") or {}).values()
+                          for line in (scene.get("lines") or [])]
+        continuity = " / ".join(previous_lines[-3:])[-1200:]
+        base_prompt = build_day_prompt(title.split("_")[0], day, topic, arc_hint, words, exprs,
+                                       is_first, grammars, continuity)
         day_obj = None
         max_attempts = 5
         ai_failed = False
@@ -368,7 +435,8 @@ def generate_for_work(work_dir, log=print):
         # 요일은 영원히 못 넘어간다. 마지막에 계속 빠진 필수 "표현"만 사용 불가로 빼고
         # 나머지 재료로 한 번 더 생성한다(어휘·다른 표현은 그대로 필수).
         for fallback_round in range(2):
-            base_prompt = build_day_prompt(title.split("_")[0], day, topic, arc_hint, words, exprs, is_first)
+            base_prompt = build_day_prompt(title.split("_")[0], day, topic, arc_hint, words, exprs,
+                                           is_first, grammars, continuity)
             prompt = base_prompt
             last_missing = []
             for attempt in range(max_attempts):
@@ -385,10 +453,10 @@ def generate_for_work(work_dir, log=print):
                     candidate = json.loads(match.group(0)) if match else None
                 except json.JSONDecodeError:
                     candidate = None
-                if candidate and validate_day(candidate, words, exprs):
+                if candidate and validate_day(candidate, words, exprs, grammars):
                     day_obj = candidate
                     break
-                missing = missing_day_materials(candidate or {}, words, exprs)
+                missing = missing_day_materials(candidate or {}, words, exprs, grammars)
                 last_missing = missing
                 if attempt + 1 < max_attempts:
                     previous = json.dumps(candidate, ensure_ascii=False) if candidate else "(유효한 JSON 없음)"
@@ -412,18 +480,19 @@ def generate_for_work(work_dir, log=print):
         if not day_obj:
             log(f"❌ {title}: DAY {day} 생성 실패 — 중간 저장본은 남김, 재실행 시 이어감")
             return False
-        days[str(day)] = finalize_day(day, day_obj, vocab_pool, expressions)
+        days[str(day)] = finalize_day(day, day_obj, vocab_pool, expressions, grammar_patterns)
         partial_path.write_text(json.dumps({"content_version": partial_version, "days": days,
                                                   "skipped_expressions": sorted(skipped_expressions)}, ensure_ascii=False, indent=1), encoding="utf-8")
         used = sum(len(days[str(day)]["scenes"][loc].get("vocab_used", [])) for loc, _ in BOOK_LOCATIONS)
         log(f"   ✅ DAY {day} 생성 완료 (단어 {used}개 삽입)")
 
-    used_ja, used_expr = set(), set()
+    used_ja, used_expr, used_grammar = set(), set(), set()
     for generated_day in days.values():
         for loc, _ in BOOK_LOCATIONS:
             scene = generated_day["scenes"][loc]
             used_ja.update(w["ja"] for w in scene.get("vocab_used", []))
             used_expr.update(e["ja"] for e in scene.get("expressions_used", []))
+            used_grammar.update(e["pattern"] for e in scene.get("grammar_used", []))
     missing_words = [w["ja"] for w in vocab_pool if w["ja"] not in used_ja]
     missing_expressions = [e["ja"] for e in expressions
                            if e["ja"] not in used_expr and e["ja"] not in skipped_expressions]
@@ -437,7 +506,9 @@ def generate_for_work(work_dir, log=print):
     scenario = {
         "content_version": ds.GENERATED_SCENARIO_VERSION,
         "coverage": {"vocabulary": [len(used_ja), len(vocab_pool)],
-                     "expressions": [len(used_expr), len(expressions)], "complete": True},
+                     "expressions": [len(used_expr), len(expressions)],
+                     "grammar": [len(used_grammar), len(grammar_patterns)],
+                     "complete": len(used_grammar) == len(grammar_patterns)},
         "days": days,
     }
     if not ds._validate_generated_scenario(scenario, [loc for loc, _ in BOOK_LOCATIONS]):
@@ -447,7 +518,7 @@ def generate_for_work(work_dir, log=print):
         json.dumps(scenario, ensure_ascii=False, indent=1), encoding="utf-8")
     partial_path.unlink(missing_ok=True)
     log(f"🎉 {title}: 시나리오 생성 완료 — 학습 단어 {len(used_ja)}/{len(vocab_pool)}개, "
-        f"핵심 표현 {len(used_expr)}/{len(expressions)}개 전부 활용")
+        f"핵심 표현 {len(used_expr)}/{len(expressions)}개, 문법 {len(used_grammar)}/{len(grammar_patterns)}개 전부 활용")
     return True
 
 

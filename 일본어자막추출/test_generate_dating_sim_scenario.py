@@ -30,7 +30,7 @@ class DatingScenarioGenerationTest(unittest.TestCase):
             }
         return {"scenes": scenes}
 
-    def test_all_assigned_vocabulary_and_expressions_are_required(self):
+    def test_all_assigned_vocabulary_expressions_and_grammar_are_required(self):
         words = [
             {"ja": "契約成立", "reading": "けいやくせいりつ", "ko": "계약 성립"},
             {"ja": "出張", "reading": "しゅっちょう", "ko": "출장"},
@@ -41,11 +41,38 @@ class DatingScenarioGenerationTest(unittest.TestCase):
             {"ja": "競合", "reading": "きょうごう", "ko": "경쟁"},
             {"ja": "相談する", "reading": "そうだんする", "ko": "상담하다"},
         ]
+        grammar = [
+            {"pattern": "～たらいい？", "explanation": "허락이나 제안을 묻는다."},
+            {"pattern": "～みたい", "explanation": "추측을 나타낸다."},
+            {"pattern": "～ばかり", "explanation": "한 동작의 반복을 강조한다."},
+        ]
         candidate = self._candidate()
-        self.assertTrue(generator.validate_day(candidate, words, expressions))
+        evidence = {
+            "first": ("～たらいい？", "どうしたらいいですか"),
+            "walk": ("～みたい", "雨みたいですね"),
+            "quiet": ("～ばかり", "話してばかりですね"),
+        }
+        for location, (pattern, quote) in evidence.items():
+            candidate["scenes"][location]["lines"][0] += f" {quote}。"
+            candidate["scenes"][location]["grammar_evidence"] = [{"pattern": pattern, "quote": quote}]
+        self.assertTrue(generator.validate_day(candidate, words, expressions, grammar))
         candidate["scenes"]["walk"]["lines"][0] = "[出張|しゅっちょう]へ行く。\n출장을 간다."
-        self.assertFalse(generator.validate_day(candidate, words, expressions))
-        self.assertIn("walk 표현: 競合", generator.missing_day_materials(candidate, words, expressions))
+        self.assertFalse(generator.validate_day(candidate, words, expressions, grammar))
+        missing = generator.missing_day_materials(candidate, words, expressions, grammar)
+        self.assertIn("walk 표현: 競合", missing)
+        self.assertIn("walk 문법: ～みたい", missing)
+
+    def test_load_grammar_patterns_extracts_tilde_forms(self):
+        with tempfile.TemporaryDirectory() as directory:
+            work_dir = Path(directory)
+            cards = {"1-1": {"grammar": [
+                "「～たらいい？」는 허락이나 제안을 묻는다.",
+                "「～ばっかり」는 반복을 강조하고 「～みたい」는 추측을 나타낸다.",
+            ]}}
+            (work_dir / "scene_study_cards.json").write_text(json.dumps(cards), encoding="utf-8")
+            loaded = generator.load_grammar_patterns(work_dir)
+        self.assertEqual(["～たらいい？", "～ばっかり", "～みたい"],
+                         [item["pattern"] for item in loaded])
 
     def test_prompt_allows_adult_context_but_keeps_consent_boundary(self):
         prompt = generator.build_day_prompt("하루", 2, "재회", "관계를 이어간다", [], [], False)

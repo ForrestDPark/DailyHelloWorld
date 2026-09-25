@@ -225,13 +225,17 @@ class DatingSimApiTests(unittest.TestCase):
         story["scenes"][1]["cafe"]["expressions_used"] = [
             {"ja": "また会いましょう", "reading": "またあいましょう", "ko": "또 만나요"}
         ]
+        story["scenes"][1]["cafe"]["grammar_used"] = [
+            {"pattern": "～たらいい？", "explanation": "제안을 묻는다.",
+             "evidence": "どうしたらいいですか"}
+        ]
         with patch.object(app, "_dating_story", return_value=story):
             initial = app.dating_sim_state(request())
-            self.assertEqual(initial["learning_progress"], {"seen": 0, "total": 2, "percent": 0})
+            self.assertEqual(initial["learning_progress"], {"seen": 0, "total": 3, "percent": 0})
             visited = app.dating_sim_visit(app.DatingSimLocationRequest(location="cafe"), request())
             self.assertEqual(visited["learning_progress"]["seen"], 0)
             result = app.dating_sim_seen(app.DatingSimRestartRequest(story_id=story["id"]), request())
-            self.assertEqual(result["learning_progress"], {"seen": 2, "total": 2, "percent": 100})
+            self.assertEqual(result["learning_progress"], {"seen": 3, "total": 3, "percent": 100})
 
     def test_visiting_an_unknown_location_is_rejected(self):
         with self.assertRaises(HTTPException) as raised:

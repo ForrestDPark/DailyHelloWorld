@@ -26,7 +26,7 @@ def _read_json(path):
 
 def scenario_complete(folder):
     data = _read_json(folder / "dating_sim_scenario.json")
-    return data.get("content_version") == 2 and (data.get("coverage") or {}).get("complete") is True
+    return data.get("content_version") == 3 and (data.get("coverage") or {}).get("complete") is True
 
 
 def images_complete(folder):

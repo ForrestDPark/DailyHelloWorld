@@ -842,6 +842,27 @@ def _load_work_expressions(title):
     return list(seen.values())
 
 
+def _load_work_grammar(title):
+    """학습카드 문법 설명의 `～` 문형을 중복 없이 읽는다."""
+    folder = _find_library_folder(title)
+    if not folder:
+        return []
+    try:
+        cards = json.loads((folder / "scene_study_cards.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    pattern_re = re.compile(r"「([^」]*[～~][^」]*)」")
+    seen = {}
+    for scene in cards.values():
+        for entry in (scene or {}).get("grammar", []) or []:
+            explanation = entry if isinstance(entry, str) else str((entry or {}).get("text") or "")
+            for matched in pattern_re.findall(explanation):
+                pattern = matched.replace("~", "～").strip()
+                if pattern and pattern not in seen:
+                    seen[pattern] = (pattern, explanation)
+    return list(seen.values())
+
+
 _FURIGANA_TAG_RE = re.compile(r"\[([^\]|]+)\|[^\]]+\]")
 _JAPANESE_MATERIAL_RE = re.compile(r"[^一-龯々〆ヵヶぁ-ゖァ-ヺーA-Za-z0-9]+")
 
@@ -865,6 +886,7 @@ def work_corpus_stats(title):
     뽑아 시나리오에 얼마나 녹였나"라는 규모 비교는 안전하게 보고할 수 있다."""
     folder = _find_library_folder(title)
     stats = {"study_card_scenes": 0, "vocabulary_total": 0, "expressions_total": 0,
+             "grammar_total": 0,
              "transcript_lines": 0, "transcript_scenes": 0}
     if not folder:
         return stats
@@ -872,14 +894,19 @@ def work_corpus_stats(title):
         cards = json.loads((folder / "scene_study_cards.json").read_text(encoding="utf-8"))
         if isinstance(cards, dict):
             stats["study_card_scenes"] = len(cards)
-            vocab_seen, expr_count = set(), 0
+            vocab_seen, grammar_seen, expr_count = set(), set(), 0
             for scene in cards.values():
                 for entry in (scene or {}).get("vocabulary", []) or []:
                     if entry.get("ja"):
                         vocab_seen.add(entry["ja"])
                 expr_count += len((scene or {}).get("expressions", []) or [])
+                for entry in (scene or {}).get("grammar", []) or []:
+                    explanation = entry if isinstance(entry, str) else str((entry or {}).get("text") or "")
+                    grammar_seen.update(match.replace("~", "～").strip()
+                                        for match in re.findall(r"「([^」]*[～~][^」]*)」", explanation))
             stats["vocabulary_total"] = len(vocab_seen)
             stats["expressions_total"] = expr_count
+            stats["grammar_total"] = len(grammar_seen)
     except (OSError, ValueError):
         pass
     scenes = set()
@@ -1702,7 +1729,7 @@ def random_book_id(exclude=None, prepared_only=True):
 # 돌리므로, 런타임(story_for)은 캐시가 있으면 그걸 쓰고 없으면 기존 고정
 # 템플릿으로 안전하게 폴백한다(학습카드 파이프라인과 같은 오프라인 생성·
 # 런타임 소비 구조).
-GENERATED_SCENARIO_VERSION = 2
+GENERATED_SCENARIO_VERSION = 3
 GENERATED_SCENARIO_FILENAME = "dating_sim_scenario.json"
 GENERATED_IMAGE_DIRNAME = "dating_sim_images"
 GENERATED_IMAGE_MANIFEST = "manifest.json"
@@ -1759,7 +1786,9 @@ def _validate_generated_scenario(gen, expected_locations):
     """생성 캐시가 엔진이 기대하는 구조(요일별 3장소, 장소마다 lines +
     선택지 정확히 2개(양·음 호감도))를 갖췄는지 확인한다. 하나라도 어긋나면
     캐시를 무시하고 고정 템플릿으로 폴백한다(깨진 생성물로 게임이 죽지 않게)."""
-    if not isinstance(gen, dict) or gen.get("content_version") != GENERATED_SCENARIO_VERSION:
+    # v3 작품을 백그라운드에서 순차 재생성하는 동안 기존 v2 작품도 계속
+    # 플레이할 수 있게 읽기 호환성을 유지한다. 생성·완료 판정은 v3만 쓴다.
+    if not isinstance(gen, dict) or gen.get("content_version") not in {2, GENERATED_SCENARIO_VERSION}:
         return False
     days = gen.get("days")
     if not isinstance(days, dict) or not days:
@@ -2063,6 +2092,14 @@ def _scenes_from_generated(gen, character_name_ko, character_name_jp):
             ]
             if expressions_used:
                 scene["expressions_used"] = expressions_used
+            grammar_used = [
+                {"pattern": item["pattern"], "explanation": item.get("explanation", ""),
+                 "evidence": item.get("evidence", "")}
+                for item in (sc.get("grammar_used") or [])
+                if isinstance(item, dict) and item.get("pattern") and item.get("evidence")
+            ]
+            if grammar_used:
+                scene["grammar_used"] = grammar_used
             scenes[day][loc] = scene
     return scenes, day_narration
 
@@ -2244,6 +2281,8 @@ def scenario_tree(story_id=None, seed_key=None):
     expr_plain = [(_normalize_japanese_material(ja), {"ja": ja, "reading": reading, "ko": ko})
                   for ja, reading, ko in expr_pool]
     expr_used_days = {}
+    grammar_pool = _load_work_grammar(source_title) if source_title else []
+    grammar_used_days = {}
     story_day_narration = story.get("day_narration", {})
     days = []
     for day in range(1, story["total_days"] + 1):
@@ -2279,6 +2318,9 @@ def scenario_tree(story_id=None, seed_key=None):
                     for choice in scene["choices"]
                 ],
             })
+            for grammar in scene.get("grammar_used") or []:
+                if grammar.get("pattern"):
+                    grammar_used_days.setdefault(grammar["pattern"], []).append(day)
         day_plain = "\n".join(day_plain_parts)
         for plain_ja, meta in expr_plain:
             if plain_ja and plain_ja in day_plain:
@@ -2321,6 +2363,12 @@ def scenario_tree(story_id=None, seed_key=None):
         for ja, reading, ko in expr_pool
     ]
     expr_used_count = sum(1 for e in expression_usage if e["used_days"])
+    grammar_usage = [
+        {"pattern": pattern, "explanation": explanation,
+         "used_days": sorted(set(grammar_used_days.get(pattern, [])))}
+        for pattern, explanation in grammar_pool
+    ]
+    grammar_used_count = sum(1 for item in grammar_usage if item["used_days"])
     scenario_breakdown = [
         {
             "day": day["day"],
@@ -2334,6 +2382,7 @@ def scenario_tree(story_id=None, seed_key=None):
     ]
     corpus = work_corpus_stats(source_title) if source_title else {
         "study_card_scenes": 0, "vocabulary_total": 0, "expressions_total": 0,
+        "grammar_total": 0,
         "transcript_lines": 0, "transcript_scenes": 0,
     }
     report = {
@@ -2344,6 +2393,9 @@ def scenario_tree(story_id=None, seed_key=None):
         "expression_used_count": expr_used_count,
         "expression_pool_count": len(expr_pool),
         "expression_usage": expression_usage,
+        "grammar_used_count": grammar_used_count,
+        "grammar_pool_count": len(grammar_pool),
+        "grammar_usage": grammar_usage,
         "scenario_breakdown": scenario_breakdown,
         "locations": [
             {"id": k, "label": v.get("label", k), "emoji": v.get("emoji", "")}
