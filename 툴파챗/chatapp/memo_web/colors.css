@@ -1,0 +1,20 @@
+.memo-accent {
+  padding: .04em .18em;
+  border-radius: .28em;
+  font-weight: 750;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+.memo-accent-green { color: #116b46; background: #dff4e9; }
+.memo-accent-blue { color: #214f9a; background: #e0eaff; }
+.memo-accent-red { color: #a12f48; background: #ffe3e9; }
+.memo-accent-orange { color: #954700; background: #ffead7; }
+.memo-accent-purple { color: #6331ad; background: #eee3ff; }
+
+@media (prefers-color-scheme: dark) {
+  .memo-accent-green { color: #75e1aa; background: #173c2c; }
+  .memo-accent-blue { color: #8eb8ff; background: #1d3156; }
+  .memo-accent-red { color: #ff9bad; background: #4b2330; }
+  .memo-accent-orange { color: #ffb977; background: #4b311e; }
+  .memo-accent-purple { color: #c8a5ff; background: #372553; }
+}

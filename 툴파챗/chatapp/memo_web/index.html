@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171321"><title>메모 시스템</title>
-  <link rel="stylesheet" href="/memo/static/style.css?v=20260925-memo-v1"><link rel="stylesheet" href="/memo/static/voice.css?v=20260925-stop-v1">
+  <link rel="stylesheet" href="/memo/static/style.css?v=20260925-memo-v1"><link rel="stylesheet" href="/memo/static/colors.css?v=20260925-v1"><link rel="stylesheet" href="/memo/static/tools.css?v=20260925-node-drag-v3"><link rel="stylesheet" href="/memo/static/voice.css?v=20260925-stop-v1">
 </head>
 <body>
   <header class="topbar"><a href="/#home" aria-label="홈으로">←</a><div><small>CONNECTED NOTES</small><h1>메모 시스템</h1></div><button id="new-memo">＋ 새 메모</button></header>
@@ -19,11 +19,11 @@
         <div class="mindmap-grid"></div>
         <div id="mindmap-stage" class="mindmap-stage"><svg id="mindmap-lines" aria-hidden="true"></svg><div id="memo-tree" class="memo-tree"></div></div>
         <div class="zoom-controls" aria-label="화면 확대 축소"><button id="zoom-out" aria-label="축소">−</button><button id="zoom-fit">전체</button><button id="zoom-in" aria-label="확대">＋</button><span id="zoom-level">100%</span></div>
-        <p class="canvas-hint">빈 공간을 드래그해 이동 · 두 손가락으로 확대/축소</p>
+        <p class="canvas-hint">메모를 길게 눌러 자유 배치 · 빈 공간 이동 · 두 손가락 확대/축소</p>
       </div>
     </section>
   </main>
   <dialog id="node-dialog"><form method="dialog"><div class="dialog-head"><h2 id="node-dialog-title">파생 메모</h2><span><button id="node-voice" class="voice-button" type="button" aria-label="음성으로 파생 메모 입력">🎙️ 음성</button><button value="cancel" aria-label="닫기">×</button></span></div><textarea id="node-content" maxlength="6000" placeholder="생각, 할 일, 연결할 아이디어를 적어보세요"></textarea><div class="dialog-actions"><button value="cancel">취소</button><button id="node-save" value="default">저장</button></div></form></dialog>
   <div id="toast" class="toast hidden" role="status"></div>
-  <script src="/memo/static/app.js?v=20260925-voice-stop-v1"></script>
+  <script src="/memo/static/app.js?v=20260925-node-drag-v3"></script>
 </body></html>

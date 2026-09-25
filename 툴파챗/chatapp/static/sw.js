@@ -1,4 +1,4 @@
-const CACHE_NAME = "tulpachat-shell-20260925-shift-push-v1";
+const CACHE_NAME = "natuda-shell-20260925-brand-v1";
 const OFFLINE_URL = "/static/offline.html";
 
 // 서버 재시작 중에도 설치된 웹앱이 흰 화면만 보이지 않도록 정비 안내 화면은
@@ -27,9 +27,9 @@ self.addEventListener("push", (event) => {
   try {
     data = event.data ? event.data.json() : {};
   } catch (e) {
-    data = { title: "툴파챗", body: event.data ? event.data.text() : "" };
+    data = { title: "나투다", body: event.data ? event.data.text() : "" };
   }
-  const title = data.title || "툴파챗";
+  const title = data.title || "나투다";
   event.waitUntil(
     self.registration.showNotification(title, {
       body: data.body || "",
