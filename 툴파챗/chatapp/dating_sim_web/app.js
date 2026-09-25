@@ -238,6 +238,15 @@ function renderHud(state) {
     sourceLink.href = `/epub/?${sourceParams}`;
     sourceLink.setAttribute("aria-label", `${state.source_title || "원작"} EPUB로 이동`);
   }
+  const sourceVideoLink = $("source-video-link");
+  const sourceTitle = String(state.source_title || "").trim();
+  sourceVideoLink.classList.toggle("hidden", !sourceTitle);
+  if (sourceTitle) {
+    const videoSearch = new URL("https://kr47.topgirl.co/video/search/");
+    videoSearch.searchParams.set("keyword", sourceTitle);
+    sourceVideoLink.href = videoSearch.toString();
+    sourceVideoLink.setAttribute("aria-label", `${sourceTitle} 영상 원본을 Safari에서 검색`);
+  }
   // 관리자 계정에서만 시나리오 트리 버튼을 보여준다(서버도 소유자만 허용).
   $("tree-open-btn").classList.toggle("hidden", !state.is_admin);
   $("story-list-btn").classList.toggle("hidden", !state.is_admin);
