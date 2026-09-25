@@ -871,7 +871,7 @@ async def generate_mp3_lrc(request: Request, file: UploadFile = File(...)):
             raise HTTPException(status_code=422, detail="MP3 음성을 분석 형식으로 바꾸지 못했습니다")
         transcribed = await asyncio.to_thread(
             subprocess.run,
-            [str(whisper), "-m", str(model), "-f", str(wave), "-l", "ja", "-osrt", "-of", str(output_prefix)],
+            [str(whisper), "-ng", "-m", str(model), "-f", str(wave), "-l", "ja", "-sns", "-osrt", "-of", str(output_prefix)],
             capture_output=True, text=True, timeout=1800,
         )
         srt = output_prefix.with_suffix(".srt")

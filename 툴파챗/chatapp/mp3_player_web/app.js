@@ -127,13 +127,14 @@ async function generateLrc() {
     }
     currentLrc = await response.text();
     lyricRows = parseLrc(currentLrc);
+    if (lyricRows.length < 2) throw new Error("가사를 충분히 인식하지 못했습니다. 잘못된 한 줄 가사는 적용하지 않았습니다.");
     renderLyrics(); syncLyrics(true);
     $("download-lrc").classList.remove("hidden");
     message("LRC 가사를 만들었습니다. 필요하면 파일로 저장하세요.");
   } catch (error) {
     $("lyrics-state").textContent = "생성 실패";
     message(error.message, true);
-  } finally { button.disabled = false; button.textContent = "로컬 Whisper로 LRC 생성"; }
+  } finally { button.disabled = false; button.textContent = "일본어 가사 LRC 생성"; }
 }
 
 function downloadLrc() {
