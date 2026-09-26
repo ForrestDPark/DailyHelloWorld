@@ -221,28 +221,31 @@ body.practice-open { overflow: hidden; }
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-wrap: wrap;
-  gap: 5px 10px;
-  min-width: 140px;
-  padding: 9px 16px;
-  border: 3px solid var(--border);
+  flex-wrap: nowrap;
+  gap: 8px;
+  width: fit-content;
+  max-width: calc(100vw - 32px);
+  min-width: 0;
+  padding: 6px 11px;
+  border: 2px solid var(--border);
   background: #fff4cf;
   color: #24101c;
-  box-shadow: 4px 4px 0 rgba(0,0,0,.34);
-  font-size: clamp(16px, 4.6vw, 21px);
+  box-shadow: 3px 3px 0 rgba(0,0,0,.28);
+  font-size: clamp(14px, 3.8vw, 18px);
   font-weight: 800;
-  line-height: 1.25;
+  line-height: 1.15;
   text-align: center;
-}
-.speaker-name .speaker-name-jp { color: #301d55; }
-.speaker-name .speaker-name-ko {
-  padding-left: 10px;
-  border-left: 2px solid rgba(48,29,85,.3);
-  color: #7b2144;
-  font-size: .82em;
   white-space: nowrap;
 }
-.speaker-name rt { color: #6b4d87; font-size: .55em; line-height: 1; }
+.speaker-name .speaker-name-jp { color: #111; }
+.speaker-name .speaker-name-ko {
+  padding-left: 8px;
+  border-left: 1px solid rgba(17,17,17,.35);
+  color: #7b2144;
+  font-size: .78em;
+  white-space: nowrap;
+}
+.speaker-name rt { color: #111; font-size: .52em; line-height: 1; }
 @media (prefers-color-scheme: dark) {
   .speaker-name { background: #fff0bd; color: #17101f; }
 }

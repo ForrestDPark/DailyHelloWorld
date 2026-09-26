@@ -1514,13 +1514,20 @@ function stopTypewriter() {
   }
 }
 
+function displayCharacterName(value) {
+  return String(value || "")
+    .replace(/\s*[<〈《(（\[［【]\s*가명\s*[>〉》)）\]］】]\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function renderSpeakerName(element, state) {
   element.replaceChildren();
   const japanese = document.createElement("span");
   japanese.className = "speaker-name-jp";
-  renderAnnotatedText(japanese, state?.character_name || "");
+  renderAnnotatedText(japanese, displayCharacterName(state?.character_name));
   element.append(japanese);
-  const koreanText = String(state?.character_name_ko || "").trim();
+  const koreanText = displayCharacterName(state?.character_name_ko);
   if (koreanText) {
     const korean = document.createElement("span");
     korean.className = "speaker-name-ko";
