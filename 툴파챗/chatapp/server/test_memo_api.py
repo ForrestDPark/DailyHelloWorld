@@ -72,5 +72,20 @@ class MemoApiTests(unittest.TestCase):
         node = next(item for item in app.list_memos(request())[0]["nodes"] if item["id"] == created["id"])
         self.assertEqual((node["position_x"], node["position_y"]), (980.0, 760.0))
 
+    def test_card_width_is_saved_and_clamped(self):
+        memo = app.create_memo(app.MemoDocumentCreate(title="폭 조절 메모"), request())
+        created = app.create_memo_node(
+            memo["id"], app.MemoNodeCreate(content="넓게 볼 가지"), request()
+        )
+        app.update_memo_node(
+            created["id"], app.MemoNodeUpdate(content="넓게 볼 가지", card_width=560), request()
+        )
+        app.update_memo(
+            memo["id"], app.MemoDocumentUpdate(title="폭 조절 메모", note="", card_width=900), request()
+        )
+        result = app.list_memos(request())[0]
+        self.assertEqual(result["card_width"], 720)
+        self.assertEqual(result["nodes"][0]["card_width"], 560)
+
 
 if __name__ == "__main__": unittest.main()

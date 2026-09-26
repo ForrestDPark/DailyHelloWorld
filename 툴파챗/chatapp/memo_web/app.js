@@ -79,6 +79,10 @@ function memoNodeColor(node, index = 0) {
     Math.abs(Number(node?.id) || index) % MEMO_NODE_COLORS.length
   ];
 }
+function cardWidthStyle(value) {
+  const width = Number(value);
+  return Number.isFinite(width) ? `width:${Math.max(220, Math.min(720, width))}px;` : "";
+}
 function toast(v) {
   const e = $("#toast");
   e.textContent = v;
@@ -237,13 +241,13 @@ function renderMap() {
     rootText =
       current.note || current.source_content || "여기서 생각을 확장해보세요";
   $("#memo-tree").innerHTML =
-    `<article class="node-card root expanded" style="--node-accent:#ee9b42;left:${O.x}px;top:${O.y}px"><small>ROOT NOTE</small><h3>${esc(current.title)}</h3><p>${richMemoHtml(rootText)}</p><div class="node-actions"><button data-toggle-root aria-label="내용 접기">−</button><button class="node-link-handle" data-link-root aria-label="드래그해 새 메모 연결">＋</button></div></article>` +
+    `<article class="node-card root expanded" style="--node-accent:#ee9b42;${cardWidthStyle(current.card_width)}left:${O.x}px;top:${O.y}px"><small>ROOT NOTE</small><h3>${esc(current.title)}</h3><p>${richMemoHtml(rootText)}</p><div class="node-actions"><button data-toggle-root aria-label="내용 접기">−</button><button class="node-resize-handle" data-resize-root aria-label="메모 폭 조절" title="좌우로 밀어 폭 조절">↔</button><button class="node-link-handle" data-link-root aria-label="드래그해 새 메모 연결">＋</button></div></article>` +
     current.nodes
       .map((n, index) => {
         const p = pos.get(n.id),
           collapsed = collapsedNodes.has(n.id),
           color = memoNodeColor(n, index);
-        return `<article class="node-card ${collapsed ? "collapsed" : "expanded"}" data-node-id="${n.id}" style="--node-accent:${color};left:${p.x}px;top:${p.y}px"><p>${richMemoHtml(n.content)}</p><div class="node-actions"><button data-toggle="${n.id}" aria-label="${collapsed ? "내용 펼치기" : "내용 접기"}">${collapsed ? "＋" : "−"}</button><button data-edit="${n.id}">수정</button><button data-delete="${n.id}" class="danger">삭제</button><button class="node-link-handle" data-link="${n.id}" aria-label="드래그해 새 메모 연결">＋</button></div></article>`;
+        return `<article class="node-card ${collapsed ? "collapsed" : "expanded"}" data-node-id="${n.id}" style="--node-accent:${color};${cardWidthStyle(n.card_width)}left:${p.x}px;top:${p.y}px"><p>${richMemoHtml(n.content)}</p><div class="node-actions"><button data-toggle="${n.id}" aria-label="${collapsed ? "내용 펼치기" : "내용 접기"}">${collapsed ? "＋" : "−"}</button><button data-edit="${n.id}">수정</button><button data-delete="${n.id}" class="danger">삭제</button><button class="node-resize-handle" data-resize="${n.id}" aria-label="메모 폭 조절" title="좌우로 밀어 폭 조절">↔</button><button class="node-link-handle" data-link="${n.id}" aria-label="드래그해 새 메모 연결">＋</button></div></article>`;
       })
       .join("");
   $("#mindmap-lines").innerHTML = current.nodes
@@ -302,6 +306,21 @@ function renderMap() {
       lastRootTap = now;
     }
   };
+  $("[data-resize-root]").addEventListener("pointerdown", (event) =>
+    startCardResize(event, rootCard, null),
+  );
+  $("#memo-tree")
+    .querySelectorAll("[data-resize]")
+    .forEach((button) => {
+      const id = Number(button.dataset.resize);
+      button.addEventListener("pointerdown", (event) =>
+        startCardResize(
+          event,
+          button.closest(".node-card"),
+          current.nodes.find((node) => node.id === id),
+        ),
+      );
+    });
   $("[data-link-root]").addEventListener("pointerdown", (e) =>
     startLinkDrag(e, null, O),
   );
@@ -460,6 +479,59 @@ function prepareNodeDrag(event, card) {
       node.position_x = saved.x;
       node.position_y = saved.y;
       renderMap();
+      toast(error.message);
+    }
+  };
+  window.addEventListener("pointermove", move, { passive: false });
+  window.addEventListener("pointerup", end);
+  window.addEventListener("pointercancel", end);
+}
+function startCardResize(event, card, node) {
+  event.preventDefault();
+  event.stopPropagation();
+  const startX = event.clientX,
+    startWidth = card.getBoundingClientRect().width / view.scale,
+    pointerId = event.pointerId;
+  card.classList.add("resizing");
+  const move = (moveEvent) => {
+    if (moveEvent.pointerId !== pointerId) return;
+    moveEvent.preventDefault();
+    const width = Math.max(
+      220,
+      Math.min(720, startWidth + (moveEvent.clientX - startX) / view.scale),
+    );
+    card.style.width = `${width}px`;
+    card.dataset.pendingWidth = String(Math.round(width));
+  };
+  const end = async (endEvent) => {
+    if (endEvent.pointerId !== pointerId) return;
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", end);
+    window.removeEventListener("pointercancel", end);
+    card.classList.remove("resizing");
+    const width = Number(card.dataset.pendingWidth || Math.round(startWidth));
+    delete card.dataset.pendingWidth;
+    try {
+      if (node) {
+        node.card_width = width;
+        await api(`/api/me/memo-nodes/${node.id}`, {
+          method: "PUT",
+          body: JSON.stringify({ content: node.content, card_width: width }),
+        });
+      } else {
+        current.card_width = width;
+        await api(`/api/me/memos/${current.id}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            title: $("#memo-title").value,
+            note: $("#memo-note").value,
+            card_width: width,
+          }),
+        });
+      }
+      toast(`메모 폭을 ${width}px로 저장했습니다`);
+    } catch (error) {
+      card.style.width = `${startWidth}px`;
       toast(error.message);
     }
   };

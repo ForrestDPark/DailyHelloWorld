@@ -5864,6 +5864,7 @@ class MemoDocumentCreate(BaseModel):
 class MemoDocumentUpdate(BaseModel):
     title: str
     note: str = ""
+    card_width: Optional[float] = None
 
 
 class MemoNodeCreate(BaseModel):
@@ -5877,6 +5878,7 @@ class MemoNodeUpdate(BaseModel):
     content: str
     position_x: Optional[float] = None
     position_y: Optional[float] = None
+    card_width: Optional[float] = None
 
 
 def _memo_user(request):
@@ -5889,7 +5891,7 @@ def _memo_user(request):
 def _memo_document_payload(conn, username):
     documents = [dict(row) for row in conn.execute(
         """SELECT id,source_message_id,source_room_id,source_sender,source_content,
-                  title,note,created_at,updated_at
+                  title,note,card_width,created_at,updated_at
            FROM memo_documents WHERE username=? ORDER BY updated_at DESC,id DESC""",
         (username,),
     ).fetchall()]
@@ -5898,7 +5900,7 @@ def _memo_document_payload(conn, username):
     ids = [document["id"] for document in documents]
     placeholders = ",".join("?" for _ in ids)
     nodes = [dict(row) for row in conn.execute(
-        f"""SELECT id,memo_id,parent_id,content,sort_order,position_x,position_y,created_at,updated_at
+        f"""SELECT id,memo_id,parent_id,content,sort_order,position_x,position_y,card_width,created_at,updated_at
             FROM memo_nodes WHERE memo_id IN ({placeholders})
             ORDER BY sort_order,id""", ids
     ).fetchall()]
@@ -5973,10 +5975,19 @@ def update_memo(memo_id: int, body: MemoDocumentUpdate, request: Request):
     user = _memo_user(request); title, note = body.title.strip(), body.note.strip()
     if not title or len(title) > 160 or len(note) > 12000:
         raise HTTPException(status_code=400, detail="제목은 1~160자, 메모는 12000자 이하로 입력하세요")
-    conn = get_conn(); cursor = conn.execute(
-        "UPDATE memo_documents SET title=?,note=?,updated_at=? WHERE id=? AND username=?",
-        (title, note, _now(), memo_id, user["username"]),
-    ); conn.commit(); conn.close()
+    card_width = body.card_width if body.card_width is None else max(220, min(720, body.card_width))
+    conn = get_conn()
+    if card_width is None:
+        cursor = conn.execute(
+            "UPDATE memo_documents SET title=?,note=?,updated_at=? WHERE id=? AND username=?",
+            (title, note, _now(), memo_id, user["username"]),
+        )
+    else:
+        cursor = conn.execute(
+            "UPDATE memo_documents SET title=?,note=?,card_width=?,updated_at=? WHERE id=? AND username=?",
+            (title, note, card_width, _now(), memo_id, user["username"]),
+        )
+    conn.commit(); conn.close()
     if not cursor.rowcount: raise HTTPException(status_code=404, detail="메모를 찾을 수 없습니다")
     return {"ok": True}
 
@@ -6017,11 +6028,15 @@ def update_memo_node(node_id: int, body: MemoNodeUpdate, request: Request):
         WHERE n.id=? AND m.username=?""", (node_id, user["username"])).fetchone()
     if not row: conn.close(); raise HTTPException(status_code=404, detail="파생 메모를 찾을 수 없습니다")
     now = _now()
+    fields, values = ["content=?"], [content]
     if body.position_x is not None and body.position_y is not None:
-        position_x = max(100, min(2300, body.position_x)); position_y = max(80, min(1720, body.position_y))
-        conn.execute("UPDATE memo_nodes SET content=?,position_x=?,position_y=?,updated_at=? WHERE id=?", (content, position_x, position_y, now, node_id))
-    else:
-        conn.execute("UPDATE memo_nodes SET content=?,updated_at=? WHERE id=?", (content, now, node_id))
+        fields.extend(["position_x=?", "position_y=?"])
+        values.extend([max(100, min(2300, body.position_x)), max(80, min(1720, body.position_y))])
+    if body.card_width is not None:
+        fields.append("card_width=?")
+        values.append(max(220, min(720, body.card_width)))
+    fields.append("updated_at=?"); values.extend([now, node_id])
+    conn.execute(f"UPDATE memo_nodes SET {','.join(fields)} WHERE id=?", values)
     conn.execute("UPDATE memo_documents SET updated_at=? WHERE id=?", (now, row["memo_id"])); conn.commit(); conn.close()
     return {"ok": True}
 

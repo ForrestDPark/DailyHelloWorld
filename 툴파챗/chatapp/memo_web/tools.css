@@ -41,6 +41,25 @@
   font-size: 19px !important;
   touch-action: none;
 }
+.node-resize-handle {
+  width: 34px;
+  height: 34px;
+  padding: 0 !important;
+  cursor: ew-resize;
+  touch-action: none;
+  font-size: 17px !important;
+}
+.node-card.resizing {
+  z-index: 9;
+  transition: none;
+}
+.node-card h3,
+.node-card p {
+  width: 100%;
+  white-space: normal;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
 .link-ghost {
   z-index: 8;
   display: grid;

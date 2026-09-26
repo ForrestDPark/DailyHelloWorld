@@ -505,6 +505,9 @@ def init_db():
     # 생각 지도에서 드래그해 놓은 카드 위치를 기기 재접속 뒤에도 유지한다.
     _ensure_column(conn, "memo_nodes", "position_x", "REAL")
     _ensure_column(conn, "memo_nodes", "position_y", "REAL")
+    # 생각 지도 카드 폭은 사용자 조절값을 계정 데이터와 함께 동기화한다.
+    _ensure_column(conn, "memo_documents", "card_width", "REAL")
+    _ensure_column(conn, "memo_nodes", "card_width", "REAL")
     conn.commit()
     conn.close()
 
