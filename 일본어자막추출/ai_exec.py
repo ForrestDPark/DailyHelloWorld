@@ -30,6 +30,16 @@ import ai_usage  # noqa: E402
 
 CODEX_BIN = "/opt/homebrew/bin/codex"
 CLAUDE_BIN = "/opt/homebrew/bin/claude"
+HOMEBREW_BIN_DIRS = ("/opt/homebrew/opt/node@22/bin", "/opt/homebrew/bin")
+
+
+def _background_safe_env():
+    """launchd의 최소 PATH에서도 Node 기반 Codex/Claude가 실행되게 한다."""
+    env = os.environ.copy()
+    current = env.get("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
+    parts = [*HOMEBREW_BIN_DIRS, *current.split(os.pathsep)]
+    env["PATH"] = os.pathsep.join(dict.fromkeys(part for part in parts if part))
+    return env
 
 
 def _run_one(engine, prompt, cwd, timeout):
@@ -46,7 +56,7 @@ def _run_one(engine, prompt, cwd, timeout):
         ]
     return subprocess.run(
         cmd, input=prompt, capture_output=True, text=True,
-        timeout=timeout, cwd=str(cwd),
+        timeout=timeout, cwd=str(cwd), env=_background_safe_env(),
     )
 
 

@@ -21,6 +21,15 @@ STATE = Path.home() / ".tulpachat" / "dating_scenario_backlog.json"
 GENERATOR_NAME = "generate_dating_sim_scenario.py"
 
 
+def _background_safe_env():
+    """로그인 셸을 거치지 않는 launchd에서도 Homebrew 도구를 찾는다."""
+    env = os.environ.copy()
+    current = env.get("PATH", "/usr/bin:/bin:/usr/sbin:/sbin")
+    preferred = ["/opt/homebrew/opt/node@22/bin", "/opt/homebrew/bin"]
+    env["PATH"] = os.pathsep.join(dict.fromkeys([*preferred, *current.split(os.pathsep)]))
+    return env
+
+
 def generator_is_running() -> bool:
     """잠금 없이 시작된 수동/이전 일괄 생성기도 찾아 중복 실행을 막는다."""
     try:
@@ -72,16 +81,20 @@ def main() -> int:
         save_state("running", started_at=dt.datetime.now().isoformat(timespec="seconds"))
         result = subprocess.run(
             [str(agent.PYTHON), str(agent.ROOT / GENERATOR_NAME), "--all"],
-            check=False,
+            check=False, env=_background_safe_env(),
         )
+        if result.returncode != 0:
+            status = "waiting_for_codex" if result.returncode == 75 else "failed"
+            save_state(status, exit_code=result.returncode, quality_exit_code=None)
+            # 대기 상태를 성공(0)으로 숨기지 않는다. launchd와 운영 화면에서
+            # 실제 미완료를 확인할 수 있고, 다음 StartInterval에는 다시 시도한다.
+            return result.returncode
         quality_result = subprocess.run([
             str(agent.PYTHON), str(agent.ROOT / "audit_dating_sim_images.py"), "--lock-held",
-        ], check=False)
-        status = "waiting_for_codex" if result.returncode == 75 else (
-            "complete" if result.returncode == 0 and quality_result.returncode == 0 else "failed"
-        )
-        save_state(status, exit_code=result.returncode, quality_exit_code=quality_result.returncode)
-        return 0 if result.returncode in (0, 75) and quality_result.returncode in (0, 1) else result.returncode
+        ], check=False, env=_background_safe_env())
+        status = "complete" if quality_result.returncode == 0 else "failed"
+        save_state(status, exit_code=0, quality_exit_code=quality_result.returncode)
+        return quality_result.returncode
     finally:
         agent.LOCK.unlink(missing_ok=True)
 
