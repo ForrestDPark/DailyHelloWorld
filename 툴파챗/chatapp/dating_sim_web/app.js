@@ -555,7 +555,7 @@ function speakWithDevice(text, line, sequence, fallback = false) {
 function speakCurrentLine() {
   if (!listeningMode || typewriterTimer || !sceneLines.length) return;
   const line = sceneLines[sceneLineIndex];
-  const text = japaneseText(typeof line === "string" ? line : line.text);
+  const text = japaneseText(displayedSceneLine(line));
   if (!text) {
     if (sceneLineIndex < sceneLines.length - 1) advanceLine();
     return;
@@ -617,7 +617,7 @@ function currentPracticeLine() {
   if ($("scene-view").classList.contains("hidden") || !sceneLines.length) return null;
   const raw = sceneLines[sceneLineIndex];
   const line = typeof raw === "string" ? { speaker: "character", text: raw } : raw;
-  const text = japaneseText(line.text);
+  const text = japaneseText(displayedSceneLine(line));
   return text ? { text, role: line.speaker === "narrator" ? "male" : "female" } : null;
 }
 
@@ -1521,6 +1521,42 @@ function displayCharacterName(value) {
     .trim();
 }
 
+function naturalCharacterAddress(state = latestState) {
+  const fullJp = displayCharacterName(state?.character_name);
+  const fullKo = displayCharacterName(state?.character_name_ko);
+  const jpParts = fullJp.match(/\[[^\]]+\]|[々〆ヵヶ一-龯ぁ-ゖァ-ヺー]+/g) || [];
+  const koParts = fullKo.split(/\s+/).filter(Boolean);
+  const day = Number(state?.day) || 1;
+  if (!jpParts.length && !koParts.length) return { fullJp, fullKo, jp: fullJp, ko: fullKo };
+  if (day <= 4) {
+    return { fullJp, fullKo, jp: `${jpParts[0] || fullJp}さん`, ko: `${koParts[0] || fullKo} 씨` };
+  }
+  const givenJp = jpParts[jpParts.length - 1] || fullJp;
+  const givenKo = koParts[koParts.length - 1] || fullKo;
+  return day <= 8
+    ? { fullJp, fullKo, jp: `${givenJp}さん`, ko: `${givenKo} 씨` }
+    : { fullJp, fullKo, jp: `${givenJp}ちゃん`, ko: `${givenKo} 짱` };
+}
+
+function naturalizeCharacterAddress(text, state = latestState) {
+  let result = String(text || "");
+  const address = naturalCharacterAddress(state);
+  const replacements = [
+    [displayCharacterName(state?.character_name), address.jp],
+    [plainText(displayCharacterName(state?.character_name)), plainText(address.jp)],
+    [displayCharacterName(state?.character_name_ko), address.ko],
+  ];
+  for (const [from, to] of replacements) {
+    if (from && to && from !== to) result = result.split(from).join(to);
+  }
+  return result;
+}
+
+function displayedSceneLine(raw) {
+  const line = typeof raw === "string" ? { speaker: "character", text: raw } : raw;
+  return line?.speaker === "narrator" ? String(line.text || "") : naturalizeCharacterAddress(line?.text);
+}
+
 function renderSpeakerName(element, state) {
   element.replaceChildren();
   const japanese = document.createElement("span");
@@ -1542,8 +1578,8 @@ function typeLine(text) {
   $("writing-practice").disabled = true;
   $("speaking-practice").disabled = true;
   const line = typeof text === "string" ? { speaker: "character", text } : text;
-  text = line.text;
   const narrator = line.speaker === "narrator";
+  text = narrator ? line.text : naturalizeCharacterAddress(line.text);
   const speakerName = $("speaker-name");
   if (narrator) speakerName.textContent = "主人公 · 나";
   else renderSpeakerName(speakerName, latestState);
@@ -1603,7 +1639,7 @@ function advanceLine() {
     // 타자기 도중 클릭하면 그 줄을 즉시 완성해서 보여준다.
     stopTypewriter();
     const line = sceneLines[sceneLineIndex];
-    renderAnnotatedText($("dialogue-text"), typeof line === "string" ? line : line.text, sceneVocab, sceneExpr);
+    renderAnnotatedText($("dialogue-text"), displayedSceneLine(line), sceneVocab, sceneExpr);
     onLineFullyShown();
     return;
   }
@@ -1635,7 +1671,7 @@ function renderChoices() {
     cursor.className = "choice-cursor";
     cursor.textContent = "▶";
     const label = document.createElement("span");
-    renderAnnotatedText(label, choice.text, sceneVocab, sceneExpr);
+    renderAnnotatedText(label, naturalizeCharacterAddress(choice.text), sceneVocab, sceneExpr);
     button.append(cursor, label);
     button.addEventListener("click", () => chooseOption(index));
     list.append(button);
@@ -1729,18 +1765,18 @@ function renderChoiceResult(state) {
   $("stage").dataset.location = state.choice_result.location || "result";
   $("stage").dataset.day = state.day;
   setSafeImage($("result-portrait-image"), state.choice_result.character_image || state.character_image);
-  renderAnnotatedText($("result-text"), state.choice_result.line);
+  renderAnnotatedText($("result-text"), naturalizeCharacterAddress(state.choice_result.line, state));
   $("result-affection").textContent = `${delta > 0 ? "+" : ""}${delta} · 현재 호감도 ${state.affection}`;
   showView("result-view");
   if (listeningMode) {
-    playStandalone(state.choice_result.line, "female", `${state.character_name} 대사 재생 중`)
+    playStandalone(naturalizeCharacterAddress(state.choice_result.line, state), "female", `${state.character_name} 대사 재생 중`)
       .then(() => updateListeningControls("다음 장면을 눌러 계속"));
   }
 }
 
 function renderEnding(state) {
   $("ending-title").textContent = state.ending.title;
-  renderAnnotatedText($("ending-text"), state.ending.lines.join("\n"));
+  renderAnnotatedText($("ending-text"), naturalizeCharacterAddress(state.ending.lines.join("\n"), state));
   renderSpeakerName($("ending-speaker-name"), state);
   setSafeImage($("ending-portrait-image"), state.character_image);
   showView("ending-view");
@@ -2100,13 +2136,16 @@ async function chooseOption(choiceIndex) {
   // 지금 끝나는 장면을 백로그용으로 미리 떼어둔다.
   const finishedEntry = {
     day: latestState?.day, location: $("stage").dataset.location,
-    lines: sceneLines.slice(), choiceText: sceneChoices[choiceIndex]?.text || "",
+    lines: sceneLines.map((line) => typeof line === "string"
+      ? displayedSceneLine(line)
+      : {...line, text: displayedSceneLine(line)}),
+    choiceText: naturalizeCharacterAddress(sceneChoices[choiceIndex]?.text || ""),
     vocab: sceneVocab,
   };
   try {
     const state = await api("/api/dating-sim/choose", { method: "POST", body: JSON.stringify({ choice_index: choiceIndex, story_id: storyId }) });
     if (listeningMode) {
-      await playStandalone(sceneChoices[choiceIndex].text, "male", "내 대사 재생 중");
+      await playStandalone(naturalizeCharacterAddress(sceneChoices[choiceIndex].text), "male", "내 대사 재생 중");
     }
     addSceneToHistory(finishedEntry);
     render(state);
@@ -2133,17 +2172,17 @@ function replayCurrentView() {
       .then(() => updateListeningControls("답장을 골라주세요"));
   }
   if (!$("result-view").classList.contains("hidden") && latestState?.choice_result) {
-    return playStandalone(latestState.choice_result.line, "female", `${latestState.character_name} 대사 재생 중`)
+    return playStandalone(naturalizeCharacterAddress(latestState.choice_result.line), "female", `${latestState.character_name} 대사 재생 중`)
       .then(() => updateListeningControls("다음 장면을 눌러 계속"));
   }
   if (!$("ending-view").classList.contains("hidden") && latestState?.ending) {
-    return playStandalone(latestState.ending.lines.join("\n"), "female", `${latestState.character_name} 엔딩 재생 중`)
+    return playStandalone(naturalizeCharacterAddress(latestState.ending.lines.join("\n")), "female", `${latestState.character_name} 엔딩 재생 중`)
       .then(() => updateListeningControls("엔딩 음성 완료"));
   }
   if (typewriterTimer) {
     stopTypewriter();
     const line = sceneLines[sceneLineIndex];
-    renderAnnotatedText($("dialogue-text"), typeof line === "string" ? line : line.text, sceneVocab, sceneExpr);
+    renderAnnotatedText($("dialogue-text"), displayedSceneLine(line), sceneVocab, sceneExpr);
     onLineFullyShown();
     return Promise.resolve();
   }
