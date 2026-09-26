@@ -364,11 +364,19 @@ body.practice-open { overflow: hidden; }
 }
 .japanese-kanji-popover {
   position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   z-index: 1300;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: 14px;
   width: min(340px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 54px 16px 16px;
   border: 3px solid var(--border);
   background: var(--panel-2);

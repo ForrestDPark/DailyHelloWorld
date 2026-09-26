@@ -776,6 +776,13 @@ _word_meaning_cache = None
 # 화면에 이미 번역된 단어가 팝업에서 다시 "뜻 없음"이 되지 않게 한다.
 DATING_SIM_CONTEXT_GLOSSES = {
     "紙袋": "종이봉투",
+    "拍子": "~한 순간·바람에",
+    "曲がり角": "길모퉁이",
+    "夕方": "저녁 무렵",
+    "書店": "서점",
+    "女性": "여성",
+    "足元": "발밑·발치",
+    "一枚": "한 장",
 }
 
 
@@ -785,6 +792,15 @@ def _load_word_meaning_cache():
         try:
             _word_meaning_cache = json.loads(DATING_SIM_WORD_MEANING_CACHE.read_text(encoding="utf-8"))
         except (OSError, ValueError):
+            _word_meaning_cache = {}
+        # 과거 버전이 저장했을 수 있는 `문맥: <문장 전체>` 값은 단어 뜻이
+        # 아니므로 캐시에서 제외한다.
+        if isinstance(_word_meaning_cache, dict):
+            _word_meaning_cache = {
+                key: value for key, value in _word_meaning_cache.items()
+                if isinstance(value, str) and value.strip() and not value.lstrip().startswith("문맥:")
+            }
+        else:
             _word_meaning_cache = {}
     return _word_meaning_cache
 
@@ -803,13 +819,13 @@ def translate_word_meaning(word, context=""):
     if not word:
         return ""
     cache = _load_word_meaning_cache()
-    if word in cache:
-        return cache[word]
     if word in DATING_SIM_CONTEXT_GLOSSES:
         meaning = DATING_SIM_CONTEXT_GLOSSES[word]
         cache[word] = meaning
         _save_word_meaning_cache(cache)
         return meaning
+    if word in cache:
+        return cache[word]
     query = urllib.parse.urlencode({"client": "gtx", "sl": "ja", "tl": "ko", "dt": "t", "q": word})
     meaning = ""
     for endpoint in ("https://translate.googleapis.com/translate_a/single",
@@ -828,10 +844,10 @@ def translate_word_meaning(word, context=""):
     if meaning and meaning != word:
         cache[word] = meaning
         _save_word_meaning_cache(cache)
-    # 번역 서비스가 실패하더라도 현재 대사의 한국어 번역은 이미 검수 가능한
-    # 문맥 정보다. 단어 하나의 뜻으로 오인시키지 않도록 문맥임을 명시한다.
-    context = re.sub(r"\s+", " ", context or "").strip()
-    return f"문맥: {context}" if context else meaning
+    # 대사 전체의 한국어 번역은 단어의 뜻이 아니다. 외부 번역이 실패했다고
+    # 문장 전체를 뜻 칸에 대신 넣지 않는다. context는 중의성 판별용으로만
+    # 받고 반환값으로 쓰지 않는다.
+    return meaning
 
 
 def _load_work_expressions(title):

@@ -37,6 +37,26 @@ class DatingSimApiTests(unittest.TestCase):
             if (choice["affection"] > 0) is positive
         )
 
+    def test_vocab_meaning_never_returns_the_whole_dialogue_as_a_word_gloss(self):
+        """단어 번역이 실패해도 한국어 대사 전체를 `문맥:`으로 뜻 칸에
+        보여주지 않아야 한다."""
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(dating_sim_story, "DATING_SIM_WORD_MEANING_CACHE", Path(directory) / "words.json"), \
+             patch.object(dating_sim_story.urllib.request, "urlopen", side_effect=OSError("offline")):
+            dating_sim_story._word_meaning_cache = None
+            meaning = dating_sim_story.translate_word_meaning("未登録語", "이것은 단어가 아닌 문장 전체입니다.")
+        self.assertEqual(meaning, "")
+
+    def test_vocab_meaning_uses_contextual_gloss_before_an_old_generic_cache(self):
+        """拍子는 현재 장면에서 '박자'가 아니라 '~한 바람에'라는 뜻이다."""
+        with tempfile.TemporaryDirectory() as directory:
+            cache_path = Path(directory) / "words.json"
+            cache_path.write_text(json.dumps({"拍子": "박자", "紙袋": "문맥: 문장 전체"}, ensure_ascii=False), encoding="utf-8")
+            with patch.object(dating_sim_story, "DATING_SIM_WORD_MEANING_CACHE", cache_path):
+                dating_sim_story._word_meaning_cache = None
+                self.assertEqual(dating_sim_story.translate_word_meaning("拍子", "부딪친 바람에"), "~한 순간·바람에")
+                self.assertNotIn("문맥:", dating_sim_story._load_word_meaning_cache().get("紙袋", ""))
+
     def test_nested_sone_scene_image_is_served_but_unlisted_path_is_blocked(self):
         response = app.dating_sim_static(
             "static/sone-486/rainy-evening.png", request()

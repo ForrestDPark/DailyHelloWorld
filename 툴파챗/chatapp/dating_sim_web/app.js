@@ -1065,8 +1065,8 @@ function showVocabWordPopover(word, anchor, wordKind = "general") {
   if (!word.ko) {
     fetchVocabWordMeaning(word.ja, currentKoreanTranslation()).then((meaning) => {
       if (!meaningValueEl.isConnected) return;
-      meaningValueEl.textContent = meaning || "뜻을 찾지 못했습니다";
-      if (meaning && !meaning.startsWith("문맥:")) word.ko = meaning;
+      meaningValueEl.textContent = meaning || "단어 뜻을 다시 불러오지 못했습니다";
+      if (meaning) word.ko = meaning;
     });
   }
   popover.append(close, favorite, sound, glyph, readings);
@@ -1142,11 +1142,9 @@ function showVocabWordPopover(word, anchor, wordKind = "general") {
   }
   document.body.appendChild(popover);
   vocabPopover = popover;
-  const rect = anchor.getBoundingClientRect();
-  const width = popover.offsetWidth;
-  popover.style.left = `${Math.max(12, Math.min(rect.left + rect.width / 2 - width / 2, innerWidth - width - 12))}px`;
-  const desiredTop = rect.bottom + 10;
-  popover.style.top = `${Math.max(12, Math.min(desiredTop, innerHeight - popover.offsetHeight - 12))}px`;
+  // 대사 하단의 단어를 눌러도 팝오버가 화면 밖으로 밀리지 않도록
+  // 앵커 위치와 무관하게 뷰포트 중앙에 고정한다. 높이가 긴 표현은 팝오버
+  // 내부만 스크롤된다.
 }
 
 function katakanaToHiragana(text) {
