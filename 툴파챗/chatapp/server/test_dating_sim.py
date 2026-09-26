@@ -1102,10 +1102,49 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         self.assertTrue(profile["is_alias"])
         self.assertNotEqual(profile["jp"], "感じ")
 
+    def test_character_profile_rejects_sentence_fragments_seen_in_library(self):
+        """실제 서재에서 이름으로 오인됐던 대사 조각은 모두 거부한다."""
+        bad_names = [
+            "うちど", "こちら", "こちらもこの辺", "もう大学生", "今からなん",
+            "同じ部屋なんて絶対無理", "ちゃんとした人", "久しぶり", "お疲れ様",
+            "東京", "犬みたい", "いい朝", "病院の方", "初めましてりま",
+            "パンチ", "到着", "ドエスの変態な方", "鋭子さんの犬", "トイ",
+            "出せないくらい前",
+        ]
+        for name in bad_names:
+            with self.subTest(name=name):
+                self.assertFalse(dating_sim_story._is_plausible_character_profile({
+                    "jp": name,
+                    "full_jp": name,
+                    "ko": dating_sim_story._romanize_japanese_name(name),
+                }))
+
+    def test_character_profile_keeps_plausible_real_names(self):
+        for name, korean in (("五条恋", "고죠 렌"), ("椿リカ", "츠바키 리카"),
+                             ("富康レオナ", "도미야스 레오나")):
+            with self.subTest(name=name):
+                self.assertTrue(dating_sim_story._is_plausible_character_profile({
+                    "jp": name, "full_jp": name, "ko": korean,
+                }))
+
     def test_japanese_name_romanization_uses_kanji_readings_not_meaning(self):
         self.assertEqual(dating_sim_story._romanize_japanese_name("これお手洗い"), "고레오테아라이")
         self.assertEqual(dating_sim_story._romanize_japanese_name("たかはし"), "다카하시")
         self.assertEqual(dating_sim_story._romanize_japanese_name("さくら"), "사쿠라")
+
+    def test_dialogue_profile_uses_furigana_for_korean_name(self):
+        with tempfile.TemporaryDirectory() as directory:
+            library_dir = Path(directory)
+            work_dir = library_dir / "REAL-NAME"
+            work_dir.mkdir()
+            (work_dir / "transcript_part1.jsonl").write_text(json.dumps({
+                "ja": "富康レオナです。", "ko": "도미야스 레오나입니다.",
+                "furigana": "富康(とみやす)レオナです。",
+            }, ensure_ascii=False) + "\n", encoding="utf-8")
+            with patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", library_dir):
+                profile = dating_sim_story._profile_from_work_dialogue("REAL-NAME")
+        self.assertEqual(profile["full_jp"], "[富康|とみやす]レオナ")
+        self.assertEqual(profile["ko"], "도미야스 레오나")
 
     def test_book_character_marks_generated_name_as_alias(self):
         with tempfile.TemporaryDirectory() as directory, \

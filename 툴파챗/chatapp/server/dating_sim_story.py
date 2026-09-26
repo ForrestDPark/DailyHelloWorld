@@ -1557,6 +1557,9 @@ _NON_NAME_JAPANESE_TERMS = {
     "私", "わたし", "僕", "俺", "彼女", "女性", "女", "母", "姉", "妹",
     "先生", "店員", "会社", "学校", "仕事", "これ", "それ", "あれ",
     "ここ", "そこ", "どこ", "お手洗い", "これお手洗い",
+    "こちら", "もう大学生", "久しぶり", "もちろん", "お疲れ様", "東京",
+    "いい朝", "大学生", "病院", "店長", "同じ部屋", "今から", "犬みたい",
+    "パンチ", "到着",
 }
 _NON_NAME_KOREAN_TERMS = {
     "간지", "느낌", "기분", "이름", "오늘", "내일", "어제", "처음", "감사",
@@ -1586,7 +1589,23 @@ def _is_plausible_character_profile(profile):
         return False
     if jp in _NON_NAME_JAPANESE_TERMS or ko in _NON_NAME_KOREAN_TERMS:
         return False
-    if any(jp.startswith(prefix) for prefix in ("これ", "それ", "あれ", "ここ", "そこ", "私は", "わたしは")):
+    if any(jp.startswith(prefix) for prefix in (
+        "これ", "それ", "あれ", "ここ", "そこ", "こちら", "私は", "わたしは",
+        "僕", "俺", "今", "もう", "ちゃんと", "初めまして", "お疲れ", "いい",
+    )):
+        return False
+    # 자동 추출 이름은 짧은 고유명사여야 한다. 히라가나만으로 된 일반 대사나
+    # 조사·서술어가 섞인 문장 조각은 실제 이름을 놓치더라도 가명으로 폴백한다.
+    # 검수된 character_profile.json과 작품별 보정표는 이 검사 전에 우선된다.
+    if len(jp) > 9 or not re.search(r"[一-龯々〆ヵヶ]", jp):
+        return False
+    if re.search(
+        r"(?:こちら|大学生|部屋|絶対|無理|手洗|疲れ|東京|病院|店長|主人|専用|"
+        r"日課|学校|機会|幼児|数日|留守|朝|感じ|気持|名前|変態|みたい|なんて|"
+        r"という|だった|です|ます|する|した|から|この|その|あの|さん|ちゃん|"
+        r"くん|の|ない|くらい|[はもをにで]$)",
+        jp,
+    ):
         return False
     if any(term in ko for term in _NON_NAME_KOREAN_TERMS):
         return False
@@ -1654,7 +1673,11 @@ def _profile_from_work_dialogue(source_title):
         # 번역문이 아니라 일본어 이름의 발음을 한글로 옮긴 값을 쓴다 —
         # 번역이 엉뚱한 문장(예: "화장실입니다")을 집었을 때도 최소한
         # 이름처럼 들리게 하기 위해서다.
-        candidate = {"jp": ja_name, "full_jp": full_jp, "ko": _romanize_japanese_name(ja_name),
+        # 후리가나가 있으면 표면 한자의 사전 추정음이 아니라 실제 표기된
+        # 읽기를 사용한다(예: 富康=とみやす → 도미야스).
+        reading_name = re.sub(r"\[([^|\]]+)\|([^\]]+)\]", r"\2 ", full_jp)
+        reading_name = re.sub(r"\s+", " ", reading_name).strip()
+        candidate = {"jp": ja_name, "full_jp": full_jp, "ko": _romanize_japanese_name(reading_name),
                      "image": "/dating-sim/static/reina.png", "is_alias": False}
         if _is_plausible_character_profile(candidate):
             return candidate
