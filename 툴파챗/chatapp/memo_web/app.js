@@ -10,7 +10,9 @@ let memos = [],
   pan = null,
   pinch = null,
   linkDrag = null,
-  nodeDrag = null;
+  nodeDrag = null,
+  lastNodeTap = { id: null, at: 0 },
+  lastRootTap = 0;
 const pointers = new Map(),
   collapsedNodes = new Set();
 async function api(path, options = {}) {
@@ -160,7 +162,17 @@ function openMemoPreview(id) {
     sections.join("\n\n") || "기록된 내용이 없습니다.",
   );
   $("#preview-open").dataset.id = String(id);
+  $("#preview-edit").dataset.id = String(id);
   $("#memo-preview-dialog").showModal();
+}
+function openRootEditor(id, focusNote = false) {
+  selectMemo(id);
+  if (!focusNote) return;
+  requestAnimationFrame(() => {
+    const note = $("#memo-note");
+    note.scrollIntoView({ behavior: "smooth", block: "center" });
+    note.focus();
+  });
 }
 function selectMemo(id) {
   current = memos.find((m) => m.id === id);
@@ -264,6 +276,32 @@ function renderMap() {
   $("#memo-tree")
     .querySelectorAll("[data-delete]")
     .forEach((b) => (b.onclick = () => removeNode(+b.dataset.delete)));
+  const rootCard = $("#memo-tree .node-card.root");
+  rootCard.ondblclick = (event) => {
+    if (event.target.closest("button")) return;
+    openRootEditor(current.id, true);
+  };
+  let rootPointerStart = null;
+  rootCard.onpointerdown = (event) => {
+    if (event.target.closest("button")) return;
+    rootPointerStart = { x: event.clientX, y: event.clientY };
+  };
+  rootCard.onpointerup = (event) => {
+    if (!rootPointerStart || event.target.closest("button")) return;
+    const moved = Math.hypot(
+      event.clientX - rootPointerStart.x,
+      event.clientY - rootPointerStart.y,
+    );
+    rootPointerStart = null;
+    if (moved > 10 || event.pointerType === "mouse") return;
+    const now = Date.now();
+    if (now - lastRootTap < 430) {
+      lastRootTap = 0;
+      openRootEditor(current.id, true);
+    } else {
+      lastRootTap = now;
+    }
+  };
   $("[data-link-root]").addEventListener("pointerdown", (e) =>
     startLinkDrag(e, null, O),
   );
@@ -396,7 +434,18 @@ function prepareNodeDrag(event, card) {
     window.removeEventListener("pointercancel", end);
     card.classList.remove("dragging");
     nodeDrag = null;
-    if (!state.active) return;
+    if (!state.active) {
+      if (!state.cancelled) {
+        const now = Date.now();
+        if (lastNodeTap.id === id && now - lastNodeTap.at < 430) {
+          lastNodeTap = { id: null, at: 0 };
+          openNode("edit", id);
+        } else {
+          lastNodeTap = { id, at: now };
+        }
+      }
+      return;
+    }
     try {
       await api(`/api/me/memo-nodes/${id}`, {
         method: "PUT",
@@ -640,7 +689,12 @@ $("#zoom-fit").onclick = fitMap;
 $("#preview-open").onclick = () => {
   const id = Number($("#preview-open").dataset.id);
   $("#memo-preview-dialog").close();
-  selectMemo(id);
+  openRootEditor(id);
+};
+$("#preview-edit").onclick = () => {
+  const id = Number($("#preview-edit").dataset.id);
+  $("#memo-preview-dialog").close();
+  openRootEditor(id, true);
 };
 $("#memo-voice").onclick = (event) =>
   startVoiceInput($("#memo-note"), event.currentTarget);

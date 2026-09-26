@@ -188,4 +188,6 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
-#preview-open { background: var(--accent); color: #fff; border-color: transparent; }
+#preview-open,
+#preview-edit { background: var(--accent); color: #fff; border-color: transparent; }
+#preview-edit { background: color-mix(in srgb, var(--accent) 76%, #ef6a9c); }
