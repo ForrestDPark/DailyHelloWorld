@@ -1068,12 +1068,9 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         self.assertFalse(profile["is_alias"])
         self.assertIn("rainy-evening.png", profile["scene_images"]["walk"])
 
-    def test_book_character_name_uses_japanese_reading_not_literal_translation(self):
-        # ★ 2026-09-23: "이름이 화장실인건 이상하잖아 이름은 일본어 이름으로
-        # 읽어줘" 신고 — 277DCV-298에서 "これお手洗いです"(=이것은 화장실
-        # 입니다)라는 무관한 문장이 자기소개로 오인식되면서 이름이 "화장실"
-        # 로 떴다. 감지된 일본어 글자는 그대로 두되, 한국어 이름은 번역문이
-        # 아니라 발음(음역)으로 채워야 한다.
+    def test_book_character_rejects_sentence_fragment_as_name(self):
+        # 일반 문장의 `...입니다`를 자기소개로 오인해도 인명 검증에서 걸러
+        # 결정론적 가명을 사용해야 한다.
         with tempfile.TemporaryDirectory() as directory:
             library_dir = Path(directory)
             work_dir = library_dir / "277DCV-298"
@@ -1087,9 +1084,23 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
                 profile = dating_sim_story.book_character_profile(
                     "book:" + "6" * 20, source_title="277DCV-298"
                 )
-        self.assertEqual(profile["jp"], "これお手洗い")
-        self.assertNotIn("화장실", profile["ko"])
-        self.assertNotEqual(profile["ko"], "이것은 화장실")
+        self.assertTrue(profile["is_alias"])
+        self.assertNotEqual(profile["jp"], "これお手洗い")
+
+    def test_book_character_rejects_common_word_kanji_as_name(self):
+        with tempfile.TemporaryDirectory() as directory:
+            library_dir = Path(directory)
+            work_dir = library_dir / "BAD-NAME"
+            work_dir.mkdir()
+            (work_dir / "character_profile.json").write_text(json.dumps({
+                "jp": "感じ", "full_jp": "[感じ|かんじ]", "ko": "간지", "is_alias": False,
+            }, ensure_ascii=False), encoding="utf-8")
+            with patch.object(dating_sim_story, "JP_SUBTITLE_LIBRARY_DIR", library_dir):
+                profile = dating_sim_story.book_character_profile(
+                    "book:" + "7" * 20, source_title="BAD-NAME"
+                )
+        self.assertTrue(profile["is_alias"])
+        self.assertNotEqual(profile["jp"], "感じ")
 
     def test_japanese_name_romanization_uses_kanji_readings_not_meaning(self):
         self.assertEqual(dating_sim_story._romanize_japanese_name("これお手洗い"), "고레오테아라이")

@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/dating-sim/static/style.css?v=20260926-nameplate-v45">
+  <link rel="stylesheet" href="/dating-sim/static/style.css?v=20260926-navigation-v46">
 </head>
 <body>
   <div id="game">
@@ -15,10 +15,10 @@
       <div class="hud-top-row">
         <a class="back-link" href="/#home">← 나가기</a>
         <div class="hud-top-actions">
+          <button id="tree-open-btn" type="button" class="history-open-btn hidden">🌳 시나리오 트리</button>
           <a id="source-epub-link" class="history-open-btn hidden" href="/epub/">📖 원작 EPUB</a>
           <a id="source-video-link" class="history-open-btn hidden" href="#" target="_blank" rel="noopener noreferrer">🎬 영상 원본</a>
           <button id="story-list-btn" type="button" class="history-open-btn hidden">📚 미연시 목록</button>
-          <button id="tree-open-btn" type="button" class="history-open-btn hidden">🌳 시나리오 트리</button>
           <button id="history-open-btn" type="button" class="history-open-btn hidden">📜 이전 장면</button>
         </div>
       </div>
@@ -43,6 +43,16 @@
     </div>
 
     <div id="story-popover" class="story-popover hidden" role="dialog" aria-label="진행 가능한 미연시 목록"></div>
+
+    <div id="updates-overlay" class="history-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="updates-title">
+      <div class="history-panel updates-panel">
+        <div class="history-panel-head">
+          <div><small>CHANGE LOG</small><strong id="updates-title">미연시 업데이트</strong></div>
+          <button id="updates-close-btn" type="button" class="history-close-btn" aria-label="업데이트 닫기">×</button>
+        </div>
+        <div id="updates-list" class="updates-list"><p class="history-empty">불러오는 중...</p></div>
+      </div>
+    </div>
 
     <div id="tree-overlay" class="history-overlay hidden">
       <div class="history-panel tree-panel">
@@ -114,6 +124,7 @@
       <section id="lobby-view" class="hidden">
         <p class="lobby-hint">이어서 만날까요, 새로운 사람을 만날까요?</p>
         <button id="lobby-continue-btn" type="button" class="lobby-card hidden"></button>
+        <button id="updates-open-btn" type="button" class="pixel-button lobby-new-btn">✨ 미연시 업데이트</button>
         <button id="lobby-story-list-btn" type="button" class="pixel-button lobby-new-btn hidden">📚 미연시 목록 (관리자)</button>
         <button id="lobby-new-btn" type="button" class="pixel-button lobby-new-btn">✨ 새로운 만남 시작하기</button>
       </section>
@@ -153,6 +164,6 @@
       <button id="practice-continue" type="button" class="practice-continue hidden">점수 확인하고 다음 대사</button>
     </section>
   </div>
-  <script src="/dating-sim/static/app.js?v=20260926-vocab-popover-v57"></script>
+  <script src="/dating-sim/static/app.js?v=20260926-navigation-v58"></script>
 </body>
 </html>

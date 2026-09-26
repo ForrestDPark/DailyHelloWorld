@@ -107,6 +107,44 @@ function clearSceneHistory() {
   updateHistoryButtonVisibility();
 }
 
+function closeDatingUpdates() {
+  $("updates-overlay").classList.add("hidden");
+}
+
+async function openDatingUpdates() {
+  const list = $("updates-list");
+  list.replaceChildren(Object.assign(document.createElement("p"), {className:"history-empty", textContent:"불러오는 중..."}));
+  $("updates-overlay").classList.remove("hidden");
+  try {
+    const data = await api(`/api/dating-sim/updates?_=${Date.now()}`);
+    list.replaceChildren();
+    for (const item of data.items || []) {
+      const entry = document.createElement("article");
+      const time = document.createElement("time");
+      const copy = document.createElement("div");
+      const kind = document.createElement("span");
+      const title = document.createElement("strong");
+      const body = document.createElement("p");
+      const created = new Date(item.created_at);
+      entry.className = "update-entry";
+      time.className = "update-time";
+      time.dateTime = item.created_at;
+      time.textContent = Number.isNaN(created.getTime()) ? item.created_at : new Intl.DateTimeFormat("ko-KR", {month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"}).format(created);
+      copy.className = "update-copy";
+      kind.className = "update-kind";
+      kind.textContent = item.system || "미연시";
+      title.textContent = item.title || "업데이트";
+      body.textContent = item.body || "";
+      copy.append(kind, title, body);
+      entry.append(time, copy);
+      list.append(entry);
+    }
+    if (!list.children.length) list.append(Object.assign(document.createElement("p"), {className:"history-empty", textContent:"아직 기록된 업데이트가 없습니다."}));
+  } catch (error) {
+    list.replaceChildren(Object.assign(document.createElement("p"), {className:"history-empty", textContent:"업데이트 기록을 불러오지 못했습니다."}));
+  }
+}
+
 function renderHistoryList() {
   const list = $("history-list");
   list.replaceChildren();
@@ -3137,6 +3175,11 @@ async function openScenarioTree() {
 }
 
 $("tree-open-btn").addEventListener("click", openScenarioTree);
+$("updates-open-btn").addEventListener("click", openDatingUpdates);
+$("updates-close-btn").addEventListener("click", closeDatingUpdates);
+$("updates-overlay").addEventListener("click", (event) => {
+  if (event.target === $("updates-overlay")) closeDatingUpdates();
+});
 $("tree-close-btn").addEventListener("click", () => {
   closeTreeImageDetail();
   stopDatingSimImageGenPoll();
@@ -3150,7 +3193,9 @@ $("tree-overlay").addEventListener("click", (event) => {
 });
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
-  if (!$("practice-overlay").classList.contains("hidden")) {
+  if (!$("updates-overlay").classList.contains("hidden")) {
+    closeDatingUpdates();
+  } else if (!$("practice-overlay").classList.contains("hidden")) {
     closePractice();
   } else if (document.querySelector(".tree-image-detail-overlay")) {
     closeTreeImageDetail();

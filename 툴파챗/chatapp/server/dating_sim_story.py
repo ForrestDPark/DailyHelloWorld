@@ -1551,6 +1551,48 @@ def _romanize_japanese_name(text):
     return _hiragana_to_korean_name(_japanese_name_reading(text)) or text
 
 
+_NON_NAME_JAPANESE_TERMS = {
+    "感じ", "気持ち", "名前", "今日", "明日", "昨日", "最初", "初めまして",
+    "大丈夫", "本当", "ありがとう", "すみません", "ごめんなさい", "お願い",
+    "私", "わたし", "僕", "俺", "彼女", "女性", "女", "母", "姉", "妹",
+    "先生", "店員", "会社", "学校", "仕事", "これ", "それ", "あれ",
+    "ここ", "そこ", "どこ", "お手洗い", "これお手洗い",
+}
+_NON_NAME_KOREAN_TERMS = {
+    "간지", "느낌", "기분", "이름", "오늘", "내일", "어제", "처음", "감사",
+    "괜찮", "여기", "저기", "화장실", "여자", "여성", "선생님", "회사",
+}
+
+
+def _plain_character_name(value):
+    """후리가나 태그와 가명 표식을 걷어 이름 후보 자체만 비교한다."""
+    text = re.sub(r"\[([^|\]]+)\|[^\]]+\]", r"\1", str(value or ""))
+    text = re.sub(r"\s*[（(]\s*가명\s*[)）]\s*", "", text)
+    return re.sub(r"[\s・·]+", "", text).strip()
+
+
+def _is_plausible_character_profile(profile):
+    """일반 명사·대명사·문장 조각을 인명으로 채택하지 않는다.
+
+    ASR/번역 대사의 `…です`만으로 이름을 추정하면 `感じです` 같은 문장이
+    자기소개로 오인될 수 있다. 확정 저장 프로필도 매번 이 검사를 거쳐 기존
+    잘못된 데이터가 즉시 결정론적 가명으로 폴백되게 한다.
+    """
+    if not isinstance(profile, dict):
+        return False
+    jp = _plain_character_name(profile.get("jp") or profile.get("full_jp"))
+    ko = _plain_character_name(profile.get("ko"))
+    if not jp or not ko:
+        return False
+    if jp in _NON_NAME_JAPANESE_TERMS or ko in _NON_NAME_KOREAN_TERMS:
+        return False
+    if any(jp.startswith(prefix) for prefix in ("これ", "それ", "あれ", "ここ", "そこ", "私は", "わたしは")):
+        return False
+    if any(term in ko for term in _NON_NAME_KOREAN_TERMS):
+        return False
+    return True
+
+
 def _profile_from_work_dialogue(source_title):
     """작품의 실제 대사에서 명시적으로 자기소개한 여주 이름만 찾는다.
 
@@ -1566,7 +1608,8 @@ def _profile_from_work_dialogue(source_title):
     profile_path = folder / "character_profile.json"
     try:
         saved = json.loads(profile_path.read_text(encoding="utf-8"))
-        if all(saved.get(key) for key in ("jp", "full_jp", "ko")) and not saved.get("is_alias"):
+        if (all(saved.get(key) for key in ("jp", "full_jp", "ko"))
+                and not saved.get("is_alias") and _is_plausible_character_profile(saved)):
             return {**saved, "image": saved.get("image") or "/dating-sim/static/reina.png",
                     "is_alias": False}
     except (OSError, ValueError, TypeError):
@@ -1611,8 +1654,10 @@ def _profile_from_work_dialogue(source_title):
         # 번역문이 아니라 일본어 이름의 발음을 한글로 옮긴 값을 쓴다 —
         # 번역이 엉뚱한 문장(예: "화장실입니다")을 집었을 때도 최소한
         # 이름처럼 들리게 하기 위해서다.
-        return {"jp": ja_name, "full_jp": full_jp, "ko": _romanize_japanese_name(ja_name),
-                "image": "/dating-sim/static/reina.png", "is_alias": False}
+        candidate = {"jp": ja_name, "full_jp": full_jp, "ko": _romanize_japanese_name(ja_name),
+                     "image": "/dating-sim/static/reina.png", "is_alias": False}
+        if _is_plausible_character_profile(candidate):
+            return candidate
     return None
 
 
