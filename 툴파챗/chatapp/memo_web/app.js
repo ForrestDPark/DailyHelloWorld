@@ -371,6 +371,20 @@ function fitMap() {
   view.y = v.clientHeight / 2 - ((minY + maxY) / 2) * view.scale;
   applyView();
 }
+function setMindmapFullscreen(enabled) {
+  const viewport = $("#mindmap-viewport"),
+    button = $("#mindmap-fullscreen"),
+    active = Boolean(enabled);
+  viewport.classList.toggle("fullscreen-mode", active);
+  document.body.classList.toggle("mindmap-fullscreen-open", active);
+  button.textContent = active ? "×" : "⛶";
+  button.setAttribute(
+    "aria-label",
+    active ? "전체 화면 닫기" : "생각 지도 전체 화면",
+  );
+  button.title = active ? "전체 화면 닫기" : "전체 화면";
+  requestAnimationFrame(() => requestAnimationFrame(fitMap));
+}
 function pointerWorld(event) {
   const rect = $("#mindmap-viewport").getBoundingClientRect();
   return {
@@ -758,6 +772,18 @@ $("#memo-layout").onclick = (event) =>
 $("#zoom-in").onclick = () => zoom(view.scale * 1.22);
 $("#zoom-out").onclick = () => zoom(view.scale / 1.22);
 $("#zoom-fit").onclick = fitMap;
+$("#mindmap-fullscreen").onclick = () =>
+  setMindmapFullscreen(
+    !$("#mindmap-viewport").classList.contains("fullscreen-mode"),
+  );
+document.addEventListener("keydown", (event) => {
+  if (
+    event.key === "Escape" &&
+    $("#mindmap-viewport").classList.contains("fullscreen-mode")
+  ) {
+    setMindmapFullscreen(false);
+  }
+});
 $("#preview-open").onclick = () => {
   const id = Number($("#preview-open").dataset.id);
   $("#memo-preview-dialog").close();

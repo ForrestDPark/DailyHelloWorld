@@ -53,6 +53,32 @@
   z-index: 9;
   transition: none;
 }
+body.mindmap-fullscreen-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+.mindmap-viewport.fullscreen-mode {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 100dvh;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+.mindmap-viewport.fullscreen-mode .zoom-controls {
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+}
+.mindmap-viewport.fullscreen-mode .canvas-hint {
+  bottom: max(10px, env(safe-area-inset-bottom));
+}
+#mindmap-fullscreen {
+  font-size: 20px;
+  line-height: 1;
+}
 .node-card h3,
 .node-card p {
   width: 100%;
