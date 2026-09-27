@@ -83,6 +83,13 @@ class DatingImageAgentTests(unittest.TestCase):
         self.assertEqual(text_workflow["3"]["inputs"]["denoise"], 1.0)
         self.assertEqual(text_workflow["4"]["inputs"]["ckpt_name"], "model.safetensors")
         self.assertEqual(text_workflow["9"]["class_type"], "SaveImage")
+        positive = text_workflow["6"]["inputs"]["text"]
+        negative = text_workflow["7"]["inputs"]["text"]
+        self.assertIn("both eyes aligned toward the same focal point", positive)
+        self.assertIn("correctly centered pupils", positive)
+        self.assertIn("cross-eyed", negative)
+        self.assertIn("duplicate pupils", negative)
+        self.assertIn("ghost eyes", negative)
 
         folder_workflow = images._build_comfy_workflow(
             "a quiet cafe scene", "stable-v15", 42, loader="DiffusersLoader"

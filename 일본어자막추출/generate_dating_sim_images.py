@@ -342,6 +342,20 @@ def _image_filename(scene_key):
     return "scene-" + hashlib.sha256(scene_key.encode()).hexdigest()[:12] + ".png"
 
 
+EYE_QUALITY_PROMPT = (
+    "anatomically correct natural human eyes, both eyes aligned toward the same focal point, "
+    "coherent gaze direction for the head pose, matching iris and pupil size, correctly centered pupils, "
+    "natural eyelids and sclera, realistic catchlights, balanced binocular anatomy, "
+)
+
+EYE_QUALITY_NEGATIVE_PROMPT = (
+    "cross-eyed, wall-eyed, strabismus, lazy eye, divergent gaze, misaligned eyes, unfocused eyes, "
+    "asymmetric pupils, mismatched pupils, mismatched irises, off-center pupils, malformed eyes, "
+    "deformed eyes, extra eye, duplicate eyes, duplicate pupils, missing pupil, missing iris, "
+    "blank white eyes, rolled-back eyes, glowing eyes, ghost eyes, dead eyes, doll eyes, unnatural sclera, "
+)
+
+
 def _prompt(title, scene=None):
     # ★ 2026-09-23: "초상화에 항상 중국옷 입지말게하고 한국사람이나 일본사람으로
     # 옷 입게 해줘" 요청 — "tasteful contemporary clothing"만으로는 모델이
@@ -350,6 +364,7 @@ def _prompt(title, scene=None):
     common = (
         "Photorealistic Japanese romance visual novel still, adult Japanese woman age 25 or older, "
         "natural facial anatomy, cinematic available light, coherent recurring character identity, "
+        + EYE_QUALITY_PROMPT +
         "modern Korean or Japanese everyday fashion (never Chinese hanfu, qipao, or other Chinese "
         "traditional dress), wearing a skirt or dress rather than jeans or trousers, "
         "tasteful contemporary clothing, non-explicit, no text, no watermark. "
@@ -544,6 +559,7 @@ def _build_comfy_workflow(
     local_prompt = (
         "photorealistic adult Japanese woman age 25, fully clothed, tasteful romance scene, "
         "natural face and hands, detailed skin, sharp focus, no text, "
+        + EYE_QUALITY_PROMPT +
         "shot on Canon EOS R5, 85mm f/1.4, golden hour lighting, "
         + camera_direction + ", "
         + _clean(prompt.split("Visualize this specific narrative beat rather than a generic pose:")[-1], 180)
@@ -568,6 +584,7 @@ def _build_comfy_workflow(
                 "nsfw, nude, child, low quality, blurry, distorted, deformed, bad hands, "
                 "multiple people, two women, duplicate person, duplicate face, extra face, "
                 "double exposure, ghost face, overlapping bodies, collage, split screen, "
+                + EYE_QUALITY_NEGATIVE_PROMPT +
                 "text, watermark, caption, subtitle, logo, banner, letters, "
                 "chinese hanfu, qipao, cheongsam, chinese traditional dress"
             ),

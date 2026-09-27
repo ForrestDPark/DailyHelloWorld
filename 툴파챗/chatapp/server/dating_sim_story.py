@@ -1860,6 +1860,13 @@ def _legacy_portrait_prompt(title):
     )
 
 
+_COMFY_EYE_QUALITY_PROMPT = (
+    "anatomically correct natural human eyes, both eyes aligned toward the same focal point, "
+    "coherent gaze direction for the head pose, matching iris and pupil size, correctly centered pupils, "
+    "natural eyelids and sclera, realistic catchlights, balanced binocular anatomy, "
+)
+
+
 def _comfy_effective_prompt(prompt):
     """현재 ComfyUI 워크플로가 CLIP에 실제 전달한 축약 프롬프트를 복원한다.
     매니페스트의 원본 계획 프롬프트와 구분해 품질 문제를 진단할 수 있게 한다."""
@@ -1871,6 +1878,7 @@ def _comfy_effective_prompt(prompt):
     return (
         "photorealistic adult Japanese woman age 25, fully clothed, tasteful romance scene, "
         "natural face and hands, detailed skin, sharp focus, no text, "
+        + _COMFY_EYE_QUALITY_PROMPT +
         "shot on Canon EOS R5, 85mm f/1.4, golden hour lighting, " + beat
     )
 
