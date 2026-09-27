@@ -48,6 +48,29 @@ BOOK_LOCATIONS = [
     ("walk", "함께 걷는 길·공원·강변"),
     ("quiet", "조용한 찻집·카페"),
 ]
+OPENING_CONCEPT_VERSION = 1
+OPENING_VENUES = (
+    "동네 코인세탁소의 마지막 빈 세탁기 앞",
+    "작은 독립영화관의 GV 대기 줄",
+    "강을 건너는 수상버스 승강장",
+    "박물관의 체험 해설 프로그램 접수대",
+    "주말 농산물 시장의 시식 코너",
+    "비가 시작된 식물원 온실 입구",
+    "원데이 요리 수업의 조 편성표 앞",
+    "골목 사진전의 관람객 투표대",
+    "야간 천문관측 행사의 망원경 대기 줄",
+)
+OPENING_TRIGGERS = (
+    "예약자 이름이 비슷해 직원이 두 사람을 같은 일행으로 착각한다",
+    "현장 안내 방송이 잘 들리지 않아 서로가 알아들은 내용을 맞춰 본다",
+    "기계가 한 사람의 표만 인식하지 않아 둘이 원인을 함께 찾아본다",
+    "행사 설문에서 정반대의 답을 골라 가벼운 논쟁이 시작된다",
+    "마지막 남은 체험 자리를 둘 중 누가 쓸지 양보하다 함께 참여하게 된다",
+    "갑작스러운 정전으로 잠시 같은 안내등 아래 기다리며 말을 튼다",
+    "직원이 건넨 안내물이 서로 뒤바뀐 것을 읽다가 공통 관심사를 발견한다",
+    "길을 묻는 외국인에게 서로 다른 방향을 알려 주다 함께 확인하게 된다",
+    "행사 진행자가 즉석에서 두 사람을 한 팀으로 묶어 짧은 과제를 준다",
+)
 FURIGANA_RE = re.compile(r"\[([^\]|]+)\|([^\]]+)\]")
 JAPANESE_TOKEN_RE = re.compile(r"[^一-龯々〆ヵヶぁ-ゖァ-ヺーA-Za-z0-9]+")
 
@@ -61,6 +84,37 @@ def plain_japanese(text):
 def contains_material(text, material):
     needle = plain_japanese(material.get("ja", ""))
     return bool(needle and needle in plain_japanese(text))
+
+
+def opening_concept_for(title, known_titles=None):
+    """현재 서재에서 작품마다 겹치지 않는 첫 만남 장소·사건 조합을 준다.
+
+    정렬된 작품 순번을 9×9 조합에 일대일 대응해 같은 서재 안에서는 동일한
+    조합이 나오지 않는다. 81편을 넘으면 작품 코드 해시를 보조 단서로 더해
+    AI가 같은 서사로 복제하지 못하게 한다.
+    """
+    titles = sorted(set(known_titles or [path.name for path in works_with_cards()] or [title]))
+    try:
+        index = titles.index(title)
+    except ValueError:
+        titles.append(title)
+        titles.sort()
+        index = titles.index(title)
+    pair_count = len(OPENING_VENUES) * len(OPENING_TRIGGERS)
+    pair_index = index % pair_count
+    venue = OPENING_VENUES[pair_index // len(OPENING_TRIGGERS)]
+    trigger = OPENING_TRIGGERS[pair_index % len(OPENING_TRIGGERS)]
+    suffix = "" if index < pair_count else f" 작품 식별자 {title}의 원작 분위기를 추가 갈등으로 사용할 것"
+    return {"id": f"opening-v{OPENING_CONCEPT_VERSION}-{index + 1}", "venue": venue,
+            "trigger": trigger, "brief": f"{venue}에서 {trigger}. {suffix}".strip()}
+
+
+def repeats_banned_opening_trope(day_obj):
+    """첫 만남을 획일화했던 종이봉투·낙하·줍기 장면의 재발을 막는다."""
+    text = plain_japanese(json.dumps(day_obj or {}, ensure_ascii=False))
+    return ("紙袋" in text or "종이봉투" in str(day_obj)
+            or bool(re.search(r"(?:本|책|しおり|소지품).{0,30}(?:落|떨어)", text))
+            or "拾" in text or "줍" in str(day_obj))
 
 
 # ★ 2026-09-22 실제 사고: "학습카드의 표현은 이미 정제됐다"는 가정이
@@ -169,7 +223,7 @@ def distribute_locations(items):
 
 
 def build_day_prompt(character_ko, day, topic, arc_hint, words, expressions, is_first_day,
-                     grammar_patterns=None, continuity_context=""):
+                     grammar_patterns=None, continuity_context="", opening_concept=None):
     schema_example = json.dumps({
         "narration": "[今日|きょう]は[雨|あめ]が[降|ふ]っていた。\n오늘은 비가 내리고 있었다.",
         "scenes": {
@@ -219,7 +273,10 @@ def build_day_prompt(character_ko, day, topic, arc_hint, words, expressions, is_
     first_rule = (
         "두 사람은 방금 처음 만난 완전한 남남이다. 관계의 지속·애착을 "
         "전제하는 말(다시 만나자, 늘 그랬듯이 등)은 하지 마라. 배정된 학습 단어·표현은 "
-        "우연한 작은 사고와 첫 인사 맥락 안에 전부 자연스럽게 넣어라."
+        "지정된 고유 첫 만남 사건과 첫 인사 맥락 안에 전부 자연스럽게 넣어라. "
+        f"이 작품에만 배정된 첫 만남: {(opening_concept or {}).get('brief', '')} "
+        "장소와 사건을 임의로 서점·길모퉁이로 바꾸지 마라. 종이봉투, 떨어진 책·책갈피·소지품, "
+        "두 사람이 동시에 줍거나 손이 닿는 장면은 어떤 형태로도 쓰지 마라."
         if is_first_day else
         "이미 여러 사건을 거치며 연락을 주고받는 성인들이다. 배정된 학습 단어·표현을 현재 상황 "
         "속에 전부 자연스럽게 녹여라. 단어를 지칭하며 설명하지 말고 등장인물의 실제 대사나 "
@@ -390,7 +447,7 @@ def repair_missing_materials(days, missing_words, missing_expressions):
         scene.setdefault(field, []).append(item)
 
 
-def generate_for_work(work_dir, log=print):
+def generate_for_work(work_dir, log=print, refresh_opening_only=False):
     title = work_dir.name
     vocab_pool = [{"ja": ja, "reading": reading, "ko": ko}
                   for ja, reading, ko in ds._load_work_vocabulary(title)]
@@ -410,7 +467,13 @@ def generate_for_work(work_dir, log=print):
     days = {}
     skipped_expressions = set()
     partial_version = ds.GENERATED_SCENARIO_VERSION
-    if partial_path.is_file():
+    if refresh_opening_only:
+        try:
+            cached = json.loads((work_dir / "dating_sim_scenario.json").read_text(encoding="utf-8"))
+            days = {key: value for key, value in (cached.get("days") or {}).items() if key != "1"}
+        except (OSError, ValueError):
+            days = {}
+    elif partial_path.is_file():
         try:
             partial = json.loads(partial_path.read_text(encoding="utf-8"))
             if partial.get("content_version") == partial_version:
@@ -436,8 +499,9 @@ def generate_for_work(work_dir, log=print):
         previous_lines = [line for scene in (previous.get("scenes") or {}).values()
                           for line in (scene.get("lines") or [])]
         continuity = " / ".join(previous_lines[-3:])[-1200:]
+        opening_concept = opening_concept_for(title) if is_first else None
         base_prompt = build_day_prompt(title.split("_")[0], day, topic, arc_hint, words, exprs,
-                                       is_first, grammars, continuity)
+                                       is_first, grammars, continuity, opening_concept)
         day_obj = None
         max_attempts = 5
         ai_failed = False
@@ -446,7 +510,7 @@ def generate_for_work(work_dir, log=print):
         # 나머지 재료로 한 번 더 생성한다(어휘·다른 표현은 그대로 필수).
         for fallback_round in range(2):
             base_prompt = build_day_prompt(title.split("_")[0], day, topic, arc_hint, words, exprs,
-                                           is_first, grammars, continuity)
+                                           is_first, grammars, continuity, opening_concept)
             prompt = base_prompt
             last_missing = []
             for attempt in range(max_attempts):
@@ -463,11 +527,14 @@ def generate_for_work(work_dir, log=print):
                     candidate = json.loads(match.group(0)) if match else None
                 except json.JSONDecodeError:
                     candidate = None
-                if candidate and validate_day(candidate, words, exprs, grammars):
+                if (candidate and validate_day(candidate, words, exprs, grammars)
+                        and not (is_first and repeats_banned_opening_trope(candidate))):
                     day_obj = candidate
                     break
                 missing = missing_day_materials(candidate or {}, words, exprs, grammars)
                 last_missing = missing
+                if is_first and candidate and repeats_banned_opening_trope(candidate):
+                    last_missing.append("첫 만남 금지 전개(종이봉투·낙하·줍기)를 제거하고 지정 사건으로 교체")
                 if attempt + 1 < max_attempts:
                     previous = json.dumps(candidate, ensure_ascii=False) if candidate else "(유효한 JSON 없음)"
                     prompt = (base_prompt
@@ -515,6 +582,8 @@ def generate_for_work(work_dir, log=print):
         used_expr.update(e["ja"] for e in expression_meta)
     scenario = {
         "content_version": ds.GENERATED_SCENARIO_VERSION,
+        "opening_concept_version": OPENING_CONCEPT_VERSION,
+        "opening_concept": opening_concept_for(title),
         "coverage": {"vocabulary": [len(used_ja), len(vocab_pool)],
                      "expressions": [len(used_expr), len(expressions)],
                      "grammar": [len(used_grammar), len(grammar_patterns)],
@@ -557,6 +626,7 @@ def main():
     parser.add_argument("work_dir", nargs="?", help="library/<작품 폴더>")
     parser.add_argument("--all", action="store_true", help="학습카드 있는 전 작품 생성")
     parser.add_argument("--force", action="store_true", help="이미 생성된 작품도 다시 생성")
+    parser.add_argument("--refresh-openings", action="store_true", help="기존 2~14일 흐름은 보존하고 첫 만남만 새 고유 콘셉트로 교체")
     parser.add_argument("--shard-count", type=int, default=1, help="전체 대기열 분할 수")
     parser.add_argument("--shard-index", type=int, default=0, help="이 프로세스가 맡을 분할 번호(0부터)")
     args = parser.parse_args()
@@ -574,19 +644,28 @@ def main():
     ok, fail = 0, 0
     for work_dir in targets:
         scenario_path = work_dir / "dating_sim_scenario.json"
+        cached = {}
         if not args.force and scenario_path.is_file():
             try:
                 cached = json.loads(scenario_path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 cached = {}
             if (cached.get("content_version") == ds.GENERATED_SCENARIO_VERSION
-                    and (cached.get("coverage") or {}).get("complete") is True):
+                    and (cached.get("coverage") or {}).get("complete") is True
+                    and cached.get("opening_concept_version") == OPENING_CONCEPT_VERSION
+                    and not args.refresh_openings):
                 print(f"⏭️  {work_dir.name}: 전수 활용 시나리오가 이미 생성됨(--force로 재생성)")
                 continue
             print(f"↻ {work_dir.name}: 이전/불완전 시나리오를 새 규칙으로 교체합니다")
         print(f"\n===== {work_dir.name} =====")
         try:
-            if generate_for_work(work_dir):
+            refresh_opening = args.refresh_openings or (
+                scenario_path.is_file()
+                and cached.get("content_version") == ds.GENERATED_SCENARIO_VERSION
+                and (cached.get("coverage") or {}).get("complete") is True
+                and cached.get("opening_concept_version") != OPENING_CONCEPT_VERSION
+            )
+            if generate_for_work(work_dir, refresh_opening_only=refresh_opening):
                 ok += 1
             else:
                 fail += 1

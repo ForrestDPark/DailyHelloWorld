@@ -93,6 +93,26 @@ class DatingScenarioGenerationTest(unittest.TestCase):
         self.assertIn("미성년자, 강압, 비동의, 착취", prompt)
         self.assertNotIn("노골적/성적/폭력적 내용은 절대", prompt)
 
+    def test_each_library_work_gets_a_distinct_opening_concept(self):
+        titles = [f"WORK-{index:03d}" for index in range(75)]
+        concepts = [generator.opening_concept_for(title, titles) for title in titles]
+        self.assertEqual(len(concepts), len({item["brief"] for item in concepts}))
+        self.assertTrue(all("종이봉투" not in item["brief"] for item in concepts))
+
+    def test_first_day_prompt_and_validator_block_repeated_paper_bag_trope(self):
+        concept = generator.opening_concept_for("WORK-001", ["WORK-001"])
+        prompt = generator.build_day_prompt(
+            "하루", 1, "첫 만남", "낯선 두 사람이 인사한다", [], [], True,
+            opening_concept=concept,
+        )
+        self.assertIn(concept["venue"], prompt)
+        self.assertIn(concept["trigger"], prompt)
+        self.assertIn("종이봉투", prompt)
+        repeated = self._candidate()
+        repeated["narration"] = "[紙袋|かみぶくろ]から[本|ほん]が[落|お]ちた。\n종이봉투에서 책이 떨어졌다."
+        self.assertTrue(generator.repeats_banned_opening_trope(repeated))
+        self.assertFalse(generator.repeats_banned_opening_trope(self._candidate()))
+
     def test_load_expressions_filters_out_verbatim_explicit_dialogue(self):
         """★ 2026-09-22 실제 사고: ABF-161_J의 학습카드 "핵심 표현" 216개
         중 7개가 원본에서 그대로 뽑힌 노골적 성적 대사(性欲が溜まる,
