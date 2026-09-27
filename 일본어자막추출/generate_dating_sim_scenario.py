@@ -487,6 +487,12 @@ def generate_for_work(work_dir, log=print, refresh_opening_only=False):
         words = [] if is_first else word_by_day.get(day, [])
         exprs = [] if is_first else expr_by_day.get(day, [])
         grammars = [] if is_first else grammar_by_day.get(day, [])
+        # 첫 만남 갱신은 DAY 1만 교체하는 작업이다. 현재 검증 규칙이 예전보다
+        # 엄격해졌더라도 이미 완성된 DAY 2~14를 이 과정에서 다시 생성하지 않는다.
+        # 후속 흐름을 건드리면 사용자의 진행 기록과 기존 서사가 함께 달라질 수 있다.
+        if refresh_opening_only and not is_first and str(day) in days:
+            log(f"   ↪️ DAY {day} 기존 후속 흐름 보존")
+            continue
         if str(day) in days:
             if validate_day(days[str(day)], words, exprs, grammars):
                 log(f"   ↪️ DAY {day} 중간 저장본 재사용")
