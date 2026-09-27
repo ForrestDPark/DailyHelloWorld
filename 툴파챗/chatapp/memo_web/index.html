@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171321"><title>메모 시스템</title>
-  <link rel="icon" href="/static/app-icon-192.png?v=20260927-natum-favicon-v1" type="image/png">
-  <link rel="stylesheet" href="/memo/static/style.css?v=20260926-memo-layout-v2"><link rel="stylesheet" href="/memo/static/colors.css?v=20260925-v1"><link rel="stylesheet" href="/memo/static/tools.css?v=20260927-rich-text-v1"><link rel="stylesheet" href="/memo/static/voice.css?v=20260925-stop-v1">
+  <link rel="icon" href="/static/system-icons/memo.svg?v=20260927" type="image/svg+xml">
+  <link rel="stylesheet" href="/memo/static/style.css?v=20260926-memo-layout-v2"><link rel="stylesheet" href="/memo/static/colors.css?v=20260925-v1"><link rel="stylesheet" href="/memo/static/tools.css?v=20260927-rich-text-v2"><link rel="stylesheet" href="/memo/static/voice.css?v=20260925-stop-v1">
 </head>
 <body>
   <header class="topbar"><a href="/#home" aria-label="홈으로">←</a><div class="topbar-title"><small>CONNECTED NOTES</small><h1>메모 시스템</h1></div><div class="topbar-actions"><button id="memo-layout" class="layout-button" type="button" aria-label="리스트 보기로 전환">☰ 리스트</button><button id="new-memo">＋ 새 메모</button></div></header>
@@ -28,10 +28,21 @@
   <dialog id="node-dialog"><form method="dialog"><div class="dialog-head"><h2 id="node-dialog-title">파생 메모</h2><span><button id="node-voice" class="voice-button" type="button" aria-label="음성으로 파생 메모 입력">🎙️ 음성</button><button value="cancel" aria-label="닫기">×</button></span></div><textarea id="node-content" maxlength="6000" placeholder="생각, 할 일, 연결할 아이디어를 적어보세요"></textarea><div class="dialog-actions"><button value="cancel">취소</button><button id="node-save" value="default">저장</button></div></form></dialog>
   <div id="selection-toolbar" class="selection-toolbar hidden" role="toolbar" aria-label="선택한 텍스트 서식">
     <button type="button" data-format="b" aria-label="굵게" title="굵게"><b>B</b></button><button type="button" data-format="i" aria-label="기울임" title="기울임"><i>I</i></button><button type="button" data-format="u" aria-label="밑줄" title="밑줄"><u>U</u></button><button type="button" data-format="s" aria-label="취소선" title="취소선"><s>S</s></button>
-    <label class="format-color" title="글자색"><span>A</span><input id="format-color" type="color" value="#e45775" aria-label="글자색"></label><label class="format-color highlight" title="배경색"><span>▰</span><input id="format-background" type="color" value="#fff19a" aria-label="배경색"></label>
+    <button type="button" id="format-color-button" class="format-color" title="글자색" aria-label="글자색 선택"><span>A</span></button><button type="button" id="format-background-button" class="format-color highlight" title="배경색" aria-label="배경색 선택"><span>▰</span></button>
     <button type="button" id="format-comment" aria-label="코멘트" title="코멘트">▣</button><button type="button" id="format-clear" aria-label="서식 지우기" title="서식 지우기">Tx</button>
   </div>
+  <dialog id="format-color-dialog" class="format-color-dialog">
+    <form method="dialog">
+      <div class="dialog-head"><div><small>TEXT STYLE</small><h2 id="format-color-title">글자색</h2></div><button value="cancel" aria-label="닫기">×</button></div>
+      <label class="color-picker-field"><span>색상 선택</span><input id="format-color-picker" type="color" value="#e45775" aria-label="적용할 색상"></label>
+      <div id="format-color-preview" class="format-color-preview">선택한 글자 미리보기</div>
+      <div class="color-presets" aria-label="추천 색상">
+        <button type="button" data-color="#e45775" style="--swatch:#e45775" aria-label="분홍"></button><button type="button" data-color="#f2994a" style="--swatch:#f2994a" aria-label="주황"></button><button type="button" data-color="#f2c94c" style="--swatch:#f2c94c" aria-label="노랑"></button><button type="button" data-color="#56cc9d" style="--swatch:#56cc9d" aria-label="초록"></button><button type="button" data-color="#5b8def" style="--swatch:#5b8def" aria-label="파랑"></button><button type="button" data-color="#a97bea" style="--swatch:#a97bea" aria-label="보라"></button>
+      </div>
+      <div class="dialog-actions"><button value="cancel">취소</button><button id="format-color-apply" type="button">적용</button></div>
+    </form>
+  </dialog>
   <div id="comment-popover" class="comment-popover hidden" role="note"><strong>코멘트</strong><p></p><button type="button" aria-label="닫기">×</button></div>
   <div id="toast" class="toast hidden" role="status"></div>
-  <script src="/memo/static/app.js?v=20260927-rich-text-v1"></script>
+  <script src="/memo/static/app.js?v=20260927-rich-text-v2"></script>
 </body></html>

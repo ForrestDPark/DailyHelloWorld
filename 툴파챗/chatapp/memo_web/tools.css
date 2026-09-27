@@ -250,7 +250,26 @@ body.mindmap-fullscreen-open {
 .format-color { position: relative; cursor: pointer; }
 .format-color span { border-bottom: 3px solid #e45775; font-weight: 800; }
 .format-color.highlight span { border-bottom-color: #fff19a; }
-.format-color input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.format-color-dialog {
+  width: min(390px, calc(100% - 28px));
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 24px 80px #0009;
+}
+.format-color-dialog::backdrop { background: #08060db3; backdrop-filter: blur(5px); }
+.format-color-dialog form { display: grid; gap: 16px; padding: 20px; }
+.format-color-dialog h2 { margin: 3px 0 0; font-size: 22px; }
+.color-picker-field { display: grid; grid-template-columns: 1fr 64px; align-items: center; gap: 12px; font-weight: 750; }
+.color-picker-field input { width: 64px; height: 46px; padding: 3px; border: 1px solid var(--line); border-radius: 11px; background: var(--bg); cursor: pointer; }
+.format-color-preview { padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg); text-align: center; font-size: 17px; font-weight: 750; }
+.color-presets { display: grid; grid-template-columns: repeat(6, 1fr); gap: 9px; }
+.color-presets button { width: 100%; aspect-ratio: 1; min-width: 0; padding: 0; border: 2px solid #fff8; border-radius: 50%; background: var(--swatch); box-shadow: 0 0 0 1px #0003; }
+.format-color-dialog .dialog-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.format-color-dialog .dialog-actions button { min-height: 44px; }
+#format-color-apply { border-color: transparent; background: var(--accent); color: #fff; font-weight: 800; }
 .comment-popover {
   position: fixed;
   z-index: 141;

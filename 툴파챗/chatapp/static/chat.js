@@ -31,6 +31,22 @@ const aiResponseStatusText = document.getElementById("ai-response-status-text");
 const aiStatusRetry = document.getElementById("ai-status-retry");
 const portalServices = document.querySelector(".portal-services");
 const portalLayoutBtn = document.getElementById("portal-layout-btn");
+const DEFAULT_TAB_IDENTITY = { title: "나툼 · NaTum", icon: "/static/app-icon-192.png?v=20260927-natum-favicon-v1" };
+const TULPA_TAB_ICON = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#7047d7"/><path d="M14 15h36v9H37v27H27V24H14z" fill="white"/></svg>')}`;
+const TAB_IDENTITIES = {
+  sunzi: { title: "오늘의 손자병법", icon: "https://sunzi-strategy-notes.pulpilisory.chatgpt.site/icon-192.png" },
+  chat: { title: "툴파챗", icon: TULPA_TAB_ICON },
+};
+function setTabIdentity(identity = DEFAULT_TAB_IDENTITY) {
+  document.title = identity.title;
+  let icon = document.querySelector('link[rel="icon"]');
+  if (!icon) {
+    icon = document.createElement("link");
+    icon.rel = "icon";
+    document.head.append(icon);
+  }
+  icon.href = identity.icon;
+}
 function setPortalLayout(mode) {
   const grid = mode === "grid";
   const icons = mode === "icons";
@@ -4520,13 +4536,17 @@ document.getElementById("help-close-btn").addEventListener("click", () => toggle
 async function route() {
   const room = parseRoomFromHash();
   if (room) {
+    setTabIdentity(TAB_IDENTITIES.chat);
     await showChatView(room);
   } else if (location.hash === "#sunzi") {
+    setTabIdentity(TAB_IDENTITIES.sunzi);
     showSunziView();
   } else if (location.hash === "#friends" || location.hash === "#chats") {
+    setTabIdentity(TAB_IDENTITIES.chat);
     setListMode(location.hash === "#chats" ? "chats" : "friends");
     await showRoomList();
   } else {
+    setTabIdentity(DEFAULT_TAB_IDENTITY);
     await showPortalHome(location.hash === "#systems");
   }
 }

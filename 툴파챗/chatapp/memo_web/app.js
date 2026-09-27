@@ -590,8 +590,39 @@ document.addEventListener("selectionchange", () => {
 $("#selection-toolbar").querySelectorAll("[data-format]").forEach((button) => {
   button.onclick = () => applyRichFormat(`[[${button.dataset.format}]]`, `[[/${button.dataset.format}]]`);
 });
-$("#format-color").oninput = (event) => applyRichFormat(`[[color:${event.target.value}]]`, "[[/color]]");
-$("#format-background").oninput = (event) => applyRichFormat(`[[bg:${event.target.value}]]`, "[[/bg]]");
+let pendingColorMode = "color";
+function openFormatColorDialog(mode) {
+  if (!richSelection) return toast("먼저 색을 바꿀 글자를 선택해주세요");
+  pendingColorMode = mode;
+  const picker = $("#format-color-picker"), dialog = $("#format-color-dialog");
+  picker.value = mode === "color" ? "#e45775" : "#fff19a";
+  $("#format-color-title").textContent = mode === "color" ? "글자색" : "배경색";
+  updateFormatColorPreview();
+  hideSelectionToolbar();
+  dialog.showModal();
+}
+function updateFormatColorPreview() {
+  const value = $("#format-color-picker").value, preview = $("#format-color-preview");
+  preview.style.color = pendingColorMode === "color" ? value : "";
+  preview.style.backgroundColor = pendingColorMode === "background" ? value : "";
+}
+$("#format-color-button").onclick = () => openFormatColorDialog("color");
+$("#format-background-button").onclick = () => openFormatColorDialog("background");
+$("#format-color-picker").oninput = updateFormatColorPreview;
+$("#format-color-dialog").querySelectorAll("[data-color]").forEach((button) => {
+  button.onclick = () => {
+    $("#format-color-picker").value = button.dataset.color;
+    updateFormatColorPreview();
+  };
+});
+$("#format-color-apply").onclick = async () => {
+  const value = $("#format-color-picker").value;
+  $("#format-color-dialog").close();
+  await applyRichFormat(
+    pendingColorMode === "color" ? `[[color:${value}]]` : `[[bg:${value}]]`,
+    pendingColorMode === "color" ? "[[/color]]" : "[[/bg]]",
+  );
+};
 $("#format-clear").onclick = () => applyRichFormat("", "", true);
 $("#format-comment").onclick = () => {
   const comment = prompt("선택한 문장에 남길 코멘트를 입력하세요.");
