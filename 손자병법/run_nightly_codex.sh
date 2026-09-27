@@ -9,6 +9,7 @@ PIPELINE_TASK="${SUNZI_PIPELINE_TASK:-next_verse}"
 LOG_DIR="/Users/forrestdpark/Library/Logs/CodexSunzi"
 LOCK_DIR="/private/tmp/com.forrest.codex-sunzi-nightly.lock"
 CODEX_BIN="/opt/homebrew/bin/codex"
+PYTHON_BIN="/opt/anaconda3/bin/python3"
 PROGRESS_SCRIPT="$REPO_DIR/손자병법/pipeline_progress.py"
 
 mkdir -p "$LOG_DIR"
@@ -43,7 +44,7 @@ finalize_run() {
   [[ -n "${PROMPT_FILE:-}" ]] && rm -f "$PROMPT_FILE"
   if [[ -n "$TARGET_VERSE" && -f "$PROGRESS_SCRIPT" ]]; then
     if (( exit_code == 0 )); then
-      /usr/bin/python3 "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress 100 --stage "분석 완료" --state complete --pid "$$" || true
+      "$PYTHON_BIN" "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress 100 --stage "분석 완료" --state complete --pid "$$" || true
     else
       local failure_stage="분석 중단 · 로그 확인 필요"
       local failure_progress=5
@@ -57,7 +58,7 @@ finalize_run() {
       elif [[ -f "$LOG_FILE" ]] && /usr/bin/grep -q "이전 실행의 미완료 변경" "$LOG_FILE"; then
         failure_stage="작업 트리에 미완료 변경이 남아 있어 안전 중단"
       fi
-      /usr/bin/python3 "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress "$failure_progress" --stage "$failure_stage" --state failed --pid "$$" || true
+      "$PYTHON_BIN" "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress "$failure_progress" --stage "$failure_stage" --state failed --pid "$$" || true
     fi
   fi
   rm -f "$LOCK_DIR/owner_pid"
@@ -80,7 +81,7 @@ fi
 
 cd "$REPO_DIR"
 if [[ -n "$TARGET_VERSE" && -f "$PROGRESS_SCRIPT" ]]; then
-  /usr/bin/python3 "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress 5 --stage "분석 환경 준비" --state running --pid "$$"
+  "$PYTHON_BIN" "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress 5 --stage "분석 환경 준비" --state running --pid "$$"
 fi
 if [[ -n "$(git status --porcelain)" ]]; then
   print -r -- "이전 실행의 미완료 변경이 남아 있어 안전하게 중단합니다." > "$LOG_FILE"
@@ -100,7 +101,7 @@ ENGINE=$(choose_engine)
 run_selected_engine() {
   local selected_engine="${1:-$ENGINE}"
   if [[ -n "$TARGET_VERSE" && -f "$PROGRESS_SCRIPT" ]]; then
-    /usr/bin/python3 "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress 8 --stage "${selected_engine} 선택 · 분석 시작" --state running --pid "$$"
+    "$PYTHON_BIN" "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress 8 --stage "${selected_engine} 선택 · 분석 시작" --state running --pid "$$"
   fi
   if [[ "$selected_engine" == "claude" ]]; then
     /usr/bin/caffeinate -i /opt/homebrew/bin/claude -p --output-format text \
@@ -123,7 +124,7 @@ if [[ -n "$TARGET_VERSE" ]]; then
     if [[ "$ANALYSIS_MODE" == "light" ]]; then
       print -r -- "이번 실행은 라이트 모드입니다. 최신 README의 라이트 모드 계약대로 4번 역사적 실증 사례와 그 전용 이미지·지휘관 토론만 제외하고, 나머지 본문과 검증·GitHub·Notion·Tulpa Chat 단계를 수행하세요. 병법 사이트 생성·배포는 하지 마세요. validate_light_analysis.py를 반드시 통과해야 합니다."
     fi
-    print -r -- "ShiftAlarm 진행률을 위해 각 단계가 끝날 때 /usr/bin/python3 손자병법/pipeline_progress.py --verse ${TARGET_VERSE} --mode ${ANALYSIS_MODE} --progress 숫자 --stage '현재 단계'를 실행하세요. 정본·자료 확인 20, 본문 초안 45, 검증 65, GitHub 반영 78, Notion 저장·재조회 90, Tulpa Chat 보고 97을 사용하고 실제로 끝나기 전에 다음 단계 수치를 기록하지 마세요."
+    print -r -- "ShiftAlarm 진행률을 위해 각 단계가 끝날 때 /opt/anaconda3/bin/python3 손자병법/pipeline_progress.py --verse ${TARGET_VERSE} --mode ${ANALYSIS_MODE} --progress 숫자 --stage '현재 단계'를 실행하세요. 정본·자료 확인 20, 본문 초안 45, 검증 65, GitHub 반영 78, Notion 저장·재조회 90, Tulpa Chat 보고 97을 사용하고 실제로 끝나기 전에 다음 단계 수치를 기록하지 마세요."
     /bin/cat "$SOURCE_PROMPT"
   } > "$PROMPT_FILE"
 else
@@ -142,7 +143,7 @@ if (( ENGINE_EXIT != 0 )); then
   print -r -- "\n[자동 전환] ${ENGINE} 실행 실패(종료 코드 ${PRIMARY_EXIT})로 ${FALLBACK_ENGINE}를 한 번 시도합니다." >> "$LOG_FILE"
   FALLBACK_START_LINE=$(/usr/bin/wc -l < "$LOG_FILE")
   if [[ -n "$TARGET_VERSE" && -f "$PROGRESS_SCRIPT" ]]; then
-    /usr/bin/python3 "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress 8 --stage "${ENGINE} 실패(${PRIMARY_EXIT}) · ${FALLBACK_ENGINE}로 전환" --state running --pid "$$" || true
+    "$PYTHON_BIN" "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress 8 --stage "${ENGINE} 실패(${PRIMARY_EXIT}) · ${FALLBACK_ENGINE}로 전환" --state running --pid "$$" || true
   fi
   set +e
   run_selected_engine "$FALLBACK_ENGINE" < "$PROMPT_FILE" >> "$LOG_FILE" 2>&1
