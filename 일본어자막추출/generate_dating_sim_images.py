@@ -27,7 +27,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ai_exec import run_ai_exec  # noqa: E402
 
 
-VERSION = 1
+VERSION = 2
 DEFAULT_MAX_SCENES = 12
 MAX_QUALITY_ATTEMPTS = 6
 IMAGE_DIR_NAME = "dating_sim_images"
@@ -243,9 +243,16 @@ def _copy_reference(source, output, key):
     if not source:
         return None
     suffix = source.suffix.lower() if source.suffix.lower() in {".jpg", ".jpeg", ".png", ".webp"} else ".jpg"
-    filename = "reference-" + hashlib.sha256(key.encode()).hexdigest()[:12] + suffix
+    # 슬롯명(portrait, portrait-1)이 아니라 원본 내용으로 이름을 만든다.
+    # 그래야 사용자가 다른 컷을 골라 재생성했을 때 예전 슬롯 파일과 섞이지
+    # 않고, 매니페스트가 가리키는 파일이 실제 생성 당시 원본을 정확히 보존한다.
+    digest = hashlib.sha256()
+    with source.open("rb") as source_file:
+        for chunk in iter(lambda: source_file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    filename = "reference-" + digest.hexdigest()[:12] + suffix
     target = output / filename
-    if not target.is_file() or target.stat().st_size != source.stat().st_size:
+    if not target.is_file():
         shutil.copy2(source, target)
     return filename
 
@@ -991,13 +998,6 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
         for index, path in enumerate(reference_pool[1:], start=1)
     ]
     manifest["portrait_prompt"] = _prompt(work_dir.name)
-    manifest["portrait_reference"] = portrait_reference_file
-    manifest["portrait_references"] = [name for name in portrait_reference_files if name]
-    manifest["reference_source"] = (
-        (f"user_selected ({len(face_references)}장 평균)" if custom_names
-         else f"face_detected_fixed ({len(face_references)}장 평균)") if face_references
-        else "text_only_no_qualified_face"
-    )
     portrait_needed = force or "portrait" in force_keys or not _valid_image(portrait)
     scene_target_keys = {
         scene["key"] for scene in plan["selected"]
@@ -1017,6 +1017,19 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
 
     update_progress("준비 중" if progress_total else "완료 확인 중")
     if portrait_needed:
+        # 아래 항목은 '현재 선택값'이 아니라 이 portrait.png를 실제로 만들 때
+        # 사용한 참조본 스냅샷이다. 재생성하지 않은 결과의 이력을 새 선택값으로
+        # 덮어쓰지 않는다.
+        manifest["portrait_reference"] = portrait_reference_file
+        manifest["portrait_references"] = [name for name in portrait_reference_files if name]
+        manifest["portrait_reference_names"] = custom_names or [
+            _relative_original_name(work_dir, path) for path in face_references
+        ]
+        manifest["reference_source"] = (
+            (f"user_selected ({len(face_references)}장 평균)" if custom_names
+             else f"face_detected_fixed ({len(face_references)}장 평균)") if face_references
+            else "text_only_no_qualified_face"
+        )
         update_progress("대표 초상화 생성 중")
         manifest["portrait_provider"] = generator(manifest["portrait_prompt"], portrait, reference_pool)
         if manifest["portrait_provider"] == "comfyui":
@@ -1028,11 +1041,13 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
     # 참조한다 — 장면마다 다른 원작 컷을 쓰지 않는다.
     fixed_reference_path = portrait if _valid_image(portrait) else primary_reference
     fixed_reference_file = "portrait.png" if _valid_image(portrait) else portrait_reference_file
+    portrait_source_files = list(manifest.get("portrait_references") or [])
     for scene in plan["selected"]:
         filename = _image_filename(scene["key"])
         target = output / filename
         try:
-            if force or scene["key"] in force_keys or not _valid_image(target):
+            generated_now = force or scene["key"] in force_keys or not _valid_image(target)
+            if generated_now:
                 update_progress(f"장면 {progress_done + 1}/{progress_total} · {scene['key']}")
                 # 영어 통일 + 표정·배경 자동 보완(★ 2026-09-23 요청)은 실제로
                 # 새로 생성할 때만 호출한다 — 이미 만든 장면을 재실행할 때마다
@@ -1044,13 +1059,23 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
                 existing = manifest.get("scenes", {}).get(scene["key"], {})
                 provider = existing.get("provider", "existing")
                 scene_prompt = existing.get("prompt") or _prompt(work_dir.name, scene)
-            manifest["scenes"][scene["key"]] = {"file": filename, "provider": provider,
-                                                     "day": scene["day"], "location": scene["location"],
-                                                     "prompt": scene_prompt,
-                                                     "reference_file": fixed_reference_file,
-                                                     "reference_source": "portrait.png (fixed character)"}
-            if provider == "comfyui" and _LAST_GENERATION_META:
-                manifest["scenes"][scene["key"]].update(_LAST_GENERATION_META)
+            if generated_now:
+                manifest["scenes"][scene["key"]] = {
+                    "file": filename, "provider": provider,
+                    "day": scene["day"], "location": scene["location"],
+                    "prompt": scene_prompt,
+                    "reference_file": fixed_reference_file,
+                    "reference_source": "portrait.png (fixed character)",
+                    # 장면 결과도 당시 portrait의 바탕이 된 원작 컷을 별도로
+                    # 보존한다. 이후 다른 컷을 선택해도 과거 결과 이력은 바뀌지 않는다.
+                    "source_reference_files": portrait_source_files,
+                }
+                if provider == "comfyui" and _LAST_GENERATION_META:
+                    manifest["scenes"][scene["key"]].update(_LAST_GENERATION_META)
+            else:
+                # 생성하지 않은 장면의 프롬프트·참조 이력을 현재 공용 설정으로
+                # 덮어쓰던 것이 이번 버그의 핵심 원인이었다.
+                manifest["scenes"][scene["key"]] = existing
         except Exception as exc:
             manifest["errors"].append({"scene": scene["key"], "error": str(exc)[:500]})
         if scene["key"] in scene_target_keys:

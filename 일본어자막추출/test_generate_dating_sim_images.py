@@ -440,6 +440,41 @@ class DatingImageAgentTests(unittest.TestCase):
                               force_keys={scene_key})
             self.assertEqual(calls, [images._image_filename(scene_key)])
 
+    def test_regeneration_records_exact_selected_reference_snapshot(self):
+        """수동 선택을 바꿔 재생성하면 결과 이력도 새 선택본으로 교체한다."""
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "TEST-REFERENCES"
+            source = work / "images"
+            source.mkdir(parents=True)
+            (work / "dating_sim_scenario.json").write_text(
+                json.dumps(scenario(1)), encoding="utf-8")
+            first_names = []
+            second_names = []
+            for index in range(1, 7):
+                name = f"part1_scene{index:03d}.jpg"
+                (source / name).write_bytes((f"reference-{index}" * 100).encode())
+                (first_names if index <= 2 else second_names).append(name)
+
+            def fake_generator(prompt, target, reference=None):
+                target.write_bytes(b"fake-png" * 256)
+                return "test"
+
+            first_result = images.run_agent(
+                work, max_scenes=1, generator=fake_generator,
+                translator=lambda scene, work_dir: scene["text"], references=first_names,
+            )
+            first_reference_files = list(first_result["portrait_references"])
+            result = images.run_agent(
+                work, max_scenes=1, force=True, generator=fake_generator,
+                translator=lambda scene, work_dir: scene["text"], references=second_names,
+            )
+
+            self.assertEqual(result["portrait_reference_names"], second_names)
+            self.assertEqual(len(result["portrait_references"]), 4)
+            scene_record = next(iter(result["scenes"].values()))
+            self.assertEqual(scene_record["source_reference_files"], result["portrait_references"])
+            self.assertTrue(set(result["portrait_references"]).isdisjoint(first_reference_files))
+
 
 if __name__ == "__main__":
     unittest.main()

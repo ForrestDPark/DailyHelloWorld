@@ -2015,12 +2015,16 @@ def load_generated_images(title, book_id):
         # 떨어졌다. portrait.png는 이미 위에서 계산한 portrait URL을 그대로 쓰고,
         # 실제 참고 사진 여러 장(portrait_references)도 같이 보여준다.
         scene_reference_file = record.get("reference_file")
+        recorded_source_urls = [
+            url for filename in (record.get("source_reference_files") or [])
+            if (url := reference_public(filename))
+        ]
         if scene_reference_file == "portrait.png":
             scene_reference_url = portrait
-            scene_reference_urls = reference_urls
+            scene_reference_urls = recorded_source_urls or reference_urls
         else:
             scene_reference_url = reference_public(scene_reference_file)
-            scene_reference_urls = [scene_reference_url] if scene_reference_url else []
+            scene_reference_urls = recorded_source_urls or ([scene_reference_url] if scene_reference_url else [])
         gallery.append({
             "key": scene_key, "kind": "scene",
             "label": f"흐름 {day} · {location}" if day else str(scene_key),
@@ -2085,6 +2089,9 @@ def generated_image_reference_path(book_id, filename):
     # 404로 막혔다.
     allowed = {manifest.get("portrait_reference")}
     allowed.update(manifest.get("portrait_references") or [])
+    for record in (manifest.get("scenes") or {}).values():
+        if isinstance(record, dict):
+            allowed.update(record.get("source_reference_files") or [])
     allowed.update(
         record.get("reference_file") for record in (manifest.get("scenes") or {}).values()
         if isinstance(record, dict)

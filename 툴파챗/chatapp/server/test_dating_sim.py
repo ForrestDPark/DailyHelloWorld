@@ -96,6 +96,7 @@ class DatingSimApiTests(unittest.TestCase):
             "scenes": {"1:first": {"file": "scene-123456789abc.png",
                 "provider": "comfyui", "day": 1, "location": "first",
                 "prompt": "scene prompt", "reference_file": "reference-222222222222.jpg",
+                "source_reference_files": ["reference-111111111111.jpg", "reference-222222222222.jpg"],
                 "reference_source": "images/part1_scene002.jpg"}},
         }), encoding="utf-8")
         with patch.object(dating_sim_story, "_find_library_folder", return_value=root.parent):
@@ -104,6 +105,7 @@ class DatingSimApiTests(unittest.TestCase):
         self.assertEqual(history["gallery"][0]["prompt"], "portrait prompt")
         self.assertTrue(history["gallery"][0]["reference_url"].endswith("/reference-111111111111.jpg"))
         self.assertTrue(history["gallery"][1]["reference_url"].endswith("/reference-222222222222.jpg"))
+        self.assertEqual(len(history["gallery"][1]["reference_urls"]), 2)
         self.assertEqual(history["gallery"][1]["reference_source"], "images/part1_scene002.jpg")
         self.assertEqual(history["gallery"][1]["prompt"], "scene prompt")
         self.assertIn("photorealistic adult Japanese woman", history["gallery"][1]["effective_prompt"])
