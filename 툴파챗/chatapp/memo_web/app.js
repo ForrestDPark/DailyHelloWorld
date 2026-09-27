@@ -274,7 +274,7 @@ function renderMap() {
     rootText =
       current.note || current.source_content || "여기서 생각을 확장해보세요";
   $("#memo-tree").innerHTML =
-    `<article class="node-card root expanded${selectedMapNode === "root" ? " selected" : ""}" style="--node-accent:#ee9b42;${cardWidthStyle(current.card_width)}left:${O.x}px;top:${O.y}px"><small>ROOT NOTE</small><h3>${esc(current.title)}</h3><p data-rich-root="1">${richMemoHtml(rootText)}</p><div class="node-actions"><button data-toggle-root aria-label="내용 접기">−</button><button class="node-resize-handle" data-resize-root aria-label="메모 폭 조절" title="좌우로 밀어 폭 조절">↔</button><button class="node-link-handle" data-link-root aria-label="드래그해 새 메모 연결">＋</button></div></article>` +
+    `<article class="node-card root expanded${selectedMapNode === "root" ? " selected" : ""}" style="--node-accent:#ee9b42;${cardWidthStyle(current.card_width)}left:${O.x}px;top:${O.y}px"><small>ROOT NOTE</small><h3>${esc(current.title)}</h3><p data-rich-root="1">${richMemoHtml(rootText)}</p><div class="node-actions"><button data-toggle-root aria-label="내용 접기">−</button><button data-edit-root>수정</button><button class="node-resize-handle" data-resize-root aria-label="메모 폭 조절" title="좌우로 밀어 폭 조절">↔</button><button class="node-link-handle" data-link-root aria-label="드래그해 새 메모 연결">＋</button></div></article>` +
     current.nodes
       .map((n, index) => {
         const p = pos.get(n.id),
@@ -310,16 +310,14 @@ function renderMap() {
   $("#memo-tree")
     .querySelectorAll("[data-edit]")
     .forEach((b) => (b.onclick = () => openNode("edit", +b.dataset.edit)));
+  $("[data-edit-root]").onclick = () => openRootEditor(current.id, true);
   $("#memo-tree")
     .querySelectorAll("[data-delete]")
     .forEach((b) => (b.onclick = () => removeNode(+b.dataset.delete)));
   $("#memo-tree")
     .querySelectorAll("p[data-rich-node]")
     .forEach((paragraph) => {
-      paragraph.onclick = () => {
-        const selection = getSelection();
-        if (!selection || selection.isCollapsed) selectMapNode(Number(paragraph.dataset.richNode));
-      };
+      paragraph.onclick = () => selectMapNode(Number(paragraph.dataset.richNode));
     });
   const rootCard = $("#memo-tree .node-card.root");
   rootCard.querySelector("p[data-rich-root]").onclick = () => selectMapNode("root");

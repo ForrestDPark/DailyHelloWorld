@@ -31,6 +31,13 @@
   border-top: 1px solid color-mix(in srgb, currentColor 13%, transparent);
 }
 .node-actions button { flex: 0 0 auto; min-width: 38px; }
+.node-actions [data-edit],
+.node-actions [data-edit-root] {
+  border-color: var(--node-accent);
+  background: var(--node-accent);
+  color: #fff;
+  font-weight: 800;
+}
 .node-link-handle {
   margin-left: auto;
   width: 34px;
@@ -154,7 +161,7 @@ body.mindmap-fullscreen-open {
   .node-card { width: 225px; padding: 13px; }
   .node-card.root { width: 250px; }
   .node-actions { gap: 5px; }
-  .node-actions button { padding: 6px 7px; }
+  .node-actions button { min-height: 38px; padding: 6px 9px; }
   .node-mobile-actions { bottom: 44px; width: calc(100% - 18px); justify-content: center; }
   .node-mobile-actions span { display: none; }
   .node-mobile-actions button { flex: 1 1 auto; min-width: 0; font-size: 14px; }
