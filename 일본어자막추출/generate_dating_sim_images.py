@@ -937,7 +937,8 @@ def _generate(prompt, target, reference=None):
 
 
 def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_generate,
-              translator=_visual_prompt_from_scene_text, force_keys=None, references=None):
+              translator=_visual_prompt_from_scene_text, force_keys=None, references=None,
+              prompt_override=None):
     """force=True면 전부, force_keys(문자열 집합)에 담긴 키만이면 그 이미지만
     강제로 다시 만든다(★ 2026-09-23 "이미지 재생성 버튼... 이 사진만
     재생성하기" 요청) — "portrait"는 대표 초상화, 그 외는 장면 키
@@ -997,7 +998,10 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
         _copy_reference(path, output, f"portrait-{index}")
         for index, path in enumerate(reference_pool[1:], start=1)
     ]
-    manifest["portrait_prompt"] = _prompt(work_dir.name)
+    if prompt_override and "portrait" in force_keys:
+        manifest["portrait_prompt"] = prompt_override
+    else:
+        manifest["portrait_prompt"] = _prompt(work_dir.name)
     portrait_needed = force or "portrait" in force_keys or not _valid_image(portrait)
     scene_target_keys = {
         scene["key"] for scene in plan["selected"]
@@ -1053,7 +1057,8 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
                 # 새로 생성할 때만 호출한다 — 이미 만든 장면을 재실행할 때마다
                 # 다시 부르지 않는다.
                 visual_text = translator(scene, work_dir)
-                scene_prompt = _prompt(work_dir.name, {**scene, "text": visual_text})
+                scene_prompt = (prompt_override if prompt_override and scene["key"] in force_keys
+                                else _prompt(work_dir.name, {**scene, "text": visual_text}))
                 provider = generator(scene_prompt, target, fixed_reference_path)
             else:
                 existing = manifest.get("scenes", {}).get(scene["key"], {})
@@ -1121,12 +1126,15 @@ def main():
                          help="인물 참고 이미지로 쓸 원작 컷(images/ 기준 상대 경로). 여러 번 줄 수 있고 주면 자동 선별 대신 쓴다.")
     parser.add_argument("--auto-references", action="store_true",
                          help="이전에 고른 참고 이미지를 지우고 자동 선별로 되돌린다.")
+    parser.add_argument("--prompt-override", default=None,
+                         help="--force-key로 지정한 이미지 하나를 다시 만들 때 사용할 수정 프롬프트")
     args = parser.parse_args()
     if args.auto_references and args.reference is None:
         args.reference = []
     manifest = run_agent(
         Path(args.work_dir).resolve(), max(4, min(args.max_scenes, 30)), args.force,
         force_keys=set(args.force_key) or None, references=args.reference,
+        prompt_override=(args.prompt_override or "").strip() or None,
     )
     print(f"🖼️ 작품 이미지 에이전트: {manifest['status']} · 장면 {len(manifest['scenes'])}/{manifest['selected_count']}장")
     return 0 if manifest["status"] == "complete" else 1

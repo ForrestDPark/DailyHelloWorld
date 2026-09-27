@@ -2636,6 +2636,64 @@ function openTreeImageDetail(item) {
     panel.append(effective);
   }
 
+  if (item.key) {
+    const editor = document.createElement("section");
+    editor.className = "tree-image-prompt-editor";
+    const editorLabel = document.createElement("h3");
+    editorLabel.textContent = "재생성 프롬프트";
+    const helper = document.createElement("p");
+    helper.textContent = "수정 버튼을 누른 뒤 원하는 장면·구도·표정 등을 바꾸고, 수정한 내용으로 이 이미지만 다시 생성할 수 있습니다.";
+    const textarea = document.createElement("textarea");
+    textarea.value = item.prompt || item.effective_prompt || "";
+    textarea.readOnly = true;
+    textarea.setAttribute("aria-label", `${item.label || "이미지"} 재생성 프롬프트`);
+    const actions = document.createElement("div");
+    actions.className = "tree-image-prompt-actions";
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.textContent = "프롬프트 수정";
+    const generateButton = document.createElement("button");
+    generateButton.type = "button";
+    generateButton.className = "tree-image-prompt-generate";
+    generateButton.textContent = "수정한 프롬프트로 이미지 재생성";
+    generateButton.hidden = true;
+    const status = document.createElement("span");
+    status.className = "tree-image-generate-status";
+    const progress = createImageJobProgress();
+    editButton.addEventListener("click", () => {
+      textarea.readOnly = false;
+      textarea.focus();
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+      editButton.hidden = true;
+      generateButton.hidden = false;
+    });
+    const setBusy = (busy) => {
+      editButton.disabled = busy;
+      generateButton.disabled = busy;
+      textarea.disabled = busy;
+    };
+    const tick = watchDatingSimImageJob(status, setBusy, async () => {
+      closeTreeImageDetail();
+      await openScenarioTree();
+    }, progress);
+    generateButton.addEventListener("click", () => {
+      const revisedPrompt = textarea.value.trim();
+      if (!revisedPrompt) {
+        status.textContent = "프롬프트를 입력해 주세요.";
+        textarea.focus();
+        return;
+      }
+      startDatingSimImageJob(
+        status, setBusy, tick, { force_key: item.key },
+        "수정 프롬프트 전달 중...", "수정한 프롬프트로 재생성 중...",
+        { prompt_override: revisedPrompt },
+      );
+    });
+    actions.append(editButton, generateButton);
+    editor.append(editorLabel, helper, textarea, actions, progress.track, progress.label, status);
+    panel.append(editor);
+  }
+
   const settingsEntries = Object.entries(item.generation_settings || {});
   if (settingsEntries.length) {
     const settings = document.createElement("section");
@@ -2987,11 +3045,14 @@ function watchDatingSimImageJob(status, setBusy, onSuccess, progress = null) {
   return tick;
 }
 
-async function startDatingSimImageJob(status, setBusy, tick, extraParams, startLabel, runningLabel) {
+async function startDatingSimImageJob(status, setBusy, tick, extraParams, startLabel, runningLabel, requestBody = null) {
   setBusy(true);
   status.textContent = startLabel;
   try {
-    await api(`/api/dating-sim/scenario-tree/generate-images${storyQuery(extraParams)}`, { method: "POST" });
+    await api(`/api/dating-sim/scenario-tree/generate-images${storyQuery(extraParams)}`, {
+      method: "POST",
+      body: requestBody ? JSON.stringify(requestBody) : undefined,
+    });
   } catch (e) {
     setBusy(false);
     status.textContent = e.message;

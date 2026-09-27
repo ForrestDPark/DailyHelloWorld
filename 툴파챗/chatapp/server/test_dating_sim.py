@@ -229,6 +229,22 @@ class DatingSimApiTests(unittest.TestCase):
             command = popen.call_args[0][0]
             self.assertEqual(command[command.index("--force-key") + 1], "portrait")
 
+            payload = app.DatingSimImagePromptRequest(
+                prompt_override="rainy bookstore, medium shot, thoughtful expression",
+            )
+            app.dating_sim_generate_images_start(
+                owner, f"book:{book_id}", force_key="1:first", payload=payload,
+            )
+            command = popen.call_args[0][0]
+            self.assertEqual(
+                command[command.index("--prompt-override") + 1],
+                "rainy bookstore, medium shot, thoughtful expression",
+            )
+
+            with self.assertRaises(HTTPException) as missing_target:
+                app.dating_sim_generate_images_start(owner, f"book:{book_id}", payload=payload)
+            self.assertEqual(missing_target.exception.status_code, 400)
+
             with self.assertRaises(HTTPException) as bad:
                 app.dating_sim_generate_images_start(owner, f"book:{book_id}", force_key="../etc/passwd")
             self.assertEqual(bad.exception.status_code, 400)

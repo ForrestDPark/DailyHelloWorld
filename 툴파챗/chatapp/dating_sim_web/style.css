@@ -846,6 +846,21 @@ body.practice-open { overflow: hidden; }
   font: 11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;
   color: var(--text); background: rgba(0,0,0,0.28); border: 1px solid rgba(244,211,94,0.3);
 }
+.tree-image-prompt-editor p { margin: 0 0 8px; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.tree-image-prompt-editor textarea {
+  width: 100%; min-height: 180px; box-sizing: border-box; resize: vertical; padding: 10px;
+  color: var(--text); background: rgba(0,0,0,.32); border: 1px solid rgba(244,211,94,.45);
+  font: 11px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+.tree-image-prompt-editor textarea:read-only { opacity: .72; }
+.tree-image-prompt-editor textarea:focus { outline: 2px solid var(--good); outline-offset: 2px; }
+.tree-image-prompt-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.tree-image-prompt-actions button {
+  min-height: 40px; padding: 8px 12px; border: 0; border-radius: 5px;
+  color: #1c1030; background: var(--good); font: inherit; font-size: 11px; font-weight: 800;
+}
+.tree-image-prompt-actions .tree-image-prompt-generate { color: #fff; background: var(--accent); }
+.tree-image-prompt-actions button:disabled { opacity: .55; }
 .tree-image-provider, .tree-image-detail-empty { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
 .tree-image-settings {
   display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 5px 10px;

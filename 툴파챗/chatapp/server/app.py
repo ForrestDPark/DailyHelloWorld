@@ -1484,11 +1484,16 @@ def _push_when_dating_sim_image_backlog_done(process, username):
 DATING_SIM_IMAGE_KEY_RE = re.compile(r"^[A-Za-z0-9_:-]{1,64}$")
 
 
+class DatingSimImagePromptRequest(BaseModel):
+    prompt_override: str | None = None
+
+
 @app.post("/api/dating-sim/scenario-tree/generate-images")
 def dating_sim_generate_images_start(
     request: Request, story_id: str | None = None,
     force: bool = False, force_key: str | None = None,
     reference: list[str] | None = Query(default=None), auto_references: bool = False,
+    payload: DatingSimImagePromptRequest | None = None,
 ):
     """관리자 전용 — 이 작품의 이미지만(시나리오는 그대로) 지금 바로 생성한다.
     generate_dating_sim_images.py는 이미 있는 파일을 건너뛰고 빠진 것만
@@ -1499,6 +1504,11 @@ def dating_sim_generate_images_start(
     _require_owner(request)
     if force_key is not None and not DATING_SIM_IMAGE_KEY_RE.fullmatch(force_key):
         raise HTTPException(status_code=400, detail="force_key 형식이 올바르지 않습니다")
+    prompt_override = (payload.prompt_override or "").strip() if payload else ""
+    if prompt_override and not force_key:
+        raise HTTPException(status_code=400, detail="수정 프롬프트에는 재생성할 이미지가 필요합니다")
+    if len(prompt_override) > 8000:
+        raise HTTPException(status_code=400, detail="프롬프트는 8,000자 이내로 입력해 주세요")
     book_id, work_dir = dating_sim_story.resolve_book_work_dir(story_id or "")
     if not work_dir:
         raise HTTPException(status_code=404, detail="작품 폴더를 찾을 수 없습니다")
@@ -1530,6 +1540,8 @@ def dating_sim_generate_images_start(
             command.append("--force")
         elif force_key:
             command.extend(["--force-key", force_key])
+        if prompt_override:
+            command.extend(["--prompt-override", prompt_override])
         process = subprocess.Popen(command, stdout=log_file, stderr=subprocess.STDOUT)
         threading.Thread(
             target=_push_when_dating_sim_images_done,
