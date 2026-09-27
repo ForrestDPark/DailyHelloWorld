@@ -286,7 +286,10 @@ function renderHud(state) {
   }
   const sourceVideoLink = $("source-video-link");
   const sourceTitle = String(state.source_title || "").trim();
-  const sourceWorkCode = extractSourceWorkCode(sourceTitle);
+  // 서버는 EPUB 메타데이터뿐 아니라 실제 파일명에서도 작품 코드를 찾는다.
+  // 예전 서버 응답과의 호환을 위해 브라우저 추출은 보조 경로로 남긴다.
+  const sourceWorkCode = String(state.source_work_code || "").trim()
+    || extractSourceWorkCode(sourceTitle);
   sourceVideoLink.classList.toggle("hidden", !sourceWorkCode);
   if (sourceWorkCode) {
     const videoSearch = new URL("https://kr47.topgirl.co/video/search/");

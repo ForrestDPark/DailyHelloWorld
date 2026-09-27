@@ -1386,6 +1386,19 @@ def load_story_from_db(conn, character_id, seed_key=None):
 
 JAPANESE_EPUB_ROOT = Path("/Users/forrestdpark/Desktop/BlogImage/av완성작")
 BOOK_STORY_RE = re.compile(r"^book:([0-9a-f]{20})$")
+SOURCE_WORK_CODE_RE = re.compile(
+    r"(?<![A-Z0-9])(?=[A-Z0-9_-]*[A-Z])[A-Z0-9]{2,12}[-_ ]\d{2,6}(?!\d)",
+    re.IGNORECASE,
+)
+
+
+def source_work_code(*values):
+    """EPUB 메타데이터 제목 또는 실제 파일명에서 작품 식별 코드만 찾는다."""
+    for value in values:
+        match = SOURCE_WORK_CODE_RE.search(str(value or "").upper())
+        if match:
+            return re.sub(r"[_ ]", "-", match.group(0))
+    return ""
 BOOK_CHARACTER_PROFILES = [
     {"jp": "ハル", "full_jp": "[佐藤|さとう] [春|はる]", "ko": "사토 하루", "image": "/dating-sim/static/haru.png"},
     {"jp": "アカリ", "full_jp": "[高橋|たかはし] [明里|あかり]", "ko": "다카하시 아카리", "image": "/dating-sim/static/akari.png"},
@@ -2259,6 +2272,7 @@ def story_for(story_id=None, seed_key=None):
     if not path:
         raise ValueError("작품을 찾을 수 없습니다")
     source_title = _book_title(path)
+    work_code = source_work_code(source_title, path.stem, path.name)
     book_id = match.group(1)
     profile = book_character_profile(story_id, f"{source_title} {path.stem}", source_title)
     locations = {
@@ -2360,7 +2374,8 @@ def story_for(story_id=None, seed_key=None):
             "character_dialogue_name_jp": dialogue_name_jp,
             "character_dialogue_name_ko": dialogue_name_ko,
             "character_name_is_alias": bool(profile.get("is_alias")),
-            "source_title": source_title, "total_days": TOTAL_DAYS, "locations": locations,
+            "source_title": source_title, "source_work_code": work_code,
+            "total_days": TOTAL_DAYS, "locations": locations,
             "scenes": scenes, "endings": endings,
             "day_openings": _daily_openings(seed_key, story_id, dialogue_name_jp, dialogue_name_ko),
             "map_actions": map_actions,

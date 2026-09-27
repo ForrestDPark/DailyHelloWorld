@@ -1154,6 +1154,7 @@ def _dating_sim_state_payload(row, story, username=None):
     payload = {
         "story_id": story["id"], "story_title": story["title"],
         "source_title": story.get("source_title"),
+        "source_work_code": story.get("source_work_code", ""),
         "character_name": story["name"],
         "character_name_ko": story.get("character_name_ko", ""),
         "character_image": story.get("character_image"),

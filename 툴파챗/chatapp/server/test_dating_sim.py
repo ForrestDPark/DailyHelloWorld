@@ -37,6 +37,13 @@ class DatingSimApiTests(unittest.TestCase):
             if (choice["affection"] > 0) is positive
         )
 
+    def test_source_work_code_falls_back_to_epub_filename(self):
+        self.assertEqual(dating_sim_story.source_work_code(
+            "낯선 집에서 보낸 특별한 하루", "EBOD-952_낭독판.epub"), "EBOD-952")
+        self.assertEqual(dating_sim_story.source_work_code(
+            "부제만 있는 제목", "277DCV_298-REMOVE-1.epub"), "277DCV-298")
+        self.assertEqual(dating_sim_story.source_work_code("작품 코드 없음"), "")
+
     def test_vocab_meaning_never_returns_the_whole_dialogue_as_a_word_gloss(self):
         """단어 번역이 실패해도 한국어 대사 전체를 `문맥:`으로 뜻 칸에
         보여주지 않아야 한다."""
