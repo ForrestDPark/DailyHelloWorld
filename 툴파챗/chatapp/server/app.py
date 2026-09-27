@@ -73,6 +73,9 @@ CAREER_SYSTEM_DIR = REPO_ROOT / "이직시스템"
 SHIFT_ALARM_DASHBOARD_DIR = BASE_DIR / "shift_alarm_dashboard"
 VOCABULARY_WEB_DIR = BASE_DIR / "vocabulary_web"
 MEMO_WEB_DIR = BASE_DIR / "memo_web"
+SQL_LAB_WEB_DIR = BASE_DIR / "sql_lab_web"
+SQL_LAB_DATA_DIR = Path(os.path.expanduser("~/.tulpachat/sql_lab"))
+SQL_LAB_DATA_DIR.mkdir(parents=True, exist_ok=True)
 DATING_SIM_WEB_DIR = BASE_DIR / "dating_sim_web"
 DATING_SIM_AUDIO_DIR = DATING_SIM_WEB_DIR / "audio"
 _dating_sim_tts_lock = threading.Lock()
@@ -180,6 +183,8 @@ SYSTEM_UPDATE_NOTIFICATIONS = (
 # 알림 읽음 여부와 무관하게 시스템 화면에서 계속 볼 수 있는 제품 변경 이력.
 # 사용자에게 의미 있는 완료 단위만 기록하고 최신순으로 반환한다.
 WEBAPP_UPDATE_HISTORY = (
+    {"created_at": "2026-09-26T01:00:00+09:00", "system": "DB 실험실", "title": "SQL 학습용 데이터베이스 실험실", "body": "서비스 데이터와 격리된 SQLite에서 조회·JOIN·집계·테이블 설계를 직접 실습할 수 있습니다.", "url": "/sql-lab/"},
+    {"created_at": "2026-09-26T00:00:00+09:00", "system": "미연시", "title": "미연시 전용 업데이트 타임라인", "body": "작품별 시나리오·이미지 작업 완료와 기능·디자인 변경 사항을 미연시 안에서 최신순으로 확인할 수 있습니다.", "url": "/dating-sim/"},
     {"created_at": "2026-09-25T11:25:00+09:00", "system": "나툼", "title": "전체 업데이트 타임라인", "body": "시스템 화면에서 Shift Alarm뿐 아니라 웹앱 전체 변경 내용을 최신순으로 확인할 수 있습니다.", "url": "/#systems"},
     {"created_at": "2026-09-25T11:10:00+09:00", "system": "Shift Alarm", "title": "아이폰·Apple Watch 알림", "body": "맥 알림을 웹 푸시로 전달하고 아이폰·워치 알림 구독 버튼과 진동 요청을 추가했습니다.", "url": "/shift-alarm/"},
     {"created_at": "2026-09-25T10:57:00+09:00", "system": "Shift Alarm", "title": "일일 루틴 알림 시각 학습", "body": "같은 근무 유형의 최근 전부 체크 완료 시각을 학습해 10분 전에 알립니다.", "url": "/shift-alarm/"},
@@ -194,6 +199,15 @@ WEBAPP_UPDATE_HISTORY = (
     {"created_at": "2026-09-09T00:00:00+09:00", "system": "나툼", "title": "통합 알림 센터", "body": "시스템 업데이트와 읽지 않은 메시지를 한곳에서 확인할 수 있게 했습니다.", "url": "/#home"},
     {"created_at": "2026-09-07T18:00:00+09:00", "system": "일본어 학습", "title": "EPUB 리더 개선", "body": "세로 스크롤·자동 읽기·현재 구절 강조와 후리가나 표시를 개선했습니다.", "url": "/epub/"},
 )
+
+
+def _display_update_title(title):
+    """커밋 메시지를 화면용으로 짧고 자연스러운 작업명으로 정리한다."""
+    text = str(title or "").strip()
+    # 커밋 메시지에는 존댓말을 쓰더라도 SYSTEM HISTORY에서는 작업명으로
+    # 노출하므로 '개선해드립니다'보다 '개선'처럼 간결하게 끝낸다.
+    text = re.sub(r"해\s*드립니다[.!?]?$", "", text).strip()
+    return text or str(title or "").strip()
 
 
 def _git_update_history(limit=80):
@@ -221,6 +235,7 @@ def _git_update_history(limit=80):
         if len(header) != 3:
             continue
         commit_hash, created_at, title = header
+        title = _display_update_title(title)
         paths = lines[1:]
         joined = "\n".join(paths)
         if "shift_alarm" in joined:
@@ -255,6 +270,51 @@ def _current_webapp_update_history():
         key = item.get("id") or (item["created_at"], item["title"])
         unique[key] = item
     return sorted(unique.values(), key=lambda item: item["created_at"], reverse=True)
+
+
+def _dating_sim_update_history():
+    """미연시 코드 변경과 작품별 실제 제작 완료 시각을 한 타임라인으로 합친다."""
+    items = [item for item in _current_webapp_update_history() if item.get("system") == "미연시"]
+    library = REPO_ROOT / "일본어자막추출" / "library"
+    try:
+        work_dirs = [path for path in library.iterdir() if path.is_dir()]
+    except OSError:
+        work_dirs = []
+    for work_dir in work_dirs:
+        scenario = work_dir / "dating_sim_scenario.json"
+        if scenario.is_file():
+            created_at = datetime.datetime.fromtimestamp(
+                scenario.stat().st_mtime, datetime.timezone.utc
+            ).astimezone().isoformat()
+            items.append({
+                "id": f"dating-scenario:{work_dir.name}:{scenario.stat().st_mtime_ns}",
+                "created_at": created_at, "system": "시나리오", "kind": "scenario",
+                "title": f"{work_dir.name} 시나리오 작업 완료",
+                "body": "14일 분기 시나리오와 학습 표현 데이터가 준비됐습니다.",
+                "url": "/dating-sim/",
+            })
+        manifest_path = work_dir / "dating_sim_images" / "manifest.json"
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if manifest.get("status") != "complete":
+            continue
+        image_count = len({
+            record.get("file") for record in (manifest.get("scenes") or {}).values()
+            if isinstance(record, dict) and record.get("file")
+        })
+        created_at = datetime.datetime.fromtimestamp(
+            manifest_path.stat().st_mtime, datetime.timezone.utc
+        ).astimezone().isoformat()
+        items.append({
+            "id": f"dating-images:{work_dir.name}:{manifest_path.stat().st_mtime_ns}",
+            "created_at": created_at, "system": "이미지", "kind": "images",
+            "title": f"{work_dir.name} 이미지 작업 완료",
+            "body": f"대표 이미지와 장면 이미지 {image_count}장이 미연시에 연결됐습니다.",
+            "url": "/dating-sim/",
+        })
+    return sorted(items, key=lambda item: item["created_at"], reverse=True)
 
 SESSION_COOKIE_NAME = "tulpa_session"
 SESSION_COOKIE_MAX_AGE = auth.SESSION_MAX_AGE_SECONDS  # 180일
@@ -720,6 +780,25 @@ def memo_static(filename: str, request: Request):
 @app.get("/audio-editor")
 def audio_editor_redirect():
     return RedirectResponse("/audio-editor/", status_code=307)
+
+
+@app.get("/sql-lab")
+def sql_lab_redirect():
+    return RedirectResponse("/sql-lab/", status_code=307)
+
+
+@app.get("/sql-lab/")
+def sql_lab_dashboard(request: Request):
+    _require_signed_in_user(request)
+    return FileResponse(str(SQL_LAB_WEB_DIR / "index.html"))
+
+
+@app.get("/sql-lab/static/{filename}")
+def sql_lab_static(filename: str, request: Request):
+    _require_signed_in_user(request)
+    if filename not in {"style.css", "app.js"}:
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
+    return FileResponse(str(SQL_LAB_WEB_DIR / filename))
 
 
 @app.get("/audio-editor/")
@@ -3610,13 +3689,24 @@ def update_shift_alarm_reminder_time(body: ReminderTimeUpdate, request: Request)
                    if row.get("type") == "table_row"
                    and row.get("table_row", {}).get("cells")
                    and "".join(part.get("plain_text", "") for part in row["table_row"]["cells"][0]).strip() == body.label), None)
-    if not target:
-        raise HTTPException(status_code=409, detail="Notion 시각표에서 리마인더를 찾지 못했습니다")
-    cells = [_notion_plain_text_cell(cell) for cell in target["table_row"]["cells"]]
-    while len(cells) <= column_index:
-        cells.append([])
-    cells[column_index] = [{"type": "text", "text": {"content": body.time}}]
-    _notion_request(token, f"blocks/{target['id']}", "PATCH", {"table_row": {"cells": cells}})
+    created = target is None
+    if created:
+        # Shift Alarm에는 있지만 Notion 시각표에 아직 행이 없는 리마인더도
+        # 웹에서 바로 수정할 수 있어야 한다. 첫 저장 때 현재 표의 열 수에
+        # 맞춘 행을 만든 뒤 선택한 근무 유형의 시각을 채운다.
+        cells = [[] for _ in headers]
+        cells[0] = [{"type": "text", "text": {"content": body.label}}]
+        cells[column_index] = [{"type": "text", "text": {"content": body.time}}]
+        _notion_request(token, f"blocks/{table['id']}/children", "PATCH", {
+            "children": [{"object": "block", "type": "table_row",
+                          "table_row": {"cells": cells}}],
+        })
+    else:
+        cells = [_notion_plain_text_cell(cell) for cell in target["table_row"]["cells"]]
+        while len(cells) <= column_index:
+            cells.append([])
+        cells[column_index] = [{"type": "text", "text": {"content": body.time}}]
+        _notion_request(token, f"blocks/{target['id']}", "PATCH", {"table_row": {"cells": cells}})
     # Notion 갱신 뒤 Shift Alarm의 1분 상태 파일 재생성을 기다리면 방금 저장한
     # 시각이 화면에서 예전 값으로 되돌아온다. 같은 값을 로컬 오버라이드에도
     # 원자적으로 기록해 다음 status 요청부터 즉시 같은 시각을 반환한다.
@@ -3637,7 +3727,7 @@ def update_shift_alarm_reminder_time(body: ReminderTimeUpdate, request: Request)
         editor["items"][schedule_item["key"]] = override
         _write_reminder_editor(editor)
     return {"ok": True, "label": body.label, "profile": body.profile,
-            "time": body.time, "synced": True}
+            "time": body.time, "synced": True, "created_notion_row": created}
 
 
 def _today_reminder_block(token, status, label):
@@ -7321,11 +7411,127 @@ class NotificationReadUpdate(BaseModel):
     notification_id: str
 
 
+class SqlLabQuery(BaseModel):
+    sql: str
+
+
+def _sql_lab_path(username: str) -> Path:
+    identity = hashlib.sha256(username.encode("utf-8")).hexdigest()[:24]
+    return SQL_LAB_DATA_DIR / f"{identity}.sqlite3"
+
+
+def _sql_lab_connection(username: str) -> sqlite3.Connection:
+    path = _sql_lab_path(username)
+    is_new = not path.exists()
+    conn = sqlite3.connect(path, timeout=3)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=3000")
+    if is_new:
+        conn.executescript("""
+        CREATE TABLE IF NOT EXISTS departments (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE);
+        CREATE TABLE IF NOT EXISTS students (
+          id INTEGER PRIMARY KEY, name TEXT NOT NULL, age INTEGER,
+          department_id INTEGER REFERENCES departments(id)
+        );
+        CREATE TABLE IF NOT EXISTS scores (
+          id INTEGER PRIMARY KEY, student_id INTEGER NOT NULL REFERENCES students(id),
+          subject TEXT NOT NULL, score INTEGER NOT NULL CHECK(score BETWEEN 0 AND 100)
+        );
+        INSERT OR IGNORE INTO departments(id,name) VALUES (1,'데이터'),(2,'디자인'),(3,'언어');
+        INSERT OR IGNORE INTO students(id,name,age,department_id) VALUES
+          (1,'민서',24,1),(2,'지우',29,2),(3,'하루',26,3),(4,'도윤',31,1);
+        INSERT OR IGNORE INTO scores(id,student_id,subject,score) VALUES
+          (1,1,'SQL',92),(2,1,'Python',84),(3,2,'SQL',78),(4,3,'일본어',95),(5,4,'SQL',88);
+        """)
+    conn.commit()
+    return conn
+
+
+def _sql_lab_schema(conn: sqlite3.Connection):
+    tables = []
+    rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").fetchall()
+    for row in rows:
+        name = row["name"]
+        quoted = name.replace('"', '""')
+        columns = [dict(column) for column in conn.execute(f'PRAGMA table_info("{quoted}")').fetchall()]
+        count = conn.execute(f'SELECT COUNT(*) AS n FROM "{quoted}"').fetchone()["n"]
+        tables.append({"name": name, "columns": columns, "row_count": count})
+    return tables
+
+
+@app.get("/api/sql-lab/schema")
+def sql_lab_schema(request: Request):
+    _require_signed_in_user(request)
+    conn = _sql_lab_connection(_request_username(request))
+    try:
+        return {"tables": _sql_lab_schema(conn)}
+    finally:
+        conn.close()
+
+
+@app.post("/api/sql-lab/query")
+def sql_lab_query(body: SqlLabQuery, request: Request):
+    _require_signed_in_user(request)
+    sql = body.sql.strip()
+    if not sql or len(sql) > 20000:
+        raise HTTPException(status_code=400, detail="SQL을 입력해주세요")
+    if re.search(r"\b(ATTACH|DETACH|VACUUM|load_extension)\b", sql, re.I):
+        raise HTTPException(status_code=400, detail="실험실 밖의 파일에 접근할 수 있는 명령은 사용할 수 없습니다")
+    conn = _sql_lab_connection(_request_username(request))
+    started = time.perf_counter()
+    deadline = started + 2.0
+    conn.set_progress_handler(lambda: 1 if time.perf_counter() > deadline else 0, 10000)
+    try:
+        cursor = conn.execute(sql)
+        columns = [item[0] for item in cursor.description] if cursor.description else []
+        rows = [dict(row) for row in cursor.fetchmany(201)] if columns else []
+        truncated = len(rows) > 200
+        rows = rows[:200]
+        affected = cursor.rowcount
+        conn.commit()
+        return {
+            "columns": columns, "rows": rows, "truncated": truncated,
+            "affected_rows": affected if affected >= 0 else None,
+            "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
+            "schema": _sql_lab_schema(conn),
+        }
+    except sqlite3.Error as exc:
+        conn.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    finally:
+        conn.close()
+
+
+@app.post("/api/sql-lab/reset")
+def sql_lab_reset(request: Request):
+    _require_signed_in_user(request)
+    path = _sql_lab_path(_request_username(request))
+    for candidate in (path, Path(str(path) + "-wal"), Path(str(path) + "-shm")):
+        try:
+            candidate.unlink()
+        except FileNotFoundError:
+            pass
+    conn = _sql_lab_connection(_request_username(request))
+    try:
+        return {"ok": True, "tables": _sql_lab_schema(conn)}
+    finally:
+        conn.close()
+
+
 @app.get("/api/system/updates")
 def get_system_updates(request: Request):
     """웹앱 전체의 사용자용 변경 이력을 최신순으로 반환한다."""
     _require_signed_in_user(request)
     return {"items": _current_webapp_update_history()}
+
+
+@app.get("/api/dating-sim/updates")
+def get_dating_sim_updates(request: Request):
+    """미연시 안에서 보는 제작 완료·기능 변경 전용 기록."""
+    _require_signed_in_user(request)
+    return {"items": _dating_sim_update_history()}
 
 
 @app.get("/api/notifications")
@@ -7392,8 +7598,19 @@ def mark_notification_read(body: NotificationReadUpdate, request: Request):
     return {"ok": True}
 
 
+SUNZI_DISCUSSION_ROOM_ID = "custom_16ea779e1f"
+SUNZI_INITIAL_HISTORY_DAYS = 7
+
+
 @app.get("/api/messages")
-def get_messages(request: Request, room_id: str = GROUP_ROOM_ID, since_id: int = 0, count_only: bool = False):
+def get_messages(
+    request: Request,
+    room_id: str = GROUP_ROOM_ID,
+    since_id: int = 0,
+    before_id: int = 0,
+    limit: int = Query(100, ge=20, le=200),
+    count_only: bool = False,
+):
     conn = get_conn()
     user = getattr(request.state, "user", None)
     username = user["username"] if user else None
@@ -7440,15 +7657,30 @@ def get_messages(request: Request, room_id: str = GROUP_ROOM_ID, since_id: int =
         ).fetchone()["n"]
         conn.close()
         return {"count": count}
-    rows = conn.execute(
-        """SELECT m.id, m.sender, m.content, m.created_at, m.reply_message_id, m.is_system,
-                  parent.sender AS reply_sender, parent.content AS reply_content
-             FROM (SELECT * FROM messages
-                    WHERE room_id = ? AND id > ? ORDER BY id DESC LIMIT 500) m
-             LEFT JOIN messages parent ON parent.id = m.reply_message_id
-            ORDER BY m.id""",
-        (room_id, since_id),
-    ).fetchall()
+    message_select = """SELECT m.id, m.sender, m.content, m.created_at, m.reply_message_id, m.is_system,
+                               parent.sender AS reply_sender, parent.content AS reply_content
+                          FROM ({subquery}) m
+                          LEFT JOIN messages parent ON parent.id = m.reply_message_id
+                         ORDER BY m.id"""
+    if before_id > 0:
+        # 병법방에서 위로 스와이프할 때만 이전 페이지를 DB에서 가져온다.
+        # id 커서는 OFFSET과 달리 메시지가 계속 추가돼도 페이지가 밀리지 않는다.
+        subquery = "SELECT * FROM messages WHERE room_id = ? AND id < ? ORDER BY id DESC LIMIT ?"
+        params = (room_id, before_id, limit)
+    elif since_id > 0:
+        # 2초 폴링은 지금까지처럼 마지막 id 이후의 새 메시지만 조회한다.
+        subquery = "SELECT * FROM messages WHERE room_id = ? AND id > ? ORDER BY id DESC LIMIT 500"
+        params = (room_id, since_id)
+    elif room_id == SUNZI_DISCUSSION_ROOM_ID:
+        cutoff = (datetime.datetime.now().astimezone() - datetime.timedelta(
+            days=SUNZI_INITIAL_HISTORY_DAYS
+        )).isoformat(timespec="seconds")
+        subquery = "SELECT * FROM messages WHERE room_id = ? AND created_at >= ? ORDER BY id DESC LIMIT 500"
+        params = (room_id, cutoff)
+    else:
+        subquery = "SELECT * FROM messages WHERE room_id = ? ORDER BY id DESC LIMIT 500"
+        params = (room_id,)
+    rows = conn.execute(message_select.format(subquery=subquery), params).fetchall()
     reactions = _message_reactions(conn, [r["id"] for r in rows], username)
     human_profiles = _human_profiles(conn)
     conn.close()

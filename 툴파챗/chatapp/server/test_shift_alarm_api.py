@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import json
 import sqlite3
 import tempfile
@@ -34,6 +35,94 @@ def signed_in_request(username="tester"):
 
 
 class ShiftAlarmApiTests(unittest.TestCase):
+    def test_update_title_removes_commit_politeness_for_history_label(self):
+        self.assertEqual(
+            module._display_update_title("작품마다 다른 첫 만남을 만들도록 개선해드립니다"),
+            "작품마다 다른 첫 만남을 만들도록 개선",
+        )
+        self.assertEqual(module._display_update_title("눈 품질 제한 강화해드립니다."), "눈 품질 제한 강화")
+
+    def test_web_check_all_signal_is_atomic_and_contains_completion(self):
+        status = {"routine_date": "2026-09-25"}
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(module, "SHIFT_ALARM_ROUTINE_SIGNAL_FILE", Path(directory) / "signal.json"):
+            self.assertTrue(module._write_shift_alarm_routine_signal(status, "2026-09-25T11:50:00"))
+            payload = json.loads(module.SHIFT_ALARM_ROUTINE_SIGNAL_FILE.read_text(encoding="utf-8"))
+        self.assertEqual(payload["routine_date"], "2026-09-25")
+        self.assertEqual(payload["completed_at"], "2026-09-25T11:50:00")
+
+    def test_system_update_history_is_newest_first(self):
+        result = module.get_system_updates(signed_in_request())
+        items = result["items"]
+        self.assertGreater(len(items), 3)
+        self.assertEqual(
+            [item["created_at"] for item in items],
+            sorted((item["created_at"] for item in items), reverse=True),
+        )
+        self.assertTrue(all(item.get("system") and item.get("title") for item in items))
+
+    def test_dating_sim_update_history_includes_actual_completed_assets(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(module, "REPO_ROOT", Path(directory)):
+            work = Path(directory) / "일본어자막추출" / "library" / "TEST-001"
+            images = work / "dating_sim_images"
+            images.mkdir(parents=True)
+            (work / "dating_sim_scenario.json").write_text("{}", encoding="utf-8")
+            (images / "manifest.json").write_text(json.dumps({
+                "status": "complete", "scenes": {
+                    "1:first": {"file": "scene-one.png"},
+                    "2:first": {"file": "scene-one.png"},
+                },
+            }), encoding="utf-8")
+            items = module._dating_sim_update_history()
+        titles = [item["title"] for item in items]
+        self.assertIn("TEST-001 시나리오 작업 완료", titles)
+        self.assertIn("TEST-001 이미지 작업 완료", titles)
+        image_item = next(item for item in items if item["title"] == "TEST-001 이미지 작업 완료")
+        self.assertIn("1장", image_item["body"])
+        self.assertEqual(
+            [item["created_at"] for item in items],
+            sorted((item["created_at"] for item in items), reverse=True),
+        )
+
+    def test_checked_reminder_time_is_learned_for_current_shift_profile(self):
+        status = {
+            "reminder_time_profile": "Swing",
+            "reminder_schedule": [{
+                "key": "walk_20k", "label": "20분 걷는 날", "time": "10:00",
+                "times": {"시각": "10:00", "Swing": "10:00", "Day": "06:00"},
+            }],
+        }
+        checked_at = datetime.datetime(2026, 9, 25, 11, 37, 42)
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(module, "SHIFT_ALARM_REMINDER_EDITOR_FILE", Path(directory) / "editor.json"):
+            self.assertTrue(module._learn_shift_alarm_reminder_time(status, "20분 걷는 날", checked_at))
+            payload = module._read_reminder_editor()["items"]["walk_20k"]
+        self.assertEqual(payload["profile_times"]["Swing"], {"hour": 11, "minute": 37})
+        self.assertNotIn("Day", payload["profile_times"])
+        self.assertEqual(payload["last_checked_at"], "2026-09-25T11:37:42")
+
+    def test_routine_history_combines_first_daily_events(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            history = Path(temp_dir) / "history.jsonl"
+            history.write_text("\n".join([
+                json.dumps({"event_type":"routine_complete","routine_date":"2026-09-24","wake_time":"07:30","completed_at":"2026-09-24T10:45:00"}),
+                json.dumps({"event_type":"routine_complete","routine_date":"2026-09-24","wake_time":"07:30","completed_at":"2026-09-24T10:50:00"}),
+                json.dumps({"event_type":"melatonin_checked","routine_date":"2026-09-24","checked_at":"2026-09-24T20:05:00"}),
+                json.dumps({"event_type":"reminder_checked","routine_date":"2026-09-24","checked_at":"2026-09-24T11:12:00","label":"엄마한테 전화"}),
+                json.dumps({"event_type":"habit_click","routine_date":"2026-09-24","clicked_at":"2026-09-24T12:01:02","kind":"breathing","label":"운기조식"}),
+                json.dumps({"event_type":"habit_click","routine_date":"2026-09-24","clicked_at":"2026-09-24T15:04:05","kind":"smoking","label":"흡연"}),
+            ]), encoding="utf-8")
+            with patch.object(module, "SHIFT_ALARM_ROUTINE_HISTORY_FILE", history):
+                records = module._read_shift_alarm_routine_history()
+        self.assertEqual(records[0]["completed_time"], "10:45")
+        self.assertEqual(records[0]["latest_completed_time"], "10:50")
+        self.assertEqual(records[0]["melatonin_time"], "20:05")
+        self.assertEqual(records[0]["reminder_checks"][0]["label"], "엄마한테 전화")
+        self.assertEqual(records[0]["reminder_checks"][0]["time"], "11:12")
+        self.assertEqual([event["kind"] for event in records[0]["habit_events"]], ["breathing", "smoking"])
+        self.assertEqual(records[0]["habit_events"][0]["time"], "12:01:02")
+        self.assertEqual(records[0]["minutes_after_wake"], 195)
+
     def test_read_only_subapps_allow_signed_in_users(self):
         module._require_signed_in_user(signed_in_request())
         with self.assertRaises(HTTPException) as raised:
@@ -109,6 +198,44 @@ class ShiftAlarmApiTests(unittest.TestCase):
             merged = module._merge_reminder_editor(status)
         self.assertTrue(result["synced"])
         self.assertEqual(merged["reminder_schedule"][0]["time"], "20:00")
+
+    def test_notion_time_update_creates_missing_schedule_row(self):
+        status = {"reminder_schedule": [{
+            "key": "walk", "label": "20분 걷기", "time": "12:10",
+            "times": {"시각": "12:10", "Swing": "12:10"},
+        }]}
+        responses = [
+            {"results": [{"id": "table", "type": "table"}]},
+            {"results": [{"id": "header", "type": "table_row", "table_row": {"cells": [
+                [{"plain_text": "리마인더"}], [{"plain_text": "시각"}],
+                [{"plain_text": "Swing"}],
+            ]}}]},
+        ]
+        writes = []
+
+        def notion(_token, path, method="GET", payload=None):
+            if method == "GET":
+                return responses.pop(0)
+            writes.append((path, method, payload))
+            return {"ok": True}
+
+        with tempfile.TemporaryDirectory() as directory, \
+             patch.object(module, "SHIFT_ALARM_REMINDER_EDITOR_FILE", Path(directory) / "editor.json"), \
+             patch.object(module, "_read_shift_alarm_status", return_value=status), \
+             patch.object(module, "_shift_alarm_notion_token", return_value="hidden"), \
+             patch.object(module, "_notion_request", side_effect=notion):
+            result = module.update_shift_alarm_reminder_time(
+                module.ReminderTimeUpdate(label="20분 걷기", time="12:20", profile="Swing"),
+                owner_request(),
+            )
+            merged = module._merge_reminder_editor(status)
+
+        self.assertTrue(result["created_notion_row"])
+        self.assertEqual(writes[0][0], "blocks/table/children")
+        cells = writes[0][2]["children"][0]["table_row"]["cells"]
+        self.assertEqual(cells[0][0]["text"]["content"], "20분 걷기")
+        self.assertEqual(cells[2][0]["text"]["content"], "12:20")
+        self.assertEqual(merged["reminder_schedule"][0]["times"]["Swing"], "12:20")
 
     def test_reminder_definition_crud_uses_owner_editor_file(self):
         status = {"reminder_schedule": [{"key": "laundry", "label": "빨래", "time": "11:30"}]}
@@ -971,7 +1098,7 @@ class ShiftAlarmApiTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 409)
 
     def test_now_playing_reports_running_playlist(self):
-        with patch.object(module, "_shift_alarm_elmedia_running", return_value=True), \
+        with patch.object(module, "_shift_alarm_elmedia_playing", return_value=True), \
              patch.object(module, "_shift_alarm_load_now_playing", return_value="classical"):
             result = module.shift_alarm_now_playing(owner_request())
         self.assertEqual(result, {"running": True, "playlist": "classical"})
@@ -979,7 +1106,7 @@ class ShiftAlarmApiTests(unittest.TestCase):
     def test_now_playing_hides_playlist_when_not_running(self):
         """Elmedia가 안 떠 있으면 예전에 재생했던 기록이 남아 있어도 무시한다 —
         꺼진 뒤에도 "재생 중"으로 표시되는 걸 막기 위함."""
-        with patch.object(module, "_shift_alarm_elmedia_running", return_value=False), \
+        with patch.object(module, "_shift_alarm_elmedia_playing", return_value=False), \
              patch.object(module, "_shift_alarm_load_now_playing", return_value="favorites"):
             result = module.shift_alarm_now_playing(owner_request())
         self.assertEqual(result, {"running": False, "playlist": None})
