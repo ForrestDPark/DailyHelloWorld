@@ -193,14 +193,14 @@ function openMemoPreview(id) {
 }
 function openRootEditor(id, focusNote = false) {
   selectMemo(id);
-  if (!focusNote) return;
-  requestAnimationFrame(() => {
-    const note = $("#memo-note");
-    if (!note.value.trim() && current?.source_content) note.value = current.source_content;
-    note.scrollIntoView({ behavior: "smooth", block: "center" });
-    note.focus();
-    note.setSelectionRange(0, note.value.length);
-  });
+  if (focusNote) openMemoEditDialog();
+}
+function openMemoEditDialog() {
+  if (!current) return;
+  $("#memo-edit-title").value = current.title || "";
+  $("#memo-edit-note").value = current.note || current.source_content || "";
+  $("#memo-edit-dialog").showModal();
+  $("#memo-edit-note").focus({ preventScroll: true });
 }
 function selectMemo(id) {
   current = memos.find((m) => m.id === id);
@@ -946,17 +946,16 @@ $("#preview-edit").onclick = () => {
 };
 $("#edit-root").onclick = () => {
   if (!current) return;
-  openRootEditor(current.id, true);
-  toast("채팅 원문은 보존됩니다. 내 메모에는 중요한 부분만 남겨보세요.");
+  openMemoEditDialog();
 };
+$("#edit-note-inline").onclick = openMemoEditDialog;
+$("#memo-note").onclick = openMemoEditDialog;
 $("#source-toggle").onclick = () => {
   const content = $("#source-content");
   const expanded = !content.classList.toggle("collapsed");
   $("#source-toggle").textContent = expanded ? "원문 접기" : "원문 펼치기";
   $("#source-toggle").setAttribute("aria-expanded", String(expanded));
 };
-$("#memo-voice").onclick = (event) =>
-  startVoiceInput($("#memo-note"), event.currentTarget);
 $("#node-voice").onclick = (event) =>
   startVoiceInput($("#node-content"), event.currentTarget);
 $("#new-memo").onclick = async () => {
@@ -966,22 +965,23 @@ $("#new-memo").onclick = async () => {
       body: JSON.stringify({ title: "새 메모", note: "" }),
     });
     await load(r.id);
-    $("#memo-title").focus();
+    openMemoEditDialog();
   } catch (e) {
     alert(e.message);
   }
 };
-$("#save-root").onclick = async () => {
+$("#memo-edit-save").onclick = async () => {
   try {
     await api(`/api/me/memos/${current.id}`, {
       method: "PUT",
       body: JSON.stringify({
-        title: $("#memo-title").value,
-        note: $("#memo-note").value,
+        title: $("#memo-edit-title").value,
+        note: $("#memo-edit-note").value,
       }),
     });
+    $("#memo-edit-dialog").close();
     await load(current.id);
-    toast("저장했습니다");
+    toast("메모를 수정했습니다");
   } catch (e) {
     alert(e.message);
   }

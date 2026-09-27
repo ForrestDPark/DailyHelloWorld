@@ -73,7 +73,9 @@ button {
 .topbar button,
 #add-root-node,
 #save-root,
-#node-save {
+#node-save,
+#edit-root,
+#memo-edit-save {
   background: var(--accent);
   color: #fff;
   border-color: transparent;
@@ -275,6 +277,17 @@ button {
   line-height: 1.55;
   resize: vertical;
 }
+.root-note textarea[readonly] {
+  cursor: pointer;
+}
+.edit-note-inline {
+  width: 100%;
+  margin-top: 8px;
+  min-height: 44px;
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 800;
+}
 .branch-toolbar {
   display: flex;
   align-items: end;
@@ -452,6 +465,40 @@ dialog::backdrop {
 }
 dialog form {
   padding: 20px;
+}
+.memo-edit-dialog {
+  width: min(92vw, 680px);
+}
+.memo-edit-dialog form {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+}
+.memo-edit-dialog .edit-help {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+.memo-edit-dialog label {
+  display: grid;
+  gap: 7px;
+  font-weight: 800;
+}
+.memo-edit-dialog input,
+.memo-edit-dialog textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 13px 14px;
+  background: var(--panel);
+  color: var(--ink);
+  font: inherit;
+}
+.memo-edit-dialog textarea {
+  min-height: min(46vh, 420px);
+  line-height: 1.65;
+  resize: vertical;
 }
 .dialog-head,
 .dialog-actions {
