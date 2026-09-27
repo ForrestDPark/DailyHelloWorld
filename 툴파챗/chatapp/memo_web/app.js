@@ -196,8 +196,10 @@ function openRootEditor(id, focusNote = false) {
   if (!focusNote) return;
   requestAnimationFrame(() => {
     const note = $("#memo-note");
+    if (!note.value.trim() && current?.source_content) note.value = current.source_content;
     note.scrollIntoView({ behavior: "smooth", block: "center" });
     note.focus();
+    note.setSelectionRange(0, note.value.length);
   });
 }
 function selectMemo(id) {
@@ -215,6 +217,12 @@ function selectMemo(id) {
     : "직접 작성한 메모";
   $("#source-sender").textContent = current.source_sender;
   renderColoredText($("#source-content"), current.source_content);
+  $("#source-content").classList.add("collapsed");
+  $("#source-toggle").textContent = "원문 펼치기";
+  $("#source-toggle").setAttribute("aria-expanded", "false");
+  if (source) {
+    $("#source-link").href = `/#room=${encodeURIComponent(current.source_room_id)}&message=${encodeURIComponent(current.source_message_id)}`;
+  }
   renderMap();
   renderList();
   requestAnimationFrame(fitMap);
@@ -935,6 +943,17 @@ $("#preview-edit").onclick = () => {
   const id = Number($("#preview-edit").dataset.id);
   $("#memo-preview-dialog").close();
   openRootEditor(id, true);
+};
+$("#edit-root").onclick = () => {
+  if (!current) return;
+  openRootEditor(current.id, true);
+  toast("채팅 원문은 보존됩니다. 내 메모에는 중요한 부분만 남겨보세요.");
+};
+$("#source-toggle").onclick = () => {
+  const content = $("#source-content");
+  const expanded = !content.classList.toggle("collapsed");
+  $("#source-toggle").textContent = expanded ? "원문 접기" : "원문 펼치기";
+  $("#source-toggle").setAttribute("aria-expanded", String(expanded));
 };
 $("#memo-voice").onclick = (event) =>
   startVoiceInput($("#memo-note"), event.currentTarget);

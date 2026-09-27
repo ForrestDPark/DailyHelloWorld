@@ -210,6 +210,27 @@ button {
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
 }
+.source-card-head,
+.source-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.source-card-head { justify-content: space-between; }
+.source-actions { flex-wrap: wrap; justify-content: flex-end; }
+.source-actions a,
+.source-actions button {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 9px 11px;
+  background: var(--panel);
+  color: var(--accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+}
 .source-card small,
 .source-card strong {
   display: block;
@@ -225,6 +246,12 @@ button {
   white-space: pre-wrap;
   line-height: 1.65;
   margin: 0;
+}
+.source-card p.collapsed {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
 }
 .root-note {
   display: block;
@@ -500,6 +527,8 @@ dialog form {
   .source-card {
     margin-top: 14px;
   }
+  .source-card-head { align-items: flex-start; flex-direction: column; }
+  .source-actions { justify-content: flex-start; }
   .branch-toolbar {
     align-items: center;
   }
