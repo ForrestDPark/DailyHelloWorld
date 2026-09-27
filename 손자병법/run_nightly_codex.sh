@@ -135,23 +135,24 @@ run_selected_engine "$ENGINE" < "$PROMPT_FILE" >> "$LOG_FILE" 2>&1
 ENGINE_EXIT=$?
 set -e
 
-if (( ENGINE_EXIT != 0 )) && /usr/bin/grep -Eq "You've hit your (usage|session) limit|rate limit" "$LOG_FILE"; then
+if (( ENGINE_EXIT != 0 )); then
   FALLBACK_ENGINE="codex"
   [[ "$ENGINE" == "codex" ]] && FALLBACK_ENGINE="claude"
-  print -r -- "\n[자동 전환] ${ENGINE} 사용량 제한을 감지해 ${FALLBACK_ENGINE}로 한 번 전환합니다." >> "$LOG_FILE"
+  PRIMARY_EXIT=$ENGINE_EXIT
+  print -r -- "\n[자동 전환] ${ENGINE} 실행 실패(종료 코드 ${PRIMARY_EXIT})로 ${FALLBACK_ENGINE}를 한 번 시도합니다." >> "$LOG_FILE"
   FALLBACK_START_LINE=$(/usr/bin/wc -l < "$LOG_FILE")
   if [[ -n "$TARGET_VERSE" && -f "$PROGRESS_SCRIPT" ]]; then
-    /usr/bin/python3 "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress 8 --stage "${ENGINE} 제한 · ${FALLBACK_ENGINE}로 전환" --state running --pid "$$" || true
+    /usr/bin/python3 "$PROGRESS_SCRIPT" --verse "$TARGET_VERSE" --mode "$ANALYSIS_MODE" --progress 8 --stage "${ENGINE} 실패(${PRIMARY_EXIT}) · ${FALLBACK_ENGINE}로 전환" --state running --pid "$$" || true
   fi
   set +e
   run_selected_engine "$FALLBACK_ENGINE" < "$PROMPT_FILE" >> "$LOG_FILE" 2>&1
   ENGINE_EXIT=$?
   set -e
   if (( ENGINE_EXIT != 0 )); then
-    if /usr/bin/tail -n "+$((FALLBACK_START_LINE + 1))" "$LOG_FILE" | /usr/bin/grep -Eq "You've hit your (usage|session) limit|rate limit"; then
+    if /usr/bin/grep -Eq "You've hit your (usage|session) limit|rate limit" "$LOG_FILE"; then
       FAILURE_STAGE="Claude·Codex 사용량 제한 · 잠시 후 다시 시도"
     else
-      FAILURE_STAGE="${ENGINE} 제한 후 ${FALLBACK_ENGINE} 실행도 실패 · 로그 확인 필요"
+      FAILURE_STAGE="${ENGINE} 종료 ${PRIMARY_EXIT} · ${FALLBACK_ENGINE} 종료 ${ENGINE_EXIT} · 로그 확인 필요"
     fi
   fi
 fi

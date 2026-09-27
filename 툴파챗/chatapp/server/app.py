@@ -7364,8 +7364,19 @@ def mark_notification_read(body: NotificationReadUpdate, request: Request):
     return {"ok": True}
 
 
+SUNZI_DISCUSSION_ROOM_ID = "custom_16ea779e1f"
+SUNZI_INITIAL_HISTORY_DAYS = 7
+
+
 @app.get("/api/messages")
-def get_messages(request: Request, room_id: str = GROUP_ROOM_ID, since_id: int = 0, count_only: bool = False):
+def get_messages(
+    request: Request,
+    room_id: str = GROUP_ROOM_ID,
+    since_id: int = 0,
+    before_id: int = 0,
+    limit: int = Query(100, ge=20, le=200),
+    count_only: bool = False,
+):
     conn = get_conn()
     user = getattr(request.state, "user", None)
     username = user["username"] if user else None
@@ -7412,15 +7423,30 @@ def get_messages(request: Request, room_id: str = GROUP_ROOM_ID, since_id: int =
         ).fetchone()["n"]
         conn.close()
         return {"count": count}
-    rows = conn.execute(
-        """SELECT m.id, m.sender, m.content, m.created_at, m.reply_message_id, m.is_system,
-                  parent.sender AS reply_sender, parent.content AS reply_content
-             FROM (SELECT * FROM messages
-                    WHERE room_id = ? AND id > ? ORDER BY id DESC LIMIT 500) m
-             LEFT JOIN messages parent ON parent.id = m.reply_message_id
-            ORDER BY m.id""",
-        (room_id, since_id),
-    ).fetchall()
+    message_select = """SELECT m.id, m.sender, m.content, m.created_at, m.reply_message_id, m.is_system,
+                               parent.sender AS reply_sender, parent.content AS reply_content
+                          FROM ({subquery}) m
+                          LEFT JOIN messages parent ON parent.id = m.reply_message_id
+                         ORDER BY m.id"""
+    if before_id > 0:
+        # 병법방에서 위로 스와이프할 때만 이전 페이지를 DB에서 가져온다.
+        # id 커서는 OFFSET과 달리 메시지가 계속 추가돼도 페이지가 밀리지 않는다.
+        subquery = "SELECT * FROM messages WHERE room_id = ? AND id < ? ORDER BY id DESC LIMIT ?"
+        params = (room_id, before_id, limit)
+    elif since_id > 0:
+        # 2초 폴링은 지금까지처럼 마지막 id 이후의 새 메시지만 조회한다.
+        subquery = "SELECT * FROM messages WHERE room_id = ? AND id > ? ORDER BY id DESC LIMIT 500"
+        params = (room_id, since_id)
+    elif room_id == SUNZI_DISCUSSION_ROOM_ID:
+        cutoff = (datetime.datetime.now().astimezone() - datetime.timedelta(
+            days=SUNZI_INITIAL_HISTORY_DAYS
+        )).isoformat(timespec="seconds")
+        subquery = "SELECT * FROM messages WHERE room_id = ? AND created_at >= ? ORDER BY id DESC LIMIT 500"
+        params = (room_id, cutoff)
+    else:
+        subquery = "SELECT * FROM messages WHERE room_id = ? ORDER BY id DESC LIMIT 500"
+        params = (room_id,)
+    rows = conn.execute(message_select.format(subquery=subquery), params).fetchall()
     reactions = _message_reactions(conn, [r["id"] for r in rows], username)
     human_profiles = _human_profiles(conn)
     conn.close()
