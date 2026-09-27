@@ -54,17 +54,39 @@ function renderColoredText(element, value = "") {
   if (cursor < text.length)
     element.append(document.createTextNode(text.slice(cursor)));
 }
+const FORMAT_TOKEN_RE = /\[\[(?:\/?(?:b|i|u|s|red|blue|green|orange|purple|color|bg|comment)(?::[^\]]*)?)\]\]/gi;
 function richMemoHtml(value = "") {
-  const text = String(value),
-    pattern = /\[\[(red|blue|green|orange|purple)\]\]([\s\S]*?)\[\[\/\1\]\]/g;
-  let html = "",
-    cursor = 0;
-  for (const match of text.matchAll(pattern)) {
+  const text = String(value);
+  let html = "", cursor = 0;
+  for (const match of text.matchAll(FORMAT_TOKEN_RE)) {
     html += esc(text.slice(cursor, match.index));
-    html += `<span class="memo-accent memo-accent-${match[1]}">${esc(match[2])}</span>`;
+    const token = match[0].slice(2, -2), closing = token.startsWith("/"),
+      [rawName, rawValue = ""] = token.replace(/^\//, "").split(":", 2),
+      name = rawName.toLowerCase();
+    if (closing) html += "</span>";
+    else if (["red", "blue", "green", "orange", "purple"].includes(name))
+      html += `<span class="memo-accent memo-accent-${name}">`;
+    else if (["b", "i", "u", "s"].includes(name)) html += `<span class="memo-format memo-format-${name}">`;
+    else if ((name === "color" || name === "bg") && /^#[0-9a-f]{6}$/i.test(rawValue))
+      html += `<span class="memo-format" style="${name === "color" ? "color" : "background-color"}:${rawValue}">`;
+    else if (name === "comment") {
+      let comment = "";
+      try { comment = decodeURIComponent(rawValue); } catch {}
+      html += `<span class="memo-comment" data-comment="${esc(comment)}" tabindex="0">`;
+    }
     cursor = match.index + match[0].length;
   }
   return html + esc(text.slice(cursor));
+}
+function sourceIndexAtVisibleOffset(source, wanted) {
+  let sourceIndex = 0, visible = 0;
+  for (const match of String(source).matchAll(FORMAT_TOKEN_RE)) {
+    const plainLength = match.index - sourceIndex;
+    if (visible + plainLength >= wanted) return sourceIndex + wanted - visible;
+    visible += plainLength;
+    sourceIndex = match.index + match[0].length;
+  }
+  return Math.min(String(source).length, sourceIndex + Math.max(0, wanted - visible));
 }
 const MEMO_NODE_COLORS = [
   "#ef6a78",
@@ -241,13 +263,13 @@ function renderMap() {
     rootText =
       current.note || current.source_content || "여기서 생각을 확장해보세요";
   $("#memo-tree").innerHTML =
-    `<article class="node-card root expanded" style="--node-accent:#ee9b42;${cardWidthStyle(current.card_width)}left:${O.x}px;top:${O.y}px"><small>ROOT NOTE</small><h3>${esc(current.title)}</h3><p>${richMemoHtml(rootText)}</p><div class="node-actions"><button data-toggle-root aria-label="내용 접기">−</button><button class="node-resize-handle" data-resize-root aria-label="메모 폭 조절" title="좌우로 밀어 폭 조절">↔</button><button class="node-link-handle" data-link-root aria-label="드래그해 새 메모 연결">＋</button></div></article>` +
+    `<article class="node-card root expanded" style="--node-accent:#ee9b42;${cardWidthStyle(current.card_width)}left:${O.x}px;top:${O.y}px"><small>ROOT NOTE</small><h3>${esc(current.title)}</h3><p data-rich-root="1">${richMemoHtml(rootText)}</p><div class="node-actions"><button data-toggle-root aria-label="내용 접기">−</button><button class="node-resize-handle" data-resize-root aria-label="메모 폭 조절" title="좌우로 밀어 폭 조절">↔</button><button class="node-link-handle" data-link-root aria-label="드래그해 새 메모 연결">＋</button></div></article>` +
     current.nodes
       .map((n, index) => {
         const p = pos.get(n.id),
           collapsed = collapsedNodes.has(n.id),
           color = memoNodeColor(n, index);
-        return `<article class="node-card ${collapsed ? "collapsed" : "expanded"}" data-node-id="${n.id}" style="--node-accent:${color};${cardWidthStyle(n.card_width)}left:${p.x}px;top:${p.y}px"><p>${richMemoHtml(n.content)}</p><div class="node-actions"><button data-toggle="${n.id}" aria-label="${collapsed ? "내용 펼치기" : "내용 접기"}">${collapsed ? "＋" : "−"}</button><button data-edit="${n.id}">수정</button><button data-delete="${n.id}" class="danger">삭제</button><button class="node-resize-handle" data-resize="${n.id}" aria-label="메모 폭 조절" title="좌우로 밀어 폭 조절">↔</button><button class="node-link-handle" data-link="${n.id}" aria-label="드래그해 새 메모 연결">＋</button></div></article>`;
+        return `<article class="node-card ${collapsed ? "collapsed" : "expanded"}" data-node-id="${n.id}" style="--node-accent:${color};${cardWidthStyle(n.card_width)}left:${p.x}px;top:${p.y}px"><p data-rich-node="${n.id}">${richMemoHtml(n.content)}</p><div class="node-actions"><button data-toggle="${n.id}" aria-label="${collapsed ? "내용 펼치기" : "내용 접기"}">${collapsed ? "＋" : "−"}</button><button data-edit="${n.id}">수정</button><button data-delete="${n.id}" class="danger">삭제</button><button class="node-resize-handle" data-resize="${n.id}" aria-label="메모 폭 조절" title="좌우로 밀어 폭 조절">↔</button><button class="node-link-handle" data-link="${n.id}" aria-label="드래그해 새 메모 연결">＋</button></div></article>`;
       })
       .join("");
   $("#mindmap-lines").innerHTML = current.nodes
@@ -282,12 +304,12 @@ function renderMap() {
     .forEach((b) => (b.onclick = () => removeNode(+b.dataset.delete)));
   const rootCard = $("#memo-tree .node-card.root");
   rootCard.ondblclick = (event) => {
-    if (event.target.closest("button")) return;
+    if (event.target.closest("button,p[data-rich-root]")) return;
     openRootEditor(current.id, true);
   };
   let rootPointerStart = null;
   rootCard.onpointerdown = (event) => {
-    if (event.target.closest("button")) return;
+    if (event.target.closest("button,p[data-rich-root]")) return;
     rootPointerStart = { x: event.clientX, y: event.clientY };
   };
   rootCard.onpointerup = (event) => {
@@ -412,6 +434,7 @@ function redrawMindmapLines() {
   });
 }
 function prepareNodeDrag(event, card) {
+  if (event.target.closest("p[data-rich-node], .memo-comment")) return;
   const id = Number(card.dataset.nodeId),
     node = current.nodes.find((item) => item.id === id);
   if (!node) return;
@@ -500,6 +523,94 @@ function prepareNodeDrag(event, card) {
   window.addEventListener("pointerup", end);
   window.addEventListener("pointercancel", end);
 }
+
+let richSelection = null;
+function textOffsetWithin(container, node, offset) {
+  const range = document.createRange();
+  range.selectNodeContents(container);
+  try { range.setEnd(node, offset); } catch { return 0; }
+  return range.toString().length;
+}
+function hideSelectionToolbar() {
+  $("#selection-toolbar").classList.add("hidden");
+}
+function captureRichSelection() {
+  const selection = getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+  const range = selection.getRangeAt(0),
+    content = (range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+      ? range.commonAncestorContainer.parentElement
+      : range.commonAncestorContainer)?.closest?.("p[data-rich-root],p[data-rich-node]");
+  if (!content || !content.contains(range.startContainer) || !content.contains(range.endContainer)) return;
+  const start = textOffsetWithin(content, range.startContainer, range.startOffset),
+    end = textOffsetWithin(content, range.endContainer, range.endOffset);
+  if (end <= start) return;
+  const rect = range.getBoundingClientRect(), toolbar = $("#selection-toolbar");
+  richSelection = {
+    root: content.hasAttribute("data-rich-root"),
+    nodeId: Number(content.dataset.richNode || 0), start, end,
+  };
+  toolbar.classList.remove("hidden");
+  const box = toolbar.getBoundingClientRect();
+  toolbar.style.left = `${Math.max(8, Math.min(innerWidth - box.width - 8, rect.left + rect.width / 2 - box.width / 2))}px`;
+  toolbar.style.top = `${Math.max(8, rect.top - box.height - 10)}px`;
+}
+async function applyRichFormat(openTag, closeTag, clear = false) {
+  if (!richSelection || !current) return;
+  const node = richSelection.root ? null : current.nodes.find((item) => item.id === richSelection.nodeId),
+    source = richSelection.root ? (current.note || current.source_content || "") : node?.content;
+  if (source == null) return;
+  const start = sourceIndexAtVisibleOffset(source, richSelection.start),
+    end = sourceIndexAtVisibleOffset(source, richSelection.end);
+  let selected = source.slice(start, end), updated;
+  if (clear) selected = selected.replace(FORMAT_TOKEN_RE, "");
+  updated = source.slice(0, start) + (clear ? selected : openTag + selected + closeTag) + source.slice(end);
+  try {
+    if (richSelection.root) {
+      current.note = updated;
+      $("#memo-note").value = updated;
+      await api(`/api/me/memos/${current.id}`, { method: "PUT", body: JSON.stringify({ title: $("#memo-title").value || current.title, note: updated }) });
+    } else {
+      node.content = updated;
+      await api(`/api/me/memo-nodes/${node.id}`, { method: "PUT", body: JSON.stringify({ content: updated }) });
+    }
+    getSelection()?.removeAllRanges();
+    richSelection = null;
+    hideSelectionToolbar();
+    renderMap();
+    toast("선택한 글자에 서식을 적용했습니다");
+  } catch (error) { toast(error.message); }
+}
+document.addEventListener("selectionchange", () => {
+  clearTimeout(captureRichSelection.timer);
+  captureRichSelection.timer = setTimeout(() => {
+    if (!$("#selection-toolbar").matches(":hover")) captureRichSelection();
+  }, 90);
+});
+$("#selection-toolbar").querySelectorAll("[data-format]").forEach((button) => {
+  button.onclick = () => applyRichFormat(`[[${button.dataset.format}]]`, `[[/${button.dataset.format}]]`);
+});
+$("#format-color").oninput = (event) => applyRichFormat(`[[color:${event.target.value}]]`, "[[/color]]");
+$("#format-background").oninput = (event) => applyRichFormat(`[[bg:${event.target.value}]]`, "[[/bg]]");
+$("#format-clear").onclick = () => applyRichFormat("", "", true);
+$("#format-comment").onclick = () => {
+  const comment = prompt("선택한 문장에 남길 코멘트를 입력하세요.");
+  if (comment?.trim()) applyRichFormat(`[[comment:${encodeURIComponent(comment.trim())}]]`, "[[/comment]]");
+};
+document.addEventListener("click", (event) => {
+  const marked = event.target.closest(".memo-comment"), popover = $("#comment-popover");
+  if (!marked) {
+    if (!event.target.closest("#comment-popover")) popover.classList.add("hidden");
+    return;
+  }
+  event.stopPropagation();
+  popover.querySelector("p").textContent = marked.dataset.comment || "코멘트가 없습니다";
+  popover.classList.remove("hidden");
+  const rect = marked.getBoundingClientRect(), box = popover.getBoundingClientRect();
+  popover.style.left = `${Math.max(10, Math.min(innerWidth - box.width - 10, rect.left))}px`;
+  popover.style.top = `${Math.min(innerHeight - box.height - 10, rect.bottom + 8)}px`;
+});
+$("#comment-popover button").onclick = () => $("#comment-popover").classList.add("hidden");
 function startCardResize(event, card, node) {
   event.preventDefault();
   event.stopPropagation();
