@@ -532,20 +532,27 @@ dialog form {
 }
 @media (max-width: 720px) {
   .memo-edit-dialog {
-    width: calc(100vw - 16px);
+    position: fixed;
+    top: var(--memo-editor-top, 0px);
+    right: 0;
+    bottom: auto;
+    left: 0;
+    width: 100vw;
     max-width: none;
-    height: min(760px, calc(100dvh - 16px));
-    max-height: calc(100dvh - 16px);
-    margin: auto;
-    border-radius: 20px;
+    height: var(--memo-editor-height, 100dvh);
+    max-height: var(--memo-editor-height, 100dvh);
+    margin: 0;
+    border-width: 0;
+    border-radius: 0;
   }
   .memo-edit-dialog form {
     box-sizing: border-box;
     grid-template-rows: auto auto auto minmax(210px, 1fr) auto;
     height: 100%;
     min-height: 0;
-    gap: 12px;
-    padding: 16px;
+    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+    gap: 9px;
+    padding: max(10px, env(safe-area-inset-top)) 12px max(8px, env(safe-area-inset-bottom));
     overflow: hidden;
   }
   .memo-edit-dialog .edit-help {
@@ -553,6 +560,9 @@ dialog form {
     line-height: 1.45;
   }
   .memo-edit-dialog:focus-within .edit-help { display: none; }
+  .memo-edit-dialog:focus-within form {
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+  }
   .memo-edit-save-top {
     display: inline-flex;
     min-height: 44px;
@@ -566,7 +576,7 @@ dialog form {
     min-width: 0;
   }
   .memo-edit-dialog label:last-of-type {
-    grid-template-rows: auto minmax(180px, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     min-height: 0;
   }
   .memo-edit-dialog input,
@@ -577,7 +587,7 @@ dialog form {
   }
   .memo-edit-dialog textarea {
     height: 100%;
-    min-height: 180px;
+    min-height: 0;
     resize: none;
     overflow: auto;
     -webkit-overflow-scrolling: touch;
@@ -588,7 +598,7 @@ dialog form {
     display: grid;
     grid-template-columns: minmax(0, .7fr) minmax(0, 1.3fr);
     margin-top: 0;
-    padding-top: 4px;
+    padding-top: 2px;
     background: var(--panel);
   }
   .memo-edit-dialog .dialog-actions button {

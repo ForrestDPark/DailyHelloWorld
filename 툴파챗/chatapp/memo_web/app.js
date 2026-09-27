@@ -200,11 +200,26 @@ function openRootEditor(id, focusNote = false) {
 }
 function openMemoEditDialog() {
   if (!current) return;
+  syncMemoEditorViewport();
   $("#memo-edit-title").value = current.title || "";
   $("#memo-edit-note").value = current.note || current.source_content || "";
   $("#memo-edit-dialog").showModal();
   $("#memo-edit-note").focus({ preventScroll: true });
 }
+function syncMemoEditorViewport() {
+  const viewport = window.visualViewport;
+  document.documentElement.style.setProperty(
+    "--memo-editor-height",
+    `${Math.round(viewport?.height || window.innerHeight)}px`,
+  );
+  document.documentElement.style.setProperty(
+    "--memo-editor-top",
+    `${Math.round(viewport?.offsetTop || 0)}px`,
+  );
+}
+window.visualViewport?.addEventListener("resize", syncMemoEditorViewport);
+window.visualViewport?.addEventListener("scroll", syncMemoEditorViewport);
+window.addEventListener("orientationchange", syncMemoEditorViewport);
 function selectMemo(id) {
   current = memos.find((m) => m.id === id);
   if (!current) return;
