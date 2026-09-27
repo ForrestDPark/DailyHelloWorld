@@ -1043,6 +1043,7 @@ $("#memo-edit-save").onclick = async () => {
     alert(e.message);
   }
 };
+$("#memo-edit-save-top").onclick = () => $("#memo-edit-save").click();
 $("#delete-root").onclick = async () => {
   if (!confirm("이 메모와 모든 가지를 삭제할까요?")) return;
   await api(`/api/me/memos/${current.id}`, { method: "DELETE" });

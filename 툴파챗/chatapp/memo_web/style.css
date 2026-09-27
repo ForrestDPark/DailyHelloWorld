@@ -500,6 +500,8 @@ dialog form {
   line-height: 1.65;
   resize: vertical;
 }
+.memo-edit-header-actions { display: flex; align-items: center; gap: 8px; }
+.memo-edit-save-top { display: none; }
 .dialog-head,
 .dialog-actions {
   display: flex;
@@ -529,6 +531,69 @@ dialog form {
   z-index: 30;
 }
 @media (max-width: 720px) {
+  .memo-edit-dialog {
+    width: calc(100vw - 16px);
+    max-width: none;
+    height: min(760px, calc(100dvh - 16px));
+    max-height: calc(100dvh - 16px);
+    margin: auto;
+    border-radius: 20px;
+  }
+  .memo-edit-dialog form {
+    box-sizing: border-box;
+    grid-template-rows: auto auto auto minmax(210px, 1fr) auto;
+    height: 100%;
+    min-height: 0;
+    gap: 12px;
+    padding: 16px;
+    overflow: hidden;
+  }
+  .memo-edit-dialog .edit-help {
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .memo-edit-dialog:focus-within .edit-help { display: none; }
+  .memo-edit-save-top {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    background: var(--accent);
+    color: #fff;
+    font-size: 15px !important;
+    font-weight: 850;
+  }
+  .memo-edit-dialog label {
+    min-width: 0;
+  }
+  .memo-edit-dialog label:last-of-type {
+    grid-template-rows: auto minmax(180px, 1fr);
+    min-height: 0;
+  }
+  .memo-edit-dialog input,
+  .memo-edit-dialog textarea {
+    display: block;
+    min-width: 0;
+    font-size: 16px;
+  }
+  .memo-edit-dialog textarea {
+    height: 100%;
+    min-height: 180px;
+    resize: none;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .memo-edit-dialog .dialog-actions {
+    position: sticky;
+    bottom: 0;
+    display: grid;
+    grid-template-columns: minmax(0, .7fr) minmax(0, 1.3fr);
+    margin-top: 0;
+    padding-top: 4px;
+    background: var(--panel);
+  }
+  .memo-edit-dialog .dialog-actions button {
+    min-height: 48px;
+  }
   .topbar {
     padding-left: 14px;
     padding-right: 14px;
