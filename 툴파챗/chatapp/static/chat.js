@@ -4085,6 +4085,34 @@ function scrollToMessage(messageId) {
   setTimeout(() => target.classList.remove("highlight-flash"), 1200);
 }
 
+async function loadAndScrollToLinkedMessage(messageId) {
+  if (messagesEl.querySelector(`[data-message-id="${messageId}"]`)) {
+    scrollToMessage(messageId);
+    return;
+  }
+  const roomAtRequest = currentRoom;
+  const generation = pollGeneration;
+  try {
+    const response = await apiFetch(
+      `/api/messages?room_id=${encodeURIComponent(roomAtRequest)}&before_id=${messageId + 1}&limit=200`,
+    );
+    if (!response.ok) return;
+    const contextMessages = await response.json();
+    if (generation !== pollGeneration || roomAtRequest !== currentRoom) return;
+    if (typeof mergeLoadedMessages === "function" && typeof rerenderLoadedMessages === "function") {
+      mergeLoadedMessages(contextMessages);
+      rerenderLoadedMessages();
+    } else {
+      messagesEl.innerHTML = "";
+      renderedDateKey = null;
+      for (const message of contextMessages) appendMessage(message, false, true);
+    }
+    requestAnimationFrame(() => requestAnimationFrame(() => scrollToMessage(messageId)));
+  } catch (error) {
+    if (error.message !== "unauthorized" && error.message !== "forbidden") console.error(error);
+  }
+}
+
 // ★ "초대가 되면 그 톡방에 '누가 초대되었습니다'라고 구분선 같은 걸
 // 만들어달라" 요청(2026-08-28) — 말풍선이 아니라 가운데 정렬된 얇은 구분선
 // 스타일로 그린다(양옆에 선, 가운데 문구 — CSS ::before/::after).
@@ -4339,7 +4367,7 @@ async function poll() {
     }
     if (initialLoad) {
       const linkedMessageId=parseMessageFromHash();
-      if(linkedMessageId) requestAnimationFrame(()=>scrollToMessage(linkedMessageId));
+      if(linkedMessageId) await loadAndScrollToLinkedMessage(linkedMessageId);
       else positionAtLastRead();
     }
     else if (messages.length) requestAnimationFrame(markVisibleMessagesRead);
