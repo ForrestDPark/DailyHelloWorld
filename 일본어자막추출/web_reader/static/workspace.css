@@ -12,6 +12,7 @@
 .reader.scroll-mode .page-gesture-layer{display:none}
 .scroll-pages{position:absolute;inset:0;margin:0 auto;width:min(100%,860px);height:100%;min-height:0;overflow-y:scroll;overflow-x:hidden;scroll-behavior:auto;overscroll-behavior:contain;scroll-snap-type:y proximity;-webkit-overflow-scrolling:touch;touch-action:none}
 .scroll-pages iframe{display:block;width:100%;height:100vh;min-height:100vh;margin:0 0 12px;border:0;border-radius:10px;background:white;scroll-snap-align:start;pointer-events:none}
+.scroll-load{display:block;width:calc(100% - 24px);margin:10px 12px;padding:12px;border-radius:12px;background:#ded6f2;color:#4e3d6a;font-weight:750}.scroll-load.hidden{display:none}
 .reader.scroll-mode>footer{display:none}
 .reader footer{min-height:54px;padding-top:8px;padding-bottom:8px}
 .reader>footer,.reader>.readaloud-bar{transition:opacity .18s ease}.reader.reading-chrome-hidden{grid-template-rows:auto 0 1fr 0}.reader.reading-chrome-hidden>.readaloud-bar,.reader.reading-chrome-hidden>footer{min-height:0;height:0;padding-top:0;padding-bottom:0;border:0;opacity:0;overflow:hidden;pointer-events:none}
@@ -66,3 +67,4 @@
   .reader.immersive .readaloud-bar:after{content:'화면을 좌우로 넘길 수 있어요';grid-column:2;color:#bcb4c7;font-size:10px;text-align:center;align-self:center}
 }
 @media(display-mode:standalone){#library{padding-top:calc(24px + env(safe-area-inset-top))}}
+.book[aria-busy="true"]{pointer-events:none;opacity:.62}.library-status{min-height:22px;margin:-10px 0 14px;color:var(--accent);font-size:14px;font-weight:700}.library-status.error{color:#b3261e}
