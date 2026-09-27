@@ -11,6 +11,7 @@ let memos = [],
   pinch = null,
   linkDrag = null,
   nodeDrag = null,
+  selectedMapNode = null,
   lastNodeTap = { id: null, at: 0 },
   lastRootTap = 0;
 const pointers = new Map(),
@@ -112,6 +113,8 @@ function toast(v) {
   setTimeout(() => e.classList.add("hidden"), 1800);
 }
 async function load(id) {
+  selectedMapNode = null;
+  $("#node-mobile-actions")?.classList.add("hidden");
   memos = await api("/api/me/memos");
   renderList();
   const wanted = id || Number(new URLSearchParams(location.search).get("memo"));
@@ -271,13 +274,13 @@ function renderMap() {
     rootText =
       current.note || current.source_content || "여기서 생각을 확장해보세요";
   $("#memo-tree").innerHTML =
-    `<article class="node-card root expanded" style="--node-accent:#ee9b42;${cardWidthStyle(current.card_width)}left:${O.x}px;top:${O.y}px"><small>ROOT NOTE</small><h3>${esc(current.title)}</h3><p data-rich-root="1">${richMemoHtml(rootText)}</p><div class="node-actions"><button data-toggle-root aria-label="내용 접기">−</button><button class="node-resize-handle" data-resize-root aria-label="메모 폭 조절" title="좌우로 밀어 폭 조절">↔</button><button class="node-link-handle" data-link-root aria-label="드래그해 새 메모 연결">＋</button></div></article>` +
+    `<article class="node-card root expanded${selectedMapNode === "root" ? " selected" : ""}" style="--node-accent:#ee9b42;${cardWidthStyle(current.card_width)}left:${O.x}px;top:${O.y}px"><small>ROOT NOTE</small><h3>${esc(current.title)}</h3><p data-rich-root="1">${richMemoHtml(rootText)}</p><div class="node-actions"><button data-toggle-root aria-label="내용 접기">−</button><button class="node-resize-handle" data-resize-root aria-label="메모 폭 조절" title="좌우로 밀어 폭 조절">↔</button><button class="node-link-handle" data-link-root aria-label="드래그해 새 메모 연결">＋</button></div></article>` +
     current.nodes
       .map((n, index) => {
         const p = pos.get(n.id),
           collapsed = collapsedNodes.has(n.id),
           color = memoNodeColor(n, index);
-        return `<article class="node-card ${collapsed ? "collapsed" : "expanded"}" data-node-id="${n.id}" style="--node-accent:${color};${cardWidthStyle(n.card_width)}left:${p.x}px;top:${p.y}px"><p data-rich-node="${n.id}">${richMemoHtml(n.content)}</p><div class="node-actions"><button data-toggle="${n.id}" aria-label="${collapsed ? "내용 펼치기" : "내용 접기"}">${collapsed ? "＋" : "−"}</button><button data-edit="${n.id}">수정</button><button data-delete="${n.id}" class="danger">삭제</button><button class="node-resize-handle" data-resize="${n.id}" aria-label="메모 폭 조절" title="좌우로 밀어 폭 조절">↔</button><button class="node-link-handle" data-link="${n.id}" aria-label="드래그해 새 메모 연결">＋</button></div></article>`;
+        return `<article class="node-card ${collapsed ? "collapsed" : "expanded"}${selectedMapNode === n.id ? " selected" : ""}" data-node-id="${n.id}" style="--node-accent:${color};${cardWidthStyle(n.card_width)}left:${p.x}px;top:${p.y}px"><p data-rich-node="${n.id}">${richMemoHtml(n.content)}</p><div class="node-actions"><button data-toggle="${n.id}" aria-label="${collapsed ? "내용 펼치기" : "내용 접기"}">${collapsed ? "＋" : "−"}</button><button data-edit="${n.id}">수정</button><button data-delete="${n.id}" class="danger">삭제</button><button class="node-resize-handle" data-resize="${n.id}" aria-label="메모 폭 조절" title="좌우로 밀어 폭 조절">↔</button><button class="node-link-handle" data-link="${n.id}" aria-label="드래그해 새 메모 연결">＋</button></div></article>`;
       })
       .join("");
   $("#mindmap-lines").innerHTML = current.nodes
@@ -310,7 +313,16 @@ function renderMap() {
   $("#memo-tree")
     .querySelectorAll("[data-delete]")
     .forEach((b) => (b.onclick = () => removeNode(+b.dataset.delete)));
+  $("#memo-tree")
+    .querySelectorAll("p[data-rich-node]")
+    .forEach((paragraph) => {
+      paragraph.onclick = () => {
+        const selection = getSelection();
+        if (!selection || selection.isCollapsed) selectMapNode(Number(paragraph.dataset.richNode));
+      };
+    });
   const rootCard = $("#memo-tree .node-card.root");
+  rootCard.querySelector("p[data-rich-root]").onclick = () => selectMapNode("root");
   rootCard.ondblclick = (event) => {
     if (event.target.closest("button,p[data-rich-root]")) return;
     openRootEditor(current.id, true);
@@ -362,6 +374,26 @@ function renderMap() {
         startLinkDrag(e, id, pos.get(id)),
       );
     });
+}
+function selectMapNode(id) {
+  selectedMapNode = id;
+  const bar = $("#node-mobile-actions"), root = id === "root",
+    node = root ? null : current?.nodes.find((item) => item.id === id);
+  if (!root && !node) return;
+  $("#memo-tree").querySelectorAll(".node-card.selected").forEach((card) => card.classList.remove("selected"));
+  const card = root ? $("#memo-tree .node-card.root") : $(`#memo-tree .node-card[data-node-id="${id}"]`);
+  card?.classList.add("selected");
+  $("#node-mobile-label").textContent = root ? "기본 메모 선택됨" : "파생 메모 선택됨";
+  $("#node-mobile-delete").hidden = root;
+  $("#node-mobile-collapse").textContent = root
+    ? (card?.classList.contains("root-collapsed") ? "펼치기" : "접기")
+    : (collapsedNodes.has(id) ? "펼치기" : "접기");
+  bar.classList.remove("hidden");
+}
+function clearMapNodeSelection() {
+  selectedMapNode = null;
+  $("#memo-tree")?.querySelectorAll(".node-card.selected").forEach((card) => card.classList.remove("selected"));
+  $("#node-mobile-actions").classList.add("hidden");
 }
 function applyView() {
   $("#mindmap-stage").style.transform =
@@ -500,6 +532,7 @@ function prepareNodeDrag(event, card) {
     nodeDrag = null;
     if (!state.active) {
       if (!state.cancelled) {
+        selectMapNode(id);
         const now = Date.now();
         if (lastNodeTap.id === id && now - lastNodeTap.at < 430) {
           lastNodeTap = { id: null, at: 0 };
@@ -926,6 +959,30 @@ $("#mindmap-fullscreen").onclick = () =>
   setMindmapFullscreen(
     !$("#mindmap-viewport").classList.contains("fullscreen-mode"),
   );
+$("#node-mobile-edit").onclick = () => {
+  if (selectedMapNode === "root") openRootEditor(current.id, true);
+  else if (Number.isFinite(Number(selectedMapNode))) openNode("edit", Number(selectedMapNode));
+};
+$("#node-mobile-collapse").onclick = () => {
+  if (selectedMapNode === "root") {
+    const card = $("#memo-tree .node-card.root");
+    card.classList.toggle("root-collapsed");
+    selectMapNode("root");
+    return;
+  }
+  const id = Number(selectedMapNode);
+  if (!Number.isFinite(id)) return;
+  if (collapsedNodes.has(id)) collapsedNodes.delete(id); else collapsedNodes.add(id);
+  renderMap();
+  selectMapNode(id);
+};
+$("#node-mobile-delete").onclick = async () => {
+  const id = Number(selectedMapNode);
+  if (!Number.isFinite(id)) return;
+  await removeNode(id);
+  clearMapNodeSelection();
+};
+$("#node-mobile-close").onclick = clearMapNodeSelection;
 document.addEventListener("keydown", (event) => {
   if (
     event.key === "Escape" &&

@@ -53,6 +53,31 @@
   z-index: 9;
   transition: none;
 }
+.node-card.selected {
+  outline: 5px solid color-mix(in srgb, var(--node-accent) 52%, transparent);
+  outline-offset: 5px;
+}
+.node-mobile-actions {
+  position: absolute;
+  z-index: 30;
+  left: 50%;
+  bottom: 46px;
+  display: flex;
+  width: max-content;
+  max-width: calc(100% - 20px);
+  align-items: center;
+  gap: 6px;
+  padding: 7px;
+  border: 1px solid #d8dde6;
+  border-radius: 16px;
+  background: color-mix(in srgb, #fff 94%, transparent);
+  box-shadow: 0 12px 32px rgba(24, 31, 45, .22);
+  color: #202631;
+  transform: translateX(-50%);
+}
+.node-mobile-actions.hidden { display: none; }
+.node-mobile-actions span { padding: 0 6px; font-size: 13px; font-weight: 800; white-space: nowrap; }
+.node-mobile-actions button { min-height: 40px; padding: 7px 12px; white-space: nowrap; }
 body.mindmap-fullscreen-open {
   overflow: hidden;
   overscroll-behavior: none;
@@ -130,6 +155,9 @@ body.mindmap-fullscreen-open {
   .node-card.root { width: 250px; }
   .node-actions { gap: 5px; }
   .node-actions button { padding: 6px 7px; }
+  .node-mobile-actions { bottom: 44px; width: calc(100% - 18px); justify-content: center; }
+  .node-mobile-actions span { display: none; }
+  .node-mobile-actions button { flex: 1 1 auto; min-width: 0; font-size: 14px; }
 }
 
 /* SimpleMind 계열의 중립 캔버스와 색상별 가지 */
@@ -193,6 +221,7 @@ body.mindmap-fullscreen-open {
     background: color-mix(in srgb, var(--node-accent) 15%, #242930);
     color: #edf0f5;
   }
+  .node-mobile-actions { border-color: #4a5260; background: rgba(36, 41, 48, .96); color: #f1f3f6; }
 }
 
 .node-card[data-node-id] {

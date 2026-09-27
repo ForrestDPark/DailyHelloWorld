@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#171321"><title>메모 시스템</title>
   <link rel="icon" href="/static/system-icons/memo.svg?v=20260927" type="image/svg+xml">
-  <link rel="stylesheet" href="/memo/static/style.css?v=20260927-source-edit-v1"><link rel="stylesheet" href="/memo/static/colors.css?v=20260925-v1"><link rel="stylesheet" href="/memo/static/tools.css?v=20260927-rich-text-v2"><link rel="stylesheet" href="/memo/static/voice.css?v=20260925-stop-v1">
+  <link rel="stylesheet" href="/memo/static/style.css?v=20260927-source-edit-v1"><link rel="stylesheet" href="/memo/static/colors.css?v=20260925-v1"><link rel="stylesheet" href="/memo/static/tools.css?v=20260927-mobile-node-edit-v1"><link rel="stylesheet" href="/memo/static/voice.css?v=20260925-stop-v1">
 </head>
 <body>
   <header class="topbar"><a href="/#home" aria-label="홈으로">←</a><div class="topbar-title"><small>CONNECTED NOTES</small><h1>메모 시스템</h1></div><div class="topbar-actions"><button id="memo-layout" class="layout-button" type="button" aria-label="리스트 보기로 전환">☰ 리스트</button><button id="new-memo">＋ 새 메모</button></div></header>
@@ -20,6 +20,7 @@
         <div class="mindmap-grid"></div>
         <div id="mindmap-stage" class="mindmap-stage"><svg id="mindmap-lines" aria-hidden="true"></svg><div id="memo-tree" class="memo-tree"></div></div>
         <div class="zoom-controls" aria-label="생각 지도 화면 도구"><button id="zoom-out" aria-label="축소">−</button><button id="zoom-fit">맞춤</button><button id="zoom-in" aria-label="확대">＋</button><span id="zoom-level">100%</span><button id="mindmap-fullscreen" aria-label="생각 지도 전체 화면" title="전체 화면">⛶</button></div>
+        <div id="node-mobile-actions" class="node-mobile-actions hidden" aria-live="polite"><span id="node-mobile-label">메모 선택됨</span><button id="node-mobile-edit" type="button">수정</button><button id="node-mobile-collapse" type="button">접기</button><button id="node-mobile-delete" class="danger" type="button">삭제</button><button id="node-mobile-close" type="button" aria-label="선택 해제">×</button></div>
         <p class="canvas-hint">메모를 길게 눌러 자유 배치 · 빈 공간 이동 · 두 손가락 확대/축소</p>
       </div>
     </section>
@@ -45,5 +46,5 @@
   </dialog>
   <div id="comment-popover" class="comment-popover hidden" role="note"><strong>코멘트</strong><p></p><button type="button" aria-label="닫기">×</button></div>
   <div id="toast" class="toast hidden" role="status"></div>
-  <script src="/memo/static/app.js?v=20260927-edit-dialog-v2"></script>
+  <script src="/memo/static/app.js?v=20260927-mobile-node-edit-v1"></script>
 </body></html>
