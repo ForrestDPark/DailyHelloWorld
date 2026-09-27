@@ -544,6 +544,8 @@ dialog form {
     margin: 0;
     border-width: 0;
     border-radius: 0;
+    -webkit-text-size-adjust: none;
+    text-size-adjust: none;
   }
   .memo-edit-dialog form {
     box-sizing: border-box;
@@ -589,11 +591,21 @@ dialog form {
   .memo-edit-dialog textarea {
     height: 100%;
     min-height: 0;
-    line-height: 1.48;
-    font-weight: 500;
+    font-size: 13px !important;
+    line-height: 1.42;
+    font-weight: 400;
     resize: none;
     overflow: auto;
     -webkit-overflow-scrolling: touch;
+  }
+  .memo-edit-dialog:has(textarea:focus) label:first-of-type {
+    display: none;
+  }
+  .memo-edit-dialog:has(textarea:focus) form {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+  .memo-edit-dialog:has(textarea:focus) .dialog-head h2 {
+    font-size: 18px;
   }
   .memo-edit-dialog .dialog-actions {
     position: sticky;
