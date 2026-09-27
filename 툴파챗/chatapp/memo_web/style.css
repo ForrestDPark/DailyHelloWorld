@@ -583,11 +583,14 @@ dialog form {
   .memo-edit-dialog textarea {
     display: block;
     min-width: 0;
-    font-size: 16px;
+    font-size: 15px;
   }
+  .memo-edit-dialog input { font-size: 16px; }
   .memo-edit-dialog textarea {
     height: 100%;
     min-height: 0;
+    line-height: 1.48;
+    font-weight: 500;
     resize: none;
     overflow: auto;
     -webkit-overflow-scrolling: touch;
