@@ -10,7 +10,7 @@
 .reader iframe{max-width:860px;border-radius:10px;overscroll-behavior-x:none;touch-action:none}
 .page-gesture-layer{position:absolute;z-index:2;top:12px;bottom:12px;left:max(12px,calc((100% - 860px)/2));right:max(12px,calc((100% - 860px)/2));background:transparent;touch-action:none;pointer-events:none;-webkit-user-select:none;user-select:none}
 .reader.scroll-mode .page-gesture-layer{display:none}
-.scroll-pages{position:absolute;inset:0;margin:0 auto;width:min(100%,860px);height:100%;min-height:0;overflow-y:scroll;overflow-x:hidden;scroll-behavior:auto;overscroll-behavior:contain;scroll-snap-type:y proximity;-webkit-overflow-scrolling:touch;touch-action:none}
+.scroll-pages{position:absolute;inset:0;margin:0 auto;width:min(100%,860px);height:100%;min-height:0;overflow-y:auto;overflow-x:hidden;scroll-behavior:auto;overscroll-behavior-y:contain;-webkit-overflow-scrolling:touch;touch-action:pan-y;will-change:scroll-position}
 .scroll-pages iframe{display:block;width:100%;height:100vh;min-height:100vh;margin:0 0 12px;border:0;border-radius:10px;background:white;scroll-snap-align:start;pointer-events:none}
 .scroll-load{display:block;width:calc(100% - 24px);margin:10px 12px;padding:12px;border-radius:12px;background:#ded6f2;color:#4e3d6a;font-weight:750}.scroll-load.hidden{display:none}
 .reader.scroll-mode>footer{display:none}
@@ -24,6 +24,7 @@
 .readaloud-bar label{display:flex;align-items:center;gap:6px;white-space:nowrap}
 .readaloud-bar select{border:1px solid var(--line);border-radius:9px;background:white;padding:6px;color:var(--ink)}
 .readaloud-bar input{margin:0;accent-color:var(--accent)}
+.page-jump{display:flex;align-items:center;gap:4px}.page-jump input{width:58px;padding:8px 6px;text-align:center}.page-jump button{padding:8px 9px}.toc-dialog{width:min(520px,calc(100% - 28px));max-height:min(76dvh,680px);padding:0;border:1px solid var(--line);border-radius:20px;background:var(--paper);color:var(--ink);box-shadow:0 24px 80px #20162f55}.toc-dialog::backdrop{background:#15101f88;backdrop-filter:blur(3px)}.toc-head{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:var(--paper);border-bottom:1px solid var(--line)}.toc-head button{padding:7px 11px}.toc-list{display:grid;gap:6px;padding:12px;overflow:auto}.toc-list>button{display:flex;justify-content:space-between;gap:16px;width:100%;padding:12px 14px;text-align:left;background:#eee9f7;color:var(--ink)}.toc-list small{flex:none;color:var(--muted)}
 .focus-mode{min-width:auto!important;background:#e8e1f7!important;color:var(--accent)!important}
 .reader.immersive{position:fixed;inset:0;z-index:40;height:100dvh;grid-template-rows:1fr auto;background:#111}
 .reader.immersive>nav,.reader.immersive>footer{display:none}
@@ -50,6 +51,7 @@
   .reader nav{min-height:48px;padding:6px 9px;gap:8px}
   .reader nav button{padding:9px 11px;font-size:12px}
   .reader nav strong{font-size:12px}
+  .reader-actions{gap:4px}.reader-actions>a{display:none!important}.reader-actions .subtle{padding:8px;font-size:11px}.page-jump input{width:48px;padding:7px 4px;font-size:12px}.page-jump button{padding:7px;font-size:11px}
   .reader-stage{padding:0}
   .page-gesture-layer{inset:0;pointer-events:auto}
   .scroll-pages{width:100%;scroll-snap-type:none}

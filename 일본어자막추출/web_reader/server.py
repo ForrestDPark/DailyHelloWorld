@@ -67,6 +67,7 @@ class Book:
     spine: tuple[str, ...]
     audio: tuple[tuple[dict, ...], ...]
     cover: str | None
+    toc: tuple[dict, ...]
     modified: float
     size: int
     kind: str = "epub"
@@ -145,6 +146,32 @@ def parse_book(path: Path) -> Book:
                 items[item_id] = {"member": member, "media_type": item.get("media-type", ""), "properties": item.get("properties", ""), "overlay": item.get("media-overlay")}
         spine_items = [items[ref.get("idref")] for ref in package.findall(".//opf:spine/opf:itemref", XML_NS) if ref.get("idref") in items]
         spine = tuple(item["member"] for item in spine_items)
+        spine_index = {member.split("#", 1)[0]: index for index, member in enumerate(spine)}
+        toc: list[dict] = []
+        nav_item = next((item for item in items.values() if "nav" in item["properties"].split()), None)
+        if nav_item:
+            try:
+                nav_root = ET.fromstring(zf.read(nav_item["member"]))
+                for anchor in nav_root.findall(".//{*}nav//{*}a"):
+                    href = urllib.parse.unquote(anchor.get("href") or "")
+                    member = _safe_member(posixpath.join(posixpath.dirname(nav_item["member"]), href.split("#", 1)[0]))
+                    label = " ".join("".join(anchor.itertext()).split())
+                    if member in spine_index and label: toc.append({"title": label, "index": spine_index[member]})
+            except (KeyError, ValueError, ET.ParseError):
+                pass
+        if not toc:
+            ncx_item = next((item for item in items.values() if item["media_type"] == "application/x-dtbncx+xml"), None)
+            if ncx_item:
+                try:
+                    ncx_root = ET.fromstring(zf.read(ncx_item["member"]))
+                    for point in ncx_root.findall(".//{*}navPoint"):
+                        content, label_node = point.find("{*}content"), point.find(".//{*}navLabel/{*}text")
+                        href = urllib.parse.unquote(content.get("src") or "") if content is not None else ""
+                        member = _safe_member(posixpath.join(posixpath.dirname(ncx_item["member"]), href.split("#", 1)[0]))
+                        label = " ".join("".join(label_node.itertext()).split()) if label_node is not None else ""
+                        if member in spine_index and label: toc.append({"title": label, "index": spine_index[member]})
+                except (KeyError, ValueError, ET.ParseError):
+                    pass
         audio = tuple(_smil_audio(zf, items[item["overlay"]]["member"]) if item.get("overlay") in items else () for item in spine_items)
         cover = next((v["member"] for v in items.values() if "cover-image" in v["properties"].split()), None)
         if not cover:
@@ -154,7 +181,7 @@ def parse_book(path: Path) -> Book:
         if not cover:
             cover = next((v["member"] for key, v in items.items() if v["media_type"].startswith("image/") and "cover" in key.casefold()), None)
         stat = path.stat()
-        return Book(_book_id(path), path.resolve(), title, opf_path, spine, audio, cover, stat.st_mtime, stat.st_size)
+        return Book(_book_id(path), path.resolve(), title, opf_path, spine, audio, cover, tuple(toc), stat.st_mtime, stat.st_size)
 
 
 def parse_pdf(path: Path) -> Book:
@@ -165,10 +192,11 @@ def parse_pdf(path: Path) -> Book:
             raise ValueError("페이지가 없는 PDF입니다")
         metadata = document.metadata or {}
         title = str(metadata.get("title") or "").strip() or path.stem
+        toc = tuple({"title": str(item[1]), "index": max(0, int(item[2]) - 1)} for item in document.get_toc() if len(item) >= 3)
     stat = path.stat()
     spine = tuple(f"pdf-page/{index}" for index in range(page_count))
     return Book(_book_id(path), path.resolve(), title, "", spine,
-                tuple(() for _ in spine), None, stat.st_mtime, stat.st_size, "pdf")
+                tuple(() for _ in spine), None, toc, stat.st_mtime, stat.st_size, "pdf")
 
 
 class Library:
@@ -403,7 +431,7 @@ class ReaderHandler(BaseHTTPRequestHandler):
                     "begin": clip["begin"], "end": clip["end"], "target": clip["target"],
                 } for clip in book.audio[i]],
             } for i, href in enumerate(book.spine)]
-            return self._json(200, {**book.public(self.app.progress_for(book, *(self._principal() or ("", False))), self.app.base_path), "chapters": chapters})
+            return self._json(200, {**book.public(self.app.progress_for(book, *(self._principal() or ("", False))), self.app.base_path), "chapters": chapters, "toc": book.toc})
         if action == "progress": return self._json(200, self.app.progress_for(book, *(self._principal() or ("", False))))
         if action == "cover" and book.cover: return self._resource(book, book.cover)
         if action == "download":
@@ -418,8 +446,6 @@ class ReaderHandler(BaseHTTPRequestHandler):
                     text = document.load_page(page_index).get_text("text").strip()
                 paragraphs = [line.strip() for line in text.splitlines() if line.strip()]
                 content = "".join(f"<p>{html.escape(line)}</p>" for line in paragraphs)
-                if not content:
-                    content = '<p class="pdf-empty">이 페이지에는 추출 가능한 텍스트가 없습니다.</p>'
                 page = ("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">"
                         "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
                         "<style>body{font-family:Georgia,serif;line-height:1.7}p{margin:.65em 0}"

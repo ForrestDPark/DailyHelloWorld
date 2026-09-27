@@ -10,14 +10,17 @@ from unittest.mock import patch
 import server
 
 
-def make_epub(path: Path, title="테스트 책", readaloud=False):
+def make_epub(path: Path, title="테스트 책", readaloud=False, with_toc=False):
     with zipfile.ZipFile(path, "w") as z:
         z.writestr("META-INF/container.xml", '<?xml version="1.0"?><container xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf"/></rootfiles></container>')
         overlay = ' media-overlay="s1"' if readaloud else ''
         smil = '<item id="s1" href="overlays/1.smil" media-type="application/smil+xml"/><item id="a1" href="audio/1.m4a" media-type="audio/mp4"/>' if readaloud else ''
-        z.writestr("OEBPS/content.opf", f'''<package xmlns="http://www.idpf.org/2007/opf"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>{title}</dc:title></metadata><manifest><item id="cover" href="images/cover.jpg" media-type="image/jpeg" properties="cover-image"/><item id="p1" href="pages/1.xhtml" media-type="application/xhtml+xml"{overlay}/>{smil}</manifest><spine><itemref idref="p1"/></spine></package>''')
+        nav = '<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>' if with_toc else ''
+        z.writestr("OEBPS/content.opf", f'''<package xmlns="http://www.idpf.org/2007/opf"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>{title}</dc:title></metadata><manifest><item id="cover" href="images/cover.jpg" media-type="image/jpeg" properties="cover-image"/><item id="p1" href="pages/1.xhtml" media-type="application/xhtml+xml"{overlay}/>{nav}{smil}</manifest><spine><itemref idref="p1"/></spine></package>''')
         z.writestr("OEBPS/images/cover.jpg", b"jpeg")
         z.writestr("OEBPS/pages/1.xhtml", "<html>본문</html>")
+        if with_toc:
+            z.writestr("OEBPS/nav.xhtml", '<html xmlns="http://www.w3.org/1999/xhtml"><body><nav><ol><li><a href="pages/1.xhtml">첫 장</a></li></ol></nav></body></html>')
         if readaloud:
             z.writestr("OEBPS/overlays/1.smil", '<smil xmlns="http://www.w3.org/ns/SMIL"><body><seq><par><text src="../pages/1.xhtml#line-1"/><audio src="../audio/1.m4a" clipBegin="00:00:01.250" clipEnd="00:00:02.500"/></par></seq></body></smil>')
             z.writestr("OEBPS/audio/1.m4a", b"audio")
@@ -39,6 +42,12 @@ class ReaderTests(unittest.TestCase):
             book = server.parse_book(root / "ABC-001_낭독판.epub")
             self.assertEqual(book.title, "테스트 책"); self.assertEqual(book.spine, ("OEBPS/pages/1.xhtml",)); self.assertEqual(book.cover, "OEBPS/images/cover.jpg")
             self.assertEqual(len(server.Library([root]).books), 1)
+
+    def test_epub_navigation_is_mapped_to_spine_pages(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td); make_epub(root / "toc.epub", with_toc=True)
+            book = server.parse_book(root / "toc.epub")
+            self.assertEqual(book.toc, ({"title": "첫 장", "index": 0},))
 
     def test_readaloud_alias_is_deduplicated(self):
         with tempfile.TemporaryDirectory() as td:
