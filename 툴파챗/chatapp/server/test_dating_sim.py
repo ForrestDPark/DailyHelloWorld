@@ -367,10 +367,58 @@ class DatingSimApiTests(unittest.TestCase):
         app.dating_sim_visit(app.DatingSimLocationRequest(location="cafe"), request())
         index = self.choice_index("reader", "cafe", True)
         state = app.dating_sim_choose(app.DatingSimChoiceRequest(choice_index=index), request())
-        self.assertIn(state["choice_result"]["affection_delta"], range(7, 12))
+        self.assertGreater(state["choice_result"]["choice_score"], 0)
+        self.assertGreater(state["choice_result"]["affection_delta"], 0)
+        self.assertLessEqual(
+            state["choice_result"]["affection_delta"],
+            state["choice_result"]["choice_score"],
+        )
         self.assertEqual(state["affection"], 50 + state["choice_result"]["affection_delta"])
+        self.assertEqual(state["affection"], state["choice_result"]["affection_cap"])
         self.assertEqual(state["day"], 2)
         self.assertIsNone(state["pending_location"])
+
+    def test_affection_cap_opens_gradually_and_reaches_100_only_after_completion(self):
+        caps = [
+            app._dating_affection_cap(day, dating_sim_story.TOTAL_DAYS)
+            for day in range(1, dating_sim_story.TOTAL_DAYS + 1)
+        ]
+        self.assertEqual(caps[0], 50)
+        self.assertEqual(caps, sorted(caps))
+        self.assertLess(caps[-1], 100)
+        self.assertEqual(
+            app._dating_affection_cap(
+                dating_sim_story.TOTAL_DAYS + 1,
+                dating_sim_story.TOTAL_DAYS,
+                completed=True,
+            ),
+            100,
+        )
+
+    def test_legacy_early_100_affection_is_repaired_to_story_progress(self):
+        initial = app.dating_sim_state(request())
+        conn = db.get_conn()
+        try:
+            conn.execute(
+                "UPDATE dating_sim_progress SET day=2,affection=100 WHERE username=? AND character_id=?",
+                ("reader", initial["story_id"]),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        repaired = app.dating_sim_state(request())
+        expected = app._dating_affection_cap(2, repaired["total_days"])
+        self.assertEqual(repaired["affection"], expected)
+        conn = db.get_conn()
+        try:
+            saved = conn.execute(
+                "SELECT affection FROM dating_sim_progress WHERE username=? AND character_id=?",
+                ("reader", initial["story_id"]),
+            ).fetchone()
+        finally:
+            conn.close()
+        self.assertEqual(saved["affection"], expected)
 
     def test_negative_choice_lowers_affection_and_clamps_at_zero(self):
         app.dating_sim_visit(app.DatingSimLocationRequest(location="cafe"), request())

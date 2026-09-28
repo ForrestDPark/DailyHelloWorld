@@ -1159,6 +1159,20 @@ def _dating_story_signature(story):
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
+def _dating_affection_cap(day, total_days, completed=False):
+    """이야기 진행도에 맞춰 현재 도달 가능한 최대 호감도를 계산한다.
+
+    시작값 50에서 출발해 장면을 하나 마칠 때마다 전체 분량에 비례해 상한이
+    열린다. 완결 전에는 절대 100이 되지 않고, 마지막 선택까지 마친 뒤에만
+    100에 도달할 수 있다.
+    """
+    total_days = max(1, int(total_days or 1))
+    if completed:
+        return 100
+    completed_scenes = max(0, min(total_days - 1, int(day or 1) - 1))
+    return 50 + (50 * completed_scenes // total_days)
+
+
 def _dating_sim_row(conn, username, story):
     story_signature = _dating_story_signature(story)
     row = conn.execute(
@@ -1201,6 +1215,21 @@ def _dating_sim_row(conn, username, story):
             )
             conn.commit()
             row.update(completed=0, ending_id=None, pending_location=None)
+        # 예전에는 선택지 점수를 진행도와 무관하게 누적해 초반에도 호감도
+        # 100이 저장될 수 있었다. 미완결 기록만 현재 진행 단계의 상한으로
+        # 한 번 보정하며, 낮은 점수와 정상 완결 기록은 그대로 보존한다.
+        affection_cap = _dating_affection_cap(
+            row["day"], story["total_days"], bool(row["completed"])
+        )
+        if not row["completed"] and row["affection"] > affection_cap:
+            now = _now()
+            conn.execute(
+                "UPDATE dating_sim_progress SET affection=?,updated_at=? "
+                "WHERE username=? AND character_id=?",
+                (affection_cap, now, username, story["id"]),
+            )
+            conn.commit()
+            row.update(affection=affection_cap, updated_at=now)
         return row
     now = _now()
     conn.execute(
@@ -2248,9 +2277,12 @@ def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
         scene = story["scenes"][row["day"]][selected_location]
         if body.choice_index not in range(len(scene["choices"])):
             raise HTTPException(status_code=400, detail="올바르지 않은 선택지입니다")
-        affection = max(0, min(100, row["affection"] + scene["choices"][body.choice_index]["affection"]))
+        raw_affection_delta = scene["choices"][body.choice_index]["affection"]
         next_day = row["day"] + 1
         completed = next_day > story["total_days"]
+        affection_cap = _dating_affection_cap(next_day, story["total_days"], completed)
+        affection = max(0, min(affection_cap, row["affection"] + raw_affection_delta))
+        applied_affection_delta = affection - row["affection"]
         ending_id = dating_sim_story.ending_for(story, affection)["id"] if completed else None
         conn.execute(
             "UPDATE dating_sim_progress SET day=?, affection=?, pending_location=NULL, completed=?, ending_id=?, "
@@ -2264,13 +2296,15 @@ def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
         conn.close()
     payload = _dating_sim_state_payload(row, story, username)
     payload["choice_result"] = {
-        "affection_delta": scene["choices"][body.choice_index]["affection"],
+        "affection_delta": applied_affection_delta,
+        "choice_score": raw_affection_delta,
+        "affection_cap": affection_cap,
         "location": selected_location,
         "character_image": scene.get("character_image") or story.get("character_images", {}).get(
             selected_location, story.get("character_image")),
         "line": dating_sim_story.choice_reaction(
             row["day"] - 1, selected_location,
-            scene["choices"][body.choice_index]["affection"], story["id"],
+            raw_affection_delta, story["id"],
         ),
     }
     return payload
