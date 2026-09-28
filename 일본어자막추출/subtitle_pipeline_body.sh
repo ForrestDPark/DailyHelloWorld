@@ -173,15 +173,6 @@ except Exception:
             echo "⚠️  학습카드 복구 실패(쿼터 소진 등) — 다음 실행에서 다시 시도"
             continue
         fi
-        if ! /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_dating_sim_scenario.py" "$BOOK_CANDIDATE"; then
-            echo "⚠️  미연시 시나리오 복구는 다음 실행에서 이어갑니다."
-        fi
-        if [[ -f "${BOOK_CANDIDATE}/dating_sim_scenario.json" ]]; then
-            echo "🖼️  작품 이미지 에이전트가 누락된 초상화·장면 이미지를 이어서 생성합니다."
-            if ! /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_dating_sim_images.py" "$BOOK_CANDIDATE"; then
-                echo "⚠️  작품 이미지 일부가 아직 없습니다. EPUB 복구는 계속하고 다음 실행에서 이어갑니다."
-            fi
-        fi
         RETRY_FINAL_EPUB="${BOOK_CANDIDATE}/${BOOK_CANDIDATE:t}.epub"
         if ! /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/finalize_japanese_book.py" "$BOOK_CANDIDATE" \
             || [[ ! -f "$RETRY_FINAL_EPUB" ]]; then
@@ -195,6 +186,7 @@ except Exception:
         [[ -z "$RETRY_DISPLAY_TITLE" ]] && RETRY_DISPLAY_TITLE="${BOOK_CANDIDATE:t}"
         RETRY_READALOUD_NAME="${RETRY_DISPLAY_TITLE}_낭독판.epub"
         RETRY_READALOUD_TMP="${MYTMP}/${RETRY_READALOUD_NAME}"
+        RETRY_EPUB_PUBLISHED=0
         if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/build_readaloud_epub.py" \
             "$BOOK_CANDIDATE" --output "$RETRY_READALOUD_TMP"; then
             mkdir -p "$COMPLETED_EPUB_DIR_FOR_BACKFILL"
@@ -203,12 +195,32 @@ except Exception:
             rm -f "${COMPLETED_EPUB_DIR_FOR_BACKFILL}/${BOOK_CANDIDATE:t}"*"_낭독판.epub"
             if cp "$RETRY_READALOUD_TMP" "${COMPLETED_EPUB_DIR_FOR_BACKFILL}/${RETRY_READALOUD_NAME}"; then
                 echo "✅ 학습카드 포함 낭독판으로 교체 완료: ${RETRY_READALOUD_NAME}"
+                launchctl kickstart -k "gui/$(id -u)/com.tulpachat.epub-reader" >/dev/null 2>&1
+                RETRY_EPUB_PUBLISHED=1
             else
                 echo "⚠️  복구된 낭독판을 av완성작으로 복사하지 못함"
             fi
             rm -f "$RETRY_READALOUD_TMP"
         else
             echo "⚠️  학습카드는 복구됐지만 낭독판 EPUB 재빌드 실패"
+        fi
+
+        # 서재에서 읽을 EPUB을 실제 배포한 뒤에만 미연시 제작을 시작한다.
+        # 사용자는 먼저 원작과 학습카드를 읽고, 그 다음 단계로 미연시에
+        # 들어가야 하므로 AI/ComfyUI 장기 작업이 EPUB 공개를 막으면 안 된다.
+        if (( RETRY_EPUB_PUBLISHED == 1 )); then
+            echo "💗 EPUB 서재 공개 확인 완료 — 미연시 시나리오 복구를 시작합니다."
+            if ! /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_dating_sim_scenario.py" "$BOOK_CANDIDATE"; then
+                echo "⚠️  미연시 시나리오 복구는 다음 실행에서 이어갑니다."
+            fi
+            if [[ -f "${BOOK_CANDIDATE}/dating_sim_scenario.json" ]]; then
+                echo "🖼️  작품 이미지 에이전트가 누락된 초상화·장면 이미지를 이어서 생성합니다."
+                if ! /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_dating_sim_images.py" "$BOOK_CANDIDATE"; then
+                    echo "⚠️  작품 이미지 일부가 아직 없습니다. 다음 실행에서 이어갑니다."
+                fi
+            fi
+        else
+            echo "⏸️  서재용 EPUB 공개 전이므로 미연시 복구를 시작하지 않습니다."
         fi
     done
 fi
@@ -1450,25 +1462,13 @@ drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese 
     READALOUD_SUCCESS=0
     READALOUD_EPUB=""
     SUMMARY_OK=0
+    EPUB_PUBLISHED=0
     COMPLETED_EPUB_DIR="/Users/forrestdpark/Desktop/BlogImage/av완성작"
     mkdir -p "$COMPLETED_EPUB_DIR"
     _T0=$(date +%s)
     if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_summary.py" "$BOOK_DIR"; then
         SUMMARY_OK=1
         echo "⏱ 요약 생성 소요: $(( $(date +%s) - _T0 ))초"
-
-        echo "\n💗 학습 단어·핵심 표현 전수 활용 미연시 시나리오 생성 중..."
-        if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_dating_sim_scenario.py" "$BOOK_DIR"; then
-            echo "✅ 미연시 시나리오 생성 완료"
-            echo "\n🖼️ 작품 전용 초상화·다양한 장면 이미지 에이전트 실행 중..."
-            if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_dating_sim_images.py" "$BOOK_DIR"; then
-                echo "✅ 작품 이미지 생성·미연시 연결 완료"
-            else
-                echo "⚠️  작품 이미지 일부가 아직 없습니다. EPUB 생성은 계속하고 다음 실행에서 이어갑니다."
-            fi
-        else
-            echo "⚠️  미연시 시나리오 생성은 완료되지 않았습니다. 중간 결과를 보존하고 다음 실행에서 이어갑니다."
-        fi
 
         FINAL_LIBRARY_EPUB="${BOOK_DIR}/${SAFE_BASE_NAME}.epub"
         if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/finalize_japanese_book.py" "$BOOK_DIR" \
@@ -1524,6 +1524,7 @@ drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese 
                 "${OBSIDIAN_PATH}/${FILENAME_NO_EXT}.epub" \
                 "${OBSIDIAN_PATH}/${READALOUD_EPUB:t}"
             READALOUD_SUCCESS=1
+            EPUB_PUBLISHED=1
             if (( SUMMARY_OK == 0 )); then
                 echo "⚠️  주의: 이 낭독판에는 AI 요약·학습카드가 빠져 있습니다(쿼터 소진 등)."
                 echo "    나중에 python3 generate_summary.py \"$BOOK_DIR\" 로 요약만 채운 뒤"
@@ -1545,9 +1546,32 @@ drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese 
 
     # 낭독판 EPUB이 실패했을 때만 일반 EPUB을 비상 결과물로 배포한다.
     if (( READALOUD_SUCCESS == 0 )) && [[ -f "$OUTPUT_EPUB" ]]; then
-        cp "$OUTPUT_EPUB" "$COMPLETED_EPUB_DIR/" \
-            && echo "📚 낭독판 실패로 일반 EPUB을 비상 보존" \
-            && launchctl kickstart -k "gui/$(id -u)/com.tulpachat.epub-reader" >/dev/null 2>&1
+        if cp "$OUTPUT_EPUB" "$COMPLETED_EPUB_DIR/"; then
+            echo "📚 낭독판 실패로 일반 EPUB을 비상 보존"
+            launchctl kickstart -k "gui/$(id -u)/com.tulpachat.epub-reader" >/dev/null 2>&1
+            EPUB_PUBLISHED=1
+        fi
+    fi
+
+    # 다음 자막 추출부터는 EPUB이 서재에 먼저 나타난다. 시나리오와 이미지는
+    # 그 뒤에 시작하므로 오래 걸리거나 실패해도 EPUB 읽기를 기다릴 필요가 없다.
+    if (( EPUB_PUBLISHED == 1 && SUMMARY_OK == 1 )); then
+        echo "\n💗 EPUB 서재 공개 확인 완료 — 미연시 시나리오 생성 중..."
+        if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_dating_sim_scenario.py" "$BOOK_DIR"; then
+            echo "✅ 미연시 시나리오 생성 완료"
+            echo "\n🖼️ 작품 전용 초상화·다양한 장면 이미지 에이전트 실행 중..."
+            if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_dating_sim_images.py" "$BOOK_DIR"; then
+                echo "✅ 작품 이미지 생성·미연시 연결 완료"
+            else
+                echo "⚠️  작품 이미지 일부가 아직 없습니다. 다음 실행에서 이어갑니다."
+            fi
+        else
+            echo "⚠️  미연시 시나리오 생성은 완료되지 않았습니다. 중간 결과를 보존하고 다음 실행에서 이어갑니다."
+        fi
+    elif (( EPUB_PUBLISHED == 0 )); then
+        echo "⏸️  서재용 EPUB 공개 실패 — 미연시 생성은 시작하지 않고 다음 실행에서 재시도합니다."
+    elif (( SUMMARY_OK == 0 )); then
+        echo "⏸️  EPUB은 먼저 공개됐지만 학습카드가 없어 미연시 생성은 복구 단계로 넘깁니다."
     fi
 
     echo "\033[1;32m[$FILENAME_NO_EXT] 전체 완료!\033[0m"

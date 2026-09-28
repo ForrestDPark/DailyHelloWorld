@@ -23,6 +23,9 @@ import json
 import os
 import re
 import sys
+import threading
+import time
+from datetime import datetime
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -42,6 +45,63 @@ from ai_exec import run_ai_exec  # noqa: E402
 # 이어가다가 Codex가 살아나면 빈 부분을 채우게 한다.
 EXIT_CODEX_UNAVAILABLE = 75
 codex_unavailable = False
+
+
+def _time_label(seconds):
+    seconds = max(0, int(seconds or 0))
+    hours, remainder = divmod(seconds, 3600)
+    minutes = max(1, (remainder + 59) // 60) if seconds else 0
+    return f"{hours}시간 {minutes}분" if hours else (f"{minutes}분" if minutes else "계산 중")
+
+
+def _write_scenario_progress(work_dir, *, status, done, total, current, started_at, log=print):
+    now = int(time.time())
+    elapsed = max(0, now - started_at)
+    default_day_seconds = max(60, int(os.environ.get("JP_DATING_SCENARIO_DEFAULT_DAY_SECONDS", "300")))
+    average = elapsed / done if done else default_day_seconds
+    eta = max(0, round(average * (total - done)))
+    payload = {
+        "status": status, "done": done, "total": total,
+        "percent": min(100, round(done / total * 100)) if total else 100,
+        "current": current, "started_at": started_at, "updated_at": now,
+        "elapsed_seconds": elapsed, "eta_seconds": eta,
+        "average_day_seconds": round(average),
+        "expected_finished_at": now + eta,
+    }
+    (work_dir / "dating_sim_scenario_progress.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    estimate = (_time_label(eta) if done else
+                f"초기 예상 {_time_label(default_day_seconds * max(0, total - done))} (첫 DAY 완료 뒤 실측 보정)")
+    log(f"   📈 시나리오 {done}/{total} · {payload['percent']}% · {current} | "
+        f"경과 {_time_label(elapsed)} · 남은 {estimate} · 완료 예상 "
+        f"{datetime.fromtimestamp(payload['expected_finished_at']).strftime('%H:%M')}")
+    return payload
+
+
+def _run_ai_with_progress(prompt, work_dir, *, day, attempt, done, total, started_at, log):
+    """Codex 한 번의 응답을 기다리는 동안에도 30초마다 ETA를 갱신한다.
+
+    DAY 하나가 끝나야만 퍼센트가 움직이는 구조라 긴 호출 중 화면이 멈춘 것처럼
+    보였던 문제를 해결한다. 완료 단위 기반 퍼센트는 과장하지 않고 그대로 두되,
+    현재 재시도·경과·예상 완료 시각을 계속 새로 기록한다.
+    """
+    stopped = threading.Event()
+
+    def heartbeat():
+        while not stopped.wait(30):
+            _write_scenario_progress(
+                work_dir, status="running", done=done, total=total,
+                current=f"DAY {day} Codex 응답 대기 · 시도 {attempt}",
+                started_at=started_at, log=log,
+            )
+
+    thread = threading.Thread(target=heartbeat, daemon=True)
+    thread.start()
+    try:
+        return run_ai_exec(prompt, str(work_dir), timeout=600, engines=["codex"])
+    finally:
+        stopped.set()
+        thread.join(timeout=1)
 
 BOOK_LOCATIONS = [
     ("first", "우연히 마주친 곳(서점·길모퉁이 등)"),
@@ -482,6 +542,11 @@ def generate_for_work(work_dir, log=print, refresh_opening_only=False):
         except (OSError, ValueError):
             days = {}
 
+    progress_started_at = int(time.time())
+    completed_days = sum(1 for value in days.values() if isinstance(value, dict))
+    _write_scenario_progress(work_dir, status="running", done=completed_days, total=total_days,
+                             current="시나리오 생성 준비 중", started_at=progress_started_at, log=log)
+
     for day in range(1, total_days + 1):
         is_first = day == 1
         words = [] if is_first else word_by_day.get(day, [])
@@ -492,10 +557,16 @@ def generate_for_work(work_dir, log=print, refresh_opening_only=False):
         # 후속 흐름을 건드리면 사용자의 진행 기록과 기존 서사가 함께 달라질 수 있다.
         if refresh_opening_only and not is_first and str(day) in days:
             log(f"   ↪️ DAY {day} 기존 후속 흐름 보존")
+            completed_days = max(completed_days, day)
+            _write_scenario_progress(work_dir, status="running", done=completed_days, total=total_days,
+                                     current=f"DAY {day} 기존 흐름 확인", started_at=progress_started_at, log=log)
             continue
         if str(day) in days:
             if validate_day(days[str(day)], words, exprs, grammars):
                 log(f"   ↪️ DAY {day} 중간 저장본 재사용")
+                completed_days = max(completed_days, day)
+                _write_scenario_progress(work_dir, status="running", done=completed_days, total=total_days,
+                                         current=f"DAY {day} 중간 저장본 확인", started_at=progress_started_at, log=log)
                 continue
             log(f"   ♻️ DAY {day} 중간 저장본 검증 실패 — 완성 문장으로 다시 생성")
             days.pop(str(day), None)
@@ -508,6 +579,8 @@ def generate_for_work(work_dir, log=print, refresh_opening_only=False):
         opening_concept = opening_concept_for(title) if is_first else None
         base_prompt = build_day_prompt(title.split("_")[0], day, topic, arc_hint, words, exprs,
                                        is_first, grammars, continuity, opening_concept)
+        _write_scenario_progress(work_dir, status="running", done=completed_days, total=total_days,
+                                 current=f"DAY {day} 생성 중", started_at=progress_started_at, log=log)
         day_obj = None
         max_attempts = 5
         ai_failed = False
@@ -521,7 +594,11 @@ def generate_for_work(work_dir, log=print, refresh_opening_only=False):
             last_missing = []
             for attempt in range(max_attempts):
                 try:
-                    stdout, engine = run_ai_exec(prompt, str(work_dir), timeout=600, engines=["codex"])
+                    stdout, engine = _run_ai_with_progress(
+                        prompt, work_dir, day=day, attempt=attempt + 1,
+                        done=completed_days, total=total_days,
+                        started_at=progress_started_at, log=log,
+                    )
                 except RuntimeError as exc:
                     log(f"   ⚠️ DAY {day} Codex 호출 실패({exc})")
                     ai_failed = True
@@ -562,12 +639,17 @@ def generate_for_work(work_dir, log=print, refresh_opening_only=False):
             exprs = [e for e in exprs if e not in stuck]
         if not day_obj:
             log(f"❌ {title}: DAY {day} 생성 실패 — 중간 저장본은 남김, 재실행 시 이어감")
+            _write_scenario_progress(work_dir, status="failed", done=completed_days, total=total_days,
+                                     current=f"DAY {day} 생성 실패", started_at=progress_started_at, log=log)
             return False
         days[str(day)] = finalize_day(day, day_obj, vocab_pool, expressions, grammar_patterns)
         partial_path.write_text(json.dumps({"content_version": partial_version, "days": days,
                                                   "skipped_expressions": sorted(skipped_expressions)}, ensure_ascii=False, indent=1), encoding="utf-8")
         used = sum(len(days[str(day)]["scenes"][loc].get("vocab_used", [])) for loc, _ in BOOK_LOCATIONS)
         log(f"   ✅ DAY {day} 생성 완료 (단어 {used}개 삽입)")
+        completed_days = max(completed_days, day)
+        _write_scenario_progress(work_dir, status="running", done=completed_days, total=total_days,
+                                 current=f"DAY {day} 생성 완료", started_at=progress_started_at, log=log)
 
     used_ja, used_expr, used_grammar = set(), set(), set()
     for generated_day in days.values():
@@ -598,12 +680,16 @@ def generate_for_work(work_dir, log=print, refresh_opening_only=False):
     }
     if not ds._validate_generated_scenario(scenario, [loc for loc, _ in BOOK_LOCATIONS]):
         log(f"❌ {title}: 최종 검증 실패 — 캐시를 쓰지 않음")
+        _write_scenario_progress(work_dir, status="failed", done=completed_days, total=total_days,
+                                 current="최종 검증 실패", started_at=progress_started_at, log=log)
         return False
     (work_dir / "dating_sim_scenario.json").write_text(
         json.dumps(scenario, ensure_ascii=False, indent=1), encoding="utf-8")
     partial_path.unlink(missing_ok=True)
     log(f"🎉 {title}: 시나리오 생성 완료 — 학습 단어 {len(used_ja)}/{len(vocab_pool)}개, "
         f"핵심 표현 {len(used_expr)}/{len(expressions)}개, 문법 {len(used_grammar)}/{len(grammar_patterns)}개 전부 활용")
+    _write_scenario_progress(work_dir, status="complete", done=total_days, total=total_days,
+                             current="시나리오 생성 완료", started_at=progress_started_at, log=log)
     return True
 
 

@@ -45,6 +45,14 @@ _OPENAI_DISABLED_REASON = None
 _LAST_GENERATION_META = {}
 _GENERATION_OVERRIDES = {}
 _FACE_CASCADES = {}
+_PROGRESS_HEARTBEAT = None
+
+
+def _duration_label(seconds):
+    seconds = max(0, int(seconds or 0))
+    hours, remainder = divmod(seconds, 3600)
+    minutes = max(1, (remainder + 59) // 60) if seconds else 0
+    return f"{hours}시간 {minutes}분" if hours else (f"{minutes}분" if minutes else "0분")
 
 
 def _deduplicate_face_boxes(boxes):
@@ -801,7 +809,12 @@ def _comfy_upload(reference):
 
 def _comfy_wait_image(prompt_id, timeout):
     deadline = time.monotonic() + timeout
+    next_heartbeat = time.monotonic()
     while time.monotonic() < deadline:
+        global _PROGRESS_HEARTBEAT
+        if _PROGRESS_HEARTBEAT and time.monotonic() >= next_heartbeat:
+            _PROGRESS_HEARTBEAT()
+            next_heartbeat = time.monotonic() + 10
         history = _comfy_request(f"/history/{urllib.parse.quote(prompt_id)}", timeout=15)
         record = history.get(prompt_id, {})
         for output in record.get("outputs", {}).values():
@@ -1057,21 +1070,41 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
     progress_total = int(portrait_needed) + len(scene_target_keys)
     progress_done = 0
     progress_started_at = int(time.time())
+    previous_progress = manifest.get("job_progress") or {}
+    default_item_seconds = max(60, int(os.environ.get("JP_DATING_IMAGE_DEFAULT_SECONDS", "600")))
+    prior_average = float(previous_progress.get("average_item_seconds") or default_item_seconds)
+    progress_current = "준비 중"
+    last_terminal_heartbeat = 0
 
-    def update_progress(current):
+    def update_progress(current=None, heartbeat=False):
+        nonlocal progress_current, last_terminal_heartbeat
+        if current:
+            progress_current = current
+        now = int(time.time())
         percent = round(progress_done / progress_total * 100) if progress_total else 100
-        elapsed = max(0, int(time.time()) - progress_started_at)
-        eta_seconds = (round(elapsed / progress_done * (progress_total - progress_done))
-                       if progress_done else None)
+        elapsed = max(0, now - progress_started_at)
+        average = (elapsed / progress_done) if progress_done else prior_average
+        eta_seconds = max(0, round(average * (progress_total - progress_done)))
         manifest["job_progress"] = {
             "done": progress_done, "total": progress_total,
-            "percent": min(100, percent), "current": current,
-            "started_at": progress_started_at, "updated_at": int(time.time()),
+            "percent": min(100, percent), "current": progress_current,
+            "started_at": progress_started_at, "updated_at": now,
             "elapsed_seconds": elapsed, "eta_seconds": eta_seconds,
+            "average_item_seconds": round(average),
+            "expected_finished_at": now + eta_seconds,
         }
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        if not heartbeat or now - last_terminal_heartbeat >= 30:
+            last_terminal_heartbeat = now
+            initial = " (첫 이미지 완료 뒤 실측 보정)" if not progress_done and progress_total else ""
+            expected = time.strftime("%H:%M", time.localtime(now + eta_seconds))
+            print(f"   📈 이미지 {progress_done}/{progress_total} · {min(100, percent)}% · {progress_current} | "
+                  f"경과 {_duration_label(elapsed)} · 남은 약 {_duration_label(eta_seconds)}{initial} · "
+                  f"완료 예상 {expected}", flush=True)
 
     update_progress("준비 중" if progress_total else "완료 확인 중")
+    global _PROGRESS_HEARTBEAT
+    _PROGRESS_HEARTBEAT = lambda: update_progress(heartbeat=True)
     if portrait_needed:
         # 아래 항목은 '현재 선택값'이 아니라 이 portrait.png를 실제로 만들 때
         # 사용한 참조본 스냅샷이다. 재생성하지 않은 결과의 이력을 새 선택값으로
@@ -1164,10 +1197,9 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
             for key, report in failed_quality.items()
         )
     manifest["status"] = "complete" if not manifest["errors"] and not failed_quality else "partial"
-    manifest["job_progress"] = {
-        "done": progress_total, "total": progress_total, "percent": 100,
-        "current": "생성 완료" if not manifest["errors"] else "오류 포함 완료",
-    }
+    progress_done = progress_total
+    update_progress("생성 완료" if not manifest["errors"] else "오류 포함 완료")
+    _PROGRESS_HEARTBEAT = None
     manifest["updated_at"] = int(time.time())
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return manifest

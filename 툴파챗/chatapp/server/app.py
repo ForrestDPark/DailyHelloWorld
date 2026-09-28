@@ -1115,6 +1115,65 @@ class DatingSimChoiceRequest(BaseModel):
 
 class DatingSimRestartRequest(BaseModel):
     story_id: str | None = None
+    difficulty: str | None = None
+
+
+class DatingSimNewRequest(BaseModel):
+    difficulty: str = "normal"
+
+
+DATING_DIFFICULTIES = {
+    "easy": {"label": "이지", "start": (55, 68), "positive": 1.25, "negative": 0.55},
+    "normal": {"label": "노말", "start": (32, 48), "positive": 1.0, "negative": 1.0},
+    "hard": {"label": "하드", "start": (0, 0), "positive": 0.35, "negative": 1.0},
+}
+
+
+def _dating_difficulty(value):
+    return value if value in DATING_DIFFICULTIES else "normal"
+
+
+def _dating_start_affection(story, difficulty):
+    difficulty = _dating_difficulty(difficulty)
+    low, high = DATING_DIFFICULTIES[difficulty]["start"]
+    if low == high:
+        return low
+    heroine_key = ":".join([
+        story.get("id", ""), story.get("name", ""),
+        story.get("character_name_ko", ""), difficulty,
+    ])
+    seed = int.from_bytes(hashlib.sha256(heroine_key.encode()).digest()[:4], "big")
+    return low + seed % (high - low + 1)
+
+
+def _dating_apply_affection_delta(raw_delta, difficulty):
+    config = DATING_DIFFICULTIES[_dating_difficulty(difficulty)]
+    multiplier = config["positive" if raw_delta > 0 else "negative"]
+    adjusted = int(round(raw_delta * multiplier))
+    if raw_delta > 0:
+        return max(1, adjusted)
+    if raw_delta < 0:
+        return min(-1, adjusted)
+    return 0
+
+
+def _dating_relationship_tone(affection):
+    bands = [
+        (9, "경멸", "말투가 날카롭고 거리를 분명히 둡니다."),
+        (19, "냉담", "차갑고 짧게 대답합니다."),
+        (29, "경계", "의심을 풀지 않고 조심스럽게 반응합니다."),
+        (39, "격식", "예의를 지키지만 사적인 거리를 둡니다."),
+        (49, "중립", "담담하게 대화를 이어갑니다."),
+        (59, "호기심", "조금씩 관심을 보이기 시작합니다."),
+        (69, "친근", "편안하고 다정하게 반응합니다."),
+        (79, "설렘", "수줍은 호감과 귀여운 반응이 늘어납니다."),
+        (89, "애정", "애교 있고 적극적인 애정을 보입니다."),
+        (100, "깊은 애정", "신뢰와 친밀감을 솔직하게 표현합니다."),
+    ]
+    for maximum, label, description in bands:
+        if affection <= maximum:
+            return {"band": maximum // 10, "label": label, "description": description}
+    return {"band": 10, "label": "깊은 애정", "description": bands[-1][2]}
 
 
 def _dating_story(story_id=None, variant_seed=None):
@@ -1179,18 +1238,19 @@ def _dating_story_signature(story):
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
-def _dating_affection_cap(day, total_days, completed=False):
+def _dating_affection_cap(day, total_days, completed=False, start_affection=50):
     """이야기 진행도에 맞춰 현재 도달 가능한 최대 호감도를 계산한다.
 
-    시작값 50에서 출발해 장면을 하나 마칠 때마다 전체 분량에 비례해 상한이
-    열린다. 완결 전에는 절대 100이 되지 않고, 마지막 선택까지 마친 뒤에만
-    100에 도달할 수 있다.
+    선택한 난이도와 인물별 시작값에서 출발해 장면을 하나 마칠 때마다 전체
+    분량에 비례해 상한이 열린다. 완결 전에는 절대 100이 되지 않고, 마지막
+    선택까지 마친 뒤에만 100에 도달할 수 있다.
     """
     total_days = max(1, int(total_days or 1))
     if completed:
         return 100
     completed_scenes = max(0, min(total_days - 1, int(day or 1) - 1))
-    return 50 + (50 * completed_scenes // total_days)
+    start_affection = max(0, min(99, int(start_affection)))
+    return start_affection + ((100 - start_affection) * completed_scenes // total_days)
 
 
 def _dating_sim_row(conn, username, story):
@@ -1204,18 +1264,20 @@ def _dating_sim_row(conn, username, story):
         saved_signature = row.get("story_signature")
         if saved_signature and saved_signature != story_signature:
             now = _now()
+            difficulty = _dating_difficulty(row.get("difficulty"))
+            start_affection = _dating_start_affection(story, difficulty)
             conn.execute(
-                "UPDATE dating_sim_progress SET day=1,affection=50,pending_location=NULL,"
+                "UPDATE dating_sim_progress SET day=1,affection=?,pending_location=NULL,"
                 "completed=0,ending_id=NULL,story_signature=?,updated_at=? "
                 "WHERE username=? AND character_id=?",
-                (story_signature, now, username, story["id"]),
+                (start_affection, story_signature, now, username, story["id"]),
             )
             conn.execute(
                 "DELETE FROM dating_sim_learning_seen WHERE username=? AND character_id=?",
                 (username, story["id"]),
             )
             conn.commit()
-            row.update(day=1, affection=50, pending_location=None, completed=0,
+            row.update(day=1, affection=start_affection, pending_location=None, completed=0,
                        ending_id=None, story_signature=story_signature, updated_at=now)
         elif not saved_signature:
             # 기존 DB는 현재 내용을 기준점으로 한 번만 등록한다. 이후 내용이
@@ -1238,8 +1300,9 @@ def _dating_sim_row(conn, username, story):
         # 예전에는 선택지 점수를 진행도와 무관하게 누적해 초반에도 호감도
         # 100이 저장될 수 있었다. 미완결 기록만 현재 진행 단계의 상한으로
         # 한 번 보정하며, 낮은 점수와 정상 완결 기록은 그대로 보존한다.
+        start_affection = _dating_start_affection(story, _dating_difficulty(row.get("difficulty")))
         affection_cap = _dating_affection_cap(
-            row["day"], story["total_days"], bool(row["completed"])
+            row["day"], story["total_days"], bool(row["completed"]), start_affection
         )
         if not row["completed"] and row["affection"] > affection_cap:
             now = _now()
@@ -1252,17 +1315,20 @@ def _dating_sim_row(conn, username, story):
             row.update(affection=affection_cap, updated_at=now)
         return row
     now = _now()
+    difficulty = _dating_difficulty(story.pop("_requested_difficulty", "normal"))
+    start_affection = _dating_start_affection(story, difficulty)
     conn.execute(
         "INSERT INTO dating_sim_progress "
         "(username,character_id,day,affection,pending_location,completed,ending_id,"
-        "created_at,updated_at,story_signature) "
-        "VALUES (?,?,1,50,NULL,0,NULL,?,?,?)",
-        (username, story["id"], now, now, story_signature),
+        "created_at,updated_at,story_signature,difficulty) "
+        "VALUES (?,?,1,?,NULL,0,NULL,?,?,?,?)",
+        (username, story["id"], start_affection, now, now, story_signature, difficulty),
     )
     conn.commit()
     return {
         "username": username, "character_id": story["id"],
-        "day": 1, "affection": 50, "pending_location": None, "completed": 0,
+        "day": 1, "affection": start_affection, "pending_location": None, "completed": 0,
+        "difficulty": difficulty,
         "ending_id": None, "story_signature": story_signature,
     }
 
@@ -1350,6 +1416,9 @@ def _dating_sim_state_payload(row, story, username=None):
         "character_image": story.get("character_image"),
         "day": current_day, "total_days": story["total_days"],
         "affection": row["affection"],
+        "difficulty": _dating_difficulty(row.get("difficulty")),
+        "difficulty_label": DATING_DIFFICULTIES[_dating_difficulty(row.get("difficulty"))]["label"],
+        "relationship_tone": _dating_relationship_tone(row["affection"]),
         "day_opening": day_opening,
         "locations": [
             {
@@ -1639,6 +1708,10 @@ def _dating_sim_image_backlog_progress(state, running):
                 payload["current_image_job"] = str(image_progress.get("current") or "이미지 생성 중")
                 payload["current_image_percent"] = max(0, min(100, int(image_progress.get("percent") or 0)))
                 payload["current_image_eta_seconds"] = image_progress.get("eta_seconds")
+                payload["current_image_elapsed_seconds"] = image_progress.get("elapsed_seconds")
+                payload["current_image_updated_at"] = image_progress.get("updated_at")
+                payload["current_image_expected_finished_at"] = image_progress.get("expected_finished_at")
+                payload["current_image_average_seconds"] = image_progress.get("average_item_seconds")
         except (OSError, ValueError, TypeError):
             pass
     processed = completed + failed
@@ -1832,6 +1905,125 @@ class ComfyUIRuntimeRequest(BaseModel):
 
 class ComfyWorkspaceActionRequest(BaseModel):
     action: str
+
+
+COMFY_MODEL_CATALOG = (
+    {
+        "id": "majicmix-realistic",
+        "name": "majicMIX Realistic",
+        "family": "SD 1.5",
+        "filenames": ("majicmixrealistic", "majicmix_realistic"),
+        "summary": "인물 사진과 일상 장면에 강한 사실적 계열 모델입니다. 현재 미연시 인물·장면 생성의 기본 모델로 사용 중입니다.",
+        "best_for": ("사실적인 인물 초상", "일상·데이트 장면", "부드러운 피부와 조명"),
+        "caution": "손·눈처럼 작은 구조는 참조 이미지 품질과 프롬프트에 영향을 많이 받습니다.",
+        "url": "https://civitai.com/models/43331/majicmix-realistic",
+    },
+    {
+        "id": "epicrealism",
+        "name": "epiCRealism",
+        "family": "SD 1.5",
+        "filenames": ("epicrealism",),
+        "summary": "자연스러운 피부 질감과 영화 같은 빛을 내는 사실적 인물 모델입니다.",
+        "best_for": ("감정이 드러나는 얼굴", "영화풍 인물 컷", "실내·야간 조명"),
+        "caution": "작품별 동일 인물 유지에는 IP-Adapter 같은 참조 제어가 필요합니다.",
+        "url": "https://civitai.com/models/25694/epicrealism",
+    },
+    {
+        "id": "dreamshaper",
+        "name": "DreamShaper",
+        "family": "SD 1.5 / XL",
+        "filenames": ("dreamshaper",),
+        "summary": "실사와 일러스트 사이를 폭넓게 다루는 범용 모델로, 배경과 콘셉트 장면을 만들기 좋습니다.",
+        "best_for": ("다양한 배경", "도트풍이 아닌 콘셉트 아트", "실사·일러스트 혼합"),
+        "caution": "버전에 따라 기반 모델이 다르므로 워크플로의 SD 1.5·SDXL 호환을 확인해야 합니다.",
+        "url": "https://civitai.com/models/4384/dreamshaper",
+    },
+    {
+        "id": "juggernaut-xl",
+        "name": "Juggernaut XL",
+        "family": "SDXL",
+        "filenames": ("juggernautxl", "juggernaut_xl"),
+        "summary": "고해상도 실사 인물과 풍부한 배경 묘사에 적합한 SDXL 계열 모델입니다.",
+        "best_for": ("고해상도 인물", "넓은 장면과 배경", "광고·시네마틱 사진"),
+        "caution": "현재 SD 1.5 워크플로보다 메모리와 생성 시간이 더 필요하며 별도 SDXL 워크플로가 필요합니다.",
+        "url": "https://civitai.com/models/133005/juggernaut-xl",
+    },
+    {
+        "id": "realistic-vision",
+        "name": "Realistic Vision",
+        "family": "SD 1.5",
+        "filenames": ("realisticvision", "realistic_vision"),
+        "summary": "인물·제품·실내외 사진을 안정적으로 만드는 대표적인 사실적 SD 1.5 모델입니다.",
+        "best_for": ("일상 인물 사진", "제품과 소품", "실내외 현실적 장면"),
+        "caution": "모델 버전에 맞는 VAE와 권장 설정을 함께 확인해야 색감 차이를 줄일 수 있습니다.",
+        "url": "https://civitai.com/models/4201/realistic-vision-v60-b1",
+    },
+)
+
+
+def _comfy_workspace_model_catalog():
+    checkpoint_dir = Path.home() / "Applications/ComfyUI/models/checkpoints"
+    installed_files = []
+    try:
+        installed_files = sorted(
+            path.name for path in checkpoint_dir.iterdir()
+            if path.is_file() and path.suffix.lower() in {".safetensors", ".ckpt", ".pt"}
+        )
+    except OSError:
+        pass
+    lowered = {name.lower(): name for name in installed_files}
+    models = []
+    for model in COMFY_MODEL_CATALOG:
+        match = next((original for low, original in lowered.items()
+                      if any(token in low for token in model["filenames"])), None)
+        models.append({
+            key: (list(value) if isinstance(value, tuple) else value)
+            for key, value in model.items() if key != "filenames"
+        } | {"installed": bool(match), "installed_file": match or ""})
+    return {"models": models, "installed_files": installed_files}
+
+
+def _comfy_workspace_animation_capability():
+    custom_nodes = Path.home() / "Applications/ComfyUI/custom_nodes"
+    node_names = []
+    try:
+        node_names = [path.name.lower() for path in custom_nodes.iterdir() if path.is_dir()]
+    except OSError:
+        pass
+    has_video_helper = any("videohelpersuite" in name or "video_helper" in name for name in node_names)
+    has_animatediff = any("animatediff" in name for name in node_names)
+    motion_files = []
+    for relative in ("animatediff_models", "animatediff", "motion_models"):
+        folder = Path.home() / "Applications/ComfyUI/models" / relative
+        try:
+            motion_files.extend(path.name for path in folder.iterdir() if path.is_file())
+        except OSError:
+            continue
+    missing = []
+    if not has_video_helper:
+        missing.append("Video Helper Suite(GIF 저장)")
+    if not has_animatediff:
+        missing.append("AnimateDiff-Evolved(움직임 생성)")
+    if not motion_files:
+        missing.append("AnimateDiff 모션 모델")
+    return {
+        "supported": True,
+        "export_ready": has_video_helper,
+        "motion_ready": has_video_helper and has_animatediff and bool(motion_files),
+        "video_helper_installed": has_video_helper,
+        "animatediff_installed": has_animatediff,
+        "motion_models": sorted(set(motion_files)),
+        "missing": missing,
+        "summary": (
+            "움직이는 장면 생성과 GIF 저장을 바로 사용할 수 있습니다."
+            if has_video_helper and has_animatediff and motion_files else
+            "GIF 작업은 가능하지만 현재 설치에는 애니메이션 생성·저장 구성요소가 부족합니다."
+        ),
+        "docs": {
+            "video_helper": "https://github.com/Kosinkadink/ComfyUI-VideoHelperSuite",
+            "animatediff": "https://github.com/Kosinkadink/ComfyUI-AnimateDiff-Evolved",
+        },
+    }
 
 
 def _comfyui_json(path: str, payload: dict | None = None):
@@ -2128,6 +2320,15 @@ def comfy_workspace_status(request: Request):
                                    if preview else None)})
     return {**runtime, "queue": queue, "backlog": backlog, "active_jobs": active,
             "log_tail": _comfyui_log_tail(), "checked_at": _now()}
+
+
+@app.get("/api/comfy-workspace/models")
+def comfy_workspace_models(request: Request):
+    """관리자용 읽기 전용 모델 카탈로그와 GIF 준비 상태."""
+    _require_owner(request)
+    return {**_comfy_workspace_model_catalog(),
+            "animation": _comfy_workspace_animation_capability(),
+            "checked_at": _now()}
 
 
 @app.post("/api/comfy-workspace/action")
@@ -2465,6 +2666,22 @@ def dating_sim_playable_stories(request: Request):
         except HTTPException:
             continue
         scenario_ok, images_ok, image_count = dating_sim_story.book_readiness(book_id)
+        _, work_dir = dating_sim_story.resolve_book_work_dir(story_id)
+        scenario_progress = None
+        if work_dir:
+            progress_path = work_dir / "dating_sim_scenario_progress.json"
+            try:
+                raw_progress = json.loads(progress_path.read_text(encoding="utf-8"))
+                if isinstance(raw_progress, dict):
+                    scenario_progress = {
+                        key: raw_progress.get(key) for key in (
+                            "status", "done", "total", "percent", "current",
+                            "started_at", "updated_at", "elapsed_seconds", "eta_seconds",
+                            "average_day_seconds", "expected_finished_at",
+                        )
+                    }
+            except (OSError, ValueError):
+                pass
         row = progress.get(story_id)
         stories.append({
             "story_id": story_id, "character_name": story["name"],
@@ -2476,6 +2693,7 @@ def dating_sim_playable_stories(request: Request):
             # ★ 2026-09-24: 이미지·시나리오가 덜 끝난 작품도 목록에서 빼지 않고 미완료로 표시한다.
             "ready": scenario_ok and images_ok, "scenario_ready": scenario_ok,
             "images_ready": images_ok, "image_count": image_count,
+            "scenario_progress": scenario_progress,
         })
     # 사용자가 관계를 이어 온 작품부터 찾을 수 있도록 시작한 작품을 호감도
     # 내림차순으로 먼저 둔다. 같은 호감도와 미시작 작품은 제작 완료 상태를 따른다.
@@ -2486,7 +2704,7 @@ def dating_sim_playable_stories(request: Request):
 
 
 @app.post("/api/dating-sim/new")
-def dating_sim_new_encounter(request: Request):
+def dating_sim_new_encounter(request: Request, body: DatingSimNewRequest | None = None):
     """아직 시작하지 않은 만남(기본 이야기 또는 서재의 작품) 하나를 무작위로
     골라준다. 전부 이미 시작했으면 409 — 그 경우 프론트는 기존 만남을
     이어가거나 게임 안 "처음부터 다시하기"로 특정 만남을 초기화하게 안내한다."""
@@ -2510,7 +2728,16 @@ def dating_sim_new_encounter(request: Request):
         candidates.append(f"book:{book_id}")
     if not candidates:
         raise HTTPException(status_code=409, detail="완전히 준비된 새 시나리오가 아직 없어요. 기존 만남을 이어가거나 다음 기상 알람의 자동 생성을 기다려주세요")
-    return {"story_id": random.choice(candidates)}
+    selected = random.choice(candidates)
+    difficulty = _dating_difficulty(body.difficulty if body else "normal")
+    story = _dating_story(selected, username)
+    story["_requested_difficulty"] = difficulty
+    conn = get_conn()
+    try:
+        _dating_sim_row(conn, username, story)
+    finally:
+        conn.close()
+    return {"story_id": selected, "difficulty": difficulty}
 
 
 class BattleSimChoiceRequest(BaseModel):
@@ -2697,10 +2924,14 @@ def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
         if body.choice_index not in range(len(scene["choices"])):
             raise HTTPException(status_code=400, detail="올바르지 않은 선택지입니다")
         raw_affection_delta = scene["choices"][body.choice_index]["affection"]
+        difficulty = _dating_difficulty(row.get("difficulty"))
+        adjusted_delta = _dating_apply_affection_delta(raw_affection_delta, difficulty)
         next_day = row["day"] + 1
         completed = next_day > story["total_days"]
-        affection_cap = _dating_affection_cap(next_day, story["total_days"], completed)
-        affection = max(0, min(affection_cap, row["affection"] + raw_affection_delta))
+        start_affection = _dating_start_affection(story, difficulty)
+        affection_cap = _dating_affection_cap(next_day, story["total_days"], completed, start_affection)
+        old_affection = row["affection"]
+        affection = max(0, min(affection_cap, old_affection + adjusted_delta))
         applied_affection_delta = affection - row["affection"]
         ending_id = dating_sim_story.ending_for(story, affection)["id"] if completed else None
         conn.execute(
@@ -2714,6 +2945,7 @@ def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
     finally:
         conn.close()
     payload = _dating_sim_state_payload(row, story, username)
+    crossed = list(range(((old_affection // 10) + 1) * 10, affection + 1, 10)) if affection > old_affection else []
     payload["choice_result"] = {
         "affection_delta": applied_affection_delta,
         "choice_score": raw_affection_delta,
@@ -2723,9 +2955,21 @@ def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
             selected_location, story.get("character_image")),
         "line": dating_sim_story.choice_reaction(
             row["day"] - 1, selected_location,
-            raw_affection_delta, story["id"],
+            raw_affection_delta, story["id"], affection,
         ),
     }
+    if crossed:
+        milestone = crossed[-1]
+        payload["choice_result"]["service_scene"] = {
+            "milestone": milestone,
+            "title": f"호감도 {milestone} 보너스 장면",
+            "description": "관계가 가까워진 만큼 표정과 거리감이 달라진 특별 장면입니다.",
+            "image_prompt": (
+                "adult Japanese woman, tasteful romantic bonus scene, affectionate expression, "
+                "elegant contemporary outfit, cinematic lighting, non-explicit, fully clothed, "
+                "no nudity, no sexual act, natural eyes and hands"
+            ),
+        }
     return payload
 
 
@@ -2734,14 +2978,18 @@ def dating_sim_restart(request: Request, body: DatingSimRestartRequest | None = 
     _require_signed_in_user(request)
     username = _request_username(request)
     story = _dating_story(body.story_id if body else None, username)
+    difficulty = _dating_difficulty(body.difficulty if body and body.difficulty else "normal")
+    start_affection = _dating_start_affection(story, difficulty)
     conn = get_conn()
     try:
-        conn.execute(
-            "UPDATE dating_sim_progress SET day=1, affection=50, pending_location=NULL, completed=0, "
+        cursor = conn.execute(
+            "UPDATE dating_sim_progress SET day=1, affection=?, difficulty=?, pending_location=NULL, completed=0, "
             "ending_id=NULL, scenario_run=scenario_run+1, updated_at=? WHERE username=? AND character_id=?",
-            (_now(), username, story["id"]),
+            (start_affection, difficulty, _now(), username, story["id"]),
         )
         conn.commit()
+        if cursor.rowcount == 0:
+            story["_requested_difficulty"] = difficulty
         row = _dating_sim_row(conn, username, story)
     finally:
         conn.close()

@@ -503,9 +503,14 @@ class DatingImageAgentTests(unittest.TestCase):
                               force_keys={"portrait"})
             self.assertEqual(calls, ["portrait.png"])
             manifest = json.loads((work / "dating_sim_images" / "manifest.json").read_text(encoding="utf-8"))
-            self.assertEqual(manifest["job_progress"], {
-                "done": 1, "total": 1, "percent": 100, "current": "생성 완료",
-            })
+            progress = manifest["job_progress"]
+            self.assertEqual(
+                {key: progress[key] for key in ("done", "total", "percent", "current")},
+                {"done": 1, "total": 1, "percent": 100, "current": "생성 완료"},
+            )
+            self.assertEqual(progress["eta_seconds"], 0)
+            self.assertIn("elapsed_seconds", progress)
+            self.assertIn("expected_finished_at", progress)
             calls.clear()
 
             images.run_agent(work, max_scenes=5, generator=fake_generator, translator=fake_translator,

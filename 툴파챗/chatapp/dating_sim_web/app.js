@@ -280,6 +280,11 @@ function renderHud(state) {
   $("affection-value").textContent = state.affection;
   $("affection-value").parentElement.setAttribute("aria-label", `호감도 ${state.affection}점`);
   $("affection-bar").style.width = `${Math.max(0, Math.min(100, state.affection))}%`;
+  $("difficulty-badge").textContent = state.difficulty_label || "노말";
+  $("difficulty-badge").title = state.relationship_tone
+    ? `${state.relationship_tone.label}: ${state.relationship_tone.description}` : "";
+  const restartDifficulty = $("restart-difficulty-select");
+  if (restartDifficulty) restartDifficulty.value = state.difficulty || "normal";
   const sourceLink = $("source-epub-link");
   const sourceBookId = String(state.story_id || "").match(/^book:([0-9a-f]{20})$/)?.[1];
   sourceLink.classList.toggle("hidden", !sourceBookId);
@@ -1874,6 +1879,12 @@ function renderChoiceResult(state) {
   setSafeImage($("result-portrait-image"), state.choice_result.character_image || state.character_image);
   renderAnnotatedText($("result-text"), naturalizeCharacterAddress(state.choice_result.line, state));
   $("result-affection").textContent = `${delta > 0 ? "+" : ""}${delta} · 현재 호감도 ${state.affection}`;
+  if (state.choice_result.service_scene) {
+    const bonus = document.createElement("span");
+    bonus.className = "service-scene";
+    bonus.textContent = `✦ ${state.choice_result.service_scene.title} · ${state.choice_result.service_scene.description}`;
+    $("result-affection").append(bonus);
+  }
   showView("result-view");
   if (listeningMode) {
     playStandalone(naturalizeCharacterAddress(state.choice_result.line, state), "female", `${state.character_name} 대사 재생 중`)
@@ -2069,6 +2080,23 @@ async function openStoryPopover(anchor) {
     const minutes = Math.max(1, Math.ceil((value % 3600) / 60));
     return hours ? `약 ${hours}시간 ${minutes}분` : `약 ${minutes}분`;
   };
+  const clockLabel = (value) => {
+    if (!value) return "계산 중";
+    const numeric = Number(value);
+    const date = Number.isFinite(numeric)
+      ? new Date(numeric * 1000)
+      : new Date(value);
+    if (Number.isNaN(date.getTime())) return "계산 중";
+    return new Intl.DateTimeFormat("ko-KR", {
+      month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit",
+    }).format(date);
+  };
+  const updateAgeLabel = (value) => {
+    const numeric = Number(value);
+    if (!numeric) return "갱신 대기";
+    const age = Math.max(0, Math.round(Date.now() / 1000 - numeric));
+    return age < 15 ? "방금 갱신" : `${age}초 전 갱신`;
+  };
 
   const stopBulkPoll = () => {
     if (missingImagePollTimer) clearInterval(missingImagePollTimer);
@@ -2118,8 +2146,14 @@ async function openStoryPopover(anchor) {
         const currentJob = state.current_image_job || "이미지 작업 준비 중";
         const currentPercent = Number.isFinite(Number(state.current_image_percent))
           ? ` (${state.current_image_percent}%)` : "";
-        const eta = durationLabel(state.eta_seconds || state.current_image_eta_seconds);
-        jobDetail.innerHTML = `<b>현재 작업</b><span>${currentJob}${currentPercent}</span><b>완료 예상</b><span>${eta}</span>`;
+        const etaSeconds = state.current_image_eta_seconds ?? state.eta_seconds;
+        const elapsed = durationLabel(state.current_image_elapsed_seconds);
+        const expected = clockLabel(state.current_image_expected_finished_at || state.expected_finished_at);
+        const updated = updateAgeLabel(state.current_image_updated_at || state.updated_at_epoch);
+        jobDetail.innerHTML = `<b>현재 작업</b><span>${currentJob}${currentPercent}</span>`
+          + `<b>경과 시간</b><span>${elapsed}</span>`
+          + `<b>남은 시간</b><span>${durationLabel(etaSeconds)}</span>`
+          + `<b>완료 예정</b><span>${expected} · ${updated}</span>`;
         return;
       }
       if (["completed", "completed_with_errors", "failed", "stopped"].includes(uiStatus)) {
@@ -2244,6 +2278,17 @@ async function openStoryPopover(anchor) {
     const imageRequired = Number(item.image_required) || 42;
     production.textContent = item.ready ? "플레이 가능" : item.scenario_ready
       ? `이미지 미완성 · ${item.image_count}/${imageRequired}장` : "시나리오 미완성";
+    const scenarioProgress = item.scenario_progress || null;
+    if (!item.scenario_ready && scenarioProgress && scenarioProgress.status === "running") {
+      const percent = Math.max(0, Math.min(100, Number(scenarioProgress.percent) || 0));
+      const etaSeconds = Number(scenarioProgress.eta_seconds) || 0;
+      const expectedAt = scenarioProgress.expected_finished_at;
+      production.textContent = `시나리오 생성 중 · ${percent}% · ${scenarioProgress.current || "작업 중"}`;
+      if (etaSeconds > 0) production.textContent += ` · ${durationLabel(etaSeconds)} 남음`;
+      if (expectedAt) production.textContent += ` (${clockLabel(expectedAt)} 예상)`;
+    } else if (!item.scenario_ready && scenarioProgress && scenarioProgress.status === "failed") {
+      production.textContent = `시나리오 중단 · ${Number(scenarioProgress.percent) || 0}% · 재실행 시 이어서 진행`;
+    }
     const status = document.createElement("small");
     status.textContent = item.completed ? `내 진행 · 엔딩 완료 · 호감도 ${item.affection}` : item.started
       ? `내 진행 · DAY ${item.day}/${item.total_days} · 호감도 ${item.affection}` : "내 진행 · 아직 시작하지 않음";
@@ -2300,7 +2345,7 @@ async function boot() {
   try {
     const encounters = await api("/api/dating-sim/encounters");
     if (!encounters.length) {
-      const created = await api("/api/dating-sim/new", { method: "POST" });
+      const created = await api("/api/dating-sim/new", { method: "POST", body: JSON.stringify({ difficulty: selectedDifficulty() }) });
       return enterStory(created.story_id);
     }
     renderLobby(encounters[0]);
@@ -2312,7 +2357,7 @@ async function boot() {
 $("lobby-new-btn").addEventListener("click", async () => {
   showView("loading-view");
   try {
-    const { story_id } = await api("/api/dating-sim/new", { method: "POST" });
+    const { story_id } = await api("/api/dating-sim/new", { method: "POST", body: JSON.stringify({ difficulty: selectedDifficulty() }) });
     enterStory(story_id);
   } catch (e) {
     alert(e.message);
@@ -2360,12 +2405,26 @@ async function chooseOption(choiceIndex) {
 async function restart() {
   if (!confirm("처음부터 다시 시작할까요? 지금까지의 호감도는 사라집니다.")) return;
   try {
-    render(await api("/api/dating-sim/restart", { method: "POST", body: JSON.stringify({ story_id: storyId }) }));
+    const difficulty = $("restart-difficulty-select")?.value || latestState?.difficulty || "normal";
+    render(await api("/api/dating-sim/restart", { method: "POST", body: JSON.stringify({ story_id: storyId, difficulty }) }));
     clearSceneHistory();
   } catch (e) {
     alert(e.message);
   }
 }
+
+function selectedDifficulty() {
+  return $("difficulty-select")?.value || latestState?.difficulty || "normal";
+}
+
+$("difficulty-select")?.addEventListener("change", (event) => {
+  const help = {
+    easy: "이지는 인물마다 55~68점에서 시작하고 호감도가 빠르게 오릅니다.",
+    normal: "노말은 인물 성격에 따라 32~48점에서 시작합니다.",
+    hard: "하드는 정확히 0점에서 시작하고 긍정 선택의 상승량도 작습니다.",
+  };
+  $("difficulty-help").textContent = help[event.target.value];
+});
 
 function replayCurrentView() {
   if (!$("map-view").classList.contains("hidden")) {
