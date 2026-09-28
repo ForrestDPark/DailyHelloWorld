@@ -265,6 +265,11 @@ function extractSourceWorkCode(sourceTitle) {
 }
 
 function renderHud(state) {
+  // 최초 상태 조회에는 권한 정보가 있지만 visit/choose 응답에는 생략된다.
+  // 장면 전환 때마다 관리자 버튼이 사라지지 않도록 확인된 권한을 이어받는다.
+  if (typeof state.is_admin !== "boolean" && typeof latestState?.is_admin === "boolean") {
+    state.is_admin = latestState.is_admin;
+  }
   latestState = state;
   $("hud-title").textContent = "미연시";
   const learning = state.learning_progress;
@@ -297,7 +302,7 @@ function renderHud(state) {
     sourceVideoLink.href = videoSearch.toString();
     sourceVideoLink.setAttribute("aria-label", `${sourceWorkCode} 영상 원본을 Safari에서 검색`);
   }
-  // 관리자 계정에서만 시나리오 트리 버튼을 보여준다(서버도 소유자만 허용).
+  // 관리자 계정에서는 장면 종류와 전환 횟수에 관계없이 항상 표시한다.
   $("tree-open-btn").classList.toggle("hidden", !state.is_admin);
   $("story-list-btn").classList.toggle("hidden", !state.is_admin);
 }
