@@ -585,6 +585,9 @@ def _build_comfy_workflow(
     scheduler = str(_GENERATION_OVERRIDES.get("scheduler", "karras"))
     denoise = float(_GENERATION_OVERRIDES.get(
         "denoise", 0.48 if blend_mode else 1.0))
+    hires_scale = float(_GENERATION_OVERRIDES.get("hires_scale", 1.0))
+    hires_steps = int(_GENERATION_OVERRIDES.get("hires_steps", 10))
+    hires_denoise = float(_GENERATION_OVERRIDES.get("hires_denoise", 0.28))
     workflow = {
         "3": {"class_type": "KSampler", "inputs": {
             "seed": seed, "steps": steps, "cfg": cfg, "sampler_name": sampler_name,
@@ -609,11 +612,28 @@ def _build_comfy_workflow(
             ),
             "clip": ["4", 1],
         }},
-        "8": {"class_type": "VAEDecode", "inputs": {"samples": ["3", 0], "vae": ["12", 0] if vae_name else ["4", 2]}},
+        "8": {"class_type": "VAEDecode", "inputs": {"samples": ["17", 0] if hires_scale > 1.0 else ["3", 0], "vae": ["12", 0] if vae_name else ["4", 2]}},
         "9": {"class_type": "SaveImage", "inputs": {"filename_prefix": "tulpachat/dating", "images": ["8", 0]}},
     }
     if vae_name:
         workflow["12"] = {"class_type": "VAELoader", "inputs": {"vae_name": vae_name}}
+    if hires_scale > 1.0:
+        # Civitai 2805532는 512x768 생성 메타데이터에 1024x1536 결과를
+        # 게시했다. Mac에서 곧바로 2배 크기를 샘플링하면 메모리와 시간이
+        # 급증하므로, 기본 latent를 1.5배 확대한 뒤 낮은 denoise로 짧게
+        # 재샘플링해 눈·머리카락·니트 질감만 보강한다.
+        workflow["16"] = {"class_type": "LatentUpscale", "inputs": {
+            "samples": ["3", 0], "upscale_method": "bislerp",
+            "width": int(round(width * hires_scale / 64) * 64),
+            "height": int(round(height * hires_scale / 64) * 64),
+            "crop": "disabled",
+        }}
+        workflow["17"] = {"class_type": "KSampler", "inputs": {
+            "seed": seed + 2, "steps": hires_steps, "cfg": cfg,
+            "sampler_name": sampler_name, "scheduler": scheduler,
+            "denoise": hires_denoise, "model": ["22", 0] if ipadapter_mode else ["4", 0],
+            "positive": ["6", 0], "negative": ["7", 0], "latent_image": ["16", 0],
+        }}
     if ipadapter_mode:
         # ★ 2026-09-23: "인물고정법도 있을건데 그거참고해서 만들면좋겠어" 요청 —
         # IP-Adapter FaceID(InsightFace 얼굴 임베딩으로 모델 자체를 패치)로
@@ -908,6 +928,9 @@ def _local_generate(prompt, target, reference=None):
                     "steps": sampler["steps"], "cfg": sampler["cfg"],
                     "sampler": sampler["sampler_name"], "scheduler": sampler["scheduler"],
                     "denoise": sampler["denoise"], "base_seed": base_seed,
+                    "hires_scale": float(_GENERATION_OVERRIDES.get("hires_scale", 1.0)),
+                    "hires_steps": int(_GENERATION_OVERRIDES.get("hires_steps", 10)),
+                    "hires_denoise": float(_GENERATION_OVERRIDES.get("hires_denoise", 0.28)),
                     "used_seed": seed, "attempt": attempt + 1,
                     "reference_count": len(reference_names),
                     "composition_pass": (
@@ -1228,12 +1251,17 @@ def main():
     parser.add_argument("--sampler")
     parser.add_argument("--scheduler")
     parser.add_argument("--denoise", type=float)
+    parser.add_argument("--hires-scale", type=float)
+    parser.add_argument("--hires-steps", type=int)
+    parser.add_argument("--hires-denoise", type=float)
     args = parser.parse_args()
     _GENERATION_OVERRIDES = {
         key: value for key, value in {
             "width": args.width, "height": args.height, "steps": args.steps,
             "cfg": args.cfg, "sampler": args.sampler,
             "scheduler": args.scheduler, "denoise": args.denoise,
+            "hires_scale": args.hires_scale, "hires_steps": args.hires_steps,
+            "hires_denoise": args.hires_denoise,
         }.items() if value is not None
     }
     if args.auto_references and args.reference is None:

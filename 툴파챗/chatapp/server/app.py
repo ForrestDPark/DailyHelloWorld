@@ -2341,6 +2341,8 @@ def _validated_image_settings(raw):
         "width": (int, 256, 1536), "height": (int, 256, 1536),
         "steps": (int, 5, 80), "cfg": (float, 1, 20),
         "denoise": (float, 0.05, 1),
+        "hires_scale": (float, 1, 2), "hires_steps": (int, 4, 30),
+        "hires_denoise": (float, 0.05, 0.6),
     }
     result = {}
     for key, (cast, low, high) in rules.items():
@@ -2545,9 +2547,10 @@ def dating_sim_generate_images_start(
             command.extend(["--force-key", force_key])
         if prompt_override:
             command.extend(["--prompt-override", prompt_override])
-        for key in ("width", "height", "steps", "cfg", "sampler", "scheduler", "denoise"):
+        for key in ("width", "height", "steps", "cfg", "sampler", "scheduler", "denoise",
+                    "hires_scale", "hires_steps", "hires_denoise"):
             if key in settings:
-                command.extend([f"--{key}", str(settings[key])])
+                command.extend([f"--{key.replace('_', '-')}", str(settings[key])])
         process = subprocess.Popen(command, stdout=log_file, stderr=subprocess.STDOUT)
         threading.Thread(
             target=_push_when_dating_sim_images_done,
