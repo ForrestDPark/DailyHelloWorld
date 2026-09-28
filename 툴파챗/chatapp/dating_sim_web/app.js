@@ -302,30 +302,36 @@ function renderHud(state) {
   $("story-list-btn").classList.toggle("hidden", !state.is_admin);
 }
 
-function renderMap(state) {
-  if (!recordedAudio.paused || window.speechSynthesis?.speaking) stopListening({ turnOff: false });
-  $("stage").dataset.location = "map";
-  $("stage").dataset.day = state.day;
-  const hint = document.querySelector(".map-hint");
-  mapOpeningText = state.day_opening || "오늘 어떤 일이 일어날까?";
-  $("intro-art-image").src = openingBackdrop(mapOpeningText, state.day);
-  renderAnnotatedText(hint, mapOpeningText);
-  const list = $("map-locations");
-  list.replaceChildren();
-  state.locations.forEach((location) => {
-    const tile = document.createElement("button");
-    tile.type = "button";
-    tile.className = "map-tile";
-    const emoji = document.createElement("span");
-    emoji.className = "map-tile-emoji";
-    emoji.textContent = location.emoji;
-    const label = document.createElement("span");
-    label.textContent = location.action || location.label;
-    tile.append(emoji, label);
-    tile.addEventListener("click", () => visitLocation(location.id));
-    list.append(tile);
-  });
-  showView("map-view");
+let flowEntryInFlight = false;
+
+async function enterCurrentFlow(state) {
+  // 도입 문구와 장소 선택은 실제 장면과 별도로 만들어져 서사가 어긋났다.
+  // 각 흐름은 시나리오에 저장된 첫 실제 장면부터 바로 시작한다.
+  if (flowEntryInFlight) return;
+  const firstLocation = state.locations?.[0];
+  if (!firstLocation) {
+    showView("loading-view");
+    $("loading-view").querySelector("p").textContent = "이 흐름에 재생할 장면이 없습니다.";
+    return;
+  }
+  flowEntryInFlight = true;
+  showView("loading-view");
+  $("loading-view").querySelector("p").textContent = `흐름 ${state.day}의 첫 장면을 여는 중…`;
+  try {
+    render(await api("/api/dating-sim/visit", {
+      method: "POST",
+      body: JSON.stringify({ location: firstLocation.id, story_id: storyId }),
+    }));
+  } catch (error) {
+    // 다른 탭에서 이미 장면을 연 경우에는 저장된 현재 상태를 다시 받는다.
+    if (/이미 진행 중인 장면/.test(error.message || "")) {
+      render(await api(`/api/dating-sim/state${storyQuery()}`));
+    } else {
+      $("loading-view").querySelector("p").textContent = error.message;
+    }
+  } finally {
+    flowEntryInFlight = false;
+  }
 }
 
 // ★ 2026-09-15: "고전 시뮬레이션 도트 게임 느낌" 요청 — 옛날 RPG 대사창처럼
@@ -1861,7 +1867,7 @@ function render(state) {
   } else if (state.scene) {
     renderScene(state);
   } else {
-    renderMap(state);
+    enterCurrentFlow(state);
   }
 }
 
@@ -3192,22 +3198,6 @@ function renderScenarioTree(tree) {
       renderAnnotatedText(nar, day.narration);
       dayEl.append(nar);
     }
-    if (day.openings.length) {
-      const openWrap = document.createElement("div");
-      openWrap.className = "tree-openings";
-      const label = document.createElement("span");
-      label.className = "tree-openings-label";
-      label.textContent = "도입 메시지 후보";
-      openWrap.append(label);
-      for (const opening of day.openings) {
-        const o = document.createElement("p");
-        o.className = "tree-opening";
-        renderAnnotatedText(o, opening);
-        openWrap.append(o);
-      }
-      dayEl.append(openWrap);
-    }
-
     for (const loc of day.locations) {
       const locEl = document.createElement("div");
       locEl.className = "tree-loc";
