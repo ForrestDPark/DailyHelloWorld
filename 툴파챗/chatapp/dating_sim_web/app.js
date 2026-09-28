@@ -3429,6 +3429,55 @@ function renderScenarioTree(tree) {
   head.append(meta);
   body.append(head);
 
+  if (tree.source_title && storyId) {
+    const rebuild = document.createElement("section");
+    rebuild.className = "full-rebuild-control";
+    rebuild.innerHTML = `
+      <strong>영상 원본으로 전체 재제작</strong>
+      <p>대사가 적거나 원작 이미지가 누락된 작품을 영상 다운로드부터 다시 만듭니다.</p>
+      <div class="full-rebuild-row"><input type="url" inputmode="url" placeholder="https://… 영상 주소" aria-label="원본 영상 주소"><button type="button">진단 후 재제작</button></div>
+      <div class="full-rebuild-status" aria-live="polite"></div>`;
+    const input = rebuild.querySelector("input");
+    const button = rebuild.querySelector("button");
+    const status = rebuild.querySelector(".full-rebuild-status");
+    button.addEventListener("click", async () => {
+      if (!input.value.trim()) { input.focus(); status.textContent = "영상 주소를 입력해주세요."; return; }
+      button.disabled = true;
+      status.textContent = "현재 산출물을 진단하고 있습니다…";
+      try {
+        const plan = await api("/api/dating-sim/full-rebuild/propose", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({story_id: storyId, video_url: input.value.trim()}),
+        });
+        const d = plan.diagnosis;
+        const summary = `현재 자막 ${Math.max(d.subtitle_cues, d.transcript_lines)}줄 · 참고 이미지 ${d.reference_images}장\n\n${d.reasons.join("\n")}\n\n새 결과 검증 전까지 기존 결과는 유지하고, 성공하면 백업 후 완전히 교체합니다. 계속할까요?`;
+        if (!confirm(summary)) { status.textContent = "재제작 승인을 취소했습니다."; button.disabled = false; return; }
+        await api("/api/dating-sim/full-rebuild/approve", {
+          method: "POST", headers: {"Content-Type":"application/json"},
+          body: JSON.stringify({plan_id: plan.plan_id}),
+        });
+        const progress = document.createElement("progress");
+        progress.max = 100; progress.value = 0;
+        status.replaceChildren(progress, document.createTextNode(" 재제작을 시작했습니다."));
+        const poll = async () => {
+          try {
+            const state = await api(`/api/dating-sim/full-rebuild/status?plan_id=${encodeURIComponent(plan.plan_id)}`);
+            progress.value = Number(state.percent || 0);
+            status.lastChild.textContent = ` ${state.message || state.stage || "진행 중"} (${progress.value}%)`;
+            if (state.status === "completed") { button.disabled = false; button.textContent = "재제작 완료"; return; }
+            if (state.status === "failed") { button.disabled = false; button.textContent = "다시 시도"; return; }
+          } catch (error) { status.lastChild.textContent = ` 상태 확인 실패: ${error.message}`; }
+          setTimeout(poll, 3000);
+        };
+        poll();
+      } catch (error) {
+        status.textContent = error.message;
+        button.disabled = false;
+      }
+    });
+    body.append(rebuild);
+  }
+
   const imageToggle = makeTreeToggle("🖼️ 생성된 캐릭터·장면 이미지");
   if (tree.source_title) {
     renderImageGenerationControl(imageToggle.content, tree);

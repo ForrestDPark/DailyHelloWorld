@@ -100,8 +100,8 @@ run_study_card_recovery() {
 echo "\n\033[1;36m==================================================\033[0m"
 echo "\033[1;36m🩹 학습카드 누락 회차 자동 복구 확인 중...\033[0m"
 echo "\033[1;36m==================================================\033[0m"
-LIBRARY_DIR="${SCRIPT_DIR}/library"
-COMPLETED_EPUB_DIR_FOR_BACKFILL="/Users/forrestdpark/Desktop/BlogImage/av완성작"
+LIBRARY_DIR="${JP_LIBRARY_DIR_OVERRIDE:-${SCRIPT_DIR}/library}"
+COMPLETED_EPUB_DIR_FOR_BACKFILL="${JP_COMPLETED_EPUB_DIR_OVERRIDE:-/Users/forrestdpark/Desktop/BlogImage/av완성작}"
 
 # ★ 2026-09-05: "라이브러리가 없으면 여기서(av완성작) 보충해" 요청 — 위 SUMMARY_OK
 # 수정 이전에 이미 library/<작품명>/이 통째로 지워진 회차는 원본 영상 없이는 복구
@@ -1279,7 +1279,7 @@ PYEOF
     fi
 
     SAFE_BASE_NAME=$(printf '%s' "$FILENAME_NO_EXT" | sed -E 's/[^0-9A-Za-z가-힣._-]+/_/g; s/^_+//; s/_+$//')
-    BOOK_DIR="${SCRIPT_DIR}/library/${SAFE_BASE_NAME}"
+    BOOK_DIR="${JP_LIBRARY_DIR_OVERRIDE:-${SCRIPT_DIR}/library}/${SAFE_BASE_NAME}"
 
     # ── 통합 자막 생성 ─────────────────────────────────────────────
     MERGED_SRT="${FILENAME_NO_EXT}.srt"
@@ -1463,7 +1463,7 @@ drawtext=fontfile='/System/Library/Fonts/Supplemental/Arial.ttf':text='Japanese 
     READALOUD_EPUB=""
     SUMMARY_OK=0
     EPUB_PUBLISHED=0
-    COMPLETED_EPUB_DIR="/Users/forrestdpark/Desktop/BlogImage/av완성작"
+    COMPLETED_EPUB_DIR="${JP_COMPLETED_EPUB_DIR_OVERRIDE:-/Users/forrestdpark/Desktop/BlogImage/av완성작}"
     mkdir -p "$COMPLETED_EPUB_DIR"
     _T0=$(date +%s)
     if /opt/anaconda3/bin/python3 "${SCRIPT_DIR}/generate_summary.py" "$BOOK_DIR"; then

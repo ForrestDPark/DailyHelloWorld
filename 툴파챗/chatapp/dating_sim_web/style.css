@@ -747,6 +747,16 @@ body.practice-open { overflow: hidden; }
 }
 .tree-work-head strong { font-size: 14px; color: var(--text); line-height: 1.4; }
 .tree-work-head span { font-size: 11px; color: var(--muted); }
+.full-rebuild-control { margin: 10px 0 14px; padding: 12px; border: 1px solid #7864a4; background: #211936; }
+.full-rebuild-control strong { display:block; color: var(--gold); font-size: 14px; }
+.full-rebuild-control p { margin: 6px 0 10px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.full-rebuild-row { display:flex; gap:7px; }
+.full-rebuild-row input { min-width:0; flex:1; padding:10px; border:1px solid #6f6290; border-radius:8px; background:#110d1c; color:var(--text); font-size:12px; }
+.full-rebuild-row button { flex:0 0 auto; padding:9px 11px; border:0; border-radius:8px; background:#68dfa4; color:#14251d; font-weight:800; }
+.full-rebuild-row button:disabled { opacity:.55; }
+.full-rebuild-status { margin-top:9px; color:#d9cee9; font-size:11px; line-height:1.5; }
+.full-rebuild-status progress { width:100%; height:8px; accent-color:#68dfa4; vertical-align:middle; }
+@media (max-width: 520px) { .full-rebuild-row { flex-direction:column; } .full-rebuild-row button { width:100%; } }
 .tree-toggle { border: 2px solid var(--border); background: var(--panel-2); }
 .tree-toggle > summary {
   position: relative; padding: 10px 34px 10px 12px; cursor: pointer; list-style: none;

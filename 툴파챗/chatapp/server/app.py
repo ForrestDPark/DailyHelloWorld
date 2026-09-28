@@ -1593,6 +1593,119 @@ def dating_sim_scenario_tree(request: Request, story_id: str | None = None):
         raise HTTPException(status_code=404, detail=str(exc))
 
 
+# ★ 2026-09-29: 영상 주소 하나로 다운로드→자막→번역→EPUB→미연시→이미지를
+# 다시 만드는 관리자 전용 안전 파이프라인. AI에는 실행 권한을 주지 않고 고정된
+# 파이썬 워커만 승인된 계획 파일을 실행한다. 기존 결과는 검증 성공 뒤에만 교체한다.
+DATING_REBUILD_DIR = Path(os.path.expanduser("~/.tulpachat/dating_full_rebuild"))
+DATING_REBUILD_WORKER = REPO_ROOT / "일본어자막추출" / "rebuild_dating_sim_from_video.py"
+
+
+class DatingFullRebuildRequest(BaseModel):
+    story_id: str
+    video_url: str
+
+
+class DatingFullRebuildApproveRequest(BaseModel):
+    plan_id: str
+
+
+def _dating_rebuild_diagnosis(work_dir: Path):
+    srt_cues = 0
+    for path in work_dir.glob("*.srt"):
+        try:
+            srt_cues = max(srt_cues, len(re.findall(r"(?m)^\d+\s*$", path.read_text(encoding="utf-8", errors="ignore"))))
+        except OSError:
+            pass
+    jsonl_lines = 0
+    for path in work_dir.glob("transcript*.jsonl"):
+        try:
+            jsonl_lines += sum(1 for line in path.read_text(encoding="utf-8", errors="ignore").splitlines() if line.strip())
+        except OSError:
+            pass
+    references = len(dating_sim_story.reference_candidates(work_dir))
+    scenario_path = work_dir / "dating_sim_scenario.json"
+    scenario_lines = 0
+    try:
+        scenario_text = scenario_path.read_text(encoding="utf-8")
+        scenario_lines = len(re.findall(r'"(?:ja|text)"\s*:', scenario_text))
+    except OSError:
+        pass
+    reasons = []
+    if max(srt_cues, jsonl_lines) < 30:
+        reasons.append("원본 자막 추출량이 적어 EPUB에 넣을 대사 자체가 부족합니다.")
+    if references < 8:
+        reasons.append(f"원작 참고 이미지가 {references}장만 보존되어 장면·인물 선별 폭도 좁습니다.")
+    if scenario_lines < 20:
+        reasons.append("학습카드 또는 미연시 시나리오의 대사 확장이 충분히 완료되지 않았습니다.")
+    if not reasons:
+        reasons.append("자막 수는 확보되어 있어 EPUB 조립 과정의 누락 여부를 재검사해야 합니다.")
+    return {"subtitle_cues": srt_cues, "transcript_lines": jsonl_lines,
+            "reference_images": references, "scenario_lines": scenario_lines, "reasons": reasons}
+
+
+@app.post("/api/dating-sim/full-rebuild/propose")
+def propose_dating_full_rebuild(request: Request, payload: DatingFullRebuildRequest):
+    _require_owner(request)
+    video_url = _validate_stream_download_url(payload.video_url)
+    _book_id, work_dir = dating_sim_story.resolve_book_work_dir(payload.story_id)
+    if not work_dir:
+        raise HTTPException(status_code=404, detail="재제작할 작품 폴더를 찾지 못했습니다")
+    DATING_REBUILD_DIR.mkdir(parents=True, exist_ok=True)
+    plan_id = secrets.token_urlsafe(18)
+    state_path = DATING_REBUILD_DIR / f"{plan_id}.state.json"
+    log_path = DATING_REBUILD_DIR / f"{plan_id}.log"
+    plan = {
+        "plan_id": plan_id, "status": "proposed", "story_id": payload.story_id,
+        "video_url": video_url, "work_dir": str(Path(work_dir).resolve()),
+        "completed_epub_dir": "/Users/forrestdpark/Desktop/BlogImage/av완성작",
+        "state_path": str(state_path), "log_path": str(log_path),
+        "created_by": _request_username(request), "created_at": int(time.time()),
+    }
+    plan_path = DATING_REBUILD_DIR / f"{plan_id}.plan.json"
+    plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.chmod(plan_path, 0o600)
+    state_path.write_text(json.dumps({"status": "awaiting_approval", "stage": "plan", "percent": 0,
+                                      "story_id": payload.story_id}, ensure_ascii=False), encoding="utf-8")
+    return {"ok": True, "plan_id": plan_id, "diagnosis": _dating_rebuild_diagnosis(Path(work_dir)),
+            "steps": ["영상 다운로드", "자막·번역·EPUB 재생성", "미연시 시나리오 재생성",
+                      "장면 이미지 재생성", "검증 성공 후 기존 결과 백업·교체"]}
+
+
+@app.post("/api/dating-sim/full-rebuild/approve")
+def approve_dating_full_rebuild(request: Request, payload: DatingFullRebuildApproveRequest):
+    _require_owner(request)
+    if not re.fullmatch(r"[A-Za-z0-9_-]{10,64}", payload.plan_id):
+        raise HTTPException(status_code=422, detail="계획 번호가 올바르지 않습니다")
+    plan_path = DATING_REBUILD_DIR / f"{payload.plan_id}.plan.json"
+    try:
+        plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=404, detail="재제작 계획을 찾지 못했습니다") from exc
+    if plan.get("status") != "proposed":
+        raise HTTPException(status_code=409, detail="이미 승인했거나 실행한 계획입니다")
+    plan["status"] = "approved"
+    plan["approved_at"] = int(time.time())
+    plan_path.write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
+    log = open(plan["log_path"], "a", encoding="utf-8")
+    try:
+        process = subprocess.Popen([DATING_SIM_IMAGE_PYTHON, str(DATING_REBUILD_WORKER), str(plan_path)],
+                                   stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+    finally:
+        log.close()
+    return {"ok": True, "plan_id": payload.plan_id, "pid": process.pid}
+
+
+@app.get("/api/dating-sim/full-rebuild/status")
+def dating_full_rebuild_status(request: Request, plan_id: str):
+    _require_owner(request)
+    if not re.fullmatch(r"[A-Za-z0-9_-]{10,64}", plan_id):
+        raise HTTPException(status_code=422, detail="계획 번호가 올바르지 않습니다")
+    try:
+        return json.loads((DATING_REBUILD_DIR / f"{plan_id}.state.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise HTTPException(status_code=404, detail="진행 상태를 찾지 못했습니다") from exc
+
+
 # ★ 2026-09-23: "시나리오트리에 이미지생성하기 버튼 만들어서 이미지만
 # 생성해서 올릴수있게하자" 요청 — 지금까지 미연시 이미지는 기상 알람이
 # 하루 한 작품씩 돌리는 백그라운드 에이전트(run_daily_dating_sim_agent.py)
