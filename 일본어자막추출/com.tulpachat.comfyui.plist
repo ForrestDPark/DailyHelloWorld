@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.tulpachat.comfyui</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/forrestdpark/Applications/ComfyUI/.venv/bin/python</string>
+    <string>/Users/forrestdpark/Applications/ComfyUI/main.py</string>
+    <string>--listen</string>
+    <string>127.0.0.1</string>
+    <string>--port</string>
+    <string>8188</string>
+    <string>--preview-method</string>
+    <string>none</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/forrestdpark/Applications/ComfyUI</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PYTORCH_ENABLE_MPS_FALLBACK</key>
+    <string>1</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>15</integer>
+  <key>ProcessType</key>
+  <string>Interactive</string>
+  <key>StandardOutPath</key>
+  <string>/Users/forrestdpark/Library/Logs/ComfyUI/server.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/forrestdpark/Library/Logs/ComfyUI/server-error.log</string>
+</dict>
+</plist>
