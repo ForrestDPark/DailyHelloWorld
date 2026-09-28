@@ -30,7 +30,7 @@
      페이지 로드는 chat.js가 부팅 후 유휴 시간에 백그라운드로 미리 시작). -->
 <link rel="preconnect" href="https://sunzi-strategy-notes.pulpilisory.chatgpt.site" crossorigin>
 <link rel="dns-prefetch" href="https://sunzi-strategy-notes.pulpilisory.chatgpt.site">
-<link rel="stylesheet" href="/static/style.css?v=20260925-update-history-v1"><link rel="stylesheet" href="/static/icon-layout.css?v=20260928-service-fold-v11">
+<link rel="stylesheet" href="/static/style.css?v=20260925-update-history-v1"><link rel="stylesheet" href="/static/icon-layout.css?v=20260928-history-chart-v12">
 <!-- ★ "새 메시지 알림(웹 푸시)" 요청(2026-08-27) — iOS Safari는 PWA로
      "홈 화면에 추가"돼 있어야만 웹 푸시가 동작한다. manifest.json이 그
      설치 가능 상태를 만든다. -->
@@ -116,6 +116,10 @@
       </section>
       <section id="portal-update-history" class="portal-update-history" aria-labelledby="portal-update-title">
         <div class="portal-update-head"><div><small id="portal-update-title">SYSTEM HISTORY</small></div><div class="portal-update-head-actions"><span id="portal-update-count"></span><button id="portal-update-refresh" type="button" aria-label="Refresh history" title="Refresh history">↻</button><button id="portal-update-toggle" type="button" aria-label="Collapse history" title="Collapse history" aria-expanded="true" aria-controls="portal-update-list"><i aria-hidden="true">⌃</i></button></div></div>
+        <section id="portal-update-chart" class="portal-update-chart" aria-label="분류별 업데이트 비율">
+          <div id="portal-update-donut" class="portal-update-donut" role="img" aria-label="업데이트 분류 원형 그래프"><span><b>0</b><small>UPDATES</small></span></div>
+          <div id="portal-update-legend" class="portal-update-legend"></div>
+        </section>
         <div id="portal-update-list" class="portal-update-list"><p>업데이트 기록을 불러오는 중입니다.</p></div>
       </section>
     </main>
@@ -352,6 +356,6 @@
   </div>
 
   <link rel="stylesheet" href="/static/style.css?v=20260925-message-fold-v2">
-  <script src="/static/chat.js?v=20260928-service-fold-v3"></script>
+  <script src="/static/chat.js?v=20260928-history-chart-v4"></script>
 </body>
 </html>

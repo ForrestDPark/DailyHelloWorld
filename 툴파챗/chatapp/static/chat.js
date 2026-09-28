@@ -2150,6 +2150,7 @@ async function loadSystemUpdateHistory({manual = false} = {}) {
     const syncedAt = new Date();
     const synced = `${String(syncedAt.getHours()).padStart(2, "0")}:${String(syncedAt.getMinutes()).padStart(2, "0")}`;
     document.getElementById("portal-update-count").textContent = `${items.length}건 · ${synced}`;
+    renderSystemUpdateChart(items);
     list.replaceChildren();
     for (const item of items) {
       const link = document.createElement("a");
@@ -2176,11 +2177,69 @@ async function loadSystemUpdateHistory({manual = false} = {}) {
     if (!items.length) list.textContent = "아직 기록된 업데이트가 없습니다.";
   } catch (error) {
     list.textContent = "업데이트 기록을 불러오지 못했습니다.";
+    renderSystemUpdateChart([]);
     document.getElementById("portal-update-count").textContent = "새로고침 실패";
     console.error(error);
   } finally {
     if (manual) { refresh.disabled = false; refresh.classList.remove("is-refreshing"); }
   }
+}
+
+const SYSTEM_UPDATE_COLORS = {
+  "나툼":"#9c6cff", "미연시":"#f35f9d", "학습 서재":"#38bfc8",
+  "일본어 학습":"#38bfc8", "Shift Alarm":"#f2a93b", "손자병법":"#7cb36a",
+  "단어장":"#d89835", "메모":"#bd72e8", "이직 시스템":"#4c8ee8",
+  "DB 실험실":"#4dc4a2",
+};
+const SYSTEM_UPDATE_FALLBACK_COLORS = ["#e97764", "#66a7dc", "#c9a257", "#73b98d", "#aa86df", "#d67aa4"];
+
+function systemUpdateColor(name, index) {
+  if (SYSTEM_UPDATE_COLORS[name]) return SYSTEM_UPDATE_COLORS[name];
+  let hash = 0;
+  for (const character of name) hash = ((hash << 5) - hash + character.charCodeAt(0)) | 0;
+  return SYSTEM_UPDATE_FALLBACK_COLORS[Math.abs(hash || index) % SYSTEM_UPDATE_FALLBACK_COLORS.length];
+}
+
+function renderSystemUpdateChart(items) {
+  const chart = document.getElementById("portal-update-chart");
+  const donut = document.getElementById("portal-update-donut");
+  const legend = document.getElementById("portal-update-legend");
+  if (!chart || !donut || !legend) return;
+  const counts = new Map();
+  for (const item of items) {
+    const name = String(item.system || "나툼").trim() || "나툼";
+    counts.set(name, (counts.get(name) || 0) + 1);
+  }
+  const total = items.length;
+  const rows = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ko"));
+  chart.classList.toggle("hidden", total === 0);
+  if (!total) {
+    donut.style.removeProperty("--update-segments");
+    legend.replaceChildren();
+    return;
+  }
+  let cursor = 0;
+  const segments = rows.map(([name, count], index) => {
+    const start = cursor;
+    cursor += count / total * 100;
+    return `${systemUpdateColor(name, index)} ${start.toFixed(3)}% ${cursor.toFixed(3)}%`;
+  });
+  donut.style.setProperty("--update-segments", segments.join(","));
+  donut.querySelector("b").textContent = String(total);
+  donut.setAttribute("aria-label", rows.map(([name, count]) => `${name} ${Math.round(count / total * 100)}퍼센트`).join(", "));
+  legend.replaceChildren(...rows.map(([name, count], index) => {
+    const row = document.createElement("div");
+    const label = document.createElement("span");
+    const value = document.createElement("b");
+    const dot = document.createElement("i");
+    row.className = "portal-update-legend-row";
+    dot.style.background = systemUpdateColor(name, index);
+    label.append(dot, document.createTextNode(name));
+    value.textContent = `${Math.round(count / total * 100)}%`;
+    value.title = `${count}건 / 전체 ${total}건`;
+    row.append(label, value);
+    return row;
+  }));
 }
 
 const SYSTEM_UPDATE_COLLAPSED_KEY = "tulpachat_system_updates_collapsed";
