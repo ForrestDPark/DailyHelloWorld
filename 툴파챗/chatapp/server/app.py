@@ -1492,6 +1492,16 @@ _dating_sim_image_jobs_lock = threading.Lock()
 _dating_sim_image_backlog_job: dict | None = None
 
 
+def _comfyui_runtime_status():
+    """관리자 제작 화면에 표시할 로컬 ComfyUI 생존 상태를 반환한다."""
+    try:
+        with urllib.request.urlopen("http://127.0.0.1:8188/system_stats", timeout=1.5):
+            pass
+        return {"comfy_online": True, "comfy_label": "ComfyUI ON"}
+    except (OSError, urllib.error.URLError):
+        return {"comfy_online": False, "comfy_label": "ComfyUI OFF"}
+
+
 def _dating_sim_image_backlog_state():
     try:
         data = json.loads(DATING_SIM_IMAGE_BACKLOG_STATE.read_text(encoding="utf-8"))
@@ -1727,7 +1737,7 @@ def dating_sim_generate_images_start(
         ).start()
         _dating_sim_image_jobs[book_id] = {
             "process": process, "log_file": log_file, "log_path": log_path,
-            "started_at": int(time.time()),
+            "started_at": int(time.time()), "work_dir": str(work_dir),
         }
     return {"status": "started"}
 
@@ -1804,12 +1814,31 @@ def dating_sim_generate_missing_images_status(request: Request):
     with _dating_sim_image_jobs_lock:
         job = _dating_sim_image_backlog_job
         running = bool(job and job["process"].poll() is None)
+        individual_jobs = [
+            (book_id, item) for book_id, item in _dating_sim_image_jobs.items()
+            if item["process"].poll() is None
+        ]
     if not running:
         external = _dating_sim_external_image_job()
         if external:
+            external.update(_comfyui_runtime_status())
+            external["image_worker_running"] = True
+            external["active_work"] = external.get("current") or "예약 이미지 작업"
             return external
     state = _dating_sim_image_backlog_progress(_dating_sim_image_backlog_state(), running)
     state["running"] = running
+    state.update(_comfyui_runtime_status())
+    state["image_worker_running"] = running or bool(individual_jobs)
+    if running:
+        state["active_work"] = state.get("current") or "일괄 이미지 작업 준비 중"
+        state["active_job"] = state.get("current_image_job") or "이미지 생성 준비 중"
+    elif individual_jobs:
+        book_id, item = individual_jobs[0]
+        work_dir = Path(item.get("work_dir") or "")
+        detail = _dating_sim_image_job_status(book_id, work_dir)
+        state["active_work"] = work_dir.name or book_id
+        state["active_job"] = detail.get("current") or "이미지 생성 중"
+        state["active_job_percent"] = detail.get("percent") or 0
     return state
 
 

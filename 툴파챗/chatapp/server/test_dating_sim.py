@@ -37,6 +37,19 @@ class DatingSimApiTests(unittest.TestCase):
             if (choice["affection"] > 0) is positive
         )
 
+    def test_comfyui_runtime_status_distinguishes_on_and_off(self):
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_):
+                return None
+
+        with patch.object(app.urllib.request, "urlopen", return_value=Response()):
+            self.assertTrue(app._comfyui_runtime_status()["comfy_online"])
+        with patch.object(app.urllib.request, "urlopen", side_effect=OSError("offline")):
+            self.assertFalse(app._comfyui_runtime_status()["comfy_online"])
+
     def test_source_work_code_falls_back_to_epub_filename(self):
         self.assertEqual(dating_sim_story.source_work_code(
             "낯선 집에서 보낸 특별한 하루", "EBOD-952_낭독판.epub"), "EBOD-952")

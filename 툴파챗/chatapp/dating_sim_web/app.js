@@ -1977,9 +1977,13 @@ async function probeStoryListForAdmin() {
 
 function closeStoryPopover() {
   $("story-popover").classList.add("hidden");
+  if (missingImagePollTimer) clearInterval(missingImagePollTimer);
+  missingImagePollTimer = null;
 }
 
 async function openStoryPopover(anchor) {
+  if (missingImagePollTimer) clearInterval(missingImagePollTimer);
+  missingImagePollTimer = null;
   const pop = $("story-popover");
   if (!pop.classList.contains("hidden") && pop.dataset.anchor === anchor.id) return closeStoryPopover();
   pop.dataset.anchor = anchor.id;
@@ -2019,6 +2023,13 @@ async function openStoryPopover(anchor) {
   }
   const bulk = document.createElement("section");
   bulk.className = "story-image-backlog";
+  const runtime = document.createElement("section");
+  runtime.className = "story-comfy-runtime";
+  const runtimeState = document.createElement("b");
+  runtimeState.textContent = "ComfyUI 확인 중";
+  const runtimeWork = document.createElement("span");
+  runtimeWork.textContent = "현재 이미지 작업을 확인하고 있습니다";
+  runtime.append(runtimeState, runtimeWork);
   const bulkButton = document.createElement("button");
   bulkButton.type = "button";
   bulkButton.textContent = `이미지 미완성 ${imageMissing.length}편 생성하기`;
@@ -2054,6 +2065,17 @@ async function openStoryPopover(anchor) {
   const pollBulk = async () => {
     try {
       const state = await api("/api/dating-sim/generate-missing-images/status");
+      runtime.dataset.online = state.comfy_online ? "true" : "false";
+      runtimeState.textContent = state.comfy_online ? "● ComfyUI ON" : "● ComfyUI OFF";
+      if (state.image_worker_running) {
+        const jobPercent = Number.isFinite(Number(state.active_job_percent))
+          ? ` · ${state.active_job_percent}%` : "";
+        runtimeWork.textContent = `현재 생성: ${state.active_work || "작품 확인 중"} · ${state.active_job || state.current_image_job || "이미지 생성 중"}${jobPercent}`;
+      } else {
+        runtimeWork.textContent = state.comfy_online
+          ? "현재 실행 중인 미연시 이미지 작업이 없습니다"
+          : "이미지 생성이 멈춥니다. Mac의 ComfyUI 자동 실행 상태를 확인하세요";
+      }
       if (state.running) {
         const percent = Math.max(0, Math.min(100, Number(state.percent) || 0));
         bulkButton.disabled = true;
@@ -2073,7 +2095,6 @@ async function openStoryPopover(anchor) {
         jobDetail.innerHTML = `<b>현재 작업</b><span>${currentJob}${currentPercent}</span><b>완료 예상</b><span>${eta}</span>`;
         return;
       }
-      stopBulkPoll();
       if (["complete", "partial", "failed"].includes(state.status)) {
         const percent = Math.max(0, Math.min(100, Number(state.percent) || 0));
         progressBar.style.width = `${percent}%`;
@@ -2086,9 +2107,9 @@ async function openStoryPopover(anchor) {
         playableStories = null;
       }
     } catch (error) {
-      stopBulkPoll();
       bulkButton.disabled = false;
       bulkStatus.textContent = error.message;
+      runtimeWork.textContent = "상태 연결을 다시 확인하는 중…";
     }
   };
   bulkButton.addEventListener("click", async () => {
@@ -2187,8 +2208,9 @@ async function openStoryPopover(anchor) {
     });
     list.append(button);
   }
-  pop.replaceChildren(head, summary, filters, bulk, list);
+  pop.replaceChildren(head, summary, runtime, filters, bulk, list);
   pollBulk();
+  missingImagePollTimer = setInterval(pollBulk, 5000);
 }
 
 for (const id of ["story-list-btn", "lobby-story-list-btn"]) {
