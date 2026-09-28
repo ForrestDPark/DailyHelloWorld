@@ -2087,11 +2087,12 @@ async function openStoryPopover(anchor) {
   const filters = document.createElement("nav");
   filters.className = "story-status-filters";
   filters.setAttribute("aria-label", "작품 제작 상태 필터");
+  // 제작 상태는 서로 겹치지 않는 세 목록만 제공한다. "전체"를 섞으면
+  // 미완성 수와 목록의 의미가 다시 모호해지므로 제거했다.
   const filterDefinitions = [
     ["ready", `플레이 가능 ${readyStories.length}`],
     ["images", `이미지 미완성 ${imageMissing.length}`],
     ["scenario", `시나리오 미완성 ${scenarioMissing.length}`],
-    ["all", `전체 ${stories.length}`],
   ];
   for (const [key, label] of filterDefinitions) {
     const filter = document.createElement("button");
@@ -2102,7 +2103,7 @@ async function openStoryPopover(anchor) {
     filter.addEventListener("click", () => {
       filters.querySelectorAll("button").forEach((item) => item.classList.toggle("active", item === filter));
       list.querySelectorAll(".story-popover-item").forEach((item) => {
-        item.classList.toggle("hidden", key !== "all" && item.dataset.productionState !== key);
+        item.classList.toggle("hidden", item.dataset.productionState !== key);
       });
     });
     filters.append(filter);
@@ -2133,8 +2134,9 @@ async function openStoryPopover(anchor) {
     const production = document.createElement("em");
     production.className = "story-production-status";
     production.dataset.state = button.dataset.productionState;
+    const imageRequired = Number(item.image_required) || 42;
     production.textContent = item.ready ? "플레이 가능" : item.scenario_ready
-      ? `이미지 준비 중 · ${item.image_count}/42장` : "시나리오 준비 중";
+      ? `이미지 미완성 · ${item.image_count}/${imageRequired}장` : "시나리오 미완성";
     const status = document.createElement("small");
     status.textContent = item.completed ? `내 진행 · 엔딩 완료 · 호감도 ${item.affection}` : item.started
       ? `내 진행 · DAY ${item.day}/${item.total_days} · 호감도 ${item.affection}` : "내 진행 · 아직 시작하지 않음";
@@ -2142,7 +2144,7 @@ async function openStoryPopover(anchor) {
       // 이미지·시나리오가 덜 끝난 작품도 목록에 남기고 무엇이 모자란지 표시한다.
       const missing = [];
       if (!item.scenario_ready) missing.push("시나리오");
-      if (!item.images_ready) missing.push(`이미지 ${item.image_count}/42`);
+      if (!item.images_ready) missing.push(`이미지 ${item.image_count}/${imageRequired}`);
       status.title = `준비되지 않은 항목: ${missing.join(", ")}`;
       button.classList.add("incomplete");
     }
@@ -2151,17 +2153,11 @@ async function openStoryPopover(anchor) {
     text.append(name, sourceTitle, production, status);
     button.append(text);
     button.addEventListener("click", async () => {
-      if (!item.ready) {
-        const reason = !item.scenario_ready
-          ? "시나리오가 아직 완성되지 않아 열 수 없습니다."
-          : `장면 이미지가 ${item.image_count}/42장 준비되어 아직 열 수 없습니다.`;
-        bulkStatus.textContent = `${plainText(item.character_name)}: ${reason} 위 생성 버튼에서 진행률을 확인하세요.`;
-        bulkStatus.setAttribute("role", "alert");
-        bulk.scrollIntoView({ block: "nearest", behavior: "smooth" });
-        return;
-      }
       closeStoryPopover();
       await enterStory(item.story_id);
+      // 미완성 항목은 막아 두지 않고 해당 작품의 제작 화면(시나리오 트리)을
+      // 바로 연다. 완성작은 평소처럼 즉시 플레이한다.
+      if (!item.ready) await openScenarioTree();
     });
     list.append(button);
   }

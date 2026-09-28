@@ -1764,7 +1764,10 @@ def prepared_book(book_id):
     except (OSError, ValueError):
         return None
     image_dir = manifest_path.parent
-    if manifest.get("status") != "complete" or not _image_file_ready(image_dir / str(manifest.get("portrait", ""))):
+    # 개별 재생성이나 품질 재검사가 중간에 끝나면 status가 ``partial``로
+    # 남을 수 있다. 장면 42장과 초상화가 실제로 모두 존재하는데 이 문자열
+    # 하나 때문에 완성작을 다시 미완성으로 강등하지 않는다.
+    if not _image_file_ready(image_dir / str(manifest.get("portrait", ""))):
         return None
     expected = {f"{day}:{location}" for day in range(1, TOTAL_DAYS + 1) for location in locations}
     assignments = manifest.get("assignments") or {}
@@ -1798,7 +1801,9 @@ def book_readiness(book_id):
     ready = sum(1 for key in expected
                 if key in assignments and _image_file_ready(image_dir / str(assignments[key])))
     portrait_ok = _image_file_ready(image_dir / str(manifest.get("portrait", "")))
-    images_ok = manifest.get("status") == "complete" and portrait_ok and ready == len(expected)
+    # 매니페스트 status는 작업 이력이고, 플레이 가능 여부는 실제 산출물을
+    # 기준으로 판정한다. 모든 필수 파일이 있으면 partial이어도 완성이다.
+    images_ok = portrait_ok and ready == len(expected)
     return scenario_ok, images_ok, ready
 
 
@@ -1806,7 +1811,11 @@ def all_book_ids():
     """서재의 모든 EPUB 공개 식별자(중복 제거·이름순)."""
     if not JAPANESE_EPUB_ROOT.is_dir():
         return []
-    return [_book_id(path) for path in sorted(JAPANESE_EPUB_ROOT.rglob("*.epub"))]
+    # 같은 EPUB이 다른 폴더에 복제되어도 콘텐츠 해시는 같으므로 한 작품만
+    # 노출한다. 문서의 "중복 제거" 약속과 실제 동작을 일치시킨다.
+    return list(dict.fromkeys(
+        _book_id(path) for path in sorted(JAPANESE_EPUB_ROOT.rglob("*.epub"))
+    ))
 
 
 def prepared_book_ids():

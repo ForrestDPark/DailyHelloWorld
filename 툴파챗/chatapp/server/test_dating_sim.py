@@ -1033,6 +1033,34 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         self.assertTrue(stories[0]["character_name"])
         self.assertEqual(stories[0]["source_title"], "READY")
 
+    def test_book_readiness_uses_complete_files_even_when_manifest_status_is_partial(self):
+        book_id = "d" * 20
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            image_dir = work / dating_sim_story.GENERATED_IMAGE_DIRNAME
+            image_dir.mkdir()
+            (image_dir / "portrait.png").write_bytes(b"p" * 2048)
+            assignments = {}
+            for day in range(1, dating_sim_story.TOTAL_DAYS + 1):
+                for location in ("first", "walk", "quiet"):
+                    filename = f"scene-{day}-{location}.png"
+                    (image_dir / filename).write_bytes(b"i" * 2048)
+                    assignments[f"{day}:{location}"] = filename
+            (image_dir / dating_sim_story.GENERATED_IMAGE_MANIFEST).write_text(
+                json.dumps({"status": "partial", "portrait": "portrait.png", "assignments": assignments}),
+                encoding="utf-8",
+            )
+            with patch.object(dating_sim_story, "_find_book", return_value=work / "book.epub"), \
+                 patch.object(dating_sim_story, "_book_title", return_value="BOOK"), \
+                 patch.object(dating_sim_story, "_find_library_folder", return_value=work), \
+                 patch.object(dating_sim_story, "load_generated_scenario", return_value={"days": []}):
+                scenario_ok, images_ok, image_count = dating_sim_story.book_readiness(book_id)
+                prepared = dating_sim_story.prepared_book(book_id)
+        self.assertTrue(scenario_ok)
+        self.assertTrue(images_ok)
+        self.assertEqual(image_count, 42)
+        self.assertIsNotNone(prepared)
+
     def test_playable_stories_puts_completed_scenarios_first(self):
         owner = SimpleNamespace(state=SimpleNamespace(
             user={"username": "admin", "is_owner": True}, can_write=True, share_guest=False))
