@@ -204,7 +204,11 @@ function openMemoEditDialog() {
   $("#memo-edit-title").value = current.title || "";
   $("#memo-edit-note").value = current.note || current.source_content || "";
   $("#memo-edit-dialog").showModal();
-  $("#memo-edit-note").focus({ preventScroll: true });
+  // 모바일에서 내용 칸을 먼저 포커스하면 작은 화면 최적화 CSS가 제목 칸을
+  // 밀어내 사용자가 제목을 수정할 수 없었다. 편집 목적에 맞게 제목부터
+  // 보여주고 선택하며, 내용 칸을 눌러도 제목 입력란은 계속 남겨둔다.
+  $("#memo-edit-title").focus({ preventScroll: true });
+  $("#memo-edit-title").select();
 }
 function syncMemoEditorViewport() {
   const viewport = window.visualViewport;
@@ -1042,10 +1046,15 @@ $("#new-memo").onclick = async () => {
 };
 $("#memo-edit-save").onclick = async () => {
   try {
+    const title = $("#memo-edit-title").value.trim();
+    if (!title) {
+      $("#memo-edit-title").focus();
+      throw new Error("메모 제목을 입력해 주세요");
+    }
     await api(`/api/me/memos/${current.id}`, {
       method: "PUT",
       body: JSON.stringify({
-        title: $("#memo-edit-title").value,
+        title,
         note: $("#memo-edit-note").value,
       }),
     });

@@ -598,11 +598,8 @@ dialog form {
     overflow: auto;
     -webkit-overflow-scrolling: touch;
   }
-  .memo-edit-dialog:has(textarea:focus) label:first-of-type {
-    display: none;
-  }
   .memo-edit-dialog:has(textarea:focus) form {
-    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
   }
   .memo-edit-dialog:has(textarea:focus) .dialog-head h2 {
     font-size: 18px;
