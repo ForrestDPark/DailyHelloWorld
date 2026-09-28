@@ -1645,6 +1645,10 @@ def _dating_sim_image_backlog_progress(state, running):
     if running and payload.get("current_index"):
         processed = max(processed, int(payload["current_index"]) - 1)
     payload["percent"] = min(100, round((processed + current_fraction) / total * 100)) if total else 0
+    # 프로세스가 아직 살아 있는 동안 100%를 표시하면 완료로 오해하기 쉽다.
+    # 마지막 결과 정리 단계는 99%로 두고, 프로세스 종료 뒤에만 100%가 된다.
+    if running and payload["percent"] >= 100:
+        payload["percent"] = 99
     if running:
         durations = [float(value) for value in (payload.get("work_durations") or [])
                      if isinstance(value, (int, float)) and value > 0]
@@ -1705,6 +1709,22 @@ def _dating_sim_external_image_job():
         state = json.loads(state_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         state = {}
+
+    # 일괄 이미지 생성기는 daily-agent 잠금을 함께 사용하지만 진행 정보는
+    # 별도 backlog 파일에 기록한다. 서버 재시작 뒤 메모리 작업 정보가 사라진
+    # 경우, 오래된 daily-agent 실패 기록을 현재 작업으로 오인하지 않도록
+    # 더 최근에 갱신된 backlog 상태를 우선한다.
+    try:
+        backlog_state = _dating_sim_image_backlog_state()
+        backlog_updated = DATING_SIM_IMAGE_BACKLOG_STATE.stat().st_mtime
+        daily_updated = state_path.stat().st_mtime
+        if backlog_state and backlog_updated > daily_updated:
+            payload = _dating_sim_image_backlog_progress(backlog_state, True)
+            payload["external"] = True
+            payload["running"] = True
+            return payload
+    except OSError:
+        pass
     current = state.get("work")
     payload = {"status": "running", "running": True, "external": True,
                "current": current, "total": 1, "completed": 0, "failed": 0,
