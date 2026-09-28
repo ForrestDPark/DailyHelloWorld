@@ -387,6 +387,42 @@ class DatingImageAgentTests(unittest.TestCase):
             self.assertEqual(len(calls), first_call_count)
             self.assertTrue(second["assignments"])
 
+    def test_agent_regenerates_files_that_failed_previous_quality_check(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            work = Path(tmp) / "TEST-QUALITY-RETRY"
+            work.mkdir()
+            (work / "dating_sim_scenario.json").write_text(
+                json.dumps(scenario(2)), encoding="utf-8")
+            calls = []
+
+            def fake_generator(prompt, target, reference=None):
+                calls.append(target.name)
+                target.write_bytes(b"fake-png" * 256)
+                return "test"
+
+            first = images.run_agent(
+                work, max_scenes=4, generator=fake_generator,
+                translator=lambda scene, work_dir: scene["text"],
+            )
+            failed_key = next(iter(first["scenes"]))
+            manifest_path = work / "dating_sim_images" / "manifest.json"
+            saved = json.loads(manifest_path.read_text(encoding="utf-8"))
+            saved["status"] = "partial"
+            saved["quality_status"] = "failed"
+            saved["quality_checks"][failed_key] = {
+                "passed": False, "reasons": ["test failure"], "face_count": 2,
+            }
+            manifest_path.write_text(json.dumps(saved), encoding="utf-8")
+            calls.clear()
+
+            result = images.run_agent(
+                work, max_scenes=4, generator=fake_generator,
+                translator=lambda scene, work_dir: scene["text"],
+            )
+
+            self.assertEqual(calls, [images._image_filename(failed_key)])
+            self.assertEqual(result["status"], "complete")
+
     def test_agent_does_not_use_cover_when_no_face_reference_qualifies(self):
         try:
             from PIL import Image

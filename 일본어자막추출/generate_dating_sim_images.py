@@ -971,12 +971,17 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
     manifest_path = output / MANIFEST_NAME
     manifest = {}
     previous_custom_references = []
+    previous_failed_quality = set()
     if manifest_path.is_file():
         try:
             previous = json.loads(manifest_path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             previous = {}
         previous_custom_references = list(previous.get("custom_references") or [])
+        previous_failed_quality = {
+            key for key, report in (previous.get("quality_checks") or {}).items()
+            if isinstance(report, dict) and report.get("passed") is False
+        }
         if not force:
             manifest = previous
     manifest.update({"version": VERSION, "status": "running", "title": work_dir.name,
@@ -1019,10 +1024,16 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
         manifest["portrait_prompt"] = prompt_override
     else:
         manifest["portrait_prompt"] = _prompt(work_dir.name)
-    portrait_needed = force or "portrait" in force_keys or not _valid_image(portrait)
+    # 파일이 존재하더라도 직전 품질 검사에서 탈락했다면 반드시 다시 만든다.
+    # 예전에는 탈락 파일도 `_valid_image()`만 통과하면 재사용되어, 백로그가
+    # 같은 partial 결과만 재검사하며 영원히 줄지 않았다.
+    portrait_needed = (force or "portrait" in force_keys
+                       or "portrait" in previous_failed_quality
+                       or not _valid_image(portrait))
     scene_target_keys = {
         scene["key"] for scene in plan["selected"]
         if force or scene["key"] in force_keys
+        or scene["key"] in previous_failed_quality
         or not _valid_image(output / _image_filename(scene["key"]))
     }
     progress_total = int(portrait_needed) + len(scene_target_keys)
@@ -1073,7 +1084,9 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
         filename = _image_filename(scene["key"])
         target = output / filename
         try:
-            generated_now = force or scene["key"] in force_keys or not _valid_image(target)
+            generated_now = (force or scene["key"] in force_keys
+                             or scene["key"] in previous_failed_quality
+                             or not _valid_image(target))
             if generated_now:
                 update_progress(f"장면 {progress_done + 1}/{progress_total} · {scene['key']}")
                 # 영어 통일 + 표정·배경 자동 보완(★ 2026-09-23 요청)은 실제로
