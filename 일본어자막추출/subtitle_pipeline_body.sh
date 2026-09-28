@@ -1104,15 +1104,25 @@ for scene_start in range(0, len(parsed_lines), SCENE_SIZE * 3):
         scene_lines[i:i + READALOUD_LINES_PER_PAGE]
         for i in range(2, len(scene_lines), READALOUD_LINES_PER_PAGE)
     ]
+    previous_page_image = None
     for page_num, page_lines in enumerate(page_groups, 1):
-        representative = page_lines[len(page_lines) // 2]
+        candidates = list(reversed(page_lines))
         page_image = os.path.join(
             book_images_dir,
             f"part{part_num}_scene{scene_num:03d}_page{page_num:02d}.jpg",
         )
-        capture_representative_image(
-            video_path, offset_sec + representative["start"] + 0.1, page_image
-        )
+        if os.path.isfile(page_image):
+            os.remove(page_image)
+        for candidate_index, representative in enumerate(candidates):
+            capture_representative_image(
+                video_path, offset_sec + representative["start"] + 0.1, page_image
+            )
+            if (not previous_page_image or
+                    image_difference(previous_page_image, page_image) >= 8 or
+                    candidate_index == len(candidates) - 1):
+                break
+            os.remove(page_image)
+        previous_page_image = page_image
 print(
     f"🖼️ 낭독판 EPUB 페이지 이미지 준비 완료 "
     f"(장면 첫 페이지 2문장+학습 카드, 이후 페이지당 {READALOUD_LINES_PER_PAGE}문장)",

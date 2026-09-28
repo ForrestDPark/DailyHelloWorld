@@ -1667,6 +1667,7 @@ def dating_sim_generate_images_start(
     request: Request, story_id: str | None = None,
     force: bool = False, force_key: str | None = None,
     reference: list[str] | None = Query(default=None), auto_references: bool = False,
+    no_references: bool = False,
     payload: DatingSimImagePromptRequest | None = None,
 ):
     """관리자 전용 — 이 작품의 이미지만(시나리오는 그대로) 지금 바로 생성한다.
@@ -1698,7 +1699,9 @@ def dating_sim_generate_images_start(
         log_file = open(log_path, "ab")
         command = [DATING_SIM_IMAGE_PYTHON, DATING_SIM_IMAGE_SCRIPT, str(work_dir)]
         # ★ 2026-09-24: 관리자가 직접 고른 원작 컷으로 인물(portrait)을 다시 만든다.
-        if isinstance(reference, list) and reference:
+        if no_references:
+            command.append("--no-references")
+        elif isinstance(reference, list) and reference:
             allowed = set(dating_sim_story.reference_candidates(work_dir))
             if any(name not in allowed for name in reference) or len(reference) > 4:
                 raise HTTPException(status_code=400, detail="참고 이미지 선택이 올바르지 않습니다(최대 4장)")
@@ -1719,7 +1722,7 @@ def dating_sim_generate_images_start(
         process = subprocess.Popen(command, stdout=log_file, stderr=subprocess.STDOUT)
         threading.Thread(
             target=_push_when_dating_sim_images_done,
-            args=(process, _request_username(request), story_id or "", "인물·전체" if (force or reference or auto_references) else "이미지"),
+            args=(process, _request_username(request), story_id or "", "인물·전체" if (force or reference or auto_references or no_references) else "이미지"),
             daemon=True,
         ).start()
         _dating_sim_image_jobs[book_id] = {

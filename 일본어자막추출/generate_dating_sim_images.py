@@ -955,7 +955,7 @@ def _generate(prompt, target, reference=None):
 
 def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_generate,
               translator=_visual_prompt_from_scene_text, force_keys=None, references=None,
-              prompt_override=None):
+              prompt_override=None, no_references=False):
     """force=True면 전부, force_keys(문자열 집합)에 담긴 키만이면 그 이미지만
     강제로 다시 만든다(★ 2026-09-23 "이미지 재생성 버튼... 이 사진만
     재생성하기" 요청) — "portrait"는 대표 초상화, 그 외는 장면 키
@@ -1002,13 +1002,19 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
     # 있으면 자동 선별 대신 그 컷들로 인물을 만든다. 고른 목록은 매니페스트에 남겨
     # 이후 재생성에도 이어 쓰고, 빈 목록으로 다시 고르면 자동 선별로 돌아간다.
     by_relative = {_relative_original_name(work_dir, path): path for path in originals}
-    if references is not None:
+    if no_references:
+        custom_names = []
+    elif references is not None:
         custom_names = [name for name in references if name in by_relative]
     else:
         custom_names = [name for name in previous_custom_references if name in by_relative]
     manifest["custom_references"] = custom_names
-    face_references = ([by_relative[name] for name in custom_names] if custom_names
-                       else _select_fixed_references(originals))
+    face_references = ([] if no_references else
+                       ([by_relative[name] for name in custom_names] if custom_names
+                        else _select_fixed_references(originals)))
+    manifest["reference_mode"] = "none" if no_references else (
+        "selected" if custom_names else "auto"
+    )
     # 얼굴 검증을 통과한 사진이 없을 때 표지나 첫 장면을 억지로 쓰지 않는다.
     # FSDSS-873_J에서는 첫 장면이 남성 표지였고, 이를 여성 초상화 프롬프트와
     # 합치면서 여러 얼굴이 겹친 기괴한 결과가 생성됐다. 이 경우 참고 없는
@@ -1077,9 +1083,12 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
         update_progress("대표 초상화 완료")
     # 이후 모든 장면은 portrait.png(없으면 위에서 고른 얼굴 사진)를 동일하게
     # 참조한다 — 장면마다 다른 원작 컷을 쓰지 않는다.
-    fixed_reference_path = portrait if _valid_image(portrait) else primary_reference
-    fixed_reference_file = "portrait.png" if _valid_image(portrait) else portrait_reference_file
-    portrait_source_files = list(manifest.get("portrait_references") or [])
+    fixed_reference_path = (None if no_references else
+                            (portrait if _valid_image(portrait) else primary_reference))
+    fixed_reference_file = (None if no_references else
+                            ("portrait.png" if _valid_image(portrait) else portrait_reference_file))
+    portrait_source_files = ([] if no_references else
+                             list(manifest.get("portrait_references") or []))
     for scene in plan["selected"]:
         filename = _image_filename(scene["key"])
         target = output / filename
@@ -1106,7 +1115,8 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
                     "day": scene["day"], "location": scene["location"],
                     "prompt": scene_prompt,
                     "reference_file": fixed_reference_file,
-                    "reference_source": "portrait.png (fixed character)",
+                    "reference_source": ("text_only_no_reference" if no_references
+                                         else "portrait.png (fixed character)"),
                     # 장면 결과도 당시 portrait의 바탕이 된 원작 컷을 별도로
                     # 보존한다. 이후 다른 컷을 선택해도 과거 결과 이력은 바뀌지 않는다.
                     "source_reference_files": portrait_source_files,
@@ -1162,6 +1172,8 @@ def main():
                          help="인물 참고 이미지로 쓸 원작 컷(images/ 기준 상대 경로). 여러 번 줄 수 있고 주면 자동 선별 대신 쓴다.")
     parser.add_argument("--auto-references", action="store_true",
                          help="이전에 고른 참고 이미지를 지우고 자동 선별로 되돌린다.")
+    parser.add_argument("--no-references", action="store_true",
+                         help="원작 컷이나 기존 초상화를 참조하지 않고 텍스트 프롬프트만으로 생성한다.")
     parser.add_argument("--prompt-override", default=None,
                          help="--force-key로 지정한 이미지 하나를 다시 만들 때 사용할 수정 프롬프트")
     args = parser.parse_args()
@@ -1171,6 +1183,7 @@ def main():
         Path(args.work_dir).resolve(), max(4, min(args.max_scenes, 30)), args.force,
         force_keys=set(args.force_key) or None, references=args.reference,
         prompt_override=(args.prompt_override or "").strip() or None,
+        no_references=args.no_references,
     )
     print(f"🖼️ 작품 이미지 에이전트: {manifest['status']} · 장면 {len(manifest['scenes'])}/{manifest['selected_count']}장")
     return 0 if manifest["status"] == "complete" else 1

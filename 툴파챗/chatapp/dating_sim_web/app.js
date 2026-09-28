@@ -2562,6 +2562,7 @@ function buildReferencePicker(item) {
     const defs = [
       ["✅ 체크한 사진으로 인물만 재생성", { __pick: "1" }, "인물 재생성", true],
       ["✅ 체크한 사진으로 전체 재생성", { __pick: "1", force: "true" }, "전체 재생성", true],
+      ["사진 선택 없이 이미지 생성", { no_references: "true", force: "true" }, "참고 사진 없는 전체 생성", false],
       ["↩️ 자동 선별로 되돌리기", { auto_references: "true" }, "자동 선별 인물 재생성", false],
     ];
     for (const [text, extra, label, needsPick] of defs) {
@@ -2628,16 +2629,29 @@ function openTreeImageDetail(item) {
     const regenStatus = document.createElement("span");
     regenStatus.className = "tree-image-generate-status";
     const regenProgress = createImageJobProgress();
-    regenWrap.append(regenButton, regenProgress.track, regenProgress.label, regenStatus);
+    const textOnlyButton = document.createElement("button");
+    textOnlyButton.type = "button";
+    textOnlyButton.className = "tree-image-generate-btn";
+    textOnlyButton.textContent = "사진 선택 없이 이미지 생성";
+    regenWrap.append(regenButton, textOnlyButton, regenProgress.track, regenProgress.label, regenStatus);
     panel.append(regenWrap);
 
-    const tick = watchDatingSimImageJob(regenStatus, (busy) => { regenButton.disabled = busy; }, async () => {
+    const setGenerateBusy = (busy) => {
+      regenButton.disabled = busy;
+      textOnlyButton.disabled = busy;
+    };
+    const tick = watchDatingSimImageJob(regenStatus, setGenerateBusy, async () => {
       closeTreeImageDetail();
       await openScenarioTree();
     }, regenProgress);
     regenButton.addEventListener("click", () => startDatingSimImageJob(
-      regenStatus, (busy) => { regenButton.disabled = busy; }, tick, { force_key: item.key },
+      regenStatus, setGenerateBusy, tick, { force_key: item.key },
       "재생성 시작 중...", "재생성 중... (몇 분 걸릴 수 있어요)",
+    ));
+    textOnlyButton.addEventListener("click", () => startDatingSimImageJob(
+      regenStatus, setGenerateBusy, tick,
+      { force_key: item.key, no_references: "true" },
+      "참고 사진 없는 생성 시작 중...", "텍스트 프롬프트만으로 생성 중...",
     ));
     tick(true);
   }

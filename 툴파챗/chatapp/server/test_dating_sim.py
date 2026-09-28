@@ -1115,6 +1115,23 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         self.assertIn("portrait", command)
         app._dating_sim_image_jobs.pop("6" * 20, None)
 
+    def test_regeneration_can_explicitly_disable_references(self):
+        owner = SimpleNamespace(state=SimpleNamespace(
+            user={"username": "admin", "is_owner": True}, can_write=True, share_guest=False))
+        story_id = "book:" + "7" * 20
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            with patch.object(dating_sim_story, "resolve_book_work_dir", return_value=("7" * 20, work)), \
+                 patch.object(app.subprocess, "Popen") as popen:
+                popen.return_value.poll.return_value = 0
+                app.dating_sim_generate_images_start(
+                    owner, story_id, force_key="1:first", no_references=True,
+                )
+            command = popen.call_args[0][0]
+        self.assertIn("--no-references", command)
+        self.assertIn("1:first", command)
+        app._dating_sim_image_jobs.pop("7" * 20, None)
+
     def test_book_character_profiles_are_stable_and_varied(self):
         profiles = [dating_sim_story.book_character_profile(f"book:{number:020x}")
                     for number in range(20)]
