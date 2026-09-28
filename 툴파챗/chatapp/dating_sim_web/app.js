@@ -2029,7 +2029,15 @@ async function openStoryPopover(anchor) {
   runtimeState.textContent = "ComfyUI 확인 중";
   const runtimeWork = document.createElement("span");
   runtimeWork.textContent = "현재 이미지 작업을 확인하고 있습니다";
-  runtime.append(runtimeState, runtimeWork);
+  const runtimeToggle = document.createElement("button");
+  runtimeToggle.type = "button";
+  runtimeToggle.className = "story-comfy-toggle";
+  runtimeToggle.setAttribute("role", "switch");
+  runtimeToggle.setAttribute("aria-label", "ComfyUI 전원");
+  runtimeToggle.setAttribute("aria-checked", "false");
+  runtimeToggle.disabled = true;
+  runtimeToggle.innerHTML = "<i></i><span>OFF</span>";
+  runtime.append(runtimeState, runtimeToggle, runtimeWork);
   const bulkButton = document.createElement("button");
   bulkButton.type = "button";
   bulkButton.textContent = `이미지 미완성 ${imageMissing.length}편 생성하기`;
@@ -2067,6 +2075,9 @@ async function openStoryPopover(anchor) {
       const state = await api("/api/dating-sim/generate-missing-images/status");
       runtime.dataset.online = state.comfy_online ? "true" : "false";
       runtimeState.textContent = state.comfy_online ? "● ComfyUI ON" : "● ComfyUI OFF";
+      runtimeToggle.disabled = !state.comfy_control_available || Boolean(runtimeToggle.dataset.switching);
+      runtimeToggle.setAttribute("aria-checked", state.comfy_online ? "true" : "false");
+      runtimeToggle.querySelector("span").textContent = state.comfy_online ? "ON" : "OFF";
       if (state.image_worker_running) {
         const jobPercent = Number.isFinite(Number(state.active_job_percent))
           ? ` · ${state.active_job_percent}%` : "";
@@ -2112,6 +2123,28 @@ async function openStoryPopover(anchor) {
       runtimeWork.textContent = "상태 연결을 다시 확인하는 중…";
     }
   };
+  runtimeToggle.addEventListener("click", async () => {
+    const enabled = runtimeToggle.getAttribute("aria-checked") !== "true";
+    if (!enabled && !confirm("ComfyUI를 끌까요? 다음 이미지 생성 때 다시 켜야 합니다.")) return;
+    runtimeToggle.dataset.switching = "true";
+    runtimeToggle.disabled = true;
+    runtimeToggle.querySelector("span").textContent = enabled ? "켜는 중…" : "끄는 중…";
+    runtimeWork.textContent = enabled ? "ComfyUI 프로세스를 시작하고 있습니다" : "진행 중인 작업이 없는지 확인하고 있습니다";
+    try {
+      const state = await api("/api/dating-sim/comfyui/runtime", {
+        method: "POST", body: JSON.stringify({ enabled }),
+      });
+      runtime.dataset.online = state.comfy_online ? "true" : "false";
+      runtimeToggle.setAttribute("aria-checked", state.comfy_online ? "true" : "false");
+      runtimeState.textContent = state.comfy_online ? "● ComfyUI ON" : enabled ? "◌ ComfyUI 시작 중" : "● ComfyUI OFF";
+      runtimeWork.textContent = state.message || (enabled ? "모델을 불러오는 중입니다" : "ComfyUI가 꺼졌습니다");
+    } catch (error) {
+      runtimeWork.textContent = error.message;
+    } finally {
+      delete runtimeToggle.dataset.switching;
+      await pollBulk();
+    }
+  });
   bulkButton.addEventListener("click", async () => {
     if (!confirm(`시나리오가 완성됐지만 이미지가 덜 만들어진 ${imageMissing.length}편을 순서대로 생성할까요? Mac의 ComfyUI가 켜져 있어야 합니다.`)) return;
     bulkButton.disabled = true;

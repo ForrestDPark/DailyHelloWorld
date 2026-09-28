@@ -50,6 +50,36 @@ class DatingSimApiTests(unittest.TestCase):
         with patch.object(app.urllib.request, "urlopen", side_effect=OSError("offline")):
             self.assertFalse(app._comfyui_runtime_status()["comfy_online"])
 
+    def test_comfyui_switch_uses_only_fixed_launch_agent(self):
+        results = []
+        launch_agent = Path(self.temp.name) / "com.tulpachat.comfyui.plist"
+        launch_agent.write_text("plist", encoding="utf-8")
+
+        def launchctl(*args):
+            results.append(args)
+            return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+        with patch.object(app, "COMFYUI_LAUNCH_AGENT_PLIST", launch_agent), \
+             patch.object(app, "_run_comfyui_launchctl", side_effect=launchctl), \
+             patch.object(app, "_comfyui_runtime_status", return_value={"comfy_online": True}), \
+             patch.object(app.time, "sleep"):
+            status = app._set_comfyui_runtime(True)
+        self.assertTrue(status["comfy_online"])
+        self.assertEqual(results[0], ("enable", f"gui/{app.os.getuid()}/com.tulpachat.comfyui"))
+        self.assertIn(("kickstart", "-k", f"gui/{app.os.getuid()}/com.tulpachat.comfyui"), results)
+
+        results.clear()
+        with patch.object(app, "COMFYUI_LAUNCH_AGENT_PLIST", launch_agent), \
+             patch.object(app, "_run_comfyui_launchctl", side_effect=launchctl), \
+             patch.object(app, "_comfyui_runtime_status", return_value={"comfy_online": False}), \
+             patch.object(app.time, "sleep"):
+            status = app._set_comfyui_runtime(False)
+        self.assertFalse(status["comfy_online"])
+        self.assertEqual(results, [
+            ("disable", f"gui/{app.os.getuid()}/com.tulpachat.comfyui"),
+            ("bootout", f"gui/{app.os.getuid()}/com.tulpachat.comfyui"),
+        ])
+
     def test_source_work_code_falls_back_to_epub_filename(self):
         self.assertEqual(dating_sim_story.source_work_code(
             "낯선 집에서 보낸 특별한 하루", "EBOD-952_낭독판.epub"), "EBOD-952")

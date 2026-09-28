@@ -1486,6 +1486,8 @@ DATING_SIM_IMAGE_SCRIPT = str(REPO_ROOT / "일본어자막추출" / "generate_da
 DATING_SIM_IMAGE_BACKLOG_SCRIPT = str(REPO_ROOT / "일본어자막추출" / "generate_missing_dating_sim_images.py")
 DATING_SIM_IMAGE_BACKLOG_STATE = Path(os.path.expanduser("~/.tulpachat/dating_sim_image_backlog.json"))
 DATING_SIM_IMAGE_BACKLOG_LOG = Path(os.path.expanduser("~/.tulpachat/dating_sim_image_backlog.log"))
+COMFYUI_LAUNCH_AGENT_LABEL = "com.tulpachat.comfyui"
+COMFYUI_LAUNCH_AGENT_PLIST = Path.home() / "Library" / "LaunchAgents" / f"{COMFYUI_LAUNCH_AGENT_LABEL}.plist"
 
 _dating_sim_image_jobs: dict[str, dict] = {}
 _dating_sim_image_jobs_lock = threading.Lock()
@@ -1497,9 +1499,57 @@ def _comfyui_runtime_status():
     try:
         with urllib.request.urlopen("http://127.0.0.1:8188/system_stats", timeout=1.5):
             pass
-        return {"comfy_online": True, "comfy_label": "ComfyUI ON"}
+        return {"comfy_online": True, "comfy_label": "ComfyUI ON",
+                "comfy_control_available": COMFYUI_LAUNCH_AGENT_PLIST.is_file()}
     except (OSError, urllib.error.URLError):
-        return {"comfy_online": False, "comfy_label": "ComfyUI OFF"}
+        return {"comfy_online": False, "comfy_label": "ComfyUI OFF",
+                "comfy_control_available": COMFYUI_LAUNCH_AGENT_PLIST.is_file()}
+
+
+def _run_comfyui_launchctl(*arguments):
+    """고정된 LaunchAgent만 제어한다. 사용자 입력은 명령에 포함하지 않는다."""
+    try:
+        return subprocess.run(
+            ["/bin/launchctl", *arguments], capture_output=True, text=True,
+            timeout=12, check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError("ComfyUI 시스템 제어 명령을 실행하지 못했습니다") from exc
+
+
+def _set_comfyui_runtime(enabled: bool):
+    """ComfyUI LaunchAgent를 영구 활성화하거나 비활성화한다."""
+    if not COMFYUI_LAUNCH_AGENT_PLIST.is_file():
+        raise RuntimeError("ComfyUI 자동 실행 설정 파일을 찾을 수 없습니다")
+    domain = f"gui/{os.getuid()}"
+    target = f"{domain}/{COMFYUI_LAUNCH_AGENT_LABEL}"
+    if enabled:
+        enabled_result = _run_comfyui_launchctl("enable", target)
+        if enabled_result.returncode:
+            raise RuntimeError((enabled_result.stderr or "ComfyUI 활성화에 실패했습니다").strip())
+        loaded = _run_comfyui_launchctl("print", target).returncode == 0
+        if not loaded:
+            boot = _run_comfyui_launchctl("bootstrap", domain, str(COMFYUI_LAUNCH_AGENT_PLIST))
+            if boot.returncode:
+                raise RuntimeError((boot.stderr or "ComfyUI 등록에 실패했습니다").strip())
+        started = _run_comfyui_launchctl("kickstart", "-k", target)
+        if started.returncode:
+            raise RuntimeError((started.stderr or "ComfyUI 시작에 실패했습니다").strip())
+    else:
+        disabled = _run_comfyui_launchctl("disable", target)
+        if disabled.returncode:
+            raise RuntimeError((disabled.stderr or "ComfyUI 비활성화에 실패했습니다").strip())
+        # 이미 종료된 상태의 bootout 오류는 목표 상태와 같으므로 무시한다.
+        _run_comfyui_launchctl("bootout", target)
+
+    # 시작은 모델 로딩 때문에 시간이 걸릴 수 있다. UI가 거짓으로 ON을
+    # 표시하지 않도록 짧게 확인하고, 나머지는 기존 5초 상태 폴링에 맡긴다.
+    for _ in range(12 if enabled else 4):
+        status = _comfyui_runtime_status()
+        if status["comfy_online"] is enabled:
+            return status
+        time.sleep(0.5)
+    return _comfyui_runtime_status()
 
 
 def _dating_sim_image_backlog_state():
@@ -1672,6 +1722,10 @@ class DatingSimImagePromptRequest(BaseModel):
     prompt_override: str | None = None
 
 
+class ComfyUIRuntimeRequest(BaseModel):
+    enabled: bool
+
+
 @app.post("/api/dating-sim/scenario-tree/generate-images")
 def dating_sim_generate_images_start(
     request: Request, story_id: str | None = None,
@@ -1840,6 +1894,42 @@ def dating_sim_generate_missing_images_status(request: Request):
         state["active_job"] = detail.get("current") or "이미지 생성 중"
         state["active_job_percent"] = detail.get("percent") or 0
     return state
+
+
+@app.post("/api/dating-sim/comfyui/runtime")
+def dating_sim_set_comfyui_runtime(payload: ComfyUIRuntimeRequest, request: Request):
+    """관리자 전용 ComfyUI 전원 스위치.
+
+    AI나 브라우저에 셸 권한을 주지 않고 고정 LaunchAgent만 결정론적으로
+    전환한다. 진행 중인 생성 작업이 있으면 종료 요청을 거부해 결과 파일이
+    중간에 끊기지 않게 한다.
+    """
+    _require_owner(request)
+    if not payload.enabled:
+        with _dating_sim_image_jobs_lock:
+            backlog_running = bool(
+                _dating_sim_image_backlog_job
+                and _dating_sim_image_backlog_job["process"].poll() is None
+            )
+            individual_running = any(
+                item["process"].poll() is None for item in _dating_sim_image_jobs.values()
+            )
+        if backlog_running or individual_running or _dating_sim_external_image_job():
+            raise HTTPException(
+                status_code=409,
+                detail="이미지 생성 작업이 진행 중이라 ComfyUI를 끌 수 없습니다. 작업이 끝난 뒤 다시 시도해 주세요",
+            )
+    try:
+        status = _set_comfyui_runtime(payload.enabled)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    status["requested_enabled"] = payload.enabled
+    status["message"] = (
+        "ComfyUI를 켰습니다" if status["comfy_online"]
+        else "ComfyUI를 껐습니다" if not payload.enabled
+        else "ComfyUI를 시작했습니다. 모델을 불러오는 중입니다"
+    )
+    return status
 
 
 # ★ 2026-09-17: "만남마다 나가기하면 그 진행상태가 세이브되서 다시 미연시
