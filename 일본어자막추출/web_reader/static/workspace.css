@@ -15,7 +15,7 @@
 .scroll-load{display:block;width:calc(100% - 24px);margin:10px 12px;padding:12px;border-radius:12px;background:#ded6f2;color:#4e3d6a;font-weight:750}.scroll-load.hidden{display:none}
 .reader.scroll-mode>footer{display:none}
 .reader footer{min-height:54px;padding-top:8px;padding-bottom:8px}
-.reader>footer,.reader>.readaloud-bar{transition:opacity .18s ease}.reader.reading-chrome-hidden{grid-template-rows:auto 0 1fr 0}.reader.reading-chrome-hidden>.readaloud-bar,.reader.reading-chrome-hidden>footer{min-height:0;height:0;padding-top:0;padding-bottom:0;border:0;opacity:0;overflow:hidden;pointer-events:none}
+.reader>nav,.reader>footer,.reader>.readaloud-bar{transition:opacity .18s ease}.reader.reading-chrome-hidden{grid-template-rows:0 0 1fr 0}.reader.reading-chrome-hidden>nav,.reader.reading-chrome-hidden>.readaloud-bar,.reader.reading-chrome-hidden>footer{min-height:0;height:0;padding-top:0;padding-bottom:0;border:0;opacity:0;overflow:hidden;pointer-events:none}
 .readaloud-bar{display:flex;align-items:center;gap:12px;padding:9px 16px;background:#f7f3ff;border-bottom:1px solid var(--line);font-size:12px;color:var(--muted)}
 .readaloud-bar button{min-width:90px;padding:9px 14px}
 .readaloud-bar button.playing{background:#b3261e}

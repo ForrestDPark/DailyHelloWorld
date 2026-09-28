@@ -36,6 +36,14 @@ def make_pdf(path: Path, title="PDF 테스트 책"):
 
 
 class ReaderTests(unittest.TestCase):
+    def test_reader_chrome_is_tap_toggled_not_scroll_toggled(self):
+        script = (Path(__file__).parent / "static" / "app.js").read_text(encoding="utf-8")
+        styles = (Path(__file__).parent / "static" / "workspace.css").read_text(encoding="utf-8")
+        self.assertIn("function toggleReaderChrome()", script)
+        self.assertIn("scrollChromeTap", script)
+        self.assertNotIn("addEventListener('scroll',()=>setReaderChromeHidden(true)", script)
+        self.assertIn(".reader.reading-chrome-hidden>nav", styles)
+
     def test_parse_and_scan(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td); make_epub(root / "ABC-001_낭독판.epub")
