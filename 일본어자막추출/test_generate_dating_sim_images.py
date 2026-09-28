@@ -2,6 +2,7 @@ import importlib.util
 import json
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 from unittest.mock import patch
 
@@ -325,6 +326,34 @@ class DatingImageAgentTests(unittest.TestCase):
             self.assertEqual([path.name for path in originals], [
                 "part1_scene001.jpg", "part1_scene002.jpg", "part1_scene003.jpg",
             ])
+
+    def test_original_images_restore_every_unique_image_from_completed_epub(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            work = root / "FNS-248-sample"
+            source = work / "images"
+            completed = root / "completed"
+            source.mkdir(parents=True)
+            completed.mkdir()
+            first = b"first-image" * 200
+            source.joinpath("part1_scene001.jpg").write_bytes(first)
+            epub = completed / "FNS-248 — sample_낭독판.epub"
+            with zipfile.ZipFile(epub, "w") as archive:
+                archive.writestr("OEBPS/images/part1_scene001_page01.jpg", first)
+                archive.writestr("OEBPS/images/part1_scene001_page02.jpg", b"second-image" * 200)
+                archive.writestr("OEBPS/images/part1_scene001_page03.png", b"third-image" * 200)
+            with patch.object(images, "restore_epub_images") as restore:
+                # 공통 복원기는 별도 단위 테스트 대상이며, 생성기가 반드시 이를
+                # 호출한다는 계약도 고정한다.
+                originals = images._original_scene_images(work)
+            restore.assert_called_once_with(work)
+            self.assertEqual([path.name for path in originals], ["part1_scene001.jpg"])
+
+            from epub_reference_images import restore_epub_images
+            restored = restore_epub_images(work, completed)
+            self.assertEqual(len(restored), 2)
+            all_images = sorted(path for path in source.glob("**/*") if path.is_file())
+            self.assertEqual(len(all_images), 3)
 
     def test_fixed_reference_selection_skips_faceless_or_undecodable_images(self):
         # ★ 2026-09-23: "얼굴이 한 인물로 고정되면 좋겠어" 요청으로

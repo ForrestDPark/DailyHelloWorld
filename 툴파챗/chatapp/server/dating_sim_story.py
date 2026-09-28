@@ -19,6 +19,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zipfile
+import importlib.util
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -2126,8 +2127,21 @@ def generated_image_reference_path(book_id, filename):
 REFERENCE_CANDIDATE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 
 
+def _restore_epub_reference_images(work_dir):
+    """작업 폴더에 빠진 완성 EPUB 내부 이미지를 참고 후보로 복원한다."""
+    module_path = Path(__file__).resolve().parents[3] / "일본어자막추출" / "epub_reference_images.py"
+    try:
+        spec = importlib.util.spec_from_file_location("epub_reference_images", module_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module.restore_epub_images(Path(work_dir), JAPANESE_EPUB_ROOT)
+    except (AttributeError, ImportError, OSError):
+        return []
+
+
 def reference_candidates(work_dir):
-    """인물 참고 이미지로 고를 수 있는 원작 컷 전부(images/ 기준 상대 경로, 읽기 순서)."""
+    """작업 폴더와 완성 EPUB의 원작 이미지 전부를 읽기 순서로 돌려준다."""
+    _restore_epub_reference_images(work_dir)
     image_dir = Path(work_dir) / "images"
     if not image_dir.is_dir():
         return []

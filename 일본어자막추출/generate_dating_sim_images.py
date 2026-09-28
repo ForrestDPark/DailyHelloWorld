@@ -25,6 +25,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from ai_exec import run_ai_exec  # noqa: E402
+from epub_reference_images import restore_epub_images  # noqa: E402
 
 
 VERSION = 2
@@ -114,6 +115,7 @@ def _original_scene_images(work_dir):
     `images/partN_sceneNNN[_pageNN].jpg`는 EPUB에 실제 수록되는 원본 장면이다.
     dating_sim_images 아래의 생성물은 의도적으로 제외한다.
     """
+    restore_epub_images(work_dir)
     image_dir = work_dir / "images"
     allowed = {".jpg", ".jpeg", ".png", ".webp"}
     paths = [
