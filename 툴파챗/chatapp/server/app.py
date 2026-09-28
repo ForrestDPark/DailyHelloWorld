@@ -1126,13 +1126,73 @@ def _dating_story(story_id=None, variant_seed=None):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+def _dating_story_signature(story):
+    """이미지·표시 순서와 무관한 시나리오 본문 서명.
+
+    사용자별로 선택지 표시 순서가 뒤집혀도 같은 이야기로 취급하되, 실제
+    대사·선택지·학습 재료가 재생성되면 다른 이야기로 판정한다.
+    """
+    scenes = {}
+    for day, day_scenes in sorted(story.get("scenes", {}).items(), key=lambda item: int(item[0])):
+        scenes[str(day)] = {}
+        for location, scene in sorted(day_scenes.items()):
+            choices = sorted(
+                [
+                    {"text": choice.get("text", ""), "affection": choice.get("affection", 0)}
+                    for choice in scene.get("choices", [])
+                ],
+                key=lambda choice: (choice["text"], choice["affection"]),
+            )
+            scenes[str(day)][location] = {
+                "lines": scene.get("lines", []),
+                "choices": choices,
+                "vocab_words": scene.get("vocab_words", []),
+                "expressions_used": scene.get("expressions_used", []),
+                "grammar_used": scene.get("grammar_used", []),
+            }
+    source = {
+        "story_id": story.get("id"),
+        "total_days": story.get("total_days"),
+        "scenes": scenes,
+    }
+    encoded = json.dumps(source, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
 def _dating_sim_row(conn, username, story):
+    story_signature = _dating_story_signature(story)
     row = conn.execute(
         "SELECT * FROM dating_sim_progress WHERE username=? AND character_id=?",
         (username, story["id"]),
     ).fetchone()
     if row:
         row = dict(row)
+        saved_signature = row.get("story_signature")
+        if saved_signature and saved_signature != story_signature:
+            now = _now()
+            conn.execute(
+                "UPDATE dating_sim_progress SET day=1,affection=50,pending_location=NULL,"
+                "completed=0,ending_id=NULL,story_signature=?,updated_at=? "
+                "WHERE username=? AND character_id=?",
+                (story_signature, now, username, story["id"]),
+            )
+            conn.execute(
+                "DELETE FROM dating_sim_learning_seen WHERE username=? AND character_id=?",
+                (username, story["id"]),
+            )
+            conn.commit()
+            row.update(day=1, affection=50, pending_location=None, completed=0,
+                       ending_id=None, story_signature=story_signature, updated_at=now)
+        elif not saved_signature:
+            # 기존 DB는 현재 내용을 기준점으로 한 번만 등록한다. 이후 내용이
+            # 바뀔 때부터 자동 초기화되므로 정상적인 과거 진행은 보존된다.
+            conn.execute(
+                "UPDATE dating_sim_progress SET story_signature=? "
+                "WHERE username=? AND character_id=?",
+                (story_signature, username, story["id"]),
+            )
+            conn.commit()
+            row["story_signature"] = story_signature
         if row["completed"] and row["day"] <= story["total_days"]:
             conn.execute(
                 "UPDATE dating_sim_progress SET completed=0,ending_id=NULL,pending_location=NULL,updated_at=? "
@@ -1145,14 +1205,16 @@ def _dating_sim_row(conn, username, story):
     now = _now()
     conn.execute(
         "INSERT INTO dating_sim_progress "
-        "(username,character_id,day,affection,pending_location,completed,ending_id,created_at,updated_at) "
-        "VALUES (?,?,1,50,NULL,0,NULL,?,?)",
-        (username, story["id"], now, now),
+        "(username,character_id,day,affection,pending_location,completed,ending_id,"
+        "created_at,updated_at,story_signature) "
+        "VALUES (?,?,1,50,NULL,0,NULL,?,?,?)",
+        (username, story["id"], now, now, story_signature),
     )
     conn.commit()
     return {
         "username": username, "character_id": story["id"],
-        "day": 1, "affection": 50, "pending_location": None, "completed": 0, "ending_id": None,
+        "day": 1, "affection": 50, "pending_location": None, "completed": 0,
+        "ending_id": None, "story_signature": story_signature,
     }
 
 

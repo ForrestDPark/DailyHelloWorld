@@ -341,7 +341,18 @@ def init_db():
         """
     )
     _ensure_column(conn, "messages", "room_id", "TEXT NOT NULL DEFAULT 'group'")
+    # 방별 최신 조회와 id 커서 기반 과거 페이지 조회가 전체 메시지 테이블을
+    # 훑지 않도록 한다. created_at 인덱스는 병법방의 최근 7일 첫 화면에 사용한다.
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_room_id_id ON messages(room_id, id)")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messages_room_created_id "
+        "ON messages(room_id, created_at, id)"
+    )
     _ensure_column(conn, "dating_sim_progress", "scenario_run", "INTEGER NOT NULL DEFAULT 0")
+    # 같은 작품의 시나리오가 재생성된 뒤에도 예전 회차의 호감도만 남아
+    # 새 이야기 첫 장면이 100점으로 시작하는 일을 막는다. 실제 대사·선택지의
+    # 서명을 진행 행에 함께 저장하고, 내용이 바뀌면 새 회차로 초기화한다.
+    _ensure_column(conn, "dating_sim_progress", "story_signature", "TEXT")
     _ensure_column(conn, "dating_sim_characters", "content_version", "INTEGER NOT NULL DEFAULT 1")
     _ensure_column(conn, "messages", "reply_message_id", "INTEGER")
     _ensure_column(conn, "pending_turns", "room_id", "TEXT NOT NULL DEFAULT 'group'")

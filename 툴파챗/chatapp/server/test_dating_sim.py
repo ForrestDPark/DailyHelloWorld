@@ -259,6 +259,28 @@ class DatingSimApiTests(unittest.TestCase):
         self.assertTrue(state["day_opening"])
         self.assertTrue(all(location["action"] != location["label"] for location in state["locations"]))
 
+    def test_changed_story_resets_stale_affection_and_learning_progress(self):
+        story = copy.deepcopy(dating_sim_story.story_for())
+        story["id"] = "regenerated-story-test"
+        with patch.object(app, "_dating_story", return_value=story):
+            app.dating_sim_visit(app.DatingSimLocationRequest(location="cafe"), request())
+            index = next(
+                index for index, choice in enumerate(story["scenes"][1]["cafe"]["choices"])
+                if choice["affection"] > 0
+            )
+            progressed = app.dating_sim_choose(
+                app.DatingSimChoiceRequest(choice_index=index, story_id=story["id"]), request()
+            )
+            self.assertGreater(progressed["affection"], 50)
+
+        regenerated = copy.deepcopy(story)
+        regenerated["scenes"][1]["cafe"]["lines"][0] += " 새 시나리오"
+        with patch.object(app, "_dating_story", return_value=regenerated):
+            reset = app.dating_sim_state(request(), story_id=story["id"])
+        self.assertEqual(reset["day"], 1)
+        self.assertEqual(reset["affection"], 50)
+        self.assertIsNone(reset["pending_location"])
+
     def test_visiting_a_location_returns_that_scene_and_blocks_a_second_visit(self):
         state = app.dating_sim_visit(app.DatingSimLocationRequest(location="cafe"), request())
         self.assertEqual(state["scene"]["location"], "cafe")
