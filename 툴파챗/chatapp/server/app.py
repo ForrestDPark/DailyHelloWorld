@@ -1123,8 +1123,11 @@ class DatingSimNewRequest(BaseModel):
 
 
 DATING_DIFFICULTIES = {
-    "easy": {"label": "이지", "start": (55, 68), "positive": 1.25, "negative": 0.55},
-    "normal": {"label": "노말", "start": (32, 48), "positive": 1.0, "negative": 1.0},
+    # 첫 만남부터 친밀도가 높게 보이지 않도록 모든 난이도의 시작값을
+    # 10점 이하로 제한한다. 같은 난이도 안에서는 인물마다 첫인상이 조금씩
+    # 달라지되, 하드는 요청대로 정확히 0점에서 시작한다.
+    "easy": {"label": "이지", "start": (7, 10), "positive": 1.25, "negative": 0.55},
+    "normal": {"label": "노말", "start": (3, 7), "positive": 1.0, "negative": 1.0},
     "hard": {"label": "하드", "start": (0, 0), "positive": 0.35, "negative": 1.0},
 }
 

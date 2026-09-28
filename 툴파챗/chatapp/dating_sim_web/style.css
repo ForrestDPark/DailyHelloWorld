@@ -91,6 +91,18 @@ html, body {
   background: var(--accent);
   transition: width .3s steps(8);
 }
+.difficulty-badge { border: 1px solid var(--border); padding: 6px 9px; font: inherit; font-size: 10px; white-space: nowrap; color: var(--text); background: var(--panel); cursor: pointer; }
+.difficulty-picker { display: grid; gap: 8px; margin: 12px auto; max-width: 430px; color: var(--muted); }
+.difficulty-picker select { min-height: 46px; border: 2px solid var(--border); background: var(--panel); color: var(--text); padding: 8px; font: inherit; }
+.difficulty-panel { width: min(520px, calc(100vw - 28px)); max-height: min(680px, calc(100dvh - 32px)); overflow: auto; margin: auto; padding: 20px; border: 3px solid var(--border); background: var(--panel); box-shadow: 0 20px 60px rgba(0,0,0,.55); }
+.difficulty-warning { color: var(--muted); line-height: 1.65; }
+.difficulty-options { display: grid; gap: 12px; margin-top: 18px; }
+.difficulty-options button { display: grid; gap: 7px; width: 100%; padding: 16px; border: 2px solid var(--border); background: var(--bg); color: var(--text); text-align: left; cursor: pointer; }
+.difficulty-options button strong { color: var(--accent); font-size: 16px; }
+.difficulty-options button span { color: var(--muted); line-height: 1.5; }
+.difficulty-options button.selected { border-color: var(--pink); box-shadow: inset 4px 0 var(--pink); }
+.difficulty-help { max-width: 430px; margin: 0 auto 14px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+.service-scene { display: block; margin-top: 8px; color: var(--gold); font-weight: 700; }
 #stage { flex: 1; padding: 14px 12px 22px; display: flex; flex-direction: column; transition:background .35s ease; }
 #stage[data-location="cafe"],#stage[data-location="quiet"]{background:linear-gradient(#2b1d36aa,#1c1233)}
 #stage[data-location="park"],#stage[data-location="walk"]{background:linear-gradient(#18372baa,#1c1233)}

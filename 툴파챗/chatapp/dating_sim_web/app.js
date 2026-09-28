@@ -280,7 +280,7 @@ function renderHud(state) {
   $("affection-value").textContent = state.affection;
   $("affection-value").parentElement.setAttribute("aria-label", `호감도 ${state.affection}점`);
   $("affection-bar").style.width = `${Math.max(0, Math.min(100, state.affection))}%`;
-  $("difficulty-badge").textContent = state.difficulty_label || "노말";
+  $("difficulty-badge").textContent = `난이도 · ${state.difficulty_label || "노말"}`;
   $("difficulty-badge").title = state.relationship_tone
     ? `${state.relationship_tone.label}: ${state.relationship_tone.description}` : "";
   const restartDifficulty = $("restart-difficulty-select");
@@ -2449,11 +2449,51 @@ function selectedDifficulty() {
 
 $("difficulty-select")?.addEventListener("change", (event) => {
   const help = {
-    easy: "이지는 인물마다 55~68점에서 시작하고 호감도가 빠르게 오릅니다.",
-    normal: "노말은 인물 성격에 따라 32~48점에서 시작합니다.",
+    easy: "이지는 인물마다 7~10점에서 시작하고 호감도가 비교적 빠르게 오릅니다.",
+    normal: "노말은 인물 성격에 따라 3~7점에서 시작합니다.",
     hard: "하드는 정확히 0점에서 시작하고 긍정 선택의 상승량도 작습니다.",
   };
   $("difficulty-help").textContent = help[event.target.value];
+});
+
+function closeDifficultyPicker() {
+  $("difficulty-overlay")?.classList.add("hidden");
+}
+
+$("difficulty-badge")?.addEventListener("click", () => {
+  const current = latestState?.difficulty || "normal";
+  document.querySelectorAll("[data-difficulty]").forEach((button) => {
+    button.classList.toggle("selected", button.dataset.difficulty === current);
+    button.setAttribute("aria-checked", String(button.dataset.difficulty === current));
+  });
+  $("difficulty-overlay")?.classList.remove("hidden");
+});
+
+$("difficulty-close-btn")?.addEventListener("click", closeDifficultyPicker);
+$("difficulty-overlay")?.addEventListener("click", (event) => {
+  if (event.target === $("difficulty-overlay")) closeDifficultyPicker();
+});
+
+document.querySelectorAll("[data-difficulty]").forEach((button) => {
+  button.addEventListener("click", async () => {
+    const difficulty = button.dataset.difficulty;
+    const label = button.querySelector("strong")?.textContent || difficulty;
+    if (!confirm(`${label} 난이도로 처음부터 다시 시작할까요? 현재 진행과 호감도는 초기화됩니다.`)) return;
+    button.disabled = true;
+    try {
+      const state = await api("/api/dating-sim/restart", {
+        method: "POST",
+        body: JSON.stringify({ story_id: storyId, difficulty }),
+      });
+      clearSceneHistory();
+      closeDifficultyPicker();
+      render(state);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      button.disabled = false;
+    }
+  });
 });
 
 function replayCurrentView() {
@@ -3509,7 +3549,9 @@ $("tree-overlay").addEventListener("click", (event) => {
 });
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
-  if (!$("updates-overlay").classList.contains("hidden")) {
+  if (!$("difficulty-overlay").classList.contains("hidden")) {
+    closeDifficultyPicker();
+  } else if (!$("updates-overlay").classList.contains("hidden")) {
     closeDatingUpdates();
   } else if (!$("practice-overlay").classList.contains("hidden")) {
     closePractice();
