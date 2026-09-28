@@ -2733,23 +2733,36 @@ def dating_sim_encounters(request: Request):
             "SELECT * FROM dating_sim_progress WHERE username=? ORDER BY updated_at DESC", (username,)
         ).fetchall()
         encounters = []
-        for row in rows:
+        for raw_row in rows:
+            row = dict(raw_row)
             story_id = None if row["character_id"] == dating_sim_story.CHARACTER_ID else row["character_id"]
             if not story_id or not story_id.startswith("book:"):
-                continue
-            # ★ 2026-09-23: "미연시 이거미완료라고 아무것도 안보이는데
-            # 미완료여도 이전에 진행하던거는 계속볼수있게해줘" 요청 — 아직
-            # 시작 안 한(day=1·호감도=50 기본값 그대로인) 미완성 작품만
-            # 로비에서 숨기고, 이미 실제로 진행한(day가 늘었거나 호감도가
-            # 바뀌었거나 완결된) 작품은 이미지·시나리오 생성이 덜 끝났어도
-            # "이어하기"로 계속 볼 수 있게 한다.
-            has_real_progress = row["day"] > 1 or row["affection"] != 50 or bool(row["completed"])
-            if not has_real_progress and not dating_sim_story.prepared_book(story_id.split(":", 1)[1]):
                 continue
             try:
                 story = _dating_story(story_id, username)
             except HTTPException:
                 continue  # 서재에서 지워진 EPUB 등 더 이상 존재하지 않는 이야기는 건너뛴다
+            # 실제 플레이 화면과 같은 보정 경로를 사용한다. 과거 버전에서
+            # 진행도보다 높게 저장된 호감도를 목록만 그대로 보여주면 게임
+            # 화면과 숫자가 달라지므로, 목록 조회 때도 DB까지 함께 정규화한다.
+            row = _dating_sim_row(conn, username, story)
+            # ★ 2026-09-23: "미연시 이거미완료라고 아무것도 안보이는데
+            # 미완료여도 이전에 진행하던거는 계속볼수있게해줘" 요청 — 아직
+            # 시작 안 한(day=1·난이도별 시작 호감도 그대로인) 미완성 작품만
+            # 로비에서 숨기고, 이미 실제로 진행한(day가 늘었거나 호감도가
+            # 바뀌었거나 완결된) 작품은 이미지·시나리오 생성이 덜 끝났어도
+            # "이어하기"로 계속 볼 수 있게 한다.
+            start_affection = _dating_start_affection(
+                story, _dating_difficulty(row.get("difficulty"))
+            )
+            has_real_progress = (
+                row["day"] > 1
+                or row["affection"] != start_affection
+                or bool(row["completed"])
+                or bool(row.get("pending_location"))
+            )
+            if not has_real_progress and not dating_sim_story.prepared_book(story_id.split(":", 1)[1]):
+                continue
             encounters.append({
                 "story_id": story["id"], "title": story["title"], "character_name": story["name"],
                 "character_image": story.get("character_image"), "source_title": story.get("source_title"),
@@ -2802,6 +2815,15 @@ def dating_sim_playable_stories(request: Request):
             except (OSError, ValueError):
                 pass
         row = progress.get(story_id)
+        if row:
+            # /api/dating-sim/state가 사용하는 것과 동일한 정규화 함수를
+            # 거쳐 목록의 호감도·진행일·완료 상태를 실제 플레이와 일치시킨다.
+            # 이 과정에서 보정된 값은 DB에도 저장되어 다음 기기에서도 같다.
+            progress_conn = get_conn()
+            try:
+                row = _dating_sim_row(progress_conn, username, story)
+            finally:
+                progress_conn.close()
         stories.append({
             "story_id": story_id, "character_name": story["name"],
             "source_title": story.get("source_title"),

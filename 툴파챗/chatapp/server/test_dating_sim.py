@@ -1210,7 +1210,7 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
                     "INSERT INTO dating_sim_progress "
                     "(username,character_id,day,affection,pending_location,completed,ending_id,created_at,updated_at) "
                     "VALUES (?,?,?,?,NULL,0,NULL,'now','now')",
-                    ("admin", f"book:{book_id}", 2, affection),
+                    ("admin", f"book:{book_id}", 14, affection),
                 )
             conn.commit()
         finally:
@@ -1226,6 +1226,40 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
             f"book:{book_ids[1]}", f"book:{book_ids[0]}", f"book:{book_ids[2]}",
         ])
         self.assertEqual([item["affection"] for item in stories], [88, 61, None])
+
+    def test_playable_stories_normalizes_affection_like_game_state(self):
+        owner = SimpleNamespace(state=SimpleNamespace(
+            user={"username": "admin", "is_owner": True}, can_write=True, share_guest=False))
+        book_id = "d" * 20
+        conn = db.get_conn()
+        try:
+            conn.execute(
+                "INSERT INTO dating_sim_progress "
+                "(username,character_id,day,affection,pending_location,completed,ending_id,created_at,updated_at) "
+                "VALUES (?,?,?,?,NULL,0,NULL,'now','now')",
+                ("admin", f"book:{book_id}", 2, 79),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+        with patch.object(dating_sim_story, "all_book_ids", return_value=[book_id]), \
+             patch.object(dating_sim_story, "book_readiness", return_value=(True, True, 42)), \
+             patch.object(dating_sim_story, "_find_book", return_value=Path(f"/tmp/{book_id}.epub")), \
+             patch.object(dating_sim_story, "_book_title", return_value="동기화 테스트"):
+            stories = app.dating_sim_playable_stories(owner)
+
+        shown_affection = stories[0]["affection"]
+        self.assertLess(shown_affection, 79)
+        conn = db.get_conn()
+        try:
+            saved = conn.execute(
+                "SELECT affection FROM dating_sim_progress WHERE username=? AND character_id=?",
+                ("admin", f"book:{book_id}"),
+            ).fetchone()["affection"]
+        finally:
+            conn.close()
+        self.assertEqual(shown_affection, saved)
 
     def test_reference_candidates_list_and_regeneration_passes_selected_references(self):
         owner = SimpleNamespace(state=SimpleNamespace(
