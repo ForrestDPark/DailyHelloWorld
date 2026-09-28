@@ -1984,7 +1984,7 @@ async function openStoryPopover(anchor) {
   summary.className = "story-status-summary";
   for (const [label, value, tone] of [
     ["전체 작품", stories.length, "all"], ["지금 플레이 가능", readyStories.length, "ready"],
-    ["이미지 준비 중", imageMissing.length, "images"], ["시나리오 준비 중", scenarioMissing.length, "scenario"],
+    ["이미지 미완성", imageMissing.length, "images"], ["시나리오 미완성", scenarioMissing.length, "scenario"],
   ]) {
     const chip = document.createElement("span");
     chip.dataset.tone = tone;
@@ -1995,7 +1995,7 @@ async function openStoryPopover(anchor) {
   bulk.className = "story-image-backlog";
   const bulkButton = document.createElement("button");
   bulkButton.type = "button";
-  bulkButton.textContent = `이미지 준비 중 ${imageMissing.length}편 이어서 생성`;
+  bulkButton.textContent = `이미지 미완성 ${imageMissing.length}편 생성하기`;
   bulkButton.disabled = imageMissing.length === 0;
   const bulkStatus = document.createElement("span");
   bulkStatus.textContent = imageMissing.length ? "시나리오는 완성됐고 이미지가 부족한 작품만 처리합니다" : "이미지가 필요한 작품이 없습니다";
@@ -2073,8 +2073,8 @@ async function openStoryPopover(anchor) {
   filters.setAttribute("aria-label", "작품 제작 상태 필터");
   const filterDefinitions = [
     ["ready", `플레이 가능 ${readyStories.length}`],
-    ["images", `이미지 준비 ${imageMissing.length}`],
-    ["scenario", `시나리오 준비 ${scenarioMissing.length}`],
+    ["images", `이미지 미완성 ${imageMissing.length}`],
+    ["scenario", `시나리오 미완성 ${scenarioMissing.length}`],
     ["all", `전체 ${stories.length}`],
   ];
   for (const [key, label] of filterDefinitions) {
