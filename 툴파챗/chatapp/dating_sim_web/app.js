@@ -1038,6 +1038,41 @@ function closeVocabPopover() {
   vocabPopover = null;
 }
 
+function positionAnchoredPopover(popover, anchor) {
+  const rect = anchor.getBoundingClientRect();
+  const viewport = window.visualViewport;
+  const viewportLeft = viewport?.offsetLeft || 0;
+  const viewportTop = viewport?.offsetTop || 0;
+  const viewportWidth = viewport?.width || window.innerWidth;
+  const viewportHeight = viewport?.height || window.innerHeight;
+  const gap = 10;
+  const edge = 10;
+
+  // CSS의 중앙 정렬 transform이 남아 있으면 계산한 좌표에서 팝오버가
+  // 다시 반 폭만큼 밀리므로, 앵커형 팝오버에서는 반드시 해제한다.
+  popover.style.transform = "none";
+  const width = Math.min(popover.offsetWidth, viewportWidth - edge * 2);
+  popover.style.maxWidth = `${Math.max(0, viewportWidth - edge * 2)}px`;
+  const left = Math.max(
+    viewportLeft + edge,
+    Math.min(
+      viewportLeft + rect.left + rect.width / 2 - width / 2,
+      viewportLeft + viewportWidth - width - edge,
+    ),
+  );
+
+  const maxHeight = Math.max(140, viewportHeight - edge * 2);
+  popover.style.maxHeight = `${maxHeight}px`;
+  const height = Math.min(popover.offsetHeight, maxHeight);
+  const below = viewportTop + rect.bottom + gap;
+  const above = viewportTop + rect.top - height - gap;
+  const top = below + height <= viewportTop + viewportHeight - edge
+    ? below
+    : Math.max(viewportTop + edge, above);
+  popover.style.left = `${left}px`;
+  popover.style.top = `${top}px`;
+}
+
 function showVocabWordPopover(word, anchor, wordKind = "general") {
   closeKanjiPopover();
   closeVocabPopover();
@@ -1329,11 +1364,7 @@ function showKanjiPopover(character, reading, anchor) {
   popover.append(close, favorite, sound, glyph, readings);
   document.body.appendChild(popover);
   kanjiPopover = popover;
-  const rect = anchor.getBoundingClientRect();
-  const width = popover.offsetWidth;
-  popover.style.left = `${Math.max(12, Math.min(rect.left + rect.width / 2 - width / 2, innerWidth - width - 12))}px`;
-  const desiredTop = rect.bottom + 10;
-  popover.style.top = `${Math.max(12, Math.min(desiredTop, innerHeight - popover.offsetHeight - 12))}px`;
+  positionAnchoredPopover(popover, anchor);
 }
 
 function decorateKanji(container) {

@@ -402,6 +402,14 @@ body.practice-open { overflow: hidden; }
   background: var(--panel-2);
   color: var(--text);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  box-sizing: border-box;
+}
+@media (max-width: 600px) {
+  .japanese-kanji-popover {
+    width: min(340px, calc(100vw - 20px));
+    max-width: calc(100vw - 20px);
+    max-height: calc(100dvh - 20px);
+  }
 }
 .japanese-kanji-popover-glyph {
   align-self: center;
