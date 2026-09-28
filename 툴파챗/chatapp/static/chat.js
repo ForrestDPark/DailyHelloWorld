@@ -31,6 +31,8 @@ const aiResponseStatusText = document.getElementById("ai-response-status-text");
 const aiStatusRetry = document.getElementById("ai-status-retry");
 const portalServices = document.querySelector(".portal-services");
 const portalLayoutBtn = document.getElementById("portal-layout-btn");
+const portalServicesMore = document.getElementById("portal-services-more");
+const PORTAL_VISIBLE_SERVICE_COUNT = 6;
 const DEFAULT_TAB_IDENTITY = { title: "나툼 · NaTum", icon: "/static/app-icon-192.png?v=20260927-natum-favicon-v1" };
 const TULPA_TAB_ICON = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="16" fill="#7047d7"/><path d="M14 15h36v9H37v27H27V24H14z" fill="white"/></svg>')}`;
 const TAB_IDENTITIES = {
@@ -87,7 +89,24 @@ function applyPortalOrder() {
     .sort((a, b) => b.count - a.count || a.index - b.index)
     .forEach(({card}) => portalServices.append(card));
   pinned.forEach(card => portalServices.prepend(card));
+  if (portalServicesMore) portalServices.append(portalServicesMore);
+  updatePortalServiceVisibility();
 }
+function updatePortalServiceVisibility() {
+  if (!portalServices || !portalServicesMore) return;
+  const cards = [...portalServices.querySelectorAll(":scope > .portal-card")];
+  const expanded = portalServicesMore.getAttribute("aria-expanded") === "true";
+  cards.forEach((card, index) => card.classList.toggle("portal-card-folded", !expanded && index >= PORTAL_VISIBLE_SERVICE_COUNT));
+  const hiddenCount = Math.max(0, cards.length - PORTAL_VISIBLE_SERVICE_COUNT);
+  portalServicesMore.classList.toggle("hidden", hiddenCount === 0);
+  portalServicesMore.textContent = expanded ? "접기" : `··· 나머지 ${hiddenCount}개 보기`;
+  portalServicesMore.setAttribute("aria-label", expanded ? "나머지 시스템 접기" : `나머지 시스템 ${hiddenCount}개 펼쳐 보기`);
+}
+portalServicesMore?.addEventListener("click", () => {
+  const expanded = portalServicesMore.getAttribute("aria-expanded") === "true";
+  portalServicesMore.setAttribute("aria-expanded", String(!expanded));
+  updatePortalServiceVisibility();
+});
 portalServices?.querySelectorAll(":scope > .portal-card").forEach(card => {
   card.addEventListener("click", () => {
     const href = card.getAttribute("href");
