@@ -1822,6 +1822,8 @@ DATING_SIM_IMAGE_KEY_RE = re.compile(r"^[A-Za-z0-9_:-]{1,64}$")
 
 class DatingSimImagePromptRequest(BaseModel):
     prompt_override: str | None = None
+    keywords: list[str] | None = None
+    settings: dict[str, Any] | None = None
 
 
 class ComfyUIRuntimeRequest(BaseModel):
@@ -1947,6 +1949,115 @@ def _comfy_work_preview(work_name: str, requested_file: str | None = None):
     }
 
 
+def _comfy_work_history(work_name: str):
+    """매니페스트에 남은 현재 작품의 생성 결과를 최신순으로 돌려준다."""
+    latest = _comfy_work_preview(work_name)
+    if not latest:
+        return []
+    image_dir = latest["path"].parent
+    try:
+        manifest = json.loads((image_dir / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return []
+    names = []
+    portrait = manifest.get("portrait")
+    if isinstance(portrait, str):
+        names.append(Path(portrait).name)
+    for value in (manifest.get("scenes") or {}).values():
+        if isinstance(value, str):
+            names.append(Path(value).name)
+        elif isinstance(value, dict):
+            for key in ("file", "filename", "image", "path"):
+                if isinstance(value.get(key), str):
+                    names.append(Path(value[key]).name)
+                    break
+    results = []
+    for name in dict.fromkeys(names):
+        item = _comfy_work_preview(work_name, name)
+        if item:
+            results.append({k: v for k, v in item.items() if k != "path"})
+    return sorted(results, key=lambda item: item.get("updated_at", ""), reverse=True)
+
+
+def _comfy_work_context(work_name: str, requested_file: str | None = None):
+    """현재 결과의 프롬프트·설정·참조본을 매니페스트 이력에서 읽는다."""
+    preview = _comfy_work_preview(work_name, requested_file)
+    if not preview:
+        return None
+    image_dir = preview["path"].parent
+    manifest = json.loads((image_dir / "manifest.json").read_text(encoding="utf-8"))
+    image_key = "portrait" if preview["filename"] == Path(str(manifest.get("portrait") or "")).name else ""
+    record = None
+    for key, value in (manifest.get("scenes") or {}).items():
+        if isinstance(value, dict) and Path(str(value.get("file") or "")).name == preview["filename"]:
+            image_key, record = str(key), value
+            break
+    if image_key == "portrait":
+        prompt = str(manifest.get("portrait_prompt") or "")
+        effective_prompt = str(manifest.get("portrait_effective_prompt") or "")
+        settings = manifest.get("portrait_generation_settings") or {}
+        reference_files = manifest.get("portrait_references") or []
+    elif record:
+        prompt = str(record.get("prompt") or "")
+        effective_prompt = str(record.get("effective_prompt") or "")
+        settings = record.get("generation_settings") or {}
+        reference_files = record.get("source_reference_files") or []
+        if record.get("reference_file"):
+            reference_files = [record["reference_file"], *reference_files]
+    else:
+        prompt, effective_prompt, settings, reference_files = "", "", {}, []
+    allowed = []
+    for value in reference_files:
+        name = Path(str(value)).name
+        target = (image_dir / name).resolve()
+        try:
+            target.relative_to(image_dir.resolve())
+            if target.is_file() and name not in allowed:
+                allowed.append(name)
+        except (OSError, ValueError):
+            continue
+    return {
+        "preview": {k: v for k, v in preview.items() if k != "path"},
+        "image_key": image_key, "prompt": prompt, "effective_prompt": effective_prompt,
+        "settings": settings,
+        "history": _comfy_work_history(work_name),
+        "references": [{"name": name, "url": "/api/comfy-workspace/reference?" +
+                        urllib.parse.urlencode({"work": Path(work_name).name, "image": preview["filename"], "file": name})}
+                       for name in allowed],
+    }
+
+
+def _validated_image_settings(raw):
+    raw = raw if isinstance(raw, dict) else {}
+    rules = {
+        "width": (int, 256, 1536), "height": (int, 256, 1536),
+        "steps": (int, 5, 80), "cfg": (float, 1, 20),
+        "denoise": (float, 0.05, 1),
+    }
+    result = {}
+    for key, (cast, low, high) in rules.items():
+        if key not in raw:
+            continue
+        try:
+            value = cast(raw[key])
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=f"{key} 설정값이 올바르지 않습니다") from exc
+        if not low <= value <= high:
+            raise HTTPException(status_code=400, detail=f"{key} 설정 범위를 확인해 주세요")
+        if key in {"width", "height"} and value % 64:
+            raise HTTPException(status_code=400, detail="이미지 크기는 64의 배수여야 합니다")
+        result[key] = value
+    choices = {"sampler": {"dpmpp_2m", "euler", "euler_ancestral"},
+               "scheduler": {"karras", "normal", "simple"}}
+    for key, allowed in choices.items():
+        if key in raw:
+            value = str(raw[key])
+            if value not in allowed:
+                raise HTTPException(status_code=400, detail=f"지원하지 않는 {key} 설정입니다")
+            result[key] = value
+    return result
+
+
 @app.get("/api/comfy-workspace/preview")
 def comfy_workspace_preview(request: Request, work: str, file: str):
     """관리자에게만 현재 생성 결과를 파일 단위로 제공한다."""
@@ -1955,6 +2066,27 @@ def comfy_workspace_preview(request: Request, work: str, file: str):
     if not preview:
         raise HTTPException(status_code=404, detail="미리보기 이미지를 찾을 수 없습니다")
     return FileResponse(preview["path"], headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/comfy-workspace/image-detail")
+def comfy_workspace_image_detail(request: Request, work: str, file: str):
+    _require_owner(request)
+    context = _comfy_work_context(work, file)
+    if not context:
+        raise HTTPException(status_code=404, detail="이미지 생성 이력을 찾을 수 없습니다")
+    return context
+
+
+@app.get("/api/comfy-workspace/reference")
+def comfy_workspace_reference(request: Request, work: str, image: str, file: str):
+    _require_owner(request)
+    context = _comfy_work_context(work, image)
+    allowed = {item["name"] for item in (context or {}).get("references", [])}
+    safe_file = Path(file).name
+    if safe_file != file or safe_file not in allowed:
+        raise HTTPException(status_code=404, detail="참조 이미지를 찾을 수 없습니다")
+    target = (JP_SUBTITLE_DIR / "library" / Path(work).name / "dating_sim_images" / safe_file).resolve()
+    return FileResponse(target, headers={"Cache-Control": "private, max-age=300"})
 
 
 @app.get("/api/comfy-workspace/status")
@@ -2036,11 +2168,32 @@ def dating_sim_generate_images_start(
     if force_key is not None and not DATING_SIM_IMAGE_KEY_RE.fullmatch(force_key):
         raise HTTPException(status_code=400, detail="force_key 형식이 올바르지 않습니다")
     prompt_override = (payload.prompt_override or "").strip() if payload else ""
+    keywords = [str(value).strip() for value in ((payload.keywords or []) if payload else [])
+                if str(value).strip()]
+    if len(keywords) > 24 or any(len(value) > 80 for value in keywords):
+        raise HTTPException(status_code=400, detail="키워드는 24개, 항목당 80자 이내로 입력해 주세요")
+    if keywords:
+        prompt_override = ", ".join(filter(None, [prompt_override, *keywords]))
+    settings = _validated_image_settings(payload.settings if payload else None)
     if prompt_override and not force_key:
         raise HTTPException(status_code=400, detail="수정 프롬프트에는 재생성할 이미지가 필요합니다")
     if len(prompt_override) > 8000:
         raise HTTPException(status_code=400, detail="프롬프트는 8,000자 이내로 입력해 주세요")
     book_id, work_dir = dating_sim_story.resolve_book_work_dir(story_id or "")
+    # 이미지 작업 시스템은 EPUB 해시 대신 관리자 화면에 표시된 안전한
+    # 작품 폴더명을 전달한다. library 밖으로 나갈 수 없게 basename과
+    # containment를 모두 확인한 뒤에만 기존 결정론적 생성기를 실행한다.
+    if not work_dir and (story_id or "").startswith("work:"):
+        safe_name = (story_id or "")[5:]
+        library_root = (JP_SUBTITLE_DIR / "library").resolve()
+        candidate = (library_root / Path(safe_name).name).resolve()
+        if safe_name == Path(safe_name).name:
+            try:
+                candidate.relative_to(library_root)
+                if candidate.is_dir():
+                    book_id, work_dir = f"work:{safe_name}", candidate
+            except (OSError, ValueError):
+                pass
     if not work_dir:
         raise HTTPException(status_code=404, detail="작품 폴더를 찾을 수 없습니다")
     with _dating_sim_image_jobs_lock:
@@ -2075,6 +2228,9 @@ def dating_sim_generate_images_start(
             command.extend(["--force-key", force_key])
         if prompt_override:
             command.extend(["--prompt-override", prompt_override])
+        for key in ("width", "height", "steps", "cfg", "sampler", "scheduler", "denoise"):
+            if key in settings:
+                command.extend([f"--{key}", str(settings[key])])
         process = subprocess.Popen(command, stdout=log_file, stderr=subprocess.STDOUT)
         threading.Thread(
             target=_push_when_dating_sim_images_done,

@@ -43,6 +43,7 @@ MANIFEST_NAME = "manifest.json"
 LOCATIONS = ("first", "walk", "quiet")
 _OPENAI_DISABLED_REASON = None
 _LAST_GENERATION_META = {}
+_GENERATION_OVERRIDES = {}
 _FACE_CASCADES = {}
 
 
@@ -568,10 +569,18 @@ def _build_comfy_workflow(
     )
     ipadapter_mode = bool(reference_names) and use_ipadapter_faceid
     blend_mode = bool(reference_names) and not use_ipadapter_faceid
+    width = int(_GENERATION_OVERRIDES.get("width", IMAGE_WIDTH))
+    height = int(_GENERATION_OVERRIDES.get("height", IMAGE_HEIGHT))
+    steps = int(_GENERATION_OVERRIDES.get("steps", 25))
+    cfg = float(_GENERATION_OVERRIDES.get("cfg", 7.0))
+    sampler_name = str(_GENERATION_OVERRIDES.get("sampler", "dpmpp_2m"))
+    scheduler = str(_GENERATION_OVERRIDES.get("scheduler", "karras"))
+    denoise = float(_GENERATION_OVERRIDES.get(
+        "denoise", 0.48 if blend_mode else 1.0))
     workflow = {
         "3": {"class_type": "KSampler", "inputs": {
-            "seed": seed, "steps": 25, "cfg": 7.0, "sampler_name": "dpmpp_2m",
-            "scheduler": "karras", "denoise": 0.48 if blend_mode else 1.0,
+            "seed": seed, "steps": steps, "cfg": cfg, "sampler_name": sampler_name,
+            "scheduler": scheduler, "denoise": denoise,
             "model": ["22", 0] if ipadapter_mode else ["4", 0],
             "positive": ["6", 0], "negative": ["7", 0],
             "latent_image": ["14", 0] if blend_mode else ["5", 0],
@@ -579,7 +588,7 @@ def _build_comfy_workflow(
         "4": {"class_type": loader, "inputs": {
             "ckpt_name" if loader == "CheckpointLoaderSimple" else "model_path": model_name
         }},
-        "5": {"class_type": "EmptyLatentImage", "inputs": {"width": IMAGE_WIDTH, "height": IMAGE_HEIGHT, "batch_size": 1}},
+        "5": {"class_type": "EmptyLatentImage", "inputs": {"width": width, "height": height, "batch_size": 1}},
         "6": {"class_type": "CLIPTextEncode", "inputs": {"text": local_prompt, "clip": ["4", 1]}},
         "7": {"class_type": "CLIPTextEncode", "inputs": {
             "text": (
@@ -881,7 +890,8 @@ def _local_generate(prompt, target, reference=None):
                 "effective_prompt": workflow["6"]["inputs"]["text"],
                 "generation_settings": {
                     "model": model_name, "loader": loader, "vae": vae_name or "checkpoint embedded",
-                    "width": IMAGE_WIDTH, "height": IMAGE_HEIGHT,
+                    "width": workflow["5"]["inputs"]["width"],
+                    "height": workflow["5"]["inputs"]["height"],
                     "steps": sampler["steps"], "cfg": sampler["cfg"],
                     "sampler": sampler["sampler_name"], "scheduler": sampler["scheduler"],
                     "denoise": sampler["denoise"], "base_seed": base_seed,
@@ -1164,6 +1174,7 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
 
 
 def main():
+    global _GENERATION_OVERRIDES
     parser = argparse.ArgumentParser()
     parser.add_argument("work_dir")
     parser.add_argument("--max-scenes", type=int, default=int(os.environ.get("JP_DATING_IMAGE_MAX_SCENES", DEFAULT_MAX_SCENES)))
@@ -1178,7 +1189,21 @@ def main():
                          help="원작 컷이나 기존 초상화를 참조하지 않고 텍스트 프롬프트만으로 생성한다.")
     parser.add_argument("--prompt-override", default=None,
                          help="--force-key로 지정한 이미지 하나를 다시 만들 때 사용할 수정 프롬프트")
+    parser.add_argument("--width", type=int)
+    parser.add_argument("--height", type=int)
+    parser.add_argument("--steps", type=int)
+    parser.add_argument("--cfg", type=float)
+    parser.add_argument("--sampler")
+    parser.add_argument("--scheduler")
+    parser.add_argument("--denoise", type=float)
     args = parser.parse_args()
+    _GENERATION_OVERRIDES = {
+        key: value for key, value in {
+            "width": args.width, "height": args.height, "steps": args.steps,
+            "cfg": args.cfg, "sampler": args.sampler,
+            "scheduler": args.scheduler, "denoise": args.denoise,
+        }.items() if value is not None
+    }
     if args.auto_references and args.reference is None:
         args.reference = []
     manifest = run_agent(
