@@ -1632,8 +1632,41 @@ def _dating_sim_image_backlog_progress(state, running):
         remaining_works = max(0.0, total - processed - current_fraction)
         if average:
             payload["eta_seconds"] = round(remaining_works * average)
-    if not running and payload.get("status") in {"complete", "partial"}:
+    raw_status = str(payload.get("status") or "idle")
+    if not running and raw_status in {"complete", "partial"}:
         payload["percent"] = 100
+    # 저장 파일의 과거 문구와 현재 프로세스 생존 여부를 UI가 각자 해석하면
+    # `생성 중 0/1 · 100% · 오류 포함 완료`처럼 모순된 상태가 동시에 보인다.
+    # 관리자 화면은 아래의 단일 정규 상태만 표시하게 한다.
+    if running:
+        ui_status = "running"
+    elif raw_status == "complete" or (raw_status == "partial" and failed == 0):
+        ui_status = "completed"
+    elif raw_status == "partial":
+        ui_status = "completed_with_errors"
+    elif raw_status == "failed":
+        ui_status = "failed"
+    elif raw_status == "waiting_for_lock":
+        ui_status = "waiting"
+    elif raw_status == "running":
+        ui_status = "stopped"
+    else:
+        ui_status = "idle"
+    labels = {
+        "running": "진행 중", "completed": "완료",
+        "completed_with_errors": "일부 실패", "failed": "실패",
+        "waiting": "대기 중", "stopped": "중단됨", "idle": "대기 중",
+    }
+    payload["raw_status"] = raw_status
+    payload["ui_status"] = ui_status
+    payload["ui_status_label"] = labels[ui_status]
+    payload["is_terminal"] = ui_status in {"completed", "completed_with_errors", "failed", "stopped"}
+    payload["can_retry"] = ui_status in {"completed_with_errors", "failed", "stopped"}
+    if ui_status == "completed" and total and completed < total:
+        # 구버전 작업 상태는 완료 수를 마지막 저장 전에 남기기도 했다.
+        payload["display_completed"] = total
+    else:
+        payload["display_completed"] = completed
     return payload
 
 

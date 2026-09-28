@@ -2056,7 +2056,11 @@ async function openStoryPopover(anchor) {
   progressLabel.textContent = "0%";
   const jobDetail = document.createElement("div");
   jobDetail.className = "story-image-job-detail";
-  bulk.append(bulkButton, progress, progressLabel, bulkStatus, jobDetail);
+  const stateBanner = document.createElement("div");
+  stateBanner.className = "story-image-state-banner";
+  stateBanner.dataset.state = "idle";
+  stateBanner.innerHTML = "<i aria-hidden=\"true\">○</i><span><b>대기 중</b><small>실행 중인 일괄 작업이 없습니다</small></span>";
+  bulk.append(stateBanner, bulkButton, progress, progressLabel, bulkStatus, jobDetail);
 
   const durationLabel = (seconds) => {
     const value = Math.max(0, Math.round(Number(seconds) || 0));
@@ -2087,17 +2091,29 @@ async function openStoryPopover(anchor) {
           ? "현재 실행 중인 미연시 이미지 작업이 없습니다"
           : "이미지 생성이 멈춥니다. Mac의 ComfyUI 자동 실행 상태를 확인하세요";
       }
+      const uiStatus = state.ui_status || (state.running ? "running" : "idle");
+      const stateCopy = {
+        running: ["↻", "진행 중", "현재 작품의 이미지를 생성하고 있습니다"],
+        completed: ["✓", "완료", "모든 대상 작품의 이미지 생성이 끝났습니다"],
+        completed_with_errors: ["!", "일부 실패", "완료되지 않은 작품만 다시 시도할 수 있습니다"],
+        failed: ["!", "실패", "작업이 끝나지 않았습니다. 오류를 확인한 뒤 다시 시도하세요"],
+        stopped: ["■", "중단됨", "프로세스가 종료되어 작업이 멈췄습니다"],
+        waiting: ["…", "대기 중", "다른 제작 작업이 끝나면 다시 시작할 수 있습니다"],
+        idle: ["○", "대기 중", "실행 중인 일괄 작업이 없습니다"],
+      }[uiStatus] || ["○", "상태 확인", "제작 상태를 확인하고 있습니다"];
+      stateBanner.dataset.state = uiStatus;
+      stateBanner.innerHTML = `<i aria-hidden="true">${stateCopy[0]}</i><span><b>${stateCopy[1]}</b><small>${stateCopy[2]}</small></span>`;
       if (state.running) {
         const percent = Math.max(0, Math.min(100, Number(state.percent) || 0));
         bulkButton.disabled = true;
-        bulkButton.textContent = `생성 중 ${state.completed || 0}/${state.total || imageMissing.length}`;
+        bulkButton.textContent = `진행 중 · ${state.completed || 0}/${state.total || imageMissing.length}편 완료`;
         progressBar.style.width = `${percent}%`;
         progress.setAttribute("aria-valuenow", String(percent));
         progressLabel.textContent = `${percent}%`;
         const imageCount = state.current_image_total
           ? ` · 이미지 ${state.current_images || 0}/${state.current_image_total}` : "";
         bulkStatus.textContent = state.current
-          ? `${state.current} 처리 중${imageCount} · 실패 ${state.failed || 0}편`
+          ? `현재 작품: ${state.current}${imageCount} · 실패 ${state.failed || 0}편`
           : "대상 작품을 확인하는 중…";
         const currentJob = state.current_image_job || "이미지 작업 준비 중";
         const currentPercent = Number.isFinite(Number(state.current_image_percent))
@@ -2106,17 +2122,28 @@ async function openStoryPopover(anchor) {
         jobDetail.innerHTML = `<b>현재 작업</b><span>${currentJob}${currentPercent}</span><b>완료 예상</b><span>${eta}</span>`;
         return;
       }
-      if (["complete", "partial", "failed"].includes(state.status)) {
+      if (["completed", "completed_with_errors", "failed", "stopped"].includes(uiStatus)) {
         const percent = Math.max(0, Math.min(100, Number(state.percent) || 0));
         progressBar.style.width = `${percent}%`;
         progress.setAttribute("aria-valuenow", String(percent));
         progressLabel.textContent = `${percent}%`;
-        bulkButton.disabled = false;
-        bulkButton.textContent = state.status === "complete" ? "잔여 이미지 생성 완료" : "실패 작품 다시 시도";
-        bulkStatus.textContent = `완료 ${state.completed || 0}편 · 실패 ${state.failed || 0}편${state.error ? ` · ${state.error}` : ""}`;
-        jobDetail.replaceChildren();
+        bulkButton.disabled = uiStatus === "completed";
+        bulkButton.textContent = uiStatus === "completed" ? "모든 이미지 생성 완료" : "완료되지 않은 작품 다시 시도";
+        bulkStatus.textContent = uiStatus === "completed"
+          ? `완료 ${state.display_completed ?? state.completed ?? 0}/${state.total || 0}편 · 실패 없음`
+          : `완료 ${state.completed || 0}/${state.total || 0}편 · 실패 ${state.failed || 0}편${state.error ? ` · ${state.error}` : ""}`;
+        jobDetail.innerHTML = uiStatus === "completed"
+          ? "<b>최종 상태</b><span>정상 완료</span>"
+          : `<b>다음 조치</b><span>${uiStatus === "stopped" ? "중단된 작업을 다시 시작하세요" : "실패 항목만 다시 시도하세요"}</span>`;
         playableStories = null;
+        return;
       }
+      bulkButton.disabled = imageMissing.length === 0 || uiStatus === "waiting";
+      bulkButton.textContent = uiStatus === "waiting" ? "다른 작업 종료 대기 중" : `이미지 미완성 ${imageMissing.length}편 생성하기`;
+      progressBar.style.width = "0%";
+      progress.setAttribute("aria-valuenow", "0");
+      progressLabel.textContent = "0%";
+      jobDetail.replaceChildren();
     } catch (error) {
       bulkButton.disabled = false;
       bulkStatus.textContent = error.message;

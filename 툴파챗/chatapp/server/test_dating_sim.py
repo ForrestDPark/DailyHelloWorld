@@ -50,6 +50,28 @@ class DatingSimApiTests(unittest.TestCase):
         with patch.object(app.urllib.request, "urlopen", side_effect=OSError("offline")):
             self.assertFalse(app._comfyui_runtime_status()["comfy_online"])
 
+    def test_image_backlog_status_is_normalized_for_admin_ui(self):
+        completed = app._dating_sim_image_backlog_progress(
+            {"status": "partial", "total": 1, "completed": 0, "failed": 0}, False,
+        )
+        self.assertEqual(completed["ui_status"], "completed")
+        self.assertEqual(completed["percent"], 100)
+        self.assertEqual(completed["display_completed"], 1)
+
+        partial = app._dating_sim_image_backlog_progress(
+            {"status": "partial", "total": 3, "completed": 2, "failed": 1}, False,
+        )
+        self.assertEqual(partial["ui_status"], "completed_with_errors")
+        self.assertTrue(partial["can_retry"])
+
+    def test_dead_running_image_backlog_is_reported_as_stopped(self):
+        state = app._dating_sim_image_backlog_progress(
+            {"status": "running", "total": 4, "completed": 1, "failed": 0}, False,
+        )
+        self.assertEqual(state["ui_status"], "stopped")
+        self.assertEqual(state["ui_status_label"], "중단됨")
+        self.assertTrue(state["can_retry"])
+
     def test_comfyui_switch_uses_only_fixed_launch_agent(self):
         results = []
         launch_agent = Path(self.temp.name) / "com.tulpachat.comfyui.plist"
