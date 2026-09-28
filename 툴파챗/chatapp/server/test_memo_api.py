@@ -38,6 +38,17 @@ class MemoApiTests(unittest.TestCase):
         self.assertEqual(first["id"], second["id"])
         self.assertEqual(len(app.list_memos(request())), 1)
 
+    def test_memo_title_and_note_are_updated_together(self):
+        memo = app.create_memo(app.MemoDocumentCreate(title="수정 전 제목", note="수정 전 내용"), request())
+        app.update_memo(
+            memo["id"],
+            app.MemoDocumentUpdate(title="수정한 제목", note="수정한 내용"),
+            request(),
+        )
+        saved = app.list_memos(request())[0]
+        self.assertEqual(saved["title"], "수정한 제목")
+        self.assertEqual(saved["note"], "수정한 내용")
+
     def test_nodes_are_nested_and_account_scoped(self):
         memo = app.create_memo(app.MemoDocumentCreate(title="아이디어"), request())
         parent = app.create_memo_node(memo["id"], app.MemoNodeCreate(content="첫 가지"), request())

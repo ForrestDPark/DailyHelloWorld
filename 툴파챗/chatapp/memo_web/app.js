@@ -1,46 +1,1088 @@
-const $=s=>document.querySelector(s),W=2400,H=1800,O={x:1200,y:900};let memos=[],current=null,dialogMode=null,view={x:0,y:0,scale:1},pan=null,pinch=null,linkDrag=null,nodeDrag=null;const pointers=new Map(),collapsedNodes=new Set();
-async function api(path,options={}){const r=await fetch(path,{credentials:"same-origin",headers:{"Content-Type":"application/json",...(options.headers||{})},...options}),data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.detail||"요청을 처리하지 못했습니다");return data}
-function esc(v=""){return String(v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-function renderColoredText(element,value=""){element.replaceChildren();const text=String(value),pattern=/\[\[(red|blue|green|orange|purple)\]\]([\s\S]*?)\[\[\/\1\]\]/g;let cursor=0;for(const match of text.matchAll(pattern)){if(match.index>cursor)element.append(document.createTextNode(text.slice(cursor,match.index)));const accent=document.createElement("span");accent.className=`memo-accent memo-accent-${match[1]}`;accent.textContent=match[2];element.append(accent);cursor=match.index+match[0].length}if(cursor<text.length)element.append(document.createTextNode(text.slice(cursor)))}
-function richMemoHtml(value=""){const text=String(value),pattern=/\[\[(red|blue|green|orange|purple)\]\]([\s\S]*?)\[\[\/\1\]\]/g;let html="",cursor=0;for(const match of text.matchAll(pattern)){html+=esc(text.slice(cursor,match.index));html+=`<span class="memo-accent memo-accent-${match[1]}">${esc(match[2])}</span>`;cursor=match.index+match[0].length}return html+esc(text.slice(cursor))}
-const MEMO_NODE_COLORS=["#ef6a78","#ee9b42","#4eae72","#3a9cc0","#5878d8","#9a69cf"];
-function memoNodeColor(node,index=0){return MEMO_NODE_COLORS[Math.abs(Number(node?.id)||index)%MEMO_NODE_COLORS.length]}
-function toast(v){const e=$("#toast");e.textContent=v;e.classList.remove("hidden");setTimeout(()=>e.classList.add("hidden"),1800)}
-async function load(id){memos=await api("/api/me/memos");renderList();const wanted=id||Number(new URLSearchParams(location.search).get("memo"));if(wanted)selectMemo(wanted);else if(current)selectMemo(current.id);else{$("#editor").classList.add("hidden");$("#empty").classList.remove("hidden");$("#empty").innerHTML=memos.length?"<b>메모를 선택하세요</b><p>제목을 누르면 팝오버에서 내용을 확인할 수 있어요.</p>":"<b>첫 메모를 만들어보세요</b><p>채팅 메시지를 저장하거나 새 메모를 직접 작성할 수 있어요.</p>"}}
-function memoDate(value){const date=new Date(value);return Number.isNaN(date.getTime())?"날짜 정보 없음":new Intl.DateTimeFormat("ko-KR",{year:"numeric",month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}).format(date)}
-function renderList(){const q=$("#search").value.trim().toLowerCase(),list=memos.filter(m=>`${m.title} ${m.note} ${m.source_content}`.toLowerCase().includes(q));$("#memo-list").innerHTML=list.length?list.map(m=>`<button data-id="${m.id}" class="${current?.id===m.id?'active':''}"><strong>${esc((m.title||"제목 없는 메모").split(/\r?\n/,1)[0])}</strong><span>${esc(memoDate(m.updated_at||m.created_at))}</span></button>`).join(""):"<p>저장된 메모가 없습니다.</p>";$("#memo-list").querySelectorAll("button").forEach(b=>b.onclick=()=>openMemoPreview(+b.dataset.id))}
-function openMemoPreview(id){const memo=memos.find(item=>item.id===id);if(!memo)return;$("#preview-title").textContent=(memo.title||"제목 없는 메모").split(/\r?\n/,1)[0];$("#preview-date").textContent=`최근 기록 ${memoDate(memo.updated_at||memo.created_at)}`;const sections=[];if(memo.source_content)sections.push(`채팅 원문\n${memo.source_content}`);if(memo.note)sections.push(`${memo.source_content?"내 메모\n":""}${memo.note}`);renderColoredText($("#preview-content"),sections.join("\n\n")||"기록된 내용이 없습니다.");$("#preview-open").dataset.id=String(id);$("#memo-preview-dialog").showModal()}
-function selectMemo(id){current=memos.find(m=>m.id===id);if(!current)return;history.replaceState(null,"",`?memo=${id}`);$("#empty").classList.add("hidden");$("#editor").classList.remove("hidden");$("#memo-title").value=current.title;$("#memo-note").value=current.note;const source=!!current.source_message_id;$("#source-card").classList.toggle("hidden",!source);$("#source-label").textContent=source?`채팅방 ${current.source_room_id||""}`:"직접 작성한 메모";$("#source-sender").textContent=current.source_sender;renderColoredText($("#source-content"),current.source_content);renderMap();renderList();requestAnimationFrame(fitMap)}
-function layout(){const children=new Map(),positions=new Map([[0,{...O}]]);current.nodes.forEach(n=>{const k=n.parent_id??0;if(!children.has(k))children.set(k,[]);children.get(k).push(n)});const roots=children.get(0)||[];roots.forEach((n,i)=>place(n,-Math.PI/2+Math.PI*2*i/Math.max(1,roots.length),1));function place(n,a,d){const p=positions.get(n.parent_id??0)||O,dist=d===1?310:Math.max(205,265-d*12),saved=Number.isFinite(Number(n.position_x))&&Number.isFinite(Number(n.position_y));positions.set(n.id,saved?{x:Number(n.position_x),y:Number(n.position_y)}:{x:p.x+Math.cos(a)*dist,y:p.y+Math.sin(a)*dist});const list=children.get(n.id)||[],spread=Math.min(1.05,.32+list.length*.14);list.forEach((c,i)=>place(c,a+(list.length===1?0:-spread/2+spread*i/(list.length-1)),d+1))}return positions}
-function renderMap(){const pos=layout(),rootText=current.note||current.source_content||"여기서 생각을 확장해보세요";$("#memo-tree").innerHTML=`<article class="node-card root expanded" style="--node-accent:#ee9b42;left:${O.x}px;top:${O.y}px"><small>ROOT NOTE</small><h3>${esc(current.title)}</h3><p>${richMemoHtml(rootText)}</p><div class="node-actions"><button data-toggle-root aria-label="내용 접기">−</button><button class="node-link-handle" data-link-root aria-label="드래그해 새 메모 연결">＋</button></div></article>`+current.nodes.map((n,index)=>{const p=pos.get(n.id),collapsed=collapsedNodes.has(n.id),color=memoNodeColor(n,index);return `<article class="node-card ${collapsed?"collapsed":"expanded"}" data-node-id="${n.id}" style="--node-accent:${color};left:${p.x}px;top:${p.y}px"><p>${richMemoHtml(n.content)}</p><div class="node-actions"><button data-toggle="${n.id}" aria-label="${collapsed?"내용 펼치기":"내용 접기"}">${collapsed?"＋":"−"}</button><button data-edit="${n.id}">수정</button><button data-delete="${n.id}" class="danger">삭제</button><button class="node-link-handle" data-link="${n.id}" aria-label="드래그해 새 메모 연결">＋</button></div></article>`}).join("");$("#mindmap-lines").innerHTML=current.nodes.map((n,index)=>{const a=pos.get(n.parent_id??0)||O,b=pos.get(n.id),dx=b.x-a.x;return `<path style="--branch-color:${memoNodeColor(n,index)}" d="M ${a.x} ${a.y} C ${a.x+dx*.45} ${a.y}, ${b.x-dx*.35} ${b.y}, ${b.x} ${b.y}"/>`}).join("");$("[data-toggle-root]").onclick=e=>{e.currentTarget.closest(".node-card").classList.toggle("root-collapsed");e.currentTarget.textContent=e.currentTarget.textContent==="−"?"＋":"−"};$("#memo-tree").querySelectorAll("[data-toggle]").forEach(b=>b.onclick=()=>{const id=+b.dataset.toggle;if(collapsedNodes.has(id))collapsedNodes.delete(id);else collapsedNodes.add(id);renderMap()});$("#memo-tree").querySelectorAll("[data-edit]").forEach(b=>b.onclick=()=>openNode("edit",+b.dataset.edit));$("#memo-tree").querySelectorAll("[data-delete]").forEach(b=>b.onclick=()=>removeNode(+b.dataset.delete));$("[data-link-root]").addEventListener("pointerdown",e=>startLinkDrag(e,null,O));$("#memo-tree").querySelectorAll("[data-link]").forEach(b=>{const id=+b.dataset.link;b.addEventListener("pointerdown",e=>startLinkDrag(e,id,pos.get(id)))})}
-function applyView(){$("#mindmap-stage").style.transform=`translate(${view.x}px,${view.y}px) scale(${view.scale})`;$("#zoom-level").textContent=`${Math.round(view.scale*100)}%`}
-function zoom(scale,x,y){const r=$("#mindmap-viewport").getBoundingClientRect(),px=(x??r.left+r.width/2)-r.left,py=(y??r.top+r.height/2)-r.top,wx=(px-view.x)/view.scale,wy=(py-view.y)/view.scale;view.scale=Math.min(2.4,Math.max(.28,scale));view.x=px-wx*view.scale;view.y=py-wy*view.scale;applyView()}
-function fitMap(){if(!current)return;const v=$("#mindmap-viewport"),cards=[...$("#memo-tree").querySelectorAll(".node-card")],xs=cards.map(c=>parseFloat(c.style.left)),ys=cards.map(c=>parseFloat(c.style.top)),minX=Math.min(...xs)-180,maxX=Math.max(...xs)+180,minY=Math.min(...ys)-130,maxY=Math.max(...ys)+130;view.scale=Math.max(.28,Math.min(1,(v.clientWidth-40)/(maxX-minX),(v.clientHeight-40)/(maxY-minY)));view.x=v.clientWidth/2-(minX+maxX)/2*view.scale;view.y=v.clientHeight/2-(minY+maxY)/2*view.scale;applyView()}
-function pointerWorld(event){const rect=$("#mindmap-viewport").getBoundingClientRect();return{x:Math.max(100,Math.min(2300,(event.clientX-rect.left-view.x)/view.scale)),y:Math.max(80,Math.min(1720,(event.clientY-rect.top-view.y)/view.scale))}}
-function redrawMindmapLines(){const pos=layout(),paths=$("#mindmap-lines").querySelectorAll("path");current.nodes.forEach((n,index)=>{const a=pos.get(n.parent_id??0)||O,b=pos.get(n.id),dx=b.x-a.x;paths[index]?.setAttribute("d",`M ${a.x} ${a.y} C ${a.x+dx*.45} ${a.y}, ${b.x-dx*.35} ${b.y}, ${b.x} ${b.y}`)})}
-function prepareNodeDrag(event,card){const id=Number(card.dataset.nodeId),node=current.nodes.find(item=>item.id===id);if(!node)return;event.preventDefault();event.stopPropagation();card.setPointerCapture?.(event.pointerId);const origin={x:event.clientX,y:event.clientY},saved=layout().get(id),state={id,node,card,pointerId:event.pointerId,active:false,cancelled:false,last:saved};nodeDrag=state;const timer=setTimeout(()=>{if(nodeDrag!==state||state.cancelled)return;state.active=true;card.classList.add("dragging");navigator.vibrate?.(25);toast("메모를 원하는 위치로 옮기세요")},380);const move=moveEvent=>{if(nodeDrag!==state||moveEvent.pointerId!==state.pointerId)return;const distance=Math.hypot(moveEvent.clientX-origin.x,moveEvent.clientY-origin.y);if(!state.active){if(distance>10){state.cancelled=true;clearTimeout(timer)}return}moveEvent.preventDefault();const point=pointerWorld(moveEvent);state.last=point;node.position_x=point.x;node.position_y=point.y;card.style.left=`${point.x}px`;card.style.top=`${point.y}px`;redrawMindmapLines()};const end=async endEvent=>{if(nodeDrag!==state||endEvent.pointerId!==state.pointerId)return;clearTimeout(timer);window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",end);window.removeEventListener("pointercancel",end);card.classList.remove("dragging");nodeDrag=null;if(!state.active)return;try{await api(`/api/me/memo-nodes/${id}`,{method:"PUT",body:JSON.stringify({content:node.content,position_x:state.last.x,position_y:state.last.y})});toast("메모 위치를 저장했습니다")}catch(error){node.position_x=saved.x;node.position_y=saved.y;renderMap();toast(error.message)}};window.addEventListener("pointermove",move,{passive:false});window.addEventListener("pointerup",end);window.addEventListener("pointercancel",end)}
-function startLinkDrag(event,parentId,start){event.preventDefault();event.stopPropagation();const stage=$("#mindmap-stage"),ghost=document.createElement("div"),path=document.createElementNS("http://www.w3.org/2000/svg","path");ghost.className="node-card link-ghost";ghost.textContent="새 메모";stage.append(ghost);path.classList.add("link-preview");$("#mindmap-lines").append(path);linkDrag={parentId,start,ghost,path};const move=e=>{if(!linkDrag)return;const point=pointerWorld(e),dx=point.x-start.x;ghost.style.left=`${point.x}px`;ghost.style.top=`${point.y}px`;path.setAttribute("d",`M ${start.x} ${start.y} C ${start.x+dx*.45} ${start.y}, ${point.x-dx*.35} ${point.y}, ${point.x} ${point.y}`)};const end=e=>{if(!linkDrag)return;move(e);const point=pointerWorld(e),distance=Math.hypot(point.x-start.x,point.y-start.y);ghost.remove();path.remove();linkDrag=null;window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",end);openNode("add",parentId,distance<70?null:point)};window.addEventListener("pointermove",move);window.addEventListener("pointerup",end,{once:true});move(event)}
-function gestures(){const v=$("#mindmap-viewport");v.addEventListener("contextmenu",e=>{if(e.target.closest(".node-card[data-node-id]"))e.preventDefault()});v.addEventListener("wheel",e=>{e.preventDefault();zoom(view.scale*Math.exp(-e.deltaY*.0015),e.clientX,e.clientY)},{passive:false});v.addEventListener("pointerdown",e=>{const card=e.target.closest(".node-card[data-node-id]");if(card&&!e.target.closest("button")){prepareNodeDrag(e,card);return}if(e.target.closest("button,.node-card"))return;v.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===1)pan={x:e.clientX,y:e.clientY,vx:view.x,vy:view.y};if(pointers.size===2){const[a,b]=[...pointers.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),scale:view.scale}}});v.addEventListener("pointermove",e=>{if(!pointers.has(e.pointerId))return;pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});if(pointers.size===2&&pinch){const[a,b]=[...pointers.values()];zoom(pinch.scale*Math.hypot(a.x-b.x,a.y-b.y)/Math.max(1,pinch.d),(a.x+b.x)/2,(a.y+b.y)/2)}else if(pan){view.x=pan.vx+e.clientX-pan.x;view.y=pan.vy+e.clientY-pan.y;applyView()}});const end=e=>{pointers.delete(e.pointerId);pan=null;pinch=null};v.addEventListener("pointerup",end);v.addEventListener("pointercancel",end)}
-function openNode(mode,id=null,position=null){dialogMode={mode,id,position};$("#node-dialog-title").textContent=mode==="edit"?"파생 메모 수정":"새 파생 메모";$("#node-content").value=mode==="edit"?current.nodes.find(n=>n.id===id)?.content||"":"";$("#node-dialog").showModal();setTimeout(()=>$("#node-content").focus(),50)}
-const activeVoiceInputs=new WeakMap();
-function resetVoiceButton(button){button.classList.remove("listening");button.textContent="🎙️ 음성";button.setAttribute("aria-label","음성으로 메모 입력")}
-function startVoiceInput(target,button){
-  const active=activeVoiceInputs.get(button);
-  if(active){active.stopping=true;button.disabled=true;active.recognition.stop();return}
-  const Recognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!Recognition){alert("이 브라우저에서는 음성 입력을 지원하지 않습니다. macOS Safari 또는 Chrome에서 마이크 권한을 허용해주세요.");return}
-  const recognition=new Recognition(),state={recognition,stopping:false,finalText:"",interimText:""};
-  recognition.lang="ko-KR";recognition.interimResults=true;recognition.continuous=true;
-  const original=target.value,separator=original.trim()?" ":"";
-  activeVoiceInputs.set(button,state);button.classList.add("listening");button.textContent="■ 정지";button.setAttribute("aria-label","음성 메모 녹음 정지");
-  recognition.onresult=event=>{let interim="";for(let index=event.resultIndex;index<event.results.length;index++){const text=event.results[index][0].transcript;if(event.results[index].isFinal)state.finalText+=text;else interim+=text}state.interimText=interim;target.value=original+separator+state.finalText+state.interimText;target.dispatchEvent(new Event("input",{bubbles:true}))};
-  recognition.onerror=event=>{if(event.error==="aborted"||event.error==="no-speech"||state.stopping)return;const message=event.error==="not-allowed"?"마이크 권한이 꺼져 있습니다. 브라우저의 사이트 설정에서 마이크를 허용해주세요.":`음성 입력 오류: ${event.error}`;toast(message)};
-  recognition.onend=()=>{if(activeVoiceInputs.get(button)!==state)return;activeVoiceInputs.delete(button);button.disabled=false;resetVoiceButton(button);target.focus()};
-  try{recognition.start()}catch(error){activeVoiceInputs.delete(button);button.disabled=false;resetVoiceButton(button);if(error.name!=="AbortError")toast("음성 입력을 시작하지 못했습니다. 잠시 후 다시 시도해주세요.")}
+const $ = (s) => document.querySelector(s),
+  W = 2400,
+  H = 1800,
+  O = { x: 1200, y: 900 },
+  MEMO_LAYOUT_KEY = "memo-list-layout-v1";
+let memos = [],
+  current = null,
+  dialogMode = null,
+  view = { x: 0, y: 0, scale: 1 },
+  pan = null,
+  pinch = null,
+  linkDrag = null,
+  nodeDrag = null,
+  selectedMapNode = null,
+  lastNodeTap = { id: null, at: 0 },
+  lastRootTap = 0;
+const pointers = new Map(),
+  collapsedNodes = new Set();
+async function api(path, options = {}) {
+  const r = await fetch(path, {
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers || {}),
+      },
+      ...options,
+    }),
+    data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.detail || "요청을 처리하지 못했습니다");
+  return data;
 }
-async function removeNode(id){if(!confirm("이 가지와 아래에 연결된 메모를 모두 삭제할까요?"))return;await api(`/api/me/memo-nodes/${id}`,{method:"DELETE"});await load(current.id);toast("가지를 삭제했습니다")}
-$("#node-dialog").addEventListener("close",async()=>{if($("#node-dialog").returnValue!=="default"||!dialogMode)return;const content=$("#node-content").value.trim();if(!content)return toast("내용을 입력하세요");try{if(dialogMode.mode==="edit")await api(`/api/me/memo-nodes/${dialogMode.id}`,{method:"PUT",body:JSON.stringify({content})});else await api(`/api/me/memos/${current.id}/nodes`,{method:"POST",body:JSON.stringify({parent_id:dialogMode.id,content,position_x:dialogMode.position?.x??null,position_y:dialogMode.position?.y??null})});await load(current.id);toast("메모를 연결했습니다")}catch(e){alert(e.message)}});
-$("#node-save").onclick=()=>$("#node-dialog").close("default");$("#add-root-node").onclick=()=>openNode("add",null);$("#search").oninput=renderList;$("#zoom-in").onclick=()=>zoom(view.scale*1.22);$("#zoom-out").onclick=()=>zoom(view.scale/1.22);$("#zoom-fit").onclick=fitMap;
-$("#preview-open").onclick=()=>{const id=Number($("#preview-open").dataset.id);$("#memo-preview-dialog").close();selectMemo(id)};
-$("#memo-voice").onclick=event=>startVoiceInput($("#memo-note"),event.currentTarget);$("#node-voice").onclick=event=>startVoiceInput($("#node-content"),event.currentTarget);
-$("#new-memo").onclick=async()=>{try{const r=await api("/api/me/memos",{method:"POST",body:JSON.stringify({title:"새 메모",note:""})});await load(r.id);$("#memo-title").focus()}catch(e){alert(e.message)}};$("#save-root").onclick=async()=>{try{await api(`/api/me/memos/${current.id}`,{method:"PUT",body:JSON.stringify({title:$("#memo-title").value,note:$("#memo-note").value})});await load(current.id);toast("저장했습니다")}catch(e){alert(e.message)}};$("#delete-root").onclick=async()=>{if(!confirm("이 메모와 모든 가지를 삭제할까요?"))return;await api(`/api/me/memos/${current.id}`,{method:"DELETE"});current=null;history.replaceState(null,"","/memo/");$("#editor").classList.add("hidden");$("#empty").classList.remove("hidden");await load()};gestures();load().catch(e=>{$("#empty").innerHTML=`<b>메모를 불러오지 못했습니다</b><p>${esc(e.message)}</p>`});
+function esc(v = "") {
+  return String(v).replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
+  );
+}
+function renderColoredText(element, value = "") {
+  element.replaceChildren();
+  const text = String(value),
+    pattern = /\[\[(red|blue|green|orange|purple)\]\]([\s\S]*?)\[\[\/\1\]\]/g;
+  let cursor = 0;
+  for (const match of text.matchAll(pattern)) {
+    if (match.index > cursor)
+      element.append(document.createTextNode(text.slice(cursor, match.index)));
+    const accent = document.createElement("span");
+    accent.className = `memo-accent memo-accent-${match[1]}`;
+    accent.textContent = match[2];
+    element.append(accent);
+    cursor = match.index + match[0].length;
+  }
+  if (cursor < text.length)
+    element.append(document.createTextNode(text.slice(cursor)));
+}
+const FORMAT_TOKEN_RE = /\[\[(?:\/?(?:b|i|u|s|red|blue|green|orange|purple|color|bg|comment)(?::[^\]]*)?)\]\]/gi;
+function richMemoHtml(value = "") {
+  const text = String(value);
+  let html = "", cursor = 0;
+  for (const match of text.matchAll(FORMAT_TOKEN_RE)) {
+    html += esc(text.slice(cursor, match.index));
+    const token = match[0].slice(2, -2), closing = token.startsWith("/"),
+      [rawName, rawValue = ""] = token.replace(/^\//, "").split(":", 2),
+      name = rawName.toLowerCase();
+    if (closing) html += "</span>";
+    else if (["red", "blue", "green", "orange", "purple"].includes(name))
+      html += `<span class="memo-accent memo-accent-${name}">`;
+    else if (["b", "i", "u", "s"].includes(name)) html += `<span class="memo-format memo-format-${name}">`;
+    else if ((name === "color" || name === "bg") && /^#[0-9a-f]{6}$/i.test(rawValue))
+      html += `<span class="memo-format" style="${name === "color" ? "color" : "background-color"}:${rawValue}">`;
+    else if (name === "comment") {
+      let comment = "";
+      try { comment = decodeURIComponent(rawValue); } catch {}
+      html += `<span class="memo-comment" data-comment="${esc(comment)}" tabindex="0">`;
+    }
+    cursor = match.index + match[0].length;
+  }
+  return html + esc(text.slice(cursor));
+}
+function sourceIndexAtVisibleOffset(source, wanted) {
+  let sourceIndex = 0, visible = 0;
+  for (const match of String(source).matchAll(FORMAT_TOKEN_RE)) {
+    const plainLength = match.index - sourceIndex;
+    if (visible + plainLength >= wanted) return sourceIndex + wanted - visible;
+    visible += plainLength;
+    sourceIndex = match.index + match[0].length;
+  }
+  return Math.min(String(source).length, sourceIndex + Math.max(0, wanted - visible));
+}
+const MEMO_NODE_COLORS = [
+  "#ef6a78",
+  "#ee9b42",
+  "#4eae72",
+  "#3a9cc0",
+  "#5878d8",
+  "#9a69cf",
+];
+function memoNodeColor(node, index = 0) {
+  return MEMO_NODE_COLORS[
+    Math.abs(Number(node?.id) || index) % MEMO_NODE_COLORS.length
+  ];
+}
+function cardWidthStyle(value) {
+  const width = Number(value);
+  return Number.isFinite(width) ? `width:${Math.max(220, Math.min(720, width))}px;` : "";
+}
+function toast(v) {
+  const e = $("#toast");
+  e.textContent = v;
+  e.classList.remove("hidden");
+  setTimeout(() => e.classList.add("hidden"), 1800);
+}
+async function load(id) {
+  selectedMapNode = null;
+  $("#node-mobile-actions")?.classList.add("hidden");
+  memos = await api("/api/me/memos");
+  renderList();
+  const wanted = id || Number(new URLSearchParams(location.search).get("memo"));
+  if (wanted) selectMemo(wanted);
+  else if (current) selectMemo(current.id);
+  else {
+    $("#editor").classList.add("hidden");
+    $("#empty").classList.remove("hidden");
+    $("#empty").innerHTML = memos.length
+      ? "<b>메모를 선택하세요</b><p>제목을 누르면 팝오버에서 내용을 확인할 수 있어요.</p>"
+      : "<b>첫 메모를 만들어보세요</b><p>채팅 메시지를 저장하거나 새 메모를 직접 작성할 수 있어요.</p>";
+  }
+}
+function memoDate(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "날짜 정보 없음"
+    : new Intl.DateTimeFormat("ko-KR", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(date);
+}
+function setMemoLayout(mode) {
+  const next = mode === "list" ? "list" : "grid",
+    list = $("#memo-list"),
+    button = $("#memo-layout");
+  list.classList.toggle("list-view", next === "list");
+  list.classList.toggle("grid-view", next === "grid");
+  button.dataset.layout = next;
+  button.textContent = next === "grid" ? "☰ 리스트" : "▦ 격자";
+  button.setAttribute(
+    "aria-label",
+    next === "grid" ? "리스트 보기로 전환" : "격자 보기로 전환",
+  );
+  try {
+    localStorage.setItem(MEMO_LAYOUT_KEY, next);
+  } catch {}
+}
+function renderList() {
+  const q = $("#search").value.trim().toLowerCase(),
+    list = memos.filter((m) =>
+      `${m.title} ${m.note} ${m.source_content}`.toLowerCase().includes(q),
+    );
+  $("#memo-list").innerHTML = list.length
+    ? list
+        .map(
+          (m) =>
+            `<button data-id="${m.id}" class="${current?.id === m.id ? "active" : ""}"><strong>${esc((m.title || "제목 없는 메모").split(/\r?\n/, 1)[0])}</strong><span>${esc(memoDate(m.updated_at || m.created_at))}</span></button>`,
+        )
+        .join("")
+    : "<p>저장된 메모가 없습니다.</p>";
+  $("#memo-list")
+    .querySelectorAll("button")
+    .forEach((b) => (b.onclick = () => openMemoPreview(+b.dataset.id)));
+}
+function openMemoPreview(id) {
+  const memo = memos.find((item) => item.id === id);
+  if (!memo) return;
+  $("#preview-title").textContent = (memo.title || "제목 없는 메모").split(
+    /\r?\n/,
+    1,
+  )[0];
+  $("#preview-date").textContent =
+    `최근 기록 ${memoDate(memo.updated_at || memo.created_at)}`;
+  const sections = [];
+  if (memo.source_content) sections.push(`채팅 원문\n${memo.source_content}`);
+  if (memo.note)
+    sections.push(`${memo.source_content ? "내 메모\n" : ""}${memo.note}`);
+  renderColoredText(
+    $("#preview-content"),
+    sections.join("\n\n") || "기록된 내용이 없습니다.",
+  );
+  $("#preview-open").dataset.id = String(id);
+  $("#preview-edit").dataset.id = String(id);
+  $("#memo-preview-dialog").showModal();
+}
+function openRootEditor(id, focusNote = false) {
+  selectMemo(id);
+  if (focusNote) openMemoEditDialog();
+}
+function openMemoEditDialog() {
+  if (!current) return;
+  syncMemoEditorViewport();
+  $("#memo-edit-title").value = current.title || "";
+  $("#memo-edit-note").value = current.note || current.source_content || "";
+  $("#memo-edit-dialog").showModal();
+  // 모바일에서 내용 칸을 먼저 포커스하면 작은 화면 최적화 CSS가 제목 칸을
+  // 밀어내 사용자가 제목을 수정할 수 없었다. 편집 목적에 맞게 제목부터
+  // 보여주고 선택하며, 내용 칸을 눌러도 제목 입력란은 계속 남겨둔다.
+  $("#memo-edit-title").focus({ preventScroll: true });
+  $("#memo-edit-title").select();
+}
+function syncMemoEditorViewport() {
+  const viewport = window.visualViewport;
+  document.documentElement.style.setProperty(
+    "--memo-editor-height",
+    `${Math.round(viewport?.height || window.innerHeight)}px`,
+  );
+  document.documentElement.style.setProperty(
+    "--memo-editor-top",
+    `${Math.round(viewport?.offsetTop || 0)}px`,
+  );
+}
+window.visualViewport?.addEventListener("resize", syncMemoEditorViewport);
+window.visualViewport?.addEventListener("scroll", syncMemoEditorViewport);
+window.addEventListener("orientationchange", syncMemoEditorViewport);
+function selectMemo(id) {
+  current = memos.find((m) => m.id === id);
+  if (!current) return;
+  history.replaceState(null, "", `?memo=${id}`);
+  $("#empty").classList.add("hidden");
+  $("#editor").classList.remove("hidden");
+  $("#memo-title").value = current.title;
+  $("#memo-note").value = current.note;
+  const source = !!current.source_message_id;
+  $("#source-card").classList.toggle("hidden", !source);
+  $("#source-label").textContent = source
+    ? `채팅방 ${current.source_room_id || ""}`
+    : "직접 작성한 메모";
+  $("#source-sender").textContent = current.source_sender;
+  renderColoredText($("#source-content"), current.source_content);
+  $("#source-content").classList.add("collapsed");
+  $("#source-toggle").textContent = "원문 펼치기";
+  $("#source-toggle").setAttribute("aria-expanded", "false");
+  if (source) {
+    $("#source-link").href = `/#room=${encodeURIComponent(current.source_room_id)}&message=${encodeURIComponent(current.source_message_id)}`;
+  }
+  renderMap();
+  renderList();
+  requestAnimationFrame(fitMap);
+}
+function layout() {
+  const children = new Map(),
+    positions = new Map([[0, { ...O }]]);
+  current.nodes.forEach((n) => {
+    const k = n.parent_id ?? 0;
+    if (!children.has(k)) children.set(k, []);
+    children.get(k).push(n);
+  });
+  const roots = children.get(0) || [];
+  roots.forEach((n, i) =>
+    place(n, -Math.PI / 2 + (Math.PI * 2 * i) / Math.max(1, roots.length), 1),
+  );
+  function place(n, a, d) {
+    const p = positions.get(n.parent_id ?? 0) || O,
+      dist = d === 1 ? 310 : Math.max(205, 265 - d * 12),
+      saved =
+        Number.isFinite(Number(n.position_x)) &&
+        Number.isFinite(Number(n.position_y));
+    positions.set(
+      n.id,
+      saved
+        ? { x: Number(n.position_x), y: Number(n.position_y) }
+        : { x: p.x + Math.cos(a) * dist, y: p.y + Math.sin(a) * dist },
+    );
+    const list = children.get(n.id) || [],
+      spread = Math.min(1.05, 0.32 + list.length * 0.14);
+    list.forEach((c, i) =>
+      place(
+        c,
+        a +
+          (list.length === 1
+            ? 0
+            : -spread / 2 + (spread * i) / (list.length - 1)),
+        d + 1,
+      ),
+    );
+  }
+  return positions;
+}
+function renderMap() {
+  const pos = layout(),
+    rootText =
+      current.note || current.source_content || "여기서 생각을 확장해보세요";
+  $("#memo-tree").innerHTML =
+    `<article class="node-card root expanded${selectedMapNode === "root" ? " selected" : ""}" style="--node-accent:#ee9b42;${cardWidthStyle(current.card_width)}left:${O.x}px;top:${O.y}px"><small>ROOT NOTE</small><h3>${esc(current.title)}</h3><p data-rich-root="1">${richMemoHtml(rootText)}</p><div class="node-actions"><button data-toggle-root aria-label="내용 접기">−</button><button data-edit-root>수정</button><button class="node-resize-handle" data-resize-root aria-label="메모 폭 조절" title="좌우로 밀어 폭 조절">↔</button><button class="node-link-handle" data-link-root aria-label="드래그해 새 메모 연결">＋</button></div></article>` +
+    current.nodes
+      .map((n, index) => {
+        const p = pos.get(n.id),
+          collapsed = collapsedNodes.has(n.id),
+          color = memoNodeColor(n, index);
+        return `<article class="node-card ${collapsed ? "collapsed" : "expanded"}${selectedMapNode === n.id ? " selected" : ""}" data-node-id="${n.id}" style="--node-accent:${color};${cardWidthStyle(n.card_width)}left:${p.x}px;top:${p.y}px"><p data-rich-node="${n.id}">${richMemoHtml(n.content)}</p><div class="node-actions"><button data-toggle="${n.id}" aria-label="${collapsed ? "내용 펼치기" : "내용 접기"}">${collapsed ? "＋" : "−"}</button><button data-edit="${n.id}">수정</button><button data-delete="${n.id}" class="danger">삭제</button><button class="node-resize-handle" data-resize="${n.id}" aria-label="메모 폭 조절" title="좌우로 밀어 폭 조절">↔</button><button class="node-link-handle" data-link="${n.id}" aria-label="드래그해 새 메모 연결">＋</button></div></article>`;
+      })
+      .join("");
+  $("#mindmap-lines").innerHTML = current.nodes
+    .map((n, index) => {
+      const a = pos.get(n.parent_id ?? 0) || O,
+        b = pos.get(n.id),
+        dx = b.x - a.x;
+      return `<path style="--branch-color:${memoNodeColor(n, index)}" d="M ${a.x} ${a.y} C ${a.x + dx * 0.45} ${a.y}, ${b.x - dx * 0.35} ${b.y}, ${b.x} ${b.y}"/>`;
+    })
+    .join("");
+  $("[data-toggle-root]").onclick = (e) => {
+    e.currentTarget.closest(".node-card").classList.toggle("root-collapsed");
+    e.currentTarget.textContent =
+      e.currentTarget.textContent === "−" ? "＋" : "−";
+  };
+  $("#memo-tree")
+    .querySelectorAll("[data-toggle]")
+    .forEach(
+      (b) =>
+        (b.onclick = () => {
+          const id = +b.dataset.toggle;
+          if (collapsedNodes.has(id)) collapsedNodes.delete(id);
+          else collapsedNodes.add(id);
+          renderMap();
+        }),
+    );
+  $("#memo-tree")
+    .querySelectorAll("[data-edit]")
+    .forEach((b) => (b.onclick = () => openNode("edit", +b.dataset.edit)));
+  $("[data-edit-root]").onclick = () => openRootEditor(current.id, true);
+  $("#memo-tree")
+    .querySelectorAll("[data-delete]")
+    .forEach((b) => (b.onclick = () => removeNode(+b.dataset.delete)));
+  $("#memo-tree")
+    .querySelectorAll("p[data-rich-node]")
+    .forEach((paragraph) => {
+      paragraph.onclick = () => selectMapNode(Number(paragraph.dataset.richNode));
+    });
+  const rootCard = $("#memo-tree .node-card.root");
+  rootCard.querySelector("p[data-rich-root]").onclick = () => selectMapNode("root");
+  rootCard.ondblclick = (event) => {
+    if (event.target.closest("button,p[data-rich-root]")) return;
+    openRootEditor(current.id, true);
+  };
+  let rootPointerStart = null;
+  rootCard.onpointerdown = (event) => {
+    if (event.target.closest("button,p[data-rich-root]")) return;
+    rootPointerStart = { x: event.clientX, y: event.clientY };
+  };
+  rootCard.onpointerup = (event) => {
+    if (!rootPointerStart || event.target.closest("button")) return;
+    const moved = Math.hypot(
+      event.clientX - rootPointerStart.x,
+      event.clientY - rootPointerStart.y,
+    );
+    rootPointerStart = null;
+    if (moved > 10 || event.pointerType === "mouse") return;
+    const now = Date.now();
+    if (now - lastRootTap < 430) {
+      lastRootTap = 0;
+      openRootEditor(current.id, true);
+    } else {
+      lastRootTap = now;
+    }
+  };
+  $("[data-resize-root]").addEventListener("pointerdown", (event) =>
+    startCardResize(event, rootCard, null),
+  );
+  $("#memo-tree")
+    .querySelectorAll("[data-resize]")
+    .forEach((button) => {
+      const id = Number(button.dataset.resize);
+      button.addEventListener("pointerdown", (event) =>
+        startCardResize(
+          event,
+          button.closest(".node-card"),
+          current.nodes.find((node) => node.id === id),
+        ),
+      );
+    });
+  $("[data-link-root]").addEventListener("pointerdown", (e) =>
+    startLinkDrag(e, null, O),
+  );
+  $("#memo-tree")
+    .querySelectorAll("[data-link]")
+    .forEach((b) => {
+      const id = +b.dataset.link;
+      b.addEventListener("pointerdown", (e) =>
+        startLinkDrag(e, id, pos.get(id)),
+      );
+    });
+}
+function selectMapNode(id) {
+  selectedMapNode = id;
+  const bar = $("#node-mobile-actions"), root = id === "root",
+    node = root ? null : current?.nodes.find((item) => item.id === id);
+  if (!root && !node) return;
+  $("#memo-tree").querySelectorAll(".node-card.selected").forEach((card) => card.classList.remove("selected"));
+  const card = root ? $("#memo-tree .node-card.root") : $(`#memo-tree .node-card[data-node-id="${id}"]`);
+  card?.classList.add("selected");
+  $("#node-mobile-label").textContent = root ? "기본 메모 선택됨" : "파생 메모 선택됨";
+  $("#node-mobile-delete").hidden = root;
+  $("#node-mobile-collapse").textContent = root
+    ? (card?.classList.contains("root-collapsed") ? "펼치기" : "접기")
+    : (collapsedNodes.has(id) ? "펼치기" : "접기");
+  bar.classList.remove("hidden");
+}
+function clearMapNodeSelection() {
+  selectedMapNode = null;
+  $("#memo-tree")?.querySelectorAll(".node-card.selected").forEach((card) => card.classList.remove("selected"));
+  $("#node-mobile-actions").classList.add("hidden");
+}
+function applyView() {
+  $("#mindmap-stage").style.transform =
+    `translate(${view.x}px,${view.y}px) scale(${view.scale})`;
+  $("#zoom-level").textContent = `${Math.round(view.scale * 100)}%`;
+}
+function zoom(scale, x, y) {
+  const r = $("#mindmap-viewport").getBoundingClientRect(),
+    px = (x ?? r.left + r.width / 2) - r.left,
+    py = (y ?? r.top + r.height / 2) - r.top,
+    wx = (px - view.x) / view.scale,
+    wy = (py - view.y) / view.scale;
+  view.scale = Math.min(2.4, Math.max(0.28, scale));
+  view.x = px - wx * view.scale;
+  view.y = py - wy * view.scale;
+  applyView();
+}
+function fitMap() {
+  if (!current) return;
+  const v = $("#mindmap-viewport"),
+    cards = [...$("#memo-tree").querySelectorAll(".node-card")],
+    xs = cards.map((c) => parseFloat(c.style.left)),
+    ys = cards.map((c) => parseFloat(c.style.top)),
+    minX = Math.min(...xs) - 180,
+    maxX = Math.max(...xs) + 180,
+    minY = Math.min(...ys) - 130,
+    maxY = Math.max(...ys) + 130;
+  view.scale = Math.max(
+    0.28,
+    Math.min(
+      1,
+      (v.clientWidth - 40) / (maxX - minX),
+      (v.clientHeight - 40) / (maxY - minY),
+    ),
+  );
+  view.x = v.clientWidth / 2 - ((minX + maxX) / 2) * view.scale;
+  view.y = v.clientHeight / 2 - ((minY + maxY) / 2) * view.scale;
+  applyView();
+}
+function setMindmapFullscreen(enabled) {
+  const viewport = $("#mindmap-viewport"),
+    button = $("#mindmap-fullscreen"),
+    active = Boolean(enabled);
+  viewport.classList.toggle("fullscreen-mode", active);
+  document.body.classList.toggle("mindmap-fullscreen-open", active);
+  button.textContent = active ? "×" : "⛶";
+  button.setAttribute(
+    "aria-label",
+    active ? "전체 화면 닫기" : "생각 지도 전체 화면",
+  );
+  button.title = active ? "전체 화면 닫기" : "전체 화면";
+  requestAnimationFrame(() => requestAnimationFrame(fitMap));
+}
+function pointerWorld(event) {
+  const rect = $("#mindmap-viewport").getBoundingClientRect();
+  return {
+    x: Math.max(
+      100,
+      Math.min(2300, (event.clientX - rect.left - view.x) / view.scale),
+    ),
+    y: Math.max(
+      80,
+      Math.min(1720, (event.clientY - rect.top - view.y) / view.scale),
+    ),
+  };
+}
+function redrawMindmapLines() {
+  const pos = layout(),
+    paths = $("#mindmap-lines").querySelectorAll("path");
+  current.nodes.forEach((n, index) => {
+    const a = pos.get(n.parent_id ?? 0) || O,
+      b = pos.get(n.id),
+      dx = b.x - a.x;
+    paths[index]?.setAttribute(
+      "d",
+      `M ${a.x} ${a.y} C ${a.x + dx * 0.45} ${a.y}, ${b.x - dx * 0.35} ${b.y}, ${b.x} ${b.y}`,
+    );
+  });
+}
+function prepareNodeDrag(event, card) {
+  if (event.target.closest("p[data-rich-node], .memo-comment")) return;
+  const id = Number(card.dataset.nodeId),
+    node = current.nodes.find((item) => item.id === id);
+  if (!node) return;
+  event.preventDefault();
+  event.stopPropagation();
+  card.setPointerCapture?.(event.pointerId);
+  const origin = { x: event.clientX, y: event.clientY },
+    saved = layout().get(id),
+    state = {
+      id,
+      node,
+      card,
+      pointerId: event.pointerId,
+      active: false,
+      cancelled: false,
+      last: saved,
+    };
+  nodeDrag = state;
+  const timer = setTimeout(() => {
+    if (nodeDrag !== state || state.cancelled) return;
+    state.active = true;
+    card.classList.add("dragging");
+    navigator.vibrate?.(25);
+    toast("메모를 원하는 위치로 옮기세요");
+  }, 380);
+  const move = (moveEvent) => {
+    if (nodeDrag !== state || moveEvent.pointerId !== state.pointerId) return;
+    const distance = Math.hypot(
+      moveEvent.clientX - origin.x,
+      moveEvent.clientY - origin.y,
+    );
+    if (!state.active) {
+      if (distance > 10) {
+        state.cancelled = true;
+        clearTimeout(timer);
+      }
+      return;
+    }
+    moveEvent.preventDefault();
+    const point = pointerWorld(moveEvent);
+    state.last = point;
+    node.position_x = point.x;
+    node.position_y = point.y;
+    card.style.left = `${point.x}px`;
+    card.style.top = `${point.y}px`;
+    redrawMindmapLines();
+  };
+  const end = async (endEvent) => {
+    if (nodeDrag !== state || endEvent.pointerId !== state.pointerId) return;
+    clearTimeout(timer);
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", end);
+    window.removeEventListener("pointercancel", end);
+    card.classList.remove("dragging");
+    nodeDrag = null;
+    if (!state.active) {
+      if (!state.cancelled) {
+        selectMapNode(id);
+        const now = Date.now();
+        if (lastNodeTap.id === id && now - lastNodeTap.at < 430) {
+          lastNodeTap = { id: null, at: 0 };
+          openNode("edit", id);
+        } else {
+          lastNodeTap = { id, at: now };
+        }
+      }
+      return;
+    }
+    try {
+      await api(`/api/me/memo-nodes/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          content: node.content,
+          position_x: state.last.x,
+          position_y: state.last.y,
+        }),
+      });
+      toast("메모 위치를 저장했습니다");
+    } catch (error) {
+      node.position_x = saved.x;
+      node.position_y = saved.y;
+      renderMap();
+      toast(error.message);
+    }
+  };
+  window.addEventListener("pointermove", move, { passive: false });
+  window.addEventListener("pointerup", end);
+  window.addEventListener("pointercancel", end);
+}
+
+let richSelection = null;
+function textOffsetWithin(container, node, offset) {
+  const range = document.createRange();
+  range.selectNodeContents(container);
+  try { range.setEnd(node, offset); } catch { return 0; }
+  return range.toString().length;
+}
+function hideSelectionToolbar() {
+  $("#selection-toolbar").classList.add("hidden");
+}
+function captureRichSelection() {
+  const selection = getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+  const range = selection.getRangeAt(0),
+    content = (range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+      ? range.commonAncestorContainer.parentElement
+      : range.commonAncestorContainer)?.closest?.("p[data-rich-root],p[data-rich-node]");
+  if (!content || !content.contains(range.startContainer) || !content.contains(range.endContainer)) return;
+  const start = textOffsetWithin(content, range.startContainer, range.startOffset),
+    end = textOffsetWithin(content, range.endContainer, range.endOffset);
+  if (end <= start) return;
+  const rect = range.getBoundingClientRect(), toolbar = $("#selection-toolbar");
+  richSelection = {
+    root: content.hasAttribute("data-rich-root"),
+    nodeId: Number(content.dataset.richNode || 0), start, end,
+  };
+  toolbar.classList.remove("hidden");
+  const box = toolbar.getBoundingClientRect();
+  toolbar.style.left = `${Math.max(8, Math.min(innerWidth - box.width - 8, rect.left + rect.width / 2 - box.width / 2))}px`;
+  toolbar.style.top = `${Math.max(8, rect.top - box.height - 10)}px`;
+}
+async function applyRichFormat(openTag, closeTag, clear = false) {
+  if (!richSelection || !current) return;
+  const node = richSelection.root ? null : current.nodes.find((item) => item.id === richSelection.nodeId),
+    source = richSelection.root ? (current.note || current.source_content || "") : node?.content;
+  if (source == null) return;
+  const start = sourceIndexAtVisibleOffset(source, richSelection.start),
+    end = sourceIndexAtVisibleOffset(source, richSelection.end);
+  let selected = source.slice(start, end), updated;
+  if (clear) selected = selected.replace(FORMAT_TOKEN_RE, "");
+  updated = source.slice(0, start) + (clear ? selected : openTag + selected + closeTag) + source.slice(end);
+  try {
+    if (richSelection.root) {
+      current.note = updated;
+      $("#memo-note").value = updated;
+      await api(`/api/me/memos/${current.id}`, { method: "PUT", body: JSON.stringify({ title: $("#memo-title").value || current.title, note: updated }) });
+    } else {
+      node.content = updated;
+      await api(`/api/me/memo-nodes/${node.id}`, { method: "PUT", body: JSON.stringify({ content: updated }) });
+    }
+    getSelection()?.removeAllRanges();
+    richSelection = null;
+    hideSelectionToolbar();
+    renderMap();
+    toast("선택한 글자에 서식을 적용했습니다");
+  } catch (error) { toast(error.message); }
+}
+document.addEventListener("selectionchange", () => {
+  clearTimeout(captureRichSelection.timer);
+  captureRichSelection.timer = setTimeout(() => {
+    if (!$("#selection-toolbar").matches(":hover")) captureRichSelection();
+  }, 90);
+});
+$("#selection-toolbar").querySelectorAll("[data-format]").forEach((button) => {
+  button.onclick = () => applyRichFormat(`[[${button.dataset.format}]]`, `[[/${button.dataset.format}]]`);
+});
+let pendingColorMode = "color";
+function openFormatColorDialog(mode) {
+  if (!richSelection) return toast("먼저 색을 바꿀 글자를 선택해주세요");
+  pendingColorMode = mode;
+  const picker = $("#format-color-picker"), dialog = $("#format-color-dialog");
+  picker.value = mode === "color" ? "#e45775" : "#fff19a";
+  $("#format-color-title").textContent = mode === "color" ? "글자색" : "배경색";
+  updateFormatColorPreview();
+  hideSelectionToolbar();
+  dialog.showModal();
+}
+function updateFormatColorPreview() {
+  const value = $("#format-color-picker").value, preview = $("#format-color-preview");
+  preview.style.color = pendingColorMode === "color" ? value : "";
+  preview.style.backgroundColor = pendingColorMode === "background" ? value : "";
+}
+$("#format-color-button").onclick = () => openFormatColorDialog("color");
+$("#format-background-button").onclick = () => openFormatColorDialog("background");
+$("#format-color-picker").oninput = updateFormatColorPreview;
+$("#format-color-dialog").querySelectorAll("[data-color]").forEach((button) => {
+  button.onclick = () => {
+    $("#format-color-picker").value = button.dataset.color;
+    updateFormatColorPreview();
+  };
+});
+$("#format-color-apply").onclick = async () => {
+  const value = $("#format-color-picker").value;
+  $("#format-color-dialog").close();
+  await applyRichFormat(
+    pendingColorMode === "color" ? `[[color:${value}]]` : `[[bg:${value}]]`,
+    pendingColorMode === "color" ? "[[/color]]" : "[[/bg]]",
+  );
+};
+$("#format-clear").onclick = () => applyRichFormat("", "", true);
+$("#format-comment").onclick = () => {
+  const comment = prompt("선택한 문장에 남길 코멘트를 입력하세요.");
+  if (comment?.trim()) applyRichFormat(`[[comment:${encodeURIComponent(comment.trim())}]]`, "[[/comment]]");
+};
+document.addEventListener("click", (event) => {
+  const marked = event.target.closest(".memo-comment"), popover = $("#comment-popover");
+  if (!marked) {
+    if (!event.target.closest("#comment-popover")) popover.classList.add("hidden");
+    return;
+  }
+  event.stopPropagation();
+  popover.querySelector("p").textContent = marked.dataset.comment || "코멘트가 없습니다";
+  popover.classList.remove("hidden");
+  const rect = marked.getBoundingClientRect(), box = popover.getBoundingClientRect();
+  popover.style.left = `${Math.max(10, Math.min(innerWidth - box.width - 10, rect.left))}px`;
+  popover.style.top = `${Math.min(innerHeight - box.height - 10, rect.bottom + 8)}px`;
+});
+$("#comment-popover button").onclick = () => $("#comment-popover").classList.add("hidden");
+function startCardResize(event, card, node) {
+  event.preventDefault();
+  event.stopPropagation();
+  const startX = event.clientX,
+    startWidth = card.getBoundingClientRect().width / view.scale,
+    pointerId = event.pointerId;
+  card.classList.add("resizing");
+  const move = (moveEvent) => {
+    if (moveEvent.pointerId !== pointerId) return;
+    moveEvent.preventDefault();
+    const width = Math.max(
+      220,
+      Math.min(720, startWidth + (moveEvent.clientX - startX) / view.scale),
+    );
+    card.style.width = `${width}px`;
+    card.dataset.pendingWidth = String(Math.round(width));
+  };
+  const end = async (endEvent) => {
+    if (endEvent.pointerId !== pointerId) return;
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", end);
+    window.removeEventListener("pointercancel", end);
+    card.classList.remove("resizing");
+    const width = Number(card.dataset.pendingWidth || Math.round(startWidth));
+    delete card.dataset.pendingWidth;
+    try {
+      if (node) {
+        node.card_width = width;
+        await api(`/api/me/memo-nodes/${node.id}`, {
+          method: "PUT",
+          body: JSON.stringify({ content: node.content, card_width: width }),
+        });
+      } else {
+        current.card_width = width;
+        await api(`/api/me/memos/${current.id}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            title: $("#memo-title").value,
+            note: $("#memo-note").value,
+            card_width: width,
+          }),
+        });
+      }
+      toast(`메모 폭을 ${width}px로 저장했습니다`);
+    } catch (error) {
+      card.style.width = `${startWidth}px`;
+      toast(error.message);
+    }
+  };
+  window.addEventListener("pointermove", move, { passive: false });
+  window.addEventListener("pointerup", end);
+  window.addEventListener("pointercancel", end);
+}
+function startLinkDrag(event, parentId, start) {
+  event.preventDefault();
+  event.stopPropagation();
+  const stage = $("#mindmap-stage"),
+    ghost = document.createElement("div"),
+    path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  ghost.className = "node-card link-ghost";
+  ghost.textContent = "새 메모";
+  stage.append(ghost);
+  path.classList.add("link-preview");
+  $("#mindmap-lines").append(path);
+  linkDrag = { parentId, start, ghost, path };
+  const move = (e) => {
+    if (!linkDrag) return;
+    const point = pointerWorld(e),
+      dx = point.x - start.x;
+    ghost.style.left = `${point.x}px`;
+    ghost.style.top = `${point.y}px`;
+    path.setAttribute(
+      "d",
+      `M ${start.x} ${start.y} C ${start.x + dx * 0.45} ${start.y}, ${point.x - dx * 0.35} ${point.y}, ${point.x} ${point.y}`,
+    );
+  };
+  const end = (e) => {
+    if (!linkDrag) return;
+    move(e);
+    const point = pointerWorld(e),
+      distance = Math.hypot(point.x - start.x, point.y - start.y);
+    ghost.remove();
+    path.remove();
+    linkDrag = null;
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", end);
+    openNode("add", parentId, distance < 70 ? null : point);
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", end, { once: true });
+  move(event);
+}
+function gestures() {
+  const v = $("#mindmap-viewport");
+  v.addEventListener("contextmenu", (e) => {
+    if (e.target.closest(".node-card[data-node-id]")) e.preventDefault();
+  });
+  v.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      zoom(view.scale * Math.exp(-e.deltaY * 0.0015), e.clientX, e.clientY);
+    },
+    { passive: false },
+  );
+  v.addEventListener("pointerdown", (e) => {
+    const card = e.target.closest(".node-card[data-node-id]");
+    if (card && !e.target.closest("button")) {
+      prepareNodeDrag(e, card);
+      return;
+    }
+    if (e.target.closest("button,.node-card")) return;
+    v.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 1)
+      pan = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y };
+    if (pointers.size === 2) {
+      const [a, b] = [...pointers.values()];
+      pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), scale: view.scale };
+    }
+  });
+  v.addEventListener("pointermove", (e) => {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.size === 2 && pinch) {
+      const [a, b] = [...pointers.values()];
+      zoom(
+        (pinch.scale * Math.hypot(a.x - b.x, a.y - b.y)) / Math.max(1, pinch.d),
+        (a.x + b.x) / 2,
+        (a.y + b.y) / 2,
+      );
+    } else if (pan) {
+      view.x = pan.vx + e.clientX - pan.x;
+      view.y = pan.vy + e.clientY - pan.y;
+      applyView();
+    }
+  });
+  const end = (e) => {
+    pointers.delete(e.pointerId);
+    pan = null;
+    pinch = null;
+  };
+  v.addEventListener("pointerup", end);
+  v.addEventListener("pointercancel", end);
+}
+function openNode(mode, id = null, position = null) {
+  dialogMode = { mode, id, position };
+  $("#node-dialog-title").textContent =
+    mode === "edit" ? "파생 메모 수정" : "새 파생 메모";
+  $("#node-content").value =
+    mode === "edit"
+      ? current.nodes.find((n) => n.id === id)?.content || ""
+      : "";
+  $("#node-dialog").showModal();
+  setTimeout(() => $("#node-content").focus(), 50);
+}
+const activeVoiceInputs = new WeakMap();
+function resetVoiceButton(button) {
+  button.classList.remove("listening");
+  button.textContent = "🎙️ 음성";
+  button.setAttribute("aria-label", "음성으로 메모 입력");
+}
+function startVoiceInput(target, button) {
+  const active = activeVoiceInputs.get(button);
+  if (active) {
+    active.stopping = true;
+    button.disabled = true;
+    active.recognition.stop();
+    return;
+  }
+  const Recognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!Recognition) {
+    alert(
+      "이 브라우저에서는 음성 입력을 지원하지 않습니다. macOS Safari 또는 Chrome에서 마이크 권한을 허용해주세요.",
+    );
+    return;
+  }
+  const recognition = new Recognition(),
+    state = { recognition, stopping: false, finalText: "", interimText: "" };
+  recognition.lang = "ko-KR";
+  recognition.interimResults = true;
+  recognition.continuous = true;
+  const original = target.value,
+    separator = original.trim() ? " " : "";
+  activeVoiceInputs.set(button, state);
+  button.classList.add("listening");
+  button.textContent = "■ 정지";
+  button.setAttribute("aria-label", "음성 메모 녹음 정지");
+  recognition.onresult = (event) => {
+    let interim = "";
+    for (let index = event.resultIndex; index < event.results.length; index++) {
+      const text = event.results[index][0].transcript;
+      if (event.results[index].isFinal) state.finalText += text;
+      else interim += text;
+    }
+    state.interimText = interim;
+    target.value = original + separator + state.finalText + state.interimText;
+    target.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  recognition.onerror = (event) => {
+    if (
+      event.error === "aborted" ||
+      event.error === "no-speech" ||
+      state.stopping
+    )
+      return;
+    const message =
+      event.error === "not-allowed"
+        ? "마이크 권한이 꺼져 있습니다. 브라우저의 사이트 설정에서 마이크를 허용해주세요."
+        : `음성 입력 오류: ${event.error}`;
+    toast(message);
+  };
+  recognition.onend = () => {
+    if (activeVoiceInputs.get(button) !== state) return;
+    activeVoiceInputs.delete(button);
+    button.disabled = false;
+    resetVoiceButton(button);
+    target.focus();
+  };
+  try {
+    recognition.start();
+  } catch (error) {
+    activeVoiceInputs.delete(button);
+    button.disabled = false;
+    resetVoiceButton(button);
+    if (error.name !== "AbortError")
+      toast("음성 입력을 시작하지 못했습니다. 잠시 후 다시 시도해주세요.");
+  }
+}
+async function removeNode(id) {
+  if (!confirm("이 가지와 아래에 연결된 메모를 모두 삭제할까요?")) return;
+  await api(`/api/me/memo-nodes/${id}`, { method: "DELETE" });
+  await load(current.id);
+  toast("가지를 삭제했습니다");
+}
+$("#node-dialog").addEventListener("close", async () => {
+  if ($("#node-dialog").returnValue !== "default" || !dialogMode) return;
+  const content = $("#node-content").value.trim();
+  if (!content) return toast("내용을 입력하세요");
+  try {
+    if (dialogMode.mode === "edit")
+      await api(`/api/me/memo-nodes/${dialogMode.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ content }),
+      });
+    else
+      await api(`/api/me/memos/${current.id}/nodes`, {
+        method: "POST",
+        body: JSON.stringify({
+          parent_id: dialogMode.id,
+          content,
+          position_x: dialogMode.position?.x ?? null,
+          position_y: dialogMode.position?.y ?? null,
+        }),
+      });
+    await load(current.id);
+    toast("메모를 연결했습니다");
+  } catch (e) {
+    alert(e.message);
+  }
+});
+$("#node-save").onclick = () => $("#node-dialog").close("default");
+$("#add-root-node").onclick = () => openNode("add", null);
+$("#search").oninput = renderList;
+$("#memo-layout").onclick = (event) =>
+  setMemoLayout(
+    event.currentTarget.dataset.layout === "grid" ? "list" : "grid",
+  );
+$("#zoom-in").onclick = () => zoom(view.scale * 1.22);
+$("#zoom-out").onclick = () => zoom(view.scale / 1.22);
+$("#zoom-fit").onclick = fitMap;
+$("#mindmap-fullscreen").onclick = () =>
+  setMindmapFullscreen(
+    !$("#mindmap-viewport").classList.contains("fullscreen-mode"),
+  );
+$("#node-mobile-edit").onclick = () => {
+  if (selectedMapNode === "root") openRootEditor(current.id, true);
+  else if (Number.isFinite(Number(selectedMapNode))) openNode("edit", Number(selectedMapNode));
+};
+$("#node-mobile-collapse").onclick = () => {
+  if (selectedMapNode === "root") {
+    const card = $("#memo-tree .node-card.root");
+    card.classList.toggle("root-collapsed");
+    selectMapNode("root");
+    return;
+  }
+  const id = Number(selectedMapNode);
+  if (!Number.isFinite(id)) return;
+  if (collapsedNodes.has(id)) collapsedNodes.delete(id); else collapsedNodes.add(id);
+  renderMap();
+  selectMapNode(id);
+};
+$("#node-mobile-delete").onclick = async () => {
+  const id = Number(selectedMapNode);
+  if (!Number.isFinite(id)) return;
+  await removeNode(id);
+  clearMapNodeSelection();
+};
+$("#node-mobile-close").onclick = clearMapNodeSelection;
+document.addEventListener("keydown", (event) => {
+  if (
+    event.key === "Escape" &&
+    $("#mindmap-viewport").classList.contains("fullscreen-mode")
+  ) {
+    setMindmapFullscreen(false);
+  }
+});
+$("#preview-open").onclick = () => {
+  const id = Number($("#preview-open").dataset.id);
+  $("#memo-preview-dialog").close();
+  openRootEditor(id);
+};
+$("#preview-edit").onclick = () => {
+  const id = Number($("#preview-edit").dataset.id);
+  $("#memo-preview-dialog").close();
+  openRootEditor(id, true);
+};
+$("#edit-root").onclick = () => {
+  if (!current) return;
+  openMemoEditDialog();
+};
+$("#edit-note-inline").onclick = openMemoEditDialog;
+$("#memo-note").onclick = openMemoEditDialog;
+$("#source-toggle").onclick = () => {
+  const content = $("#source-content");
+  const expanded = !content.classList.toggle("collapsed");
+  $("#source-toggle").textContent = expanded ? "원문 접기" : "원문 펼치기";
+  $("#source-toggle").setAttribute("aria-expanded", String(expanded));
+};
+$("#node-voice").onclick = (event) =>
+  startVoiceInput($("#node-content"), event.currentTarget);
+$("#new-memo").onclick = async () => {
+  try {
+    const r = await api("/api/me/memos", {
+      method: "POST",
+      body: JSON.stringify({ title: "새 메모", note: "" }),
+    });
+    await load(r.id);
+    openMemoEditDialog();
+  } catch (e) {
+    alert(e.message);
+  }
+};
+$("#memo-edit-save").onclick = async () => {
+  try {
+    const title = $("#memo-edit-title").value.trim();
+    if (!title) {
+      $("#memo-edit-title").focus();
+      throw new Error("메모 제목을 입력해 주세요");
+    }
+    await api(`/api/me/memos/${current.id}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        title,
+        note: $("#memo-edit-note").value,
+      }),
+    });
+    $("#memo-edit-dialog").close();
+    await load(current.id);
+    toast("메모를 수정했습니다");
+  } catch (e) {
+    alert(e.message);
+  }
+};
+$("#memo-edit-save-top").onclick = () => $("#memo-edit-save").click();
+$("#delete-root").onclick = async () => {
+  if (!confirm("이 메모와 모든 가지를 삭제할까요?")) return;
+  await api(`/api/me/memos/${current.id}`, { method: "DELETE" });
+  current = null;
+  history.replaceState(null, "", "/memo/");
+  $("#editor").classList.add("hidden");
+  $("#empty").classList.remove("hidden");
+  await load();
+};
+let initialMemoLayout = "grid";
+try {
+  initialMemoLayout =
+    localStorage.getItem(MEMO_LAYOUT_KEY) === "list" ? "list" : "grid";
+} catch {}
+setMemoLayout(initialMemoLayout);
+gestures();
+load().catch((e) => {
+  $("#empty").innerHTML =
+    `<b>메모를 불러오지 못했습니다</b><p>${esc(e.message)}</p>`;
+});
