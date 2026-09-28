@@ -16,6 +16,30 @@ import run_daily_dating_sim_agent as agent
 
 STATE = Path.home() / ".tulpachat" / "dating_sim_image_backlog.json"
 
+# 관리자 이미지 작업 시스템의 `Civitai 2805532 · 고품질 인물` 프리셋과
+# 동일한 품질 설정이다. 일괄 생성에서는 기존 작품의 화면비율을 보존해야
+# 하므로 --width/--height는 의도적으로 전달하지 않는다.
+BATCH_QUALITY_PRESET_ARGS = (
+    "--steps", "30",
+    "--cfg", "7",
+    "--sampler", "dpmpp_2m",
+    "--scheduler", "karras",
+    "--denoise", "1",
+    "--hires-scale", "1.5",
+    "--hires-steps", "10",
+    "--hires-denoise", "0.28",
+)
+
+
+def generation_command(work: Path) -> list[str]:
+    """기존 화면비율을 유지한 고품질 일괄 생성 명령을 만든다."""
+    return [
+        str(agent.PYTHON),
+        str(agent.ROOT / "generate_dating_sim_images.py"),
+        str(work),
+        *BATCH_QUALITY_PRESET_ARGS,
+    ]
+
 
 def save(payload):
     STATE.parent.mkdir(parents=True, exist_ok=True)
@@ -81,9 +105,7 @@ def main():
             print(f"\n▶ {work.name} ({index}/{len(works)}) · 전체 남은 시간 약 "
                   f"{duration_label(state.get('eta_seconds'))}", flush=True)
             work_started = time.monotonic()
-            result = subprocess.run([
-                str(agent.PYTHON), str(agent.ROOT / "generate_dating_sim_images.py"), str(work),
-            ])
+            result = subprocess.run(generation_command(work))
             if result.returncode == 0 and agent.images_complete(work):
                 state["completed"] += 1
             else:
