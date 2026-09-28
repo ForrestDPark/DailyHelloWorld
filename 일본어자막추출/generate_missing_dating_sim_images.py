@@ -31,8 +31,12 @@ def main():
         os.write(lock_fd, str(os.getpid()).encode("ascii"))
         os.close(lock_fd)
     except FileExistsError:
-        save({"status": "failed", "error": "다른 미연시 제작 작업이 이미 실행 중입니다"})
-        return 2
+        save({
+            "status": "waiting_for_lock",
+            "error": "다른 미연시 제작 작업이 실행 중이어 자동 재개를 기다립니다",
+            "checked_at": dt.datetime.now().isoformat(timespec="seconds"),
+        })
+        return 0
     try:
         works = [work for work in agent.candidates()
                  if agent.scenario_complete(work) and not agent.images_complete(work)]
