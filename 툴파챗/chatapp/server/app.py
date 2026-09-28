@@ -1802,14 +1802,16 @@ def dating_sim_playable_stories(request: Request):
             "source_title": story.get("source_title"),
             "character_image": story.get("character_image"),
             "started": bool(row), "day": min(row["day"], story["total_days"]) if row else 0,
+            "affection": row["affection"] if row else None,
             "total_days": story["total_days"], "completed": bool(row and row["completed"]),
             # ★ 2026-09-24: 이미지·시나리오가 덜 끝난 작품도 목록에서 빼지 않고 미완료로 표시한다.
             "ready": scenario_ok and images_ok, "scenario_ready": scenario_ok,
             "images_ready": images_ok, "image_count": image_count,
         })
-    # 목록의 가장 중요한 기준은 실제 시나리오 완성 여부다. 이미지가 아직
-    # 덜 만들어졌거나 플레이를 시작하지 않았더라도 완성 시나리오를 위에 둔다.
-    stories.sort(key=lambda item: (not item["scenario_ready"], not item["ready"], not item["started"],
+    # 사용자가 관계를 이어 온 작품부터 찾을 수 있도록 시작한 작품을 호감도
+    # 내림차순으로 먼저 둔다. 같은 호감도와 미시작 작품은 제작 완료 상태를 따른다.
+    stories.sort(key=lambda item: (not item["started"], -(item["affection"] if item["affection"] is not None else -1),
+                                   not item["scenario_ready"], not item["ready"],
                                    re.sub(r"\[([^|\]]+)\|[^\]]*\]", r"\1", item["character_name"] or "")))
     return stories
 

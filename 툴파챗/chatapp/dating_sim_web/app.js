@@ -2120,8 +2120,8 @@ async function openStoryPopover(anchor) {
     production.textContent = item.ready ? "플레이 가능" : item.scenario_ready
       ? `이미지 준비 중 · ${item.image_count}/42장` : "시나리오 준비 중";
     const status = document.createElement("small");
-    status.textContent = item.completed ? "내 진행 · 엔딩 완료" : item.started
-      ? `내 진행 · DAY ${item.day}/${item.total_days}` : "내 진행 · 아직 시작하지 않음";
+    status.textContent = item.completed ? `내 진행 · 엔딩 완료 · 호감도 ${item.affection}` : item.started
+      ? `내 진행 · DAY ${item.day}/${item.total_days} · 호감도 ${item.affection}` : "내 진행 · 아직 시작하지 않음";
     if (!item.ready) {
       // 이미지·시나리오가 덜 끝난 작품도 목록에 남기고 무엇이 모자란지 표시한다.
       const missing = [];

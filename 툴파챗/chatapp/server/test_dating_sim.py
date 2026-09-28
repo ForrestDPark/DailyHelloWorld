@@ -1006,6 +1006,7 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         self.assertEqual([s["story_id"] for s in stories], [f"book:{book_id}"])
         self.assertFalse(stories[0]["started"])
         self.assertFalse(stories[0]["ready"])  # 미완료도 목록에는 남는다
+        self.assertIsNone(stories[0]["affection"])
         self.assertEqual(stories[0]["image_count"], 10)
         self.assertTrue(stories[0]["character_name"])
         self.assertEqual(stories[0]["source_title"], "READY")
@@ -1034,6 +1035,34 @@ class DatingSimContentDatabaseTests(unittest.TestCase):
         self.assertEqual([item["story_id"] for item in stories], [
             f"book:{book_ids[2]}", f"book:{book_ids[1]}", f"book:{book_ids[0]}",
         ])
+
+    def test_playable_stories_sorts_started_stories_by_affection_descending(self):
+        owner = SimpleNamespace(state=SimpleNamespace(
+            user={"username": "admin", "is_owner": True}, can_write=True, share_guest=False))
+        book_ids = ["a" * 20, "b" * 20, "c" * 20]
+        conn = db.get_conn()
+        try:
+            for book_id, affection in ((book_ids[0], 61), (book_ids[1], 88)):
+                conn.execute(
+                    "INSERT INTO dating_sim_progress "
+                    "(username,character_id,day,affection,pending_location,completed,ending_id,created_at,updated_at) "
+                    "VALUES (?,?,?,?,NULL,0,NULL,'now','now')",
+                    ("admin", f"book:{book_id}", 2, affection),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+        with patch.object(dating_sim_story, "all_book_ids", return_value=book_ids), \
+             patch.object(dating_sim_story, "book_readiness", return_value=(True, True, 42)), \
+             patch.object(dating_sim_story, "_find_book", side_effect=lambda book_id: Path(f"/tmp/{book_id}.epub")), \
+             patch.object(dating_sim_story, "_book_title", side_effect=lambda path: path.stem):
+            stories = app.dating_sim_playable_stories(owner)
+
+        self.assertEqual([item["story_id"] for item in stories], [
+            f"book:{book_ids[1]}", f"book:{book_ids[0]}", f"book:{book_ids[2]}",
+        ])
+        self.assertEqual([item["affection"] for item in stories], [88, 61, None])
 
     def test_reference_candidates_list_and_regeneration_passes_selected_references(self):
         owner = SimpleNamespace(state=SimpleNamespace(
