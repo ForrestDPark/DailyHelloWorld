@@ -1869,7 +1869,7 @@ def _comfyui_log_tail(max_chars=12000):
 
 @app.get("/api/comfy-workspace/status")
 def comfy_workspace_status(request: Request):
-    """관리자용 Comfy 작업실의 단일 상태 스냅샷."""
+    """관리자용 이미지 작업 시스템의 단일 상태 스냅샷."""
     _require_owner(request)
     runtime = _comfyui_runtime_status()
     queue = _comfyui_queue_summary() if runtime["comfy_online"] else {
