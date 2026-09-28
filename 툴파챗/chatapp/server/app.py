@@ -1887,6 +1887,76 @@ def _comfyui_log_tail(max_chars=12000):
     return "\n\n".join(chunks)[-max_chars:]
 
 
+def _comfy_work_preview(work_name: str, requested_file: str | None = None):
+    """작품별로 마지막에 완성된 이미지와 안전한 미리보기 경로를 찾는다."""
+    safe_work = Path(str(work_name or "")).name
+    if not safe_work or safe_work != str(work_name or ""):
+        return None
+    library_root = (JP_SUBTITLE_DIR / "library").resolve()
+    work_dir = (library_root / safe_work).resolve()
+    try:
+        work_dir.relative_to(library_root)
+    except ValueError:
+        return None
+    image_dir = work_dir / "dating_sim_images"
+    try:
+        manifest = json.loads((image_dir / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return None
+    allowed = set()
+    portrait = manifest.get("portrait")
+    if isinstance(portrait, str):
+        allowed.add(Path(portrait).name)
+    scenes = manifest.get("scenes")
+    if isinstance(scenes, dict):
+        for scene in scenes.values():
+            if isinstance(scene, str):
+                allowed.add(Path(scene).name)
+            elif isinstance(scene, dict):
+                for key in ("file", "filename", "image", "path"):
+                    value = scene.get(key)
+                    if isinstance(value, str):
+                        allowed.add(Path(value).name)
+    candidates = []
+    for filename in allowed:
+        target = (image_dir / filename).resolve()
+        try:
+            target.relative_to(image_dir.resolve())
+            if target.is_file() and target.stat().st_size >= 1024:
+                candidates.append(target)
+        except (OSError, ValueError):
+            continue
+    if requested_file:
+        wanted = Path(requested_file).name
+        if wanted != requested_file:
+            return None
+        target = next((item for item in candidates if item.name == wanted), None)
+    else:
+        target = max(candidates, key=lambda item: item.stat().st_mtime, default=None)
+    if target is None:
+        return None
+    modified = int(target.stat().st_mtime)
+    return {
+        "path": target,
+        "filename": target.name,
+        "url": "/api/comfy-workspace/preview?" + urllib.parse.urlencode({
+            "work": safe_work, "file": target.name, "v": modified,
+        }),
+        "updated_at": datetime.datetime.fromtimestamp(
+            modified, tz=datetime.timezone.utc).isoformat(),
+    }
+
+
+@app.get("/api/comfy-workspace/preview")
+def comfy_workspace_preview(request: Request, work: str, file: str):
+    """관리자에게만 현재 생성 결과를 파일 단위로 제공한다."""
+    _require_owner(request)
+    preview = _comfy_work_preview(work, file)
+    if not preview:
+        raise HTTPException(status_code=404, detail="미리보기 이미지를 찾을 수 없습니다")
+    return FileResponse(preview["path"], headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/comfy-workspace/status")
 def comfy_workspace_status(request: Request):
     """관리자용 이미지 작업 시스템의 단일 상태 스냅샷."""
@@ -1908,14 +1978,22 @@ def comfy_workspace_status(request: Request):
         backlog = external
     active = []
     if backlog.get("running"):
-        active.append({"kind": "일괄 생성", "work": backlog.get("current") or "준비 중",
+        work = backlog.get("current") or "준비 중"
+        preview = _comfy_work_preview(work)
+        active.append({"kind": "일괄 생성", "work": work,
                        "task": backlog.get("current_image_job") or "이미지 생성",
-                       "percent": backlog.get("current_image_percent") or backlog.get("percent") or 0})
+                       "percent": backlog.get("current_image_percent") or backlog.get("percent") or 0,
+                       "preview": ({k: v for k, v in preview.items() if k != "path"}
+                                   if preview else None)})
     for book_id, item in individual:
         detail = _dating_sim_image_job_status(book_id, Path(item.get("work_dir") or ""))
-        active.append({"kind": "개별 생성", "work": Path(item.get("work_dir") or book_id).name,
+        work = Path(item.get("work_dir") or book_id).name
+        preview = _comfy_work_preview(work)
+        active.append({"kind": "개별 생성", "work": work,
                        "task": detail.get("current") or "이미지 생성",
-                       "percent": detail.get("percent") or 0})
+                       "percent": detail.get("percent") or 0,
+                       "preview": ({k: v for k, v in preview.items() if k != "path"}
+                                   if preview else None)})
     return {**runtime, "queue": queue, "backlog": backlog, "active_jobs": active,
             "log_tail": _comfyui_log_tail(), "checked_at": _now()}
 
@@ -4340,7 +4418,18 @@ def record_shift_alarm_habit_click(body: ShiftAlarmHabitClickRequest, request: R
 @app.post("/api/shift-alarm/habit-click/undo")
 def undo_shift_alarm_habit_click(body: ShiftAlarmHabitClickRequest, request: Request):
     _require_owner(request)
-    return {"ok": True, "event": _undo_shift_alarm_habit_click(body.kind)}
+    event = _undo_shift_alarm_habit_click(body.kind)
+    today = datetime.date.today().isoformat()
+    record = next((item for item in _read_shift_alarm_routine_history(7)
+                   if item.get("routine_date") == today), {})
+    remaining = [item for item in record.get("habit_events", [])
+                 if item.get("kind") == body.kind]
+    return {
+        "ok": True,
+        "event": event,
+        "count": len(remaining),
+        "previous_time": remaining[-1].get("time") if remaining else None,
+    }
 
 
 @app.get("/shift-alarm/quick/{kind}")
