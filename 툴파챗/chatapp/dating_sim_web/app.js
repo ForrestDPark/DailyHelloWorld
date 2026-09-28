@@ -2041,25 +2041,12 @@ async function openStoryPopover(anchor) {
   const productionToggle = document.createElement("summary");
   productionToggle.className = "story-production-toggle";
   productionToggle.innerHTML = "<span><b>진행 사항</b><small>ComfyUI와 이미지 생성 상세</small></span><em>펼치기</em>";
-  Object.assign(productionDetails.style, {
-    border: "1px solid rgba(246, 215, 91, .5)",
-    borderRadius: "14px",
-    overflow: "hidden",
-  });
-  Object.assign(productionToggle.style, {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: "12px",
-    minHeight: "48px",
-    padding: "10px 14px",
-    cursor: "pointer",
-    listStyle: "none",
-    background: "rgba(26, 20, 44, .9)",
-  });
   productionDetails.addEventListener("toggle", () => {
     const label = productionToggle.querySelector("em");
     if (label) label.textContent = productionDetails.open ? "접기" : "펼치기";
+    if (productionDetails.open) {
+      requestAnimationFrame(() => productionDetails.scrollIntoView({ block: "nearest" }));
+    }
   });
   const runtimeState = document.createElement("b");
   runtimeState.textContent = "ComfyUI 확인 중";
