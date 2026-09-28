@@ -2036,6 +2036,31 @@ async function openStoryPopover(anchor) {
   bulk.className = "story-image-backlog";
   const runtime = document.createElement("section");
   runtime.className = "story-comfy-runtime";
+  const productionDetails = document.createElement("details");
+  productionDetails.className = "story-production-details";
+  const productionToggle = document.createElement("summary");
+  productionToggle.className = "story-production-toggle";
+  productionToggle.innerHTML = "<span><b>진행 사항</b><small>ComfyUI와 이미지 생성 상세</small></span><em>펼치기</em>";
+  Object.assign(productionDetails.style, {
+    border: "1px solid rgba(246, 215, 91, .5)",
+    borderRadius: "14px",
+    overflow: "hidden",
+  });
+  Object.assign(productionToggle.style, {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: "12px",
+    minHeight: "48px",
+    padding: "10px 14px",
+    cursor: "pointer",
+    listStyle: "none",
+    background: "rgba(26, 20, 44, .9)",
+  });
+  productionDetails.addEventListener("toggle", () => {
+    const label = productionToggle.querySelector("em");
+    if (label) label.textContent = productionDetails.open ? "접기" : "펼치기";
+  });
   const runtimeState = document.createElement("b");
   runtimeState.textContent = "ComfyUI 확인 중";
   const runtimeWork = document.createElement("span");
@@ -2131,6 +2156,10 @@ async function openStoryPopover(anchor) {
       }[uiStatus] || ["○", "상태 확인", "제작 상태를 확인하고 있습니다"];
       stateBanner.dataset.state = uiStatus;
       stateBanner.innerHTML = `<i aria-hidden="true">${stateCopy[0]}</i><span><b>${stateCopy[1]}</b><small>${stateCopy[2]}</small></span>`;
+      const compactStatus = productionToggle.querySelector("small");
+      if (compactStatus) compactStatus.textContent = state.running
+        ? `${state.current || "이미지 생성"} · ${Math.max(0, Math.min(100, Number(state.percent) || 0))}%`
+        : stateCopy[1];
       if (state.running) {
         const percent = Math.max(0, Math.min(100, Number(state.percent) || 0));
         bulkButton.disabled = true;
@@ -2313,7 +2342,8 @@ async function openStoryPopover(anchor) {
     });
     list.append(button);
   }
-  pop.replaceChildren(head, summary, runtime, filters, bulk, list);
+  productionDetails.append(productionToggle, runtime, bulk);
+  pop.replaceChildren(head, summary, productionDetails, filters, list);
   pollBulk();
   missingImagePollTimer = setInterval(pollBulk, 5000);
 }
