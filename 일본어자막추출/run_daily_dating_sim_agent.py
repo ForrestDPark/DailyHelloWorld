@@ -67,6 +67,7 @@ def run(today=None, force=False):
     LOCK.parent.mkdir(parents=True, exist_ok=True)
     try:
         fd = os.open(LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        os.write(fd, str(os.getpid()).encode("ascii"))
         os.close(fd)
     except FileExistsError:
         print("⏭️ 미연시 제작 에이전트가 이미 실행 중입니다")

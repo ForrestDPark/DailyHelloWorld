@@ -806,6 +806,7 @@ body.practice-open { overflow: hidden; }
 .story-image-backlog button{min-height:40px;border:0;border-radius:4px;background:var(--good);color:#1c1030;font:inherit;font-size:11px;font-weight:800;cursor:pointer}
 .story-image-backlog button:disabled{opacity:.58;cursor:default}.story-image-backlog span{color:var(--muted);font-size:10px;line-height:1.45}
 .story-image-progress{height:8px;overflow:hidden;border:1px solid var(--border);border-radius:999px;background:#130c21}.story-image-progress i{display:block;width:0;height:100%;background:linear-gradient(90deg,var(--good),var(--accent));transition:width .35s ease}.story-image-progress-label{color:var(--border);font-size:11px;text-align:right}
+.story-image-job-detail{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 8px;padding:7px;border:1px solid color-mix(in srgb,var(--border) 45%,transparent);background:#130c21;font-size:10px;line-height:1.45}.story-image-job-detail:empty{display:none}.story-image-job-detail b{color:var(--border)}.story-image-job-detail span{overflow-wrap:anywhere;color:var(--text)}
 .tree-image-gallery {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px;
 }

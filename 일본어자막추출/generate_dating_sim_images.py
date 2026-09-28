@@ -1027,12 +1027,18 @@ def run_agent(work_dir, max_scenes=DEFAULT_MAX_SCENES, force=False, generator=_g
     }
     progress_total = int(portrait_needed) + len(scene_target_keys)
     progress_done = 0
+    progress_started_at = int(time.time())
 
     def update_progress(current):
         percent = round(progress_done / progress_total * 100) if progress_total else 100
+        elapsed = max(0, int(time.time()) - progress_started_at)
+        eta_seconds = (round(elapsed / progress_done * (progress_total - progress_done))
+                       if progress_done else None)
         manifest["job_progress"] = {
             "done": progress_done, "total": progress_total,
             "percent": min(100, percent), "current": current,
+            "started_at": progress_started_at, "updated_at": int(time.time()),
+            "elapsed_seconds": elapsed, "eta_seconds": eta_seconds,
         }
         manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 

@@ -1464,15 +1464,48 @@ def _dating_sim_image_backlog_progress(state, running):
                 payload["current_images"] = min(generated, target)
                 payload["current_image_total"] = target
                 current_fraction = min(1.0, generated / target)
+                image_progress = manifest.get("job_progress") or {}
+                payload["current_image_job"] = str(image_progress.get("current") or "이미지 생성 중")
+                payload["current_image_percent"] = max(0, min(100, int(image_progress.get("percent") or 0)))
+                payload["current_image_eta_seconds"] = image_progress.get("eta_seconds")
         except (OSError, ValueError, TypeError):
             pass
     processed = completed + failed
     if running and payload.get("current_index"):
         processed = max(processed, int(payload["current_index"]) - 1)
     payload["percent"] = min(100, round((processed + current_fraction) / total * 100)) if total else 0
+    if running:
+        durations = [float(value) for value in (payload.get("work_durations") or [])
+                     if isinstance(value, (int, float)) and value > 0]
+        average = (sum(durations) / len(durations)) if durations else 0
+        remaining_works = max(0.0, total - processed - current_fraction)
+        if average:
+            payload["eta_seconds"] = round(remaining_works * average)
     if not running and payload.get("status") in {"complete", "partial"}:
         payload["percent"] = 100
     return payload
+
+
+def _dating_sim_external_image_job():
+    """예약 에이전트가 잡은 잠금도 웹 상태 화면에서 숨기지 않는다."""
+    lock_path = Path(os.path.expanduser("~/.tulpachat/dating_sim_daily_agent.lock"))
+    state_path = Path(os.path.expanduser("~/.tulpachat/dating_sim_daily_agent.json"))
+    if not lock_path.exists():
+        return None
+    try:
+        pid = int(lock_path.read_text(encoding="ascii").strip())
+        os.kill(pid, 0)
+    except (OSError, ValueError):
+        return None
+    try:
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        state = {}
+    current = state.get("work")
+    payload = {"status": "running", "running": True, "external": True,
+               "current": current, "total": 1, "completed": 0, "failed": 0,
+               "current_index": 1, "started_at": state.get("started_at")}
+    return _dating_sim_image_backlog_progress(payload, True)
 
 
 def _dating_sim_image_job_status(book_id, work_dir):
@@ -1706,6 +1739,10 @@ def dating_sim_generate_missing_images_status(request: Request):
     with _dating_sim_image_jobs_lock:
         job = _dating_sim_image_backlog_job
         running = bool(job and job["process"].poll() is None)
+    if not running:
+        external = _dating_sim_external_image_job()
+        if external:
+            return external
     state = _dating_sim_image_backlog_progress(_dating_sim_image_backlog_state(), running)
     state["running"] = running
     return state

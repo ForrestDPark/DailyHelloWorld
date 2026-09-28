@@ -2009,7 +2009,17 @@ async function openStoryPopover(anchor) {
   const progressLabel = document.createElement("b");
   progressLabel.className = "story-image-progress-label";
   progressLabel.textContent = "0%";
-  bulk.append(bulkButton, progress, progressLabel, bulkStatus);
+  const jobDetail = document.createElement("div");
+  jobDetail.className = "story-image-job-detail";
+  bulk.append(bulkButton, progress, progressLabel, bulkStatus, jobDetail);
+
+  const durationLabel = (seconds) => {
+    const value = Math.max(0, Math.round(Number(seconds) || 0));
+    if (!value) return "계산 중";
+    const hours = Math.floor(value / 3600);
+    const minutes = Math.max(1, Math.ceil((value % 3600) / 60));
+    return hours ? `약 ${hours}시간 ${minutes}분` : `약 ${minutes}분`;
+  };
 
   const stopBulkPoll = () => {
     if (missingImagePollTimer) clearInterval(missingImagePollTimer);
@@ -2030,6 +2040,11 @@ async function openStoryPopover(anchor) {
         bulkStatus.textContent = state.current
           ? `${state.current} 처리 중${imageCount} · 실패 ${state.failed || 0}편`
           : "대상 작품을 확인하는 중…";
+        const currentJob = state.current_image_job || "이미지 작업 준비 중";
+        const currentPercent = Number.isFinite(Number(state.current_image_percent))
+          ? ` (${state.current_image_percent}%)` : "";
+        const eta = durationLabel(state.eta_seconds || state.current_image_eta_seconds);
+        jobDetail.innerHTML = `<b>현재 작업</b><span>${currentJob}${currentPercent}</span><b>완료 예상</b><span>${eta}</span>`;
         return;
       }
       stopBulkPoll();
@@ -2041,6 +2056,7 @@ async function openStoryPopover(anchor) {
         bulkButton.disabled = false;
         bulkButton.textContent = state.status === "complete" ? "잔여 이미지 생성 완료" : "실패 작품 다시 시도";
         bulkStatus.textContent = `완료 ${state.completed || 0}편 · 실패 ${state.failed || 0}편${state.error ? ` · ${state.error}` : ""}`;
+        jobDetail.replaceChildren();
         playableStories = null;
       }
     } catch (error) {

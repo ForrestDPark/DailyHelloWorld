@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import run_daily_dating_sim_agent as agent
@@ -26,7 +27,9 @@ def save(payload):
 def main():
     agent.LOCK.parent.mkdir(parents=True, exist_ok=True)
     try:
-        os.close(os.open(agent.LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600))
+        lock_fd = os.open(agent.LOCK, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        os.write(lock_fd, str(os.getpid()).encode("ascii"))
+        os.close(lock_fd)
     except FileExistsError:
         save({"status": "failed", "error": "다른 미연시 제작 작업이 이미 실행 중입니다"})
         return 2
@@ -40,8 +43,11 @@ def main():
         }
         save(state)
         for index, work in enumerate(works, 1):
-            state.update(current=work.name, current_index=index)
+            state.update(current=work.name, current_index=index,
+                         current_started_at=dt.datetime.now().isoformat(timespec="seconds"),
+                         updated_at=dt.datetime.now().isoformat(timespec="seconds"))
             save(state)
+            work_started = time.monotonic()
             result = subprocess.run([
                 str(agent.PYTHON), str(agent.ROOT / "generate_dating_sim_images.py"), str(work),
             ])
@@ -50,6 +56,13 @@ def main():
             else:
                 state["failed"] += 1
                 state["failures"].append({"work": work.name, "returncode": result.returncode})
+            durations = list(state.get("work_durations") or [])
+            durations.append(round(time.monotonic() - work_started, 1))
+            state["work_durations"] = durations[-10:]
+            average = sum(state["work_durations"]) / len(state["work_durations"])
+            state["average_work_seconds"] = round(average, 1)
+            state["eta_seconds"] = round(max(0, len(works) - index) * average)
+            state["updated_at"] = dt.datetime.now().isoformat(timespec="seconds")
             save(state)
         state.update(
             status="complete" if not state["failed"] else "partial",
