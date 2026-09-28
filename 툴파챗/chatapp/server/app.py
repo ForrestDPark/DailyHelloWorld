@@ -1393,6 +1393,30 @@ def _dating_learning_progress(username, story):
     return {"seen": count, "total": len(total_materials), "percent": round(count / len(total_materials) * 100)}
 
 
+_DATING_ORDERED_SCENE_KEYS = ("first", "walk", "quiet")
+
+
+def _dating_ordered_scene_keys(story, day):
+    """생성 시나리오의 한 흐름 안에서 재생해야 할 장면 순서를 돌려준다.
+
+    기존 수동 시나리오는 하루에 cafe/park/school 중 하나를 고르는 구조이므로
+    first/walk/quiet가 둘 이상 있는 생성 시나리오에만 연속 재생을 적용한다.
+    """
+    day_scenes = story.get("scenes", {}).get(day, {})
+    keys = [key for key in _DATING_ORDERED_SCENE_KEYS if key in day_scenes]
+    return keys if len(keys) >= 2 else []
+
+
+def _dating_next_scene(story, day, current_scene):
+    ordered = _dating_ordered_scene_keys(story, day)
+    if current_scene in ordered:
+        index = ordered.index(current_scene)
+        if index + 1 < len(ordered):
+            return day, ordered[index + 1], False
+    next_day = day + 1
+    return next_day, None, next_day > story["total_days"]
+
+
 def _dating_sim_state_payload(row, story, username=None):
     completed = bool(row["completed"])
     current_day = min(row["day"], story["total_days"])
@@ -1443,8 +1467,12 @@ def _dating_sim_state_payload(row, story, username=None):
         scene = story["scenes"][row["day"]][selected_location]
         # ★ 2026-09-19: AI 생성 시나리오는 요일 나레이션도 작품별로 새로
         # 만들므로, 있으면 그 작품 나레이션을 쓰고 없으면 고정 템플릿을 쓴다.
-        day_narration = story.get("day_narration", {}).get(row["day"]) or dating_sim_story.DAY_NARRATION[row["day"]]
-        scene_lines = [{"speaker": "narrator", "text": day_narration}]
+        ordered = _dating_ordered_scene_keys(story, row["day"])
+        is_flow_opening = not ordered or selected_location == ordered[0]
+        scene_lines = []
+        if is_flow_opening:
+            day_narration = story.get("day_narration", {}).get(row["day"]) or dating_sim_story.DAY_NARRATION[row["day"]]
+            scene_lines.append({"speaker": "narrator", "text": day_narration})
         for line in scene["lines"]:
             speaker = "narrator" if line.lstrip().startswith("(") else "character"
             scene_lines.append({"speaker": speaker, "text": line})
@@ -3051,7 +3079,7 @@ def dating_sim_seen(body: DatingSimRestartRequest, request: Request):
 
 @app.post("/api/dating-sim/choose")
 def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
-    """진행 중인 장면의 선택지를 골라 호감도를 반영하고 다음 날로 넘어간다."""
+    """선택 결과를 반영하고 같은 흐름의 다음 장면 또는 다음 날로 넘어간다."""
     _require_signed_in_user(request)
     username = _request_username(request)
     story = _dating_story(body.story_id, username)
@@ -3061,14 +3089,16 @@ def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
         if row["completed"] or not row["pending_location"]:
             raise HTTPException(status_code=409, detail="지금은 선택할 수 있는 장면이 없습니다")
         selected_location = row["pending_location"]
-        scene = story["scenes"][row["day"]][selected_location]
+        scene_day = row["day"]
+        scene = story["scenes"][scene_day][selected_location]
         if body.choice_index not in range(len(scene["choices"])):
             raise HTTPException(status_code=400, detail="올바르지 않은 선택지입니다")
         raw_affection_delta = scene["choices"][body.choice_index]["affection"]
         difficulty = _dating_difficulty(row.get("difficulty"))
         adjusted_delta = _dating_apply_affection_delta(raw_affection_delta, difficulty)
-        next_day = row["day"] + 1
-        completed = next_day > story["total_days"]
+        next_day, next_location, completed = _dating_next_scene(
+            story, scene_day, selected_location,
+        )
         start_affection = _dating_start_affection(story, difficulty)
         affection_cap = _dating_affection_cap(next_day, story["total_days"], completed, start_affection)
         old_affection = row["affection"]
@@ -3076,12 +3106,12 @@ def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
         applied_affection_delta = affection - row["affection"]
         ending_id = dating_sim_story.ending_for(story, affection)["id"] if completed else None
         conn.execute(
-            "UPDATE dating_sim_progress SET day=?, affection=?, pending_location=NULL, completed=?, ending_id=?, "
+            "UPDATE dating_sim_progress SET day=?, affection=?, pending_location=?, completed=?, ending_id=?, "
             "updated_at=? WHERE username=? AND character_id=?",
-            (next_day, affection, int(completed), ending_id, _now(), username, story["id"]),
+            (next_day, affection, next_location, int(completed), ending_id, _now(), username, story["id"]),
         )
         conn.commit()
-        row.update(day=next_day, affection=affection, pending_location=None,
+        row.update(day=next_day, affection=affection, pending_location=next_location,
                    completed=int(completed), ending_id=ending_id)
     finally:
         conn.close()
@@ -3095,7 +3125,7 @@ def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
         "character_image": scene.get("character_image") or story.get("character_images", {}).get(
             selected_location, story.get("character_image")),
         "line": dating_sim_story.choice_reaction(
-            row["day"] - 1, selected_location,
+            scene_day, selected_location,
             raw_affection_delta, story["id"], affection,
         ),
     }

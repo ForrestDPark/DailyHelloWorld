@@ -354,6 +354,54 @@ class DatingSimApiTests(unittest.TestCase):
             app.dating_sim_visit(app.DatingSimLocationRequest(location="park"), request())
         self.assertEqual(raised.exception.status_code, 409)
 
+    def test_generated_story_plays_every_scene_in_a_flow_before_the_next_day(self):
+        """first → walk → quiet를 건너뛰고 다음 날로 가면 안 된다."""
+        story = copy.deepcopy(dating_sim_story.story_for())
+        story["id"] = "ordered-flow-regression-test"
+        template = copy.deepcopy(story["scenes"][1]["cafe"])
+        story["scenes"][1] = {}
+        for location in ("first", "walk", "quiet"):
+            scene = copy.deepcopy(template)
+            scene["lines"] = [f"{location} scene"]
+            story["scenes"][1][location] = scene
+            story["locations"][location] = {
+                "label": location,
+                "action": location,
+                "emoji": "•",
+            }
+
+        username = "ordered-flow-reader"
+        with patch.object(app, "_dating_story", return_value=story):
+            first = app.dating_sim_visit(
+                app.DatingSimLocationRequest(location="first", story_id=story["id"]),
+                request(username),
+            )
+            self.assertEqual(first["scene"]["location"], "first")
+
+            walk = app.dating_sim_choose(
+                app.DatingSimChoiceRequest(choice_index=0, story_id=story["id"]),
+                request(username),
+            )
+            self.assertEqual(walk["day"], 1)
+            self.assertEqual(walk["pending_location"], "walk")
+            self.assertEqual(walk["scene"]["location"], "walk")
+            self.assertEqual(walk["scene"]["lines"][0]["text"], "walk scene")
+
+            quiet = app.dating_sim_choose(
+                app.DatingSimChoiceRequest(choice_index=0, story_id=story["id"]),
+                request(username),
+            )
+            self.assertEqual(quiet["day"], 1)
+            self.assertEqual(quiet["pending_location"], "quiet")
+            self.assertEqual(quiet["scene"]["location"], "quiet")
+
+            next_day = app.dating_sim_choose(
+                app.DatingSimChoiceRequest(choice_index=0, story_id=story["id"]),
+                request(username),
+            )
+            self.assertEqual(next_day["day"], 2)
+            self.assertIsNone(next_day["pending_location"])
+
     def test_learning_progress_counts_only_after_last_line_is_seen(self):
         story = copy.deepcopy(dating_sim_story.story_for())
         story["id"] = "learning-progress-test"
