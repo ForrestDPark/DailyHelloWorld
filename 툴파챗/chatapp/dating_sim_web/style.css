@@ -324,6 +324,44 @@ body.practice-open { overflow: hidden; }
 }
 .choice-button:active { transform: translateY(2px); }
 .choice-cursor { color: var(--accent); flex: none; }
+.choice-scroll-cue {
+  position: fixed;
+  z-index: 120;
+  left: 50%;
+  bottom: max(18px, calc(env(safe-area-inset-bottom) + 10px));
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 15px;
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  background: rgba(31, 22, 54, .94);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .42);
+  color: #fff7dc;
+  font-family: -apple-system, BlinkMacSystemFont, "Noto Sans KR", sans-serif;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.choice-scroll-cue-arrow {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 16px;
+  animation: choice-cue-turn 1.15s ease-in-out infinite;
+}
+@keyframes choice-cue-turn {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  50% { transform: rotate(180deg) translateY(-2px); }
+}
+@media (min-width: 700px) {
+  .choice-scroll-cue { display: none; }
+}
 .result-affection { color: var(--accent); border-top: 1px dashed var(--border); padding-top: 10px; }
 #stage[data-location="park"] .portrait,#stage[data-location="walk"] .portrait{animation:scene-walk 2.4s ease-in-out infinite}
 #stage[data-location="school"] .portrait,#stage[data-location="first"] .portrait{animation:scene-turn 3s ease-in-out infinite}

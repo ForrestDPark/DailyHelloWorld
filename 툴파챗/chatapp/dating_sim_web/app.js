@@ -1674,6 +1674,7 @@ function typeLine(text) {
   $("dialogue-next").classList.add("hidden");
   $("dialogue-back").classList.toggle("hidden", sceneLineIndex === 0);
   $("choice-list").classList.add("hidden");
+  $("choice-scroll-cue").classList.add("hidden");
   $("portrait").classList.toggle("speaking", !narrator);
   const visibleText = plainText(text);
   let i = 0;
@@ -1758,6 +1759,31 @@ function renderChoices() {
     list.append(button);
   });
   list.classList.remove("hidden");
+  requestAnimationFrame(updateChoiceScrollCue);
+}
+
+// 모바일의 긴 대사 카드에서는 선택지가 화면 아래에 생겨도 사용자가 이를
+// 알아차리기 어렵다. 선택지 첫 항목이 뷰포트 밖에 있을 때에만 안내를 띄운다.
+function updateChoiceScrollCue() {
+  const cue = $("choice-scroll-cue");
+  const list = $("choice-list");
+  const firstChoice = list.querySelector(".choice-button");
+  const sceneVisible = !$("scene-view").classList.contains("hidden");
+  const choicesReady = !list.classList.contains("hidden") && firstChoice;
+  if (!sceneVisible || !choicesReady) {
+    cue.classList.add("hidden");
+    return;
+  }
+  const rect = firstChoice.getBoundingClientRect();
+  const visible = rect.top < window.innerHeight - 18 && rect.bottom > 18;
+  cue.classList.toggle("hidden", visible);
+}
+
+function scrollToChoices() {
+  const firstChoice = $("choice-list").querySelector(".choice-button");
+  if (!firstChoice) return;
+  firstChoice.scrollIntoView({ behavior: "smooth", block: "center" });
+  window.setTimeout(updateChoiceScrollCue, 450);
 }
 
 function renderScene(state) {
@@ -3291,6 +3317,9 @@ async function openScenarioTree() {
 }
 
 $("tree-open-btn").addEventListener("click", openScenarioTree);
+$("choice-scroll-cue").addEventListener("click", scrollToChoices);
+window.addEventListener("scroll", updateChoiceScrollCue, { passive: true });
+window.addEventListener("resize", updateChoiceScrollCue);
 $("updates-open-btn").addEventListener("click", openDatingUpdates);
 $("updates-close-btn").addEventListener("click", closeDatingUpdates);
 $("updates-overlay").addEventListener("click", (event) => {

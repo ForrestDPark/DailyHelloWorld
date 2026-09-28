@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/dating-sim/static/style.css?v=20260928-production-tabs-v51">
+<link rel="stylesheet" href="/dating-sim/static/style.css?v=20260928-choice-cue-v52">
 </head>
 <body>
   <div id="game">
@@ -98,6 +98,10 @@
           <div id="teacher-tip-bubble" class="teacher-tip-bubble hidden"><strong>일본어 선생님</strong><p id="teacher-tip-text"></p><a id="teacher-tip-source" class="teacher-tip-source hidden">툴파챗 원본 메시지 보기</a></div>
         </aside>
         <div id="choice-list" class="choice-list hidden"></div>
+        <button id="choice-scroll-cue" class="choice-scroll-cue hidden" type="button" aria-label="답변 선택지로 이동">
+          <span>답변을 선택하세요</span>
+          <span class="choice-scroll-cue-arrow" aria-hidden="true">↻</span>
+        </button>
       </section>
 
       <section id="result-view" class="hidden">
@@ -165,6 +169,6 @@
       <button id="practice-continue" type="button" class="practice-continue hidden">점수 확인하고 다음 대사</button>
     </section>
   </div>
-  <script src="/dating-sim/static/app.js?v=20260928-production-tabs-v67"></script>
+  <script src="/dating-sim/static/app.js?v=20260928-choice-cue-v68"></script>
 </body>
 </html>
