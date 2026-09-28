@@ -4,6 +4,9 @@ let pollTimer = null;
 let pollGeneration = 0;
 let activePollController = null;
 let renderedDateKey = null;
+let loadedMessages = [];
+let historyLoading = false;
+let historyExhausted = false;
 let aiStatusTimer = null;
 let roomOpenLastReadId = 0;
 let lastVisibleReadId = 0;
@@ -212,6 +215,8 @@ messageSearch.addEventListener("input", () => {
 // 지난 대화를 읽고 있을 때만 의미가 있다.
 const scrollBottomBtn = document.getElementById("scroll-bottom-btn");
 const SCROLL_BOTTOM_THRESHOLD_PX = 120;
+const SUNZI_DISCUSSION_ROOM_ID = "custom_16ea779e1f";
+const HISTORY_PAGE_SIZE = 100;
 
 function updateScrollBottomVisibility() {
   const distanceFromBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight;
@@ -264,6 +269,7 @@ function markVisibleMessagesRead() {
 }
 
 messagesEl.addEventListener("scroll", () => {
+  if (currentRoom === SUNZI_DISCUSSION_ROOM_ID && messagesEl.scrollTop <= 80) loadOlderMessages();
   if (readVisibilityFrame !== null) return;
   readVisibilityFrame = requestAnimationFrame(() => {
     updateScrollBottomVisibility();
@@ -446,6 +452,7 @@ function initAccountChip() {
   // 권한을 줄 수 있게 해달라" 요청(2026-08-26) — 권한 관리 버튼은 소유자
   // 로그인일 때만 보인다.
   document.getElementById("admin-btn").classList.toggle("hidden", !amOwner);
+  document.getElementById("portal-comfy-link")?.classList.toggle("hidden", !amOwner);
   // ★ "사용자가 자기만의 페르소나를 만들고, 단체톡방도 만들 수 있게 해달라"
   // 요청(2026-08-26) — 로그인한 계정이면 누구나 쓸 수 있다(소유자 전용 아님).
   document.getElementById("new-room-btn").classList.remove("hidden");
@@ -2579,6 +2586,9 @@ async function showChatView(roomId) {
   roomOpenLastReadId = 0;
   lastVisibleReadId = 0;
   renderedDateKey = null;
+  loadedMessages = [];
+  historyLoading = false;
+  historyExhausted = false;
   setReplyTarget(null);
   messagesEl.innerHTML = "";
   applyChatBackground(null);
@@ -4163,7 +4173,7 @@ function renderSystemMessage(m, shouldScroll = false) {
   // 인사담당자가 답변을 만드는 중임을 보여준다. 뒤이어 페르소나 답변이
   // 렌더링되면 appendMessage가 기존 상태 표시를 자동으로 닫는다.
   if (isCareerConsult) setAiResponseStatus(true);
-  while (messagesEl.children.length > 500) messagesEl.firstElementChild.remove();
+  while (messagesEl.children.length > 2000) messagesEl.firstElementChild.remove();
   if (shouldScroll) el.scrollIntoView({behavior: "smooth", block: "end"});
 }
 
@@ -4343,7 +4353,7 @@ function appendMessage(m, forceScroll = false, suppressScroll = false) {
   if (messageSearch.value.trim() && !el.textContent.toLocaleLowerCase("ko-KR").includes(messageSearch.value.trim().toLocaleLowerCase("ko-KR"))) {
     el.classList.add("hidden");
   }
-  while (messagesEl.children.length > 500) messagesEl.firstElementChild.remove();
+  while (messagesEl.children.length > 2000) messagesEl.firstElementChild.remove();
   if (!suppressScroll && (forceScroll || wasNearBottom)) {
     el.scrollIntoView({ behavior: forceScroll ? "auto" : "smooth", block: "end" });
   }
@@ -4366,6 +4376,51 @@ function positionAtLastRead() {
   requestAnimationFrame(markVisibleMessagesRead);
 }
 
+function mergeLoadedMessages(messages) {
+  const byId = new Map(loadedMessages.map((message) => [message.id, message]));
+  for (const message of messages) byId.set(message.id, message);
+  loadedMessages = [...byId.values()].sort((a, b) => a.id - b.id);
+}
+
+function rerenderLoadedMessages(scrollOffsetFromBottom = null) {
+  messagesEl.innerHTML = "";
+  renderedDateKey = null;
+  for (const message of loadedMessages) appendMessage(message, false, true);
+  if (scrollOffsetFromBottom !== null) {
+    messagesEl.scrollTop = Math.max(0, messagesEl.scrollHeight - scrollOffsetFromBottom);
+  }
+}
+
+async function loadOlderMessages() {
+  if (
+    currentRoom !== SUNZI_DISCUSSION_ROOM_ID || historyLoading || historyExhausted ||
+    !loadedMessages.length || document.hidden
+  ) return;
+  historyLoading = true;
+  const roomAtRequest = currentRoom;
+  const generation = pollGeneration;
+  const beforeId = loadedMessages[0].id;
+  const offsetFromBottom = messagesEl.scrollHeight - messagesEl.scrollTop;
+  try {
+    const response = await apiFetch(
+      `/api/messages?room_id=${encodeURIComponent(roomAtRequest)}&before_id=${beforeId}&limit=${HISTORY_PAGE_SIZE}`
+    );
+    const older = await response.json();
+    if (generation !== pollGeneration || roomAtRequest !== currentRoom) return;
+    if (!older.length) {
+      historyExhausted = true;
+      return;
+    }
+    mergeLoadedMessages(older);
+    rerenderLoadedMessages(offsetFromBottom);
+    historyExhausted = older.length < HISTORY_PAGE_SIZE;
+  } catch (error) {
+    if (error.message !== "unauthorized" && error.message !== "forbidden") console.error(error);
+  } finally {
+    historyLoading = false;
+  }
+}
+
 async function poll() {
   if (!currentRoom || document.hidden) return;
   const roomAtRequest = currentRoom;
@@ -4377,6 +4432,7 @@ async function poll() {
     const messages = await res.json();
     if (generation !== pollGeneration || roomAtRequest !== currentRoom) return;
     const initialLoad = sinceId === 0;
+    mergeLoadedMessages(messages);
     for (const m of messages) {
       appendMessage(m, false, initialLoad);
       lastId = m.id;

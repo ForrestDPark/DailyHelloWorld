@@ -73,6 +73,7 @@ CAREER_SYSTEM_DIR = REPO_ROOT / "이직시스템"
 SHIFT_ALARM_DASHBOARD_DIR = BASE_DIR / "shift_alarm_dashboard"
 VOCABULARY_WEB_DIR = BASE_DIR / "vocabulary_web"
 MEMO_WEB_DIR = BASE_DIR / "memo_web"
+COMFY_WEB_DIR = BASE_DIR / "comfy_web"
 SQL_LAB_WEB_DIR = BASE_DIR / "sql_lab_web"
 SQL_LAB_DATA_DIR = Path(os.path.expanduser("~/.tulpachat/sql_lab"))
 SQL_LAB_DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -471,7 +472,7 @@ class NoCacheStaticMiddleware(BaseHTTPMiddleware):
     바꾼다. `v=` 없는 요청(업로드 파일 등)은 기존처럼 매번 재검증한다."""
     async def dispatch(self, request, call_next):
         response = await call_next(request)
-        if request.url.path.startswith(("/static/", "/uploads/", "/shift-alarm/static/", "/audio-editor/static/", "/mp3-player/static/", "/memo/static/")):
+        if request.url.path.startswith(("/static/", "/uploads/", "/shift-alarm/static/", "/audio-editor/static/", "/mp3-player/static/", "/memo/static/", "/comfy/static/")):
             if request.query_params.get("v"):
                 response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
             else:
@@ -775,6 +776,25 @@ def memo_static(filename: str, request: Request):
     if filename not in {"style.css", "colors.css", "tools.css", "voice.css", "app.js", "manifest.webmanifest"}:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(MEMO_WEB_DIR / filename))
+
+
+@app.get("/comfy")
+def comfy_workspace_redirect():
+    return RedirectResponse("/comfy/", status_code=307)
+
+
+@app.get("/comfy/")
+def comfy_workspace(request: Request):
+    _require_owner(request)
+    return FileResponse(str(COMFY_WEB_DIR / "index.html"))
+
+
+@app.get("/comfy/static/{filename}")
+def comfy_workspace_static(filename: str, request: Request):
+    _require_owner(request)
+    if filename not in {"style.css", "app.js"}:
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
+    return FileResponse(str(COMFY_WEB_DIR / filename))
 
 
 @app.get("/audio-editor")
@@ -1786,6 +1806,118 @@ class DatingSimImagePromptRequest(BaseModel):
 
 class ComfyUIRuntimeRequest(BaseModel):
     enabled: bool
+
+
+class ComfyWorkspaceActionRequest(BaseModel):
+    action: str
+
+
+def _comfyui_json(path: str, payload: dict | None = None):
+    """고정된 ComfyUI API 경로만 호출한다. 브라우저 입력을 URL로 쓰지 않는다."""
+    api_request = urllib.request.Request(
+        f"http://127.0.0.1:8188{path}",
+        data=(json.dumps(payload).encode("utf-8") if payload is not None else None),
+        headers={"Content-Type": "application/json"},
+        method="POST" if payload is not None else "GET",
+    )
+    with urllib.request.urlopen(api_request, timeout=3) as response:
+        raw = response.read()
+    return json.loads(raw.decode("utf-8")) if raw else {}
+
+
+def _comfyui_queue_summary():
+    try:
+        queue = _comfyui_json("/queue")
+    except (OSError, ValueError, urllib.error.URLError):
+        return {"running": [], "pending": [], "running_count": 0, "pending_count": 0}
+
+    def summarize(rows):
+        result = []
+        for row in rows if isinstance(rows, list) else []:
+            if not isinstance(row, list) or len(row) < 2:
+                continue
+            prompt = row[2] if len(row) > 2 and isinstance(row[2], dict) else {}
+            checkpoint = ""
+            output_prefix = ""
+            for node in prompt.values():
+                if not isinstance(node, dict):
+                    continue
+                inputs = node.get("inputs") if isinstance(node.get("inputs"), dict) else {}
+                checkpoint = checkpoint or str(inputs.get("ckpt_name") or "")
+                output_prefix = output_prefix or str(inputs.get("filename_prefix") or "")
+            result.append({"prompt_id": str(row[1]), "node_count": len(prompt),
+                           "checkpoint": checkpoint, "output_prefix": output_prefix})
+        return result
+
+    running = summarize(queue.get("queue_running"))
+    pending = summarize(queue.get("queue_pending"))
+    return {"running": running, "pending": pending,
+            "running_count": len(running), "pending_count": len(pending)}
+
+
+def _comfyui_log_tail(max_chars=12000):
+    chunks = []
+    for path in (Path.home() / "Library/Logs/ComfyUI/stderr.log",
+                 Path.home() / "Library/Logs/ComfyUI/stdout.log"):
+        try:
+            chunks.append(f"[{path.name}]\n" + path.read_text(
+                encoding="utf-8", errors="replace")[-max_chars // 2:])
+        except OSError:
+            continue
+    return "\n\n".join(chunks)[-max_chars:]
+
+
+@app.get("/api/comfy-workspace/status")
+def comfy_workspace_status(request: Request):
+    """관리자용 Comfy 작업실의 단일 상태 스냅샷."""
+    _require_owner(request)
+    runtime = _comfyui_runtime_status()
+    queue = _comfyui_queue_summary() if runtime["comfy_online"] else {
+        "running": [], "pending": [], "running_count": 0, "pending_count": 0,
+    }
+    with _dating_sim_image_jobs_lock:
+        backlog_job = _dating_sim_image_backlog_job
+        backlog_running = bool(backlog_job and backlog_job["process"].poll() is None)
+        individual = [(book_id, item) for book_id, item in _dating_sim_image_jobs.items()
+                      if item["process"].poll() is None]
+    external = None if backlog_running else _dating_sim_external_image_job()
+    backlog = _dating_sim_image_backlog_progress(
+        _dating_sim_image_backlog_state(), backlog_running)
+    backlog["running"] = backlog_running
+    if external:
+        backlog = external
+    active = []
+    if backlog.get("running"):
+        active.append({"kind": "일괄 생성", "work": backlog.get("current") or "준비 중",
+                       "task": backlog.get("current_image_job") or "이미지 생성",
+                       "percent": backlog.get("current_image_percent") or backlog.get("percent") or 0})
+    for book_id, item in individual:
+        detail = _dating_sim_image_job_status(book_id, Path(item.get("work_dir") or ""))
+        active.append({"kind": "개별 생성", "work": Path(item.get("work_dir") or book_id).name,
+                       "task": detail.get("current") or "이미지 생성",
+                       "percent": detail.get("percent") or 0})
+    return {**runtime, "queue": queue, "backlog": backlog, "active_jobs": active,
+            "log_tail": _comfyui_log_tail(), "checked_at": _now()}
+
+
+@app.post("/api/comfy-workspace/action")
+def comfy_workspace_action(payload: ComfyWorkspaceActionRequest, request: Request):
+    """임의 명령 없이 미리 허용한 Comfy 개입만 실행한다."""
+    _require_owner(request)
+    if payload.action not in {"interrupt", "clear_pending"}:
+        raise HTTPException(status_code=400, detail="지원하지 않는 작업입니다")
+    if not _comfyui_runtime_status()["comfy_online"]:
+        raise HTTPException(status_code=409, detail="ComfyUI가 꺼져 있습니다")
+    try:
+        if payload.action == "interrupt":
+            _comfyui_json("/interrupt", {})
+            message = "현재 Comfy 이미지 생성을 중단 요청했습니다"
+        else:
+            _comfyui_json("/queue", {"clear": True})
+            message = "Comfy 대기열을 비웠습니다"
+    except (OSError, ValueError, urllib.error.URLError) as exc:
+        raise HTTPException(status_code=503, detail="ComfyUI에 개입 요청을 전달하지 못했습니다") from exc
+    return {"ok": True, "message": message}
 
 
 @app.post("/api/dating-sim/scenario-tree/generate-images")
@@ -3502,6 +3634,35 @@ def _record_shift_alarm_habit_click(kind):
     return event
 
 
+def _undo_shift_alarm_habit_click(kind):
+    labels = {"breathing": "운기조식", "smoking": "흡연"}
+    if kind not in labels:
+        raise HTTPException(status_code=422, detail="지원하지 않는 기록 종류입니다")
+    today = datetime.date.today().isoformat()
+    record = next((item for item in _read_shift_alarm_routine_history(7)
+                   if item.get("routine_date") == today), None)
+    active = [event for event in (record or {}).get("habit_events", [])
+              if event.get("kind") == kind]
+    if not active:
+        raise HTTPException(status_code=409, detail="취소할 오늘 기록이 없습니다")
+    undone_at = datetime.datetime.now()
+    event = {
+        "event_type": "habit_undo",
+        "routine_date": today,
+        "clicked_at": undone_at.isoformat(timespec="seconds"),
+        "kind": kind,
+        "label": labels[kind],
+        "undone_clicked_at": active[-1].get("clicked_at"),
+        "source": "shift_alarm_dashboard",
+    }
+    try:
+        with SHIFT_ALARM_ROUTINE_HISTORY_FILE.open("a", encoding="utf-8") as file:
+            file.write(json.dumps(event, ensure_ascii=False) + "\n")
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail="생활 기록 취소를 저장하지 못했습니다") from exc
+    return event
+
+
 def _read_shift_alarm_routine_history(limit=30):
     by_date = {}
     try:
@@ -3513,7 +3674,7 @@ def _read_shift_alarm_routine_history(limit=30):
             item = json.loads(line)
             routine_date = item.get("routine_date")
             event_type = item.get("event_type", "routine_complete")
-            timestamp_key = "clicked_at" if event_type == "habit_click" else (
+            timestamp_key = "clicked_at" if event_type in ("habit_click", "habit_undo") else (
                 "checked_at" if event_type in ("melatonin_checked", "reminder_checked") else "completed_at"
             )
             event_at = datetime.datetime.fromisoformat(item.get(timestamp_key, ""))
@@ -3525,8 +3686,8 @@ def _read_shift_alarm_routine_history(limit=30):
         if event_type == "reminder_checked":
             day.setdefault("reminder_checked", []).append((event_at, item))
             continue
-        if event_type == "habit_click":
-            day.setdefault("habit_click", []).append((event_at, item))
+        if event_type in ("habit_click", "habit_undo"):
+            day.setdefault("habit_events", []).append((event_at, item))
             continue
         if event_type == "routine_complete":
             latest = day.get("routine_complete_latest")
@@ -3540,7 +3701,20 @@ def _read_shift_alarm_routine_history(limit=30):
         routine_event = events.get("routine_complete")
         melatonin_event = events.get("melatonin_checked")
         reminder_events = sorted(events.get("reminder_checked", []), key=lambda pair: pair[0])
-        habit_clicks = sorted(events.get("habit_click", []), key=lambda pair: pair[0])
+        active_habit_clicks = {"breathing": [], "smoking": []}
+        for event_at, event in sorted(events.get("habit_events", []), key=lambda pair: pair[0]):
+            kind = event.get("kind")
+            if kind not in active_habit_clicks:
+                continue
+            if event.get("event_type") == "habit_undo":
+                if active_habit_clicks[kind]:
+                    active_habit_clicks[kind].pop()
+            else:
+                active_habit_clicks[kind].append((event_at, event))
+        habit_clicks = sorted(
+            [pair for clicks in active_habit_clicks.values() for pair in clicks],
+            key=lambda pair: pair[0],
+        )
         completed_at, routine_item = routine_event if routine_event else (None, {})
         latest_completed = events.get("routine_complete_latest")
         latest_completed_at = latest_completed[0] if latest_completed else completed_at
@@ -4141,6 +4315,28 @@ class ShiftAlarmHabitClickRequest(BaseModel):
 def record_shift_alarm_habit_click(body: ShiftAlarmHabitClickRequest, request: Request):
     _require_owner(request)
     return {"ok": True, "event": _record_shift_alarm_habit_click(body.kind)}
+
+
+@app.post("/api/shift-alarm/habit-click/undo")
+def undo_shift_alarm_habit_click(body: ShiftAlarmHabitClickRequest, request: Request):
+    _require_owner(request)
+    return {"ok": True, "event": _undo_shift_alarm_habit_click(body.kind)}
+
+
+@app.get("/shift-alarm/quick/{kind}")
+def quick_record_shift_alarm_habit(kind: str, request: Request):
+    """Safari/단축어에서 한 번 열어 생활 기록을 즉시 남긴다.
+
+    별도 비밀 URL을 노출하지 않고 기존 툴파챗 소유자 로그인 세션을 사용한다.
+    기록 후 대시보드의 최종 URL로 이동하므로 새로고침으로 중복 기록되지 않는다.
+    """
+    _require_owner(request)
+    if kind not in {"breathing", "smoking"}:
+        raise HTTPException(status_code=404, detail="지원하지 않는 빠른 기록입니다")
+    _record_shift_alarm_habit_click(kind)
+    return RedirectResponse(
+        url=f"/shift-alarm/?quick_recorded={kind}", status_code=303,
+    )
 
 
 def _sunzi_light_pipeline_state(conn):
