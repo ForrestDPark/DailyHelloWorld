@@ -2,6 +2,7 @@
 """Google 일본어→한국어 결과 중 이상 가능성이 높은 문장만 Codex(실패 시 Claude)로 보정한다."""
 
 import argparse
+import html
 import json
 import os
 import re
@@ -12,6 +13,7 @@ from pathlib import Path
 import requests
 
 from ai_exec import run_ai_exec
+from translation_store import load_structured, lookup as memory_lookup
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 MEMORY_PATH = SCRIPT_DIR / "translation_memory.json"
@@ -78,6 +80,37 @@ def save_rows(rows):
         )
 
 
+def sync_markdown_translations(rows):
+    """JSONL에서 확정된 번역을 EPUB 입력 Markdown에도 동일하게 반영한다."""
+    grouped = {}
+    for row in rows:
+        grouped.setdefault(row["path"], []).append(row)
+    synced = 0
+    pattern = re.compile(r'(<p\b[^>]*class="[^"]*\bko\b[^"]*"[^>]*>)(.*?)(</p>)', re.S)
+    for jsonl_path, items in grouped.items():
+        md_path = jsonl_path.with_suffix(".md")
+        if not md_path.exists():
+            continue
+        items.sort(key=lambda item: item["line"])
+        translations = [html.escape(item["data"].get("ko", "").strip(), quote=False) for item in items]
+        source = md_path.read_text(encoding="utf-8")
+        matches = list(pattern.finditer(source))
+        if len(matches) != len(translations):
+            raise RuntimeError(
+                f"Markdown/JSONL 대사 수 불일치: {md_path.name} "
+                f"({len(matches)} != {len(translations)})"
+            )
+        position = 0
+        def replace(match):
+            nonlocal position
+            value = translations[position]
+            position += 1
+            return f"{match.group(1)}{value}{match.group(3)}"
+        md_path.write_text(pattern.sub(replace, source), encoding="utf-8")
+        synced += len(translations)
+    return synced
+
+
 def save_memory(memory):
     """중간 종료에도 사전 JSON이 반쪽만 기록되지 않도록 원자적으로 교체한다."""
     temp_path = MEMORY_PATH.with_suffix(MEMORY_PATH.suffix + ".tmp")
@@ -122,7 +155,7 @@ def _google_batch(texts, retries=3):
 
 
 def recover_google_failures(rows, memory, batch_size=24):
-    """이전 실행에 남은 실패도 AI를 쓰기 전에 저호출 배치 방식으로 다시 살린다."""
+    """이전 실행에 남은 실패도 AI 전에 Google 저호출 배치로 다시 살린다."""
     failed = [row for row in rows if row["data"].get("ko", "").strip() in ("", "[번역 실패]")]
     recovered = 0
     provider_unavailable = False
@@ -156,6 +189,7 @@ def recover_google_failures(rows, memory, batch_size=24):
         recover(failed[start:start + batch_size])
         if provider_unavailable:
             break
+
     return recovered, provider_unavailable
 
 
@@ -195,11 +229,13 @@ def codex_refine_with_retry(book_dir, batch):
     except Exception as exc:
         # 사용량·인증·결제 오류는 입력 크기 문제가 아니므로 반으로 쪼개도 절대
         # 성공하지 않는다. 수백 번 CLI를 재호출하지 말고 다음 실행을 위해 즉시 멈춘다.
-        capacity_markers = (
+        non_splittable_markers = (
             "usage limit", "rate limit", "quota", "credit", "billing",
             "authentication", "unauthorized", "invalid_grant",
+            "readonly database", "read-only", "permission denied",
+            "codex 실행 실패", "claude 실행 실패", "사용 불가",
         )
-        if any(marker in str(exc).casefold() for marker in capacity_markers):
+        if any(marker in str(exc).casefold() for marker in non_splittable_markers):
             raise RuntimeError(f"AI 번역 공급자 사용 불가: {exc}") from exc
         if len(batch) <= 1:
             raise
@@ -231,18 +267,20 @@ def main():
     if not rows:
         sys.exit(f"❌ 대사 JSONL이 없습니다: {book_dir}")
     memory = load_memory()
+    structured = load_structured()
     memory_hits = 0
     for row in rows:
         ja = row["data"].get("ja", "").strip()
-        if ja in memory and memory[ja] and row["data"].get("ko") != memory[ja]:
-            row["data"]["ko"] = memory[ja]
+        remembered, _source = memory_lookup(ja, legacy=memory, structured=structured)
+        if remembered and row["data"].get("ko") != remembered:
+            row["data"]["ko"] = remembered
             memory_hits += 1
 
     google_recovered, google_unavailable = recover_google_failures(rows, memory)
     if google_recovered:
-        print(f"🌐 Google 저호출 배치 복구: 번역 실패 {google_recovered}문장 복원")
+        print(f"🌐 무료 번역 복구(Google/MADLAD): 번역 실패 {google_recovered}문장 복원")
     elif google_unavailable:
-        print("⚠️ Google 배치 번역도 현재 차단됨 — 남은 실패만 AI 복구로 넘깁니다.")
+        print("⚠️ Google 배치 번역도 현재 차단됨 — MADLAD 후 남은 실패만 AI로 넘깁니다.")
 
     ranked = []
     for index, row in enumerate(rows):
@@ -300,12 +338,14 @@ def main():
                 if memory_key:
                     memory[memory_key] = corrected
     save_rows(rows)
+    markdown_synced = sync_markdown_translations(rows)
     save_memory(memory)
     remaining_failures = sum(
         1 for row in rows if row["data"].get("ko", "").strip() in ("", "[번역 실패]")
     )
     print(
-        f"✅ 선택 번역 보정 완료: {changed}문장 수정 · 영구 메모리 {len(memory)}개 · "
+        f"✅ 선택 번역 보정 완료: {changed}문장 수정 · Markdown 동기화 {markdown_synced}문장 · "
+        f"영구 메모리 {len(memory)}개 · "
         f"남은 번역 실패 {remaining_failures}문장"
     )
     if remaining_failures:

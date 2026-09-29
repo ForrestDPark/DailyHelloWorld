@@ -64,6 +64,7 @@
 </strong>
 <div class="reader-actions">
 <button id="tocOpen" class="subtle" type="button">목차</button>
+<button id="gifOpen" class="subtle hidden" type="button">GIF 보기</button>
 <form id="pageJump" class="page-jump">
 <input id="pageNumber" type="number" min="1" inputmode="numeric" aria-label="이동할 쪽수">
 <button type="submit">이동</button>
@@ -121,13 +122,17 @@
 <div class="toc-head"><strong>목차</strong><button id="tocClose" type="button" aria-label="목차 닫기">×</button></div>
 <div id="tocList" class="toc-list"></div>
 </dialog>
+<dialog id="gifDialog" class="gif-dialog">
+<div class="toc-head"><div><strong id="gifTitle">장면 GIF</strong><small id="gifSummary"></small></div><button id="gifClose" type="button" aria-label="GIF 닫기">×</button></div>
+<div id="gifList" class="gif-list"></div>
+</dialog>
 <nav class="library-dock" aria-label="작업실 바로가기">
 <a href="/">홈</a>
 <a href="/#chats">채팅</a>
 <a class="active" href="/epub/">서재</a>
 <a href="/career/">이직</a>
 </nav>
-<script src="app.js?v=20260928-tap-chrome-v1" defer>
+<script src="app.js?v=20260929-gif-gallery-v2" defer>
 </script>
 </body>
 </html>
