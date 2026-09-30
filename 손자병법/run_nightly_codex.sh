@@ -122,9 +122,9 @@ if [[ -n "$TARGET_VERSE" ]]; then
       print -r -- "이번 실행은 채팅에서 소유자가 직접 승인한 九地篇 ${TARGET_VERSE}구절 전용 작업입니다. 다른 번호를 고르지 말고, Notion 원문에서 이 번호의 정확한 원문·독음을 재확인한 뒤 아래 전체 파이프라인을 수행하세요."
     fi
     if [[ "$ANALYSIS_MODE" == "light" ]]; then
-      print -r -- "이번 실행은 라이트 모드입니다. 최신 README의 라이트 모드 계약대로 4번 역사적 실증 사례와 그 전용 이미지·지휘관 토론만 제외하고, 나머지 본문과 검증·GitHub·Notion·Tulpa Chat 단계를 수행하세요. 병법 사이트 생성·배포는 하지 마세요. validate_light_analysis.py를 반드시 통과해야 합니다."
+      print -r -- "이번 실행은 라이트 모드입니다. 최신 README의 라이트 모드 계약대로 4번 역사적 실증 사례와 그 전용 이미지·지휘관 토론만 제외하고, 나머지 본문과 검증·GitHub·Notion·병법 사이트 생성·배포·실페이지 확인·Tulpa Chat 단계를 모두 수행하세요. 사이트 상세 페이지에는 라이트 원고의 1·2·3·5번을 그대로 반영하고 4번을 억지로 만들지 마세요. validate_light_analysis.py를 반드시 통과해야 합니다."
     fi
-    print -r -- "ShiftAlarm 진행률을 위해 각 단계가 끝날 때 /opt/anaconda3/bin/python3 손자병법/pipeline_progress.py --verse ${TARGET_VERSE} --mode ${ANALYSIS_MODE} --progress 숫자 --stage '현재 단계'를 실행하세요. 정본·자료 확인 20, 본문 초안 45, 검증 65, GitHub 반영 78, Notion 저장·재조회 90, Tulpa Chat 보고 97을 사용하고 실제로 끝나기 전에 다음 단계 수치를 기록하지 마세요."
+    print -r -- "ShiftAlarm 진행률을 위해 각 단계가 끝날 때 /opt/anaconda3/bin/python3 손자병법/pipeline_progress.py --verse ${TARGET_VERSE} --mode ${ANALYSIS_MODE} --progress 숫자 --stage '현재 단계'를 실행하세요. 정본·자료 확인 20, 본문 초안 45, 검증 65, GitHub 반영 78, Notion 저장·재조회 90, 사이트 배포·실페이지 확인 94, Tulpa Chat 보고 97을 사용하고 실제로 끝나기 전에 다음 단계 수치를 기록하지 마세요."
     /bin/cat "$SOURCE_PROMPT"
   } > "$PROMPT_FILE"
 else
