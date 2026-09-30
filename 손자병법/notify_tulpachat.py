@@ -265,9 +265,8 @@ def keychain_token() -> str:
 
 
 def discussion_dedupe_key(number: int, discussion_run: str, republish: bool) -> str:
-    """일반 수정은 기존 토론을 재생성하지 않고, 명시적 재발행만 새 키를 쓴다."""
-    base = f"{ROOM_ID}:sunzi-jiudi-{number}"
-    return f"{base}:republish-{discussion_run}" if republish else base
+    """한 구절에는 토론방 공지 하나만 유지한다."""
+    return f"{ROOM_ID}:sunzi-jiudi-{number}"
 
 
 def main() -> None:
@@ -283,12 +282,12 @@ def main() -> None:
     parser.add_argument(
         "--discussion-run",
         default="commanders-v1",
-        help="--republish와 함께 쓸 때만 적용되는 명시적 재발행 실행명",
+        help="이전 실행 명령과의 호환을 위해 유지되는 실행명",
     )
     parser.add_argument(
         "--republish",
         action="store_true",
-        help="사용자가 같은 구절의 전체 재게시를 명시적으로 요청한 경우에만 사용",
+        help="같은 구절의 기존 공지를 갱신하며 새 중복 공지는 만들지 않음",
     )
     args = parser.parse_args()
     if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,39}", args.discussion_run):

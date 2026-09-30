@@ -39,10 +39,10 @@ class NotifyTulpaChatTest(unittest.TestCase):
         markdown = "<!-- sunzi-analysis-mode: light -->\n## 1. 원문\n## 2. 주석\n## 3. 교차\n## 5. 적용\n"
         self.assertEqual(notify.victorious_commanders(markdown, "九地之變"), [])
 
-    def test_discussion_key_changes_only_for_explicit_republish(self):
+    def test_discussion_key_stays_stable_even_for_republish(self):
         stable = notify.discussion_dedupe_key(24, "format-v1", False)
         self.assertEqual(stable, notify.discussion_dedupe_key(24, "format-v2", False))
-        self.assertNotEqual(stable, notify.discussion_dedupe_key(24, "format-v2", True))
+        self.assertEqual(stable, notify.discussion_dedupe_key(24, "format-v2", True))
 
     def test_hanja_lesson_prepares_reading_and_literal_without_a_table(self):
         # ★ 2026-09-24: "한자선생님이 한자 뜻 표 작성하는거있는데 이제 표는
