@@ -1693,18 +1693,12 @@ def _report_sunzi_pipeline_result(process, room_id, verse_number, started_at):
         content += "\n기존 파일을 강제로 덮지 않았습니다."
     if detail:
         content += "\n\n" + detail[-2500:]
-    try:
-        _api("/api/worker/post_message", "POST", {
-            "persona_name": SUNZI_PIPELINE_PERSONA_NAME,
-            "room_id": room_id,
-            "content": content,
-        })
-    except (urllib.error.URLError, urllib.error.HTTPError) as exc:
-        print(f"⚠️ 손자병법 파이프라인 결과 보고 실패: {exc}", flush=True)
-    finally:
-        with _sunzi_pipeline_start_lock:
-            if _sunzi_pipeline_process is process:
-                _sunzi_pipeline_process = None
+    # 진행·배포 결과는 ShiftAlarm 상태 화면과 로그에서 확인한다. 토론방에는
+    # 완성된 구절 소개와 병법 토론만 남겨 손무가 현대 자동화 용어를 말하지 않는다.
+    print(f"📜 九地篇 {verse_number}구절 파이프라인 종료({return_code}): {content[:300]}", flush=True)
+    with _sunzi_pipeline_start_lock:
+        if _sunzi_pipeline_process is process:
+            _sunzi_pipeline_process = None
 
 
 def _maybe_start_sunzi_pipeline(turn):
@@ -1729,7 +1723,7 @@ def _maybe_start_sunzi_pipeline(turn):
             ):
                 _api("/api/worker/complete", "POST", {
                     "turn_id": turn["turn_id"],
-                    "reply": "손자병법 구절 해석 파이프라인이 이미 실행 중입니다. 현재 작업이 끝난 뒤 결과를 보고하겠습니다.",
+                    "reply": "NONE" if from_shift_alarm else "손자병법 구절 해석 파이프라인이 이미 실행 중입니다. 현재 작업이 끝난 뒤 결과를 보고하겠습니다.",
                 })
                 return True
             verse_number, original, reading = (_sunzi_verse_at(backfill_verse) if backfill_verse else _next_sunzi_verse())
@@ -1750,12 +1744,12 @@ def _maybe_start_sunzi_pipeline(turn):
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         _api("/api/worker/complete", "POST", {
             "turn_id": turn["turn_id"],
-            "reply": f"다음 구절을 확인하거나 파이프라인을 시작하지 못했습니다: {exc}",
+            "reply": "NONE" if from_shift_alarm else f"다음 구절을 확인하거나 파이프라인을 시작하지 못했습니다: {exc}",
         })
         return True
     _api("/api/worker/complete", "POST", {
         "turn_id": turn["turn_id"],
-        "reply": (
+        "reply": "NONE" if from_shift_alarm else (
             f"다음은 九地篇 {verse_number}구절 「{original}」\n"
             f"독음: {reading}\n\n"
             + ("소유자 요청 한 건을 승인으로 확인했습니다. 기존 1·2·3·5번은 보존하고 4번 역사적 실증 사례와 도판만 보강한 뒤 검증·Notion·사이트·토론방까지 반영합니다. 추가 승인은 필요하지 않습니다."

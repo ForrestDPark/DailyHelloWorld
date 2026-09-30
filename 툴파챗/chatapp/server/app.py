@@ -8765,7 +8765,11 @@ def worker_complete(result: WorkerResult, authorization: Optional[str] = Header(
     _check_worker_auth(authorization)
     conn = get_conn()
     row = conn.execute(
-        "SELECT persona_name, room_id, source_message_id FROM pending_turns WHERE id = ?", (result.turn_id,)
+        """SELECT p.persona_name, p.room_id, p.source_message_id, m.content AS source_content
+             FROM pending_turns p
+             LEFT JOIN messages m ON m.id = p.source_message_id
+            WHERE p.id = ?""",
+        (result.turn_id,),
     ).fetchone()
     if not row:
         conn.close()
@@ -8786,6 +8790,8 @@ def worker_complete(result: WorkerResult, authorization: Optional[str] = Header(
                     (now, result.turn_id),
                 )
                 _enqueue_next_automation_discussion_turn(conn, row["source_message_id"], now)
+                if row["source_content"] == SUNZI_LIGHT_PIPELINE_REQUEST:
+                    conn.execute("DELETE FROM messages WHERE id = ?", (row["source_message_id"],))
             conn.commit()
             conn.close()
             return {"ok": True, "skipped": True}

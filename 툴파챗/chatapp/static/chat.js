@@ -182,6 +182,7 @@ const scrollBottomBtn = document.getElementById("scroll-bottom-btn");
 const SCROLL_BOTTOM_THRESHOLD_PX = 120;
 const SUNZI_DISCUSSION_ROOM_ID = "custom_16ea779e1f";
 const HISTORY_PAGE_SIZE = 100;
+const SUNZI_INTERNAL_PIPELINE_REQUEST = "📜 ShiftAlarm에서 오늘의 병법 구절 라이트 분석을 요청했습니다.";
 
 function updateScrollBottomVisibility() {
   const distanceFromBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight;
@@ -4187,6 +4188,9 @@ function ensureDateSeparator(m) {
 }
 
 function appendMessage(m, forceScroll = false, suppressScroll = false) {
+  // ShiftAlarm의 자동화 트리거는 워커에 작업을 전달하기 위한 내부 신호다.
+  // 고대 병법가가 현대 배포 절차를 말하는 것처럼 보이지 않게 대화에서는 숨긴다.
+  if (m.is_system && m.content === SUNZI_INTERNAL_PIPELINE_REQUEST) return;
   const wasNearBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < SCROLL_BOTTOM_THRESHOLD_PX;
   ensureDateSeparator(m);
   if (m.is_system) { renderSystemMessage(m, !suppressScroll && (forceScroll || wasNearBottom)); return; }
