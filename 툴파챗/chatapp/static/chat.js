@@ -2483,7 +2483,7 @@ function escapeHtml(text) {
 }
 
 function appendLinkifiedText(container, text) {
-  const urlPattern = /https?:\/\/[^\s<]+/g;
+  const urlPattern = /\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<]+)/g;
   let cursor = 0;
   const appendTextWithBreaks = (value) => {
     const parts = String(value || "").split("\n");
@@ -2494,12 +2494,13 @@ function appendLinkifiedText(container, text) {
   };
   for (const match of text.matchAll(urlPattern)) {
     if (match.index > cursor) appendTextWithBreaks(text.slice(cursor, match.index));
-    let url = match[0];
+    const label = match[1] || "";
+    let url = match[2] || match[3];
     let suffix = "";
-    while (/[),.!?\]}]$/.test(url)) { suffix = url.slice(-1) + suffix; url = url.slice(0, -1); }
+    if (!label) while (/[),.!?\]}]$/.test(url)) { suffix = url.slice(-1) + suffix; url = url.slice(0, -1); }
     const link = document.createElement("a");
     link.href = url;
-    link.textContent = url;
+    link.textContent = label || url;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
     link.className = "message-link";

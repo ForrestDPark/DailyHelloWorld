@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOM_ID = "custom_16ea779e1f"
 API_URL = "http://127.0.0.1:8000/api/worker/announcements"
+SUNZI_SITE_BASE = "https://sunzi-strategy-notes.pulpilisory.chatgpt.site"
 KEYCHAIN_SERVICE = "com.forrest.tulpachat.worker"
 MARKDOWN_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\((https?://[^)\s]+)\)")
 COMMANDER_NAME_ALIASES = {
@@ -300,12 +301,12 @@ def main() -> None:
         parser.error("풀 모드에는 --site-url이 필요합니다")
     commanders = [] if is_light else victorious_commanders(markdown, original)
     hanja_lesson = build_hanja_lesson(markdown, original, subtitle)
+    site_url = args.site_url or f"{SUNZI_SITE_BASE}/verses/{number}"
     content = (
         f"📜 손자병법 새 구절 분석이 완료되었습니다 — 구지편 {number}구절\n\n"
         f"원문: {original}\n"
         f"핵심 해석: {subtitle}\n\n"
-        f"Notion 정본: {args.notion_url}\n"
-        + (f"사이트 분석: {args.site_url}\n" if args.site_url else "")
+        f"[병법 사이트에서 분석 보기]({site_url})\n"
         + "\n"
         + (
             "병법가들은 한자선생님의 풀이를 들은 뒤, 각자의 주석 관점에서 이 구절의 뜻과 "
