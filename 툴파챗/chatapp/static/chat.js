@@ -4359,17 +4359,25 @@ function positionAtLastRead() {
   document.querySelector(".unread-start-divider")?.remove();
   const rendered = [...messagesEl.querySelectorAll(".msg[data-message-id], .msg-system[data-message-id]")];
   if (!rendered.length) return;
-  const lastReadMessage = rendered.find((el) => Number(el.dataset.messageId) === roomOpenLastReadId);
   const firstUnread = rendered.find((el) => Number(el.dataset.messageId) > roomOpenLastReadId);
+  let divider = null;
   if (firstUnread) {
-    const divider = document.createElement("div");
+    divider = document.createElement("div");
     divider.className = "unread-start-divider";
     divider.textContent = "여기부터 안 읽은 메시지";
     firstUnread.before(divider);
   }
-  const target = lastReadMessage || firstUnread || rendered[rendered.length - 1];
-  target.scrollIntoView({behavior: "auto", block: lastReadMessage ? "start" : "center"});
-  requestAnimationFrame(markVisibleMessagesRead);
+  const roomAtPositioning = currentRoom;
+  // 각 말풍선의 4줄 접기 높이는 appendMessage()의 두 번째 animation frame에
+  // 확정된다. 그 전에 스크롤하면 긴 메시지가 접히면서 시작점이 엉뚱한 곳으로
+  // 밀리므로, 같은 계산이 끝난 다음 프레임에 구분선 자체를 화면 맨 위로 둔다.
+  requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (currentRoom !== roomAtPositioning) return;
+    if (divider?.isConnected) divider.scrollIntoView({behavior: "auto", block: "start"});
+    else rendered[rendered.length - 1]?.scrollIntoView({behavior: "auto", block: "end"});
+    updateScrollBottomVisibility();
+    markVisibleMessagesRead();
+  })));
 }
 
 function mergeLoadedMessages(messages) {
