@@ -649,6 +649,13 @@ def load_ebook_reader_state():
     return "\n".join(lines)
 
 
+def is_automatic_reading_session_turn(turn):
+    """전자책 종료 알림이 만든 자동 토론 턴인지 구분한다."""
+    return str((turn or {}).get("source_message_content") or "").startswith(
+        "🔔 오늘 독서 세션 완료"
+    )
+
+
 # ★ 2026-08-30 추가: "독서지기가 노션에 저장된 모든 독서 내용 읽고 학습하도록
 # 하고 지금 대화에 대해서 막힘없이 이야기 할 수 있게 해달라" 요청 — "여태까지
 # 등장한 인물 나열해줘" 같은 질문에 live_state(오늘 것만)만으로는 답이 안 나와서
@@ -3290,6 +3297,15 @@ def _process_turn_inner(turn, persona_cache):
         live_state = load_shift_alarm_state(shift_alarm_state_key)
     elif persona_name in EBOOK_DISCUSSION_PERSONA_NAMES:
         live_state = load_ebook_reader_state()
+        if (
+            is_automatic_reading_session_turn(turn)
+            and "오늘은 아직 읽은 기록이 없음" in live_state
+        ):
+            # 자동 턴이 다음 날까지 밀렸거나 실제 독서 기록이 사라진 경우에는
+            # '읽지 않았다'는 대화조차 만들지 않는다. 기록이 있을 때만 토론한다.
+            _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": "NONE"})
+            print(f"🤫 {persona_name}: 오늘 독서 기록이 없어 자동 토론을 건너뜀", flush=True)
+            return
     elif persona_name in JOB_SYSTEM_PERSONA_NAMES:
         live_state = load_job_system_state()
     elif persona_name == CONTEST_PERSONA_NAME:

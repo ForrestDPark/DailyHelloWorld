@@ -8090,6 +8090,7 @@ def worker_pending(authorization: Optional[str] = Header(None)):
         "room_id": row["room_id"],
         "rerouted": bool(row["rerouted"]),
         "source_message_id": row["source_message_id"],
+        "source_message_content": source_message_content,
         "source_username": source_username,
         "source_is_owner": source_is_owner,
         "source_ui_dev_granted": source_ui_dev_granted,
