@@ -158,9 +158,9 @@ def build_hanja_lesson(markdown: str, original: str, subtitle: str) -> str:
 
 
 def read_page(path: Path) -> tuple[int, str, str]:
-    match = re.search(r"jiudi(\d+)_full_page\.md$", path.name)
+    match = re.search(r"(?:jiudi|huogong)(\d+)_full_page\.md$", path.name)
     if not match:
-        raise ValueError("파일명이 jiudi<번호>_full_page.md 형식이어야 합니다")
+        raise ValueError("파일명이 <편 식별자><번호>_full_page.md 형식이어야 합니다")
     markdown = path.read_text(encoding="utf-8")
     summary = re.search(r"<summary>([\s\S]*?)</summary>", markdown, flags=re.I)
     if not summary:
@@ -266,7 +266,7 @@ def keychain_token() -> str:
 
 def discussion_dedupe_key(number: int, discussion_run: str, republish: bool) -> str:
     """한 구절에는 토론방 공지 하나만 유지한다."""
-    return f"{ROOM_ID}:sunzi-jiudi-{number}"
+    return f"{ROOM_ID}:sunzi-{number}"
 
 
 def main() -> None:
@@ -294,6 +294,7 @@ def main() -> None:
         parser.error("--discussion-run은 영문 소문자·숫자·밑줄·하이픈만 사용할 수 있습니다")
 
     number, original, subtitle = read_page(args.page)
+    chapter_name = "화공편" if args.page.name.startswith("huogong") else "구지편"
     markdown = args.page.read_text(encoding="utf-8")
     is_light = args.light or "<!-- sunzi-analysis-mode: light -->" in markdown
     if not is_light and not args.site_url:
@@ -301,8 +302,10 @@ def main() -> None:
     commanders = [] if is_light else victorious_commanders(markdown, original)
     hanja_lesson = build_hanja_lesson(markdown, original, subtitle)
     site_url = args.site_url or f"{SUNZI_SITE_BASE}/verses/{number}"
+    site_number_match = re.search(r"/verses/(\d+)(?:[/?#]|$)", site_url)
+    discussion_number = int(site_number_match.group(1)) if site_number_match else number
     content = (
-        f"📜 손자병법 새 구절 분석이 완료되었습니다 — 구지편 {number}구절\n\n"
+        f"📜 손자병법 새 구절 분석이 완료되었습니다 — {chapter_name} {number}구절\n\n"
         f"원문: {original}\n"
         f"핵심 해석: {subtitle}\n\n"
         f"[병법 사이트에서 분석 보기]({site_url})\n"
@@ -321,7 +324,7 @@ def main() -> None:
         {
             "room_id": ROOM_ID,
             "content": content,
-            "dedupe_key": discussion_dedupe_key(number, args.discussion_run, args.republish),
+            "dedupe_key": discussion_dedupe_key(discussion_number, args.discussion_run, args.republish),
             "hanja_lesson": hanja_lesson,
             "victory_commanders": commanders,
             "analysis_mode": "light" if is_light else "full",
