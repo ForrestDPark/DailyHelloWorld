@@ -12,6 +12,7 @@ from pathlib import Path
 
 ROOM_ID = "custom_16ea779e1f"
 API_URL = "http://127.0.0.1:8000/api/worker/announcements"
+SUNZI_SITE_BASE = "https://sunzi-strategy-notes.pulpilisory.chatgpt.site"
 KEYCHAIN_SERVICE = "com.forrest.tulpachat.worker"
 MARKDOWN_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\((https?://[^)\s]+)\)")
 COMMANDER_NAME_ALIASES = {
@@ -22,6 +23,7 @@ BATTLE_COMMANDER_PREFERENCES = {
     "거록": "항우",
 }
 TRADITIONAL_COMMENTATORS = {"조조", "이전", "두목", "매요신", "장예", "왕석", "가림", "두우", "진호"}
+LI_LING_NAME = "리링"
 
 
 def plain(value: str) -> str:
@@ -156,9 +158,9 @@ def build_hanja_lesson(markdown: str, original: str, subtitle: str) -> str:
 
 
 def read_page(path: Path) -> tuple[int, str, str]:
-    match = re.search(r"jiudi(\d+)_full_page\.md$", path.name)
+    match = re.search(r"(?:jiudi|huogong)(\d+)_full_page\.md$", path.name)
     if not match:
-        raise ValueError("파일명이 jiudi<번호>_full_page.md 형식이어야 합니다")
+        raise ValueError("파일명이 <편 식별자><번호>_full_page.md 형식이어야 합니다")
     markdown = path.read_text(encoding="utf-8")
     summary = re.search(r"<summary>([\s\S]*?)</summary>", markdown, flags=re.I)
     if not summary:
@@ -263,9 +265,8 @@ def keychain_token() -> str:
 
 
 def discussion_dedupe_key(number: int, discussion_run: str, republish: bool) -> str:
-    """일반 수정은 기존 토론을 재생성하지 않고, 명시적 재발행만 새 키를 쓴다."""
-    base = f"{ROOM_ID}:sunzi-jiudi-{number}"
-    return f"{base}:republish-{discussion_run}" if republish else base
+    """한 구절에는 토론방 공지 하나만 유지한다."""
+    return f"{ROOM_ID}:sunzi-{number}"
 
 
 def main() -> None:
@@ -281,30 +282,33 @@ def main() -> None:
     parser.add_argument(
         "--discussion-run",
         default="commanders-v1",
-        help="--republish와 함께 쓸 때만 적용되는 명시적 재발행 실행명",
+        help="이전 실행 명령과의 호환을 위해 유지되는 실행명",
     )
     parser.add_argument(
         "--republish",
         action="store_true",
-        help="사용자가 같은 구절의 전체 재게시를 명시적으로 요청한 경우에만 사용",
+        help="같은 구절의 기존 공지를 갱신하며 새 중복 공지는 만들지 않음",
     )
     args = parser.parse_args()
     if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,39}", args.discussion_run):
         parser.error("--discussion-run은 영문 소문자·숫자·밑줄·하이픈만 사용할 수 있습니다")
 
     number, original, subtitle = read_page(args.page)
+    chapter_name = "화공편" if args.page.name.startswith("huogong") else "구지편"
     markdown = args.page.read_text(encoding="utf-8")
     is_light = args.light or "<!-- sunzi-analysis-mode: light -->" in markdown
     if not is_light and not args.site_url:
         parser.error("풀 모드에는 --site-url이 필요합니다")
     commanders = [] if is_light else victorious_commanders(markdown, original)
     hanja_lesson = build_hanja_lesson(markdown, original, subtitle)
+    site_url = args.site_url or f"{SUNZI_SITE_BASE}/verses/{number}"
+    site_number_match = re.search(r"/verses/(\d+)(?:[/?#]|$)", site_url)
+    discussion_number = int(site_number_match.group(1)) if site_number_match else number
     content = (
-        f"📜 손자병법 새 구절 분석이 완료되었습니다 — 구지편 {number}구절\n\n"
+        f"📜 손자병법 새 구절 분석이 완료되었습니다 — {chapter_name} {number}구절\n\n"
         f"원문: {original}\n"
         f"핵심 해석: {subtitle}\n\n"
-        f"Notion 정본: {args.notion_url}\n"
-        + (f"사이트 분석: {args.site_url}\n" if args.site_url else "")
+        f"[병법 사이트에서 분석 보기]({site_url})\n"
         + "\n"
         + (
             "병법가들은 한자선생님의 풀이를 들은 뒤, 각자의 주석 관점에서 이 구절의 뜻과 "
@@ -320,7 +324,7 @@ def main() -> None:
         {
             "room_id": ROOM_ID,
             "content": content,
-            "dedupe_key": discussion_dedupe_key(number, args.discussion_run, args.republish),
+            "dedupe_key": discussion_dedupe_key(discussion_number, args.discussion_run, args.republish),
             "hanja_lesson": hanja_lesson,
             "victory_commanders": commanders,
             "analysis_mode": "light" if is_light else "full",
@@ -348,11 +352,17 @@ def main() -> None:
     if is_light and not result.get("duplicate"):
         notified = result.get("notified") or []
         traditional = [name for name in notified if name in TRADITIONAL_COMMENTATORS]
-        if len(notified) != 5 or len(traditional) != 4 or notified[-1:] != ["데니얼 카너먼"]:
+        if (
+            len(notified) != 6
+            or len(traditional) != 4
+            or notified[-2:] != [LI_LING_NAME, "데니얼 카너먼"]
+        ):
             raise RuntimeError(
                 "Tulpa Chat 라이트 선택형 토론 큐 불일치: "
-                f"기대 전통 주석가 4명+카너먼, 실제 {notified}"
+                f"기대 전통 주석가 4명+리링+카너먼, 실제 {notified}"
             )
+    if not result.get("duplicate") and LI_LING_NAME not in (result.get("notified") or []):
+        raise RuntimeError("Tulpa Chat 토론 큐에 필수 현대 연구자 리링이 없습니다")
     print(json.dumps(result, ensure_ascii=False))
 
 

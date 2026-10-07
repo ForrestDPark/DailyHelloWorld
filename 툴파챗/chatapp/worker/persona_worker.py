@@ -649,6 +649,13 @@ def load_ebook_reader_state():
     return "\n".join(lines)
 
 
+def is_automatic_reading_session_turn(turn):
+    """전자책 종료 알림이 만든 자동 토론 턴인지 구분한다."""
+    return str((turn or {}).get("source_message_content") or "").startswith(
+        "🔔 오늘 독서 세션 완료"
+    )
+
+
 # ★ 2026-08-30 추가: "독서지기가 노션에 저장된 모든 독서 내용 읽고 학습하도록
 # 하고 지금 대화에 대해서 막힘없이 이야기 할 수 있게 해달라" 요청 — "여태까지
 # 등장한 인물 나열해줘" 같은 질문에 live_state(오늘 것만)만으로는 답이 안 나와서
@@ -1693,18 +1700,12 @@ def _report_sunzi_pipeline_result(process, room_id, verse_number, started_at):
         content += "\n기존 파일을 강제로 덮지 않았습니다."
     if detail:
         content += "\n\n" + detail[-2500:]
-    try:
-        _api("/api/worker/post_message", "POST", {
-            "persona_name": SUNZI_PIPELINE_PERSONA_NAME,
-            "room_id": room_id,
-            "content": content,
-        })
-    except (urllib.error.URLError, urllib.error.HTTPError) as exc:
-        print(f"⚠️ 손자병법 파이프라인 결과 보고 실패: {exc}", flush=True)
-    finally:
-        with _sunzi_pipeline_start_lock:
-            if _sunzi_pipeline_process is process:
-                _sunzi_pipeline_process = None
+    # 진행·배포 결과는 ShiftAlarm 상태 화면과 로그에서 확인한다. 토론방에는
+    # 완성된 구절 소개와 병법 토론만 남겨 손무가 현대 자동화 용어를 말하지 않는다.
+    print(f"📜 九地篇 {verse_number}구절 파이프라인 종료({return_code}): {content[:300]}", flush=True)
+    with _sunzi_pipeline_start_lock:
+        if _sunzi_pipeline_process is process:
+            _sunzi_pipeline_process = None
 
 
 def _maybe_start_sunzi_pipeline(turn):
@@ -1729,7 +1730,7 @@ def _maybe_start_sunzi_pipeline(turn):
             ):
                 _api("/api/worker/complete", "POST", {
                     "turn_id": turn["turn_id"],
-                    "reply": "손자병법 구절 해석 파이프라인이 이미 실행 중입니다. 현재 작업이 끝난 뒤 결과를 보고하겠습니다.",
+                    "reply": "NONE" if from_shift_alarm else "손자병법 구절 해석 파이프라인이 이미 실행 중입니다. 현재 작업이 끝난 뒤 결과를 보고하겠습니다.",
                 })
                 return True
             verse_number, original, reading = (_sunzi_verse_at(backfill_verse) if backfill_verse else _next_sunzi_verse())
@@ -1750,12 +1751,12 @@ def _maybe_start_sunzi_pipeline(turn):
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         _api("/api/worker/complete", "POST", {
             "turn_id": turn["turn_id"],
-            "reply": f"다음 구절을 확인하거나 파이프라인을 시작하지 못했습니다: {exc}",
+            "reply": "NONE" if from_shift_alarm else f"다음 구절을 확인하거나 파이프라인을 시작하지 못했습니다: {exc}",
         })
         return True
     _api("/api/worker/complete", "POST", {
         "turn_id": turn["turn_id"],
-        "reply": (
+        "reply": "NONE" if from_shift_alarm else (
             f"다음은 九地篇 {verse_number}구절 「{original}」\n"
             f"독음: {reading}\n\n"
             + ("소유자 요청 한 건을 승인으로 확인했습니다. 기존 1·2·3·5번은 보존하고 4번 역사적 실증 사례와 도판만 보강한 뒤 검증·Notion·사이트·토론방까지 반영합니다. 추가 승인은 필요하지 않습니다."
@@ -2931,6 +2932,14 @@ def build_prompt(persona_name, system_prompt, context, persona_names, has_images
             "이미 나온 내용과 구별되는 새 사실·명확한 반론·실질적인 한계가 하나도 없다면 반드시 "
             "정확히 NONE만 답하세요. 말투만 바꾼 반복은 새 관점이 아닙니다.)"
         )
+        if persona_name == "리링":
+            lines.append(
+                "\n(리링의 차례는 매 분석에 한 번 보장된 현대 문헌학 검토입니다. NONE으로 "
+                "건너뛰지 말고, 이번 원문의 판본·자구·문장 구조·편장 연결·고대 군사제도 가운데 "
+                "앞선 화자가 다루지 않은 핵심 하나만 2~4문장으로 말하세요. 실제 판본 차이가 "
+                "확인되지 않으면 이문을 꾸미지 말고 문장 구조나 앞뒤 구절의 연결, 현대적 오독의 "
+                "한계를 짚으세요. 확인하지 못한 문장을 직접 인용처럼 만들지 마세요.)"
+            )
     if any("⚔️ 승군 지휘관 전장 토론" in msg["content"] for msg in context):
         lines.append(
             "\n(승군 지휘관이 자신의 전장을 설명한 토론입니다. 막연히 동의한다고 답하지 말고, "
@@ -3288,6 +3297,15 @@ def _process_turn_inner(turn, persona_cache):
         live_state = load_shift_alarm_state(shift_alarm_state_key)
     elif persona_name in EBOOK_DISCUSSION_PERSONA_NAMES:
         live_state = load_ebook_reader_state()
+        if (
+            is_automatic_reading_session_turn(turn)
+            and "오늘은 아직 읽은 기록이 없음" in live_state
+        ):
+            # 자동 턴이 다음 날까지 밀렸거나 실제 독서 기록이 사라진 경우에는
+            # '읽지 않았다'는 대화조차 만들지 않는다. 기록이 있을 때만 토론한다.
+            _api("/api/worker/complete", "POST", {"turn_id": turn["turn_id"], "reply": "NONE"})
+            print(f"🤫 {persona_name}: 오늘 독서 기록이 없어 자동 토론을 건너뜀", flush=True)
+            return
     elif persona_name in JOB_SYSTEM_PERSONA_NAMES:
         live_state = load_job_system_state()
     elif persona_name == CONTEST_PERSONA_NAME:

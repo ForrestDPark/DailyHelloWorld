@@ -1,6 +1,8 @@
 import importlib.util
+import json
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 SCRIPT_PATH = Path(__file__).with_name("notify_tulpachat.py")
@@ -10,14 +12,37 @@ SPEC.loader.exec_module(notify)
 
 
 class NotifyTulpaChatTest(unittest.TestCase):
+    def test_notice_uses_named_strategy_site_link_without_notion_url(self):
+        page = Path(__file__).with_name("jiudi22_full_page.md")
+        captured = {}
+
+        class Response:
+            def __enter__(self): return self
+            def __exit__(self, *_args): return False
+            def read(self): return b'{"ok":true,"duplicate":true}'
+
+        def fake_urlopen(request, timeout=0):
+            captured.update(json.loads(request.data.decode("utf-8")))
+            return Response()
+
+        with patch.object(notify, "keychain_token", return_value="test-token"), \
+             patch.object(notify.urllib.request, "urlopen", side_effect=fake_urlopen), \
+             patch("sys.argv", ["notify_tulpachat.py", str(page), "--notion-url", "https://app.notion.com/private", "--light"]):
+            notify.main()
+
+        content = captured["content"]
+        self.assertIn("[병법 사이트에서 분석 보기](https://sunzi-strategy-notes.pulpilisory.chatgpt.site/verses/22)", content)
+        self.assertNotIn("Notion", content)
+        self.assertNotIn("app.notion.com", content)
+
     def test_light_page_has_no_commanders(self):
         markdown = "<!-- sunzi-analysis-mode: light -->\n## 1. 원문\n## 2. 주석\n## 3. 교차\n## 5. 적용\n"
         self.assertEqual(notify.victorious_commanders(markdown, "九地之變"), [])
 
-    def test_discussion_key_changes_only_for_explicit_republish(self):
+    def test_discussion_key_stays_stable_even_for_republish(self):
         stable = notify.discussion_dedupe_key(24, "format-v1", False)
         self.assertEqual(stable, notify.discussion_dedupe_key(24, "format-v2", False))
-        self.assertNotEqual(stable, notify.discussion_dedupe_key(24, "format-v2", True))
+        self.assertEqual(stable, notify.discussion_dedupe_key(24, "format-v2", True))
 
     def test_hanja_lesson_prepares_reading_and_literal_without_a_table(self):
         # ★ 2026-09-24: "한자선생님이 한자 뜻 표 작성하는거있는데 이제 표는
