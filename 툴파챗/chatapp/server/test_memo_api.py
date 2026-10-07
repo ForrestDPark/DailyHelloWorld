@@ -38,6 +38,13 @@ class MemoApiTests(unittest.TestCase):
         self.assertEqual(first["id"], second["id"])
         self.assertEqual(len(app.list_memos(request())), 1)
 
+    def test_message_capture_open_redirects_to_saved_mindmap(self):
+        response = app.create_memo_from_message_and_open(self.message_id, request())
+        self.assertEqual(response.status_code, 303)
+        self.assertEqual(response.headers["location"], "/memo/?memo=1")
+        response = app.create_memo_from_message_and_open(self.message_id, request())
+        self.assertEqual(response.headers["location"], "/memo/?memo=1")
+
     def test_memo_title_and_note_are_updated_together(self):
         memo = app.create_memo(app.MemoDocumentCreate(title="수정 전 제목", note="수정 전 내용"), request())
         app.update_memo(
@@ -70,6 +77,21 @@ class MemoApiTests(unittest.TestCase):
         self.assertEqual(node["position_x"], 640.5)
         self.assertEqual(node["position_y"], 420.25)
 
+    def test_blank_node_can_be_created_then_filled_with_line_breaks(self):
+        memo = app.create_memo(app.MemoDocumentCreate(title="즉시 생성"), request())
+        created = app.create_memo_node(
+            memo["id"], app.MemoNodeCreate(content=""), request()
+        )
+        blank = app.list_memos(request())[0]["nodes"][0]
+        self.assertEqual(blank["content"], "")
+        app.update_memo_node(
+            created["id"],
+            app.MemoNodeUpdate(content="첫 문단\n\n둘째 문단"),
+            request(),
+        )
+        saved = app.list_memos(request())[0]["nodes"][0]
+        self.assertEqual(saved["content"], "첫 문단\n\n둘째 문단")
+
     def test_dragging_existing_node_updates_canvas_position(self):
         memo = app.create_memo(app.MemoDocumentCreate(title="재배치 메모"), request())
         created = app.create_memo_node(
@@ -97,6 +119,62 @@ class MemoApiTests(unittest.TestCase):
         result = app.list_memos(request())[0]
         self.assertEqual(result["card_width"], 720)
         self.assertEqual(result["nodes"][0]["card_width"], 560)
+
+    def test_image_and_editable_pencil_strokes_are_persisted(self):
+        memo = app.create_memo(app.MemoDocumentCreate(title="시각 메모"), request())
+        image = "data:image/jpeg;base64,YWJj"
+        drawing = '{"version":1,"width":900,"height":600,"strokes":[{"color":"#6f42d9","width":6,"points":[{"x":10,"y":20,"p":0.5}]}]}'
+        created = app.create_memo_node(
+            memo["id"], app.MemoNodeCreate(content="", image_data=image, drawing_data=drawing), request()
+        )
+        saved = app.list_memos(request())[0]["nodes"][0]
+        self.assertEqual(saved["image_data"], image)
+        self.assertEqual(saved["drawing_data"], drawing)
+        changed = drawing.replace("#6f42d9", "#112233")
+        app.update_memo_node(
+            created["id"], app.MemoNodeUpdate(content="설명", drawing_data=changed), request()
+        )
+        saved = app.list_memos(request())[0]["nodes"][0]
+        self.assertEqual(saved["content"], "설명")
+        self.assertIn("#112233", saved["drawing_data"])
+
+    def test_invalid_memo_media_is_rejected(self):
+        memo = app.create_memo(app.MemoDocumentCreate(title="검증"), request())
+        with self.assertRaises(HTTPException):
+            app.create_memo_node(
+                memo["id"], app.MemoNodeCreate(content="", image_data="data:text/html;base64,YQ=="), request()
+            )
+        with self.assertRaises(HTTPException):
+            app.create_memo_node(
+                memo["id"], app.MemoNodeCreate(content="", drawing_data='{"version":2,"strokes":[]}'), request()
+            )
+
+    def test_categories_create_assign_rename_and_delete_without_deleting_memo(self):
+        category = app.create_memo_category(app.MemoCategoryWrite(name="손자병법"), request())
+        second = app.create_memo_category(app.MemoCategoryWrite(name="복습"), request())
+        memo = app.create_memo(
+            app.MemoDocumentCreate(title="병법 메모", category_ids=[category["id"], second["id"]]), request()
+        )
+        saved = app.list_memos(request())[0]
+        self.assertEqual(saved["category_id"], category["id"])
+        self.assertEqual(saved["category_ids"], [category["id"], second["id"]])
+        listed = app.list_memo_categories(request())
+        self.assertEqual((listed[0]["name"], listed[0]["memo_count"]), ("손자병법", 1))
+        app.update_memo_category(category["id"], app.MemoCategoryWrite(name="병법"), request())
+        self.assertEqual(app.list_memo_categories(request())[0]["name"], "병법")
+        app.delete_memo_category(category["id"], request())
+        saved = app.list_memos(request())[0]
+        self.assertEqual(saved["id"], memo["id"])
+        self.assertIsNone(saved["category_id"])
+        self.assertEqual(saved["category_ids"], [second["id"]])
+
+    def test_category_assignment_is_account_scoped(self):
+        category = app.create_memo_category(app.MemoCategoryWrite(name="영어독서"), request())
+        memo = app.create_memo(app.MemoDocumentCreate(title="영어 메모"), request())
+        with self.assertRaises(HTTPException):
+            app.assign_memo_category(
+                memo["id"], app.MemoCategoryAssign(category_ids=[category["id"]]), request("other")
+            )
 
 
 if __name__ == "__main__": unittest.main()

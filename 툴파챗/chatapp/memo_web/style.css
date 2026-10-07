@@ -96,6 +96,15 @@ button {
   border-right: 1px solid var(--line);
   background: #ffffff80;
 }
+.category-browser { display: flex; flex-direction: column; align-items: stretch; gap: 8px; margin-bottom: 12px; }
+.category-tabs { display: flex; flex-wrap: wrap; gap: 7px; overflow: visible; padding: 2px 1px 5px; scrollbar-width: none; }
+.category-tabs::-webkit-scrollbar { display: none; }
+.category-tabs button { flex: 0 0 auto; min-height: 38px; padding: 7px 12px; border-radius: 999px; white-space: nowrap; color: var(--muted); }
+.category-tabs button.active { border-color: var(--accent); background: var(--accent); color: #fff; }
+#manage-categories { align-self: flex-start; min-height: 38px; padding: 7px 10px; color: var(--accent); }
+.memo-category-badge { display: inline-flex !important; width: max-content; max-width: 100%; margin: 0 0 6px !important; padding: 3px 7px; border-radius: 999px; background: #eee7ff; color: var(--accent) !important; font-size: 10px !important; font-weight: 800; }
+.memo-category-badges { display:flex !important; flex-wrap:wrap; gap:4px; margin:0 0 3px !important; }
+.memo-category-badges .memo-category-badge { margin:0 !important; }
 .search {
   display: flex;
   align-items: center;
@@ -122,6 +131,10 @@ button {
 .memo-list.list-view {
   grid-template-columns: 1fr;
 }
+.memo-list-item {
+  position: relative;
+  min-width: 0;
+}
 .memo-list button {
   text-align: left;
   padding: 13px;
@@ -129,6 +142,26 @@ button {
   min-width: 0;
   min-height: 88px;
   background: transparent;
+}
+.memo-list .memo-open {
+  padding-right: 58px;
+}
+.memo-list .memo-card-delete {
+  position: absolute;
+  z-index: 2;
+  top: 9px;
+  right: 9px;
+  width: auto;
+  min-width: 42px;
+  min-height: 30px;
+  padding: 5px 8px;
+  border-radius: 10px;
+  border-color: color-mix(in srgb, #d55b70 45%, var(--line));
+  background: color-mix(in srgb, #d55b70 10%, var(--panel));
+  color: #d55b70;
+  font-size: 11px;
+  font-weight: 800;
+  text-align: center;
 }
 .memo-list button.active {
   background: var(--panel);
@@ -386,6 +419,44 @@ button {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.branch-tools { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+.branch-tools button { white-space:nowrap; }
+.memo-card-image,
+.memo-card-drawing {
+  display:block;
+  width:100%;
+  height:auto;
+  max-height:360px;
+  object-fit:contain;
+  border-radius:12px;
+  margin:0 0 10px;
+  background:color-mix(in srgb, var(--panel) 82%, #000);
+}
+.memo-card-drawing { aspect-ratio:3 / 2; }
+.node-card.collapsed .memo-card-image,
+.node-card.collapsed .memo-card-drawing { max-height:92px; }
+.drawing-dialog { width:min(940px, calc(100% - 24px)); }
+.drawing-dialog form { padding:18px; }
+.drawing-help { color:var(--muted); margin:8px 0 12px; }
+.drawing-tools { display:flex; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px; }
+.drawing-tools label { display:flex; align-items:center; gap:7px; }
+#drawing-canvas {
+  display:block;
+  width:100%;
+  aspect-ratio:3 / 2;
+  border:2px solid color-mix(in srgb, var(--accent) 70%, var(--line));
+  border-radius:16px;
+  background:#fff;
+  cursor:crosshair;
+  touch-action:pan-x pan-y;
+}
+@media (max-width: 620px) {
+  .branch-toolbar { align-items:flex-start; }
+  .branch-tools { max-width:230px; gap:6px; }
+  .branch-tools button { padding:9px 10px; }
+  .drawing-dialog form { padding:12px; }
+  .drawing-help { font-size:12px; }
+}
 .node-actions {
   display: flex;
   gap: 5px;
@@ -484,6 +555,8 @@ dialog form {
   gap: 7px;
   font-weight: 800;
 }
+.field-label { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.paste-field { min-height:34px; padding:5px 10px; border-color:var(--accent); color:var(--accent); font-size:12px; }
 .memo-edit-dialog input,
 .memo-edit-dialog textarea {
   width: 100%;
@@ -495,6 +568,28 @@ dialog form {
   color: var(--ink);
   font: inherit;
 }
+.memo-edit-dialog select { display:block; width:100%; margin-top:5px; padding:12px 13px; border:1px solid var(--line); border-radius:12px; background:var(--panel); color:var(--ink); font:inherit; }
+.memo-category-field { min-width:0; margin:0; padding:0; border:0; }
+.memo-category-field legend { margin-bottom:7px; font-weight:800; }
+.memo-category-field legend small { color:var(--muted); font-weight:600; }
+.memo-edit-categories { display:flex; gap:7px; overflow-x:auto; padding:1px 1px 5px; scrollbar-width:none; }
+.memo-edit-categories::-webkit-scrollbar { display:none; }
+.memo-edit-categories > p { margin:5px 0; color:var(--muted); font-size:13px; }
+.memo-category-choice { display:block !important; flex:0 0 auto; cursor:pointer; }
+.memo-category-choice input { position:absolute; opacity:0; pointer-events:none; }
+.memo-category-choice span { display:block; padding:9px 13px; border:1px solid var(--line); border-radius:999px; background:var(--panel); color:var(--muted); white-space:nowrap; }
+.memo-category-choice input:checked + span { border-color:var(--accent); background:var(--accent); color:#fff; }
+.memo-category-choice input:focus-visible + span { outline:3px solid color-mix(in srgb,var(--accent) 30%,transparent); }
+.category-dialog { width:min(92vw,560px); }
+.category-dialog form { display:grid; gap:14px; padding:20px; }
+.category-dialog p { margin:0; color:var(--muted); line-height:1.5; }
+.category-create { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; }
+.category-create input,.category-manager-list input { min-width:0; padding:11px 12px; border:1px solid var(--line); border-radius:11px; background:var(--bg); color:var(--ink); font:inherit; }
+.category-create button { background:var(--accent); color:#fff; }
+.category-manager-list { display:grid; gap:8px; max-height:42vh; overflow:auto; }
+.category-manager-row { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:7px; align-items:center; }
+.category-manager-row button { padding:9px 10px; }
+.category-manager-row .danger { background:transparent; }
 .memo-edit-dialog textarea {
   min-height: min(46vh, 420px);
   line-height: 1.65;
@@ -531,6 +626,23 @@ dialog form {
   z-index: 30;
 }
 @media (max-width: 720px) {
+  #node-dialog {
+    position: fixed;
+    top: max(18px, env(safe-area-inset-top));
+    right: 14px;
+    bottom: auto;
+    left: 14px;
+    width: auto;
+    max-height: min(56dvh, 440px);
+    margin: 0;
+  }
+  #node-dialog form { padding: 14px; }
+  #node-dialog #node-content {
+    min-height: 116px;
+    max-height: 30dvh;
+    font-size: 16px;
+    resize: none;
+  }
   .memo-edit-dialog {
     position: fixed;
     top: var(--memo-editor-top, 0px);
@@ -549,10 +661,10 @@ dialog form {
   }
   .memo-edit-dialog form {
     box-sizing: border-box;
-    grid-template-rows: auto auto auto minmax(210px, 1fr) auto;
+    display: flex;
+    flex-direction: column;
     height: 100%;
     min-height: 0;
-    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
     gap: 9px;
     padding: max(10px, env(safe-area-inset-top)) 12px max(8px, env(safe-area-inset-bottom));
     overflow: hidden;
@@ -563,7 +675,7 @@ dialog form {
   }
   .memo-edit-dialog:focus-within .edit-help { display: none; }
   .memo-edit-dialog:focus-within form {
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    display: flex;
   }
   .memo-edit-save-top {
     display: inline-flex;
@@ -577,8 +689,10 @@ dialog form {
   .memo-edit-dialog label {
     min-width: 0;
   }
-  .memo-edit-dialog label:last-of-type {
-    grid-template-rows: auto minmax(0, 1fr);
+  .memo-edit-dialog .memo-content-field {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
     min-height: 0;
   }
   .memo-edit-dialog input,
@@ -589,29 +703,28 @@ dialog form {
   }
   .memo-edit-dialog input { font-size: 16px; }
   .memo-edit-dialog textarea {
-    height: 100%;
-    min-height: 0;
-    font-size: 13px !important;
-    line-height: 1.42;
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 132px;
+    font-size: 16px !important;
+    line-height: 1.5;
     font-weight: 400;
     resize: none;
     overflow: auto;
+    touch-action: auto;
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
     -webkit-overflow-scrolling: touch;
   }
   .memo-edit-dialog:has(textarea:focus) form {
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    display: flex;
   }
   .memo-edit-dialog:has(textarea:focus) .dialog-head h2 {
     font-size: 18px;
   }
   .memo-edit-dialog .dialog-actions {
-    position: sticky;
-    bottom: 0;
-    display: grid;
-    grid-template-columns: minmax(0, .7fr) minmax(0, 1.3fr);
-    margin-top: 0;
-    padding-top: 2px;
-    background: var(--panel);
+    display: none;
   }
   .memo-edit-dialog .dialog-actions button {
     min-height: 48px;
@@ -648,6 +761,10 @@ dialog form {
     width: 100%;
     min-height: 92px;
     flex: auto;
+  }
+  .memo-list .memo-card-delete {
+    width: auto;
+    min-height: 30px;
   }
   .editor {
     padding: 18px 12px 100px;

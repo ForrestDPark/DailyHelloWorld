@@ -4,6 +4,8 @@ const $ = (s) => document.querySelector(s),
   O = { x: 1200, y: 900 },
   MEMO_LAYOUT_KEY = "memo-list-layout-v1";
 let memos = [],
+  categories = [],
+  activeCategory = localStorage.getItem("memo-active-category-v1") || "all",
   current = null,
   dialogMode = null,
   view = { x: 0, y: 0, scale: 1 },
@@ -13,7 +15,10 @@ let memos = [],
   nodeDrag = null,
   selectedMapNode = null,
   lastNodeTap = { id: null, at: 0 },
-  lastRootTap = 0;
+  lastRootTap = 0,
+  drawingTargetId = null,
+  drawingState = { version: 1, width: 900, height: 600, strokes: [] },
+  activeStroke = null;
 const pointers = new Map(),
   collapsedNodes = new Set();
 async function api(path, options = {}) {
@@ -37,6 +42,40 @@ function esc(v = "") {
         c
       ],
   );
+}
+function mediaMarkup(node) {
+  const image = node.image_data ? `<img class="memo-card-image" data-media-node="${node.id}" alt="이미지 메모">` : "";
+  const drawing = node.drawing_data ? `<canvas class="memo-card-drawing" data-drawing-node="${node.id}" width="900" height="600" aria-label="필기 메모"></canvas>` : "";
+  return image + drawing;
+}
+function drawStrokes(canvas, value, responsive = false) {
+  if (!canvas) return;
+  let data;
+  try { data = typeof value === "string" ? JSON.parse(value) : value; } catch { return; }
+  const context = canvas.getContext("2d"), sourceWidth = data.width || 900, sourceHeight = data.height || 600;
+  if (responsive) {
+    const width = Math.max(280, Math.floor(canvas.getBoundingClientRect().width * devicePixelRatio));
+    canvas.width = width; canvas.height = Math.floor(width * sourceHeight / sourceWidth);
+  }
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.lineCap = "round"; context.lineJoin = "round";
+  const sx = canvas.width / sourceWidth, sy = canvas.height / sourceHeight;
+  for (const stroke of data.strokes || []) {
+    const points = stroke.points || []; if (!points.length) continue;
+    context.beginPath(); context.strokeStyle = stroke.color || "#6f42d9";
+    context.lineWidth = Math.max(1, (stroke.width || 6) * ((sx + sy) / 2));
+    context.moveTo(points[0].x * sx, points[0].y * sy);
+    for (let index = 1; index < points.length; index++) context.lineTo(points[index].x * sx, points[index].y * sy);
+    if (points.length === 1) context.lineTo(points[0].x * sx + 0.01, points[0].y * sy + 0.01);
+    context.stroke();
+  }
+}
+function hydrateCardMedia() {
+  for (const node of current?.nodes || []) {
+    const image = document.querySelector(`[data-media-node="${node.id}"]`);
+    if (image) image.src = node.image_data;
+    drawStrokes(document.querySelector(`[data-drawing-node="${node.id}"]`), node.drawing_data, true);
+  }
 }
 function renderColoredText(element, value = "") {
   element.replaceChildren();
@@ -104,7 +143,8 @@ function memoNodeColor(node, index = 0) {
 }
 function cardWidthStyle(value) {
   const width = Number(value);
-  return Number.isFinite(width) ? `width:${Math.max(220, Math.min(720, width))}px;` : "";
+  const resolved = Number.isFinite(width) && width > 0 ? width : 620;
+  return `width:${Math.max(220, Math.min(720, resolved))}px;`;
 }
 function toast(v) {
   const e = $("#toast");
@@ -115,7 +155,12 @@ function toast(v) {
 async function load(id) {
   selectedMapNode = null;
   $("#node-mobile-actions")?.classList.add("hidden");
-  memos = await api("/api/me/memos");
+  [memos, categories] = await Promise.all([
+    api("/api/me/memos"),
+    api("/api/me/memo-categories"),
+  ]);
+  if (!(["all", "none"].includes(activeCategory)) && !categories.some((item) => String(item.id) === String(activeCategory))) activeCategory = "all";
+  renderCategories();
   renderList();
   const wanted = id || Number(new URLSearchParams(location.search).get("memo"));
   if (wanted) selectMemo(wanted);
@@ -158,20 +203,79 @@ function setMemoLayout(mode) {
 }
 function renderList() {
   const q = $("#search").value.trim().toLowerCase(),
-    list = memos.filter((m) =>
-      `${m.title} ${m.note} ${m.source_content}`.toLowerCase().includes(q),
-    );
+    list = memos.filter((m) => {
+      const categoryIds = memoCategoryIds(m);
+      const categoryMatches = activeCategory === "all"
+        || (activeCategory === "none" ? categoryIds.length === 0 : categoryIds.some((id) => String(id) === String(activeCategory)));
+      return categoryMatches && `${m.title} ${m.note} ${m.source_content}`.toLowerCase().includes(q);
+    });
   $("#memo-list").innerHTML = list.length
     ? list
         .map(
           (m) =>
-            `<button data-id="${m.id}" class="${current?.id === m.id ? "active" : ""}"><strong>${esc((m.title || "제목 없는 메모").split(/\r?\n/, 1)[0])}</strong><span>${esc(memoDate(m.updated_at || m.created_at))}</span></button>`,
+            `<article class="memo-list-item"><button type="button" data-id="${m.id}" class="memo-open ${current?.id === m.id ? "active" : ""}">${memoCategoryIds(m).length ? `<span class="memo-category-badges">${memoCategoryIds(m).map((id) => `<span class="memo-category-badge">${esc(categories.find((item) => item.id === id)?.name || "삭제된 키워드")}</span>`).join("")}</span>` : ""}<strong>${esc((m.title || "제목 없는 메모").split(/\r?\n/, 1)[0])}</strong><span>${esc(memoDate(m.updated_at || m.created_at))}</span></button><button type="button" class="memo-card-delete danger" data-delete-memo="${m.id}" aria-label="${esc((m.title || "제목 없는 메모").split(/\r?\n/, 1)[0])} 삭제">삭제</button></article>`,
         )
         .join("")
-    : "<p>저장된 메모가 없습니다.</p>";
+    : `<p>${activeCategory === "all" ? "저장된 메모가 없습니다." : "이 키워드에 저장된 메모가 없습니다."}</p>`;
   $("#memo-list")
-    .querySelectorAll("button")
+    .querySelectorAll("[data-id]")
     .forEach((b) => (b.onclick = () => openMemoPreview(+b.dataset.id)));
+  $("#memo-list")
+    .querySelectorAll("[data-delete-memo]")
+    .forEach((button) => (button.onclick = async (event) => {
+      event.stopPropagation();
+      await removeMemoDocument(+button.dataset.deleteMemo);
+    }));
+}
+
+async function removeMemoDocument(id) {
+  const memo = memos.find((item) => item.id === id);
+  if (!memo) return;
+  const title = (memo.title || "제목 없는 메모").split(/\r?\n/, 1)[0];
+  if (!confirm(`‘${title}’ 메모와 연결된 모든 가지를 삭제할까요?`)) return;
+  try {
+    await api(`/api/me/memos/${id}`, { method: "DELETE" });
+    if (current?.id === id) {
+      current = null;
+      history.replaceState(null, "", "/memo/");
+      $("#editor").classList.add("hidden");
+      $("#empty").classList.remove("hidden");
+    }
+    if ($("#memo-preview-dialog").open) $("#memo-preview-dialog").close();
+    await load();
+    toast("메모를 삭제했습니다");
+  } catch (error) {
+    alert(error.message);
+  }
+}
+function renderCategories() {
+  const unclassified = memos.filter((memo) => memoCategoryIds(memo).length === 0).length;
+  const tabs = [
+    {id: "all", name: "전체", count: memos.length},
+    {id: "none", name: "미분류", count: unclassified},
+    ...categories.map((item) => ({id: String(item.id), name: item.name, count: Number(item.memo_count || 0)})),
+  ];
+  $("#category-tabs").innerHTML = tabs.map((item) => `<button type="button" data-category="${item.id}" class="${String(activeCategory) === item.id ? "active" : ""}">${esc(item.name)} <small>${item.count}</small></button>`).join("");
+  $("#category-tabs").querySelectorAll("button").forEach((button) => button.onclick = () => {
+    activeCategory = button.dataset.category;
+    localStorage.setItem("memo-active-category-v1", activeCategory);
+    renderCategories(); renderList();
+  });
+}
+function renderCategoryManager() {
+  $("#category-manager-list").innerHTML = categories.length
+    ? categories.map((item) => `<div class="category-manager-row" data-category-row="${item.id}"><input maxlength="40" value="${esc(item.name)}" aria-label="키워드 이름"><button type="button" data-save-category="${item.id}">수정</button><button type="button" class="danger" data-delete-category="${item.id}">삭제</button></div>`).join("")
+    : '<p>아직 만든 키워드가 없습니다.</p>';
+}
+function memoCategoryIds(memo) {
+  if (Array.isArray(memo?.category_ids)) return memo.category_ids.map(Number).filter(Number.isFinite);
+  return memo?.category_id == null ? [] : [Number(memo.category_id)];
+}
+function fillMemoCategorySelect(selected = []) {
+  const selectedIds = new Set((Array.isArray(selected) ? selected : [selected]).map(Number));
+  $("#memo-edit-categories").innerHTML = categories.length
+    ? categories.map((item) => `<label class="memo-category-choice"><input type="checkbox" value="${item.id}" ${selectedIds.has(Number(item.id)) ? "checked" : ""}><span>${esc(item.name)}</span></label>`).join("")
+    : '<p>키워드 관리에서 먼저 키워드를 만들어보세요.</p>';
 }
 function openMemoPreview(id) {
   const memo = memos.find((item) => item.id === id);
@@ -201,14 +305,24 @@ function openRootEditor(id, focusNote = false) {
 function openMemoEditDialog() {
   if (!current) return;
   syncMemoEditorViewport();
-  $("#memo-edit-title").value = current.title || "";
   $("#memo-edit-note").value = current.note || current.source_content || "";
+  fillMemoCategorySelect(memoCategoryIds(current));
   $("#memo-edit-dialog").showModal();
-  // 모바일에서 내용 칸을 먼저 포커스하면 작은 화면 최적화 CSS가 제목 칸을
-  // 밀어내 사용자가 제목을 수정할 수 없었다. 편집 목적에 맞게 제목부터
-  // 보여주고 선택하며, 내용 칸을 눌러도 제목 입력란은 계속 남겨둔다.
-  $("#memo-edit-title").focus({ preventScroll: true });
-  $("#memo-edit-title").select();
+  // 제목을 따로 입력하지 않고 내용부터 바로 편집한다. iOS에서는 dialog가
+  // 열린 다음 프레임에 포커스해야 visualViewport 높이가 안정적으로 반영된다.
+  requestAnimationFrame(() => {
+    syncMemoEditorViewport();
+    $("#memo-edit-note").focus({ preventScroll: true });
+  });
+}
+function memoTitleFromContent(note, fallback = "새 메모") {
+  const firstLine = String(note || "")
+    .replace(/\[\[\/?(?:b|i|u|s)\]\]/gi, "")
+    .replace(/\[\[(?:color|bg):[^\]]+\]\]|\[\[\/(?:color|bg)\]\]/gi, "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean);
+  return (firstLine || fallback || "새 메모").slice(0, 160);
 }
 function syncMemoEditorViewport() {
   const viewport = window.visualViewport;
@@ -221,8 +335,27 @@ function syncMemoEditorViewport() {
     `${Math.round(viewport?.offsetTop || 0)}px`,
   );
 }
+async function pasteIntoMemoField(target) {
+  if (!target) return;
+  try {
+    if (!navigator.clipboard?.readText) throw new Error("이 브라우저에서는 클립보드를 직접 읽을 수 없습니다");
+    const text = await navigator.clipboard.readText();
+    if (!text) return toast("클립보드가 비어 있습니다");
+    const start = Number.isFinite(target.selectionStart) ? target.selectionStart : target.value.length;
+    const end = Number.isFinite(target.selectionEnd) ? target.selectionEnd : start;
+    target.setRangeText(text, start, end, "end");
+    target.dispatchEvent(new Event("input", {bubbles: true}));
+    target.focus({preventScroll: true});
+    toast("클립보드 내용을 붙여넣었습니다");
+  } catch (error) {
+    target.focus({preventScroll: true});
+    alert("붙여넣기 권한을 사용할 수 없습니다. 입력칸을 길게 눌러 ‘붙여넣기’를 선택해 주세요.");
+  }
+}
+document.querySelectorAll("[data-paste-target]").forEach((button) => {
+  button.onclick = () => pasteIntoMemoField(document.getElementById(button.dataset.pasteTarget));
+});
 window.visualViewport?.addEventListener("resize", syncMemoEditorViewport);
-window.visualViewport?.addEventListener("scroll", syncMemoEditorViewport);
 window.addEventListener("orientationchange", syncMemoEditorViewport);
 function selectMemo(id) {
   current = memos.find((m) => m.id === id);
@@ -290,16 +423,16 @@ function layout() {
 }
 function renderMap() {
   const pos = layout(),
-    rootText =
-      current.note || current.source_content || "여기서 생각을 확장해보세요";
+    rootText = current.note || current.source_content || "";
   $("#memo-tree").innerHTML =
-    `<article class="node-card root expanded${selectedMapNode === "root" ? " selected" : ""}" style="--node-accent:#ee9b42;${cardWidthStyle(current.card_width)}left:${O.x}px;top:${O.y}px"><small>ROOT NOTE</small><h3>${esc(current.title)}</h3><p data-rich-root="1">${richMemoHtml(rootText)}</p><div class="node-actions"><button data-toggle-root aria-label="내용 접기">−</button><button data-edit-root>수정</button><button class="node-resize-handle" data-resize-root aria-label="메모 폭 조절" title="좌우로 밀어 폭 조절">↔</button><button class="node-link-handle" data-link-root aria-label="드래그해 새 메모 연결">＋</button></div></article>` +
+    `<article class="node-card root expanded${selectedMapNode === "root" ? " selected" : ""}" style="--node-accent:#ee9b42;${cardWidthStyle(current.card_width)}left:${O.x}px;top:${O.y}px"><small>ROOT NOTE</small><h3>${esc(current.title)}</h3><textarea class="node-inline-editor root-inline-editor" data-inline-root="1" maxlength="12000" placeholder="내용을 입력하세요">${esc(rootText)}</textarea><div class="node-actions"><button data-toggle-root aria-label="내용 접기">−</button><button class="node-inline-save" data-save-root hidden>변경내용 저장</button><button class="node-resize-handle" data-resize-root aria-label="메모 폭 조절" title="좌우로 밀어 폭 조절">↔</button><button class="node-link-handle" data-link-root aria-label="드래그해 새 메모 연결">＋</button></div></article>` +
     current.nodes
       .map((n, index) => {
         const p = pos.get(n.id),
           collapsed = collapsedNodes.has(n.id),
           color = memoNodeColor(n, index);
-        return `<article class="node-card ${collapsed ? "collapsed" : "expanded"}${selectedMapNode === n.id ? " selected" : ""}" data-node-id="${n.id}" style="--node-accent:${color};${cardWidthStyle(n.card_width)}left:${p.x}px;top:${p.y}px"><p data-rich-node="${n.id}">${richMemoHtml(n.content)}</p><div class="node-actions"><button data-toggle="${n.id}" aria-label="${collapsed ? "내용 펼치기" : "내용 접기"}">${collapsed ? "＋" : "−"}</button><button data-edit="${n.id}">수정</button><button data-delete="${n.id}" class="danger">삭제</button><button class="node-resize-handle" data-resize="${n.id}" aria-label="메모 폭 조절" title="좌우로 밀어 폭 조절">↔</button><button class="node-link-handle" data-link="${n.id}" aria-label="드래그해 새 메모 연결">＋</button></div></article>`;
+        const empty = !String(n.content || "").trim();
+        return `<article class="node-card ${collapsed ? "collapsed" : "expanded"}${empty ? " node-empty" : ""}${selectedMapNode === n.id ? " selected" : ""}" data-node-id="${n.id}" style="--node-accent:${color};${cardWidthStyle(n.card_width)}left:${p.x}px;top:${p.y}px">${mediaMarkup(n)}<textarea class="node-inline-editor" data-inline-node="${n.id}" maxlength="6000" placeholder="${n.image_data || n.drawing_data ? "설명을 덧붙이세요" : "내용을 입력하세요"}">${esc(n.content || "")}</textarea><div class="node-actions"><button data-toggle="${n.id}" aria-label="${collapsed ? "내용 펼치기" : "내용 접기"}">${collapsed ? "＋" : "−"}</button><button class="node-inline-save" data-save-node="${n.id}" hidden>변경내용 저장</button>${n.drawing_data ? `<button data-edit-drawing="${n.id}">필기</button>` : ""}<button data-delete="${n.id}" class="danger">삭제</button><button class="node-resize-handle" data-resize="${n.id}" aria-label="메모 폭 조절" title="좌우로 밀어 폭 조절">↔</button><button class="node-link-handle" data-link="${n.id}" aria-label="드래그해 새 메모 연결">＋</button></div></article>`;
       })
       .join("");
   $("#mindmap-lines").innerHTML = current.nodes
@@ -327,44 +460,26 @@ function renderMap() {
         }),
     );
   $("#memo-tree")
-    .querySelectorAll("[data-edit]")
-    .forEach((b) => (b.onclick = () => openNode("edit", +b.dataset.edit)));
-  $("[data-edit-root]").onclick = () => openRootEditor(current.id, true);
-  $("#memo-tree")
     .querySelectorAll("[data-delete]")
     .forEach((b) => (b.onclick = () => removeNode(+b.dataset.delete)));
-  $("#memo-tree")
-    .querySelectorAll("p[data-rich-node]")
-    .forEach((paragraph) => {
-      paragraph.onclick = () => selectMapNode(Number(paragraph.dataset.richNode));
-    });
   const rootCard = $("#memo-tree .node-card.root");
-  rootCard.querySelector("p[data-rich-root]").onclick = () => selectMapNode("root");
-  rootCard.ondblclick = (event) => {
-    if (event.target.closest("button,p[data-rich-root]")) return;
-    openRootEditor(current.id, true);
-  };
   let rootPointerStart = null;
   rootCard.onpointerdown = (event) => {
-    if (event.target.closest("button,p[data-rich-root]")) return;
+    if (event.target.closest("button,textarea,input,select")) return;
     rootPointerStart = { x: event.clientX, y: event.clientY };
   };
   rootCard.onpointerup = (event) => {
-    if (!rootPointerStart || event.target.closest("button")) return;
+    if (!rootPointerStart || event.target.closest("button,textarea,input,select")) return;
     const moved = Math.hypot(
       event.clientX - rootPointerStart.x,
       event.clientY - rootPointerStart.y,
     );
     rootPointerStart = null;
-    if (moved > 10 || event.pointerType === "mouse") return;
-    const now = Date.now();
-    if (now - lastRootTap < 430) {
-      lastRootTap = 0;
-      openRootEditor(current.id, true);
-    } else {
-      lastRootTap = now;
-    }
+    if (moved <= 10) selectMapNode("root");
   };
+  bindInlineEditors();
+  hydrateCardMedia();
+  $("#memo-tree").querySelectorAll("[data-edit-drawing]").forEach((button) => button.onclick = () => openDrawing(Number(button.dataset.editDrawing)));
   $("[data-resize-root]").addEventListener("pointerdown", (event) =>
     startCardResize(event, rootCard, null),
   );
@@ -490,11 +605,71 @@ function redrawMindmapLines() {
     );
   });
 }
+function resizeInlineEditor(editor) {
+  editor.style.height = "auto";
+  editor.style.height = `${Math.max(84, editor.scrollHeight + 2)}px`;
+}
+function bindInlineEditors() {
+  const rootEditor = document.querySelector("[data-inline-root]"),
+    rootSave = document.querySelector("[data-save-root]"),
+    rootInitial = current.note || current.source_content || "";
+  if (rootEditor && rootSave) {
+    rootEditor.value = rootInitial;
+    resizeInlineEditor(rootEditor);
+    rootEditor.addEventListener("input", () => {
+      resizeInlineEditor(rootEditor);
+      rootSave.hidden = rootEditor.value === rootInitial;
+    });
+    rootEditor.addEventListener("focus", () => selectMapNode("root"));
+    rootSave.onclick = async () => {
+      const note = rootEditor.value.trim(),
+        title = memoTitleFromContent(note, current.title);
+      await api(`/api/me/memos/${current.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ title, note }),
+      });
+      current.note = note;
+      current.title = title;
+      const listed = memos.find((memo) => memo.id === current.id);
+      if (listed) Object.assign(listed, { note, title });
+      renderList();
+      renderMap();
+      selectMapNode("root");
+      toast("변경내용을 저장했습니다");
+    };
+  }
+  document.querySelectorAll("[data-inline-node]").forEach((editor) => {
+    const id = Number(editor.dataset.inlineNode),
+      node = current.nodes.find((item) => item.id === id),
+      save = document.querySelector(`[data-save-node="${id}"]`),
+      initial = node?.content || "";
+    if (!node || !save) return;
+    editor.value = initial;
+    resizeInlineEditor(editor);
+    editor.addEventListener("input", () => {
+      resizeInlineEditor(editor);
+      save.hidden = editor.value === initial;
+    });
+    editor.addEventListener("focus", () => selectMapNode(id));
+    save.onclick = async () => {
+      const content = editor.value.trim();
+      await api(`/api/me/memo-nodes/${id}`, {
+        method: "PUT",
+        body: JSON.stringify({ content }),
+      });
+      node.content = content;
+      renderMap();
+      selectMapNode(id);
+      toast("변경내용을 저장했습니다");
+    };
+  });
+}
 function prepareNodeDrag(event, card) {
-  if (event.target.closest("p[data-rich-node], .memo-comment")) return;
+  if (event.target.closest(".memo-comment,textarea,input,select,[contenteditable='true']")) return;
   const id = Number(card.dataset.nodeId),
     node = current.nodes.find((item) => item.id === id);
   if (!node) return;
+  clearRichSelectionUI();
   event.preventDefault();
   event.stopPropagation();
   card.setPointerCapture?.(event.pointerId);
@@ -553,7 +728,7 @@ function prepareNodeDrag(event, card) {
         const now = Date.now();
         if (lastNodeTap.id === id && now - lastNodeTap.at < 430) {
           lastNodeTap = { id: null, at: 0 };
-          openNode("edit", id);
+          card.querySelector("[data-inline-node]")?.focus();
         } else {
           lastNodeTap = { id, at: now };
         }
@@ -592,9 +767,18 @@ function textOffsetWithin(container, node, offset) {
 function hideSelectionToolbar() {
   $("#selection-toolbar").classList.add("hidden");
 }
+function clearRichSelectionUI() {
+  richSelection = null;
+  hideSelectionToolbar();
+  getSelection()?.removeAllRanges();
+}
 function captureRichSelection() {
   const selection = getSelection();
-  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) {
+    richSelection = null;
+    hideSelectionToolbar();
+    return;
+  }
   const range = selection.getRangeAt(0),
     content = (range.commonAncestorContainer.nodeType === Node.TEXT_NODE
       ? range.commonAncestorContainer.parentElement
@@ -644,6 +828,13 @@ document.addEventListener("selectionchange", () => {
   captureRichSelection.timer = setTimeout(() => {
     if (!$("#selection-toolbar").matches(":hover")) captureRichSelection();
   }, 90);
+});
+document.addEventListener("pointerdown", (event) => {
+  if (event.target.closest("#selection-toolbar,.format-color-dialog,.memo-comment")) return;
+  // iOS의 textarea 선택 손잡이도 pointerdown을 발생시킨다. 입력 요소에서
+  // 전역 Selection을 지우면 기본 오려두기·복사 범위 확장이 중단된다.
+  if (event.target.closest("input,textarea,select,[contenteditable='true']")) return;
+  if (!event.target.closest("p[data-rich-root],p[data-rich-node]")) clearRichSelectionUI();
 });
 $("#selection-toolbar").querySelectorAll("[data-format]").forEach((button) => {
   button.onclick = () => applyRichFormat(`[[${button.dataset.format}]]`, `[[/${button.dataset.format}]]`);
@@ -786,7 +977,7 @@ function startLinkDrag(event, parentId, start) {
     linkDrag = null;
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", end);
-    openNode("add", parentId, distance < 70 ? null : point);
+    createNodeImmediately(parentId, distance < 70 ? null : point);
   };
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", end, { once: true });
@@ -846,6 +1037,7 @@ function gestures() {
   v.addEventListener("pointercancel", end);
 }
 function openNode(mode, id = null, position = null) {
+  clearRichSelectionUI();
   dialogMode = { mode, id, position };
   $("#node-dialog-title").textContent =
     mode === "edit" ? "파생 메모 수정" : "새 파생 메모";
@@ -855,6 +1047,93 @@ function openNode(mode, id = null, position = null) {
       : "";
   $("#node-dialog").showModal();
   setTimeout(() => $("#node-content").focus(), 50);
+}
+async function createNodeImmediately(parentId = null, position = null) {
+  if (!current) return;
+  try {
+    const created = await api(`/api/me/memos/${current.id}/nodes`, {
+      method: "POST",
+      body: JSON.stringify({
+        parent_id: parentId,
+        content: "",
+        position_x: position?.x ?? null,
+        position_y: position?.y ?? null,
+        card_width: 620,
+      }),
+    });
+    const memoId = current.id;
+    await load(memoId);
+    selectMapNode(created.id);
+    const editor = document.querySelector(`[data-inline-node="${created.id}"]`);
+    editor?.focus({ preventScroll: true });
+    editor?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    toast("빈 메모를 생각 지도에 만들었습니다");
+  } catch (error) {
+    alert(error.message);
+  }
+}
+function selectedParentId() {
+  return Number.isFinite(Number(selectedMapNode)) ? Number(selectedMapNode) : null;
+}
+function mapCenterPosition() {
+  const rect = $("#mindmap-viewport").getBoundingClientRect();
+  return pointerWorld({ clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2 });
+}
+async function createMediaNode(payload) {
+  const center = mapCenterPosition();
+  const created = await api(`/api/me/memos/${current.id}/nodes`, {
+    method: "POST",
+    body: JSON.stringify({ parent_id: selectedParentId(), content: "", position_x: center.x, position_y: center.y, card_width: 620, ...payload }),
+  });
+  await load(current.id); selectMapNode(created.id); return created;
+}
+function resizeImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      const image = new Image();
+      image.onerror = reject;
+      image.onload = () => {
+        const scale = Math.min(1, 1600 / Math.max(image.naturalWidth, image.naturalHeight));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        canvas.getContext("2d").drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/jpeg", 0.84));
+      };
+      image.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function openDrawing(nodeId = null) {
+  drawingTargetId = nodeId;
+  const node = nodeId ? current.nodes.find((item) => item.id === nodeId) : null;
+  try { drawingState = node?.drawing_data ? JSON.parse(node.drawing_data) : { version: 1, width: 900, height: 600, strokes: [] }; }
+  catch { drawingState = { version: 1, width: 900, height: 600, strokes: [] }; }
+  $("#drawing-dialog h2").textContent = node ? "필기 이어 쓰기" : "생각 지도에 필기";
+  $("#drawing-dialog").showModal();
+  requestAnimationFrame(() => drawStrokes($("#drawing-canvas"), drawingState));
+}
+function drawingPoint(event) {
+  const canvas = $("#drawing-canvas"), rect = canvas.getBoundingClientRect();
+  return { x: (event.clientX - rect.left) * canvas.width / rect.width, y: (event.clientY - rect.top) * canvas.height / rect.height, p: event.pressure || 0.5 };
+}
+function bindDrawingCanvas() {
+  const canvas = $("#drawing-canvas");
+  canvas.addEventListener("pointerdown", (event) => {
+    if (event.pointerType === "touch") return;
+    event.preventDefault(); canvas.setPointerCapture(event.pointerId);
+    activeStroke = { color: $("#drawing-color").value, width: Number($("#drawing-width").value), points: [drawingPoint(event)] };
+    drawingState.strokes.push(activeStroke); drawStrokes(canvas, drawingState);
+  });
+  canvas.addEventListener("pointermove", (event) => {
+    if (!activeStroke || !canvas.hasPointerCapture(event.pointerId)) return;
+    event.preventDefault(); activeStroke.points.push(drawingPoint(event)); drawStrokes(canvas, drawingState);
+  });
+  const finish = () => { activeStroke = null; };
+  canvas.addEventListener("pointerup", finish); canvas.addEventListener("pointercancel", finish);
 }
 const activeVoiceInputs = new WeakMap();
 function resetVoiceButton(button) {
@@ -954,6 +1233,7 @@ $("#node-dialog").addEventListener("close", async () => {
           content,
           position_x: dialogMode.position?.x ?? null,
           position_y: dialogMode.position?.y ?? null,
+          card_width: 620,
         }),
       });
     await load(current.id);
@@ -963,8 +1243,73 @@ $("#node-dialog").addEventListener("close", async () => {
   }
 });
 $("#node-save").onclick = () => $("#node-dialog").close("default");
-$("#add-root-node").onclick = () => openNode("add", null);
+$("#add-root-node").onclick = () => createNodeImmediately(null);
+$("#add-image-node").onclick = () => $("#memo-image-input").click();
+$("#memo-image-input").onchange = async (event) => {
+  const file = event.target.files?.[0]; if (!file) return;
+  try {
+    toast("사진을 생각 지도에 맞게 줄이고 있습니다");
+    await createMediaNode({ image_data: await resizeImage(file) });
+    toast("이미지 메모를 만들었습니다");
+  } catch (error) { alert(error.message || "이미지를 처리하지 못했습니다"); }
+  event.target.value = "";
+};
+$("#add-drawing-node").onclick = () => openDrawing();
+$("#drawing-undo").onclick = () => { drawingState.strokes.pop(); drawStrokes($("#drawing-canvas"), drawingState); };
+$("#drawing-clear").onclick = () => { if (confirm("필기를 모두 지울까요?")) { drawingState.strokes = []; drawStrokes($("#drawing-canvas"), drawingState); } };
+$("#drawing-save").onclick = async () => {
+  if (!drawingState.strokes.length) return toast("먼저 필기해주세요");
+  try {
+    const drawing_data = JSON.stringify(drawingState);
+    if (drawingTargetId) {
+      const node = current.nodes.find((item) => item.id === drawingTargetId);
+      await api(`/api/me/memo-nodes/${drawingTargetId}`, { method: "PUT", body: JSON.stringify({ content: node?.content || "", drawing_data }) });
+      await load(current.id); selectMapNode(drawingTargetId);
+    } else await createMediaNode({ drawing_data });
+    $("#drawing-dialog").close(); toast("필기를 생각 지도에 저장했습니다");
+  } catch (error) { alert(error.message); }
+};
+bindDrawingCanvas();
 $("#search").oninput = renderList;
+$("#manage-categories").onclick = () => {
+  renderCategoryManager();
+  $("#category-dialog").showModal();
+  setTimeout(() => $("#new-category-name").focus(), 50);
+};
+$("#create-category").onclick = async () => {
+  const name = $("#new-category-name").value.trim();
+  if (!name) return toast("키워드 이름을 입력하세요");
+  try {
+    const created = await api("/api/me/memo-categories", {method: "POST", body: JSON.stringify({name})});
+    $("#new-category-name").value = "";
+    activeCategory = String(created.id);
+    localStorage.setItem("memo-active-category-v1", activeCategory);
+    await load(current?.id);
+    renderCategoryManager();
+    toast("키워드를 만들었습니다");
+  } catch (error) { alert(error.message); }
+};
+$("#category-manager-list").onclick = async (event) => {
+  const save = event.target.closest("[data-save-category]"), remove = event.target.closest("[data-delete-category]");
+  if (!save && !remove) return;
+  const id = Number((save || remove).dataset.saveCategory || (save || remove).dataset.deleteCategory);
+  try {
+    if (save) {
+      const name = event.target.closest(".category-manager-row").querySelector("input").value.trim();
+      await api(`/api/me/memo-categories/${id}`, {method: "PUT", body: JSON.stringify({name})});
+      toast("키워드 이름을 수정했습니다");
+    } else {
+      const category = categories.find((item) => item.id === id);
+      if (!confirm(`‘${category?.name || "이 키워드"}’를 삭제할까요?\n메모는 삭제되지 않고 미분류로 이동합니다.`)) return;
+      await api(`/api/me/memo-categories/${id}`, {method: "DELETE"});
+      if (String(activeCategory) === String(id)) activeCategory = "none";
+      localStorage.setItem("memo-active-category-v1", activeCategory);
+      toast("키워드를 삭제하고 메모는 미분류로 옮겼습니다");
+    }
+    await load(current?.id);
+    renderCategoryManager();
+  } catch (error) { alert(error.message); }
+};
 $("#memo-layout").onclick = (event) =>
   setMemoLayout(
     event.currentTarget.dataset.layout === "grid" ? "list" : "grid",
@@ -977,8 +1322,9 @@ $("#mindmap-fullscreen").onclick = () =>
     !$("#mindmap-viewport").classList.contains("fullscreen-mode"),
   );
 $("#node-mobile-edit").onclick = () => {
-  if (selectedMapNode === "root") openRootEditor(current.id, true);
-  else if (Number.isFinite(Number(selectedMapNode))) openNode("edit", Number(selectedMapNode));
+  if (selectedMapNode === "root") document.querySelector("[data-inline-root]")?.focus();
+  else if (Number.isFinite(Number(selectedMapNode)))
+    document.querySelector(`[data-inline-node="${Number(selectedMapNode)}"]`)?.focus();
 };
 $("#node-mobile-collapse").onclick = () => {
   if (selectedMapNode === "root") {
@@ -1036,7 +1382,7 @@ $("#new-memo").onclick = async () => {
   try {
     const r = await api("/api/me/memos", {
       method: "POST",
-      body: JSON.stringify({ title: "새 메모", note: "" }),
+      body: JSON.stringify({ title: "새 메모", note: "", category_ids: /^\d+$/.test(String(activeCategory)) ? [Number(activeCategory)] : [] }),
     });
     await load(r.id);
     openMemoEditDialog();
@@ -1044,18 +1390,25 @@ $("#new-memo").onclick = async () => {
     alert(e.message);
   }
 };
+if (new URLSearchParams(location.search).get("new") === "1") {
+  history.replaceState(null, "", location.pathname);
+  queueMicrotask(() => $("#new-memo").click());
+}
 $("#memo-edit-save").onclick = async () => {
   try {
-    const title = $("#memo-edit-title").value.trim();
-    if (!title) {
-      $("#memo-edit-title").focus();
-      throw new Error("메모 제목을 입력해 주세요");
-    }
+    const note = $("#memo-edit-note").value;
+    const title = memoTitleFromContent(note, current.title);
     await api(`/api/me/memos/${current.id}`, {
       method: "PUT",
       body: JSON.stringify({
         title,
-        note: $("#memo-edit-note").value,
+        note,
+      }),
+    });
+    await api(`/api/me/memos/${current.id}/category`, {
+      method: "PUT",
+      body: JSON.stringify({
+        category_ids: [...document.querySelectorAll("#memo-edit-categories input:checked")].map((input) => Number(input.value)),
       }),
     });
     $("#memo-edit-dialog").close();
@@ -1067,13 +1420,7 @@ $("#memo-edit-save").onclick = async () => {
 };
 $("#memo-edit-save-top").onclick = () => $("#memo-edit-save").click();
 $("#delete-root").onclick = async () => {
-  if (!confirm("이 메모와 모든 가지를 삭제할까요?")) return;
-  await api(`/api/me/memos/${current.id}`, { method: "DELETE" });
-  current = null;
-  history.replaceState(null, "", "/memo/");
-  $("#editor").classList.add("hidden");
-  $("#empty").classList.remove("hidden");
-  await load();
+  if (current) await removeMemoDocument(current.id);
 };
 let initialMemoLayout = "grid";
 try {

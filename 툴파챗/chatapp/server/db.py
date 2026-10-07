@@ -170,6 +170,24 @@ def init_db():
             PRIMARY KEY (username, character),
             FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS mp3_track_favorites (
+            username TEXT NOT NULL,
+            track_key TEXT NOT NULL,
+            title TEXT NOT NULL DEFAULT '',
+            playlist TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (username, track_key),
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS mp3_track_lrc (
+            username TEXT NOT NULL,
+            track_key TEXT NOT NULL,
+            filename TEXT NOT NULL,
+            content TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (username, track_key),
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        );
         CREATE TABLE IF NOT EXISTS vocabulary_entries (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL,
@@ -183,6 +201,21 @@ def init_db():
             UNIQUE(username, language, term),
             FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS vocabulary_practice_attempts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            language TEXT NOT NULL,
+            term TEXT NOT NULL,
+            practice_type TEXT NOT NULL DEFAULT 'writing',
+            score INTEGER NOT NULL CHECK(score BETWEEN 0 AND 100),
+            xp INTEGER NOT NULL DEFAULT 0,
+            graded_count INTEGER NOT NULL DEFAULT 1,
+            image_data TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_vocabulary_practice_user_created
+            ON vocabulary_practice_attempts(username, created_at DESC, id DESC);
         CREATE TABLE IF NOT EXISTS memo_documents (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT NOT NULL,
@@ -285,6 +318,18 @@ def init_db():
             seen_at TEXT NOT NULL,
             PRIMARY KEY (username, character_id, material_type, material_key)
         );
+        CREATE TABLE IF NOT EXISTS dating_sim_writing_completions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            completed_date TEXT NOT NULL,
+            story_id TEXT NOT NULL,
+            day INTEGER NOT NULL,
+            scene_key TEXT NOT NULL,
+            line_count INTEGER NOT NULL,
+            average_score INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            UNIQUE (username, completed_date, story_id, day, scene_key)
+        );
         CREATE TABLE IF NOT EXISTS dating_sim_characters (
             character_id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
@@ -338,9 +383,90 @@ def init_db():
             updated_at TEXT NOT NULL,
             PRIMARY KEY (username, battle_id)
         );
+        CREATE TABLE IF NOT EXISTS battle_sim_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            battle_id TEXT NOT NULL,
+            score INTEGER NOT NULL DEFAULT 0,
+            rank TEXT NOT NULL,
+            turns INTEGER NOT NULL DEFAULT 0,
+            state_json TEXT NOT NULL DEFAULT '{}',
+            history_json TEXT NOT NULL DEFAULT '[]',
+            completed_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_battle_sim_runs_user
+            ON battle_sim_runs(username, battle_id, completed_at DESC);
+        CREATE TABLE IF NOT EXISTS health_sync_tokens (
+            username TEXT PRIMARY KEY,
+            token_hash TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            last_used_at TEXT,
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS fitness_daily (
+            username TEXT NOT NULL,
+            day TEXT NOT NULL,
+            steps INTEGER NOT NULL DEFAULT 0,
+            distance_m REAL NOT NULL DEFAULT 0,
+            active_energy_kcal REAL NOT NULL DEFAULT 0,
+            source TEXT NOT NULL DEFAULT 'healthkit',
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY (username, day),
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_fitness_daily_user_day
+            ON fitness_daily(username, day DESC);
+        CREATE TABLE IF NOT EXISTS fitness_settings (
+            username TEXT PRIMARY KEY,
+            daily_step_goal INTEGER NOT NULL DEFAULT 10000,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS terrain_surveys (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            title TEXT NOT NULL,
+            location_name TEXT NOT NULL DEFAULT '',
+            status TEXT NOT NULL DEFAULT 'planned',
+            hypotheses_json TEXT NOT NULL DEFAULT '[]',
+            conditions_json TEXT NOT NULL DEFAULT '{}',
+            summary_json TEXT NOT NULL DEFAULT '{}',
+            started_at TEXT,
+            completed_at TEXT,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_terrain_surveys_user_updated
+            ON terrain_surveys(username, updated_at DESC);
+        CREATE TABLE IF NOT EXISTS terrain_points (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            survey_id INTEGER NOT NULL,
+            username TEXT NOT NULL,
+            point_type TEXT NOT NULL DEFAULT 'track',
+            latitude REAL NOT NULL,
+            longitude REAL NOT NULL,
+            altitude REAL,
+            accuracy REAL,
+            recorded_at TEXT NOT NULL,
+            category TEXT NOT NULL DEFAULT '',
+            note TEXT NOT NULL DEFAULT '',
+            metadata_json TEXT NOT NULL DEFAULT '{}',
+            FOREIGN KEY (survey_id) REFERENCES terrain_surveys(id) ON DELETE CASCADE,
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_terrain_points_survey_time
+            ON terrain_points(survey_id, recorded_at, id);
         """
     )
     _ensure_column(conn, "messages", "room_id", "TEXT NOT NULL DEFAULT 'group'")
+    # 한 번의 단어 쓰기 완료 안에서 몇 글자를 실제로 채점했는지 별도로
+    # 보존한다. 기존 기록은 전체 완료 1회/채점 1회로 안전하게 간주한다.
+    _ensure_column(conn, "vocabulary_practice_attempts", "graded_count", "INTEGER NOT NULL DEFAULT 1")
+    _ensure_column(conn, "battle_sim_progress", "state_json", "TEXT NOT NULL DEFAULT '{}'")
+    _ensure_column(conn, "battle_sim_progress", "history_json", "TEXT NOT NULL DEFAULT '[]'")
+    _ensure_column(conn, "battle_sim_progress", "best_score", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(conn, "battle_sim_progress", "attempts", "INTEGER NOT NULL DEFAULT 0")
     # 방별 최신 조회와 id 커서 기반 과거 페이지 조회가 전체 메시지 테이블을
     # 훑지 않도록 한다. created_at 인덱스는 병법방의 최근 7일 첫 화면에 사용한다.
     conn.execute("CREATE INDEX IF NOT EXISTS idx_messages_room_id_id ON messages(room_id, id)")
@@ -353,6 +479,8 @@ def init_db():
     # 새 이야기 첫 장면이 100점으로 시작하는 일을 막는다. 실제 대사·선택지의
     # 서명을 진행 행에 함께 저장하고, 내용이 바뀌면 새 회차로 초기화한다.
     _ensure_column(conn, "dating_sim_progress", "story_signature", "TEXT")
+    _ensure_column(conn, "dating_sim_progress", "difficulty", "TEXT NOT NULL DEFAULT 'normal'")
+    _ensure_column(conn, "dating_sim_progress", "route_state", "TEXT NOT NULL DEFAULT '{}'")
     _ensure_column(conn, "dating_sim_characters", "content_version", "INTEGER NOT NULL DEFAULT 1")
     _ensure_column(conn, "messages", "reply_message_id", "INTEGER")
     _ensure_column(conn, "pending_turns", "room_id", "TEXT NOT NULL DEFAULT 'group'")
@@ -519,6 +647,38 @@ def init_db():
     # 생각 지도 카드 폭은 사용자 조절값을 계정 데이터와 함께 동기화한다.
     _ensure_column(conn, "memo_documents", "card_width", "REAL")
     _ensure_column(conn, "memo_nodes", "card_width", "REAL")
+    # 사진 메모와 Apple Pencil 필기는 계정 DB에 저장해 기기 사이에서 동기화한다.
+    # 이미지는 클라이언트에서 축소한 data URL, 필기는 다시 편집 가능한 획 JSON이다.
+    _ensure_column(conn, "memo_nodes", "image_data", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "memo_nodes", "drawing_data", "TEXT NOT NULL DEFAULT ''")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS memo_categories (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT NOT NULL,
+            name TEXT NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            UNIQUE (username, name)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_memo_categories_user ON memo_categories (username, sort_order, id)")
+    _ensure_column(conn, "memo_documents", "category_id", "INTEGER")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS memo_document_categories (
+            memo_id INTEGER NOT NULL,
+            category_id INTEGER NOT NULL,
+            created_at TEXT NOT NULL,
+            PRIMARY KEY (memo_id, category_id)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_memo_document_categories_category ON memo_document_categories (category_id, memo_id)")
+    # 기존 단일 키워드는 최초 실행 때 다중 키워드 연결표로 그대로 옮긴다.
+    conn.execute("""
+        INSERT OR IGNORE INTO memo_document_categories(memo_id,category_id,created_at)
+        SELECT id,category_id,COALESCE(updated_at,created_at)
+          FROM memo_documents WHERE category_id IS NOT NULL
+    """)
     conn.commit()
     conn.close()
 
