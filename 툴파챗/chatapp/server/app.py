@@ -38,6 +38,7 @@ import os
 import random
 import re
 import secrets
+import signal
 import shutil
 import socket
 import ssl
@@ -575,49 +576,63 @@ def _current_webapp_update_history():
     return result
 
 
-def _dating_sim_update_history():
-    """미연시 코드 변경과 작품별 실제 제작 완료 시각을 한 타임라인으로 합친다."""
-    items = [item for item in _current_webapp_update_history() if item.get("system") == "미연시"]
+def _dating_sim_update_history(include_admin=False):
+    """최근에 실제로 생성·교체된 미연시 이미지만 반환한다.
+
+    Git 변경 요약은 시스템 히스토리의 책임이다. 이 창에서 같은
+    '제작·플레이 개선' 카드를 반복하면 사용자가 어느 작품의 어느
+    이미지가 바뀌었는지 확인할 수 없으므로 이미지 파일 수정 시각을 원본으로
+    삼는다. 관리자 프롬프트 결과는 소유자에게만 노출한다.
+    """
+    items = []
     library = REPO_ROOT / "일본어자막추출" / "library"
     try:
         work_dirs = [path for path in library.iterdir() if path.is_dir()]
     except OSError:
         work_dirs = []
+    work_to_book = {}
+    for book_id in dating_sim_story.all_book_ids():
+        _, resolved = dating_sim_story.resolve_book_work_dir(f"book:{book_id}")
+        if resolved:
+            work_to_book[str(resolved.resolve())] = book_id
     for work_dir in work_dirs:
-        scenario = work_dir / "dating_sim_scenario.json"
-        if scenario.is_file():
-            created_at = datetime.datetime.fromtimestamp(
-                scenario.stat().st_mtime, datetime.timezone.utc
-            ).astimezone().isoformat()
-            items.append({
-                "id": f"dating-scenario:{work_dir.name}:{scenario.stat().st_mtime_ns}",
-                "created_at": created_at, "system": "시나리오", "kind": "scenario",
-                "title": f"{work_dir.name} 시나리오 작업 완료",
-                "body": "14일 분기 시나리오와 학습 표현 데이터가 준비됐습니다.",
-                "url": "/dating-sim/",
-            })
         manifest_path = work_dir / "dating_sim_images" / "manifest.json"
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
-        if manifest.get("status") != "complete":
+        book_id = work_to_book.get(str(work_dir.resolve()))
+        if not book_id:
             continue
-        image_count = len({
-            record.get("file") for record in (manifest.get("scenes") or {}).values()
-            if isinstance(record, dict) and record.get("file")
-        })
-        created_at = datetime.datetime.fromtimestamp(
-            manifest_path.stat().st_mtime, datetime.timezone.utc
-        ).astimezone().isoformat()
-        items.append({
-            "id": f"dating-images:{work_dir.name}:{manifest_path.stat().st_mtime_ns}",
-            "created_at": created_at, "system": "이미지", "kind": "images",
-            "title": f"{work_dir.name} 이미지 작업 완료",
-            "body": f"대표 이미지와 장면 이미지 {image_count}장이 미연시에 연결됐습니다.",
-            "url": "/dating-sim/",
-        })
-    return sorted(items, key=lambda item: item["created_at"], reverse=True)
+        labels = {str(manifest.get("portrait") or "portrait.png"): "대표 초상화"}
+        for scene_key, record in (manifest.get("scenes") or {}).items():
+            if isinstance(record, dict) and record.get("file"):
+                labels[str(record["file"])] = f"장면 {scene_key}"
+        if include_admin:
+            for record in (manifest.get("admin_prompt_images") or {}).values():
+                if isinstance(record, dict) and record.get("file"):
+                    labels[str(record["file"])] = f"관리자 프롬프트 · {record.get('name') or '이미지'}"
+        for filename, label in labels.items():
+            if filename.startswith("admin-") and not include_admin:
+                continue
+            target = manifest_path.parent / filename
+            if not target.is_file() or target.suffix.lower() != ".png":
+                continue
+            stat = target.stat()
+            created_at = datetime.datetime.fromtimestamp(
+                stat.st_mtime, datetime.timezone.utc
+            ).astimezone().isoformat()
+            route = "admin-images" if filename.startswith("admin-") else "images"
+            items.append({
+                "id": f"dating-image:{work_dir.name}:{filename}:{stat.st_mtime_ns}",
+                "created_at": created_at, "system": "최근 이미지", "kind": "image",
+                "title": f"{work_dir.name} · {label}",
+                "body": "이미지를 누르면 해당 작품의 시나리오 트리로 이동합니다.",
+                "url": "/dating-sim/", "story_id": f"book:{book_id}",
+                "work": work_dir.name, "image_file": filename, "image_label": label,
+                "image_url": f"/api/dating-sim/books/{book_id}/{route}/{filename}?t={int(stat.st_mtime)}",
+            })
+    return sorted(items, key=lambda item: item["created_at"], reverse=True)[:60]
 
 SESSION_COOKIE_NAME = "tulpa_session"
 SESSION_COOKIE_MAX_AGE = auth.SESSION_MAX_AGE_SECONDS  # 180일
@@ -1456,12 +1471,27 @@ def _open_lrc_progress_terminal(job_dir: Path, filename: str) -> None:
         # 서버가 재시작해 같은 영구 작업을 복구해도 로그 창은 한 번만 연다.
         return
     safe_title = Path(filename).name.replace("\n", " ")
+    status_path = job_dir / "status.json"
     monitor.write_text(
         "#!/bin/zsh\n"
         "clear\n"
         f"echo '🎵 LRC 생성: {safe_title.replace(chr(39), chr(39) + chr(92) + chr(39) + chr(39))}'\n"
-        "echo '이 창은 진행 로그입니다. 작업 완료 후 닫아도 됩니다.'\n"
-        f"tail -n 30 -f '{str(log_path).replace(chr(39), chr(39) + chr(92) + chr(39) + chr(39))}'\n",
+        "echo '완료 또는 실패 상태를 확인하면 이 창은 자동으로 종료됩니다.'\n"
+        f"tail -n 30 -f '{str(log_path).replace(chr(39), chr(39) + chr(92) + chr(39) + chr(39))}' &\n"
+        "TAIL_PID=$!\n"
+        "finish_monitor() { kill $TAIL_PID 2>/dev/null; wait $TAIL_PID 2>/dev/null; }\n"
+        "trap finish_monitor EXIT INT TERM\n"
+        "while true; do\n"
+        f"  STATUS=$(/usr/bin/sed -n 's/.*\"status\": \"\\([^\"]*\\)\".*/\\1/p' '{str(status_path).replace(chr(39), chr(39) + chr(92) + chr(39) + chr(39))}' | /usr/bin/head -n 1)\n"
+        "  if [[ \"$STATUS\" == complete || \"$STATUS\" == failed ]]; then break; fi\n"
+        "  sleep 2\n"
+        "done\n"
+        "finish_monitor\n"
+        "trap - EXIT INT TERM\n"
+        "echo\n"
+        "if [[ \"$STATUS\" == complete ]]; then echo '✅ LRC 생성과 적용이 완료됐습니다.'; else echo '❌ LRC 생성이 실패했습니다. 앱에서 오류 내용을 확인하세요.'; fi\n"
+        "echo '5초 후 이 진행창을 닫습니다.'\n"
+        "sleep 5\n",
         encoding="utf-8",
     )
     monitor.chmod(0o700)
@@ -1677,6 +1707,7 @@ def _run_persistent_lrc_job(job_id: str) -> None:
             response = asyncio.run(_generate_lrc_from_mp3_source(source, directory, job_id))
             body = bytes(response.body).decode("utf-8")
             result.write_text(body, encoding="utf-8")
+            _write_lrc_job(job_id, status="running", stage="3/3 · 저장 및 동기화", percent=98, message="완성된 LRC를 곡과 재생 목록에 적용하고 있습니다")
             store_synced_lrc(job.get("owner") or "", job.get("filename") or "", body)
             library_lrc = _persist_lrc_to_mp3_library(job.get("filename") or "", result)
             now = datetime.datetime.now().astimezone().isoformat()
@@ -1686,10 +1717,16 @@ def _run_persistent_lrc_job(job_id: str) -> None:
                 library_lrc=str(library_lrc) if library_lrc else None,
                 completed_at=now,
             )
+            with (directory / "progress.log").open("a", encoding="utf-8") as log:
+                log.write("[3/3] LRC 병합·저장·재생 목록 적용 완료\n")
         except HTTPException as exc:
             _write_lrc_job(job_id, status="failed", stage="생성 실패", percent=0, message=str(exc.detail))
-        except Exception:
+            with (directory / "progress.log").open("a", encoding="utf-8") as log:
+                log.write(f"[실패] {exc.detail}\n")
+        except Exception as exc:
             _write_lrc_job(job_id, status="failed", stage="생성 실패", percent=0, message="LRC 백그라운드 생성 중 오류가 발생했습니다")
+            with (directory / "progress.log").open("a", encoding="utf-8") as log:
+                log.write(f"[실패] {type(exc).__name__}: {exc}\n")
         finally:
             for disposable in (directory / "source.wav", directory / "lyrics.srt"):
                 disposable.unlink(missing_ok=True)
@@ -2261,16 +2298,19 @@ def dating_sim_generated_image_reference(book_id: str, filename: str, request: R
 class DatingSimLocationRequest(BaseModel):
     location: str
     story_id: str | None = None
+    adult_mode: bool = False
 
 
 class DatingSimChoiceRequest(BaseModel):
     choice_index: int
     story_id: str | None = None
+    adult_mode: bool = False
 
 
 class DatingSimRestartRequest(BaseModel):
     story_id: str | None = None
     difficulty: str | None = None
+    adult_mode: bool = False
 
 
 class DatingSimNewRequest(BaseModel):
@@ -2593,7 +2633,7 @@ def _dating_admin_scene_image(story, day, location):
     return images[index]["image_url"]
 
 
-def _dating_sim_state_payload(row, story, username=None, is_admin=False):
+def _dating_sim_state_payload(row, story, username=None, is_admin=False, adult_mode=False):
     completed = bool(row["completed"])
     current_day = min(row["day"], story["total_days"])
     try:
@@ -2672,7 +2712,7 @@ def _dating_sim_state_payload(row, story, username=None, is_admin=False):
             row["pending_location"], story.get("character_image"))
         admin_scene_image = (_dating_admin_scene_image(
             story, row["day"], row["pending_location"]
-        ) if is_admin else None)
+        ) if is_admin and adult_mode else None)
         payload["scene"] = {
             "location": row["pending_location"],
             "character_image": admin_scene_image or default_scene_image,
@@ -2695,7 +2735,7 @@ def _dating_sim_state_payload(row, story, username=None, is_admin=False):
 
 
 @app.get("/api/dating-sim/state")
-def dating_sim_state(request: Request, story_id: str | None = None):
+def dating_sim_state(request: Request, story_id: str | None = None, adult_mode: bool = False):
     _require_signed_in_user(request)
     username = _request_username(request)
     conn = get_conn()
@@ -2704,7 +2744,7 @@ def dating_sim_state(request: Request, story_id: str | None = None):
         row = _dating_sim_row(conn, username, story)
     finally:
         conn.close()
-    payload = _dating_sim_state_payload(row, story, username, _is_owner_request(request))
+    payload = _dating_sim_state_payload(row, story, username, _is_owner_request(request), adult_mode)
     # ★ 2026-09-18: 관리자만 시나리오 트리 버튼을 볼 수 있게 소유자 여부를
     # 상태에 실어 준다(트리 엔드포인트 자체도 소유자만 허용하므로 이중 방어).
     payload["is_admin"] = _is_owner_request(request)
@@ -2889,6 +2929,8 @@ def dating_sim_scenario_tree(request: Request, story_id: str | None = None):
         tree["generated_images"] = generated
         tree["admin_prompts_count"] = len(active_ids)
         tree["gif_count"] = len(_dating_gif_files(tree))
+        # 생성 당시 기록과 현재 재생성 기본값을 구분해 전달한다.
+        tree["prompt_settings"] = _read_dating_sim_prompt_settings()
         return tree
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
@@ -3470,6 +3512,7 @@ DATING_SIM_IMAGE_SCRIPT = str(REPO_ROOT / "일본어자막추출" / "generate_da
 DATING_SIM_IMAGE_BACKLOG_SCRIPT = str(REPO_ROOT / "일본어자막추출" / "generate_missing_dating_sim_images.py")
 DATING_SIM_IMAGE_BACKLOG_STATE = Path(os.path.expanduser("~/.tulpachat/dating_sim_image_backlog.json"))
 DATING_SIM_IMAGE_BACKLOG_LOG = Path(os.path.expanduser("~/.tulpachat/dating_sim_image_backlog.log"))
+DATING_SIM_IMAGE_PAUSE_FILE = Path(os.path.expanduser("~/.tulpachat/dating_sim_image_generation.paused"))
 DATING_SIM_ADMIN_PROMPTS_FILE = Path(os.environ.get(
     "JP_DATING_ADMIN_PROMPTS_FILE",
     os.path.expanduser("~/.tulpachat/dating_sim_admin_prompts.json"),
@@ -3494,9 +3537,22 @@ def _read_dating_sim_admin_prompts():
     return [dict(row) for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
 
 
+def _read_dating_sim_prompt_settings():
+    try:
+        payload = json.loads(DATING_SIM_ADMIN_PROMPTS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"common_negative_prompt": "", "common_negative_enabled": True}
+    settings = payload.get("settings") if isinstance(payload, dict) else {}
+    return {
+        "common_negative_prompt": str((settings or {}).get("common_negative_prompt") or "")[:8000],
+        "common_negative_enabled": bool((settings or {}).get("common_negative_enabled", True)),
+    }
+
+
 def _write_dating_sim_admin_prompts(rows):
     DATING_SIM_ADMIN_PROMPTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    payload = {"version": 1, "updated_at": _now(), "prompts": rows}
+    payload = {"version": 2, "updated_at": _now(),
+               "settings": _read_dating_sim_prompt_settings(), "prompts": rows}
     temporary = DATING_SIM_ADMIN_PROMPTS_FILE.with_suffix(".tmp")
     temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     os.replace(temporary, DATING_SIM_ADMIN_PROMPTS_FILE)
@@ -3646,7 +3702,7 @@ def _dating_sim_image_backlog_progress(state, running):
         ui_status = "failed"
     elif raw_status == "waiting_for_lock":
         ui_status = "waiting"
-    elif raw_status == "running":
+    elif raw_status in {"running", "stopped"}:
         ui_status = "stopped"
     else:
         ui_status = "idle"
@@ -3696,13 +3752,14 @@ def _dating_sim_external_image_job():
             payload = _dating_sim_image_backlog_progress(backlog_state, True)
             payload["external"] = True
             payload["running"] = True
+            payload["pid"] = pid
             return payload
     except OSError:
         pass
     current = state.get("work")
     payload = {"status": "running", "running": True, "external": True,
                "current": current, "total": 1, "completed": 0, "failed": 0,
-               "current_index": 1, "started_at": state.get("started_at")}
+               "current_index": 1, "started_at": state.get("started_at"), "pid": pid}
     return _dating_sim_image_backlog_progress(payload, True)
 
 
@@ -3892,6 +3949,11 @@ class DatingSimAdminPromptRequest(BaseModel):
     enabled: bool = True
 
 
+class DatingSimPromptSettingsRequest(BaseModel):
+    common_negative_prompt: str = ""
+    common_negative_enabled: bool = True
+
+
 class DatingSimPortraitSelectRequest(BaseModel):
     image_key: str
     # 쿼리 문자열이 모바일 캐시·이전 프런트엔드에서 누락되더라도 선택한
@@ -3904,6 +3966,10 @@ class ComfyUIRuntimeRequest(BaseModel):
 
 
 class ComfyWorkspaceActionRequest(BaseModel):
+    action: str
+
+
+class DatingSimImageGenerationControlRequest(BaseModel):
     action: str
 
 
@@ -4067,6 +4133,30 @@ def _comfyui_queue_summary():
     pending = summarize(queue.get("queue_pending"))
     return {"running": running, "pending": pending,
             "running_count": len(running), "pending_count": len(pending)}
+
+
+def _terminate_dating_image_process(process):
+    """새 세션으로 띄운 이미지 생성기와 그 자식까지 함께 종료한다."""
+    if not process or process.poll() is not None:
+        return False
+    try:
+        os.killpg(os.getpgid(process.pid), signal.SIGTERM)
+    except (OSError, ProcessLookupError):
+        try:
+            process.terminate()
+        except OSError:
+            return False
+    return True
+
+
+def _write_image_generation_pause(paused: bool):
+    if paused:
+        DATING_SIM_IMAGE_PAUSE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        temporary = DATING_SIM_IMAGE_PAUSE_FILE.with_suffix(".tmp")
+        temporary.write_text(json.dumps({"paused": True, "updated_at": _now()}, ensure_ascii=False), encoding="utf-8")
+        os.replace(temporary, DATING_SIM_IMAGE_PAUSE_FILE)
+    else:
+        DATING_SIM_IMAGE_PAUSE_FILE.unlink(missing_ok=True)
 
 
 def _comfyui_log_tail(max_chars=12000):
@@ -4356,6 +4446,47 @@ def comfy_workspace_action(payload: ComfyWorkspaceActionRequest, request: Reques
     return {"ok": True, "message": message}
 
 
+@app.post("/api/dating-sim/image-generation/control")
+def dating_sim_image_generation_control(payload: DatingSimImageGenerationControlRequest, request: Request):
+    """전체 이미지 생성의 재투입을 막고 프로세스와 Comfy 큐를 함께 멈춘다."""
+    _require_owner(request)
+    if payload.action not in {"stop", "resume"}:
+        raise HTTPException(status_code=400, detail="지원하지 않는 이미지 생성 제어입니다")
+    if payload.action == "resume":
+        _write_image_generation_pause(False)
+        return {"ok": True, "paused": False, "message": "이미지 생성을 다시 시작할 수 있습니다"}
+
+    # 종료 도중 예약 작업이 큐를 다시 채우지 못하도록 중지 표식을 먼저 남긴다.
+    _write_image_generation_pause(True)
+    stopped = 0
+    with _dating_sim_image_jobs_lock:
+        if _dating_sim_image_backlog_job:
+            stopped += int(_terminate_dating_image_process(_dating_sim_image_backlog_job.get("process")))
+        for item in _dating_sim_image_jobs.values():
+            stopped += int(_terminate_dating_image_process(item.get("process")))
+    external = _dating_sim_external_image_job()
+    if external and external.get("pid"):
+        try:
+            os.killpg(os.getpgid(int(external["pid"])), signal.SIGTERM)
+            stopped += 1
+        except (OSError, ProcessLookupError, ValueError):
+            pass
+    try:
+        _comfyui_json("/interrupt", {})
+        _comfyui_json("/queue", {"clear": True})
+    except (OSError, ValueError, urllib.error.URLError):
+        pass
+    state = _dating_sim_image_backlog_state()
+    state.update(status="stopped", current=None, error="관리자가 전체 이미지 생성을 중지했습니다",
+                 updated_at_epoch=int(time.time()), finished_at=_now())
+    DATING_SIM_IMAGE_BACKLOG_STATE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = DATING_SIM_IMAGE_BACKLOG_STATE.with_suffix(".tmp")
+    temporary.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(temporary, DATING_SIM_IMAGE_BACKLOG_STATE)
+    return {"ok": True, "paused": True, "stopped_processes": stopped,
+            "message": "전체 이미지 생성을 중지하고 ComfyUI 대기열을 비웠습니다"}
+
+
 def _validated_dating_sim_admin_prompt(payload: DatingSimAdminPromptRequest, prompt_id=None):
     name = re.sub(r"\s+", " ", payload.name).strip()
     prompt = payload.prompt.strip()
@@ -4380,7 +4511,26 @@ def _validated_dating_sim_admin_prompt(payload: DatingSimAdminPromptRequest, pro
 @app.get("/api/dating-sim/admin-prompts")
 def dating_sim_admin_prompts_list(request: Request):
     _require_owner(request)
-    return {"prompts": _read_dating_sim_admin_prompts()}
+    return {"prompts": _read_dating_sim_admin_prompts(),
+            "settings": _read_dating_sim_prompt_settings()}
+
+
+@app.put("/api/dating-sim/admin-prompt-settings")
+def dating_sim_admin_prompt_settings_update(payload: DatingSimPromptSettingsRequest, request: Request):
+    _require_owner(request)
+    negative = payload.common_negative_prompt.strip()
+    if len(negative) > 8000:
+        raise HTTPException(status_code=400, detail="공통 부정 프롬프트는 8,000자 이내로 입력해 주세요")
+    settings = {"common_negative_prompt": negative,
+                "common_negative_enabled": bool(payload.common_negative_enabled)}
+    with _DATING_SIM_ADMIN_PROMPTS_LOCK:
+        rows = _read_dating_sim_admin_prompts()
+        DATING_SIM_ADMIN_PROMPTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        stored = {"version": 2, "updated_at": _now(), "settings": settings, "prompts": rows}
+        temporary = DATING_SIM_ADMIN_PROMPTS_FILE.with_suffix(".tmp")
+        temporary.write_text(json.dumps(stored, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(temporary, DATING_SIM_ADMIN_PROMPTS_FILE)
+    return settings
 
 
 @app.get("/api/dating-sim/admin-images")
@@ -4515,6 +4665,7 @@ def dating_sim_generate_images_start(
     request: Request, story_id: str | None = None,
     force: bool = False, force_key: str | None = None,
     admin_prompts_only: bool = False, admin_prompt_id: str | None = None,
+    resume_single: bool = False,
     reference: list[str] | None = Query(default=None), auto_references: bool = False,
     no_references: bool = False,
     payload: DatingSimImagePromptRequest | None = None,
@@ -4526,6 +4677,11 @@ def dating_sim_generate_images_start(
     이미지 하나만 강제로 다시 만든다(★ 2026-09-23 "이미지 재생성 버튼...
     전체재생성도 있고 사진눌렀을때 이사진만 재생성하기" 요청)."""
     _require_owner(request)
+    single_image_resume = resume_single and bool(force_key or admin_prompt_id)
+    if resume_single and not single_image_resume:
+        raise HTTPException(status_code=400, detail="한 장만 생성 재개하려면 재생성할 이미지가 필요합니다")
+    if DATING_SIM_IMAGE_PAUSE_FILE.exists() and not single_image_resume:
+        raise HTTPException(status_code=409, detail="전체 이미지 생성이 중지되어 있습니다. 먼저 생성 재개를 눌러 주세요")
     if force_key is not None and not DATING_SIM_IMAGE_KEY_RE.fullmatch(force_key):
         raise HTTPException(status_code=400, detail="force_key 형식이 올바르지 않습니다")
     prompt_override = (payload.prompt_override or "").strip() if payload else ""
@@ -4628,6 +4784,10 @@ def dating_sim_generate_images_start(
             command.append("--admin-prompts-only")
         if admin_prompt_id:
             command.extend(["--admin-prompt-id", admin_prompt_id])
+        if single_image_resume:
+            # 전역 중지는 그대로 유지한다. 이 프로세스만 명시된 정확한
+            # 한 장을 생성하고 종료하므로 다음 작품/이미지는 이어서 돌지 않는다.
+            command.append("--single-image-resume")
         if prompt_override:
             command.extend(["--prompt-override", prompt_override])
             if exact_prompt_override:
@@ -4640,7 +4800,9 @@ def dating_sim_generate_images_start(
                     "hires_scale", "hires_steps", "hires_denoise"):
             if key in settings:
                 command.extend([f"--{key.replace('_', '-')}", str(settings[key])])
-        process = subprocess.Popen(command, stdout=log_file, stderr=subprocess.STDOUT)
+        process = subprocess.Popen(
+            command, stdout=log_file, stderr=subprocess.STDOUT, start_new_session=True,
+        )
         _write_dating_sim_teacher_notification(
             work_dir, _request_username(request), story_id or "",
             "인물·전체" if (force or reference or auto_references or no_references) else "이미지",
@@ -4752,6 +4914,8 @@ def dating_sim_generate_missing_images(request: Request):
     """관리자 전용 — 시나리오 완성·이미지 미완성 작품 전체를 순차 생성한다."""
     global _dating_sim_image_backlog_job
     _require_owner(request)
+    if DATING_SIM_IMAGE_PAUSE_FILE.exists():
+        raise HTTPException(status_code=409, detail="전체 이미지 생성이 중지되어 있습니다. 먼저 생성 재개를 눌러 주세요")
     try:
         with urllib.request.urlopen("http://127.0.0.1:8188/system_stats", timeout=3):
             pass
@@ -4768,6 +4932,7 @@ def dating_sim_generate_missing_images(request: Request):
         process = subprocess.Popen(
             [DATING_SIM_IMAGE_PYTHON, DATING_SIM_IMAGE_BACKLOG_SCRIPT],
             stdout=log_file, stderr=subprocess.STDOUT,
+            start_new_session=True,
         )
         _dating_sim_image_backlog_job = {"process": process, "log_file": log_file, "started_at": int(time.time())}
         threading.Thread(target=_push_when_dating_sim_image_backlog_done,
@@ -4791,9 +4956,16 @@ def dating_sim_generate_missing_images_status(request: Request):
             external.update(_comfyui_runtime_status())
             external["image_worker_running"] = True
             external["active_work"] = external.get("current") or "예약 이미지 작업"
+            external["paused"] = DATING_SIM_IMAGE_PAUSE_FILE.exists()
+            for candidate_book_id in dating_sim_story.all_book_ids():
+                _, candidate_dir = dating_sim_story.resolve_book_work_dir(f"book:{candidate_book_id}")
+                if candidate_dir and candidate_dir.name == external.get("current"):
+                    external["active_story_id"] = f"book:{candidate_book_id}"
+                    break
             return external
     state = _dating_sim_image_backlog_progress(_dating_sim_image_backlog_state(), running)
     state["running"] = running
+    state["paused"] = DATING_SIM_IMAGE_PAUSE_FILE.exists()
     state.update(_comfyui_runtime_status())
     state["image_worker_running"] = running or bool(individual_jobs)
     if running:
@@ -4806,6 +4978,13 @@ def dating_sim_generate_missing_images_status(request: Request):
         state["active_work"] = work_dir.name or book_id
         state["active_job"] = detail.get("current") or "이미지 생성 중"
         state["active_job_percent"] = detail.get("percent") or 0
+        state["active_story_id"] = book_id if str(book_id).startswith("book:") else f"book:{book_id}"
+    if state.get("active_work") and not state.get("active_story_id"):
+        for candidate_book_id in dating_sim_story.all_book_ids():
+            _, candidate_dir = dating_sim_story.resolve_book_work_dir(f"book:{candidate_book_id}")
+            if candidate_dir and candidate_dir.name == state["active_work"]:
+                state["active_story_id"] = f"book:{candidate_book_id}"
+                break
     return state
 
 
@@ -5389,7 +5568,7 @@ def dating_sim_visit(body: DatingSimLocationRequest, request: Request):
         row["pending_location"] = body.location
     finally:
         conn.close()
-    return _dating_sim_state_payload(row, story, username, _is_owner_request(request))
+    return _dating_sim_state_payload(row, story, username, _is_owner_request(request), body.adult_mode)
 
 
 @app.post("/api/dating-sim/seen")
@@ -5458,7 +5637,7 @@ def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
                    completed=int(completed), ending_id=ending_id)
     finally:
         conn.close()
-    payload = _dating_sim_state_payload(row, story, username, _is_owner_request(request))
+    payload = _dating_sim_state_payload(row, story, username, _is_owner_request(request), body.adult_mode)
     crossed = list(range(((old_affection // 10) + 1) * 10, affection + 1, 10)) if affection > old_affection else []
     payload["choice_result"] = {
         "affection_delta": applied_affection_delta,
@@ -5466,7 +5645,7 @@ def dating_sim_choose(body: DatingSimChoiceRequest, request: Request):
         "affection_cap": affection_cap,
         "location": selected_location,
         "character_image": (_dating_admin_scene_image(story, scene_day, selected_location)
-                            if _is_owner_request(request) else None)
+                            if _is_owner_request(request) and body.adult_mode else None)
                            or scene.get("character_image")
                            or story.get("character_images", {}).get(
                                selected_location, story.get("character_image")),
@@ -5512,7 +5691,9 @@ def dating_sim_restart(request: Request, body: DatingSimRestartRequest | None = 
         conn.close()
     # 기본 DB 이야기는 새 회차 번호로 변형을 다시 선택한다. EPUB 템플릿에는 영향 없다.
     story = _dating_story(body.story_id if body else None, username)
-    return _dating_sim_state_payload(row, story, username, _is_owner_request(request))
+    return _dating_sim_state_payload(
+        row, story, username, _is_owner_request(request), bool(body and body.adult_mode)
+    )
 
 
 @app.get("/shift-alarm")
@@ -12724,9 +12905,9 @@ def get_system_updates(request: Request):
 
 @app.get("/api/dating-sim/updates")
 def get_dating_sim_updates(request: Request):
-    """미연시 안에서 보는 제작 완료·기능 변경 전용 기록."""
+    """미연시의 최근 이미지 생성·교체 기록."""
     _require_signed_in_user(request)
-    return {"items": _dating_sim_update_history()}
+    return {"items": _dating_sim_update_history(include_admin=_is_owner_request(request))}
 
 
 @app.get("/api/notifications")
