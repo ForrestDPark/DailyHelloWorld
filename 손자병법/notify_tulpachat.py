@@ -137,13 +137,20 @@ def build_hanja_lesson(markdown: str, original: str, subtitle: str) -> str:
     literal = plain(literal_match.group(1)) if literal_match else "직역을 정본에서 확인해 주십시오."
     explanations = []
     for match in re.finditer(
-        r"^####\s+([^\n]+)\n([\s\S]*?)(?=^####\s+|</details>)", section, flags=re.M
+        r"^[ \t]*####[ \t]+([^\n]+)\n([\s\S]*?)(?=^[ \t]*####[ \t]+|^[ \t]*</details>)",
+        section,
+        flags=re.M,
     ):
         heading = plain(match.group(1))
         if "글자들이 완성" in heading:
             continue
-        explanation = plain(match.group(2))[:420]
-        explanations.append(f"{heading}\n\n{explanation}")
+        explanation = plain(match.group(2))
+        if explanation:
+            explanations.append(f"[[purple]]{heading}[[/purple]]\n\n{explanation}")
+    if not explanations:
+        raise ValueError(
+            "한자선생님 수업에 필요한 글자·구문별 상세 풀이를 찾지 못했습니다"
+        )
     return (
         "📚 한자선생님입니다. 먼저 글자부터 천천히 살펴보겠습니다.\n\n"
         f"[[orange]]원문[[/orange]]\n\n[[red]]{original}[[/red]]\n\n"

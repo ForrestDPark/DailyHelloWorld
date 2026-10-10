@@ -14118,15 +14118,34 @@ def worker_announcement(body: WorkerAnnouncement, authorization: Optional[str] =
             conn.commit()
             existing = {"message_id": legacy["id"]}
     if existing:
+        lesson = conn.execute(
+            "SELECT id FROM messages WHERE room_id = ? AND sender = ? "
+            "AND reply_message_id = ? ORDER BY id LIMIT 1",
+            (room_id, hanja_teacher_name, existing["message_id"]),
+        ).fetchone()
         conn.execute(
             "UPDATE messages SET sender = ?, content = ? WHERE id = ?",
             (sender, content, existing["message_id"]),
         )
+        if lesson:
+            conn.execute(
+                "UPDATE messages SET content = ?, created_at = ? WHERE id = ?",
+                (body.hanja_lesson.strip(), _now(), lesson["id"]),
+            )
+            hanja_lesson_message_id = lesson["id"]
+        else:
+            lesson_cursor = conn.execute(
+                "INSERT INTO messages (room_id, sender, content, created_at, reply_message_id) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (room_id, hanja_teacher_name, body.hanja_lesson.strip(), _now(), existing["message_id"]),
+            )
+            hanja_lesson_message_id = lesson_cursor.lastrowid
         conn.commit()
         conn.close()
         return {
             "ok": True, "duplicate": True, "message_id": existing["message_id"],
             "announcer": sender, "notified": [], "commanders": commander_results,
+            "hanja_lesson_message_id": hanja_lesson_message_id,
         }
 
     now = _now()

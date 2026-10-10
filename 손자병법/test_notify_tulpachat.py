@@ -62,6 +62,42 @@ class NotifyTulpaChatTest(unittest.TestCase):
         self.assertNotIn("모든 한자의 훈과 음", lesson)
         self.assertNotIn("| 한자 | 훈 | 음 |", lesson)
 
+    def test_hanja_lesson_accepts_indented_headings_without_truncation(self):
+        long_explanation = "긴 풀이입니다. " * 80
+        markdown = f"""## 1. 원문과 독음
+<details>
+<summary>火發於內.<br>화발어내.</summary>
+\t**직역**
+
+\t불이 안에서 일어난다.
+
+\t#### 火發於內(화발어내) — 내부의 불이 일어나는 순간
+
+\t{long_explanation}
+\t</details>
+---
+"""
+        lesson = notify.build_hanja_lesson(
+            markdown, "火發於內.", "화발어내. — 불이 안에서 일어난다"
+        )
+
+        self.assertIn("[[purple]]火發於內(화발어내)", lesson)
+        self.assertIn(long_explanation.strip(), lesson)
+        self.assertGreater(len(lesson), 1000)
+
+    def test_hanja_lesson_rejects_silently_empty_detail(self):
+        markdown = """## 1. 원문과 독음
+<details>
+<summary>火發於內.<br>화발어내.</summary>
+**직역**
+
+불이 안에서 일어난다.
+</details>
+---
+"""
+        with self.assertRaisesRegex(ValueError, "상세 풀이"):
+            notify.build_hanja_lesson(markdown, "火發於內.", "화발어내.")
+
     def test_all_images_are_separated_and_preserved_in_order(self):
         page = Path(__file__).with_name("jiudi22_full_page.md")
         markdown = page.read_text(encoding="utf-8")
