@@ -165,7 +165,7 @@ def build_hanja_lesson(markdown: str, original: str, subtitle: str) -> str:
 
 
 def read_page(path: Path) -> tuple[int, str, str]:
-    match = re.search(r"(?:jiudi|huogong)(\d+)_full_page\.md$", path.name)
+    match = re.search(r"(?:jiudi|huogong|yonggan)(\d+)_full_page\.md$", path.name)
     if not match:
         raise ValueError("파일명이 <편 식별자><번호>_full_page.md 형식이어야 합니다")
     markdown = path.read_text(encoding="utf-8")
@@ -301,7 +301,12 @@ def main() -> None:
         parser.error("--discussion-run은 영문 소문자·숫자·밑줄·하이픈만 사용할 수 있습니다")
 
     number, original, subtitle = read_page(args.page)
-    chapter_name = "화공편" if args.page.name.startswith("huogong") else "구지편"
+    chapter_slug = re.match(r"[a-z]+", args.page.name).group()
+    chapter_name = {
+        "jiudi": "구지편",
+        "huogong": "화공편",
+        "yonggan": "용간편",
+    }[chapter_slug]
     markdown = args.page.read_text(encoding="utf-8")
     is_light = args.light or "<!-- sunzi-analysis-mode: light -->" in markdown
     if not is_light and not args.site_url:
