@@ -23,6 +23,13 @@ def test_landscape_lyric_size_control_and_auto_fit_do_not_conflict():
     assert "fitVisibleLyrics();" in script[script.index("function setLyricSize"):script.index("function cycleLyricSize")]
 
 
+def test_next_lyric_is_half_the_current_lyric_size_in_both_orientations():
+    html = (PLAYER / "index.html").read_text(encoding="utf-8")
+    assert "calc(var(--active-lyric-size) * .5)" in html
+    assert "font-size:min(calc(var(--active-lyric-size) * .5),34px)" in html
+    assert "calc(var(--active-lyric-size) * .78)" not in html
+
+
 def test_translation_stays_inside_player():
     html = (PLAYER / "index.html").read_text(encoding="utf-8")
     script = (PLAYER / "app.js").read_text(encoding="utf-8")
@@ -37,6 +44,21 @@ def test_translation_stays_inside_player():
     assert 'document.createElement("rt")' in script
     assert ".lyrics-translation-result rt" in html
     assert "location.href = `/#room=" not in script
+
+
+def test_landscape_playlist_translation_and_sync_controls_are_available():
+    html = (PLAYER / "index.html").read_text(encoding="utf-8")
+    script = (PLAYER / "app.js").read_text(encoding="utf-8")
+    assert 'id="landscape-playlist"' in html
+    assert 'id="landscape-translation"' in html
+    assert 'id="landscape-sync"' in html
+    assert 'id="translation-toggle"' in html
+    assert 'id="sync-earlier"' in html and 'id="sync-later"' in html
+    assert 'playlist.length < 1' in script
+    assert "mapLyricTranslations" in script
+    assert '$("translation-toggle").addEventListener("click", toggleLyricTranslation)' in script
+    assert "LRC_SYNC_OFFSETS_KEY" in script
+    assert "lyricRows[index].time + manualLyricOffset" in script
 
 
 def test_message_creation_returns_source_id_for_translation_polling():
@@ -102,6 +124,8 @@ def test_japanese_music_recommendations_are_wired_to_player_and_download_queue()
     assert 'mode === "anime"' in script
     assert 'mode === "artist"' in script
     assert "collapsedRecommendationGroups" in script
+    assert "initializedRecommendationGroups" in script
+    assert "collapsedRecommendationGroups.add(group)" in script
     assert 'heading.setAttribute("aria-expanded"' in script
     assert 'window.addEventListener("scroll"' in script
     assert "recommendations-active" in script
@@ -131,6 +155,23 @@ def test_korean_track_is_not_classified_as_japanese_from_bad_lrc():
     assert "def _infer_lrc_language_hint(filename: str)" in source
     assert '"-l", language_hint or "auto"' in source
     assert "한국어 곡에서 일본어 오인식이 감지되어" in source
+
+
+def test_language_filter_uses_explicit_markers_and_rechecks_legacy_tracks():
+    script = (PLAYER / "app.js").read_text(encoding="utf-8")
+    source = (ROOT / "server" / "app.py").read_text(encoding="utf-8")
+    detector = script[script.index("function detectTrackLanguageHint"):script.index("function resolveTrackLyricsLanguage")]
+    resolver = script[script.index("function resolveTrackLyricsLanguage"):script.index("function compactHash")]
+    assert "item?.recommended_japanese" in detector
+    assert "제이팝" in detector
+    assert "케이팝" in detector
+    assert "hangul >= 4" not in detector
+    assert 'titleLanguage !== "unknown" ? titleLanguage : lyricsLanguage' in resolver
+    assert "item.languageAnalyzed !== true" in script
+    assert "item.languageAnalyzed = true" in script
+    assert "제이팝" in source
+    assert "케이팝" in source
+    assert "hangul >= 4" not in source[source.index("def _infer_lrc_language_hint"):source.index("def _lrc_script_language")]
 
 
 def test_player_back_can_restore_recommendations_without_stopping_audio():

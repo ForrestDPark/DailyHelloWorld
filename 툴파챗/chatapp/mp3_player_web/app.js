@@ -35,6 +35,8 @@ const PLAYLIST_FILTER_KEY = "natum-mp3-playlist-filter-v1";
 const PLAYBACK_MODE_KEY = "natum-mp3-playback-mode-v1";
 const PLAYBACK_SESSION_KEY = "natum-mp3-playback-session-v2";
 const LYRICS_STUDY_CACHE_KEY = "natum-mp3-lyrics-study-v2";
+const LYRIC_TRANSLATION_VISIBLE_KEY = "natum-mp3-translation-visible-v1";
+const LRC_SYNC_OFFSETS_KEY = "natum-mp3-sync-offsets-v1";
 const RECOMMENDATIONS_RETURN_KEY = "natum-mp3-recommendations-return-v1";
 const LYRIC_SIZES = ["normal", "large", "xlarge"];
 const LYRIC_SIZE_LABELS = { normal: "보통", large: "크게", xlarge: "아주 크게" };
@@ -49,11 +51,15 @@ let recommendationLoading = false;
 let recommendationTotal = 0;
 let recommendationItems = [];
 const collapsedRecommendationGroups = new Set();
+const initializedRecommendationGroups = new Set();
 let lyricsStudyKey = "";
 const lyricsStudyRecoveryInFlight = new Set();
 let lyricFitFrame = 0;
 let favoritesSyncBusy = false;
 let favoritesKnownCount = 0;
+let lyricTranslationVisible = localStorage.getItem(LYRIC_TRANSLATION_VISIBLE_KEY) === "true";
+let lyricTranslations = [];
+let manualLyricOffset = 0;
 
 function setTheme(theme) {
   const selected = theme === "dark" ? "dark" : "light";
@@ -115,10 +121,13 @@ function detectLyricsLanguage(text) {
 
 function detectTrackLanguageHint(item) {
   const label = `${trackFilename(item)} ${item?.title || ""}`;
-  const hangul = (label.match(/[가-힣]/g) || []).length;
+  const override = String(item?.languageOverride || item?.language_override || "").toLowerCase();
   const kana = (label.match(/[ぁ-ゖァ-ヺ]/g) || []).length;
+  if (["ja", "ko", "en"].includes(override)) return override;
+  if (item?.recommended_japanese) return "ja";
+  if (/(?:일본어|일본곡|일본\s*노래|제이팝|j[\s-]?pop|애니(?:송|메)?|보컬로이드)/i.test(label)) return "ja";
+  if (/(?:한국어|한국곡|한국\s*노래|케이팝|k[\s-]?pop)/i.test(label)) return "ko";
   if (kana >= 2) return "ja";
-  if (hangul >= 4 && kana === 0 && !/(?:일본어|일본곡|j-?pop)/i.test(label)) return "ko";
   return "unknown";
 }
 
@@ -127,7 +136,7 @@ function resolveTrackLyricsLanguage(item, text) {
   const titleLanguage = detectTrackLanguageHint(item);
   const mismatch = titleLanguage === "ko" && lyricsLanguage === "ja";
   return {
-    language: mismatch ? "ko" : (lyricsLanguage === "unknown" ? titleLanguage : lyricsLanguage),
+    language: titleLanguage !== "unknown" ? titleLanguage : lyricsLanguage,
     lyricsLanguage,
     titleLanguage,
     mismatch,
@@ -169,6 +178,75 @@ function currentLyricsStudyTrackIdentity() {
   const filename = trackFilename(item).replace(/\.mp3$/i, "");
   const title = $("title").textContent.trim() || "제목 없는 곡";
   return `title:${normalizedTrackName(filename || title)}`;
+}
+
+function getSyncOffsets() {
+  try { return JSON.parse(localStorage.getItem(LRC_SYNC_OFFSETS_KEY) || "{}"); } catch (_) { return {}; }
+}
+
+function loadCurrentSyncOffset() {
+  manualLyricOffset = Number(getSyncOffsets()[currentLyricsStudyTrackIdentity()] || 0);
+  updateSyncUi();
+}
+
+function saveCurrentSyncOffset(value) {
+  manualLyricOffset = Math.max(-30, Math.min(30, Math.round(Number(value || 0) * 10) / 10));
+  const offsets = getSyncOffsets();
+  const key = currentLyricsStudyTrackIdentity();
+  if (Math.abs(manualLyricOffset) < 0.05) delete offsets[key]; else offsets[key] = manualLyricOffset;
+  try { localStorage.setItem(LRC_SYNC_OFFSETS_KEY, JSON.stringify(offsets)); } catch (_) {}
+  updateSyncUi();
+  syncLyrics(true);
+}
+
+function updateSyncUi() {
+  const label = `${manualLyricOffset > 0 ? "+" : ""}${manualLyricOffset.toFixed(1)}초`;
+  $("sync-offset").textContent = label;
+  $("lyrics-state").textContent = lyricRows.length ? `${lyricRows.length}줄 · 싱크 ${label}` : "가사를 불러오세요";
+}
+
+function normalizedLyricText(value) {
+  return String(value || "").replace(/[*_`#>]/g, "").replace(/[（(][ぁ-ゖァ-ヺー・\s]+[)）]/gu, "").replace(/\s+/g, "").trim();
+}
+
+function mapLyricTranslations(resultText) {
+  const lines = String(resultText || "").split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  lyricTranslations = lyricRows.map((row) => {
+    const original = normalizedLyricText(row.text);
+    const at = lines.findIndex(line => {
+      const candidate = normalizedLyricText(line);
+      return candidate === original || (original.length >= 6 && (candidate.includes(original) || original.includes(candidate)));
+    });
+    if (at < 0) return "";
+    return lines.slice(at + 1, at + 4).find(line => /[가-힣]/.test(line) && normalizedLyricText(line) !== original) || "";
+  });
+  updateInlineTranslations();
+}
+
+function updateInlineTranslations() {
+  $("lyrics").classList.toggle("translation-visible", lyricTranslationVisible && lyricTranslations.some(Boolean));
+  $("lyrics").querySelectorAll(".lyric-line").forEach((node, index) => {
+    const translation = node.querySelector(".lyric-translation");
+    if (translation) translation.textContent = lyricTranslations[index] || "해석을 준비 중입니다";
+  });
+  $("landscape-translation").setAttribute("aria-pressed", String(lyricTranslationVisible));
+  $("landscape-translation").setAttribute("aria-label", lyricTranslationVisible ? "한국어 해석 끄기" : "한국어 해석 켜기");
+  $("landscape-translation").textContent = lyricTranslationVisible ? "한✓" : "한";
+  $("translation-toggle").setAttribute("aria-pressed", String(lyricTranslationVisible));
+  $("translation-toggle").textContent = lyricTranslationVisible ? "한국어 해석 켬" : "한국어 해석";
+}
+
+function toggleLyricTranslation() {
+  const record = getLyricsStudyCache()[lyricsStudyKey];
+  if (!record?.result) {
+    $("lyrics-translation").open = true;
+    message("먼저 가사 직해를 생성해 주세요.");
+    return;
+  }
+  lyricTranslationVisible = !lyricTranslationVisible;
+  localStorage.setItem(LYRIC_TRANSLATION_VISIBLE_KEY, String(lyricTranslationVisible));
+  mapLyricTranslations(record.result);
+  fitVisibleLyrics();
 }
 
 async function recoverLyricsStudyRecord(key) {
@@ -253,6 +331,7 @@ function renderLyricsStudyResult(text = "") {
     cursor = match.index + match[0].length;
   }
   if (cursor < text.length) result.append(document.createTextNode(text.slice(cursor)));
+  mapLyricTranslations(text);
 }
 
 function setLyricsStudyUi(record = null) {
@@ -411,6 +490,7 @@ function attachLrcToCurrentTrack(text) {
   const resolved = resolveTrackLyricsLanguage(item, text);
   item.lyricsLanguage = resolved.language;
   item.lrcLanguageMismatch = resolved.mismatch;
+  item.languageAnalyzed = true;
 }
 
 function showLrcProgress(stage, detail, percent = null, indeterminate = false) {
@@ -817,14 +897,16 @@ function renderLyrics() {
   lyricRows.forEach((row, index) => {
     const button = document.createElement("button");
     const text = document.createElement("span");
+    const translation = document.createElement("small");
     button.type = "button";
     button.className = "lyric-line";
     button.dataset.index = index;
     text.textContent = row.text;
-    button.append(text);
+    translation.className = "lyric-translation";
+    button.append(text, translation);
     button.addEventListener("click", () => {
       if (Date.now() < suppressLyricClickUntil) return;
-      audio.currentTime = row.time;
+      audio.currentTime = Math.max(0, row.time + manualLyricOffset);
       audio.play().catch(() => {});
       syncLyrics(true);
     });
@@ -833,6 +915,9 @@ function renderLyrics() {
   $("lyrics-state").textContent = `${lyricRows.length}줄 · 동기화됨`;
   $("lyrics-toggle").disabled = false;
   updateLyricsStudyButton();
+  const record = getLyricsStudyCache()[lyricsStudyKey];
+  mapLyricTranslations(record?.result || "");
+  loadCurrentSyncOffset();
   fitVisibleLyrics();
 }
 
@@ -869,7 +954,7 @@ function syncLyrics(force = false) {
   if (!lyricRows.length) return;
   let next = -1;
   for (let index = 0; index < lyricRows.length; index += 1) {
-    if (lyricRows[index].time <= audio.currentTime + 0.08) next = index;
+    if (lyricRows[index].time + manualLyricOffset <= audio.currentTime + 0.08) next = index;
     else break;
   }
   if (!force && next === activeLyric && $("lyrics").querySelector(".nearby")) return;
@@ -1109,7 +1194,7 @@ async function preparePlaylistFilter(mode) {
     }
   }
   if (mode.startsWith("lang-")) {
-    const pending = playlist.filter((item) => item.lrcFile && !item.lyricsLanguage);
+    const pending = playlist.filter((item) => item.lrcFile && item.languageAnalyzed !== true);
     for (let start = 0; start < pending.length; start += 24) {
       $("playlist-count").textContent = `가사 언어 확인 ${Math.min(start + 24, pending.length)}/${pending.length}`;
       await Promise.all(pending.slice(start, start + 24).map(async (item) => {
@@ -1117,15 +1202,19 @@ async function preparePlaylistFilter(mode) {
           const resolved = resolveTrackLyricsLanguage(item, await item.lrcFile.text());
           item.lyricsLanguage = resolved.language;
           item.lrcLanguageMismatch = resolved.mismatch;
+          item.languageAnalyzed = true;
         }
-        catch (_) { item.lyricsLanguage = "unknown"; }
+        catch (_) {
+          item.lyricsLanguage = "unknown";
+          item.languageAnalyzed = true;
+        }
       }));
     }
   }
 }
 
 function renderPlaylist() {
-  $("playlist").classList.toggle("hidden", playlist.length < 2);
+  $("playlist").classList.toggle("hidden", playlist.length < 1);
   const favoriteKeys = new Set(getFavorites().map((entry) => entry.key));
   const visibleEntries = playlistEligibleEntries();
   const currentPosition = visibleEntries.findIndex(({ index }) => index === playlistIndex);
@@ -1425,6 +1514,8 @@ function loadAudio(file, lrcFile = null) {
   updateLyricsStudyButton();
   $("title").textContent = file.name.replace(/\.mp3$/i, "");
   setCurrentTrackTitle($("title").textContent);
+  lyricTranslations = [];
+  loadCurrentSyncOffset();
   $("meta").textContent = `${(file.size / 1024 / 1024).toFixed(1)}MB · 기기에서 재생`;
   $("empty").classList.add("hidden");
   $("player").classList.remove("hidden");
@@ -1590,9 +1681,11 @@ function removePlaylistTrack(index) {
 function preparePlayer(title, meta) {
   lyricRows = []; currentLrc = ""; activeLyric = -1;
   updateGenerateButton();
-  updateLyricsStudyButton();
   $("title").textContent = title;
   setCurrentTrackTitle(title);
+  lyricTranslations = [];
+  updateLyricsStudyButton();
+  loadCurrentSyncOffset();
   $("meta").textContent = meta;
   $("empty").classList.add("hidden");
   $("player").classList.remove("hidden");
@@ -1819,6 +1912,10 @@ function renderRecommendations(items, append = false) {
   for (const item of items) {
     const group = sortMode === "anime" ? (item.anime_title || "기타 애니송") : sortMode === "artist" ? (item.artist || "가수 정보 없음") : "";
     if (group && group !== previousGroup) {
+      if (!initializedRecommendationGroups.has(group)) {
+        initializedRecommendationGroups.add(group);
+        collapsedRecommendationGroups.add(group);
+      }
       const heading = document.createElement("button"), label = document.createElement("span"), arrow = document.createElement("i");
       heading.type = "button"; heading.className = "recommendation-group-title"; label.textContent = `${group} · ${groupCounts.get(group) || 0}곡`; arrow.textContent = "⌄";
       heading.setAttribute("aria-expanded", String(!collapsedRecommendationGroups.has(group)));
@@ -2067,6 +2164,8 @@ async function loadRecommendationPage(append = true) {
       recommendationItems.push(...addedItems);
     } else {
       recommendationItems = [...(result.items || [])];
+      collapsedRecommendationGroups.clear();
+      initializedRecommendationGroups.clear();
       $("recommendation-sort").value = "recommended";
     }
     $("recommendation-sort-row").classList.toggle("hidden", !recommendationItems.length);
@@ -2247,6 +2346,24 @@ window.addEventListener("scroll", () => {
 $("lrc-file").addEventListener("change", () => applyLrc($("lrc-file").files?.[0]));
 $("generate").addEventListener("click", generateLrc);
 $("landscape-regenerate").addEventListener("click", generateLrc);
+$("landscape-translation").addEventListener("click", toggleLyricTranslation);
+$("translation-toggle").addEventListener("click", toggleLyricTranslation);
+$("landscape-playlist").addEventListener("click", () => {
+  const opening = !$("playlist").classList.contains("landscape-open");
+  $("playlist").classList.toggle("landscape-open", opening);
+  $("landscape-playlist").setAttribute("aria-expanded", String(opening));
+  $("landscape-playlist").setAttribute("aria-label", opening ? "재생 목록 닫기" : "재생 목록 열기");
+  if (opening) {
+    $("playlist-body").classList.remove("hidden");
+    $("playlist-toggle").setAttribute("aria-expanded", "true");
+    renderPlaylist();
+  }
+});
+$("landscape-sync").addEventListener("click", () => {
+  const opening = !$("sync-panel").classList.contains("landscape-open");
+  $("sync-panel").classList.toggle("landscape-open", opening);
+  $("landscape-sync").setAttribute("aria-expanded", String(opening));
+});
 $("landscape-review").addEventListener("click", () => {
   setCurrentLrcReviewRequested($("landscape-review").getAttribute("aria-pressed") !== "true");
 });
@@ -2269,6 +2386,14 @@ $("seek").addEventListener("input", () => { if (audio.duration) audio.currentTim
 $("rate").addEventListener("change", () => { audio.playbackRate = Number($("rate").value); savePlaybackSession(); });
 $("lyric-size").addEventListener("click", cycleLyricSize);
 $("landscape-lyric-size").addEventListener("click", cycleLyricSize);
+$("sync-earlier").addEventListener("click", () => saveCurrentSyncOffset(manualLyricOffset - 0.5));
+$("sync-later").addEventListener("click", () => saveCurrentSyncOffset(manualLyricOffset + 0.5));
+$("sync-reset").addEventListener("click", () => saveCurrentSyncOffset(0));
+$("sync-now").addEventListener("click", () => {
+  if (activeLyric < 0 || !lyricRows[activeLyric]) return message("먼저 맞출 가사 줄을 선택해 주세요.", true);
+  saveCurrentSyncOffset(audio.currentTime - lyricRows[activeLyric].time);
+  message("현재 가사 시작점을 재생 위치에 맞췄습니다.");
+});
 $("theme-toggle").addEventListener("click", () => {
   setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
 });
@@ -2383,6 +2508,8 @@ $("playlist-favorites").textContent = favoritesOnly ? "전체 목록" : "즐겨�
 followLyrics = initialSession?.followLyrics !== false;
 $("follow").textContent = `자동 스크롤 ${followLyrics ? "켬" : "끔"}`;
 $("follow").setAttribute("aria-pressed", String(followLyrics));
+updateInlineTranslations();
+updateSyncUi();
 if (Number.isFinite(Number(initialSession?.rate))) {
   const rate = String(initialSession.rate);
   if ([...$("rate").options].some((option) => option.value === rate)) $("rate").value = rate;

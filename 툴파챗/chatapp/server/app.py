@@ -1575,11 +1575,12 @@ def _infer_lrc_language_hint(filename: str) -> str | None:
     """파일명에 확실한 문자 단서가 있을 때만 Whisper 언어를 고정한다."""
     label = unicodedata.normalize("NFC", Path(filename or "").stem)
     kana = len(re.findall(r"[ぁ-ゖァ-ヺ]", label))
-    hangul = len(re.findall(r"[가-힣]", label))
+    if re.search(r"(?:일본어|일본곡|일본\s*노래|제이팝|j[\s-]?pop|애니(?:송|메)?|보컬로이드)", label, re.IGNORECASE):
+        return "ja"
+    if re.search(r"(?:한국어|한국곡|한국\s*노래|케이팝|k[\s-]?pop)", label, re.IGNORECASE):
+        return "ko"
     if kana >= 2:
         return "ja"
-    if hangul >= 4 and kana == 0 and not re.search(r"(?:일본어|일본곡|j-?pop)", label, re.IGNORECASE):
-        return "ko"
     return None
 
 
@@ -2342,7 +2343,8 @@ def _queue_lyrics_translation(job_id: str, username: str, title: str, lrc: str) 
     ).strip()
     content = (
         f"[MP3 가사 직해 요청]\n곡: {title}\n언어: 일본어\n\n"
-        "가사 순서를 그대로 지키며 각 일본어 원문 바로 아래에 자연스러운 한국어 직해를 붙여주세요. "
+        "가사 순서를 그대로 지키고 각 줄을 반드시 '원문: ...' 다음 줄에 '해석: ...' 형식으로 작성해 주세요. "
+        "각 일본어 원문 바로 아래에 자연스러운 한국어 직해를 붙여주세요. "
         "한자가 있는 줄에는 읽기 어려운 말만 괄호로 후리가나를 덧붙이되, 문법 수업·새 예문·감상 평가는 넣지 마세요.\n"
         "반복되는 가사도 생략하지 말고 입력된 순서대로 옮겨주세요. LRC 또는 Whisper 오인식으로 의심되는 대목도 "
         "별도의 검수 문구를 붙이지 말고, 입력된 원문을 유지한 채 가능한 범위에서 자연스럽게 직해해주세요.\n\n"
@@ -2800,7 +2802,8 @@ def get_mp3_recommendations(
         else:
             all_items = None
     if all_items is None:
-        all_items = mp3_recommendations.collect_candidates(yt_dlp, queries, excluded, per_query=12, max_results=72)
+        per_query = 6 if mode == "season" else 8 if mode == "popular" else 12
+        all_items = mp3_recommendations.collect_candidates(yt_dlp, queries, excluded, per_query=per_query, max_results=144)
         with _mp3_recommendation_cache_lock:
             _mp3_recommendation_cache[cache_key] = {"created_at": now, "items": all_items}
             for key, value in list(_mp3_recommendation_cache.items()):
