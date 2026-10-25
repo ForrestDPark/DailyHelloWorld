@@ -1571,7 +1571,34 @@ def _audio_duration_seconds(source: Path) -> float:
         return 0.0
 
 
-async def _generate_lrc_from_mp3_source(source: Path, job_dir: Path, job_id: str | None = None):
+def _infer_lrc_language_hint(filename: str) -> str | None:
+    """파일명에 확실한 문자 단서가 있을 때만 Whisper 언어를 고정한다."""
+    label = unicodedata.normalize("NFC", Path(filename or "").stem)
+    kana = len(re.findall(r"[ぁ-ゖァ-ヺ]", label))
+    hangul = len(re.findall(r"[가-힣]", label))
+    if kana >= 2:
+        return "ja"
+    if hangul >= 4 and kana == 0 and not re.search(r"(?:일본어|일본곡|j-?pop)", label, re.IGNORECASE):
+        return "ko"
+    return None
+
+
+def _lrc_script_language(lrc: str) -> str:
+    hangul = len(re.findall(r"[가-힣]", lrc or ""))
+    kana = len(re.findall(r"[ぁ-ゖァ-ヺ]", lrc or ""))
+    if kana >= 2 and kana >= hangul * 0.35:
+        return "ja"
+    if hangul >= 2:
+        return "ko"
+    return "unknown"
+
+
+async def _generate_lrc_from_mp3_source(
+    source: Path,
+    job_dir: Path,
+    job_id: str | None = None,
+    original_filename: str | None = None,
+):
     """디스크에 준비된 MP3를 변환·전사해 LRC 응답을 만든다."""
     whisper = Path("/opt/homebrew/bin/whisper-cli")
     model_candidates = [
@@ -1585,6 +1612,7 @@ async def _generate_lrc_from_mp3_source(source: Path, job_dir: Path, job_id: str
     if not whisper.is_file() or model is None or not ffmpeg:
         raise HTTPException(status_code=503, detail="Mac의 로컬 Whisper 또는 FFmpeg가 준비되지 않았습니다")
 
+    language_hint = _infer_lrc_language_hint(original_filename or source.name)
     chunk_seconds = 600
     chunks_dir = job_dir / "chunks"
     progress_log = job_dir / "progress.log"
@@ -1611,6 +1639,8 @@ async def _generate_lrc_from_mp3_source(source: Path, job_dir: Path, job_id: str
                 raise HTTPException(status_code=422, detail="MP3를 작업 조각으로 나누지 못했습니다")
         total_chunks = len(wave_chunks)
         combined_lines = ["[by:툴파챗 로컬 Whisper]"]
+        if language_hint:
+            combined_lines.append(f"[language:{language_hint}]")
         transcription_started = time.monotonic()
         with progress_log.open("a", encoding="utf-8") as log:
             log.write(f"[2/3] Whisper 조각별 전사 시작 · {total_chunks}개 조각\n")
@@ -1637,7 +1667,7 @@ async def _generate_lrc_from_mp3_source(source: Path, job_dir: Path, job_id: str
                     )
                 async def transcribe_piece(piece: Path, prefix: Path, piece_offset: float, timeout: int, marker: str) -> str:
                     process = subprocess.Popen(
-                        [str(whisper), "-ng", "-m", str(model), "-f", str(piece), "-l", "auto", "-sns", "-osrt", "-of", str(prefix)],
+                        [str(whisper), "-ng", "-m", str(model), "-f", str(piece), "-l", language_hint or "auto", "-sns", "-osrt", "-of", str(prefix)],
                         stdout=log, stderr=subprocess.STDOUT, text=True,
                     )
                     started = time.monotonic()
@@ -1758,6 +1788,9 @@ async def _generate_lrc_from_mp3_source(source: Path, job_dir: Path, job_id: str
             lrc = "\n".join(combined_lines) + "\n"
             if mp3_player.lyric_line_count(lrc) < 2:
                 raise ValueError("노래 가사를 충분히 인식하지 못했습니다. 보컬이 더 선명한 파일이나 직접 받은 LRC를 사용해주세요")
+            detected_language = _lrc_script_language(lrc)
+            if language_hint == "ko" and detected_language == "ja":
+                raise ValueError("한국어 곡에서 일본어 오인식이 감지되어 잘못된 LRC를 저장하지 않았습니다")
         except (OSError, ValueError) as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return Response(content=lrc, media_type="text/plain; charset=utf-8")
@@ -1826,7 +1859,9 @@ def _run_persistent_lrc_job(job_id: str) -> None:
                 return
             _write_lrc_job(job_id, status="running", stage="작업 시작", percent=10, message="Mac에서 LRC 작업을 시작합니다")
             _open_lrc_progress_terminal(directory, job.get("filename") or "MP3")
-            response = asyncio.run(_generate_lrc_from_mp3_source(source, directory, job_id))
+            response = asyncio.run(_generate_lrc_from_mp3_source(
+                source, directory, job_id, job.get("filename") or source.name,
+            ))
             body = bytes(response.body).decode("utf-8")
             result.write_text(body, encoding="utf-8")
             _write_lrc_job(job_id, status="running", stage="3/3 · 저장 및 동기화", percent=98, message="완성된 LRC를 곡과 재생 목록에 적용하고 있습니다")
@@ -2147,7 +2182,7 @@ async def generate_mp3_lrc(request: Request, file: UploadFile = File(...)):
                 if size > 250 * 1024 * 1024:
                     raise HTTPException(status_code=413, detail="MP3는 최대 250MB까지 처리할 수 있습니다")
                 destination.write(chunk)
-        return await _generate_lrc_from_mp3_source(source, job_dir)
+        return await _generate_lrc_from_mp3_source(source, job_dir, original_filename=original_name)
     finally:
         shutil.rmtree(job_dir, ignore_errors=True)
 
@@ -2197,7 +2232,7 @@ async def generate_mp3_lrc_chunk(
                     raise HTTPException(status_code=413, detail="MP3는 최대 1GB까지 처리할 수 있습니다")
                 with item.open("rb") as source_part:
                     shutil.copyfileobj(source_part, destination, length=1024 * 1024)
-        return await _generate_lrc_from_mp3_source(source, job_dir)
+        return await _generate_lrc_from_mp3_source(source, job_dir, original_filename=safe_name)
     finally:
         if index == total - 1:
             shutil.rmtree(job_dir, ignore_errors=True)
@@ -2373,7 +2408,7 @@ def _run_mp3_postprocess(job_id: str) -> None:
                 _update_mp3_postprocess(job_id, stage="로컬 Whisper로 시간 가사 생성 중", percent=30)
                 work_dir = LRC_JOB_ROOT / f"postprocess-{job_id}"
                 work_dir.mkdir(parents=True, exist_ok=True)
-                response = asyncio.run(_generate_lrc_from_mp3_source(path, work_dir))
+                response = asyncio.run(_generate_lrc_from_mp3_source(path, work_dir, original_filename=job["filename"]))
                 lrc = bytes(response.body).decode("utf-8")
                 source = "whisper"
             if not mp3_postprocess.valid_lrc(lrc):

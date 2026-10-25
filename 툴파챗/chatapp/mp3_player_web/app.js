@@ -90,7 +90,10 @@ function updateGenerateButton() {
 
 function detectLyricsStudyTarget() {
   const text = lyricRows.map((row) => row.text).join("\n");
-  const language = detectLyricsLanguage(text);
+  const item = playlistIndex >= 0 ? playlist[playlistIndex] : (remoteTrack || audioFile);
+  const resolved = resolveTrackLyricsLanguage(item, text);
+  if (resolved.mismatch) return null;
+  const language = resolved.language;
   if (language === "ja") {
     return { language: "일본어", persona: "일본어 선생님", label: "일본어 가사 직해 요청" };
   }
@@ -108,6 +111,27 @@ function detectLyricsLanguage(text) {
   if (hangul >= 2 && hangul >= latin * 0.15) return "ko";
   if (latin >= 20 && latin > kana * 3) return "en";
   return "unknown";
+}
+
+function detectTrackLanguageHint(item) {
+  const label = `${trackFilename(item)} ${item?.title || ""}`;
+  const hangul = (label.match(/[가-힣]/g) || []).length;
+  const kana = (label.match(/[ぁ-ゖァ-ヺ]/g) || []).length;
+  if (kana >= 2) return "ja";
+  if (hangul >= 4 && kana === 0 && !/(?:일본어|일본곡|j-?pop)/i.test(label)) return "ko";
+  return "unknown";
+}
+
+function resolveTrackLyricsLanguage(item, text) {
+  const lyricsLanguage = detectLyricsLanguage(text);
+  const titleLanguage = detectTrackLanguageHint(item);
+  const mismatch = titleLanguage === "ko" && lyricsLanguage === "ja";
+  return {
+    language: mismatch ? "ko" : (lyricsLanguage === "unknown" ? titleLanguage : lyricsLanguage),
+    lyricsLanguage,
+    titleLanguage,
+    mismatch,
+  };
 }
 
 function compactHash(value) {
@@ -384,7 +408,9 @@ function attachLrcToCurrentTrack(text) {
   } else if (item.stream_url?.includes("/api/mp3-player/library/")) {
     item.lrc_url = `/api/mp3-player/library/${encodeURIComponent(item.id)}/lrc`;
   }
-  item.lyricsLanguage = detectLyricsLanguage(text);
+  const resolved = resolveTrackLyricsLanguage(item, text);
+  item.lyricsLanguage = resolved.language;
+  item.lrcLanguageMismatch = resolved.mismatch;
 }
 
 function showLrcProgress(stage, detail, percent = null, indeterminate = false) {
@@ -1085,7 +1111,11 @@ async function preparePlaylistFilter(mode) {
     for (let start = 0; start < pending.length; start += 24) {
       $("playlist-count").textContent = `가사 언어 확인 ${Math.min(start + 24, pending.length)}/${pending.length}`;
       await Promise.all(pending.slice(start, start + 24).map(async (item) => {
-        try { item.lyricsLanguage = detectLyricsLanguage(await item.lrcFile.text()); }
+        try {
+          const resolved = resolveTrackLyricsLanguage(item, await item.lrcFile.text());
+          item.lyricsLanguage = resolved.language;
+          item.lrcLanguageMismatch = resolved.mismatch;
+        }
         catch (_) { item.lyricsLanguage = "unknown"; }
       }));
     }
@@ -2062,6 +2092,14 @@ async function applyLrc(file, expectedAudioFile = audioFile) {
     lyricRows = nextRows;
     if (!lyricRows.length) throw new Error("시간 태그가 없습니다");
     attachLrcToCurrentTrack(currentLrc);
+    const item = playlistIndex >= 0 ? playlist[playlistIndex] : (remoteTrack || audioFile);
+    const resolved = resolveTrackLyricsLanguage(item, currentLrc);
+    if (resolved.mismatch) {
+      currentLrc = "";
+      lyricRows = [];
+      if (item) item.lrcLanguageMismatch = true;
+      throw new Error("한국어 곡인데 기존 LRC가 일본어로 잘못 인식됐습니다. LRC 재생성으로 바로잡아 주세요");
+    }
     updateGenerateButton();
     renderLyrics(); syncLyrics(true); message("LRC 가사를 적용했습니다.");
   } catch (error) { currentLrc = ""; lyricRows = []; updateGenerateButton(); updateLyricsStudyButton(); message(`LRC를 읽지 못했습니다: ${error.message}`, true); }

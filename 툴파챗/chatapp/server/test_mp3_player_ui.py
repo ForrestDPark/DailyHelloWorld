@@ -110,6 +110,18 @@ def test_remote_favorite_lrc_jobs_reuse_mac_file_without_phone_upload():
     assert 'target_directory = MP3_FAVORITES_DIR if source_library == "favorites"' in source
 
 
+def test_korean_track_is_not_classified_as_japanese_from_bad_lrc():
+    script = (PLAYER / "app.js").read_text(encoding="utf-8")
+    source = (ROOT / "server" / "app.py").read_text(encoding="utf-8")
+    assert "function detectTrackLanguageHint(item)" in script
+    assert "function resolveTrackLyricsLanguage(item, text)" in script
+    assert 'titleLanguage === "ko" && lyricsLanguage === "ja"' in script
+    assert "한국어 곡인데 기존 LRC가 일본어로 잘못 인식됐습니다" in script
+    assert "def _infer_lrc_language_hint(filename: str)" in source
+    assert '"-l", language_hint or "auto"' in source
+    assert "한국어 곡에서 일본어 오인식이 감지되어" in source
+
+
 def test_player_back_can_restore_recommendations_without_stopping_audio():
     script = (PLAYER / "app.js").read_text(encoding="utf-8")
     assert "RECOMMENDATIONS_RETURN_KEY" in script
