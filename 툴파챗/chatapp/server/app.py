@@ -28,9 +28,11 @@ worker/persona_worker.py가 이 서버를 폴링해서 처리한다(자세한 �
 백그라운드 프로세스라 쿠키를 못 씀) 소유자 전용 대체 인증 경로로 남겨뒀다."""
 import asyncio
 import base64
+import collections
 import concurrent.futures
 import datetime
 import hashlib
+import fcntl
 import html
 import ipaddress
 import json
@@ -43,6 +45,7 @@ import shutil
 import socket
 import ssl
 import sqlite3
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -66,9 +69,10 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from pywebpush import WebPushException, webpush
 
-from server import ai_keys, audio_editor, auth, battle_sim_story, dating_audio, dating_sim_story, mp3_player, oauth, transcriptions, transcription_summary
+from server import ai_keys, audio_editor, auth, battle_sim_story, dating_audio, dating_sim_story, life_terrain_quiz, mp3_player, mp3_postprocess, mp3_recommendations, oauth, stock_portfolio, topic_analysis, transcriptions, transcription_summary
 from server.db import get_conn, init_db
 from server.mp3_sync import persist_lrc_to_library, store_synced_lrc
+from worker.ai_exec import circuit_status, run_ai_exec, run_provider_api
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 REPO_ROOT = BASE_DIR.parent.parent
@@ -86,13 +90,19 @@ SQL_LAB_DATA_DIR.mkdir(parents=True, exist_ok=True)
 DATING_SIM_WEB_DIR = BASE_DIR / "dating_sim_web"
 DATING_SIM_AUDIO_DIR = DATING_SIM_WEB_DIR / "audio"
 _dating_sim_tts_lock = threading.Lock()
+_TOPIC_ANALYSIS_WORKER_STARTED = False
 AUDIO_EDITOR_WEB_DIR = BASE_DIR / "audio_editor_web"
 MP3_PLAYER_WEB_DIR = BASE_DIR / "mp3_player_web"
 MP3_LIBRARY_DIR = Path(os.path.expanduser("~/Music/Shift Alarm MP3"))
 MP3_LIBRARY_DIR.mkdir(parents=True, exist_ok=True)
 MP3_DOWNLOAD_ARCHIVE = MP3_LIBRARY_DIR / ".youtube-download-archive.txt"
+MP3_FAVORITES_DIR = Path("/Users/forrestdpark/Desktop/BlogImage/좋아요플레이")
 _mp3_download_lock = threading.Lock()
 _mp3_download_jobs: dict[str, dict[str, Any]] = {}
+_mp3_postprocess_lock = threading.Lock()
+_mp3_postprocess_recovery_started = False
+_mp3_recommendation_cache: dict[str, dict[str, Any]] = {}
+_mp3_recommendation_cache_lock = threading.Lock()
 LRC_JOB_ROOT = Path(os.path.expanduser("~/.tulpachat/mp3_player/lrc_jobs"))
 LRC_JOB_ROOT.mkdir(parents=True, exist_ok=True)
 LRC_UPLOAD_ROOT = Path(os.path.expanduser("~/.tulpachat/mp3_player/lrc_uploads"))
@@ -100,8 +110,12 @@ LRC_UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 _lrc_job_run_lock = threading.Lock()
 _lrc_recovery_started = False
 BATTLE_SIM_WEB_DIR = BASE_DIR / "battle_sim_web"
+SUNZI_WEB_DIR = BASE_DIR / "sunzi_web"
+SUNZI_SITE_DIR = BASE_DIR / "sunzi_site"
+LIFE_TERRAIN_WEB_DIR = BASE_DIR / "life_terrain_web"
 FITNESS_WEB_DIR = BASE_DIR / "fitness_web"
 TERRAIN_SURVEY_WEB_DIR = BASE_DIR / "terrain_survey_web"
+STOCK_PORTFOLIO_WEB_DIR = BASE_DIR / "stock_portfolio_web"
 _terrain_nearby_cache: dict[tuple[float, float, int], dict[str, Any]] = {}
 SHIFT_ALARM_STATUS_FILE = Path(os.path.expanduser(
     "~/Library/Mobile Documents/com~apple~CloudDocs/ShiftAlarmStatus/status.json"
@@ -112,8 +126,15 @@ SHIFT_ALARM_STATUS_FILE = Path(os.path.expanduser(
 SHIFT_ALARM_STATUS_FALLBACK_FILE = Path(os.path.expanduser(
     "~/.shift_alarm_icloud_sync/status.json"
 ))
+SHIFT_ALARM_STATUS_CACHE_FILE = Path(os.path.expanduser(
+    "~/.tulpachat/shift_alarm_status_last_good.json"
+))
 SHIFT_ALARM_DISMISSED_FILE = Path(os.path.expanduser("~/.tulpachat/shift_alarm_dismissed.json"))
 SHIFT_ALARM_REMINDER_EDITOR_FILE = Path(os.path.expanduser("~/.shift_alarm_reminders.json"))
+SHIFT_ALARM_BUDEUGI_FILE = Path(os.path.expanduser("~/.shift_alarm_budeugi.json"))
+SHIFT_ALARM_BUDEUGI_JOURNAL_FILE = Path(os.path.expanduser("~/.shift_alarm_budeugi_journal.json"))
+SHIFT_ALARM_BUDEUGI_AUDIO_DIR = Path(os.path.expanduser("~/.tulpachat/budeugi_audio"))
+SHIFT_ALARM_BUDEUGI_TTS_VOICE = "ko-KR-SunHiNeural"
 # shift_alarm.py의 notify_spoken()이 매 호출마다 이 파일을 읽어 muted면 배너음·
 # 음성 안내를 건너뛴다 — self.config(~/.shift_alarm_config.json)는 shift_alarm.py가
 # 주기적으로 통째로 덮어써서 웹 서버가 직접 쓰면 경쟁 상태가 생기므로(리마인더
@@ -131,10 +152,17 @@ SHIFT_ALARM_OUT_LOG_FILE = Path(os.path.expanduser("~/Library/Logs/shift_alarm.o
 # 음량 설정할수있게끔 설정버튼 만들어줘" 요청).
 SHIFT_ALARM_WAKE_VOLUME_FILE = Path(os.path.expanduser("~/.shift_alarm_wake_volume.json"))
 SHIFT_ALARM_ROUTINE_HISTORY_FILE = Path(os.path.expanduser("~/.shift_alarm_routine_history.jsonl"))
+SHIFT_ALARM_SCHEDULE_FILE = Path(__file__).resolve().parents[3] / "shift_alarm" / "d_team_schedule_2026.json"
 SHIFT_ALARM_QUEST_EVENTS_FILE = Path(os.path.expanduser("~/.shift_alarm_quest_events.jsonl"))
+SHIFT_ALARM_CULTIVATION_CHOICES_FILE = Path(os.path.expanduser("~/.shift_alarm_cultivation_choices.json"))
+SHIFT_ALARM_CULTIVATION_INTERVALS_FILE = Path(os.path.expanduser("~/.shift_alarm_cultivation_intervals.json"))
 SHIFT_ALARM_QUEST_LOCK = threading.RLock()
 SHIFT_ALARM_QUEST_EPOCH = "2026-10-05"
 SHIFT_ALARM_ROUTINE_SIGNAL_FILE = Path(os.path.expanduser("~/.shift_alarm_routine_signal.json"))
+SHIFT_ALARM_CHECKLIST_STATE_CACHE_FILE = Path(
+    os.path.expanduser("~/.shift_alarm_checklist_state.json")
+)
+SHIFT_ALARM_HOMECOMING_FILE = Path(os.path.expanduser("~/.shift_alarm_homecoming.json"))
 SHIFT_ALARM_HUE_CONFIG_FILE = Path(os.path.expanduser("~/.shift_alarm_hue.json"))
 SHIFT_ALARM_HUE_ROOM_NAME = "거실1"
 SHIFT_ALARM_NOTION_PAGE_ID = "3b532a1e-ae80-8034-90af-fd8c9b658711"
@@ -627,7 +655,7 @@ def _dating_sim_update_history(include_admin=False):
                 "id": f"dating-image:{work_dir.name}:{filename}:{stat.st_mtime_ns}",
                 "created_at": created_at, "system": "최근 이미지", "kind": "image",
                 "title": f"{work_dir.name} · {label}",
-                "body": "이미지를 누르면 해당 작품의 시나리오 트리로 이동합니다.",
+                "body": "이미지를 누르면 생성 정보와 프롬프트 편집창이 바로 열립니다.",
                 "url": "/dating-sim/", "story_id": f"book:{book_id}",
                 "work": work_dir.name, "image_file": filename, "image_label": label,
                 "image_url": f"/api/dating-sim/books/{book_id}/{route}/{filename}?t={int(stat.st_mtime)}",
@@ -801,7 +829,7 @@ class NoCacheStaticMiddleware(BaseHTTPMiddleware):
                 response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
             else:
                 response.headers["Cache-Control"] = "no-cache"
-        if request.url.path in {"/career/", "/fitness/", "/terrain-survey/"} or request.url.path.startswith(("/career/static/", "/fitness/static/", "/terrain-survey/static/")):
+        if request.url.path in {"/career/", "/fitness/", "/terrain-survey/", "/stock-portfolio/"} or request.url.path.startswith(("/career/static/", "/fitness/static/", "/terrain-survey/static/", "/stock-portfolio/static/")):
             # iOS 홈 화면 웹앱은 일반 탭보다 HTML/JS를 오래 보존하는 경우가 있다.
             # 커리어 보드는 소유자 전용이고 파일도 작으므로 매번 최신본을 받는다.
             response.headers["Cache-Control"] = "no-store, max-age=0"
@@ -1064,6 +1092,25 @@ def fitness_redirect():
     return RedirectResponse("/fitness/", status_code=307)
 
 
+@app.get("/stock-portfolio")
+def stock_portfolio_redirect():
+    return RedirectResponse("/stock-portfolio/", status_code=307)
+
+
+@app.get("/stock-portfolio/")
+def stock_portfolio_dashboard(request: Request):
+    _require_signed_in_user(request)
+    return FileResponse(str(STOCK_PORTFOLIO_WEB_DIR / "index.html"), headers={"Cache-Control": "no-store"})
+
+
+@app.get("/stock-portfolio/static/{filename}")
+def stock_portfolio_static(filename: str, request: Request):
+    _require_signed_in_user(request)
+    if filename not in {"style.css", "app.js", "manifest.webmanifest"}:
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
+    return FileResponse(str(STOCK_PORTFOLIO_WEB_DIR / filename), headers={"Cache-Control": "no-store"})
+
+
 @app.get("/fitness/")
 def fitness_dashboard(request: Request):
     _require_signed_in_user(request)
@@ -1142,10 +1189,16 @@ def memo_dashboard(request: Request):
     return FileResponse(str(MEMO_WEB_DIR / "index.html"))
 
 
+@app.get("/memo/chat-map/")
+def memo_chat_map(request: Request):
+    _require_signed_in_user(request)
+    return FileResponse(str(MEMO_WEB_DIR / "chat-map.html"))
+
+
 @app.get("/memo/static/{filename}")
 def memo_static(filename: str, request: Request):
     _require_signed_in_user(request)
-    if filename not in {"style.css", "colors.css", "tools.css", "voice.css", "app.js", "manifest.webmanifest", "apple-touch-icon.png", "icon-192.png", "icon-512.png"}:
+    if filename not in {"style.css", "colors.css", "tools.css", "voice.css", "app.js", "chat-map.css", "chat-map.js", "manifest.webmanifest", "apple-touch-icon.png", "icon-192.png", "icon-512.png"}:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(MEMO_WEB_DIR / filename))
 
@@ -1164,7 +1217,7 @@ def comfy_workspace(request: Request):
 @app.get("/comfy/static/{filename}")
 def comfy_workspace_static(filename: str, request: Request):
     _require_owner(request)
-    if filename not in {"style.css", "quality.css", "app.js"}:
+    if filename not in {"style.css", "quality.css", "app.js", "manifest.webmanifest"}:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(COMFY_WEB_DIR / filename))
 
@@ -1188,7 +1241,7 @@ def transcription_dashboard(request: Request):
 @app.get("/transcriptions/static/{filename}")
 def transcription_static(filename: str, request: Request):
     _require_owner(request)
-    if filename not in {"style.css", "quality.css", "app.js"}:
+    if filename not in {"style.css", "quality.css", "app.js", "manifest.webmanifest"}:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(TRANSCRIPTION_WEB_DIR / filename))
 
@@ -1346,7 +1399,7 @@ def sql_lab_dashboard(request: Request):
 @app.get("/sql-lab/static/{filename}")
 def sql_lab_static(filename: str, request: Request):
     _require_signed_in_user(request)
-    if filename not in {"style.css", "app.js"}:
+    if filename not in {"style.css", "app.js", "manifest.webmanifest"}:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(SQL_LAB_WEB_DIR / filename))
 
@@ -1451,7 +1504,7 @@ def mp3_player_dashboard(request: Request):
 @app.get("/mp3-player/static/{filename}")
 def mp3_player_static(filename: str, request: Request):
     _require_signed_in_user(request)
-    if filename not in {"style.css", "playlist.css", "app.js", "manifest.webmanifest", "player-controls-v1.png", "favorite-heart-v1.png", "apple-touch-icon.png", "icon-192.png", "icon-512.png"}:
+    if filename not in {"style.css", "playlist.css", "recommendations.css", "app.js", "manifest.webmanifest", "player-controls-v1.png", "favorite-heart-v1.png", "apple-touch-icon.png", "icon-192.png", "icon-512.png"}:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     path = MP3_PLAYER_WEB_DIR / filename
     if filename in {"player-controls-v1.png", "favorite-heart-v1.png"}:
@@ -1582,50 +1635,117 @@ async def _generate_lrc_from_mp3_source(source: Path, job_dir: Path, job_id: str
                         message=f"{index + 1}번째 조각 처리 중 · {completed_audio / 60:.1f}/{duration / 60:.1f}분",
                         processed_seconds=completed_audio, audio_duration=duration,
                     )
-                process = subprocess.Popen(
-                    [str(whisper), "-ng", "-m", str(model), "-f", str(wave), "-l", "auto", "-sns", "-osrt", "-of", str(output_prefix)],
-                    stdout=log, stderr=subprocess.STDOUT, text=True,
-                )
-                chunk_started = time.monotonic()
-                last_percent = -1
-                while process.poll() is None:
-                    if time.monotonic() - chunk_started > 2400:
-                        process.kill()
-                        raise HTTPException(status_code=504, detail=f"{index + 1}번째 가사 조각 생성이 40분을 초과했습니다")
-                    await asyncio.sleep(1.5)
-                    if not job_id:
-                        continue
-                    try:
-                        log_text = progress_log.read_text(encoding="utf-8", errors="ignore").rsplit(chunk_marker, 1)[-1]
-                        stamps = re.findall(r"\[(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)\s*-->", log_text)
-                        within_chunk = 0.0
-                        if stamps:
-                            hours, minutes, seconds = stamps[-1]
-                            within_chunk = int(hours) * 3600 + int(minutes) * 60 + float(seconds)
-                        processed = min(duration, offset + min(chunk_seconds, within_chunk))
-                        analysis_percent = min(99, max(0, round(processed / duration * 100)))
-                        overall = min(92, 20 + round(analysis_percent * 0.72))
-                        if overall != last_percent:
-                            elapsed = max(1.0, time.monotonic() - transcription_started)
-                            speed = processed / elapsed
-                            remaining = max(0, round((duration - processed) / speed)) if speed > 0 and processed >= 15 else None
-                            expected_at = ((datetime.datetime.now().astimezone() + datetime.timedelta(seconds=remaining)).isoformat() if remaining is not None else None)
-                            _write_lrc_job(
-                                job_id, status="running", stage=f"2/3 · Whisper 전사 {index + 1}/{total_chunks}", percent=overall,
-                                message=f"{analysis_percent}% 분석 · {processed / 60:.1f}/{duration / 60:.1f}분",
-                                processed_seconds=processed, audio_duration=duration,
-                                estimated_remaining_seconds=remaining, estimated_completion_at=expected_at,
-                            )
-                            last_percent = overall
-                    except OSError:
-                        pass
-                srt = output_prefix.with_suffix(".srt")
-                if process.returncode != 0 or not srt.is_file():
-                    raise HTTPException(status_code=422, detail=f"Whisper가 {index + 1}번째 가사 조각을 인식하지 못했습니다")
+                async def transcribe_piece(piece: Path, prefix: Path, piece_offset: float, timeout: int, marker: str) -> str:
+                    process = subprocess.Popen(
+                        [str(whisper), "-ng", "-m", str(model), "-f", str(piece), "-l", "auto", "-sns", "-osrt", "-of", str(prefix)],
+                        stdout=log, stderr=subprocess.STDOUT, text=True,
+                    )
+                    started = time.monotonic()
+                    last_progress_at = started
+                    last_stamp = ""
+                    while process.poll() is None:
+                        elapsed_piece = time.monotonic() - started
+                        await asyncio.sleep(1.5)
+                        try:
+                            live_text = progress_log.read_text(encoding="utf-8", errors="ignore").rsplit(marker, 1)[-1]
+                            stamps = re.findall(r"\[(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)\s*-->", live_text)
+                            stamp = ":".join(stamps[-1]) if stamps else ""
+                            if stamp and stamp != last_stamp:
+                                last_stamp = stamp
+                                last_progress_at = time.monotonic()
+                                if job_id:
+                                    hours, minutes, seconds = stamps[-1]
+                                    within_piece = int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+                                    processed = min(duration, piece_offset + within_piece)
+                                    analysis_percent = min(99, max(0, round(processed / duration * 100)))
+                                    overall = min(92, 20 + round(analysis_percent * 0.72))
+                                    elapsed_total = max(1.0, time.monotonic() - transcription_started)
+                                    speed = processed / elapsed_total
+                                    remaining = max(0, round((duration - processed) / speed)) if speed > 0 and processed >= 15 else None
+                                    expected_at = (
+                                        (datetime.datetime.now().astimezone() + datetime.timedelta(seconds=remaining)).isoformat()
+                                        if remaining is not None else None
+                                    )
+                                    _write_lrc_job(
+                                        job_id, status="running", stage=f"2/3 · Whisper 전사 {index + 1}/{total_chunks}",
+                                        percent=overall,
+                                        message=f"{analysis_percent}% 분석 · {processed / 60:.1f}/{duration / 60:.1f}분",
+                                        processed_seconds=processed, audio_duration=duration,
+                                        estimated_remaining_seconds=remaining, estimated_completion_at=expected_at,
+                                    )
+                            # Whisper가 잘못 감지한 문자 하나를 끝없이 출력하는 경우를
+                            # 제한 시간까지 기다리지 않고 해당 조각만 다시 나눈다.
+                            spoken = "".join(re.findall(r"\]\s*([^\n]+)", live_text))
+                            compact = re.sub(r"\s+", "", spoken)
+                            if len(compact) >= 120:
+                                counts = collections.Counter(compact)
+                                _, dominant = counts.most_common(1)[0]
+                                if dominant >= 80 and dominant / len(compact) >= 0.55:
+                                    process.kill()
+                                    process.wait(timeout=10)
+                                    raise RuntimeError("비정상 반복 출력")
+                            if elapsed_piece > timeout or (last_stamp and time.monotonic() - last_progress_at > 480):
+                                process.kill()
+                                process.wait(timeout=10)
+                                raise RuntimeError("전사 진행 정지")
+                        except OSError:
+                            if elapsed_piece > timeout:
+                                process.kill()
+                                process.wait(timeout=10)
+                                raise RuntimeError("전사 제한 시간 초과")
+                    srt_path = prefix.with_suffix(".srt")
+                    if process.returncode != 0 or not srt_path.is_file():
+                        raise RuntimeError("Whisper 인식 실패")
+                    return mp3_player.srt_to_lrc(
+                        srt_path.read_text(encoding="utf-8"), offset_seconds=piece_offset, include_header=False,
+                    )
+
                 try:
-                    part = mp3_player.srt_to_lrc(srt.read_text(encoding="utf-8"), offset_seconds=offset, include_header=False)
-                except (OSError, ValueError) as exc:
-                    raise HTTPException(status_code=422, detail=f"{index + 1}번째 조각: {exc}") from exc
+                    part = await transcribe_piece(wave, output_prefix, offset, 2400, chunk_marker)
+                except (RuntimeError, OSError, ValueError) as first_error:
+                    retry_dir = chunks_dir / f"retry_{index:03d}"
+                    retry_dir.mkdir(parents=True, exist_ok=True)
+                    log.write(f"[{index + 1}/{total_chunks}] {first_error} · 5분 조각으로 자동 재분할\n")
+                    log.flush()
+                    if job_id:
+                        _write_lrc_job(
+                            job_id, status="running", stage=f"2/3 · 실패 조각 세분화 {index + 1}/{total_chunks}",
+                            percent=max(20, 20 + round(offset / duration * 72)),
+                            message=f"{index + 1}번째 조각의 언어 오인식·정지를 감지해 5분 단위로 다시 분석합니다",
+                            retry_chunk=index + 1,
+                        )
+                    retry_waves = sorted(retry_dir.glob("piece_*.wav"))
+                    if not retry_waves:
+                        converted = await asyncio.to_thread(
+                            subprocess.run,
+                            [ffmpeg, "-y", "-v", "error", "-i", str(wave), "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le",
+                             "-f", "segment", "-segment_time", "300", "-reset_timestamps", "1", str(retry_dir / "piece_%03d.wav")],
+                            capture_output=True, text=True, timeout=300,
+                        )
+                        retry_waves = sorted(retry_dir.glob("piece_*.wav"))
+                        if converted.returncode != 0 or not retry_waves:
+                            raise HTTPException(status_code=422, detail=f"{index + 1}번째 실패 조각을 다시 나누지 못했습니다")
+                    pieces = []
+                    for retry_index, retry_wave in enumerate(retry_waves):
+                        retry_lrc = retry_dir / f"piece_{retry_index:03d}.lrc"
+                        if retry_lrc.is_file():
+                            pieces.append(retry_lrc.read_text(encoding="utf-8"))
+                            continue
+                        retry_marker = f"--- LRC RETRY {index + 1}.{retry_index + 1}/{len(retry_waves)} ---"
+                        log.write(f"{retry_marker}\n")
+                        log.flush()
+                        try:
+                            retry_part = await transcribe_piece(
+                                retry_wave, retry_dir / f"lyrics_{retry_index:03d}", offset + retry_index * 300, 1200, retry_marker,
+                            )
+                        except (RuntimeError, OSError, ValueError) as exc:
+                            raise HTTPException(
+                                status_code=504,
+                                detail=f"{index + 1}번째 조각의 {retry_index + 1}번째 재분석도 중단됐습니다: {exc}",
+                            ) from exc
+                        retry_lrc.write_text(retry_part, encoding="utf-8")
+                        pieces.append(retry_part)
+                    part = "\n".join(piece.strip() for piece in pieces if piece.strip()) + "\n"
                 chunk_lrc.write_text(part, encoding="utf-8")
                 combined_lines.extend(line for line in part.splitlines() if line.strip())
                 log.write(f"[{index + 1}/{total_chunks}] 조각 LRC 저장 완료\n")
@@ -1686,11 +1806,13 @@ def _public_lrc_job(job: dict[str, Any]) -> dict[str, Any]:
         "id", "filename", "status", "stage", "percent", "message",
         "created_at", "updated_at", "completed_at", "processed_seconds", "audio_duration",
         "estimated_remaining_seconds", "estimated_completion_at",
+        "retry_chunk", "retryable", "reused_chunks",
     )}
 
 
-def _persist_lrc_to_mp3_library(filename: str, result: Path) -> Path | None:
-    return persist_lrc_to_library(filename, result, MP3_LIBRARY_DIR)
+def _persist_lrc_to_mp3_library(filename: str, result: Path, source_library: str = "library") -> Path | None:
+    target_directory = MP3_FAVORITES_DIR if source_library == "favorites" else MP3_LIBRARY_DIR
+    return persist_lrc_to_library(filename, result, target_directory)
 
 
 def _run_persistent_lrc_job(job_id: str) -> None:
@@ -1709,7 +1831,11 @@ def _run_persistent_lrc_job(job_id: str) -> None:
             result.write_text(body, encoding="utf-8")
             _write_lrc_job(job_id, status="running", stage="3/3 · 저장 및 동기화", percent=98, message="완성된 LRC를 곡과 재생 목록에 적용하고 있습니다")
             store_synced_lrc(job.get("owner") or "", job.get("filename") or "", body)
-            library_lrc = _persist_lrc_to_mp3_library(job.get("filename") or "", result)
+            library_lrc = _persist_lrc_to_mp3_library(
+                job.get("filename") or "",
+                result,
+                job.get("source_library") or "library",
+            )
             now = datetime.datetime.now().astimezone().isoformat()
             _write_lrc_job(
                 job_id, status="complete", stage="완료", percent=100,
@@ -1720,11 +1846,20 @@ def _run_persistent_lrc_job(job_id: str) -> None:
             with (directory / "progress.log").open("a", encoding="utf-8") as log:
                 log.write("[3/3] LRC 병합·저장·재생 목록 적용 완료\n")
         except HTTPException as exc:
-            _write_lrc_job(job_id, status="failed", stage="생성 실패", percent=0, message=str(exc.detail))
+            reusable = len(list((directory / "chunks").glob("chunk_*.lrc")))
+            _write_lrc_job(
+                job_id, status="failed", stage="생성 실패", percent=0, message=str(exc.detail),
+                retryable=source.is_file(), reused_chunks=reusable,
+            )
             with (directory / "progress.log").open("a", encoding="utf-8") as log:
                 log.write(f"[실패] {exc.detail}\n")
         except Exception as exc:
-            _write_lrc_job(job_id, status="failed", stage="생성 실패", percent=0, message="LRC 백그라운드 생성 중 오류가 발생했습니다")
+            reusable = len(list((directory / "chunks").glob("chunk_*.lrc")))
+            _write_lrc_job(
+                job_id, status="failed", stage="생성 실패", percent=0,
+                message="LRC 백그라운드 생성 중 오류가 발생했습니다",
+                retryable=source.is_file(), reused_chunks=reusable,
+            )
             with (directory / "progress.log").open("a", encoding="utf-8") as log:
                 log.write(f"[실패] {type(exc).__name__}: {exc}\n")
         finally:
@@ -1745,16 +1880,36 @@ def _start_persistent_lrc_job(job_id: str) -> None:
     threading.Thread(target=_run_persistent_lrc_job, args=(job_id,), daemon=True, name=f"lrc-job-{job_id[:6]}").start()
 
 
-def _create_persistent_lrc_job(source: Path, filename: str, owner: str) -> dict[str, Any]:
+def _create_persistent_lrc_job(
+    source: Path,
+    filename: str,
+    owner: str,
+    *,
+    source_kind: str = "upload",
+    source_library: str = "library",
+) -> dict[str, Any]:
+    safe_filename = Path(filename).name
+    for status_path in LRC_JOB_ROOT.glob("*/status.json"):
+        try:
+            existing = json.loads(status_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if (
+            existing.get("owner") == owner
+            and existing.get("filename") == safe_filename
+            and existing.get("status") in {"queued", "running"}
+        ):
+            return existing
     job_id = uuid.uuid4().hex
     directory = _lrc_job_dir(job_id)
     directory.mkdir(mode=0o700, parents=True, exist_ok=False)
     shutil.move(str(source), str(directory / "source.mp3"))
     now = datetime.datetime.now().astimezone().isoformat()
     job = _write_lrc_job(
-        job_id, filename=Path(filename).name, owner=owner, status="queued",
+        job_id, filename=safe_filename, owner=owner, status="queued",
+        source_kind=source_kind, source_library=source_library,
         stage="대기 중", percent=5, message="Mac의 LRC 작업 대기열에 등록됐습니다",
-        created_at=now, completed_at=None,
+        created_at=now, completed_at=None, retryable=False,
     )
     _start_persistent_lrc_job(job_id)
     return job
@@ -1770,6 +1925,18 @@ def _recover_persistent_lrc_jobs() -> None:
                 _start_persistent_lrc_job(job_id)
         except (OSError, ValueError):
             continue
+
+
+class Mp3LibraryLrcJobRequest(BaseModel):
+    file_id: str
+    expected_name: str
+    expected_size: int
+    library_kind: str = "library"
+
+
+def _youtube_id_from_filename(filename: str) -> str:
+    match = re.search(r"\[([A-Za-z0-9_-]{11})\](?:\.mp3)?$", filename or "", re.IGNORECASE)
+    return match.group(1) if match else ""
 
 
 @app.post("/api/mp3-player/lrc-jobs")
@@ -1792,6 +1959,62 @@ async def create_mp3_lrc_job(request: Request, file: UploadFile = File(...)):
         if size < 128:
             raise HTTPException(status_code=422, detail="비어 있거나 손상된 MP3입니다")
         job = _create_persistent_lrc_job(staging, original_name, _request_username(request))
+        return JSONResponse(_public_lrc_job(job), status_code=202)
+    finally:
+        staging.unlink(missing_ok=True)
+
+
+@app.post("/api/mp3-player/lrc-jobs/from-library")
+def create_mp3_lrc_job_from_library(body: Mp3LibraryLrcJobRequest, request: Request):
+    """Mac 보관함에 동일한 MP3가 있으면 휴대폰 업로드 없이 LRC 작업을 등록한다."""
+    _require_owner(request)
+    if body.library_kind == "favorites":
+        source = _mp3_directory_path(
+            MP3_FAVORITES_DIR,
+            "/api/mp3-player/favorites-library",
+            body.file_id,
+        )
+    elif body.library_kind == "library":
+        source = _mp3_library_path(body.file_id)
+    else:
+        raise HTTPException(status_code=422, detail="Mac 보관함 종류가 올바르지 않습니다")
+    expected_name = Path(body.expected_name or "").name
+    actual_name = unicodedata.normalize("NFC", source.name).casefold()
+    requested_name = unicodedata.normalize("NFC", expected_name).casefold()
+    try:
+        actual_size = source.stat().st_size
+    except OSError as exc:
+        raise HTTPException(status_code=404, detail="Mac 보관함의 MP3를 읽을 수 없습니다") from exc
+    actual_video_id = _youtube_id_from_filename(source.name)
+    requested_video_id = _youtube_id_from_filename(expected_name)
+    same_identity = requested_name == actual_name or (
+        bool(actual_video_id) and actual_video_id == requested_video_id
+    )
+    size_matches = body.expected_size <= 0 or body.expected_size == actual_size
+    if not expected_name or not same_identity or (requested_name == actual_name and not size_matches):
+        raise HTTPException(status_code=409, detail="Mac 보관함 파일과 선택한 MP3가 정확히 일치하지 않습니다")
+
+    descriptor, staging_name = tempfile.mkstemp(prefix="lrc-library-", suffix=".mp3", dir=LRC_UPLOAD_ROOT)
+    os.close(descriptor)
+    staging = Path(staging_name)
+    staging.unlink(missing_ok=True)
+    try:
+        try:
+            os.link(source, staging)
+        except OSError:
+            shutil.copy2(source, staging)
+        job = _create_persistent_lrc_job(
+            staging,
+            source.name,
+            _request_username(request),
+            source_kind="mac_library",
+            source_library=body.library_kind,
+        )
+        job = _write_lrc_job(
+            job["id"],
+            stage="Mac 원본 확인 완료",
+            message="MP3 전송을 생략하고 Mac 원본으로 작업합니다",
+        )
         return JSONResponse(_public_lrc_job(job), status_code=202)
     finally:
         staging.unlink(missing_ok=True)
@@ -1876,6 +2099,35 @@ def mp3_lrc_job_result(job_id: str, request: Request):
     return FileResponse(result, media_type="text/plain; charset=utf-8", filename=Path(job.get("filename") or "lyrics.mp3").with_suffix(".lrc").name)
 
 
+@app.post("/api/mp3-player/lrc-jobs/{job_id}/retry")
+def retry_mp3_lrc_job(job_id: str, request: Request):
+    """성공한 조각을 보존하고 실패한 조각부터 백그라운드 작업을 재개한다."""
+    _require_signed_in_user(request)
+    job = _read_lrc_job(job_id)
+    if job.get("owner") != _request_username(request):
+        raise HTTPException(status_code=404, detail="LRC 작업을 찾을 수 없습니다")
+    if job.get("status") in {"queued", "running"}:
+        return JSONResponse(_public_lrc_job(job), status_code=202)
+    directory = _lrc_job_dir(job_id)
+    if not (directory / "source.mp3").is_file():
+        raise HTTPException(status_code=409, detail="재시도할 원본 MP3가 남아 있지 않습니다")
+    reused = len(list((directory / "chunks").glob("chunk_*.lrc")))
+    retried = _write_lrc_job(
+        job_id,
+        status="queued",
+        stage="실패 지점부터 재시도 대기",
+        percent=5,
+        message=f"완료된 {reused}개 조각을 보존하고 실패 지점부터 다시 시작합니다",
+        retryable=False,
+        reused_chunks=reused,
+        completed_at=None,
+        estimated_remaining_seconds=None,
+        estimated_completion_at=None,
+    )
+    _start_persistent_lrc_job(job_id)
+    return JSONResponse(_public_lrc_job(retried), status_code=202)
+
+
 @app.post("/api/mp3-player/generate-lrc")
 async def generate_mp3_lrc(request: Request, file: UploadFile = File(...)):
     """작은 MP3를 한 번에 받아 로컬 Whisper로 LRC를 만든다."""
@@ -1953,12 +2205,25 @@ async def generate_mp3_lrc_chunk(
 
 class YoutubeMp3DownloadRequest(BaseModel):
     url: str
+    destination: str = "library"
 
 
 class Mp3TrackFavoriteWrite(BaseModel):
     track_key: str
     title: str = ""
     playlist: str = ""
+
+
+class Mp3RecommendationPreferencesWrite(BaseModel):
+    genres: list[str] = []
+    moods: list[str] = []
+    artists: list[str] = []
+
+
+class Mp3RecommendationFeedbackWrite(BaseModel):
+    youtube_id: str
+    action: str
+    title: str = ""
 
 
 def _youtube_mp3_url(value: str) -> str:
@@ -1976,8 +2241,15 @@ def _youtube_mp3_url(value: str) -> str:
 
 
 def _mp3_library_rows() -> list[dict[str, Any]]:
+    rows = _mp3_directory_rows(MP3_LIBRARY_DIR, "/api/mp3-player/library")
+    for row in rows:
+        row["library_kind"] = "library"
+    return rows
+
+
+def _mp3_directory_rows(directory: Path, route_prefix: str) -> list[dict[str, Any]]:
     rows = []
-    for path in MP3_LIBRARY_DIR.glob("*.mp3"):
+    for path in directory.glob("*.mp3"):
         try:
             stat = path.stat()
         except OSError:
@@ -1990,65 +2262,266 @@ def _mp3_library_rows() -> list[dict[str, Any]]:
             "title": path.stem,
             "size": stat.st_size,
             "updated_at": datetime.datetime.fromtimestamp(stat.st_mtime).astimezone().isoformat(),
-            "stream_url": f"/api/mp3-player/library/{file_id}/file",
+            "stream_url": f"{route_prefix}/{file_id}/file",
             "has_lrc": lrc_path.is_file(),
-            "lrc_url": f"/api/mp3-player/library/{file_id}/lrc" if lrc_path.is_file() else None,
+            "lrc_url": f"{route_prefix}/{file_id}/lrc" if lrc_path.is_file() else None,
         })
     return sorted(rows, key=lambda row: row["updated_at"], reverse=True)
 
 
 def _mp3_library_path(file_id: str) -> Path:
-    for row in _mp3_library_rows():
+    return _mp3_directory_path(MP3_LIBRARY_DIR, "/api/mp3-player/library", file_id)
+
+
+def _mp3_directory_path(directory: Path, route_prefix: str, file_id: str) -> Path:
+    for row in _mp3_directory_rows(directory, route_prefix):
         if secrets.compare_digest(row["id"], file_id):
-            target = MP3_LIBRARY_DIR / row["name"]
-            if target.resolve().parent == MP3_LIBRARY_DIR.resolve() and target.is_file():
+            target = directory / row["name"]
+            if target.resolve().parent == directory.resolve() and target.is_file():
                 return target
     raise HTTPException(status_code=404, detail="MP3 파일을 찾을 수 없습니다")
 
 
-def _run_youtube_mp3_job(job_id: str, url: str) -> None:
+def _youtube_id_from_url(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.hostname == "youtu.be":
+        return parsed.path.strip("/").split("/")[0]
+    return urllib.parse.parse_qs(parsed.query).get("v", [""])[0]
+
+
+def _update_mp3_postprocess(job_id: str, **values) -> None:
+    if not values:
+        return
+    values["updated_at"] = _now()
+    fields = ",".join(f"{key}=?" for key in values)
+    conn = get_conn()
+    conn.execute(f"UPDATE mp3_postprocess_jobs SET {fields} WHERE id=?", (*values.values(), job_id))
+    conn.commit()
+    conn.close()
+
+
+def _queue_lyrics_translation(job_id: str, username: str, title: str, lrc: str) -> int:
+    lyrics = "\n".join(
+        re.sub(r"^\[[^]]+]\s*", "", line).strip()
+        for line in lrc.splitlines() if re.match(r"^\[\d{1,3}:\d{2}", line)
+    ).strip()
+    content = (
+        f"[MP3 가사 직해 요청]\n곡: {title}\n언어: 일본어\n\n"
+        "가사 순서를 그대로 지키며 각 일본어 원문 바로 아래에 자연스러운 한국어 직해를 붙여주세요. "
+        "한자가 있는 줄에는 읽기 어려운 말만 괄호로 후리가나를 덧붙이되, 문법 수업·새 예문·감상 평가는 넣지 마세요.\n"
+        "반복되는 가사도 생략하지 말고 입력된 순서대로 옮겨주세요. LRC 또는 Whisper 오인식으로 의심되는 대목도 "
+        "별도의 검수 문구를 붙이지 말고, 입력된 원문을 유지한 채 가능한 범위에서 자연스럽게 직해해주세요.\n\n"
+        f"[가사]\n{lyrics[:16000]}"
+    )
+    now = _now()
+    conn = get_conn()
+    cursor = conn.execute(
+        "INSERT INTO messages(room_id,sender,content,created_at) VALUES(?,?,?,?)",
+        ("일본어 선생님", username, content, now),
+    )
+    source_message_id = int(cursor.lastrowid)
+    conn.execute(
+        "INSERT INTO pending_turns(persona_name,room_id,status,created_at,source_message_id) VALUES(?,?,'pending',?,?)",
+        ("일본어 선생님", "일본어 선생님", now, source_message_id),
+    )
+    conn.commit()
+    conn.close()
+    _update_mp3_postprocess(
+        job_id, status="translating", stage="가사 해석 대기 중", percent=75,
+        source_message_id=source_message_id,
+    )
+    threading.Thread(
+        target=_watch_mp3_translation, args=(job_id, source_message_id), daemon=True,
+        name=f"mp3-translation-{job_id[:6]}",
+    ).start()
+    return source_message_id
+
+
+def _watch_mp3_translation(job_id: str, source_message_id: int) -> None:
+    while True:
+        conn = get_conn()
+        turn = conn.execute(
+            "SELECT status,error FROM pending_turns WHERE source_message_id=? ORDER BY id DESC LIMIT 1",
+            (source_message_id,),
+        ).fetchone()
+        conn.close()
+        if turn and turn["status"] == "done":
+            _update_mp3_postprocess(job_id, status="complete", stage="LRC·가사 해석 완료", percent=100, completed_at=_now())
+            return
+        if turn and turn["status"] == "failed":
+            _update_mp3_postprocess(job_id, status="failed", stage="가사 해석 실패", percent=70, error=str(turn["error"] or "")[:500], completed_at=_now())
+            return
+        time.sleep(2)
+
+
+def _run_mp3_postprocess(job_id: str) -> None:
+    with _mp3_postprocess_lock:
+        conn = get_conn()
+        job = conn.execute("SELECT * FROM mp3_postprocess_jobs WHERE id=?", (job_id,)).fetchone()
+        conn.close()
+        if not job or job["status"] in {"complete", "translating"}:
+            return
+        path = Path(job["mp3_path"])
+        try:
+            if not path.is_file():
+                raise FileNotFoundError("다운로드된 MP3를 찾을 수 없습니다")
+            _update_mp3_postprocess(job_id, status="processing", stage="LRCLIB에서 시간 가사 검색 중", percent=15, error=None)
+            metadata = mp3_postprocess.media_metadata(path)
+            lrc = mp3_postprocess.find_synced_lyrics(metadata)
+            source = "lrclib"
+            if not lrc:
+                _update_mp3_postprocess(job_id, stage="로컬 Whisper로 시간 가사 생성 중", percent=30)
+                work_dir = LRC_JOB_ROOT / f"postprocess-{job_id}"
+                work_dir.mkdir(parents=True, exist_ok=True)
+                response = asyncio.run(_generate_lrc_from_mp3_source(path, work_dir))
+                lrc = bytes(response.body).decode("utf-8")
+                source = "whisper"
+            if not mp3_postprocess.valid_lrc(lrc):
+                raise ValueError("시간 가사를 충분히 만들지 못했습니다")
+            lrc_path = path.with_suffix(".lrc")
+            temporary = lrc_path.with_suffix(".lrc.tmp")
+            temporary.write_text(lrc, encoding="utf-8")
+            temporary.replace(lrc_path)
+            store_synced_lrc(job["username"], job["filename"], lrc)
+            _update_mp3_postprocess(job_id, stage="LRC 저장 완료 · 가사 해석 요청 중", percent=70, lrc_source=source)
+            _queue_lyrics_translation(job_id, job["username"], metadata["title"], lrc)
+        except Exception as exc:
+            detail = exc.detail if isinstance(exc, HTTPException) else str(exc)
+            _update_mp3_postprocess(
+                job_id, status="failed", stage="자동 가사 처리 실패", percent=0,
+                error=str(detail)[:500], completed_at=_now(),
+            )
+
+
+def _enqueue_mp3_postprocess(username: str, path: Path, youtube_id: str = "") -> str:
+    now, job_id = _now(), uuid.uuid4().hex
+    conn = get_conn()
+    existing = conn.execute(
+        "SELECT id,status FROM mp3_postprocess_jobs WHERE username=? AND filename=?",
+        (username, path.name),
+    ).fetchone()
+    if existing and existing["status"] not in {"failed"}:
+        conn.close()
+        return existing["id"]
+    conn.execute(
+        """INSERT INTO mp3_postprocess_jobs
+           (id,username,youtube_id,filename,mp3_path,status,stage,percent,created_at,updated_at)
+           VALUES(?,?,?,?,?,'queued','LRC 검색 대기 중',0,?,?)
+           ON CONFLICT(username,filename) DO UPDATE SET id=excluded.id,youtube_id=excluded.youtube_id,
+             mp3_path=excluded.mp3_path,status='queued',stage='LRC 검색 대기 중',percent=0,
+             lrc_source=NULL,source_message_id=NULL,error=NULL,updated_at=excluded.updated_at,completed_at=NULL""",
+        (job_id, username, youtube_id or None, path.name, str(path), now, now),
+    )
+    conn.commit()
+    conn.close()
+    threading.Thread(target=_run_mp3_postprocess, args=(job_id,), daemon=True, name=f"mp3-post-{job_id[:6]}").start()
+    return job_id
+
+
+def _update_mp3_download_job(job_id: str, **values) -> dict[str, Any]:
+    values["updated_at"] = _now()
+    job = _mp3_download_jobs.setdefault(job_id, {"id": job_id})
+    job.update(values)
+    conn = get_conn()
+    fields = ",".join(f"{key}=?" for key in values)
+    conn.execute(f"UPDATE mp3_download_jobs SET {fields} WHERE id=?", (*values.values(), job_id))
+    conn.commit()
+    conn.close()
+    return job
+
+
+def _recover_incomplete_download(job_id: str, output_dir: Path, youtube_id: str) -> Path | None:
+    media = next((
+        path for suffix in ("mp4", "m4a", "webm") for path in output_dir.glob(f"*.{suffix}")
+        if f"[{youtube_id}]" in path.stem
+    ), None)
+    if not media:
+        return None
+    ffmpeg = next((candidate for candidate in (
+        "/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", shutil.which("ffmpeg"),
+    ) if candidate and Path(candidate).is_file()), None)
+    if not ffmpeg:
+        return None
+    target = media.with_suffix(".mp3")
+    temporary = target.with_suffix(".mp3.tmp")
+    _update_mp3_download_job(job_id, status="converting", stage="중단된 음원을 MP3로 복구 중", percent=78, current_file=media.name)
+    converted = subprocess.run(
+        [ffmpeg, "-y", "-v", "error", "-i", str(media), "-vn", "-codec:a", "libmp3lame", "-qscale:a", "0", "-f", "mp3", str(temporary)],
+        capture_output=True, text=True, timeout=900,
+    )
+    if converted.returncode or not temporary.is_file() or temporary.stat().st_size < 1024:
+        temporary.unlink(missing_ok=True)
+        return None
+    temporary.replace(target)
+    media.unlink(missing_ok=True)
+    return target
+
+
+def _run_youtube_mp3_job(job_id: str, url: str, destination: str = "library", username: str = "") -> None:
     yt_dlp = next((Path(path) for path in (
         "/opt/homebrew/bin/yt-dlp", "/usr/local/bin/yt-dlp", shutil.which("yt-dlp") or "",
     ) if path and Path(path).is_file()), None)
     if yt_dlp is None:
-        _mp3_download_jobs[job_id].update(status="failed", message="Mac에 yt-dlp가 설치되어 있지 않습니다")
+        _update_mp3_download_job(job_id, status="failed", stage="저장 실패", percent=0, message="Mac에 yt-dlp가 설치되어 있지 않습니다", error="yt-dlp 없음")
         return
+    output_dir = MP3_FAVORITES_DIR if destination == "favorites" else MP3_LIBRARY_DIR
+    output_dir.mkdir(parents=True, exist_ok=True)
+    download_archive = output_dir / ".youtube-download-archive.txt"
+    youtube_id = _youtube_id_from_url(url)
     command = [
         str(yt_dlp), "--newline", "--no-overwrites", "--yes-playlist",
         "--format", "bestaudio[protocol=m3u8_native]/bestaudio/best",
         "--retries", "10", "--fragment-retries", "10", "--sleep-requests", "1",
         "--extract-audio", "--audio-format", "mp3", "--audio-quality", "0",
         "--embed-thumbnail", "--convert-thumbnails", "jpg", "--embed-metadata",
-        "--download-archive", str(MP3_DOWNLOAD_ARCHIVE),
-        "--output", str(MP3_LIBRARY_DIR / "%(title).180B [%(id)s].%(ext)s"),
+        "--download-archive", str(download_archive),
+        "--output", str(output_dir / "%(title).180B [%(id)s].%(ext)s"),
         url,
     ]
     with _mp3_download_lock:
-        job = _mp3_download_jobs[job_id]
-        job.update(status="downloading", message="Mac에서 MP3로 변환 중입니다")
         try:
-            process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-            assert process.stdout is not None
-            for raw in process.stdout:
-                line = raw.strip()
-                if not line:
-                    continue
-                percent = re.search(r"\[download\]\s+([\d.]+)%", line)
-                if percent:
-                    job["percent"] = max(0, min(100, int(float(percent.group(1)))))
-                destination = re.search(r"(?:Destination:|ExtractAudio\].*?:)\s*(.+)$", line)
-                if destination:
-                    job["current"] = Path(destination.group(1)).name
-                job["updated_at"] = datetime.datetime.now().astimezone().isoformat()
-            return_code = process.wait()
-            if return_code:
-                job.update(status="failed", message="다운로드에 실패했습니다. 주소·연령 제한·공개 상태를 확인해주세요")
+            recovered = _recover_incomplete_download(job_id, output_dir, youtube_id)
+            if recovered:
+                matches = [recovered]
             else:
-                job.update(status="complete", percent=100, message="Mac MP3 보관함에 저장했습니다")
-        except OSError:
-            job.update(status="failed", message="yt-dlp를 실행하지 못했습니다")
-        finally:
-            job["updated_at"] = datetime.datetime.now().astimezone().isoformat()
+                _update_mp3_download_job(job_id, status="downloading", stage="YouTube 음원 받는 중", percent=2, message="음원을 다운로드하고 있습니다", error=None)
+                process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+                assert process.stdout is not None
+                for raw in process.stdout:
+                    line = raw.strip()
+                    if not line:
+                        continue
+                    percent_match = re.search(r"\[download\]\s+([\d.]+)%", line)
+                    if percent_match:
+                        download_percent = max(0, min(100, int(float(percent_match.group(1)))))
+                        _update_mp3_download_job(job_id, status="downloading", stage="YouTube 음원 받는 중", percent=min(70, 2 + round(download_percent * .68)))
+                    destination_match = re.search(r"(?:Destination:|ExtractAudio\].*?:)\s*(.+)$", line)
+                    if destination_match:
+                        _update_mp3_download_job(job_id, status="converting", stage="MP3 변환·메타데이터 적용 중", percent=82, current_file=Path(destination_match.group(1)).name)
+                    elif "EmbedThumbnail" in line or "Metadata" in line:
+                        _update_mp3_download_job(job_id, status="finalizing", stage="앨범 이미지·곡 정보 적용 중", percent=94)
+                return_code = process.wait()
+                if return_code:
+                    raise RuntimeError("다운로드 또는 MP3 변환에 실패했습니다")
+                matches = sorted(
+                    (item for item in output_dir.glob("*.mp3") if f"[{youtube_id}]" in item.stem),
+                    key=lambda item: item.stat().st_mtime, reverse=True,
+                )
+            if not matches:
+                raise RuntimeError("변환된 MP3 파일을 찾지 못했습니다")
+            final_path = matches[0]
+            postprocess_id = _enqueue_mp3_postprocess(username, final_path, youtube_id) if username else None
+            message = "좋아요음악 폴더에 저장했습니다" if destination == "favorites" else "Mac MP3 보관함에 저장했습니다"
+            _update_mp3_download_job(
+                job_id, status="complete", stage="좋아요 폴더 저장 완료" if destination == "favorites" else "MP3 저장 완료",
+                percent=100, message=f"{message} · LRC와 가사 해석을 자동 처리합니다",
+                final_filename=final_path.name, postprocess_id=postprocess_id, completed_at=_now(), error=None,
+            )
+        except (OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+            _update_mp3_download_job(
+                job_id, status="failed", stage="저장 실패", percent=0,
+                message="저장하지 못했습니다. 다시 시도해주세요", error=str(exc)[:500], completed_at=_now(),
+            )
 
 
 @app.get("/api/mp3-player/library")
@@ -2070,6 +2543,77 @@ def mp3_player_library_lrc(file_id: str, request: Request):
     if not target.is_file():
         raise HTTPException(status_code=404, detail="이 곡의 LRC를 찾을 수 없습니다")
     return FileResponse(target, media_type="text/plain; charset=utf-8", headers={"Cache-Control": "private, no-store"})
+
+
+@app.get("/api/mp3-player/favorites-library")
+def mp3_player_favorites_library(request: Request):
+    user = _memo_user(request)
+    conn = get_conn()
+    recommended_ids = {row["youtube_id"] for row in conn.execute(
+        "SELECT youtube_id FROM mp3_recommendation_feedback WHERE username=? AND action='download'", (user["username"],)
+    ).fetchall()}
+    conn.close()
+    rows = _mp3_directory_rows(MP3_FAVORITES_DIR, "/api/mp3-player/favorites-library")
+    for row in rows:
+        match = re.search(r"\[([\w-]{11})\]\.mp3$", row["name"], re.IGNORECASE)
+        row["recommended_japanese"] = bool(match and match.group(1) in recommended_ids)
+        row["library_label"] = "좋아요음악"
+        row["library_kind"] = "favorites"
+    return {"items": rows}
+
+
+@app.get("/api/mp3-player/favorites-library/{file_id}/file")
+def mp3_player_favorites_library_file(file_id: str, request: Request):
+    _require_owner(request)
+    target = _mp3_directory_path(MP3_FAVORITES_DIR, "/api/mp3-player/favorites-library", file_id)
+    return FileResponse(target, media_type="audio/mpeg", headers={"Cache-Control": "private, max-age=3600"})
+
+
+@app.get("/api/mp3-player/favorites-library/{file_id}/lrc")
+def mp3_player_favorites_library_lrc(file_id: str, request: Request):
+    _require_owner(request)
+    target = _mp3_directory_path(MP3_FAVORITES_DIR, "/api/mp3-player/favorites-library", file_id).with_suffix(".lrc")
+    if not target.is_file():
+        raise HTTPException(status_code=404, detail="이 곡의 LRC를 찾을 수 없습니다")
+    return FileResponse(target, media_type="text/plain; charset=utf-8", headers={"Cache-Control": "private, no-store"})
+
+
+@app.get("/api/mp3-player/favorites-library/{file_id}/postprocess")
+def mp3_player_favorites_postprocess(file_id: str, request: Request):
+    user = _memo_user(request)
+    target = _mp3_directory_path(MP3_FAVORITES_DIR, "/api/mp3-player/favorites-library", file_id)
+    conn = get_conn()
+    job = conn.execute(
+        "SELECT * FROM mp3_postprocess_jobs WHERE username=? AND filename=? ORDER BY updated_at DESC LIMIT 1",
+        (user["username"], target.name),
+    ).fetchone()
+    if not job:
+        conn.close()
+        raise HTTPException(status_code=404, detail="자동 가사 작업을 찾을 수 없습니다")
+    result, turn_status, turn_error = None, None, None
+    if job["source_message_id"]:
+        turn = conn.execute(
+            "SELECT status,reply,error FROM pending_turns WHERE source_message_id=? ORDER BY id DESC LIMIT 1",
+            (job["source_message_id"],),
+        ).fetchone()
+        if turn:
+            turn_status, turn_error = turn["status"], turn["error"]
+            result = turn["reply"] if turn_status == "done" and turn["reply"] != "NONE" else None
+    conn.close()
+    status, stage, percent = job["status"], job["stage"], job["percent"]
+    if turn_status == "done":
+        status, stage, percent = "complete", "LRC·가사 해석 완료", 100
+        _update_mp3_postprocess(job["id"], status=status, stage=stage, percent=percent, completed_at=_now())
+    elif turn_status == "processing":
+        status, stage, percent = "translating", "가사 분석·해석 중", 85
+    elif turn_status in {"failed"}:
+        status, stage, percent = "failed", "가사 해석 실패", 70
+    return {
+        "id": job["id"], "status": status, "stage": stage, "percent": percent,
+        "lrc_source": job["lrc_source"], "has_lrc": target.with_suffix(".lrc").is_file(),
+        "source_message_id": job["source_message_id"], "result": result,
+        "error": turn_error or job["error"],
+    }
 
 
 @app.get("/api/me/mp3-favorites")
@@ -2119,6 +2663,122 @@ def remove_mp3_favorite(request: Request, track_key: str = Query(min_length=1, m
     return {"ok": True, "key": track_key, "is_favorite": False}
 
 
+def _mp3_recommendation_preferences(username: str) -> dict:
+    conn = get_conn()
+    row = conn.execute(
+        "SELECT preferences_json FROM mp3_recommendation_preferences WHERE username=?", (username,)
+    ).fetchone()
+    conn.close()
+    try:
+        stored = json.loads(row["preferences_json"]) if row else {}
+    except (TypeError, json.JSONDecodeError):
+        stored = {}
+    return mp3_recommendations.normalize_preferences(stored)
+
+
+@app.get("/api/mp3-recommendations/preferences")
+def get_mp3_recommendation_preferences(request: Request):
+    user = _memo_user(request)
+    return _mp3_recommendation_preferences(user["username"])
+
+
+@app.put("/api/mp3-recommendations/preferences")
+def put_mp3_recommendation_preferences(body: Mp3RecommendationPreferencesWrite, request: Request):
+    user = _memo_user(request)
+    preferences = mp3_recommendations.normalize_preferences(body.dict())
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO mp3_recommendation_preferences(username,preferences_json,updated_at) VALUES(?,?,?)
+           ON CONFLICT(username) DO UPDATE SET preferences_json=excluded.preferences_json,updated_at=excluded.updated_at""",
+        (user["username"], json.dumps(preferences, ensure_ascii=False), _now()),
+    )
+    conn.commit()
+    conn.close()
+    return preferences
+
+
+@app.post("/api/mp3-recommendations/feedback")
+def post_mp3_recommendation_feedback(body: Mp3RecommendationFeedbackWrite, request: Request):
+    user = _memo_user(request)
+    if not re.fullmatch(r"[\w-]{11}", body.youtube_id) or body.action not in {"dismiss", "download"}:
+        raise HTTPException(status_code=422, detail="추천 피드백이 올바르지 않습니다")
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO mp3_recommendation_feedback(username,youtube_id,action,title,created_at) VALUES(?,?,?,?,?)
+           ON CONFLICT(username,youtube_id) DO UPDATE SET action=excluded.action,title=excluded.title,created_at=excluded.created_at""",
+        (user["username"], body.youtube_id, body.action, body.title.strip()[:300], _now()),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.get("/api/mp3-recommendations")
+def get_mp3_recommendations(
+    request: Request,
+    mode: str = Query("taste"),
+    year: int | None = Query(None, ge=2000, le=2100),
+    season: str | None = Query(None),
+    cursor: int = Query(0, ge=0),
+    page_size: int = Query(12, ge=6, le=20),
+):
+    _require_owner(request)
+    if mode not in {"taste", "popular", "season"} or (season and season not in {"WINTER", "SPRING", "SUMMER", "FALL"}):
+        raise HTTPException(status_code=422, detail="추천 방식 또는 분기가 올바르지 않습니다")
+    user = _memo_user(request)
+    yt_dlp = next((Path(path) for path in (
+        "/opt/homebrew/bin/yt-dlp", "/usr/local/bin/yt-dlp", shutil.which("yt-dlp") or "",
+    ) if path and Path(path).is_file()), None)
+    if yt_dlp is None:
+        raise HTTPException(status_code=503, detail="Mac에 yt-dlp가 설치되어 있지 않습니다")
+    conn = get_conn()
+    favorites = [row["title"] for row in conn.execute(
+        "SELECT title FROM mp3_track_favorites WHERE username=? ORDER BY created_at DESC LIMIT 10", (user["username"],)
+    ).fetchall() if row["title"]]
+    dismissed = {row["youtube_id"] for row in conn.execute(
+        "SELECT youtube_id FROM mp3_recommendation_feedback WHERE username=? AND action='dismiss'", (user["username"],)
+    ).fetchall()}
+    conn.close()
+    preferences = _mp3_recommendation_preferences(user["username"])
+    if mode == "popular":
+        queries = mp3_recommendations.popular_anime_queries()
+    elif mode == "season":
+        default_year, default_season = mp3_recommendations.current_anime_season()
+        year, season = year or default_year, season or default_season
+        queries = mp3_recommendations.season_anime_queries(year, season)
+    else:
+        queries = mp3_recommendations.build_queries(preferences, favorites, limit=7)
+    excluded = (
+        mp3_recommendations.library_youtube_ids(MP3_LIBRARY_DIR)
+        | mp3_recommendations.library_youtube_ids(MP3_FAVORITES_DIR)
+        | dismissed
+    )
+    cache_key = hashlib.sha256(json.dumps({
+        "user": user["username"], "mode": mode, "year": year, "season": season,
+        "preferences": preferences, "favorites": favorites, "excluded": sorted(excluded),
+    }, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+    now = time.time()
+    with _mp3_recommendation_cache_lock:
+        cached = _mp3_recommendation_cache.get(cache_key)
+        if cached and now - cached["created_at"] < 1800:
+            all_items = cached["items"]
+        else:
+            all_items = None
+    if all_items is None:
+        all_items = mp3_recommendations.collect_candidates(yt_dlp, queries, excluded, per_query=12, max_results=72)
+        with _mp3_recommendation_cache_lock:
+            _mp3_recommendation_cache[cache_key] = {"created_at": now, "items": all_items}
+            for key, value in list(_mp3_recommendation_cache.items()):
+                if now - value["created_at"] >= 1800:
+                    _mp3_recommendation_cache.pop(key, None)
+    items = all_items[cursor:cursor + page_size]
+    next_cursor = cursor + len(items) if cursor + len(items) < len(all_items) else None
+    return {
+        "items": items, "preferences": preferences, "queries": len(queries), "mode": mode,
+        "year": year, "season": season, "next_cursor": next_cursor, "total": len(all_items),
+    }
+
+
 @app.get("/api/me/mp3-lrc-index")
 def list_synced_mp3_lrc(request: Request):
     user = _memo_user(request)
@@ -2152,25 +2812,68 @@ def get_synced_mp3_lrc(request: Request, track_key: str = Query(min_length=1, ma
 
 
 @app.get("/api/shift-alarm/youtube-mp3")
-def youtube_mp3_status(request: Request):
+def youtube_mp3_status(request: Request, job_id: str | None = Query(None)):
     _require_owner(request)
-    jobs = sorted(_mp3_download_jobs.values(), key=lambda row: row["created_at"], reverse=True)[:10]
-    return {"jobs": jobs, "items": _mp3_library_rows()}
+    user = _memo_user(request)
+    conn = get_conn()
+    if job_id:
+        row = conn.execute("SELECT * FROM mp3_download_jobs WHERE id=? AND username=?", (job_id, user["username"])).fetchone()
+        if not row:
+            conn.close()
+            raise HTTPException(status_code=404, detail="다운로드 작업을 찾을 수 없습니다")
+        job = dict(row)
+        conn.close()
+        item = None
+        if job.get("final_filename"):
+            item = next((entry for entry in _mp3_directory_rows(
+                MP3_FAVORITES_DIR if job["destination"] == "favorites" else MP3_LIBRARY_DIR,
+                "/api/mp3-player/favorites-library" if job["destination"] == "favorites" else "/api/mp3-player/library",
+            ) if entry["name"] == job["final_filename"]), None)
+            if item and job["destination"] == "favorites":
+                item.update(library_label="좋아요음악", library_kind="favorites", recommended_japanese=True)
+        return {"job": job, "item": item}
+    rows = conn.execute(
+        "SELECT * FROM mp3_download_jobs WHERE username=? ORDER BY created_at DESC LIMIT 20", (user["username"],)
+    ).fetchall()
+    conn.close()
+    return {"jobs": [dict(row) for row in rows], "items": _mp3_library_rows()}
 
 
 @app.post("/api/shift-alarm/youtube-mp3")
 def youtube_mp3_download(payload: YoutubeMp3DownloadRequest, request: Request):
     _require_owner(request)
+    user = _memo_user(request)
     url = _youtube_mp3_url(payload.url)
-    if any(row.get("status") in {"queued", "downloading"} and row.get("url") == url for row in _mp3_download_jobs.values()):
+    if payload.destination not in {"library", "favorites"}:
+        raise HTTPException(status_code=422, detail="저장 위치가 올바르지 않습니다")
+    conn = get_conn()
+    active = conn.execute(
+        "SELECT id FROM mp3_download_jobs WHERE username=? AND url=? AND destination=? AND status IN ('queued','downloading','converting','finalizing') ORDER BY created_at DESC LIMIT 1",
+        (user["username"], url, payload.destination),
+    ).fetchone()
+    active_count = conn.execute(
+        "SELECT COUNT(*) AS n FROM mp3_download_jobs WHERE status IN ('queued','downloading','converting','finalizing')"
+    ).fetchone()["n"]
+    conn.close()
+    if active:
         raise HTTPException(status_code=409, detail="같은 주소를 이미 다운로드하고 있습니다")
-    if sum(row.get("status") in {"queued", "downloading"} for row in _mp3_download_jobs.values()) >= 3:
+    if active_count >= 3:
         raise HTTPException(status_code=429, detail="다운로드 대기열이 가득 찼습니다. 진행 중인 작업이 끝난 뒤 다시 시도해주세요")
     now = datetime.datetime.now().astimezone().isoformat()
     job_id = uuid.uuid4().hex
-    job = {"id": job_id, "url": url, "status": "queued", "percent": 0, "message": "다운로드 대기 중", "current": "", "created_at": now, "updated_at": now}
+    youtube_id = _youtube_id_from_url(url)
+    job = {"id": job_id, "username": user["username"], "youtube_id": youtube_id, "url": url, "destination": payload.destination, "status": "queued", "stage": "다운로드 대기 중", "percent": 0, "message": "다운로드 대기 중", "current_file": "", "created_at": now, "updated_at": now}
     _mp3_download_jobs[job_id] = job
-    threading.Thread(target=_run_youtube_mp3_job, args=(job_id, url), daemon=True, name=f"youtube-mp3-{job_id[:6]}").start()
+    conn = get_conn()
+    conn.execute(
+        """INSERT INTO mp3_download_jobs
+           (id,username,youtube_id,url,destination,status,stage,percent,current_file,created_at,updated_at)
+           VALUES(?,?,?,?,?,'queued','다운로드 대기 중',0,'',?,?)""",
+        (job_id, user["username"], youtube_id or None, url, payload.destination, now, now),
+    )
+    conn.commit()
+    conn.close()
+    threading.Thread(target=_run_youtube_mp3_job, args=(job_id, url, payload.destination, user["username"]), daemon=True, name=f"youtube-mp3-{job_id[:6]}").start()
     return JSONResponse(job, status_code=202)
 
 
@@ -2185,7 +2888,8 @@ def dating_sim_redirect():
 @app.get("/dating-sim/")
 def dating_sim_dashboard(request: Request):
     _require_signed_in_user(request)
-    return FileResponse(str(DATING_SIM_WEB_DIR / "index.html"))
+    return FileResponse(str(DATING_SIM_WEB_DIR / "index.html"),
+                        headers={"Cache-Control": "private, no-store"})
 
 
 @app.get("/dating-sim/static/{filename:path}")
@@ -2204,7 +2908,7 @@ def dating_sim_static(filename: str, request: Request):
     target = DATING_SIM_WEB_DIR / filename
     if not target.is_file():
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
-    return FileResponse(str(target))
+    return FileResponse(str(target), headers={"Cache-Control": "private, no-store"})
 
 
 @app.get("/dating-sim/audio/{filename}")
@@ -2293,6 +2997,17 @@ def dating_sim_generated_image_reference(book_id: str, filename: str, request: R
     if not target:
         raise HTTPException(status_code=404, detail="참고 이미지를 찾을 수 없습니다")
     return FileResponse(str(target))
+
+
+@app.get("/api/dating-sim/books/{book_id}/quality-attempts/{filename}")
+def dating_sim_generated_quality_attempt(book_id: str, filename: str, request: Request):
+    """관리자에게만 시도별 품질검수 후보 이미지를 제공한다."""
+    _require_owner(request)
+    target = dating_sim_story.generated_quality_attempt_path(book_id, filename)
+    if not target:
+        raise HTTPException(status_code=404, detail="품질검수 후보 이미지를 찾을 수 없습니다")
+    return FileResponse(str(target), media_type="image/png",
+                        headers={"Cache-Control": "private, no-store"})
 
 
 class DatingSimLocationRequest(BaseModel):
@@ -2633,6 +3348,53 @@ def _dating_admin_scene_image(story, day, location):
     return images[index]["image_url"]
 
 
+def _dating_scene_image(story, day, location, adult_mode=False):
+    """현재 장면 이미지와 재생성에 사용할 정확한 매니페스트 키를 고른다.
+
+    신고 예약이 처리 중인 키는 후보에서 제외한다. 관리자 이미지를 켠 경우에는
+    관리자 이미지를 우선하고, 남은 관리자 후보가 없을 때 일반 이미지로
+    내려간다. 일반 모드에서는 언제나 일반 이미지가 우선이다.
+    """
+    generated = story.get("generated_images") or {}
+    reported = _pending_dating_sim_image_report_keys(story.get("id") or "")
+    regular = [item for item in (generated.get("gallery") or [])
+               if item.get("image_url") and item.get("key") not in reported]
+    active_ids = _active_dating_sim_admin_prompt_ids()
+    admin = [item for item in (generated.get("admin_gallery") or [])
+             if item.get("image_url") and item.get("key") not in reported
+             and str(item.get("key") or "").removeprefix("admin:") in active_ids]
+    scene = story.get("scenes", {}).get(day, {}).get(location, {})
+    default_url = (scene.get("character_image")
+                   or story.get("character_images", {}).get(location)
+                   or story.get("character_image"))
+    default_item = next((item for item in (generated.get("gallery") or [])
+                         if item.get("image_url") == default_url), None)
+    if adult_mode:
+        preferred_admin_url = _dating_admin_scene_image(story, day, location)
+        preferred_admin_item = next(
+            (item for item in (generated.get("admin_gallery") or [])
+             if item.get("image_url") == preferred_admin_url), None,
+        )
+        if preferred_admin_url and (
+            preferred_admin_item is None or preferred_admin_item.get("key") not in reported
+        ):
+            return (preferred_admin_url,
+                    preferred_admin_item.get("key") if preferred_admin_item else None, True)
+    if adult_mode and admin:
+        key = f"{story.get('id')}:{day}:{location}"
+        selected = admin[int.from_bytes(hashlib.sha256(key.encode()).digest()[:4], "big") % len(admin)]
+        return selected["image_url"], selected.get("key"), True
+    if default_item and default_item.get("key") not in reported:
+        return default_url, default_item.get("key"), False
+    if regular:
+        key = f"{story.get('id')}:{day}:{location}:fallback"
+        selected = regular[int.from_bytes(hashlib.sha256(key.encode()).digest()[:4], "big") % len(regular)]
+        return selected["image_url"], selected.get("key"), False
+    if default_item and default_item.get("key") in reported:
+        return "/dating-sim/static/reina.png", None, False
+    return default_url, default_item.get("key") if default_item else None, False
+
+
 def _dating_sim_state_payload(row, story, username=None, is_admin=False, adult_mode=False):
     completed = bool(row["completed"])
     current_day = min(row["day"], story["total_days"])
@@ -2708,15 +3470,14 @@ def _dating_sim_state_payload(row, story, username=None, is_admin=False, adult_m
         for line in scene["lines"]:
             speaker = "narrator" if line.lstrip().startswith("(") else "character"
             scene_lines.append({"speaker": speaker, "text": line})
-        default_scene_image = scene.get("character_image") or story.get("character_images", {}).get(
-            row["pending_location"], story.get("character_image"))
-        admin_scene_image = (_dating_admin_scene_image(
-            story, row["day"], row["pending_location"]
-        ) if is_admin and adult_mode else None)
+        selected_image, selected_image_key, selected_admin_image = _dating_scene_image(
+            story, row["day"], row["pending_location"], is_admin and adult_mode,
+        )
         payload["scene"] = {
             "location": row["pending_location"],
-            "character_image": admin_scene_image or default_scene_image,
-            "admin_prompt_image": bool(admin_scene_image),
+            "character_image": selected_image,
+            "character_image_key": selected_image_key,
+            "admin_prompt_image": selected_admin_image,
             "lines": scene_lines,
             "choices": [{"text": choice["text"]} for choice in scene["choices"]],
             # 한 장면에 여러 학습 단어가 들어갈 수 있어(생성 시나리오) 목록으로
@@ -3014,6 +3775,49 @@ def _save_source_video_metadata(work_dir: Path, url: str, username: str) -> dict
     os.chmod(temporary, 0o600)
     os.replace(temporary, target)
     return data
+
+
+def _write_dating_sim_manifest(manifest_path: Path, payload: dict) -> dict:
+    """Serialize cross-process manifest updates and retain unrelated fresh rows."""
+    lock_path = manifest_path.with_name(f".{manifest_path.name}.lock")
+    with lock_path.open("a+") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        try:
+            current = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.is_file() else {}
+        except (OSError, ValueError):
+            current = {}
+        merged = dict(current) if isinstance(current, dict) else {}
+        merged.update(payload)
+        for map_name in ("scenes", "admin_prompt_images", "quality_checks"):
+            current_map = current.get(map_name) if isinstance(current, dict) else {}
+            incoming_map = payload.get(map_name) if isinstance(payload, dict) else {}
+            combined = dict(current_map or {})
+            for key, value in (incoming_map or {}).items():
+                if isinstance(combined.get(key), dict) and isinstance(value, dict):
+                    previous_record = combined[key]
+                    combined[key] = {**previous_record, **value}
+                    if map_name in {"scenes", "admin_prompt_images"}:
+                        previous_quality = previous_record.get("automatic_quality") or {}
+                        incoming_quality = value.get("automatic_quality") or {}
+                        previous_count = len(previous_quality.get("attempts") or [])
+                        incoming_count = len(incoming_quality.get("attempts") or [])
+                        if (previous_count > incoming_count or (
+                            previous_count == incoming_count
+                            and previous_quality.get("manually_selected")
+                            and not incoming_quality.get("manually_selected")
+                        )):
+                            combined[key]["automatic_quality"] = previous_quality
+                else:
+                    combined[key] = value
+            if combined:
+                merged[map_name] = combined
+        merged["revision"] = int((current or {}).get("revision") or 0) + 1
+        merged["revision_updated_at"] = int(time.time())
+        temporary = manifest_path.with_name(f".{manifest_path.name}.{os.getpid()}.tmp")
+        temporary.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(temporary, manifest_path)
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+    return merged
 
 
 def _dating_rebuild_pid_alive(pid) -> bool:
@@ -3513,6 +4317,14 @@ DATING_SIM_IMAGE_BACKLOG_SCRIPT = str(REPO_ROOT / "일본어자막추출" / "gen
 DATING_SIM_IMAGE_BACKLOG_STATE = Path(os.path.expanduser("~/.tulpachat/dating_sim_image_backlog.json"))
 DATING_SIM_IMAGE_BACKLOG_LOG = Path(os.path.expanduser("~/.tulpachat/dating_sim_image_backlog.log"))
 DATING_SIM_IMAGE_PAUSE_FILE = Path(os.path.expanduser("~/.tulpachat/dating_sim_image_generation.paused"))
+DATING_SIM_IMAGE_REPORTS_FILE = Path(os.path.expanduser("~/.tulpachat/dating_sim_image_reports.json"))
+DATING_SIM_IMAGE_LIKES_FILE = Path(os.path.expanduser("~/.tulpachat/dating_sim_image_likes.json"))
+DATING_SIM_REPORT_PRIORITY_FILE = Path(os.path.expanduser("~/.tulpachat/dating_sim_report_priority.active"))
+DATING_SIM_REPORT_PROCESS_FILE = Path(os.path.expanduser("~/.tulpachat/dating_sim_report_process.json"))
+DATING_SIM_PROMPT_APPROVALS_FILE = Path(os.environ.get(
+    "JP_DATING_PROMPT_APPROVALS_FILE",
+    os.path.expanduser("~/.tulpachat/dating_sim_prompt_approvals.json"),
+))
 DATING_SIM_ADMIN_PROMPTS_FILE = Path(os.environ.get(
     "JP_DATING_ADMIN_PROMPTS_FILE",
     os.path.expanduser("~/.tulpachat/dating_sim_admin_prompts.json"),
@@ -3526,6 +4338,399 @@ COMFYUI_LAUNCH_AGENT_PLIST = Path.home() / "Library" / "LaunchAgents" / f"{COMFY
 _dating_sim_image_jobs: dict[str, dict] = {}
 _dating_sim_image_jobs_lock = threading.Lock()
 _dating_sim_image_backlog_job: dict | None = None
+_DATING_SIM_IMAGE_REPORTS_LOCK = threading.Lock()
+_DATING_SIM_IMAGE_LIKES_LOCK = threading.Lock()
+_DATING_SIM_PROMPT_APPROVALS_LOCK = threading.Lock()
+_DATING_SIM_IMAGE_REPORT_WORKER_STARTED = False
+
+_DATING_SIM_SITUATION_TAGS = {
+    "bed": ("bed", "bedroom", "mattress", "침대", "침실"),
+    "outdoor": ("outdoor", "garden", "park", "street", "outside", "야외", "공원"),
+    "indoor": ("indoor", "room", "interior", "실내"),
+    "sitting": ("sitting", "seated", "sit ", "앉"),
+    "lying": ("lying", "reclining", "laying", "누운", "눕"),
+    "standing": ("standing", "stand ", "서 있", "선 자세"),
+    "closeup": ("close-up", "closeup", "portrait shot", "얼굴 중심", "클로즈업"),
+    "fullbody": ("full body", "full-body", "전신"),
+    "single": ("one woman", "single subject", "one person", "단일 인물"),
+}
+
+
+def _dating_prompt_situation_tags(text):
+    normalized = f" {str(text or '').casefold()} "
+    return sorted(tag for tag, tokens in _DATING_SIM_SITUATION_TAGS.items()
+                  if any(token.casefold() in normalized for token in tokens))
+
+
+def _write_dating_prompt_approval(approval):
+    with _DATING_SIM_PROMPT_APPROVALS_LOCK:
+        try:
+            payload = json.loads(DATING_SIM_PROMPT_APPROVALS_FILE.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            payload = {}
+        rows = [dict(row) for row in (payload.get("items") or []) if isinstance(row, dict)]
+        # 같은 관리자 프롬프트 또는 같은 작품의 동일 장면 키를 다시 채택하면
+        # 오래된 승인을 남겨 경쟁시키지 않고 최신 사용자 판단으로 교체한다.
+        rows = [row for row in rows if not (
+            (approval["kind"] == "admin" and row.get("kind") == "admin"
+             and row.get("admin_prompt_id") == approval.get("admin_prompt_id"))
+            or (approval["kind"] != "admin" and row.get("kind") == approval["kind"]
+                and row.get("story_id") == approval.get("story_id")
+                and row.get("image_key") == approval.get("image_key"))
+        )]
+        rows.append(approval)
+        stored = {"version": 1, "updated_at": _now(), "items": rows[-500:]}
+        DATING_SIM_PROMPT_APPROVALS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        temporary = DATING_SIM_PROMPT_APPROVALS_FILE.with_suffix(".tmp")
+        temporary.write_text(json.dumps(stored, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(temporary, DATING_SIM_PROMPT_APPROVALS_FILE)
+
+
+def _remove_dating_prompt_like_approval(story_id, image_key):
+    with _DATING_SIM_PROMPT_APPROVALS_LOCK:
+        try:
+            payload = json.loads(DATING_SIM_PROMPT_APPROVALS_FILE.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return
+        rows = [dict(row) for row in (payload.get("items") or []) if isinstance(row, dict)]
+        remaining = [row for row in rows if not (
+            row.get("source") == "image_like"
+            and row.get("story_id") == story_id and row.get("image_key") == image_key
+        )]
+        if len(remaining) == len(rows):
+            return
+        temporary = DATING_SIM_PROMPT_APPROVALS_FILE.with_suffix(".tmp")
+        temporary.write_text(json.dumps({
+            "version": 1, "updated_at": _now(), "items": remaining,
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(temporary, DATING_SIM_PROMPT_APPROVALS_FILE)
+
+
+def _read_dating_sim_image_reports():
+    try:
+        payload = json.loads(DATING_SIM_IMAGE_REPORTS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    rows = payload.get("items") if isinstance(payload, dict) else payload
+    return [dict(row) for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+
+
+def _write_dating_sim_image_reports(rows):
+    DATING_SIM_IMAGE_REPORTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"version": 1, "updated_at": _now(), "items": rows[-500:]}
+    temporary = DATING_SIM_IMAGE_REPORTS_FILE.with_suffix(".tmp")
+    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(temporary, DATING_SIM_IMAGE_REPORTS_FILE)
+
+
+def _read_dating_sim_image_likes():
+    try:
+        payload = json.loads(DATING_SIM_IMAGE_LIKES_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    rows = payload.get("items") if isinstance(payload, dict) else payload
+    return [dict(row) for row in (rows or []) if isinstance(row, dict)]
+
+
+def _write_dating_sim_image_likes(rows):
+    DATING_SIM_IMAGE_LIKES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = DATING_SIM_IMAGE_LIKES_FILE.with_suffix(".tmp")
+    temporary.write_text(json.dumps({
+        "version": 1, "updated_at": _now(), "items": rows[-1000:],
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(temporary, DATING_SIM_IMAGE_LIKES_FILE)
+
+
+def _pending_dating_sim_image_report_keys(story_id):
+    return {str(item.get("image_key") or "") for item in _read_dating_sim_image_reports()
+            if item.get("story_id") == story_id
+            and item.get("status") in {"pending", "processing", "failed"}}
+
+
+def _update_dating_sim_image_report(report_id, **updates):
+    with _DATING_SIM_IMAGE_REPORTS_LOCK:
+        rows = _read_dating_sim_image_reports()
+        for row in rows:
+            if row.get("id") == report_id:
+                row.update(updates)
+                _write_dating_sim_image_reports(rows)
+                return row
+    return None
+
+
+def _dating_sim_image_file_for_key(work_dir, image_key):
+    """manifest의 허용된 이미지 키를 실제 결과 파일로 해석한다."""
+    image_dir = Path(work_dir) / "dating_sim_images"
+    try:
+        manifest = json.loads((image_dir / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        return None
+    if image_key == "portrait":
+        filename = manifest.get("portrait")
+    elif image_key.startswith("admin:"):
+        prompt_id = image_key.removeprefix("admin:")
+        record = (manifest.get("admin_prompt_images") or {}).get(prompt_id)
+        filename = record.get("file") if isinstance(record, dict) else None
+        # 서로 다른 이미지 작업이 같은 manifest를 갱신하던 구버전에서는
+        # 완성 PNG는 남고 관리자 레코드만 유실될 수 있었다. 관리자 파일명은
+        # prompt id로 결정적이므로 실제 파일이 있으면 안전하게 복구한다.
+        if not filename:
+            fallback = f"admin-{prompt_id}.png"
+            if re.fullmatch(r"admin-[0-9a-f]{32}\.png", fallback):
+                filename = fallback
+    else:
+        record = (manifest.get("scenes") or {}).get(image_key)
+        filename = record.get("file") if isinstance(record, dict) else None
+    target = image_dir / str(filename or "")
+    return target if filename and target.is_file() and target.parent == image_dir else None
+
+
+def _dating_sim_report_generation_info(story_id, work_dir, image_key):
+    """완료 화면용 생성정보를 manifest 유실 시에도 실제 산출물에서 복원한다."""
+    image_dir = Path(work_dir) / "dating_sim_images"
+    try:
+        manifest = json.loads((image_dir / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        manifest = {}
+    book_id = str(story_id).removeprefix("book:")
+    if image_key.startswith("admin:"):
+        prompt_id = image_key.removeprefix("admin:")
+        record = dict((manifest.get("admin_prompt_images") or {}).get(prompt_id) or {})
+        prompt = next((row for row in _read_dating_sim_admin_prompts()
+                       if row.get("id") == prompt_id), {})
+        filename = f"admin-{prompt_id}.png"
+        record.update({
+            "key": image_key, "id": prompt_id,
+            "label": record.get("name") or prompt.get("name") or image_key,
+            "name": record.get("name") or prompt.get("name") or image_key,
+            "file": filename, "admin_only": True,
+            "prompt": record.get("prompt") or prompt.get("prompt") or "",
+            "negative_prompt": record.get("negative_prompt") or prompt.get("negative_prompt") or "",
+            "negative_prompt_enabled": record.get("negative_prompt_enabled", prompt.get("negative_prompt_enabled", True)),
+        })
+    elif image_key == "portrait":
+        filename = str(manifest.get("portrait") or "portrait.png")
+        record = {"key": image_key, "label": "인물 이미지", "file": filename,
+                  "prompt": manifest.get("portrait_prompt") or "",
+                  "effective_prompt": manifest.get("portrait_effective_prompt") or "",
+                  "automatic_quality": manifest.get("portrait_automatic_quality") or {}}
+    else:
+        record = dict((manifest.get("scenes") or {}).get(image_key) or {})
+        filename = str(record.get("file") or "")
+        record.update({"key": image_key, "label": record.get("label") or image_key})
+    target = image_dir / filename
+    if filename and target.is_file():
+        route = "admin-images" if image_key.startswith("admin:") else "images"
+        record["image_url"] = f"/api/dating-sim/books/{book_id}/{route}/{filename}?t={int(target.stat().st_mtime)}"
+    automatic = dict(record.get("automatic_quality") or {})
+    attempts = list(automatic.get("attempts") or [])
+    if not attempts and filename:
+        stem = Path(filename).stem
+        final_hash = hashlib.sha256(target.read_bytes()).hexdigest() if target.is_file() else ""
+        for attempt in range(1, 4):
+            attempt_name = f"{stem}-attempt-{attempt}.png"
+            candidate = image_dir / "quality_attempts" / attempt_name
+            if not candidate.is_file():
+                continue
+            candidate_hash = hashlib.sha256(candidate.read_bytes()).hexdigest()
+            sidecar = candidate.with_suffix(".json")
+            try:
+                saved = json.loads(sidecar.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                saved = None
+            recovered = dict(saved) if isinstance(saved, dict) else {
+                "attempt": attempt, "image_file": attempt_name,
+                "prompt": record.get("prompt") or "",
+                "effective_prompt": record.get("effective_prompt") or record.get("prompt") or "",
+                "negative_prompt": record.get("effective_negative_prompt") or record.get("negative_prompt") or "",
+                "generation_settings": record.get("generation_settings") or {},
+                "report": {"passed": False, "reasons": ["후보 사진은 복구됐지만 당시 검사 기록은 저장되어 있지 않음"]},
+            }
+            recovered.update({
+                "attempt": attempt, "image_file": attempt_name,
+                "image_url": f"/api/dating-sim/books/{book_id}/quality-attempts/{attempt_name}?t={int(candidate.stat().st_mtime)}",
+            })
+            attempts.append(recovered)
+            if final_hash and candidate_hash == final_hash:
+                automatic["selected_attempt"] = attempt
+        if attempts:
+            automatic.update({"attempts": attempts, "attempts_used": len(attempts),
+                              "max_attempts": 3, "recovered_from_files": True,
+                              "recovery_complete": all(
+                                  (image_dir / "quality_attempts" / f"{Path(row['image_file']).stem}.json").is_file()
+                                  for row in attempts
+                              )})
+            record["automatic_quality"] = automatic
+    return record
+
+
+def _watch_dating_sim_image_reports_forever():
+    """신고 예약을 한 장씩 처리하고 다음 장 전에 2분간 발열 휴식을 둔다."""
+    while True:
+        active_reports = [item for item in _read_dating_sim_image_reports()
+                          if item.get("status") in {"pending", "processing"}]
+        if active_reports:
+            DATING_SIM_REPORT_PRIORITY_FILE.parent.mkdir(parents=True, exist_ok=True)
+            DATING_SIM_REPORT_PRIORITY_FILE.touch(exist_ok=True)
+        else:
+            DATING_SIM_REPORT_PRIORITY_FILE.unlink(missing_ok=True)
+        external_job = _dating_sim_external_image_job()
+        with _dating_sim_image_jobs_lock:
+            internal_running = any(
+                job.get("process") and job["process"].poll() is None
+                for job in _dating_sim_image_jobs.values()
+            ) or bool(
+                _dating_sim_image_backlog_job
+                and _dating_sim_image_backlog_job.get("process")
+                and _dating_sim_image_backlog_job["process"].poll() is None
+            )
+        # 서버 재시작으로 process 객체를 잃은 작업은 외부 생성까지 모두 끝난
+        # 시점에 다시 대기로 돌려 영구적인 '생성 중' 표시를 없앤다.
+        if not external_job and not internal_running:
+            stale = [item for item in _read_dating_sim_image_reports()
+                     if item.get("status") == "processing"]
+            for item in stale:
+                _update_dating_sim_image_report(
+                    item.get("id"), status="pending", started_at=None,
+                    error="서버 재시작 후 대기열에 자동 복구됨",
+                )
+        priorities = {"regenerate": 0, "anatomy": 1, "eyes": 2, "sharpness": 3}
+        pending_reports = [item for item in _read_dating_sim_image_reports()
+                           if item.get("status") == "pending"]
+        report = min(pending_reports, key=lambda item: (
+            priorities.get(str(item.get("job_type") or "regenerate"), 9),
+            str(item.get("created_at") or ""),
+        ), default=None)
+        if not report or DATING_SIM_IMAGE_PAUSE_FILE.exists():
+            time.sleep(10)
+            continue
+        story_id = str(report.get("story_id") or "")
+        image_key = str(report.get("image_key") or "")
+        book_id, work_dir = dating_sim_story.resolve_book_work_dir(story_id)
+        if not work_dir or not DATING_SIM_IMAGE_KEY_RE.fullmatch(image_key):
+            _update_dating_sim_image_report(
+                report.get("id"), status="failed", error="작품 또는 이미지 키를 찾을 수 없습니다",
+                finished_at=_now(),
+            )
+            continue
+        image_dir = work_dir / "dating_sim_images"
+        image_dir.mkdir(parents=True, exist_ok=True)
+        log_path = image_dir / "reported-image-generation.log"
+        log_file = None
+        process = None
+        busy = False
+        before_file = _dating_sim_image_file_for_key(work_dir, image_key)
+        if not before_file:
+            _update_dating_sim_image_report(
+                report.get("id"), status="failed",
+                error="재생성할 현재 이미지 파일을 찾을 수 없습니다",
+                finished_at=_now(),
+            )
+            continue
+        before_hash = hashlib.sha256(before_file.read_bytes()).hexdigest() if before_file else ""
+        # 서버 재시작 전에 시작된 이미지 생성 프로세스도 감지해 ComfyUI 작업을
+        # 겹쳐 실행하지 않는다.
+        external_job = _dating_sim_external_image_job()
+        with _dating_sim_image_jobs_lock:
+            existing = _dating_sim_image_jobs.get(book_id)
+            if (external_job
+                    or (existing and existing["process"].poll() is None)
+                    or (_dating_sim_image_backlog_job
+                        and _dating_sim_image_backlog_job["process"].poll() is None)):
+                busy = True
+            else:
+                command = [DATING_SIM_IMAGE_PYTHON, DATING_SIM_IMAGE_SCRIPT, str(work_dir)]
+                if image_key.startswith("admin:"):
+                    command.extend(["--admin-prompts-only", "--admin-prompt-id", image_key.split(":", 1)[1]])
+                else:
+                    command.extend(["--force-key", image_key])
+                command.append("--single-image-resume")
+                try:
+                    log_file = open(log_path, "ab")
+                    process_env = os.environ.copy()
+                    process_env["JP_DATING_IMAGE_SEED_NONCE"] = (
+                        f"report:{report.get('id')}:{time.time_ns()}"
+                    )
+                    process_env["JP_DATING_IMAGE_REPORT_JOB"] = "1"
+                    process_env["JP_DATING_TARGET_IMPROVEMENT"] = str(report.get("job_type") or "")
+                    process = subprocess.Popen(
+                        command, stdout=log_file, stderr=subprocess.STDOUT,
+                        start_new_session=True, env=process_env,
+                    )
+                except OSError as exc:
+                    if log_file:
+                        log_file.close()
+                    _update_dating_sim_image_report(
+                        report.get("id"), status="failed", error=str(exc)[:500], finished_at=_now(),
+                    )
+                    continue
+                _dating_sim_image_jobs[book_id] = {
+                    "process": process, "log_file": log_file, "log_path": log_path,
+                    "started_at": int(time.time()), "work_dir": str(work_dir),
+                    "job_type": "reported_image", "expected_total": 1,
+                }
+                marker = DATING_SIM_REPORT_PROCESS_FILE.with_suffix(".tmp")
+                marker.write_text(json.dumps({
+                    "pid": process.pid, "report_id": report.get("id"),
+                    "story_id": story_id, "image_key": image_key,
+                    "started_at": _now(), "before_sha256": before_hash,
+                }, ensure_ascii=False), encoding="utf-8")
+                os.replace(marker, DATING_SIM_REPORT_PROCESS_FILE)
+        if busy:
+            time.sleep(10)
+            continue
+        _update_dating_sim_image_report(
+            report.get("id"), status="processing", started_at=_now(), error="",
+        )
+        returncode = process.wait()
+        with _dating_sim_image_jobs_lock:
+            current = _dating_sim_image_jobs.get(book_id)
+            if current and current.get("process") is process:
+                _dating_sim_image_jobs.pop(book_id, None)
+        try:
+            marker = json.loads(DATING_SIM_REPORT_PROCESS_FILE.read_text(encoding="utf-8"))
+            if int(marker.get("pid") or 0) == process.pid:
+                DATING_SIM_REPORT_PROCESS_FILE.unlink(missing_ok=True)
+        except (OSError, ValueError, TypeError):
+            pass
+        log_file.close()
+        after_file = _dating_sim_image_file_for_key(work_dir, image_key)
+        after_hash = hashlib.sha256(after_file.read_bytes()).hexdigest() if after_file else ""
+        generation_info_snapshot = _dating_sim_report_generation_info(
+            story_id, work_dir, image_key,
+        )
+        try:
+            manifest = json.loads((image_dir / "manifest.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            manifest = {}
+        progress = manifest.get("job_progress") if isinstance(manifest, dict) else {}
+        generated_exactly_one = bool(
+            isinstance(progress, dict)
+            and int(progress.get("total") or 0) == 1
+            and int(progress.get("done") or 0) == 1
+        )
+        unchanged = bool(returncode == 0 and before_hash and after_hash == before_hash)
+        succeeded = bool(returncode == 0 and generated_exactly_one and not unchanged)
+        if returncode == 0 and not generated_exactly_one:
+            result_error = (
+                "단일 재생성 작업이 정확히 1장을 만들지 않았습니다 "
+                f"(진행 {int((progress or {}).get('done') or 0)}/"
+                f"{int((progress or {}).get('total') or 0)})"
+            )
+        elif unchanged:
+            result_error = "재생성 결과가 신고 당시 파일과 완전히 동일해 완료 처리하지 않았습니다"
+        elif returncode != 0:
+            result_error = "이미지 재생성 프로세스가 실패했습니다"
+        else:
+            result_error = ""
+        _update_dating_sim_image_report(
+            report.get("id"), status="done" if succeeded else "failed",
+            returncode=returncode, finished_at=_now(),
+            before_sha256=before_hash, result_sha256=after_hash,
+            generation_info=generation_info_snapshot,
+            error=result_error,
+        )
+        time.sleep(120)
 
 
 def _read_dating_sim_admin_prompts():
@@ -3700,7 +4905,7 @@ def _dating_sim_image_backlog_progress(state, running):
         ui_status = "completed_with_errors"
     elif raw_status == "failed":
         ui_status = "failed"
-    elif raw_status == "waiting_for_lock":
+    elif raw_status in {"waiting_for_lock", "waiting_for_report_queue"}:
         ui_status = "waiting"
     elif raw_status in {"running", "stopped"}:
         ui_status = "stopped"
@@ -3726,6 +4931,43 @@ def _dating_sim_image_backlog_progress(state, running):
 
 def _dating_sim_external_image_job():
     """예약 에이전트가 잡은 잠금도 웹 상태 화면에서 숨기지 않는다."""
+    # 신고 워커의 자식은 서버 재시작 뒤 고아 프로세스로 계속 작업할 수 있다.
+    # 별도 PID 표식을 먼저 확인해 같은 예약을 중복 제출하지 않는다.
+    try:
+        report_process = json.loads(DATING_SIM_REPORT_PROCESS_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        report_process = {}
+    if report_process:
+        report_pid = int(report_process.get("pid") or 0)
+        try:
+            os.kill(report_pid, 0)
+        except OSError:
+            # 서버 재시작 중 고아 자식이 끝났다면 결과 파일 해시로 성공을
+            # 복구한다. 결과가 바뀌지 않았을 때만 다시 pending으로 돌린다.
+            report_id = str(report_process.get("report_id") or "")
+            story_id = str(report_process.get("story_id") or "")
+            image_key = str(report_process.get("image_key") or "")
+            _book_id, work_dir = dating_sim_story.resolve_book_work_dir(story_id)
+            result_file = _dating_sim_image_file_for_key(work_dir, image_key) if work_dir else None
+            result_hash = hashlib.sha256(result_file.read_bytes()).hexdigest() if result_file else ""
+            before_hash = str(report_process.get("before_sha256") or "")
+            changed = bool(before_hash and result_hash and result_hash != before_hash)
+            _update_dating_sim_image_report(
+                report_id,
+                status="done" if changed else "pending",
+                finished_at=_now() if changed else None,
+                result_sha256=result_hash,
+                error="" if changed else "서버 재시작 후 결과 미확인 · 대기열에 자동 복구됨",
+            )
+            DATING_SIM_REPORT_PROCESS_FILE.unlink(missing_ok=True)
+        else:
+            return {
+                "status": "running", "running": True, "external": True,
+                "current": report_process.get("image_key") or "신고 이미지 재생성",
+                "total": 1, "completed": 0, "failed": 0, "current_index": 1,
+                "started_at": report_process.get("started_at"), "pid": report_pid,
+                "job_type": "reported_image", "report_id": report_process.get("report_id"),
+            }
     lock_path = Path(os.path.expanduser("~/.tulpachat/dating_sim_daily_agent.lock"))
     state_path = Path(os.path.expanduser("~/.tulpachat/dating_sim_daily_agent.json"))
     if not lock_path.exists():
@@ -3941,6 +5183,29 @@ class DatingSimImagePromptRequest(BaseModel):
     settings: dict[str, Any] | None = None
 
 
+class DatingSimImageReportRequest(BaseModel):
+    story_id: str
+    image_key: str
+    day: int
+    location: str
+    adult_mode: bool = False
+    reason: str = "이미지가 이상함"
+
+
+class DatingSimImageLikeRequest(BaseModel):
+    story_id: str
+    image_key: str
+    liked: bool = True
+
+
+class DatingSimImageImprovementRequest(BaseModel):
+    story_id: str
+    image_key: str
+    improvement: str
+    day: int = 0
+    location: str = "image-gallery"
+
+
 class DatingSimAdminPromptRequest(BaseModel):
     name: str
     prompt: str
@@ -3959,6 +5224,12 @@ class DatingSimPortraitSelectRequest(BaseModel):
     # 쿼리 문자열이 모바일 캐시·이전 프런트엔드에서 누락되더라도 선택한
     # 작품을 잃지 않도록 본문에도 같은 식별자를 받는다.
     story_id: str | None = None
+
+
+class DatingSimQualityAttemptSelectRequest(BaseModel):
+    story_id: str
+    image_key: str
+    attempt: int
 
 
 class ComfyUIRuntimeRequest(BaseModel):
@@ -4537,6 +5808,21 @@ def dating_sim_admin_prompt_settings_update(payload: DatingSimPromptSettingsRequ
 def dating_sim_admin_images_dashboard(request: Request):
     """관리자 프롬프트 이미지의 진행 중/완료 상태를 작품별로 모아 보여준다."""
     _require_owner(request)
+    liked_keys = {
+        (str(item.get("story_id") or ""), str(item.get("image_key") or ""))
+        for item in _read_dating_sim_image_likes()
+    }
+    active_reports = {
+        (str(item.get("story_id") or ""), str(item.get("image_key") or "")): item
+        for item in _read_dating_sim_image_reports()
+        if item.get("status") in {"pending", "processing"}
+    }
+    active_improvements = {}
+    for item in _read_dating_sim_image_reports():
+        if item.get("status") in {"pending", "processing"} and item.get("job_type") in {"anatomy", "eyes", "sharpness"}:
+            active_improvements.setdefault(
+                (str(item.get("story_id") or ""), str(item.get("image_key") or "")), {}
+            )[str(item.get("job_type"))] = {"status": item.get("status"), "id": item.get("id")}
     with _dating_sim_image_jobs_lock:
         running_jobs = {
             book_id: dict(job) for book_id, job in _dating_sim_image_jobs.items()
@@ -4595,6 +5881,13 @@ def dating_sim_admin_images_dashboard(request: Request):
             "image_count": len(images),
             "updated_at": max([item["updated_at"] for item in images] or [0]),
         }
+        for image in images:
+            key = (story_id, str(image.get("key") or ""))
+            report = active_reports.get(key)
+            image["liked"] = key in liked_keys
+            image["report_status"] = report.get("status") if report else ""
+            image["report_id"] = report.get("id") if report else ""
+            image["improvement_jobs"] = active_improvements.get(key, {})
         if job or persisted_running:
             # 전체 이미지 실행은 대표 초상화·일반 장면 뒤에 관리자 프롬프트를
             # 이어 만든다. manifest의 done/total은 전체 작업 수치이므로 관리자
@@ -4677,6 +5970,8 @@ def dating_sim_generate_images_start(
     이미지 하나만 강제로 다시 만든다(★ 2026-09-23 "이미지 재생성 버튼...
     전체재생성도 있고 사진눌렀을때 이사진만 재생성하기" 요청)."""
     _require_owner(request)
+    if DATING_SIM_REPORT_PRIORITY_FILE.exists():
+        raise HTTPException(status_code=409, detail="신고 이미지 재생성이 최우선으로 예약되어 있습니다")
     single_image_resume = resume_single and bool(force_key or admin_prompt_id)
     if resume_single and not single_image_resume:
         raise HTTPException(status_code=400, detail="한 장만 생성 재개하려면 재생성할 이미지가 필요합니다")
@@ -4755,9 +6050,7 @@ def dating_sim_generate_images_start(
                 "current": f"관리자 프롬프트 0/{expected_total} · 준비 중",
                 "started_at": int(time.time()), "updated_at": int(time.time()),
             }
-            temporary_manifest = manifest_path.with_suffix(".tmp")
-            temporary_manifest.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
-            os.replace(temporary_manifest, manifest_path)
+            manifest = _write_dating_sim_manifest(manifest_path, manifest)
         log_path = image_dir / "generation.log"
         log_file = open(log_path, "ab")
         command = [DATING_SIM_IMAGE_PYTHON, DATING_SIM_IMAGE_SCRIPT, str(work_dir)]
@@ -4820,6 +6113,537 @@ def dating_sim_generate_images_start(
         }
     return {"status": "started", "job_type": "admin_prompts" if admin_prompts_only else "images",
             "expected_total": expected_total}
+
+
+@app.post("/api/dating-sim/image-reports")
+def dating_sim_report_image(payload: DatingSimImageReportRequest, request: Request):
+    """플레이 중 이상한 이미지를 재생성 예약하고 안전한 임시 이미지로 교체한다."""
+    _require_signed_in_user(request)
+    DATING_SIM_REPORT_PRIORITY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    DATING_SIM_REPORT_PRIORITY_FILE.touch(exist_ok=True)
+    if not DATING_SIM_IMAGE_KEY_RE.fullmatch(payload.image_key or ""):
+        raise HTTPException(status_code=400, detail="이미지 키 형식이 올바르지 않습니다")
+    try:
+        story = dating_sim_story.scenario_tree(payload.story_id, seed_key=_request_username(request))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    generated = story.get("generated_images") or {}
+    known = [*(generated.get("gallery") or []), *(generated.get("admin_gallery") or [])]
+    target = next((item for item in known if item.get("key") == payload.image_key), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="현재 작품에서 신고할 이미지를 찾지 못했습니다")
+    reason = re.sub(r"\s+", " ", payload.reason).strip()[:300] or "이미지가 이상함"
+    username = _request_username(request)
+    with _DATING_SIM_IMAGE_REPORTS_LOCK:
+        rows = _read_dating_sim_image_reports()
+        existing = next((row for row in rows
+                         if row.get("story_id") == payload.story_id
+                         and row.get("image_key") == payload.image_key
+                         and row.get("status") in {"pending", "processing"}), None)
+        if existing:
+            report = existing
+            duplicate = True
+        else:
+            report = {
+                "id": uuid.uuid4().hex, "story_id": payload.story_id,
+                "image_key": payload.image_key, "image_label": target.get("label") or payload.image_key,
+                "image_url": target.get("image_url") or "", "day": payload.day,
+                "location": payload.location, "adult_mode": payload.adult_mode,
+                "reason": reason, "reported_by": username, "status": "pending",
+                "created_at": _now(), "job_type": "regenerate",
+            }
+            rows.append(report)
+            _write_dating_sim_image_reports(rows)
+            duplicate = False
+    if not duplicate:
+        _book_id, work_dir = dating_sim_story.resolve_book_work_dir(payload.story_id)
+        source_file = _dating_sim_image_file_for_key(work_dir, payload.image_key) if work_dir else None
+        if source_file:
+            snapshot_dir = Path(work_dir) / "dating_sim_images" / "report_snapshots"
+            snapshot_dir.mkdir(parents=True, exist_ok=True)
+            snapshot_file = snapshot_dir / f"{report['id']}.png"
+            shutil.copy2(source_file, snapshot_file)
+            snapshot_hash = hashlib.sha256(snapshot_file.read_bytes()).hexdigest()
+            snapshot_url = f"/api/dating-sim/image-report-snapshots/{report['id']}.png"
+            report = _update_dating_sim_image_report(
+                report["id"], image_url=snapshot_url,
+                original_sha256=snapshot_hash, original_snapshot=True,
+            ) or report
+    replacement_url, replacement_key, replacement_admin = _dating_scene_image(
+        story, payload.day, payload.location, payload.adult_mode and _is_owner_request(request),
+    )
+    return {
+        "ok": True, "duplicate": duplicate, "report_id": report["id"],
+        "status": report["status"], "replacement_image_url": replacement_url,
+        "replacement_image_key": replacement_key,
+        "replacement_admin_prompt_image": replacement_admin,
+        "message": "이미지를 재생성 예약에 등록하고 임시 이미지로 교체했습니다.",
+    }
+
+
+@app.post("/api/dating-sim/image-improvements")
+def dating_sim_image_improvement(payload: DatingSimImageImprovementRequest, request: Request):
+    _require_owner(request)
+    if payload.improvement not in {"anatomy", "eyes", "sharpness"}:
+        raise HTTPException(status_code=400, detail="지원하지 않는 개선 유형입니다")
+    if not DATING_SIM_IMAGE_KEY_RE.fullmatch(payload.image_key or ""):
+        raise HTTPException(status_code=400, detail="이미지 키 형식이 올바르지 않습니다")
+    story = dating_sim_story.scenario_tree(payload.story_id, seed_key=_request_username(request))
+    generated = story.get("generated_images") or {}
+    target = next((item for item in [*(generated.get("gallery") or []), *(generated.get("admin_gallery") or [])]
+                   if item.get("key") == payload.image_key), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="개선할 이미지를 찾지 못했습니다")
+    with _DATING_SIM_IMAGE_REPORTS_LOCK:
+        rows = _read_dating_sim_image_reports()
+        existing = next((row for row in rows if row.get("story_id") == payload.story_id
+                         and row.get("image_key") == payload.image_key
+                         and row.get("job_type") == payload.improvement
+                         and row.get("status") in {"pending", "processing"}), None)
+        if existing:
+            return {"ok": True, "duplicate": True, "report_id": existing["id"], "status": existing["status"]}
+        labels = {"anatomy": "팔다리·손발 개선", "eyes": "눈동자 개선", "sharpness": "선명도 개선"}
+        report = {"id": uuid.uuid4().hex, "story_id": payload.story_id, "image_key": payload.image_key,
+                  "image_label": target.get("label") or payload.image_key, "image_url": target.get("image_url") or "",
+                  "day": payload.day, "location": payload.location, "adult_mode": bool(target.get("admin_only")),
+                  "reason": labels[payload.improvement], "job_type": payload.improvement,
+                  "reported_by": _request_username(request), "status": "pending", "created_at": _now()}
+        rows.append(report); _write_dating_sim_image_reports(rows)
+    DATING_SIM_REPORT_PRIORITY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    DATING_SIM_REPORT_PRIORITY_FILE.touch(exist_ok=True)
+    return {"ok": True, "duplicate": False, "report_id": report["id"], "status": "pending"}
+
+
+@app.delete("/api/dating-sim/image-reports/{report_id}")
+def dating_sim_cancel_image_report(report_id: str, request: Request):
+    """아직 시작하지 않은 신고 이미지 재생성 예약을 취소한다."""
+    _require_owner(request)
+    if not re.fullmatch(r"[0-9a-f]{32}", report_id):
+        raise HTTPException(status_code=404, detail="재생성 예약을 찾을 수 없습니다")
+    with _DATING_SIM_IMAGE_REPORTS_LOCK:
+        rows = _read_dating_sim_image_reports()
+        report = next((row for row in rows if row.get("id") == report_id), None)
+        if not report:
+            raise HTTPException(status_code=404, detail="재생성 예약을 찾을 수 없습니다")
+        if report.get("status") == "processing":
+            raise HTTPException(status_code=409, detail="이미 생성 중인 작업은 취소할 수 없습니다")
+        if report.get("status") != "pending":
+            raise HTTPException(status_code=409, detail="대기 중인 예약만 취소할 수 있습니다")
+        report.update(status="cancelled", cancelled_at=_now(), error="")
+        _write_dating_sim_image_reports(rows)
+    return {"ok": True, "status": "cancelled", "message": "재생성 예약을 취소했습니다."}
+
+
+@app.post("/api/dating-sim/image-reports/{report_id}/retry")
+def dating_sim_retry_image_report(report_id: str, request: Request):
+    """실패한 항목을 중복 생성하지 않고 같은 예약으로 다시 대기시킨다."""
+    _require_owner(request)
+    if not re.fullmatch(r"[0-9a-f]{32}", report_id):
+        raise HTTPException(status_code=404, detail="재생성 예약을 찾을 수 없습니다")
+    with _DATING_SIM_IMAGE_REPORTS_LOCK:
+        rows = _read_dating_sim_image_reports()
+        report = next((row for row in rows if row.get("id") == report_id), None)
+        if not report:
+            raise HTTPException(status_code=404, detail="재생성 예약을 찾을 수 없습니다")
+        if report.get("status") != "failed":
+            raise HTTPException(status_code=409, detail="실패한 작업만 다시 예약할 수 있습니다")
+        report.update(
+            status="pending", error="", started_at=None, finished_at=None,
+            returncode=None, result_sha256="", generation_info={},
+            retried_at=_now(),
+        )
+        _write_dating_sim_image_reports(rows)
+    DATING_SIM_REPORT_PRIORITY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    DATING_SIM_REPORT_PRIORITY_FILE.touch(exist_ok=True)
+    return {"ok": True, "status": "pending", "message": "실패한 이미지를 다시 예약했습니다."}
+
+
+@app.get("/api/dating-sim/image-report-snapshots/{report_id}.png")
+def dating_sim_image_report_snapshot(report_id: str, request: Request):
+    _require_owner(request)
+    if not re.fullmatch(r"[0-9a-f]{32}", report_id):
+        raise HTTPException(status_code=404, detail="신고 이미지 기록을 찾을 수 없습니다")
+    report = next((row for row in _read_dating_sim_image_reports()
+                   if row.get("id") == report_id), None)
+    if not report:
+        raise HTTPException(status_code=404, detail="신고 이미지 기록을 찾을 수 없습니다")
+    _book_id, work_dir = dating_sim_story.resolve_book_work_dir(str(report.get("story_id") or ""))
+    target = (Path(work_dir) / "dating_sim_images" / "report_snapshots" / f"{report_id}.png"
+              if work_dir else None)
+    if not target or not target.is_file():
+        raise HTTPException(status_code=404, detail="신고 당시 이미지가 보존되어 있지 않습니다")
+    return FileResponse(str(target), media_type="image/png",
+                        headers={"Cache-Control": "private, no-store"})
+
+
+@app.get("/api/dating-sim/image-reports")
+def dating_sim_image_reports_list(request: Request):
+    """신고 예약의 처리 순서·상태·재생성 결과를 관리자에게 제공한다."""
+    _require_owner(request)
+    rows = _read_dating_sim_image_reports()
+    pending_order = {
+        str(item.get("id")): index
+        for index, item in enumerate(
+            (item for item in rows if item.get("status") == "pending"), start=1
+        )
+    }
+    story_cache = {}
+    items = []
+    for row in reversed(rows):
+        item = dict(row)
+        story_id = str(item.get("story_id") or "")
+        _book_id, work_dir = dating_sim_story.resolve_book_work_dir(story_id)
+        if story_id not in story_cache:
+            try:
+                story_cache[story_id] = dating_sim_story.scenario_tree(
+                    story_id, seed_key=_request_username(request),
+                )
+            except (ValueError, OSError):
+                story_cache[story_id] = {}
+        story = story_cache[story_id]
+        generated = story.get("generated_images") or {}
+        known = [*(generated.get("gallery") or []), *(generated.get("admin_gallery") or [])]
+        current = next((image for image in known
+                        if image.get("key") == item.get("image_key")), None)
+        live_generation_info = (_dating_sim_report_generation_info(
+            story_id, work_dir, str(item.get("image_key") or ""),
+        ) if work_dir else {})
+        generation_info = dict(item.get("generation_info") or {})
+        # 완료 순간 저장한 판정·프롬프트 이력을 보존하되 현재 파일 URL은
+        # 실시간 값으로 덮어써 캐시와 수동 후보 채택 결과를 정확히 반영한다.
+        generation_info.update({key: value for key, value in live_generation_info.items()
+                                if key not in {"automatic_quality"} or not generation_info.get(key)})
+        if not current and generation_info.get("image_url"):
+            current = generation_info
+        item["title"] = story.get("title") or story.get("source_title") or story_id
+        item["queue_priority"] = pending_order.get(str(item.get("id")))
+        item["result_image_url"] = (
+            current.get("image_url") if item.get("status") == "done" and current else ""
+        )
+        item["result_available"] = bool(item["result_image_url"])
+        item["original_snapshot_available"] = bool(item.get("original_snapshot"))
+        item["generation_info"] = generation_info
+        items.append(item)
+    external_job = _dating_sim_external_image_job()
+    return {
+        "items": items,
+        "pending_count": sum(item.get("status") == "pending" for item in rows),
+        "processing_count": sum(item.get("status") == "processing" for item in rows),
+        "done_count": sum(item.get("status") == "done" for item in rows),
+        "failed_count": sum(item.get("status") == "failed" for item in rows),
+        "blocked_by_external": bool(external_job),
+        "external_current": str((external_job or {}).get("current") or ""),
+    }
+
+
+@app.post("/api/dating-sim/image-reports/run")
+def dating_sim_image_reports_run(request: Request):
+    """중지 상태를 해제하고 신고 이미지 예약목록의 자동 처리를 진행한다."""
+    _require_owner(request)
+    rows = _read_dating_sim_image_reports()
+    pending = [item for item in rows if item.get("status") == "pending"]
+    processing = [item for item in rows if item.get("status") == "processing"]
+    _write_image_generation_pause(False)
+    if processing:
+        message = "이미 예약목록의 이미지를 재생성하고 있습니다."
+    elif pending:
+        message = f"예약목록 재생성을 시작했습니다. 대기 이미지 {len(pending)}장을 순서대로 처리합니다."
+    else:
+        message = "현재 재생성을 기다리는 예약 이미지가 없습니다."
+    return {
+        "ok": True, "pending_count": len(pending),
+        "processing_count": len(processing), "message": message,
+    }
+
+
+@app.get("/api/dating-sim/all-images")
+def dating_sim_all_images(request: Request):
+    """모든 작품의 일반·관리자 생성 이미지를 통합 사진첩 순서로 제공한다."""
+    _require_owner(request)
+    username = _request_username(request)
+    items = []
+    active_reports = {
+        (str(report.get("story_id") or ""), str(report.get("image_key") or "")): report
+        for report in _read_dating_sim_image_reports()
+        if report.get("status") in {"pending", "processing"}
+        and (report.get("job_type") or "regenerate") == "regenerate"
+    }
+    active_improvements = {}
+    for report in _read_dating_sim_image_reports():
+        if report.get("status") in {"pending", "processing"} and report.get("job_type") in {"anatomy", "eyes", "sharpness"}:
+            active_improvements.setdefault(
+                (str(report.get("story_id") or ""), str(report.get("image_key") or "")), {}
+            )[str(report.get("job_type"))] = {"status": report.get("status"), "id": report.get("id")}
+    liked_images = {
+        (str(item.get("story_id") or ""), str(item.get("image_key") or "")): item
+        for item in _read_dating_sim_image_likes()
+    }
+    for book_id in dating_sim_story.all_book_ids():
+        story_id = f"book:{book_id}"
+        try:
+            story = dating_sim_story.scenario_tree(story_id, seed_key=username)
+        except (ValueError, OSError):
+            continue
+        generated = story.get("generated_images") or {}
+        title = story.get("title") or story.get("source_title") or story_id
+        for image in [*(generated.get("gallery") or []), *(generated.get("admin_gallery") or [])]:
+            if not image.get("image_url") or not image.get("key"):
+                continue
+            active_report = active_reports.get((story_id, str(image.get("key") or "")))
+            liked_image = liked_images.get((story_id, str(image.get("key") or "")))
+            items.append({
+                **image, "story_id": story_id, "title": title,
+                "day": int(image.get("day") or 0),
+                "location": str(image.get("location") or "all-images"),
+                "report_status": active_report.get("status") if active_report else "",
+                "report_id": active_report.get("id") if active_report else "",
+                "liked": bool(liked_image),
+                "liked_at": liked_image.get("updated_at") if liked_image else "",
+                "improvement_jobs": active_improvements.get((story_id, str(image.get("key") or "")), {}),
+            })
+    items.sort(key=lambda item: (
+        str(item.get("title") or "").casefold(),
+        int(item.get("day") or 0), str(item.get("location") or ""),
+        str(item.get("label") or item.get("key") or "").casefold(),
+    ))
+    return {"items": items, "total": len(items)}
+
+
+@app.post("/api/dating-sim/image-likes")
+def dating_sim_image_like(payload: DatingSimImageLikeRequest, request: Request):
+    """좋아요 이미지를 보존하고 해당 생성 프롬프트를 향후 유사 장면의 선호 신호로 사용한다."""
+    _require_owner(request)
+    if not DATING_SIM_IMAGE_KEY_RE.fullmatch(payload.image_key or ""):
+        raise HTTPException(status_code=400, detail="이미지 키 형식이 올바르지 않습니다")
+    try:
+        story = dating_sim_story.scenario_tree(
+            payload.story_id, seed_key=_request_username(request),
+        )
+    except (ValueError, OSError) as exc:
+        raise HTTPException(status_code=404, detail="작품을 찾을 수 없습니다") from exc
+    generated = story.get("generated_images") or {}
+    known = [*(generated.get("gallery") or []), *(generated.get("admin_gallery") or [])]
+    target = next((item for item in known if item.get("key") == payload.image_key), None)
+    if not target:
+        raise HTTPException(status_code=404, detail="현재 작품에서 이미지를 찾지 못했습니다")
+
+    with _DATING_SIM_IMAGE_LIKES_LOCK:
+        rows = _read_dating_sim_image_likes()
+        rows = [row for row in rows if not (
+            row.get("story_id") == payload.story_id
+            and row.get("image_key") == payload.image_key
+        )]
+        if payload.liked:
+            rows.append({
+                "story_id": payload.story_id, "image_key": payload.image_key,
+                "image_url": target.get("image_url") or "",
+                "label": target.get("label") or payload.image_key,
+                "title": story.get("title") or story.get("source_title") or payload.story_id,
+                "day": int(target.get("day") or 0),
+                "location": str(target.get("location") or ""),
+                "admin_only": bool(target.get("admin_only")),
+                "prompt": target.get("prompt") or "",
+                "effective_prompt": target.get("effective_prompt") or target.get("prompt") or "",
+                "negative_prompt": target.get("negative_prompt") or "",
+                "effective_negative_prompt": target.get("effective_negative_prompt") or target.get("negative_prompt") or "",
+                "updated_at": _now(),
+            })
+        _write_dating_sim_image_likes(rows)
+
+    if payload.liked:
+        _book_id, work_dir = dating_sim_story.resolve_book_work_dir(payload.story_id)
+        prompt = target.get("effective_prompt") or target.get("prompt") or ""
+        negative = target.get("effective_negative_prompt") or target.get("negative_prompt") or ""
+        kind = "admin" if payload.image_key.startswith("admin:") else (
+            "portrait" if payload.image_key == "portrait" else "scene"
+        )
+        approval = {
+            "source": "image_like", "enabled": True, "approved_at": _now(),
+            "story_id": payload.story_id, "image_key": payload.image_key,
+            "kind": kind, "work_name": work_dir.name if work_dir else "",
+            "location": str(target.get("location") or ""),
+            "situation_tags": _dating_prompt_situation_tags(prompt),
+            "prompt": prompt, "effective_prompt": prompt,
+            "negative_prompt": negative, "effective_negative_prompt": negative,
+        }
+        if kind == "admin":
+            approval["admin_prompt_id"] = payload.image_key.removeprefix("admin:")
+        _write_dating_prompt_approval(approval)
+    else:
+        _remove_dating_prompt_like_approval(payload.story_id, payload.image_key)
+    return {
+        "ok": True, "liked": bool(payload.liked),
+        "message": "좋아요 프롬프트를 향후 유사 장면 생성에 반영합니다." if payload.liked
+                   else "좋아요를 취소했습니다.",
+    }
+
+
+@app.post("/api/dating-sim/quality-attempt-selection")
+def dating_sim_select_quality_attempt(
+    payload: DatingSimQualityAttemptSelectRequest, request: Request,
+):
+    """보존된 1~3회 품질검사 후보를 사용자가 최종 결과로 직접 채택한다."""
+    _require_owner(request)
+    if not DATING_SIM_IMAGE_KEY_RE.fullmatch(payload.image_key or ""):
+        raise HTTPException(status_code=400, detail="이미지 키 형식이 올바르지 않습니다")
+    if payload.attempt not in {1, 2, 3}:
+        raise HTTPException(status_code=400, detail="채택할 시도 번호가 올바르지 않습니다")
+    book_id, work_dir = dating_sim_story.resolve_book_work_dir(payload.story_id)
+    if not work_dir or not re.fullmatch(r"[0-9a-f]{20}", str(book_id or "")):
+        raise HTTPException(status_code=404, detail="작품 폴더를 찾을 수 없습니다")
+    image_dir = work_dir / "dating_sim_images"
+    manifest_path = image_dir / "manifest.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError) as exc:
+        raise HTTPException(status_code=404, detail="이미지 생성 기록을 찾을 수 없습니다") from exc
+
+    if payload.image_key == "portrait":
+        target_filename = manifest.get("portrait") or "portrait.png"
+        automatic = manifest.get("portrait_automatic_quality")
+        record = None
+    elif payload.image_key.startswith("admin:"):
+        prompt_id = payload.image_key.removeprefix("admin:")
+        record = (manifest.get("admin_prompt_images") or {}).get(prompt_id)
+        if not isinstance(record, dict):
+            record = _dating_sim_report_generation_info(
+                payload.story_id, work_dir, payload.image_key,
+            )
+            manifest.setdefault("admin_prompt_images", {})[prompt_id] = record
+        target_filename = record.get("file") or f"admin-{prompt_id}.png"
+        automatic = record.get("automatic_quality") if isinstance(record, dict) else None
+    else:
+        record = (manifest.get("scenes") or {}).get(payload.image_key)
+        target_filename = record.get("file") if isinstance(record, dict) else None
+        automatic = record.get("automatic_quality") if isinstance(record, dict) else None
+    if not isinstance(automatic, dict) and isinstance(target_filename, str):
+        recovered = _dating_sim_report_generation_info(
+            payload.story_id, work_dir, payload.image_key,
+        )
+        automatic = dict(recovered.get("automatic_quality") or {})
+        if isinstance(record, dict):
+            record["automatic_quality"] = automatic
+    if (not isinstance(target_filename, str)
+            or not re.fullmatch(r"(?:portrait|scene-[0-9a-f]{12}|admin-[0-9a-f]{32})\.png", target_filename)
+            or not isinstance(automatic, dict)):
+        raise HTTPException(status_code=404, detail="선택한 이미지의 품질 후보 기록을 찾을 수 없습니다")
+    selected = next(
+        (item for item in (automatic.get("attempts") or [])
+         if isinstance(item, dict) and item.get("attempt") == payload.attempt), None,
+    )
+    expected_attempt_file = f"{Path(target_filename).stem}-attempt-{payload.attempt}.png"
+    if not selected or selected.get("image_file") != expected_attempt_file:
+        raise HTTPException(status_code=404, detail="선택한 시도의 후보 이미지가 저장되어 있지 않습니다")
+    candidate = image_dir / "quality_attempts" / expected_attempt_file
+    target = image_dir / target_filename
+    if not candidate.is_file() or not target.parent == image_dir:
+        raise HTTPException(status_code=404, detail="선택한 후보 이미지 파일을 찾을 수 없습니다")
+
+    previous_mtime = target.stat().st_mtime if target.is_file() else 0
+    temporary_image = image_dir / f".{target_filename}.manual-selection.tmp"
+    shutil.copy2(candidate, temporary_image)
+    os.replace(temporary_image, target)
+    refreshed_mtime = max(time.time(), previous_mtime + 1.0)
+    os.utime(target, (refreshed_mtime, refreshed_mtime))
+    selected_report = dict(selected.get("report") or {})
+    selected_passed = selected_report.get("passed") is True
+    automatic.update({
+        "passed": selected_passed,
+        "accepted_after_limit": not selected_passed,
+        "selected_attempt": payload.attempt,
+        "selection_method": "manual",
+        "manually_selected": True,
+        "selected_at": _now(),
+        "final_report": selected_report,
+    })
+    if payload.image_key == "portrait":
+        manifest["portrait_automatic_quality"] = automatic
+        manifest["portrait_prompt"] = selected.get("prompt") or manifest.get("portrait_prompt") or ""
+        manifest["portrait_effective_prompt"] = selected.get("effective_prompt") or selected.get("prompt") or ""
+        manifest["portrait_effective_negative_prompt"] = selected.get("negative_prompt") or ""
+        manifest["portrait_generation_settings"] = selected.get("generation_settings") or {}
+    else:
+        record["automatic_quality"] = automatic
+        record["prompt"] = selected.get("prompt") or record.get("prompt") or ""
+        record["effective_prompt"] = selected.get("effective_prompt") or selected.get("prompt") or ""
+        record["effective_negative_prompt"] = selected.get("negative_prompt") or ""
+        record["generation_settings"] = selected.get("generation_settings") or {}
+    quality_checks = manifest.setdefault("quality_checks", {})
+    quality_checks[payload.image_key] = {
+        **selected_report,
+        "passed": selected_passed,
+        "accepted_after_limit": not selected_passed,
+        "manually_selected": True,
+        "selected_attempt": payload.attempt,
+    }
+    accepted_failures = any(
+        isinstance(report, dict) and report.get("accepted_after_limit") is True
+        for report in quality_checks.values()
+    )
+    hard_failures = any(
+        isinstance(report, dict) and report.get("passed") is not True
+        and report.get("accepted_after_limit") is not True
+        for report in quality_checks.values()
+    )
+    manifest["quality_status"] = (
+        "failed" if hard_failures else ("accepted_after_limit" if accepted_failures else "passed")
+    )
+    manifest = _write_dating_sim_manifest(manifest_path, manifest)
+    final_hash = hashlib.sha256(target.read_bytes()).hexdigest()
+    with _DATING_SIM_IMAGE_REPORTS_LOCK:
+        report_rows = _read_dating_sim_image_reports()
+        changed = False
+        for report_row in report_rows:
+            if (report_row.get("story_id") == payload.story_id
+                    and report_row.get("image_key") == payload.image_key
+                    and report_row.get("status") == "done"):
+                report_row["result_sha256"] = final_hash
+                report_row["selected_attempt"] = payload.attempt
+                report_row["selection_method"] = "manual"
+                report_row["generation_info"] = _dating_sim_report_generation_info(
+                    payload.story_id, work_dir, payload.image_key,
+                )
+                changed = True
+        if changed:
+            _write_dating_sim_image_reports(report_rows)
+    if payload.image_key == "portrait":
+        approval_kind, location, admin_prompt_id = "portrait", "", None
+    elif payload.image_key.startswith("admin:"):
+        approval_kind, location = "admin", ""
+        admin_prompt_id = payload.image_key.removeprefix("admin:")
+    else:
+        approval_kind = "scene"
+        location = str((record or {}).get("location") or payload.image_key.split(":", 1)[-1])
+        admin_prompt_id = None
+    approved_prompt = str(selected.get("prompt") or "").strip()
+    _write_dating_prompt_approval({
+        "id": uuid.uuid4().hex,
+        "enabled": True,
+        "kind": approval_kind,
+        "story_id": payload.story_id,
+        "work_name": work_dir.name,
+        "image_key": payload.image_key,
+        "admin_prompt_id": admin_prompt_id,
+        "location": location,
+        "situation_tags": _dating_prompt_situation_tags(approved_prompt),
+        "attempt": payload.attempt,
+        "prompt": approved_prompt,
+        "effective_prompt": selected.get("effective_prompt") or approved_prompt,
+        "negative_prompt": selected.get("negative_prompt") or "",
+        "quality_positive_prompt": selected.get("quality_positive_prompt") or "",
+        "quality_negative_prompt": selected.get("quality_negative_prompt") or "",
+        "generation_settings": selected.get("generation_settings") or {},
+        "source_report": selected_report,
+        "approved_by": _request_username(request),
+        "approved_at": _now(),
+    })
+    route = "admin-images" if target_filename.startswith("admin-") else "images"
+    return {
+        "ok": True,
+        "selected_attempt": payload.attempt,
+        "image_url": f"/api/dating-sim/books/{book_id}/{route}/{target_filename}?t={int(target.stat().st_mtime)}",
+        "message": f"{payload.attempt}회 시도 사진을 최종 결과로 채택하고 같은 상황의 우선 프롬프트로 학습했습니다.",
+    }
 
 
 @app.post("/api/dating-sim/scenario-tree/set-portrait")
@@ -4914,6 +6738,8 @@ def dating_sim_generate_missing_images(request: Request):
     """관리자 전용 — 시나리오 완성·이미지 미완성 작품 전체를 순차 생성한다."""
     global _dating_sim_image_backlog_job
     _require_owner(request)
+    if DATING_SIM_REPORT_PRIORITY_FILE.exists():
+        raise HTTPException(status_code=409, detail="신고 이미지 재생성이 최우선으로 예약되어 있습니다")
     if DATING_SIM_IMAGE_PAUSE_FILE.exists():
         raise HTTPException(status_code=409, detail="전체 이미지 생성이 중지되어 있습니다. 먼저 생성 재개를 눌러 주세요")
     try:
@@ -5093,6 +6919,7 @@ def dating_sim_encounters(request: Request):
                 route_state = {}
             encounters.append({
                 "story_id": story["id"], "title": story["title"], "character_name": story["name"],
+                "character_name_ko": story.get("character_name_ko", ""),
                 "character_image": story.get("character_image"), "source_title": story.get("source_title"),
                 "day": min(row["day"], story["total_days"]), "total_days": story["total_days"],
                 "affection": row["affection"], "completed": bool(row["completed"]),
@@ -5196,6 +7023,11 @@ def dating_sim_playable_stories(request: Request):
         except HTTPException:
             continue
         scenario_ok, images_ok, image_count = dating_sim_story.book_readiness(book_id)
+        readiness = dating_sim_story.book_readiness_details(book_id)
+        # 기존 호출자·테스트가 book_readiness를 대체해도 기본 3개 상태값은
+        # 유지하고, 상세 통계는 실제 매니페스트가 있을 때만 덧붙인다.
+        if image_count and not readiness.get("image_count"):
+            readiness["image_count"] = image_count
         _, work_dir = dating_sim_story.resolve_book_work_dir(story_id)
         scenario_progress = None
         if work_dir:
@@ -5232,6 +7064,11 @@ def dating_sim_playable_stories(request: Request):
             # ★ 2026-09-24: 이미지·시나리오가 덜 끝난 작품도 목록에서 빼지 않고 미완료로 표시한다.
             "ready": scenario_ok and images_ok, "scenario_ready": scenario_ok,
             "images_ready": images_ok, "image_count": image_count,
+            "image_required": readiness.get("image_required", readiness.get("image_limit", 42)),
+            "portrait_ready": readiness.get("portrait_ready", images_ok),
+            "legacy_complete": readiness.get("legacy_complete", False),
+            "scene_assignment_count": readiness.get("scene_assignment_count", 0),
+            "scene_assignment_required": readiness.get("scene_assignment_required", 0),
             "scenario_progress": scenario_progress,
         })
     # 사용자가 관계를 이어 온 작품부터 찾을 수 있도록 시작한 작품을 호감도
@@ -5340,8 +7177,89 @@ class BattleSimChoiceRequest(BaseModel):
     choice_index: int
 
 
+class BattleSimProbeRequest(BaseModel):
+    battle_id: str
+    symbol: str
+
+
 class BattleSimRequest(BaseModel):
     battle_id: str
+
+
+class LifeTerrainSubmitRequest(BaseModel):
+    domain: str
+    answers: dict[str, int]
+
+
+@app.get("/life-terrain/")
+def life_terrain_dashboard(request: Request):
+    _require_signed_in_user(request)
+    return FileResponse(str(LIFE_TERRAIN_WEB_DIR / "index.html"), headers={"Cache-Control": "no-store"})
+
+
+@app.get("/life-terrain")
+def life_terrain_redirect():
+    return RedirectResponse("/life-terrain/", status_code=307)
+
+
+@app.get("/life-terrain/static/{filename}")
+def life_terrain_static(filename: str, request: Request):
+    _require_signed_in_user(request)
+    if filename not in {"style.css", "app.js", "manifest.webmanifest"}:
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
+    return FileResponse(str(LIFE_TERRAIN_WEB_DIR / filename), headers={"Cache-Control": "no-store"})
+
+
+@app.get("/api/life-terrain/quiz")
+def life_terrain_quiz_data(request: Request):
+    _require_signed_in_user(request)
+    return {"domains": life_terrain_quiz.DOMAINS, "questions": life_terrain_quiz.public_questions()}
+
+
+@app.get("/api/life-terrain/results")
+def life_terrain_results(request: Request, limit: int = Query(default=12, ge=1, le=50)):
+    _require_signed_in_user(request)
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT id,domain,report_json,created_at FROM life_terrain_results "
+            "WHERE username=? ORDER BY id DESC LIMIT ?",
+            (_request_username(request), limit),
+        ).fetchall()
+    finally:
+        conn.close()
+    results = []
+    for row in rows:
+        try:
+            report = json.loads(row["report_json"])
+        except (TypeError, json.JSONDecodeError):
+            report = {}
+        results.append({"id": row["id"], "domain": row["domain"], "report": report,
+                        "created_at": row["created_at"]})
+    return results
+
+
+@app.post("/api/life-terrain/results")
+def life_terrain_submit(body: LifeTerrainSubmitRequest, request: Request):
+    _require_signed_in_user(request)
+    try:
+        report = life_terrain_quiz.evaluate(body.domain, body.answers)
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
+    username, now = _request_username(request), _now()
+    conn = get_conn()
+    try:
+        cursor = conn.execute(
+            "INSERT INTO life_terrain_results(username,domain,answers_json,report_json,created_at) "
+            "VALUES(?,?,?,?,?)",
+            (username, body.domain, json.dumps(body.answers, ensure_ascii=False),
+             json.dumps(report, ensure_ascii=False), now),
+        )
+        conn.commit()
+        result_id = cursor.lastrowid
+    finally:
+        conn.close()
+    return {"id": result_id, "created_at": now, "report": report}
 
 
 def _battle(battle_id):
@@ -5415,6 +7333,7 @@ def _battle_payload(row, battle, last_result=None):
                "last_result": last_result, "situation": situation, "history": history,
                "best_score": int(row.get("best_score") or 0), "attempts": int(row.get("attempts") or 0),
                "map_scene": battle_sim_story.map_scene(row["battle_id"], phase, situation)}
+    payload["probes"] = battle_sim_story.probe_options(row["battle_id"], situation)
     payload["commander_message"] = history[-1].get("commander_message") if history else None
     payload["battle"].pop("initial_state", None)
     payload["battle"]["total_phases"] = len(battle["phases"])
@@ -5451,12 +7370,57 @@ def battle_sim_static(filename: str, request: Request):
     allowed = {"style.css", "app.js", "jingxing_map.png", "cannae_map.png", "austerlitz_map.png",
                "jingxing_codex_map.png", "jingxing_codex_map_wide_v2.png", "cannae_codex_map.png", "austerlitz_codex_map.png",
                "jingxing_intro_terrain_v1.png", "portrait_hanxin_v1.png", "portrait_zhanger_v1.png",
-               "portrait_zhaoxie_v1.png", "portrait_lizuo_che_v1.png"}
+               "portrait_zhaoxie_v1.png", "portrait_lizuo_che_v1.png", "manifest.webmanifest"}
     if filename not in allowed:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(BATTLE_SIM_WEB_DIR / filename), headers={
         "Cache-Control": "no-store" if filename in {"app.js", "style.css"} else "public, max-age=86400"
     })
+
+
+@app.get("/sunzi")
+def sunzi_redirect():
+    return RedirectResponse("/sunzi/", status_code=307)
+
+
+@app.get("/sunzi/")
+def sunzi_dashboard(request: Request):
+    _require_signed_in_user(request)
+    return RedirectResponse("/sunzi/app/archive#list", status_code=307)
+
+
+@app.get("/sunzi/app")
+def sunzi_renderer_root(request: Request):
+    _require_signed_in_user(request)
+    return RedirectResponse("/sunzi/app/archive#list", status_code=307)
+
+
+@app.get("/sunzi/app/{path:path}")
+def sunzi_renderer(path: str, request: Request):
+    _require_signed_in_user(request)
+    root = SUNZI_SITE_DIR.resolve()
+    relative = path.strip("/")
+    candidates = [root / relative]
+    if relative and not Path(relative).suffix:
+        candidates.insert(0, root / f"{relative}.html")
+    for candidate in candidates:
+        target = candidate.resolve()
+        if not target.is_relative_to(root) or not target.is_file():
+            continue
+        is_html = target.suffix.lower() == ".html"
+        return FileResponse(
+            str(target),
+            headers={"Cache-Control": "no-store" if is_html else "public, max-age=86400"},
+        )
+    raise HTTPException(status_code=404, detail="병법 페이지를 찾을 수 없습니다")
+
+
+@app.get("/sunzi/static/{filename}")
+def sunzi_static(filename: str, request: Request):
+    _require_signed_in_user(request)
+    if filename not in {"style.css", "app.js", "manifest.webmanifest"}:
+        raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
+    return FileResponse(str(SUNZI_WEB_DIR / filename), headers={"Cache-Control": "no-store"})
 
 
 @app.get("/api/battle-sim/battles")
@@ -5476,6 +7440,30 @@ def battle_sim_state(request: Request, battle_id: str):
     finally:
         conn.close()
     return _battle_payload(row, battle)
+
+
+@app.post("/api/battle-sim/probe")
+def battle_sim_probe(body: BattleSimProbeRequest, request: Request):
+    _require_signed_in_user(request)
+    battle = _battle(body.battle_id)
+    username = _request_username(request)
+    conn = get_conn()
+    try:
+        row = _battle_row(conn, username, body.battle_id)
+        if row["completed"]:
+            raise HTTPException(status_code=409, detail="이미 종료된 전투입니다")
+        situation = _battle_json(row.get("state_json"), battle_sim_story.initial_state(battle))
+        try:
+            situation, result = battle_sim_story.apply_probe(body.battle_id, situation, body.symbol)
+        except ValueError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from error
+        conn.execute("UPDATE battle_sim_progress SET state_json=?,updated_at=? WHERE username=? AND battle_id=?",
+                     (json.dumps(situation, ensure_ascii=False), _now(), username, body.battle_id))
+        conn.commit()
+        row.update(state_json=json.dumps(situation, ensure_ascii=False))
+    finally:
+        conn.close()
+    return _battle_payload(row, battle, result)
 
 
 @app.post("/api/battle-sim/choose")
@@ -5704,7 +7692,10 @@ def shift_alarm_redirect():
 @app.get("/shift-alarm/")
 def shift_alarm_dashboard(request: Request):
     _require_owner(request)
-    return FileResponse(str(SHIFT_ALARM_DASHBOARD_DIR / "index.html"))
+    return FileResponse(
+        str(SHIFT_ALARM_DASHBOARD_DIR / "index.html"),
+        headers={"Cache-Control": "private, no-store, max-age=0"},
+    )
 
 
 @app.get("/shift-alarm/static/{filename}")
@@ -5718,7 +7709,7 @@ def shift_alarm_static(filename: str, request: Request):
 @app.get("/shift-alarm/static/assets/{filename}")
 def shift_alarm_static_asset(filename: str, request: Request):
     _require_owner(request)
-    if filename not in {"shift-pet-adventurer-sprites.png"}:
+    if filename not in {"shift-pet-adventurer-sprites.png", "budeugi-urgent.mp3"}:
         raise HTTPException(status_code=404, detail="파일을 찾을 수 없습니다")
     return FileResponse(str(SHIFT_ALARM_DASHBOARD_DIR / "assets" / filename))
 
@@ -5758,7 +7749,7 @@ main{{width:min(440px,100%);padding:28px 22px;border:1px solid #ded5ef;border-ra
 # ·worker/persona_worker.py(_shift_alarm_*)와 완전히 같은 로직 — 하나를
 # 고치면 세 곳 다 맞춰야 한다.
 SHIFT_ALARM_CLASSIC_FOLDER = "/Users/forrestdpark/Desktop/BlogImage/Coffee and Meditation"
-SHIFT_ALARM_FAVORITES_FOLDER = "/Users/forrestdpark/Desktop/BlogImage/좋아요플레이"
+SHIFT_ALARM_FAVORITES_FOLDER = str(MP3_FAVORITES_DIR)
 SHIFT_ALARM_SLEEP_FOLDER = "/Users/forrestdpark/Desktop/BlogImage/잠잘준비"
 SHIFT_ALARM_ELMEDIA_PLAYLIST_DB = os.path.expanduser(
     "~/Library/Containers/com.eltima.elmedia6.mas/Data/Library/Application Support/"
@@ -6952,7 +8943,18 @@ def _shift_alarm_set_hue_power(on):
 
 def _read_shift_alarm_status():
     saw_file = False
-    for status_file in (SHIFT_ALARM_STATUS_FILE, SHIFT_ALARM_STATUS_FALLBACK_FILE):
+    # 웹 서버에서는 Shift Alarm이 iCloud로 복사하기 직전에 함께 갱신하는
+    # 로컬 스테이징 파일을 먼저 읽는다. macOS가 iCloud 파일을 내려받거나
+    # TCC 접근을 판정하는 동안 read_text()가 수 초간 멈추는 경우가 있으며,
+    # 그러면 상태와 Shift Quest API가 함께 비어 보인다. 두 파일의 내용은
+    # 같은 쓰기 작업에서 만들어지므로 로컬본을 우선하고 없을 때만 iCloud를
+    # 최종 복구 경로로 사용한다.
+    candidates = (
+        ("local", SHIFT_ALARM_STATUS_FALLBACK_FILE),
+        ("cache", SHIFT_ALARM_STATUS_CACHE_FILE),
+        ("icloud", SHIFT_ALARM_STATUS_FILE),
+    )
+    for source, status_file in candidates:
         try:
             payload = json.loads(status_file.read_text(encoding="utf-8"))
             saw_file = True
@@ -6962,7 +8964,34 @@ def _read_shift_alarm_status():
             saw_file = True
             continue
         if isinstance(payload, dict):
-            return payload
+            # 마지막 정상본은 별도 파일에 원자적으로 보존한다. 다음 갱신 파일이
+            # 손상되어도 화면 전체가 사라지지 않고 직전 상태를 표시할 수 있다.
+            if source != "cache":
+                try:
+                    SHIFT_ALARM_STATUS_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+                    temporary = SHIFT_ALARM_STATUS_CACHE_FILE.with_suffix(".tmp")
+                    temporary.write_text(
+                        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+                    )
+                    temporary.replace(SHIFT_ALARM_STATUS_CACHE_FILE)
+                except OSError:
+                    pass
+            result = dict(payload)
+            age_seconds = None
+            try:
+                updated_at = datetime.datetime.fromisoformat(str(payload.get("updated_at")))
+                if updated_at.tzinfo is not None:
+                    updated_at = updated_at.astimezone().replace(tzinfo=None)
+                age_seconds = max(0, round((datetime.datetime.now() - updated_at).total_seconds()))
+            except (TypeError, ValueError):
+                pass
+            result["status_health"] = {
+                "source": source,
+                "cached": source == "cache",
+                "age_seconds": age_seconds,
+                "stale": age_seconds is None or age_seconds > 15 * 60,
+            }
+            return result
     detail = "Shift Alarm 상태 파일을 읽을 수 없습니다" if saw_file else "Shift Alarm 상태 파일이 아직 없습니다"
     raise HTTPException(status_code=503, detail=detail)
 
@@ -7037,6 +9066,34 @@ SHIFT_ALARM_QUEST_ATTRIBUTES = {
     "정돈": ("청소", "정리", "점검", "충전", "배수", "화장실"),
     "준비": ("준비", "출근", "루틴", "체크"),
 }
+SHIFT_ALARM_CULTIVATION_AXES = {
+    "정": {
+        "hanja": "精",
+        "title": "부득이하지 않으면 하지 않기",
+        "description": "해야 할 일과 회복만 마치고 나머지는 덜어냅니다.",
+        "recommendations": ["필수만 수행", "회복 우선", "마치면 멈추기"],
+    },
+    "기": {
+        "hanja": "氣",
+        "title": "부득이 멈춰야 할 때까지 움직이기",
+        "description": "작은 행동을 이어 붙여 흐름과 활력을 유지합니다.",
+        "recommendations": ["바로 움직이기", "행동 이어가기", "멈춰도 다시 시작"],
+    },
+    "신": {
+        "hanja": "神",
+        "title": "정신과 몰입을 벼리는 날",
+        "description": "조용한 시간을 활용해 암기·독서·사유의 밀도를 높입니다.",
+        "recommendations": ["손자병법 암기", "깊은 독서와 학습", "방해를 줄이고 몰입 유지"],
+    },
+}
+SHIFT_ALARM_ATTRIBUTE_TO_AXIS = {
+    "전투력": "신", "집중": "신", "유대": "신",
+    "활력": "기", "정돈": "기",
+    "회복": "정", "준비": "정",
+}
+SHIFT_ALARM_CULTIVATION_EPOCH = datetime.date(2026, 10, 15)  # 정(陰)으로 시작
+SHIFT_ALARM_CULTIVATION_SEQUENCE = ("정", "기")
+SHIFT_ALARM_CULTIVATION_DAILY_BONUS_CAP = 30
 SHIFT_ALARM_STAT_POINTS_PER_LEVEL = 3
 JAPANESE_READER_DB = Path(os.path.expanduser("~/.japanese_epub_web/reader.db"))
 ENGLISH_READER_DB = Path(os.path.expanduser("~/.english_epub_web/reader.db"))
@@ -7048,6 +9105,222 @@ def _shift_alarm_quest_attribute(label):
         if any(keyword in compact for keyword in keywords):
             return attribute
     return "준비"
+
+
+def _shift_alarm_action_type(label, attribute=None):
+    """퀘스트를 정·기 보상 원칙에 쓰는 행동 유형으로 분류한다."""
+    compact = re.sub(r"\s+", "", str(label or ""))
+    if any(word in compact for word in ("멜라토닌", "수면", "숙면", "휴식", "명상", "운기조식", "식사", "밥", "물", "샤워")):
+        return "회복"
+    if any(word in compact for word in ("출근", "충전", "준비", "점검", "약", "복용", "AllOK", "루틴")):
+        return "필수"
+    attribute = attribute or _shift_alarm_quest_attribute(label)
+    if attribute in {"활력", "정돈"}:
+        return "활동"
+    if attribute in {"집중", "전투력"}:
+        return "성장"
+    if attribute == "회복":
+        return "회복"
+    if attribute == "준비":
+        return "필수"
+    return "선택"
+
+
+def _shift_alarm_action_bonus(axis, action_type):
+    aligned = ((axis == "정" and action_type in {"필수", "회복"}) or
+               (axis == "기" and action_type in {"활동", "성장"}))
+    return 5 if aligned else 0
+
+
+def _shift_alarm_cultivation_axis(label, attribute=None):
+    """기존 7개 능력치를 정·기·신 수행 축으로 묶는다."""
+    attribute = attribute or _shift_alarm_quest_attribute(label)
+    return SHIFT_ALARM_ATTRIBUTE_TO_AXIS.get(attribute, "정")
+
+
+def _shift_alarm_cultivation_axis_for_date(value=None):
+    """근무와 무관하게 기준일부터 정(陰)·기(陽)를 하루씩 교대한다."""
+    if isinstance(value, datetime.datetime):
+        target = value.date()
+    elif isinstance(value, datetime.date):
+        target = value
+    else:
+        try:
+            target = datetime.date.fromisoformat(str(value or "")[:10])
+        except ValueError:
+            target = datetime.date.today()
+    offset = (target - SHIFT_ALARM_CULTIVATION_EPOCH).days
+    return SHIFT_ALARM_CULTIVATION_SEQUENCE[offset % len(SHIFT_ALARM_CULTIVATION_SEQUENCE)]
+
+
+def _read_shift_alarm_cultivation_choices():
+    try:
+        payload = json.loads(SHIFT_ALARM_CULTIVATION_CHOICES_FILE.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return {}
+    if not isinstance(payload, dict):
+        return {}
+    return {
+        str(date)[:10]: axis for date, axis in payload.items()
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", str(date)[:10]) and axis in SHIFT_ALARM_CULTIVATION_SEQUENCE
+    }
+
+
+def _write_shift_alarm_cultivation_choices(choices):
+    SHIFT_ALARM_CULTIVATION_CHOICES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = SHIFT_ALARM_CULTIVATION_CHOICES_FILE.with_suffix(".tmp")
+    temporary.write_text(json.dumps(choices, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(SHIFT_ALARM_CULTIVATION_CHOICES_FILE)
+
+
+def _shift_alarm_cultivation_choice_for_date(value, choices=None):
+    """해당 날의 수동 선택을 쓰고, 없으면 가장 최근 선택을 유지한다."""
+    date_key = str(value or datetime.date.today().isoformat())[:10]
+    choices = choices if choices is not None else _read_shift_alarm_cultivation_choices()
+    if choices.get(date_key) in SHIFT_ALARM_CULTIVATION_SEQUENCE:
+        return choices[date_key]
+    previous = [date for date in choices if date <= date_key]
+    if previous:
+        return choices[max(previous)]
+    # 선택 기록이 하나도 없을 때만 기존 화면의 오늘 축을 초기값으로 삼는다.
+    return _shift_alarm_cultivation_axis_for_date(date_key)
+
+
+def _parse_shift_alarm_cultivation_time(value):
+    if isinstance(value, datetime.datetime):
+        return value.replace(tzinfo=None)
+    text = str(value or "")
+    try:
+        if len(text) == 10:
+            return datetime.datetime.combine(datetime.date.fromisoformat(text), datetime.time.min)
+        return datetime.datetime.fromisoformat(text).replace(tzinfo=None)
+    except ValueError:
+        return None
+
+
+def _write_shift_alarm_cultivation_intervals(intervals):
+    SHIFT_ALARM_CULTIVATION_INTERVALS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = SHIFT_ALARM_CULTIVATION_INTERVALS_FILE.with_suffix(".tmp")
+    temporary.write_text(json.dumps(intervals, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(SHIFT_ALARM_CULTIVATION_INTERVALS_FILE)
+
+
+def _migrate_shift_alarm_cultivation_intervals():
+    """기존 날짜 선택을 자정 경계의 연속 시간 구간으로 한 번만 변환한다."""
+    choices = _read_shift_alarm_cultivation_choices()
+    today = datetime.date.today()
+    start_date = today - datetime.timedelta(days=89)
+    changes = []
+    for offset in range(90):
+        day = start_date + datetime.timedelta(days=offset)
+        axis = _shift_alarm_cultivation_choice_for_date(day, choices)
+        if not changes or axis != changes[-1][1]:
+            changes.append((day, axis))
+    migrated_at = datetime.datetime.now().replace(microsecond=0)
+    intervals = []
+    for index, (day, axis) in enumerate(changes):
+        start = datetime.datetime.combine(day, datetime.time.min)
+        end = (datetime.datetime.combine(changes[index + 1][0], datetime.time.min)
+               if index + 1 < len(changes) else None)
+        intervals.append({
+            "axis": axis, "started_at": start.isoformat(timespec="seconds"),
+            "ended_at": end.isoformat(timespec="seconds") if end else None,
+            "migrated": True,
+            **({"xp_started_at": migrated_at.isoformat(timespec="seconds")} if end is None else {}),
+        })
+    _write_shift_alarm_cultivation_intervals(intervals)
+    return intervals
+
+
+def _read_shift_alarm_cultivation_intervals():
+    try:
+        payload = json.loads(SHIFT_ALARM_CULTIVATION_INTERVALS_FILE.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return _migrate_shift_alarm_cultivation_intervals()
+    if not isinstance(payload, list):
+        return _migrate_shift_alarm_cultivation_intervals()
+    if payload and all(isinstance(item, dict) and item.get("migrated") for item in payload) and not any(
+        isinstance(item, dict) and item.get("xp_started_at") for item in payload
+    ):
+        return _migrate_shift_alarm_cultivation_intervals()
+    intervals = []
+    for item in payload:
+        if not isinstance(item, dict) or item.get("axis") not in SHIFT_ALARM_CULTIVATION_SEQUENCE:
+            continue
+        start = _parse_shift_alarm_cultivation_time(item.get("started_at"))
+        end = _parse_shift_alarm_cultivation_time(item.get("ended_at"))
+        if not start or (end and end < start):
+            continue
+        intervals.append({
+            "axis": item["axis"], "started_at": start.isoformat(timespec="seconds"),
+            "ended_at": end.isoformat(timespec="seconds") if end else None,
+            **({"migrated": True} if item.get("migrated") else {}),
+            **({"xp_started_at": item["xp_started_at"]} if _parse_shift_alarm_cultivation_time(item.get("xp_started_at")) else {}),
+        })
+    if not intervals:
+        return _migrate_shift_alarm_cultivation_intervals()
+    return sorted(intervals, key=lambda item: item["started_at"])
+
+
+def _shift_alarm_cultivation_axis_at(value=None, intervals=None):
+    target = _parse_shift_alarm_cultivation_time(value) or datetime.datetime.now()
+    intervals = intervals if intervals is not None else _read_shift_alarm_cultivation_intervals()
+    for item in reversed(intervals):
+        start = _parse_shift_alarm_cultivation_time(item.get("started_at"))
+        end = _parse_shift_alarm_cultivation_time(item.get("ended_at"))
+        if start and start <= target and (end is None or target < end):
+            return item["axis"]
+    return intervals[0]["axis"] if intervals else "정"
+
+
+def _switch_shift_alarm_cultivation(axis, switched_at=None):
+    switched_at = (switched_at or datetime.datetime.now()).replace(microsecond=0, tzinfo=None)
+    with SHIFT_ALARM_QUEST_LOCK:
+        intervals = _read_shift_alarm_cultivation_intervals()
+        current = intervals[-1] if intervals else None
+        if current and current.get("axis") == axis and not current.get("ended_at"):
+            return False
+        if current and not current.get("ended_at"):
+            current["ended_at"] = switched_at.isoformat(timespec="seconds")
+        intervals.append({"axis": axis, "started_at": switched_at.isoformat(timespec="seconds"), "ended_at": None})
+        _write_shift_alarm_cultivation_intervals(intervals)
+    return True
+
+
+def _shift_alarm_shift_key(value):
+    compact = re.sub(r"[^a-z]", "", str(value or "").lower())
+    if compact in {"d", "day"}:
+        return "day"
+    if compact in {"g", "gy", "graveyard", "night"}:
+        return "gy"
+    if compact in {"s", "swing"}:
+        return "swing"
+    return "off"
+
+
+def _shift_alarm_cultivation_reward(label, base_xp, *, routine_date=None, status=None):
+    """선택한 수행축과 행동 유형에 맞춰 예상 XP를 계산한다."""
+    attribute = _shift_alarm_quest_attribute(label)
+    action_type = _shift_alarm_action_type(label, attribute)
+    status = status or _read_shift_alarm_status()
+    status_date = str(status.get("date") or status.get("routine_date") or "")
+    today = datetime.date.today().isoformat()
+    shift_key = _shift_alarm_shift_key(status.get("shift"))
+    reward_date = routine_date or status_date or today
+    reward_moment = datetime.datetime.now() if str(reward_date)[:10] == today else f"{str(reward_date)[:10]}T12:00:00"
+    axis = _shift_alarm_cultivation_axis_at(reward_moment)
+    bonus = _shift_alarm_action_bonus(axis, action_type)
+    multiplier = (int(base_xp) + bonus) / max(1, int(base_xp))
+    return {
+        "attribute": attribute,
+        "action_type": action_type,
+        "bonus_reason": action_type if bonus else "기본",
+        "axis": axis,
+        "shift_key": shift_key,
+        "multiplier": multiplier,
+        "base_xp": int(base_xp),
+        "xp": max(1, int(base_xp) + bonus),
+    }
 
 
 def _shift_alarm_quest_level(total_xp):
@@ -7178,7 +9451,7 @@ def _read_shift_alarm_quest_events():
 
 
 def _record_shift_alarm_quest(quest_key, label, xp, attribute, action="award", source="web",
-                              routine_date=None, created_at=None):
+                              routine_date=None, created_at=None, cultivation=None):
     """동일 퀘스트는 한 번만 지급하고 취소한 지급만 되돌리는 append-only 원장."""
     with SHIFT_ALARM_QUEST_LOCK:
         events = _read_shift_alarm_quest_events()
@@ -7189,12 +9462,20 @@ def _record_shift_alarm_quest(quest_key, label, xp, attribute, action="award", s
         if action == "reverse" and balance <= 0:
             return False
         now = created_at or datetime.datetime.now()
+        cultivation = cultivation or _shift_alarm_cultivation_reward(
+            label, xp, routine_date=routine_date,
+        )
         _append_shift_alarm_quest_event({
             "event_id": uuid.uuid4().hex,
             "quest_key": quest_key,
             "label": str(label),
             "attribute": attribute,
-            "xp": int(xp),
+            "xp": int(cultivation.get("xp") or xp),
+            "base_xp": int(cultivation.get("base_xp") or xp),
+            "action_type": cultivation.get("action_type") or _shift_alarm_action_type(label, attribute),
+            "cultivation_axis": cultivation.get("axis") or _shift_alarm_cultivation_axis_for_date(routine_date or now),
+            "cultivation_shift": cultivation.get("shift_key") or "off",
+            "cultivation_multiplier": float(cultivation.get("multiplier") or 1),
             "action": action,
             "source": source,
             "created_at": now.isoformat(timespec="seconds"),
@@ -7236,6 +9517,56 @@ def _sync_shift_alarm_quest_history():
             continue
 
 
+def _shift_alarm_effective_rewards(active, cultivation_intervals):
+    """원장을 수정하지 않고 날짜별 모드 보너스와 기의 행동 연속 보너스를 계산한다."""
+    rewards = {}
+    daily = {}
+    ordered = sorted(active.items(), key=lambda pair: pair[1].get("created_at", ""))
+    for quest_key, event in ordered:
+        date_key = str(event.get("routine_date") or event.get("created_at") or "")[:10]
+        axis = _shift_alarm_cultivation_axis_at(event.get("created_at") or date_key, cultivation_intervals)
+        base_xp = max(0, int(event.get("base_xp") or event.get("xp") or 0))
+        action_type = event.get("action_type") or _shift_alarm_action_type(
+            event.get("label"), event.get("attribute"),
+        )
+        day = daily.setdefault(date_key, {
+            "bonus": 0, "aligned": 0, "chain": 0, "longest_chain": 0,
+            "last_at": None, "last_axis": None, "types": {},
+        })
+        bonus = _shift_alarm_action_bonus(axis, action_type)
+        flow_bonus = 0
+        try:
+            created_at = datetime.datetime.fromisoformat(str(event.get("created_at") or ""))
+        except ValueError:
+            created_at = None
+        if axis == "기" and day["last_axis"] == "기" and created_at and day["last_at"]:
+            gap = (created_at - day["last_at"]).total_seconds()
+            if 0 <= gap <= 90 * 60:
+                day["chain"] += 1
+                flow_bonus = 2
+            else:
+                day["chain"] = 1
+        else:
+            day["chain"] = max(1, day["chain"])
+        if created_at:
+            day["last_at"] = created_at
+        day["last_axis"] = axis
+        day["longest_chain"] = max(day["longest_chain"], day["chain"])
+        allowed = max(0, SHIFT_ALARM_CULTIVATION_DAILY_BONUS_CAP - day["bonus"])
+        awarded_bonus = min(allowed, bonus + flow_bonus)
+        day["bonus"] += awarded_bonus
+        if bonus:
+            day["aligned"] += 1
+        day["types"][action_type] = day["types"].get(action_type, 0) + 1
+        rewards[quest_key] = {
+            "xp": base_xp + awarded_bonus, "base_xp": base_xp,
+            "bonus_xp": awarded_bonus, "axis": axis, "action_type": action_type,
+            "bonus_reason": (f"{action_type} · 흐름" if flow_bonus and bonus else
+                             "흐름" if flow_bonus else action_type if bonus else "기본"),
+        }
+    return rewards, daily
+
+
 def _shift_alarm_quest_state(username=None):
     _sync_shift_alarm_quest_history()
     events = _read_shift_alarm_quest_events()
@@ -7247,11 +9578,16 @@ def _shift_alarm_quest_state(username=None):
         else:
             active.pop(key, None)
     username = username or APP_USERNAME or "local-owner"
-    total_xp = sum(max(0, int(event.get("xp") or 0)) for event in active.values())
-    attributes = {name: 0 for name in SHIFT_ALARM_QUEST_ATTRIBUTES}
-    for event in active.values():
-        name = event.get("attribute") if event.get("attribute") in attributes else "준비"
-        attributes[name] += max(0, int(event.get("xp") or 0))
+    today = datetime.date.today().isoformat()
+    cultivation_intervals = _read_shift_alarm_cultivation_intervals()
+    effective_rewards, daily_metrics = _shift_alarm_effective_rewards(active, cultivation_intervals)
+    total_xp = sum(item["xp"] for item in effective_rewards.values())
+    cultivation_xp = {name: 0 for name in SHIFT_ALARM_CULTIVATION_SEQUENCE}
+    for quest_key, event in active.items():
+        reward = effective_rewards[quest_key]["xp"]
+        # 예전의 '신' XP도 삭제하지 않고 그 날에 선택한 정·기로 재분류한다.
+        axis = effective_rewards[quest_key]["axis"]
+        cultivation_xp[axis] += reward
     # 전쟁 시뮬레이션은 퀴즈 점수가 아니라 실제 완주 기록의 전황·평가를
     # Shift Quest 성장에 반영한다. 정보/보급/병력 보존 성향도 각각 연결된다.
     conn = get_conn()
@@ -7263,32 +9599,132 @@ def _shift_alarm_quest_state(username=None):
         conn.close()
     for score, state_json in battle_rows:
         battle_state = _battle_json(state_json, {})
-        ratings = battle_state.get("ratings", {})
         reward = max(10, int(score or 0) * 2 +
                      (15 if battle_state.get("flags", {}).get("decisive_victory") else 0))
         total_xp += reward
-        attributes["전투력"] += max(2, int(score or 0) // 2)
-        attributes["집중"] += max(0, int(ratings.get("information") or 0))
-        attributes["유대"] += max(0, int(ratings.get("preservation") or 0))
-        attributes["준비"] += max(0, int(ratings.get("logistics") or 0))
+        cultivation_xp["정"] += reward // 2
+        cultivation_xp["기"] += reward - reward // 2
+    now = datetime.datetime.now().replace(microsecond=0)
+    cultivation_seconds = {name: 0 for name in SHIFT_ALARM_CULTIVATION_SEQUENCE}
+    cultivation_xp_seconds = {name: 0 for name in SHIFT_ALARM_CULTIVATION_SEQUENCE}
+    timeline = []
+    for item in cultivation_intervals:
+        start = _parse_shift_alarm_cultivation_time(item.get("started_at"))
+        end = _parse_shift_alarm_cultivation_time(item.get("ended_at")) or now
+        if not start:
+            continue
+        effective_end = min(end, now)
+        seconds = max(0, round((effective_end - start).total_seconds()))
+        cultivation_seconds[item["axis"]] += seconds
+        xp_start = _parse_shift_alarm_cultivation_time(item.get("xp_started_at"))
+        if not item.get("migrated") or xp_start:
+            xp_start = xp_start or start
+            cultivation_xp_seconds[item["axis"]] += max(0, round((effective_end - max(start, xp_start)).total_seconds()))
+        timeline.append({
+            "axis": item["axis"], "started_at": start.isoformat(timespec="seconds"),
+            "ended_at": item.get("ended_at"), "duration_seconds": seconds,
+            "active": not item.get("ended_at"),
+        })
+    cultivation_time_xp = {name: seconds // 3600 for name, seconds in cultivation_xp_seconds.items()}
+    for name in SHIFT_ALARM_CULTIVATION_SEQUENCE:
+        cultivation_xp[name] += cultivation_time_xp[name]
+        total_xp += cultivation_time_xp[name]
     level, level_xp, next_level_xp = _shift_alarm_quest_level(total_xp)
-    stats = _shift_alarm_quest_stats(level, attributes)
-    today = datetime.date.today().isoformat()
     today_events = sorted(
-        (event for event in active.values() if event.get("routine_date") == today),
-        key=lambda item: item.get("created_at", ""), reverse=True,
+        ((key, event) for key, event in active.items() if event.get("routine_date") == today),
+        key=lambda item: item[1].get("created_at", ""), reverse=True,
     )
+    status = _read_shift_alarm_status()
+    focus_axis = _shift_alarm_cultivation_axis_at(now, cultivation_intervals)
+    shift_key = "daily"
+    shift_names = {"daily": "TODAY"}
+    axes = []
+    for name in SHIFT_ALARM_CULTIVATION_SEQUENCE:
+        spec = SHIFT_ALARM_CULTIVATION_AXES[name]
+        xp = cultivation_xp[name]
+        axes.append({
+            "name": name, "hanja": spec["hanja"], "xp": xp,
+            "level": 1 + xp // 100, "level_xp": xp % 100, "next_level_xp": 100,
+            "focused": name == focus_axis,
+        })
+    if focus_axis:
+        focus_spec = SHIFT_ALARM_CULTIVATION_AXES[focus_axis]
+        mode = {
+            "shift": shift_names[shift_key], "axis": focus_axis, "hanja": focus_spec["hanja"],
+            "polarity": "陰" if focus_axis == "정" else "陽",
+            "title": focus_spec["title"], "description": focus_spec["description"],
+            "recommendations": focus_spec["recommendations"],
+        }
+    else:
+        mode = {
+            "shift": "휴무", "axis": "균형", "hanja": "☯", "title": "세 기운을 고르게 돌보는 날",
+            "description": "회복을 우선하되 몸·활동·정신 중 부족한 축을 가볍게 보완합니다.",
+            "recommendations": ["충분한 회복", "가벼운 움직임", "부담 없는 독서와 정리"],
+        }
+    daily_totals = {}
+    for quest_key, event in active.items():
+        date_key = str(event.get("routine_date") or event.get("created_at") or "")[:10]
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_key):
+            continue
+        item = daily_totals.setdefault(date_key, {"xp": 0, "completed": 0})
+        item["xp"] += effective_rewards[quest_key]["xp"]
+        item["completed"] += 1
+    history = []
+    today_date = datetime.date.fromisoformat(today)
+    for days_ago in range(89, -1, -1):
+        date_key = (today_date - datetime.timedelta(days=days_ago)).isoformat()
+        totals = daily_totals.get(date_key, {})
+        metric = daily_metrics.get(date_key, {})
+        history.append({
+            "date": date_key,
+            "axis": _shift_alarm_cultivation_axis_at(f"{date_key}T12:00:00", cultivation_intervals),
+            "xp": int(totals.get("xp") or 0),
+            "completed": int(totals.get("completed") or 0),
+            "bonus_xp": int(metric.get("bonus") or 0),
+            "aligned": int(metric.get("aligned") or 0),
+            "longest_chain": int(metric.get("longest_chain") or 0),
+            "types": metric.get("types") or {},
+            "selected": True,
+        })
+    today_metric = daily_metrics.get(today, {})
+    today_types = today_metric.get("types") or {}
+    mode_metric = ({
+        "label": "수렴", "value": f'{today_metric.get("aligned", 0)}개',
+        "detail": f'필수·회복 {today_types.get("필수", 0) + today_types.get("회복", 0)}개 완료',
+    } if focus_axis == "정" else {
+        "label": "흐름", "value": f'{today_metric.get("longest_chain", 0)}연속',
+        "detail": f'활동·성장 {today_types.get("활동", 0) + today_types.get("성장", 0)}개 완료',
+    })
     return {
         "level": level, "total_xp": total_xp, "level_xp": level_xp,
         "next_level_xp": next_level_xp,
         "progress_percent": round(level_xp / next_level_xp * 100) if next_level_xp else 0,
-        "today_xp": sum(int(event.get("xp") or 0) for event in today_events),
-        "today_completed": len(today_events), "attributes": attributes, "stats": stats,
-        "stat_points_per_level": SHIFT_ALARM_STAT_POINTS_PER_LEVEL,
-        "stat_points_earned": max(0, level - 1) * SHIFT_ALARM_STAT_POINTS_PER_LEVEL,
-        "masteries": _shift_alarm_masteries(username),
-        "recent": [{key: event.get(key) for key in ("label", "attribute", "xp", "created_at")}
-                   for event in today_events[:5]],
+        "today_xp": sum(effective_rewards[key]["xp"] for key, _event in today_events),
+        "today_completed": len(today_events),
+        "cultivation": {
+            "mode": mode, "axes": axes, "history": history,
+            "intervals": timeline,
+            "current_started_at": timeline[-1]["started_at"] if timeline else now.isoformat(timespec="seconds"),
+            "current_elapsed_seconds": timeline[-1]["duration_seconds"] if timeline else 0,
+            "previous_interval": timeline[-2] if len(timeline) > 1 else None,
+            "total_seconds": cultivation_seconds,
+            "time_xp": cultivation_time_xp,
+            "ratio": {
+                name: round(cultivation_seconds[name] / max(1, sum(cultivation_seconds.values())) * 100, 1)
+                for name in SHIFT_ALARM_CULTIVATION_SEQUENCE
+            },
+            "metric": mode_metric,
+            "daily_bonus": int(today_metric.get("bonus") or 0),
+            "daily_bonus_cap": SHIFT_ALARM_CULTIVATION_DAILY_BONUS_CAP,
+            "reward_multipliers": {
+                name: (1.5 if name == focus_axis else 1.0)
+                for name in SHIFT_ALARM_CULTIVATION_SEQUENCE
+            },
+        },
+        "recent": [{
+            "label": event.get("label"), "attribute": event.get("attribute"),
+            "created_at": event.get("created_at"), **effective_rewards[key],
+        } for key, event in today_events[:5]],
     }
 
 
@@ -7405,6 +9841,19 @@ def _undo_shift_alarm_habit_click(kind):
 
 
 def _read_shift_alarm_routine_history(limit=30):
+    try:
+        shift_schedule = json.loads(SHIFT_ALARM_SCHEDULE_FILE.read_text(encoding="utf-8"))
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        shift_schedule = {}
+    shift_names = {"D": "Day", "S": "Swing", "G": "GY", "휴": "휴무"}
+
+    def local_event_time(value):
+        """JSONL의 과거 naive 시각과 새 offset 시각을 같은 로컬 기준으로 맞춘다."""
+        parsed = datetime.datetime.fromisoformat(value)
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone().replace(tzinfo=None)
+        return parsed
+
     by_date = {}
     try:
         lines = SHIFT_ALARM_ROUTINE_HISTORY_FILE.read_text(encoding="utf-8").splitlines()
@@ -7420,7 +9869,7 @@ def _read_shift_alarm_routine_history(limit=30):
                     "started_at" if event_type == "ebook_study_start" else "completed_at"
                 )
             )
-            event_at = datetime.datetime.fromisoformat(item.get(timestamp_key, ""))
+            event_at = local_event_time(item.get(timestamp_key, ""))
         except (json.JSONDecodeError, TypeError, ValueError):
             continue
         if not routine_date:
@@ -7444,6 +9893,7 @@ def _read_shift_alarm_routine_history(limit=30):
             day[event_type] = (event_at, item)
     records = []
     for routine_date, events in sorted(by_date.items(), reverse=True)[:limit]:
+        shift_code = str(shift_schedule.get(routine_date) or "")
         routine_event = events.get("routine_complete")
         melatonin_event = events.get("melatonin_checked")
         ebook_event = events.get("ebook_study_start")
@@ -7493,7 +9943,14 @@ def _read_shift_alarm_routine_history(limit=30):
         wake_time = routine_item.get("wake_time") or next(
             (event.get("wake_time") for _at, event in reminder_events if event.get("wake_time")), None
         )
+        wake_flow_at = next(
+            (event_at for event_at, event in reversed(reminder_events)
+             if re.search(r"(?:핸드폰|휴대전화|폰).*충전.*샤워", str(event.get("label") or ""))),
+            None,
+        )
         minutes_after_wake = None
+        tossing_minutes = None
+        routine_focus_minutes = None
         if wake_time and completed_at:
             try:
                 wake_at = datetime.datetime.combine(
@@ -7503,9 +9960,28 @@ def _read_shift_alarm_routine_history(limit=30):
                 minutes_after_wake = max(0, round((completed_at - wake_at).total_seconds() / 60))
             except (TypeError, ValueError):
                 pass
+        if wake_time and wake_flow_at:
+            try:
+                wake_at = datetime.datetime.combine(
+                    datetime.date.fromisoformat(routine_date),
+                    datetime.time.fromisoformat(wake_time),
+                )
+                tossing_minutes = round((wake_flow_at - wake_at).total_seconds() / 60)
+                if not 0 <= tossing_minutes <= 360:
+                    tossing_minutes = None
+            except (TypeError, ValueError):
+                pass
+        if wake_flow_at and completed_at:
+            routine_focus_minutes = round((completed_at - wake_flow_at).total_seconds() / 60)
+            if not 0 <= routine_focus_minutes <= 720:
+                routine_focus_minutes = None
         records.append({
             "routine_date": routine_date,
+            "shift_code": shift_code or None,
+            "shift": shift_names.get(shift_code, shift_code or None),
             "wake_time": wake_time,
+            "wake_flow_checked_at": wake_flow_at.isoformat(timespec="seconds") if wake_flow_at else None,
+            "wake_flow_time": wake_flow_at.strftime("%H:%M") if wake_flow_at else None,
             "completed_at": completed_at.isoformat(timespec="seconds") if completed_at else None,
             "completed_time": completed_at.strftime("%H:%M") if completed_at else None,
             "latest_completed_time": latest_completed_at.strftime("%H:%M") if latest_completed_at else None,
@@ -7517,7 +9993,41 @@ def _read_shift_alarm_routine_history(limit=30):
             "habit_events": habit_events,
             "learning_link_clicks": learning_links,
             "minutes_after_wake": minutes_after_wake,
+            "tossing_minutes": tossing_minutes,
+            "routine_focus_minutes": routine_focus_minutes,
         })
+    baselines = {}
+    for record in reversed(records):
+        shift = record.get("shift") or "휴무"
+        samples = baselines.setdefault(shift, [])
+        value = record.get("tossing_minutes")
+        if value is not None and len(samples) >= 5:
+            ordered = sorted(samples[-14:])
+            middle = len(ordered) // 2
+            baseline = (ordered[middle] if len(ordered) % 2
+                        else (ordered[middle - 1] + ordered[middle]) / 2)
+            difference = value - baseline
+            threshold = max(20, baseline * .2)
+            axis = "정" if difference >= threshold else "기" if difference <= -threshold else None
+            record["cultivation_recommendation"] = {
+                "axis": axis,
+                "status": "recovery" if axis == "정" else "active" if axis == "기" else "steady",
+                "baseline_minutes": round(baseline),
+                "difference_minutes": round(difference),
+                "sample_count": len(ordered),
+                "message": (
+                    "회복이 더 필요한 신호일 수 있습니다" if axis == "정" else
+                    "평소보다 빠르게 움직인 날입니다" if axis == "기" else
+                    "평소 범위의 기상 흐름입니다"
+                ),
+            }
+        elif value is not None:
+            record["cultivation_recommendation"] = {
+                "axis": None, "status": "insufficient", "sample_count": len(samples),
+                "message": "판단을 위한 같은 근무 기록이 더 필요합니다",
+            }
+        if value is not None:
+            samples.append(value)
     return records
 
 
@@ -7525,9 +10035,13 @@ def _read_reminder_editor():
     try:
         payload = json.loads(SHIFT_ALARM_REMINDER_EDITOR_FILE.read_text(encoding="utf-8"))
     except (FileNotFoundError, OSError, json.JSONDecodeError):
-        return {"items": {}}
+        return {"items": {}, "occurrences": []}
     items = payload.get("items", {}) if isinstance(payload, dict) else {}
-    return {"items": items if isinstance(items, dict) else {}}
+    occurrences = payload.get("occurrences", []) if isinstance(payload, dict) else []
+    return {
+        "items": items if isinstance(items, dict) else {},
+        "occurrences": occurrences if isinstance(occurrences, list) else [],
+    }
 
 
 def _write_reminder_editor(payload):
@@ -7653,8 +10167,69 @@ def _reminder_display_label(label):
     return value[:match.start()].rstrip(), normalized
 
 
+def _reminder_recurrence_due(recurrence, day):
+    """웹 편집 직후 고정 일·주·월 주기의 오늘 실행 여부를 즉시 계산한다."""
+    if not isinstance(recurrence, dict) or not isinstance(day, datetime.date):
+        return None
+    try:
+        anchor = datetime.date.fromisoformat(str(recurrence.get("anchor")))
+        interval = max(1, int(recurrence.get("interval", 1)))
+    except (TypeError, ValueError):
+        return None
+    if day < anchor:
+        return False
+    unit = recurrence.get("unit")
+    if unit == "once":
+        return day == anchor
+    if unit == "daily":
+        return True
+    if unit == "days":
+        return (day - anchor).days % interval == 0
+    if unit == "weeks":
+        return (day - anchor).days % (interval * 7) == 0
+    if unit == "months":
+        month_delta = (day.year - anchor.year) * 12 + day.month - anchor.month
+        return month_delta >= 0 and month_delta % interval == 0 and day.day == anchor.day
+    return None
+
+
+def _next_reminder_recurrence_date(recurrence, start, horizon_days=400):
+    for offset in range(max(1, horizon_days)):
+        candidate = start + datetime.timedelta(days=offset)
+        if _reminder_recurrence_due(recurrence, candidate) is True:
+            return candidate.isoformat()
+    return None
+
+
+def _fixed_day_reminder_interval(item):
+    recurrence = item.get("recurrence") if isinstance(item, dict) else None
+    if isinstance(recurrence, dict) and recurrence.get("unit") == "days":
+        try:
+            return max(1, int(recurrence.get("interval", 1)))
+        except (TypeError, ValueError):
+            pass
+    for value in (item.get("default_recurrence_text"), item.get("label")):
+        match = re.search(r"(?<!\d)(\d+)\s*일(?:에)?\s*1회", str(value or ""))
+        if match:
+            return max(1, int(match.group(1)))
+    return None
+
+
+def _label_with_fixed_day_interval(label, interval):
+    value = str(label or "").strip()
+    pattern = r"\(\s*\d+\s*일(?:에)?\s*1회\s*\)\s*$"
+    if re.search(pattern, value):
+        return re.sub(pattern, f"({interval}일에 1회)", value)
+    return value
+
+
 def _merge_reminder_editor(status):
-    editor = _read_reminder_editor()["items"]
+    editor_payload = _read_reminder_editor()
+    editor = editor_payload["items"]
+    active_occurrences = [
+        item for item in editor_payload.get("occurrences", [])
+        if isinstance(item, dict) and item.get("active", True)
+    ]
     schedule = []
     seen = set()
     for source in status.get("reminder_schedule", []):
@@ -7669,9 +10244,10 @@ def _merge_reminder_editor(status):
         item["display_label"] = display_label
         item["default_recurrence_text"] = item.get("default_recurrence_text") or default_recurrence_text
         item.update({field: override[field] for field in
-                     ("label", "enabled", "recurrence", "custom") if field in override})
+                     ("label", "enabled", "recurrence", "custom", "adaptive_adjustment_id")
+                     if field in override})
         if "label" in override:
-            item["display_label"] = override["label"]
+            item["display_label"], _ = _reminder_display_label(override["label"])
         if isinstance(override.get("time"), dict):
             hour, minute = override["time"].get("hour"), override["time"].get("minute")
             if isinstance(hour, int) and isinstance(minute, int):
@@ -7684,6 +10260,12 @@ def _merge_reminder_editor(status):
                 hour, minute = value.get("hour"), value.get("minute")
                 if isinstance(hour, int) and isinstance(minute, int):
                     item.setdefault("times", {})[profile] = f"{hour:02d}:{minute:02d}"
+        try:
+            status_date = datetime.date.fromisoformat(str(status.get("date") or status.get("routine_date")))
+        except ValueError:
+            status_date = None
+        if status_date and item.get("recurrence"):
+            item["next_date"] = _next_reminder_recurrence_date(item["recurrence"], status_date)
         schedule.append(item)
         seen.add(key)
     for key, override in editor.items():
@@ -7692,13 +10274,117 @@ def _merge_reminder_editor(status):
         reminder_time = override.get("time", {})
         value = (f"{reminder_time.get('hour', 0):02d}:{reminder_time.get('minute', 0):02d}"
                  if isinstance(reminder_time, dict) else None)
-        schedule.append({
+        custom_item = {
             "key": key, "label": override.get("label", key), "time": value,
             "display_label": override.get("label", key), "default_recurrence_text": "사용자 지정",
             "times": {"시각": value}, "enabled": bool(override.get("enabled", True)),
             "recurrence": override.get("recurrence"), "custom": True,
-        })
+        }
+        try:
+            custom_status_date = datetime.date.fromisoformat(
+                str(status.get("date") or status.get("routine_date"))
+            )
+        except ValueError:
+            custom_status_date = None
+        if custom_status_date and custom_item.get("recurrence"):
+            custom_item["next_date"] = _next_reminder_recurrence_date(
+                custom_item["recurrence"], custom_status_date
+            )
+        schedule.append(custom_item)
     status["reminder_schedule"] = schedule
+    try:
+        status_date = datetime.date.fromisoformat(str(status.get("date") or status.get("routine_date")))
+    except ValueError:
+        status_date = None
+    if status_date and isinstance(status.get("reminders_detailed"), list):
+        original_details = [item for item in status["reminders_detailed"] if isinstance(item, dict)]
+        original_by_key = {item.get("key"): item for item in original_details if item.get("key")}
+        original_by_label = {item.get("label"): item for item in original_details if item.get("label")}
+        effective_details = []
+        for item in schedule:
+            source = original_by_key.get(item.get("key")) or original_by_label.get(item.get("label"))
+            due = _reminder_recurrence_due(item.get("recurrence"), status_date)
+            if not item.get("enabled", True) or due is False or (due is None and source is None):
+                continue
+            detail = dict(source or {})
+            old_label = detail.get("label")
+            detail.update({"key": item.get("key"), "label": item.get("label"),
+                           "time": item.get("time")})
+            if "checked" not in detail:
+                detail["checked"] = bool(status.get("reminders_checked", {}).get(old_label, False))
+            effective_details.append(detail)
+        status["reminders_detailed"] = effective_details
+        status["reminders"] = [item["label"] for item in effective_details]
+        status["reminders_checked"] = {
+            item["label"]: bool(item.get("checked")) for item in effective_details
+        }
+    if isinstance(status.get("shift_calendar"), list):
+        schedule_by_key = {item.get("key"): item for item in schedule if item.get("key")}
+        recalculated_keys = {
+            key for key, override in editor.items()
+            if isinstance(override, dict)
+            and (override.get("deleted") or override.get("custom") or "recurrence" in override)
+        }
+        for calendar_day in status["shift_calendar"]:
+            if not isinstance(calendar_day, dict):
+                continue
+            try:
+                day = datetime.date.fromisoformat(str(calendar_day.get("date")))
+            except ValueError:
+                continue
+            reminders = []
+            for reminder in calendar_day.get("reminders", []):
+                if not isinstance(reminder, dict) or reminder.get("key") in recalculated_keys:
+                    continue
+                merged = dict(reminder)
+                source = schedule_by_key.get(merged.get("key"))
+                if source:
+                    merged.update({"label": source.get("label"), "time": source.get("time")})
+                reminders.append(merged)
+            for key in recalculated_keys:
+                source = schedule_by_key.get(key)
+                if not source or not source.get("enabled", True):
+                    continue
+                if _reminder_recurrence_due(source.get("recurrence"), day) is not True:
+                    continue
+                reminders.append({
+                    "key": key,
+                    "label": source.get("label"),
+                    "time": source.get("time"),
+                    "checked": bool(status.get("reminders_checked", {}).get(source.get("label"), False))
+                    if day == status_date else False,
+                })
+            calendar_day["reminders"] = sorted(
+                reminders, key=lambda item: item.get("time") or "99:99"
+            )
+        calendar_by_date = {
+            item.get("date"): item for item in status["shift_calendar"]
+            if isinstance(item, dict) and item.get("date")
+        }
+        for occurrence in active_occurrences:
+            calendar_day = calendar_by_date.get(occurrence.get("scheduled_date"))
+            source = schedule_by_key.get(occurrence.get("key"))
+            if not calendar_day or not source:
+                continue
+            reminders = calendar_day.setdefault("reminders", [])
+            reminder = next(
+                (item for item in reminders if item.get("key") == occurrence.get("key")), None
+            )
+            if reminder is None:
+                reminder = {
+                    "key": occurrence.get("key"), "label": source.get("label"),
+                    "time": source.get("time"),
+                }
+                reminders.append(reminder)
+            reminder.update({
+                "checked": True,
+                "adaptive_adjustment_id": occurrence.get("id"),
+                "completed_date": occurrence.get("completed_date"),
+                "old_interval": occurrence.get("old_interval"),
+                "new_interval": occurrence.get("new_interval"),
+                "next_date": occurrence.get("next_date"),
+            })
+            reminders.sort(key=lambda item: item.get("time") or "99:99")
     return status
 
 
@@ -7771,6 +10457,13 @@ class ReminderCheckUpdate(BaseModel):
     checked: bool
 
 
+class ReminderOccurrenceUpdate(BaseModel):
+    scheduled_date: str
+    completed_date: Optional[str] = None
+    checked: bool
+    adjustment_id: Optional[str] = None
+
+
 class ReminderDefinitionUpdate(BaseModel):
     label: str
     time: str
@@ -7779,6 +10472,32 @@ class ReminderDefinitionUpdate(BaseModel):
     recurrence_anchor: Optional[str] = None
     enabled: bool = True
     profile: str = "시각"
+
+
+class BudeugiSettingsUpdate(BaseModel):
+    settings: dict[str, dict[str, Any]]
+
+
+class BudeugiJournalCreate(BaseModel):
+    text: str
+
+
+class BudeugiJournalUpdate(BaseModel):
+    text: str
+
+
+class BudeugiYinYangUpdate(BaseModel):
+    yin: str = ""
+    yang: str = ""
+
+
+class BudeugiJournalAnalysisUpdate(BaseModel):
+    cherished: str
+    threat: str
+    necessity: str
+    benefit: str
+    cost: str
+    next_shape: str
 
 
 SHIFT_ALARM_TIME_PROFILES = {"시각", "Swing", "Day", "GY", "S-D휴", "D-G휴", "G-S휴", "S-G휴"}
@@ -7803,6 +10522,459 @@ def shift_alarm_status(request: Request):
             item for item in status.get("reminders_detailed", []) if item.get("label") not in hidden
         ]
     return _merge_reminder_editor(status)
+
+
+def _dating_briefing_text(value: Any) -> str:
+    """미연시 원문 표기를 팝업에서 읽기 좋은 평문으로 정리한다."""
+    text = re.sub(r"\[([^|\]]+)\|[^\]]+\]", r"\1", str(value or ""))
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _dating_briefing_material(item: Any) -> str:
+    if isinstance(item, dict):
+        japanese = item.get("word") or item.get("ja") or item.get("text") or item.get("expression")
+        korean = item.get("meaning") or item.get("ko") or item.get("translation")
+        if japanese and korean:
+            return f"{_dating_briefing_text(japanese)} — {_dating_briefing_text(korean)}"
+        return _dating_briefing_text(japanese or korean)
+    return _dating_briefing_text(item)
+
+
+@app.get("/api/shift-alarm/dating-scene-briefing")
+def shift_alarm_dating_scene_briefing(request: Request):
+    """오늘 퀘스트 팝업에 실제 진행 중인 미연시 장면을 제공한다."""
+    _require_owner(request)
+    username = _request_username(request)
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM dating_sim_progress WHERE username=? "
+            "ORDER BY CASE WHEN completed=0 AND pending_location IS NOT NULL THEN 0 "
+            "WHEN completed=0 THEN 1 ELSE 2 END, updated_at DESC LIMIT 1",
+            (username,),
+        ).fetchone()
+        if not row:
+            return {
+                "available": False,
+                "message": "아직 진행 중인 미연시가 없습니다.",
+                "url": "/dating-sim/?write=1",
+            }
+        row = dict(row)
+        story_id = str(row.get("character_id") or "")
+        story = _dating_story(
+            None if story_id == dating_sim_story.CHARACTER_ID else story_id,
+            username,
+        )
+        state = _dating_sim_state_payload(row, story, username, True, False)
+        completion = conn.execute(
+            "SELECT created_at,average_score FROM dating_sim_writing_completions "
+            "WHERE username=? AND completed_date=? AND story_id=? AND day=? "
+            "ORDER BY created_at DESC LIMIT 1",
+            (username, datetime.date.today().isoformat(), state["story_id"], state["day"]),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    scene = state.get("scene") or {}
+    location = next(
+        (item for item in state.get("locations", []) if item.get("id") == state.get("pending_location")),
+        {},
+    )
+    lines = []
+    for line in scene.get("lines", []):
+        text = _dating_briefing_text(line.get("text"))
+        if text:
+            lines.append({"speaker": line.get("speaker", "character"), "text": text})
+    dialogue = [line for line in lines if line["speaker"] != "narrator"][-3:]
+    narration = [line["text"] for line in lines if line["speaker"] == "narrator"]
+    materials = [
+        material for material in (
+            _dating_briefing_material(item)
+            for item in [*scene.get("vocab_words", []), *scene.get("expressions_used", [])]
+        ) if material
+    ][:4]
+    book_id = state["story_id"].removeprefix("book:") if state["story_id"].startswith("book:") else ""
+    deep_link = f"/dating-sim/?book={book_id}&write=1" if re.fullmatch(r"[0-9a-f]{20}", book_id) else "/dating-sim/?write=1"
+    character = state.get("character_name_ko") or state.get("character_name") or "상대 인물"
+    has_scene = bool(scene)
+    situation = _dating_briefing_text(state.get("day_opening"))
+    if narration:
+        situation = " ".join(filter(None, [situation, narration[-1]]))
+    if not situation:
+        situation = (
+            f"{location.get('label', '다음 장소')}에서 이어질 장면을 준비하고 있습니다."
+            if has_scene else "먼저 오늘 만날 장소를 고르면 실제 장면이 열립니다."
+        )
+    return {
+        "available": True,
+        "has_scene": has_scene,
+        "completed_today": bool(completion),
+        "completed_at": completion["created_at"] if completion else None,
+        "average_score": completion["average_score"] if completion else None,
+        "story_id": state["story_id"],
+        "story_title": state.get("story_title") or state.get("source_title") or "미연시",
+        "source_title": state.get("source_title"),
+        "character": character,
+        "day": state["day"],
+        "total_days": state["total_days"],
+        "affection": state["affection"],
+        "relationship": state.get("relationship_tone") or {},
+        "location": location.get("label") or state.get("pending_location") or "장소 선택 대기",
+        "situation": situation,
+        "dialogue": dialogue,
+        "writing_goal": (
+            f"{character}의 현재 장면 대사 {len(dialogue) or 1}개를 듣고 직접 써서 채점을 완료하세요."
+            if has_scene else "미연시에서 오늘 만날 장소를 선택한 뒤 한 장면의 대사를 직접 쓰세요."
+        ),
+        "hint": materials,
+        "url": deep_link,
+    }
+
+
+@app.get("/api/shift-alarm/budeugi-settings")
+def get_shift_alarm_budeugi_settings(request: Request):
+    _require_owner(request)
+    try:
+        payload = json.loads(SHIFT_ALARM_BUDEUGI_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        payload = {}
+    return {"settings": payload if isinstance(payload, dict) else {}}
+
+
+def _read_shift_alarm_budeugi_journal() -> list[dict[str, Any]]:
+    try:
+        payload = json.loads(SHIFT_ALARM_BUDEUGI_JOURNAL_FILE.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    if not isinstance(payload, list):
+        return []
+    return [item for item in payload if isinstance(item, dict)]
+
+
+def _write_shift_alarm_budeugi_journal(items: list[dict[str, Any]]) -> None:
+    SHIFT_ALARM_BUDEUGI_JOURNAL_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = SHIFT_ALARM_BUDEUGI_JOURNAL_FILE.with_suffix(".tmp")
+    temporary.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(SHIFT_ALARM_BUDEUGI_JOURNAL_FILE)
+
+
+def _clean_budeugi_journal_text(text: str) -> str:
+    cleaned = str(text or "").strip()
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="기록할 부득이 상황을 입력해주세요")
+    if len(cleaned) > 5000:
+        raise HTTPException(status_code=400, detail="한 기록은 5,000자까지 저장할 수 있습니다")
+    return cleaned
+
+
+def _clean_budeugi_yin_yang(yin: str, yang: str) -> tuple[str, str]:
+    cleaned_yin = str(yin or "").strip()
+    cleaned_yang = str(yang or "").strip()
+    if not cleaned_yin and not cleaned_yang:
+        raise HTTPException(status_code=400, detail="음과 양 중 하나 이상을 입력해주세요")
+    if len(cleaned_yin) > 5000 or len(cleaned_yang) > 5000:
+        raise HTTPException(status_code=400, detail="음과 양은 각각 5,000자까지 저장할 수 있습니다")
+    return cleaned_yin, cleaned_yang
+
+
+BUDEUGI_ANALYSIS_FIELDS = ("cherished", "threat", "necessity", "benefit", "cost", "next_shape")
+
+
+def _clean_budeugi_analysis(payload: dict[str, Any]) -> dict[str, str]:
+    cleaned = {}
+    for field in BUDEUGI_ANALYSIS_FIELDS:
+        value = re.sub(r"\s+", " ", str(payload.get(field, ""))).strip()
+        if not value:
+            raise ValueError(f"{field} 분석이 비어 있습니다")
+        cleaned[field] = value[:1000]
+    return cleaned
+
+
+def _parse_budeugi_analysis(raw: str) -> dict[str, str]:
+    text = str(raw or "").strip()
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL | re.IGNORECASE)
+    if fenced:
+        text = fenced.group(1)
+    else:
+        start, end = text.find("{"), text.rfind("}")
+        if start >= 0 and end > start:
+            text = text[start:end + 1]
+    return _clean_budeugi_analysis(json.loads(text))
+
+
+def _generate_budeugi_analysis(text: str, username: str) -> tuple[dict[str, str], str]:
+    prompt = f"""당신은 손자병법의 '先其所愛(선기소애)'와 '凡地之利 勿考以害(범지지리 물고이해)' 관점으로 일상 기록을 해석한다.
+사용자를 겁주거나 도덕적으로 평가하지 말고, 기록에 실제로 적힌 내용만 근거로 삼아라.
+소애가 둘 이상 충돌하면 그 충돌을 선명하게 적고, 마지막 제안은 의지나 인내가 아니라 환경과 순서를 조금 조정하는 현실적인 '형세'여야 한다.
+
+[사용자 기록]
+{text}
+
+아래 키를 정확히 가진 JSON 객체 하나만 출력하라. 각 값은 쉽고 구체적인 한국어 1~2문장으로 쓴다.
+{{
+  "cherished": "所愛 · 사용자가 실제로 지키려는 것",
+  "threat": "危 · 그것을 위태롭게 하거나 흐름을 깨뜨린 조건",
+  "necessity": "不得已 · 하지 않을 수 없게 된 행동과 이유",
+  "benefit": "利 · 그 행동이 준 현실적인 이득",
+  "cost": "害 · 함께 생긴 반작용이나 대가",
+  "next_shape": "다음 형세 · 소애는 지키고 반작용은 줄이는 작은 환경 조정"
+}}"""
+    conn = get_conn()
+    row = conn.execute(
+        """SELECT u.ai_provider, c.encrypted_key
+           FROM users u LEFT JOIN user_ai_credentials c
+             ON c.username=u.username AND c.provider=u.ai_provider
+           WHERE u.username=?""",
+        (username,),
+    ).fetchone()
+    conn.close()
+    if row and row["ai_provider"] and row["encrypted_key"]:
+        raw, engine = run_provider_api(
+            row["ai_provider"], ai_keys.decrypt_key(row["encrypted_key"]), prompt, timeout=120,
+        )
+    else:
+        raw, engine = run_ai_exec(
+            prompt, BASE_DIR, timeout=180, primary="codex",
+            validator=lambda output: _budeugi_analysis_is_valid(output), fallback=True,
+        )
+    return _parse_budeugi_analysis(raw), engine
+
+
+def _budeugi_analysis_is_valid(raw: str) -> bool:
+    try:
+        _parse_budeugi_analysis(raw)
+        return True
+    except (ValueError, TypeError, json.JSONDecodeError):
+        return False
+
+
+@app.get("/api/shift-alarm/budeugi-journal")
+def get_shift_alarm_budeugi_journal(request: Request):
+    _require_owner(request)
+    return {"items": _read_shift_alarm_budeugi_journal()}
+
+
+@app.post("/api/shift-alarm/budeugi-journal")
+def create_shift_alarm_budeugi_journal(body: BudeugiJournalCreate, request: Request):
+    _require_owner(request)
+    now = datetime.datetime.now(datetime.timezone.utc).astimezone().isoformat(timespec="seconds")
+    item = {"id": uuid.uuid4().hex, "text": _clean_budeugi_journal_text(body.text),
+            "created_at": now, "updated_at": now}
+    items = _read_shift_alarm_budeugi_journal()
+    items.insert(0, item)
+    _write_shift_alarm_budeugi_journal(items[:1000])
+    return {"ok": True, "item": item, "items": items[:1000]}
+
+
+@app.post("/api/shift-alarm/budeugi-journal/yin-yang")
+def create_shift_alarm_budeugi_yin_yang(body: BudeugiYinYangUpdate, request: Request):
+    _require_owner(request)
+    yin, yang = _clean_budeugi_yin_yang(body.yin, body.yang)
+    now = datetime.datetime.now(datetime.timezone.utc).astimezone().isoformat(timespec="seconds")
+    item = {"id": uuid.uuid4().hex, "kind": "yin_yang", "yin": yin, "yang": yang,
+            "created_at": now, "updated_at": now}
+    items = _read_shift_alarm_budeugi_journal()
+    items.insert(0, item)
+    _write_shift_alarm_budeugi_journal(items[:1000])
+    return {"ok": True, "item": item, "items": items[:1000]}
+
+
+@app.put("/api/shift-alarm/budeugi-journal/{entry_id}/yin-yang")
+def update_shift_alarm_budeugi_yin_yang(
+    entry_id: str, body: BudeugiYinYangUpdate, request: Request,
+):
+    _require_owner(request)
+    items = _read_shift_alarm_budeugi_journal()
+    item = next((candidate for candidate in items if candidate.get("id") == entry_id), None)
+    if not item or item.get("kind") != "yin_yang":
+        raise HTTPException(status_code=404, detail="음양 대칭 기록을 찾을 수 없습니다")
+    yin, yang = _clean_budeugi_yin_yang(body.yin, body.yang)
+    item.update({"yin": yin, "yang": yang})
+    item["updated_at"] = datetime.datetime.now(datetime.timezone.utc).astimezone().isoformat(timespec="seconds")
+    _write_shift_alarm_budeugi_journal(items)
+    return {"ok": True, "item": item, "items": items}
+
+
+@app.put("/api/shift-alarm/budeugi-journal/{entry_id}")
+def update_shift_alarm_budeugi_journal(entry_id: str, body: BudeugiJournalUpdate, request: Request):
+    _require_owner(request)
+    items = _read_shift_alarm_budeugi_journal()
+    item = next((candidate for candidate in items if candidate.get("id") == entry_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="부득이 기록을 찾을 수 없습니다")
+    if item.get("kind") == "yin_yang":
+        raise HTTPException(status_code=400, detail="음양 대칭 기록은 음양 수정 API를 이용해주세요")
+    item["text"] = _clean_budeugi_journal_text(body.text)
+    item["updated_at"] = datetime.datetime.now(datetime.timezone.utc).astimezone().isoformat(timespec="seconds")
+    item.pop("analysis", None)
+    item.pop("analyzed_at", None)
+    item.pop("analysis_engine", None)
+    _write_shift_alarm_budeugi_journal(items)
+    return {"ok": True, "item": item, "items": items}
+
+
+@app.delete("/api/shift-alarm/budeugi-journal/{entry_id}")
+def delete_shift_alarm_budeugi_journal(entry_id: str, request: Request):
+    _require_owner(request)
+    items = _read_shift_alarm_budeugi_journal()
+    remaining = [item for item in items if item.get("id") != entry_id]
+    if len(remaining) == len(items):
+        raise HTTPException(status_code=404, detail="부득이 기록을 찾을 수 없습니다")
+    _write_shift_alarm_budeugi_journal(remaining)
+    return {"ok": True, "items": remaining}
+
+
+@app.post("/api/shift-alarm/budeugi-journal/{entry_id}/analysis")
+async def analyze_shift_alarm_budeugi_journal(entry_id: str, request: Request):
+    _require_owner(request)
+    items = _read_shift_alarm_budeugi_journal()
+    item = next((candidate for candidate in items if candidate.get("id") == entry_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="부득이 기록을 찾을 수 없습니다")
+    if item.get("kind") == "yin_yang":
+        raise HTTPException(status_code=400, detail="음양 대칭 기록은 선기소애 해석 대상이 아닙니다")
+    username = _request_username(request)
+    try:
+        analysis, engine = await asyncio.to_thread(_generate_budeugi_analysis, item.get("text", ""), username)
+    except Exception as error:
+        print(f"❌ 부득이 선기소애 분석 실패: {type(error).__name__}: {error}", flush=True)
+        raise HTTPException(status_code=502, detail="선기소애 분석을 만들지 못했습니다. 잠시 후 다시 시도해주세요") from error
+    item["analysis"] = analysis
+    item["analysis_engine"] = engine
+    item["analyzed_at"] = datetime.datetime.now(datetime.timezone.utc).astimezone().isoformat(timespec="seconds")
+    _write_shift_alarm_budeugi_journal(items)
+    return {"ok": True, "item": item, "items": items}
+
+
+@app.put("/api/shift-alarm/budeugi-journal/{entry_id}/analysis")
+def update_shift_alarm_budeugi_analysis(entry_id: str, body: BudeugiJournalAnalysisUpdate, request: Request):
+    _require_owner(request)
+    items = _read_shift_alarm_budeugi_journal()
+    item = next((candidate for candidate in items if candidate.get("id") == entry_id), None)
+    if not item:
+        raise HTTPException(status_code=404, detail="부득이 기록을 찾을 수 없습니다")
+    try:
+        item["analysis"] = _clean_budeugi_analysis(body.dict())
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail="분석 항목을 모두 입력해주세요") from error
+    item["analysis_engine"] = "manual"
+    item["analyzed_at"] = datetime.datetime.now(datetime.timezone.utc).astimezone().isoformat(timespec="seconds")
+    _write_shift_alarm_budeugi_journal(items)
+    return {"ok": True, "item": item, "items": items}
+
+
+def _shift_alarm_budeugi_tts_path(text: str) -> Path:
+    digest = hashlib.sha256(
+        f"budeugi-tts-v2\0{SHIFT_ALARM_BUDEUGI_TTS_VOICE}\0{text}".encode("utf-8")
+    ).hexdigest()[:24]
+    return SHIFT_ALARM_BUDEUGI_AUDIO_DIR / f"{digest}.mp3"
+
+
+def _shift_alarm_macos_say_mp3(text: str, target: Path) -> None:
+    """Edge TTS 장애 시에도 휴대폰에서 재생할 수 있는 MP3를 로컬로 만든다."""
+    # launchd로 실행된 서버는 Homebrew 경로가 PATH에 없을 수 있다.
+    # 인터랙티브 쉘에서만 성공하는 대체 경로가 되지 않도록 일반적인
+    # Apple Silicon/Intel Homebrew 위치를 명시적으로 확인한다.
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        ffmpeg = next((str(path) for path in (
+            Path("/opt/homebrew/bin/ffmpeg"),
+            Path("/usr/local/bin/ffmpeg"),
+        ) if path.is_file()), None)
+    if not ffmpeg:
+        raise RuntimeError("ffmpeg를 찾을 수 없습니다")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    aiff = target.with_suffix(".aiff")
+    temporary = target.with_suffix(".mp3.tmp")
+    try:
+        spoken = subprocess.run(
+            ["/usr/bin/say", "-v", "Yuna", "-o", str(aiff), text],
+            capture_output=True, text=True, timeout=120,
+        )
+        if spoken.returncode != 0 or not aiff.is_file() or not aiff.stat().st_size:
+            raise RuntimeError(spoken.stderr.strip() or "macOS say가 음성을 만들지 못했습니다")
+        converted = subprocess.run(
+            [ffmpeg, "-nostdin", "-loglevel", "error", "-y", "-i", str(aiff),
+             "-codec:a", "libmp3lame", "-q:a", "3", "-f", "mp3", str(temporary)],
+            capture_output=True, text=True, timeout=120,
+        )
+        if (converted.returncode != 0 or not temporary.is_file()
+                or temporary.stat().st_size < 2048):
+            raise RuntimeError(converted.stderr.strip() or "MP3 변환에 실패했습니다")
+        temporary.replace(target)
+    finally:
+        aiff.unlink(missing_ok=True)
+        temporary.unlink(missing_ok=True)
+
+
+@app.get("/api/shift-alarm/budeugi-tts")
+async def shift_alarm_budeugi_tts(
+    request: Request,
+    text: str = Query(min_length=1, max_length=3000),
+):
+    """부득이 미리 듣기용 SunHiNeural 음성을 생성하고 같은 문장은 캐시한다."""
+    _require_owner(request)
+    cleaned = re.sub(r"\s+", " ", text).strip()
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="읽을 시나리오가 없습니다")
+    target = _shift_alarm_budeugi_tts_path(cleaned)
+
+    def ensure_clip():
+        if target.is_file() and target.stat().st_size:
+            return
+        with _dating_sim_tts_lock:
+            if target.is_file() and target.stat().st_size:
+                return
+            try:
+                audio = dating_audio.request_edge_speech(
+                    "female", cleaned, voice=SHIFT_ALARM_BUDEUGI_TTS_VOICE, language="ko"
+                )
+                target.parent.mkdir(parents=True, exist_ok=True)
+                temporary = target.with_suffix(".mp3.tmp")
+                temporary.write_bytes(audio)
+                temporary.replace(target)
+            except Exception as edge_error:
+                print(
+                    f"⚠️ 부득이 Edge TTS 실패, macOS Yuna로 전환: {edge_error}",
+                    flush=True,
+                )
+                _shift_alarm_macos_say_mp3(cleaned, target)
+
+    try:
+        await asyncio.to_thread(ensure_clip)
+    except Exception as error:
+        print(f"❌ 부득이 TTS 대체 음성 생성 실패: {error}", flush=True)
+        raise HTTPException(status_code=502, detail="SunHi 음성을 생성하지 못했습니다") from error
+    return FileResponse(
+        str(target), media_type="audio/mpeg",
+        headers={"Cache-Control": "private, max-age=31536000"},
+    )
+
+
+@app.put("/api/shift-alarm/budeugi-settings")
+def set_shift_alarm_budeugi_settings(body: BudeugiSettingsUpdate, request: Request):
+    _require_owner(request)
+    allowed_themes = {"auto", "war", "disaster", "sea_crash", "relief_spy", "espionage", "expedition"}
+    allowed_intensities = {"strong", "urgent", "quiet"}
+    cleaned = {}
+    for label, setting in body.settings.items():
+        if not isinstance(label, str) or not label.strip() or len(label) > 120 or not isinstance(setting, dict):
+            continue
+        theme = str(setting.get("theme", "auto"))
+        intensity = str(setting.get("intensity", "strong"))
+        custom = str(setting.get("custom", "")).strip()[:3000]
+        story = str(setting.get("story", "")).strip()[:3000]
+        cleaned[label] = {
+            "theme": theme if theme in allowed_themes else "auto",
+            "intensity": intensity if intensity in allowed_intensities else "strong",
+            "custom": custom,
+            "story": story,
+        }
+    SHIFT_ALARM_BUDEUGI_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = SHIFT_ALARM_BUDEUGI_FILE.with_suffix(".tmp")
+    temporary.write_text(json.dumps(cleaned, ensure_ascii=False, indent=2), encoding="utf-8")
+    temporary.replace(SHIFT_ALARM_BUDEUGI_FILE)
+    return {"ok": True, "settings": cleaned}
 
 
 @app.get("/api/shift-alarm/mute")
@@ -7862,7 +11034,7 @@ def _validated_reminder_definition(body):
     if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", body.time or ""):
         raise HTTPException(status_code=422, detail="시각은 HH:MM 형식이어야 합니다")
     if body.recurrence_unit not in {
-        None, "daily", "days", "weeks", "months",
+        None, "once", "daily", "days", "weeks", "months",
         "off_block_start", "off_block_end", "day_shift_block_end",
     }:
         raise HTTPException(status_code=422, detail="지원하지 않는 반복 주기입니다")
@@ -7879,6 +11051,120 @@ def _validated_reminder_definition(body):
     hour, minute = (int(part) for part in body.time.split(":"))
     return {"label": label, "time": {"hour": hour, "minute": minute},
             "enabled": body.enabled, "recurrence": recurrence}
+
+
+def _validated_iso_date(value, field_name):
+    try:
+        return datetime.date.fromisoformat(str(value or ""))
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"{field_name} 날짜가 올바르지 않습니다") from exc
+
+
+@app.put("/api/shift-alarm/reminder-occurrences/{key}")
+def update_shift_alarm_reminder_occurrence(
+    key: str, body: ReminderOccurrenceUpdate, request: Request,
+):
+    """예정일과 실제 완료일의 차이를 고정 일 주기 자체에 반영한다."""
+    _require_owner(request)
+    scheduled_date = _validated_iso_date(body.scheduled_date, "예정일")
+    payload = _read_reminder_editor()
+    occurrences = payload.setdefault("occurrences", [])
+    current = payload["items"].get(key, {})
+    current = dict(current) if isinstance(current, dict) else {}
+
+    if not body.checked:
+        adjustment_id = str(body.adjustment_id or current.get("adaptive_adjustment_id") or "")
+        occurrence = next((
+            item for item in reversed(occurrences)
+            if isinstance(item, dict) and item.get("id") == adjustment_id
+            and item.get("key") == key and item.get("active", True)
+        ), None)
+        if not occurrence or current.get("adaptive_adjustment_id") != adjustment_id:
+            raise HTTPException(status_code=409, detail="가장 최근 주기 조정만 되돌릴 수 있습니다")
+        if occurrence.get("previous_recurrence_present"):
+            current["recurrence"] = occurrence.get("previous_recurrence")
+        else:
+            current.pop("recurrence", None)
+        if occurrence.get("previous_label_present"):
+            current["label"] = occurrence.get("previous_label")
+        else:
+            current.pop("label", None)
+        previous_adjustment_id = occurrence.get("previous_adjustment_id")
+        if previous_adjustment_id:
+            current["adaptive_adjustment_id"] = previous_adjustment_id
+        else:
+            current.pop("adaptive_adjustment_id", None)
+        occurrence["active"] = False
+        occurrence["undone_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+        payload["items"][key] = current
+        _write_reminder_editor(payload)
+        return {
+            "ok": True, "undone": True, "adjustment": occurrence,
+            "status": _merge_reminder_editor(_read_shift_alarm_status()),
+        }
+
+    completed_date = _validated_iso_date(
+        body.completed_date or datetime.date.today().isoformat(), "완료일"
+    )
+    status = _merge_reminder_editor(_read_shift_alarm_status())
+    schedule_by_key = {
+        item.get("key"): item for item in status.get("reminder_schedule", [])
+        if isinstance(item, dict) and item.get("key")
+    }
+    source = schedule_by_key.get(key)
+    if not source or source.get("auto_schedule"):
+        raise HTTPException(status_code=404, detail="주기를 조정할 리마인더를 찾지 못했습니다")
+    scheduled_item = next((
+        reminder
+        for day in status.get("shift_calendar", [])
+        if isinstance(day, dict) and day.get("date") == scheduled_date.isoformat()
+        for reminder in day.get("reminders", []) if reminder.get("key") == key
+    ), None)
+    if scheduled_item is None:
+        raise HTTPException(status_code=409, detail="선택한 날짜에 예정된 리마인더가 아닙니다")
+    if scheduled_item.get("checked"):
+        raise HTTPException(status_code=409, detail="이미 완료 처리된 리마인더입니다")
+
+    old_interval = _fixed_day_reminder_interval(source)
+    if old_interval is None:
+        raise HTTPException(status_code=422, detail="고정 일수 주기 리마인더만 자동 조정할 수 있습니다")
+    delta_days = (completed_date - scheduled_date).days
+    new_interval = old_interval + delta_days
+    if not 1 <= new_interval <= 365:
+        raise HTTPException(
+            status_code=422,
+            detail=f"날짜 차이를 반영한 주기({new_interval}일)는 1~365일이어야 합니다",
+        )
+    next_date = completed_date + datetime.timedelta(days=new_interval)
+    adjustment_id = uuid.uuid4().hex
+    occurrence = {
+        "id": adjustment_id, "key": key, "label": source.get("label"),
+        "scheduled_date": scheduled_date.isoformat(),
+        "completed_date": completed_date.isoformat(),
+        "completed_at": datetime.datetime.now().isoformat(timespec="seconds"),
+        "delta_days": delta_days, "old_interval": old_interval,
+        "new_interval": new_interval, "next_date": next_date.isoformat(),
+        "previous_recurrence_present": "recurrence" in current,
+        "previous_recurrence": current.get("recurrence"),
+        "previous_label_present": "label" in current,
+        "previous_label": current.get("label"),
+        "previous_adjustment_id": current.get("adaptive_adjustment_id"),
+        "active": True,
+    }
+    current["recurrence"] = {
+        "unit": "days", "interval": new_interval, "anchor": next_date.isoformat(),
+    }
+    adjusted_label = _label_with_fixed_day_interval(source.get("label"), new_interval)
+    if adjusted_label:
+        current["label"] = adjusted_label
+    current["adaptive_adjustment_id"] = adjustment_id
+    payload["items"][key] = current
+    occurrences.append(occurrence)
+    _write_reminder_editor(payload)
+    return {
+        "ok": True, "adjustment": occurrence,
+        "status": _merge_reminder_editor(_read_shift_alarm_status()),
+    }
 
 
 @app.post("/api/shift-alarm/reminder-definitions")
@@ -7913,7 +11199,8 @@ def update_shift_alarm_reminder(key: str, body: ReminderDefinitionUpdate, reques
         current["enabled"] = definition["enabled"]
         payload["items"][key] = current
         _write_reminder_editor(payload)
-        return {"ok": True, "key": key, "profile": body.profile}
+        refreshed = _merge_reminder_editor(_read_shift_alarm_status())
+        return {"ok": True, "key": key, "profile": body.profile, "status": refreshed}
     current = payload["items"].get(key, {})
     current = dict(current) if isinstance(current, dict) else {}
     custom = bool(current.get("custom")) or key.startswith("custom_")
@@ -7934,7 +11221,11 @@ def update_shift_alarm_reminder(key: str, body: ReminderDefinitionUpdate, reques
     if profile_times:
         payload["items"][key]["profile_times"] = profile_times
     _write_reminder_editor(payload)
-    return {"ok": True, "key": key, "profile": body.profile, "time": body.time}
+    refreshed = _merge_reminder_editor(_read_shift_alarm_status())
+    updated_item = next((item for item in refreshed.get("reminder_schedule", [])
+                         if item.get("key") == key), None)
+    return {"ok": True, "key": key, "profile": body.profile, "time": body.time,
+            "item": updated_item, "status": refreshed}
 
 
 @app.delete("/api/shift-alarm/reminder-definitions/{key}")
@@ -8074,18 +11365,30 @@ def _set_shift_alarm_reminder_checked(label, checked, *, allowed_labels=(), sour
     target = _today_reminder_block(
         token, status, label, create_missing=True, allowed_labels=allowed_labels,
     )
-    _notion_request(token, f"blocks/{target['id']}", "PATCH", {"to_do": {
-        "rich_text": target.get("to_do", {}).get("rich_text", []), "checked": checked,
-    }})
     routine_date = status.get("date") or datetime.date.today().isoformat()
+    previous_checked = bool(target.get("to_do", {}).get("checked", False))
+    # Notion 왕복 중에 지정 시각이 닿아도 알람이 먼저 울리지 않도록 로컬
+    # 메뉴바 캐시를 선반영한다. Notion 반영이 실패하면 이전 상태로 되돌린다.
+    _write_shift_alarm_checklist_cache(routine_date, label, checked)
+    try:
+        _notion_request(token, f"blocks/{target['id']}", "PATCH", {"to_do": {
+            "rich_text": target.get("to_do", {}).get("rich_text", []), "checked": checked,
+        }})
+    except Exception:
+        _write_shift_alarm_checklist_cache(routine_date, label, previous_checked)
+        raise
     quest_key = f"reminder:{routine_date}:{label}"
     quest_awarded = False
+    cultivation = _shift_alarm_cultivation_reward(
+        label, 10, routine_date=routine_date, status=status,
+    )
     if checked:
         checked_at = datetime.datetime.now()
         _record_shift_alarm_reminder_check(status, label, source=source, checked_at=checked_at)
         _learn_shift_alarm_reminder_time(status, label, checked_at)
         quest_awarded = _record_shift_alarm_quest(
-            quest_key, label, 10, _shift_alarm_quest_attribute(label), source=source,
+            quest_key, label, 10, cultivation["attribute"], source=source,
+            routine_date=routine_date, cultivation=cultivation,
         )
         if _is_melatonin_reminder(label):
             threading.Thread(
@@ -8095,14 +11398,44 @@ def _set_shift_alarm_reminder_checked(label, checked, *, allowed_labels=(), sour
             ).start()
     else:
         _record_shift_alarm_quest(
-            quest_key, label, 10, _shift_alarm_quest_attribute(label),
-            action="reverse", source="reminder_uncheck",
+            quest_key, label, 10, cultivation["attribute"],
+            action="reverse", source="reminder_uncheck", routine_date=routine_date,
+            cultivation=cultivation,
         )
     return {
         "ok": True, "label": label, "checked": checked,
-        "quest_awarded": quest_awarded, "quest_xp": 10 if quest_awarded else 0,
+        "quest_awarded": quest_awarded,
+        "quest_xp": cultivation["xp"] if quest_awarded else 0,
+        "quest_axis": cultivation["axis"],
         "quest": _shift_alarm_quest_state(),
     }
+
+
+def _write_shift_alarm_checklist_cache(date_str, label, checked):
+    """웹 체크 결과를 같은 Mac의 메뉴바 알람에 즉시 전달한다.
+
+    Notion 재조회 주기보다 먼저 알람 시각이 도착해도 완료한 항목이 울리지
+    않도록 메뉴바 앱과 공유하는 로컬 캐시를 원자적으로 갱신한다.
+    """
+    path = SHIFT_ALARM_CHECKLIST_STATE_CACHE_FILE
+    try:
+        cached = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        cached = {}
+    if cached.get("date") != date_str:
+        cached["date"] = date_str
+        cached["state"] = {}
+    state = dict(cached.get("state") or {})
+    state[str(label)] = bool(checked)
+    cached["state"] = state
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = path.with_suffix(".web.tmp")
+        temporary.write_text(json.dumps(cached, ensure_ascii=False), encoding="utf-8")
+        temporary.replace(path)
+        return True
+    except OSError:
+        return False
 
 
 @app.put("/api/shift-alarm/reminder-check")
@@ -8182,17 +11515,40 @@ def check_all_shift_alarm_routine(request: Request):
     completed_at = datetime.datetime.now().isoformat(timespec="seconds")
     _record_shift_alarm_routine_completion(status)
     _write_shift_alarm_routine_signal(status, completed_at)
-    _record_shift_alarm_quest(
-        f"routine:{routine_date}:all-ok", "All OK", 25, "준비",
-        source="routine_check_all",
+    cultivation = _shift_alarm_cultivation_reward(
+        "All OK", 25, routine_date=routine_date, status=status,
     )
-    return {"ok": True, "updated": len(targets), "quest": _shift_alarm_quest_state()}
+    quest_awarded = _record_shift_alarm_quest(
+        f"routine:{routine_date}:all-ok", "All OK", 25, "준비",
+        source="routine_check_all", routine_date=routine_date, cultivation=cultivation,
+    )
+    return {
+        "ok": True, "updated": len(targets), "quest": _shift_alarm_quest_state(),
+        "quest_awarded": quest_awarded,
+        "quest_xp": cultivation["xp"] if quest_awarded else 0,
+        "quest_axis": cultivation["axis"],
+    }
 
 
 @app.get("/api/shift-alarm/quest-status")
 def get_shift_alarm_quest_status(request: Request):
     _require_owner(request)
     return _shift_alarm_quest_state(_request_username(request))
+
+
+class ShiftAlarmCultivationChoiceUpdate(BaseModel):
+    axis: str
+
+
+@app.put("/api/shift-alarm/cultivation-choice")
+def update_shift_alarm_cultivation_choice(body: ShiftAlarmCultivationChoiceUpdate, request: Request):
+    _require_owner(request)
+    if body.axis not in SHIFT_ALARM_CULTIVATION_SEQUENCE:
+        raise HTTPException(status_code=400, detail="수행은 정 또는 기로 선택해주세요")
+    switched = _switch_shift_alarm_cultivation(body.axis)
+    state = _shift_alarm_quest_state(_request_username(request))
+    state["cultivation"]["switched"] = switched
+    return state
 
 
 @app.get("/api/shift-alarm/routine-history")
@@ -8207,6 +11563,58 @@ class ShiftAlarmHabitClickRequest(BaseModel):
 
 class ShiftAlarmLearningLinkRequest(BaseModel):
     kind: str
+
+
+def _shift_alarm_homecoming_state() -> dict:
+    try:
+        payload = json.loads(SHIFT_ALARM_HOMECOMING_FILE.read_text(encoding="utf-8"))
+        return payload if isinstance(payload, dict) else {}
+    except (FileNotFoundError, OSError, json.JSONDecodeError):
+        return {}
+
+
+def _save_shift_alarm_homecoming(payload: dict) -> dict:
+    SHIFT_ALARM_HOMECOMING_FILE.parent.mkdir(parents=True, exist_ok=True)
+    temporary = SHIFT_ALARM_HOMECOMING_FILE.with_suffix(".tmp")
+    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(temporary, SHIFT_ALARM_HOMECOMING_FILE)
+    return payload
+
+
+@app.get("/api/shift-alarm/homecoming")
+def get_shift_alarm_homecoming(request: Request):
+    _require_owner(request)
+    return _shift_alarm_homecoming_state()
+
+
+@app.post("/api/shift-alarm/homecoming")
+def schedule_shift_alarm_homecoming(request: Request):
+    _require_owner(request)
+    now = datetime.datetime.now().astimezone()
+    current = _shift_alarm_homecoming_state()
+    if current.get("status") == "scheduled":
+        try:
+            if datetime.datetime.fromisoformat(str(current.get("trigger_at"))) > now:
+                return current
+        except (TypeError, ValueError):
+            pass
+    payload = {
+        "status": "scheduled",
+        "scheduled_at": now.isoformat(timespec="seconds"),
+        "trigger_at": (now + datetime.timedelta(minutes=30)).isoformat(timespec="seconds"),
+        "delay_minutes": 30,
+        "actions": {"light": "pending", "classical": "pending", "reader": "pending"},
+    }
+    return _save_shift_alarm_homecoming(payload)
+
+
+@app.delete("/api/shift-alarm/homecoming")
+def cancel_shift_alarm_homecoming(request: Request):
+    _require_owner(request)
+    now = datetime.datetime.now().astimezone().isoformat(timespec="seconds")
+    payload = _shift_alarm_homecoming_state()
+    payload.update({"status": "cancelled", "cancelled_at": now})
+    return _save_shift_alarm_homecoming(payload)
 
 
 @app.post("/api/shift-alarm/habit-click")
@@ -8265,12 +11673,26 @@ def _sunzi_site_verses():
     for row in rows:
         try:
             verse = int(row.get("id"))
+            chapter_id = int(row.get("chapterId") or 11)
+            chapter_verse = int(row.get("number") or verse)
         except (AttributeError, TypeError, ValueError):
             continue
         hanja = str(row.get("original") or "").strip()
         reading = str(row.get("reading") or "").strip()
         if verse > 0 and hanja and reading:
-            verses.append({"verse": verse, "hanja": hanja, "reading": reading})
+            chapter_name = str(row.get("chapterName") or dict(
+                (chapter_id, name) for chapter_id, name in SUNZI_CHAPTER_SEQUENCE
+            ).get(chapter_id, "구지편"))
+            verses.append({
+                "id": verse,
+                # verse는 기존 호출부와 호환되는 전체 공개 순번이다.
+                "verse": verse,
+                "chapter_id": chapter_id,
+                "chapter": chapter_name,
+                "chapter_verse": chapter_verse,
+                "hanja": hanja,
+                "reading": reading,
+            })
     return verses
 
 
@@ -8396,6 +11818,14 @@ def _sunzi_light_pipeline_state(conn):
     except (KeyError, TypeError, ValueError):
         pass
     next_chapter, next_verse, latest_verse = _sunzi_next_position()
+    latest_chapter = None
+    latest_chapter_id = None
+    try:
+        cursor = json.loads(SUNZI_PIPELINE_CURSOR_FILE.read_text(encoding="utf-8"))
+        latest_chapter = str(cursor.get("chapter_name") or "").strip() or None
+        latest_chapter_id = int(cursor.get("chapter_id"))
+    except (OSError, TypeError, ValueError, json.JSONDecodeError):
+        pass
     queued_verse = None
     if queued_row:
         queued_match = SUNZI_BACKFILL_COMMAND_RE.search(queued_row["content"].replace("_", " "))
@@ -8411,12 +11841,13 @@ def _sunzi_light_pipeline_state(conn):
         "updated_at": pipeline.get("updated_at"), "next_chapter": next_chapter,
         "next_verse": next_verse,
         "latest_verse": latest_verse,
+        "latest_chapter": latest_chapter,
+        "latest_chapter_id": latest_chapter_id,
     }
 
 
 def _read_sunzi_verses():
-    """구지편 각 구절 파일에서 원문(한문)·독음(훈음) 쌍만 뽑아 구절 번호순으로
-    돌려준다 — "구절편 전체보기" 팝오버용(★ 2026-09-23 요청)."""
+    """승인된 전편 구절과 편별 번호를 화면용 순서로 돌려준다."""
     verses_by_number = {item["verse"]: item for item in _sunzi_site_verses()}
     try:
         entries = list(SUNZI_CHAPTER_DIR.iterdir())
@@ -8439,14 +11870,24 @@ def _read_sunzi_verses():
         if not hanja or not reading:
             continue
         verse = int(match.group(1))
-        verses_by_number[verse] = {"verse": verse, "hanja": hanja, "reading": reading}
+        verses_by_number[verse] = {
+            "id": verse, "verse": verse,
+            "chapter_id": 11, "chapter": "구지편", "chapter_verse": verse,
+            "hanja": hanja, "reading": reading,
+        }
     return [verses_by_number[key] for key in sorted(verses_by_number)]
 
 
 @app.get("/api/shift-alarm/sunzi-verses")
 def get_shift_alarm_sunzi_verses(request: Request):
     _require_owner(request)
-    return {"chapter": "구지편", "verses": _read_sunzi_verses()}
+    verses = _read_sunzi_verses()
+    try:
+        cursor = json.loads(SUNZI_PIPELINE_CURSOR_FILE.read_text(encoding="utf-8"))
+        chapter = str(cursor.get("chapter_name") or "").strip()
+    except (OSError, ValueError, json.JSONDecodeError):
+        chapter = ""
+    return {"chapter": chapter or (verses[-1]["chapter"] if verses else "구지편"), "verses": verses}
 
 
 @app.get("/api/shift-alarm/sunzi-analysis")
@@ -10418,6 +13859,253 @@ class FitnessGoalPayload(BaseModel):
     daily_step_goal: int
 
 
+class StockHoldingPayload(BaseModel):
+    name: str
+    symbol: str = ""
+    market: str = "US"
+    currency: str = "USD"
+    total_cost_krw: float
+    shares: float
+
+
+class StockAnalysisResultPayload(BaseModel):
+    job_id: int
+    report: Optional[dict[str, Any]] = None
+    engine: Optional[str] = None
+    error: Optional[str] = None
+
+
+def _stock_portfolio_data(request: Request):
+    _require_signed_in_user(request)
+    username = _request_username(request)
+    with get_conn() as conn:
+        stock_portfolio.seed(conn, username)
+        settings = conn.execute("SELECT * FROM stock_portfolio_settings WHERE username=?", (username,)).fetchone()
+        usd_krw = float(settings["usd_krw"] if settings else 1340.88)
+        rows = conn.execute("SELECT * FROM stock_portfolio_holdings WHERE username=? ORDER BY total_cost_krw DESC", (username,)).fetchall()
+    holdings = [stock_portfolio.public_holding(row, usd_krw) for row in rows]
+    total_cost = sum(float(item["total_cost_krw"]) for item in holdings)
+    priced = [item for item in holdings if item["value_krw"] is not None]
+    total_value = sum(item["value_krw"] for item in priced)
+    semiconductors = {"NVDA", "SOXL", "AMD", "SMH", "TSM", "AVGO"}
+    directional = {"SOXL", "AAPD", "TSLL"}
+    losses = sorted((item for item in priced if item["pnl_krw"] < 0), key=lambda item: item["pnl_krw"])
+    return {
+        "as_of": settings["last_refresh_at"] if settings else None,
+        "usd_krw": usd_krw,
+        "holdings": holdings,
+        "summary": {
+            "holding_count": len(holdings), "priced_count": len(priced),
+            "total_cost_krw": round(total_cost), "priced_value_krw": round(total_value),
+            "priced_cost_krw": round(sum(float(item["total_cost_krw"]) for item in priced)),
+            "loss_total_krw": round(sum(item["pnl_krw"] for item in losses)),
+            "semiconductor_cost_pct": round(sum(float(item["total_cost_krw"]) for item in holdings if item["symbol"] in semiconductors) / total_cost * 100, 1) if total_cost else 0,
+            "directional_cost_pct": round(sum(float(item["total_cost_krw"]) for item in holdings if item["symbol"] in directional) / total_cost * 100, 1) if total_cost else 0,
+        },
+        "losses": losses[:8],
+        "questions": [
+            "지금 현금을 새로 받았다면 현재 가격에서도 이 종목을 같은 금액만큼 다시 살 것인가?",
+            "내 투자 논리를 무효로 만드는 실적·가격·기간 조건은 무엇인가?",
+            "이 종목이 이미 가진 기술주·반도체·달러 위험을 얼마나 더 키우는가?",
+        ],
+    }
+
+
+@app.get("/api/stock-portfolio/summary")
+def stock_portfolio_summary(request: Request):
+    return _stock_portfolio_data(request)
+
+
+@app.post("/api/stock-portfolio/holdings")
+def stock_portfolio_add(payload: StockHoldingPayload, request: Request):
+    _require_signed_in_user(request)
+    if not payload.name.strip() or payload.total_cost_krw <= 0 or payload.shares <= 0:
+        raise HTTPException(status_code=400, detail="종목명·구매금액·수량을 확인하세요")
+    now = stock_portfolio.utc_now()
+    with get_conn() as conn:
+        conn.execute("""INSERT INTO stock_portfolio_holdings
+            (username,name,symbol,market,currency,total_cost_krw,shares,created_at,updated_at)
+            VALUES(?,?,?,?,?,?,?,?,?)""", (_request_username(request), payload.name.strip(), payload.symbol.strip().upper(), payload.market.upper(), payload.currency.upper(), payload.total_cost_krw, payload.shares, now, now))
+        conn.commit()
+    return {"ok": True}
+
+
+@app.put("/api/stock-portfolio/holdings/{holding_id}")
+def stock_portfolio_update(holding_id: int, payload: StockHoldingPayload, request: Request):
+    _require_signed_in_user(request)
+    if not payload.name.strip() or payload.total_cost_krw <= 0 or payload.shares <= 0:
+        raise HTTPException(status_code=400, detail="종목명·구매금액·수량을 확인하세요")
+    with get_conn() as conn:
+        result = conn.execute("""UPDATE stock_portfolio_holdings SET name=?,symbol=?,market=?,currency=?,total_cost_krw=?,shares=?,updated_at=?
+            WHERE id=? AND username=?""", (payload.name.strip(), payload.symbol.strip().upper(), payload.market.upper(), payload.currency.upper(), payload.total_cost_krw, payload.shares, stock_portfolio.utc_now(), holding_id, _request_username(request)))
+        conn.commit()
+    if not result.rowcount:
+        raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다")
+    return {"ok": True}
+
+
+@app.delete("/api/stock-portfolio/holdings/{holding_id}")
+def stock_portfolio_delete(holding_id: int, request: Request):
+    _require_signed_in_user(request)
+    with get_conn() as conn:
+        result = conn.execute("DELETE FROM stock_portfolio_holdings WHERE id=? AND username=?", (holding_id, _request_username(request)))
+        conn.commit()
+    if not result.rowcount:
+        raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다")
+    return {"ok": True}
+
+
+def _public_stock_analysis(conn, username: str, holding_id: int):
+    job = conn.execute(
+        "SELECT * FROM stock_analysis_jobs WHERE username=? AND holding_id=? ORDER BY id DESC LIMIT 1",
+        (username, holding_id),
+    ).fetchone()
+    report = conn.execute(
+        "SELECT * FROM stock_analysis_reports WHERE username=? AND holding_id=? ORDER BY id DESC LIMIT 1",
+        (username, holding_id),
+    ).fetchone()
+    parsed = None
+    if report:
+        try:
+            parsed = json.loads(report["report_json"])
+        except json.JSONDecodeError:
+            parsed = None
+    return {
+        "job": dict(job) if job else None,
+        "report": {**dict(report), "content": parsed} if report and parsed else None,
+    }
+
+
+@app.get("/api/stock-portfolio/holdings/{holding_id}/analysis")
+def stock_analysis_get(holding_id: int, request: Request):
+    _require_signed_in_user(request)
+    username = _request_username(request)
+    with get_conn() as conn:
+        holding = conn.execute(
+            "SELECT * FROM stock_portfolio_holdings WHERE id=? AND username=?", (holding_id, username)
+        ).fetchone()
+        if not holding:
+            raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다")
+        settings = conn.execute("SELECT usd_krw FROM stock_portfolio_settings WHERE username=?", (username,)).fetchone()
+        result = _public_stock_analysis(conn, username, holding_id)
+    return {"holding": stock_portfolio.public_holding(holding, float(settings["usd_krw"] if settings else 1340.88)), **result}
+
+
+@app.post("/api/stock-portfolio/holdings/{holding_id}/analysis")
+def stock_analysis_create(holding_id: int, request: Request):
+    _require_signed_in_user(request)
+    username = _request_username(request)
+    now = stock_portfolio.utc_now()
+    with get_conn() as conn:
+        holding = conn.execute(
+            "SELECT id FROM stock_portfolio_holdings WHERE id=? AND username=?", (holding_id, username)
+        ).fetchone()
+        if not holding:
+            raise HTTPException(status_code=404, detail="종목을 찾을 수 없습니다")
+        running = conn.execute(
+            "SELECT id FROM stock_analysis_jobs WHERE username=? AND holding_id=? AND status IN ('pending','processing')",
+            (username, holding_id),
+        ).fetchone()
+        if running:
+            return {"ok": True, "job_id": running["id"], "already_running": True}
+        cursor = conn.execute(
+            "INSERT INTO stock_analysis_jobs(username,holding_id,status,progress_label,created_at) VALUES(?,?,'pending','최신 자료 조사 대기 중',?)",
+            (username, holding_id, now),
+        )
+        conn.commit()
+    return JSONResponse({"ok": True, "job_id": cursor.lastrowid}, status_code=202)
+
+
+@app.post("/api/stock-portfolio/refresh")
+def stock_portfolio_refresh(request: Request):
+    _require_signed_in_user(request)
+    username = _request_username(request)
+    with get_conn() as conn:
+        stock_portfolio.seed(conn, username)
+        rows = conn.execute("SELECT id,symbol FROM stock_portfolio_holdings WHERE username=? AND symbol<>''", (username,)).fetchall()
+    symbols = {row["symbol"] for row in rows}
+    results, errors = {}, {}
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
+        futures = {pool.submit(stock_portfolio.quote, symbol): symbol for symbol in symbols | {"KRW=X"}}
+        for future in concurrent.futures.as_completed(futures):
+            symbol = futures[future]
+            try:
+                results[symbol] = future.result()
+            except Exception as exc:
+                errors[symbol] = str(exc)[:120]
+    now = stock_portfolio.utc_now()
+    usd_krw = results.get("KRW=X", (1340.88, 0))[0]
+    with get_conn() as conn:
+        for row in rows:
+            if row["symbol"] in results:
+                price, stamp = results[row["symbol"]]
+                at = datetime.datetime.fromtimestamp(stamp, datetime.timezone.utc).isoformat(timespec="seconds") if stamp else now
+                conn.execute("UPDATE stock_portfolio_holdings SET last_price=?,last_price_at=?,updated_at=? WHERE id=? AND username=?", (price, at, now, row["id"], username))
+        conn.execute("""INSERT INTO stock_portfolio_settings(username,usd_krw,last_refresh_at,updated_at) VALUES(?,?,?,?)
+            ON CONFLICT(username) DO UPDATE SET usd_krw=excluded.usd_krw,last_refresh_at=excluded.last_refresh_at,updated_at=excluded.updated_at""", (username, usd_krw, now, now))
+        conn.commit()
+    return {"ok": True, "updated": len(results) - (1 if "KRW=X" in results else 0), "failed": errors, "data": _stock_portfolio_data(request)}
+
+
+@app.get("/api/worker/stock_analysis/pending")
+def worker_pending_stock_analysis(authorization: Optional[str] = Header(None)):
+    _check_worker_auth(authorization)
+    stale_before = (datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=25)).isoformat(timespec="seconds")
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE stock_analysis_jobs SET status='pending',progress_label='중단된 조사 다시 대기 중',started_at=NULL WHERE status='processing' AND started_at<?",
+            (stale_before,),
+        )
+        row = conn.execute(
+            """SELECT j.id AS job_id,j.username,j.holding_id,h.name,h.symbol,h.market,h.currency,
+                      h.total_cost_krw,h.shares,h.last_price,h.last_price_at
+                 FROM stock_analysis_jobs j JOIN stock_portfolio_holdings h ON h.id=j.holding_id
+                WHERE j.status='pending' ORDER BY j.id LIMIT 1"""
+        ).fetchone()
+        if not row:
+            conn.commit()
+            return None
+        changed = conn.execute(
+            "UPDATE stock_analysis_jobs SET status='processing',progress_label='웹 자료 조사·보고서 작성 중',started_at=? WHERE id=? AND status='pending'",
+            (stock_portfolio.utc_now(), row["job_id"]),
+        ).rowcount
+        conn.commit()
+        return dict(row) if changed else None
+
+
+@app.post("/api/worker/stock_analysis/complete")
+def worker_complete_stock_analysis(body: StockAnalysisResultPayload, authorization: Optional[str] = Header(None)):
+    _check_worker_auth(authorization)
+    now = stock_portfolio.utc_now()
+    with get_conn() as conn:
+        job = conn.execute(
+            """SELECT j.*,h.symbol,h.last_price FROM stock_analysis_jobs j
+                 JOIN stock_portfolio_holdings h ON h.id=j.holding_id WHERE j.id=?""", (body.job_id,)
+        ).fetchone()
+        if not job or job["status"] != "processing":
+            raise HTTPException(status_code=404, detail="처리 중인 종목 분석 작업이 아닙니다")
+        if body.error or not body.report:
+            conn.execute(
+                "UPDATE stock_analysis_jobs SET status='failed',progress_label='분석 실패',error=?,engine=?,completed_at=? WHERE id=?",
+                ((body.error or "빈 분석 결과")[:1000], (body.engine or "")[:40], now, body.job_id),
+            )
+        else:
+            required = {"title", "as_of", "executive_summary", "rise_reasons", "decline_reasons", "fundamentals", "outlook", "checkpoints", "self_questions", "sources"}
+            if not required.issubset(body.report) or not isinstance(body.report.get("sources"), list):
+                raise HTTPException(status_code=422, detail="분석 보고서 필수 항목이 없습니다")
+            conn.execute(
+                """INSERT INTO stock_analysis_reports(username,holding_id,job_id,symbol,price_at_analysis,report_json,created_at)
+                   VALUES(?,?,?,?,?,?,?)""",
+                (job["username"], job["holding_id"], body.job_id, job["symbol"], job["last_price"], json.dumps(body.report, ensure_ascii=False), now),
+            )
+            conn.execute(
+                "UPDATE stock_analysis_jobs SET status='done',progress_label='분석 완료',error=NULL,engine=?,completed_at=? WHERE id=?",
+                ((body.engine or "")[:40], now, body.job_id),
+            )
+        conn.commit()
+    return {"ok": True}
+
+
 class TerrainSurveyCreate(BaseModel):
     title: str
     location_name: str = ""
@@ -11138,6 +14826,16 @@ class MemoCategoryAssign(BaseModel):
     category_ids: Optional[list[int]] = None
 
 
+class ChatMapLayoutWrite(BaseModel):
+    version: int = 2
+    cards: dict[str, dict[str, float]] = {}
+    view: dict[str, float] = {}
+
+
+class ChatTopicImport(BaseModel):
+    topic_key: str
+
+
 def _validate_memo_media(image_data: str, drawing_data: str):
     image_data = image_data or ""
     drawing_data = drawing_data or ""
@@ -11170,6 +14868,7 @@ def _memo_user(request):
 def _memo_document_payload(conn, username):
     documents = [dict(row) for row in conn.execute(
         """SELECT id,source_message_id,source_room_id,source_sender,source_content,
+                  source_topic_key,source_topic_title,source_last_message_id,
                   title,note,card_width,category_id,created_at,updated_at
            FROM memo_documents WHERE username=? ORDER BY updated_at DESC,id DESC""",
         (username,),
@@ -11179,7 +14878,8 @@ def _memo_document_payload(conn, username):
     ids = [document["id"] for document in documents]
     placeholders = ",".join("?" for _ in ids)
     nodes = [dict(row) for row in conn.execute(
-        f"""SELECT id,memo_id,parent_id,content,sort_order,position_x,position_y,card_width,image_data,drawing_data,created_at,updated_at
+        f"""SELECT id,memo_id,parent_id,content,sort_order,position_x,position_y,card_width,image_data,drawing_data,
+                   source_message_id,source_room_id,created_at,updated_at
             FROM memo_nodes WHERE memo_id IN ({placeholders})
             ORDER BY sort_order,id""", ids
     ).fetchall()]
@@ -11210,6 +14910,376 @@ def list_memos(request: Request):
     documents = _memo_document_payload(conn, user["username"])
     conn.close()
     return documents
+
+
+_CHAT_MAP_STOPWORDS = {
+    "그리고", "그런데", "그래서", "하지만", "그러면", "이거", "저거", "그거", "여기", "거기",
+    "지금", "현재", "오늘", "내일", "어제", "다시", "그냥", "약간", "정도", "부분", "내용",
+    "기능", "시스템", "채팅", "메시지", "생각", "경우", "관련", "사용", "작업", "진행", "확인",
+    "페이지", "세션", "이번", "지난", "얘기", "얘기가", "이야기", "부분이", "내용이", "오늘은", "원문",
+    "읽은", "좋은", "이미", "지금은", "핵심이네", "진짜", "나는", "나온", "결국", "계속", "먼저",
+    "만들어", "만들고", "해줘", "해주세요", "하면", "해서", "하는", "있는", "없는", "있으면",
+    "좋겠어", "좋을", "같아", "같은", "되면", "되는", "아니", "근데", "말이야", "혹시", "뭔가",
+    "really", "just", "that", "this", "with", "from", "have", "will", "about", "http", "https",
+    "green", "red", "blue", "orange", "purple", "color", "bg", "comment", "bold", "italic",
+}
+
+
+_CHAT_MAP_FORMAT_TOKEN = re.compile(
+    r"\[\[/?(?:b|i|u|s|red|blue|green|orange|purple|color(?::[^\]]*)?|bg(?::[^\]]*)?|comment(?::[^\]]*)?)\]\]",
+    re.I,
+)
+
+
+def _chat_map_clean_content(content: str) -> str:
+    """툴파챗 표시 문법을 없애고 사용자가 실제로 읽는 본문만 남긴다."""
+    clean = content or ""
+    clean = re.sub(r"\[([^\]]+)\]\(https?://[^)]+\)", r"\1", clean)
+    clean = re.sub(r"https?://\S+", " ", clean, flags=re.I)
+    clean = re.sub(r"```[\s\S]*?```|`[^`]*`", " ", clean)
+    clean = _CHAT_MAP_FORMAT_TOKEN.sub("", clean)
+    clean = re.sub(r"<[^>]+>", " ", clean)
+    return re.sub(r"[#>*_~|]", " ", clean)
+
+
+def _chat_map_emphasized_terms(content: str) -> list[str]:
+    """색상·굵기 표시는 버리고 그 안에서 사람이 강조한 짧은 표현만 보존한다."""
+    result = []
+    pattern = re.compile(
+        r"\[\[(red|blue|green|orange|purple|b|i|u|s)\]\]([\s\S]*?)\[\[/\1\]\]", re.I
+    )
+    for match in pattern.finditer(content or ""):
+        value = re.sub(r"\s+", " ", _chat_map_clean_content(match.group(2))).strip(" .,:;!?-—")
+        if not value or len(value) > 48 or len(value.split()) > 5:
+            continue
+        if value.lower() in _CHAT_MAP_STOPWORDS:
+            continue
+        if value not in result:
+            result.append(value)
+    return result[:6]
+
+
+def _chat_map_terms(content: str) -> list[str]:
+    """메시지에 실제로 등장한 단어만 뽑아 지도 제목 후보로 사용한다."""
+    clean = _chat_map_clean_content(content)
+    words = re.findall(r"[A-Za-z][A-Za-z0-9_.+-]{2,}|[가-힣]{2,}|[一-龯ぁ-ゖァ-ヺ]{2,}", clean)
+    result = _chat_map_emphasized_terms(content)
+    for word in words:
+        normalized = word.lower() if re.match(r"[A-Za-z]", word) else word
+        normalized = normalized.strip("._-+")
+        if len(normalized) < 2 or normalized in _CHAT_MAP_STOPWORDS or normalized.isdigit():
+            continue
+        if normalized not in result:
+            result.append(normalized)
+    return result[:12]
+
+
+def _chat_map_message_kind(content: str) -> str:
+    compact = re.sub(r"\s+", " ", content or "").lower()
+    if any(token in compact for token in ("완료", "반영했습니다", "수정했습니다", "해결", "끝났")):
+        return "completed"
+    if any(token in compact for token in ("오류", "에러", "안 돼", "안되", "실패", "문제", "이상해", "왜 ")):
+        return "problem"
+    if any(token in compact for token in ("해줘", "해주세요", "추가", "만들어", "바꿔", "수정", "개선")):
+        return "request"
+    if any(token in compact for token in ("결정", "하자", "하기로", "승인", "적용")):
+        return "decision"
+    return "discussion"
+
+
+def _chat_map_payload(rows, room_id: str, message_limit: Optional[int] = 12) -> dict[str, Any]:
+    usable = []
+    frequency: dict[str, int] = {}
+    for row in rows:
+        item = dict(row)
+        if item.get("is_system") or _is_internal_worker_status_message(item.get("content", "")):
+            continue
+        item["emphasized_terms"] = _chat_map_emphasized_terms(item.get("content", ""))
+        terms = _chat_map_terms(item.get("content", ""))
+        if not terms:
+            continue
+        item["terms"] = terms
+        item["kind"] = _chat_map_message_kind(item.get("content", ""))
+        usable.append(item)
+        for term in terms:
+            frequency[term] = frequency.get(term, 0) + 1
+    clusters: dict[str, dict[str, Any]] = {}
+    for item in usable:
+        emphasized = set(item.get("emphasized_terms", []))
+        ranked = sorted(
+            item["terms"],
+            key=lambda term: (-(frequency.get(term, 0) + (50 if term in emphasized else 0)), item["terms"].index(term)),
+        )
+        topic = ranked[0]
+        cluster = clusters.setdefault(topic, {
+            "key": topic, "title": topic, "keywords": [], "messages": [], "message_count": 0,
+            "message_ids": [],
+            "kinds": {"request": 0, "decision": 0, "problem": 0, "completed": 0, "discussion": 0},
+        })
+        cluster["message_count"] += 1
+        cluster["message_ids"].append(item["id"])
+        cluster["kinds"][item["kind"]] += 1
+        for term in ranked[:5]:
+            if term not in cluster["keywords"]:
+                cluster["keywords"].append(term)
+        if message_limit is None or len(cluster["messages"]) < message_limit:
+            text = re.sub(r"\s+", " ", item.get("content", "")).strip()
+            cluster["messages"].append({
+                "id": item["id"], "sender": item.get("sender", ""), "content": text[:240],
+                "created_at": item.get("created_at", ""), "kind": item["kind"],
+            })
+    topics = sorted(clusters.values(), key=lambda item: (-item["message_count"], item["title"]))[:16]
+    for topic in topics:
+        topic["keywords"] = topic["keywords"][:6]
+    return {
+        "room_id": room_id, "message_count": len(usable), "topic_count": len(topics),
+        "last_message_id": max((item["id"] for item in usable), default=0), "topics": topics,
+    }
+
+
+def _semantic_chat_map_payload(rows, room_id: str, message_limit: Optional[int] = 12):
+    prepared = []
+    for row in rows:
+        item = dict(row)
+        if item.get("is_system") or item.get("topic_status") != "done" or not item.get("embedding"):
+            continue
+        try:
+            item["embedding"] = topic_analysis.unpack_embedding(item["embedding"], item["embedding_dim"])
+            item["keywords"] = json.loads(item.get("keywords_json") or "[]")
+        except (ValueError, json.JSONDecodeError):
+            continue
+        item["kind"] = item.get("message_type") or _chat_map_message_kind(item.get("content", ""))
+        prepared.append(item)
+    if len(prepared) < 4:
+        return None
+    # 최근 500개의 의미 벡터만 군집화한다. 메시지 전문은 별도 주제 조회 API가
+    # 전체를 페이지 단위로 제공하므로 지도 구성 자체가 오래된 방에서 무거워지지 않는다.
+    prepared = prepared[-500:]
+    subclusters = topic_analysis.hierarchical_clusters(
+        prepared, threshold=0.72, max_cluster_size=max(12, (len(prepared) + 3) // 4)
+    )
+    cluster_items = []
+    for index, cluster in enumerate(subclusters):
+        frequency = {}
+        for item in cluster["items"]:
+            for rank, keyword in enumerate(item["keywords"][:6]):
+                frequency[keyword] = frequency.get(keyword, 0) + (6 - rank)
+        candidates = sorted(
+            frequency, key=lambda value: (-frequency[value], value in topic_analysis.STOPWORDS, len(value) < 3, -len(value))
+        )
+        title = next((value for value in candidates if value not in topic_analysis.STOPWORDS), "기타 대화")
+        anchor_id = min((item["id"] for item in cluster["items"]), default=index)
+        key = "semantic:" + hashlib.sha1(
+            (room_id + "\0" + title + "\0" + str(anchor_id)).encode()
+        ).hexdigest()[:16]
+        messages = []
+        for item in cluster["items"]:
+            if message_limit is not None and len(messages) >= message_limit:
+                break
+            messages.append({
+                "id": item["id"], "sender": item.get("sender", ""),
+                "content": re.sub(r"\s+", " ", item.get("content", "")).strip()[:240],
+                "summary": item.get("topic_summary") or "", "created_at": item.get("created_at", ""),
+                "kind": item["kind"],
+            })
+        kinds = {name: 0 for name in ("request", "decision", "problem", "completed", "question", "discussion")}
+        for item in cluster["items"]:
+            kinds[item["kind"] if item["kind"] in kinds else "discussion"] += 1
+        cluster_items.append({
+            "key": key, "title": title, "keywords": candidates[:6], "messages": messages,
+            "message_ids": [item["id"] for item in cluster["items"]],
+            "message_count": len(cluster["items"]), "kinds": kinds,
+            "centroid": cluster["centroid"], "_index": index,
+        })
+    parent_inputs = [{"embedding": item["centroid"], "cluster": item} for item in cluster_items]
+    parents = topic_analysis.hierarchical_clusters(parent_inputs, threshold=0.58, max_cluster_size=8)
+    for parent_index, parent in enumerate(parents):
+        children = [entry["cluster"] for entry in parent["items"]]
+        parent_keywords = []
+        for child in sorted(children, key=lambda value: -value["message_count"]):
+            for keyword in child["keywords"]:
+                if keyword not in parent_keywords:
+                    parent_keywords.append(keyword)
+        parent_title = parent_keywords[0] if parent_keywords else "기타 대화"
+        child_signature = "\0".join(sorted(child["key"] for child in children))
+        parent_key = "group:" + hashlib.sha1(
+            (room_id + "\0" + parent_title + "\0" + child_signature).encode()
+        ).hexdigest()[:16]
+        for child in children:
+            child["parent_key"] = parent_key
+            child["parent_title"] = parent_title
+            child.pop("centroid", None); child.pop("_index", None)
+    topics = sorted(cluster_items, key=lambda item: (-item["message_count"], item["title"]))[:40]
+    return {
+        "room_id": room_id, "message_count": len(prepared), "topic_count": len(topics),
+        "last_message_id": max((item["id"] for item in prepared), default=0),
+        "analysis_engine": topic_analysis.MODEL_VERSION, "topics": topics,
+    }
+
+
+@app.get("/api/me/chat-mindmap")
+def get_chat_mindmap(request: Request, room_id: str, limit: int = Query(600, ge=50, le=1500)):
+    user = _memo_user(request); conn = get_conn()
+    access_probe = conn.execute(
+        "SELECT id,room_id,sender,content,created_at FROM messages WHERE room_id=? ORDER BY id DESC LIMIT 1",
+        (room_id,),
+    ).fetchone()
+    if access_probe:
+        _ensure_message_visible(conn, access_probe, user["username"], bool(user["is_owner"]))
+    rows = conn.execute(
+        """SELECT m.id,m.room_id,m.sender,m.content,m.created_at,m.is_system,
+                  t.status AS topic_status,t.keywords_json,t.message_type,t.summary AS topic_summary,
+                  t.embedding,t.embedding_dim
+             FROM messages m LEFT JOIN message_topic_metadata t ON t.message_id=m.id
+            WHERE m.room_id=? ORDER BY m.id DESC LIMIT ?""", (room_id, limit)
+    ).fetchall()
+    ordered_rows = list(reversed(rows))
+    payload = (_semantic_chat_map_payload(ordered_rows, room_id, message_limit=None)
+               or _chat_map_payload(ordered_rows, room_id, message_limit=None))
+    previous = conn.execute(
+        "SELECT last_message_id,layout_json,updated_at FROM memo_chat_maps WHERE username=? AND room_id=?",
+        (user["username"], room_id),
+    ).fetchone()
+    previous_id = previous["last_message_id"] if previous else 0
+    payload["new_message_count"] = sum(
+        1 for row in rows
+        if row["id"] > previous_id and not row["is_system"]
+        and not _is_internal_worker_status_message(row["content"] or "")
+    )
+    try:
+        payload["layout"] = json.loads(previous["layout_json"] or "{}") if previous else {}
+    except json.JSONDecodeError:
+        payload["layout"] = {}
+    now = _now()
+    conn.execute(
+        """INSERT INTO memo_chat_maps(username,room_id,room_title,last_message_id,layout_json,created_at,updated_at)
+           VALUES(?,?,?,?,?,?,?)
+           ON CONFLICT(username,room_id) DO UPDATE SET
+             last_message_id=excluded.last_message_id,updated_at=excluded.updated_at""",
+        (user["username"], room_id, room_id, payload["last_message_id"],
+         json.dumps(payload["layout"], ensure_ascii=False), now, now),
+    )
+    conn.commit(); conn.close(); return payload
+
+
+@app.get("/api/me/chat-maps")
+def list_chat_maps(request: Request):
+    user = _memo_user(request)
+    rooms = list_rooms(request)
+    conn = get_conn()
+    states = {
+        row["room_id"]: dict(row) for row in conn.execute(
+            "SELECT room_id,last_message_id,updated_at FROM memo_chat_maps WHERE username=?",
+            (user["username"],),
+        ).fetchall()
+    }
+    result = []
+    for room in rooms:
+        state = states.get(room["room_id"], {})
+        last_message_id = int(room.get("last_message_id") or 0)
+        synced_id = int(state.get("last_message_id") or 0)
+        count = conn.execute(
+            "SELECT COUNT(*) AS n FROM messages WHERE room_id=? AND id>? AND is_system=0",
+            (room["room_id"], synced_id),
+        ).fetchone()["n"]
+        result.append({**room, "synced_message_id": synced_id,
+                       "new_message_count": count, "last_synced_at": state.get("updated_at")})
+    conn.close()
+    return sorted(result, key=lambda item: item.get("last_message_at") or "", reverse=True)
+
+
+@app.put("/api/me/chat-mindmap/layout")
+def save_chat_map_layout(room_id: str, body: ChatMapLayoutWrite, request: Request):
+    user = _memo_user(request)
+    layout = {"version": body.version, "cards": body.cards, "view": body.view}
+    encoded = json.dumps(layout, ensure_ascii=False, separators=(",", ":"))
+    if len(encoded) > 200_000:
+        raise HTTPException(status_code=413, detail="지도 배치 정보가 너무 큽니다")
+    conn = get_conn()
+    probe = conn.execute(
+        "SELECT id,room_id,sender,content,created_at FROM messages WHERE room_id=? ORDER BY id DESC LIMIT 1",
+        (room_id,),
+    ).fetchone()
+    if probe:
+        _ensure_message_visible(conn, probe, user["username"], bool(user["is_owner"]))
+    now = _now()
+    conn.execute(
+        """INSERT INTO memo_chat_maps(username,room_id,room_title,last_message_id,layout_json,created_at,updated_at)
+           VALUES(?,?,?,?,?,?,?)
+           ON CONFLICT(username,room_id) DO UPDATE SET layout_json=excluded.layout_json,updated_at=excluded.updated_at""",
+        (user["username"], room_id, room_id, 0, encoded, now, now),
+    )
+    conn.commit(); conn.close()
+    return {"ok": True}
+
+
+@app.post("/api/me/chat-mindmap/{room_id}/topic-memo")
+def import_chat_topic_as_memo(room_id: str, body: ChatTopicImport, request: Request):
+    user = _memo_user(request); conn = get_conn()
+    rows = conn.execute(
+        """SELECT m.id,m.room_id,m.sender,m.content,m.created_at,m.is_system,
+                  t.status AS topic_status,t.keywords_json,t.message_type,t.summary AS topic_summary,
+                  t.embedding,t.embedding_dim
+             FROM messages m LEFT JOIN message_topic_metadata t ON t.message_id=m.id
+            WHERE m.room_id=? ORDER BY m.id DESC LIMIT 1500""", (room_id,)
+    ).fetchall()
+    if rows:
+        _ensure_message_visible(conn, rows[0], user["username"], bool(user["is_owner"]))
+    ordered_rows = list(reversed(rows))
+    payload = (_semantic_chat_map_payload(ordered_rows, room_id, message_limit=None)
+               or _chat_map_payload(ordered_rows, room_id, message_limit=None))
+    topic = next((item for item in payload["topics"] if item["key"] == body.topic_key), None)
+    if not topic:
+        conn.close(); raise HTTPException(status_code=404, detail="현재 지도에서 주제를 찾을 수 없습니다")
+    existing = conn.execute(
+        """SELECT id FROM memo_documents
+             WHERE username=? AND source_room_id=? AND source_topic_key=?""",
+        (user["username"], room_id, topic["key"]),
+    ).fetchone()
+    now = _now(); created = not bool(existing)
+    if existing:
+        memo_id = existing["id"]
+        conn.execute(
+            """UPDATE memo_documents SET source_topic_title=?,source_last_message_id=?,updated_at=?
+                 WHERE id=?""", (topic["title"], payload["last_message_id"], now, memo_id)
+        )
+    else:
+        cursor = conn.execute(
+            """INSERT INTO memo_documents
+               (username,source_room_id,source_sender,source_content,source_topic_key,source_topic_title,
+                source_last_message_id,title,note,card_width,created_at,updated_at)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (user["username"], room_id, "채팅 생각 지도", "", topic["key"], topic["title"],
+             payload["last_message_id"], f"{topic['title']} · 채팅 주제", "", 620, now, now),
+        )
+        memo_id = cursor.lastrowid
+    existing_ids = {
+        row["source_message_id"] for row in conn.execute(
+            "SELECT source_message_id FROM memo_nodes WHERE memo_id=? AND source_message_id IS NOT NULL",
+            (memo_id,),
+        ).fetchall()
+    }
+    message_by_id = {message["id"]: message for message in topic["messages"]}
+    added = 0
+    for message_id in topic["message_ids"]:
+        if message_id in existing_ids or message_id not in message_by_id:
+            continue
+        message = message_by_id[message_id]
+        order = conn.execute(
+            "SELECT COALESCE(MAX(sort_order),-1)+1 AS n FROM memo_nodes WHERE memo_id=? AND parent_id IS NULL",
+            (memo_id,),
+        ).fetchone()["n"]
+        content = f"{message['sender']} · {message['content']}"[:6000]
+        conn.execute(
+            """INSERT INTO memo_nodes
+               (memo_id,parent_id,content,sort_order,source_message_id,source_room_id,created_at,updated_at)
+               VALUES(?,NULL,?,?,?,?,?,?)""",
+            (memo_id, content, order, message_id, room_id, now, now),
+        )
+        added += 1
+    conn.commit(); conn.close()
+    return {"ok": True, "id": memo_id, "created": created, "added": added,
+            "url": f"/memo/?memo={memo_id}"}
 
 
 def _memo_category_name(value: str) -> str:
@@ -11554,6 +15624,33 @@ def _current_user(request):
     if not user:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다")
     return user
+
+
+@app.get("/api/me/ai-runtime-status")
+def get_my_ai_runtime_status(request: Request):
+    """공유 AI의 회로 차단 상태를 민감정보 없이 반환한다.
+
+    원본 오류·요청 ID·로컬 경로는 브라우저에 노출하지 않는다. 사용자는 왜
+    답변이 대기 중인지와 언제 다시 시도되는지만 확인하면 된다.
+    """
+    _current_user(request)
+    now = time.time()
+    raw = circuit_status()
+    providers = {}
+    for provider, item in raw.get("providers", {}).items():
+        open_until = float(item.get("open_until") or 0)
+        providers[provider] = {
+            "blocked": open_until > now,
+            "error_type": item.get("error_type") or None,
+            "retry_at": datetime.datetime.fromtimestamp(open_until).isoformat() if open_until else None,
+            "retry_in_seconds": max(0, int(open_until - now)),
+            "consecutive_failures": int(item.get("consecutive_failures") or 0),
+            "last_job": item.get("last_job") or None,
+        }
+    return {
+        "providers": providers,
+        "automation_deferred": now - float(raw.get("last_interactive_at") or 0) < 5 * 60,
+    }
 
 
 @app.get("/api/me/ai-providers")
@@ -12567,9 +16664,112 @@ def _ensure_english_reading_teacher(conn):
     )
 
 
+def _analyze_pending_message_topics_forever():
+    """메시지 전송을 막지 않는 로컬 BGE-M3 분석 루프."""
+    while True:
+        conn = get_conn()
+        rows = conn.execute(
+            """SELECT m.id,m.content FROM messages m
+                 JOIN message_topic_metadata t ON t.message_id=m.id
+                WHERE t.status IN ('pending','retry') AND t.user_corrected=0
+                ORDER BY m.id LIMIT 8"""
+        ).fetchall()
+        if rows:
+            ids = [row["id"] for row in rows]
+            conn.execute(
+                f"UPDATE message_topic_metadata SET status='processing',updated_at=? WHERE message_id IN ({','.join('?' for _ in ids)})",
+                (_now(), *ids),
+            )
+            conn.commit()
+        conn.close()
+        if not rows:
+            time.sleep(3)
+            continue
+        for row in rows:
+            try:
+                result = topic_analysis.analyze_message(row["content"])
+                conn = get_conn()
+                conn.execute(
+                    """UPDATE message_topic_metadata SET status='done',primary_topic=?,subtopic=?,
+                       keywords_json=?,entities_json=?,message_type=?,summary=?,confidence=?,embedding=?,
+                       embedding_dim=?,model_version=?,error=NULL,updated_at=? WHERE message_id=?""",
+                    (result["primary_topic"], result["subtopic"], json.dumps(result["keywords"], ensure_ascii=False),
+                     json.dumps(result["entities"], ensure_ascii=False), result["message_type"], result["summary"],
+                     result["confidence"], result["embedding"], result["embedding_dim"], result["model_version"],
+                     _now(), row["id"]),
+                )
+                conn.commit(); conn.close()
+            except Exception as exc:
+                conn = get_conn()
+                conn.execute(
+                    "UPDATE message_topic_metadata SET status='retry',error=?,updated_at=? WHERE message_id=?",
+                    (str(exc)[:500], _now(), row["id"]),
+                )
+                conn.commit(); conn.close()
+                time.sleep(2)
+
+
+def _recover_mp3_postprocess_jobs() -> None:
+    """재시작으로 끊긴 작업을 잇고, 먼저 받은 추천곡도 한 번만 보충 처리한다."""
+    conn = get_conn()
+    interrupted_downloads = conn.execute(
+        "SELECT * FROM mp3_download_jobs WHERE status IN ('queued','downloading','converting','finalizing') ORDER BY created_at"
+    ).fetchall()
+    interrupted = conn.execute(
+        "SELECT id FROM mp3_postprocess_jobs WHERE status IN ('queued','processing') ORDER BY created_at"
+    ).fetchall()
+    translating = conn.execute(
+        "SELECT id,source_message_id FROM mp3_postprocess_jobs WHERE status='translating' AND source_message_id IS NOT NULL"
+    ).fetchall()
+    feedback = conn.execute(
+        "SELECT username,youtube_id,title FROM mp3_recommendation_feedback WHERE action='download'"
+    ).fetchall()
+    for row in feedback:
+        has_mp3 = any(f"[{row['youtube_id']}]" in item.stem for item in MP3_FAVORITES_DIR.glob("*.mp3"))
+        incomplete = any(f"[{row['youtube_id']}]" in item.stem for suffix in ("mp4", "m4a", "webm") for item in MP3_FAVORITES_DIR.glob(f"*.{suffix}"))
+        known = conn.execute(
+            "SELECT 1 FROM mp3_download_jobs WHERE username=? AND youtube_id=? AND status IN ('queued','downloading','converting','finalizing','complete')",
+            (row["username"], row["youtube_id"]),
+        ).fetchone()
+        if incomplete and not has_mp3 and not known:
+            now, recovery_id = _now(), uuid.uuid4().hex
+            url = f"https://www.youtube.com/watch?v={row['youtube_id']}"
+            conn.execute(
+                """INSERT INTO mp3_download_jobs
+                   (id,username,youtube_id,url,destination,status,stage,percent,created_at,updated_at)
+                   VALUES(?,?,?,?,?,'queued','중단 작업 복구 대기 중',0,?,?)""",
+                (recovery_id, row["username"], row["youtube_id"], url, "favorites", now, now),
+            )
+            interrupted_downloads = [*interrupted_downloads, conn.execute("SELECT * FROM mp3_download_jobs WHERE id=?", (recovery_id,)).fetchone()]
+    conn.commit()
+    conn.close()
+    for row in interrupted_downloads:
+        job = dict(row)
+        job.update(status="queued", stage="중단 작업 복구 대기 중", percent=0, updated_at=_now())
+        _mp3_download_jobs[job["id"]] = job
+        _update_mp3_download_job(job["id"], status="queued", stage="중단 작업 복구 대기 중", percent=0, error=None)
+        threading.Thread(
+            target=_run_youtube_mp3_job,
+            args=(job["id"], job["url"], job["destination"], job["username"]),
+            daemon=True, name=f"youtube-recover-{job['id'][:6]}",
+        ).start()
+    for row in interrupted:
+        threading.Thread(target=_run_mp3_postprocess, args=(row["id"],), daemon=True).start()
+    for row in translating:
+        threading.Thread(target=_watch_mp3_translation, args=(row["id"], row["source_message_id"]), daemon=True).start()
+    for row in feedback:
+        matches = sorted(
+            (item for item in MP3_FAVORITES_DIR.glob("*.mp3") if f"[{row['youtube_id']}]" in item.stem),
+            key=lambda item: item.stat().st_mtime, reverse=True,
+        )
+        if matches:
+            _enqueue_mp3_postprocess(row["username"], matches[0], row["youtube_id"])
+
+
 @app.on_event("startup")
 def start_system_update_push_delivery():
-    global _DATING_REBUILD_RECOVERY_STARTED, _WORKTREE_UPDATE_WATCHER_STARTED, _lrc_recovery_started
+    global _DATING_REBUILD_RECOVERY_STARTED, _WORKTREE_UPDATE_WATCHER_STARTED, _lrc_recovery_started, _mp3_postprocess_recovery_started
+    global _DATING_SIM_IMAGE_REPORT_WORKER_STARTED, _TOPIC_ANALYSIS_WORKER_STARTED
     conn = get_conn()
     try:
         _ensure_english_reading_teacher(conn)
@@ -12577,9 +16777,17 @@ def start_system_update_push_delivery():
     finally:
         conn.close()
     threading.Thread(target=_deliver_system_updates_on_startup, daemon=True).start()
+    if not _TOPIC_ANALYSIS_WORKER_STARTED:
+        _TOPIC_ANALYSIS_WORKER_STARTED = True
+        threading.Thread(
+            target=_analyze_pending_message_topics_forever, daemon=True, name="message-topic-analysis"
+        ).start()
     if not _lrc_recovery_started:
         _lrc_recovery_started = True
         threading.Thread(target=_recover_persistent_lrc_jobs, daemon=True, name="lrc-job-recovery").start()
+    if not _mp3_postprocess_recovery_started:
+        _mp3_postprocess_recovery_started = True
+        threading.Thread(target=_recover_mp3_postprocess_jobs, daemon=True, name="mp3-postprocess-recovery").start()
     if not _WORKTREE_UPDATE_WATCHER_STARTED:
         _WORKTREE_UPDATE_WATCHER_STARTED = True
         threading.Thread(target=_watch_worktree_updates_forever, daemon=True).start()
@@ -12587,6 +16795,12 @@ def start_system_update_push_delivery():
         _DATING_REBUILD_RECOVERY_STARTED = True
         threading.Thread(target=_recover_dating_rebuilds_forever, daemon=True).start()
         threading.Thread(target=_watch_dating_sim_teacher_notifications_forever, daemon=True).start()
+    if not _DATING_SIM_IMAGE_REPORT_WORKER_STARTED:
+        _DATING_SIM_IMAGE_REPORT_WORKER_STARTED = True
+        threading.Thread(
+            target=_watch_dating_sim_image_reports_forever, daemon=True,
+            name="dating-sim-image-reports",
+        ).start()
 
 
 def _send_kakao_alert_to_user(conn, username, title, body_text, url):
@@ -12910,6 +17124,24 @@ def get_dating_sim_updates(request: Request):
     return {"items": _dating_sim_update_history(include_admin=_is_owner_request(request))}
 
 
+@app.get("/api/dating-sim/server-update")
+def get_dating_sim_server_update(request: Request):
+    """미연시 서버·화면·생성기 코드 가운데 가장 최근 변경 시각."""
+    _require_signed_in_user(request)
+    candidates = [
+        Path(__file__), Path(dating_sim_story.__file__),
+        DATING_SIM_WEB_DIR / "index.html", DATING_SIM_WEB_DIR / "app.js",
+        DATING_SIM_WEB_DIR / "style.css", Path(DATING_SIM_IMAGE_SCRIPT),
+    ]
+    timestamps = [path.stat().st_mtime for path in candidates if path.is_file()]
+    updated_at = max(timestamps) if timestamps else time.time()
+    return {
+        "updated_at": datetime.datetime.fromtimestamp(
+            updated_at, datetime.timezone.utc,
+        ).isoformat(timespec="seconds"),
+    }
+
+
 @app.get("/api/notifications")
 def get_notifications(request: Request):
     """계정별 시스템 업데이트와 읽지 않은 채팅방을 하나의 알림함으로 반환한다."""
@@ -12993,6 +17225,114 @@ def _is_internal_worker_status_message(content: str) -> bool:
     )
 
 
+def _parsed_timestamp(value: Optional[str]) -> Optional[datetime.datetime]:
+    if not value:
+        return None
+    try:
+        parsed = datetime.datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+        return parsed.astimezone(datetime.timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+@app.get("/api/mp3/lyrics-study/status")
+def get_mp3_lyrics_study_status(request: Request, source_message_id: int = Query(..., ge=1)):
+    """MP3 가사 직해 작업의 실제 큐 상태와 결과를 한 번에 반환한다.
+
+    채팅 메시지의 답장 연결 여부에 의존하지 않고 pending_turns를 원장으로
+    사용한다. 진행률과 ETA는 최근 같은 페르소나 작업 시간을 이용한 추정값이며,
+    완료 결과는 pending_turns.reply에서 직접 복구한다.
+    """
+    _require_signed_in_user(request)
+    username = _request_username(request)
+    is_owner = _is_owner_request(request)
+    conn = get_conn()
+    source = conn.execute(
+        "SELECT id, room_id, sender, content, created_at FROM messages WHERE id=?",
+        (source_message_id,),
+    ).fetchone()
+    if not source or not str(source["content"] or "").startswith("[MP3 가사 직해 요청]"):
+        conn.close()
+        raise HTTPException(status_code=404, detail="가사 직해 요청을 찾지 못했습니다")
+    if not is_owner and source["sender"] != username:
+        conn.close()
+        raise HTTPException(status_code=403, detail="다른 계정의 직해 요청은 확인할 수 없습니다")
+    turn = conn.execute(
+        """SELECT id, persona_name, status, created_at, started_at, completed_at,
+                  reply, error
+             FROM pending_turns
+            WHERE source_message_id=?
+            ORDER BY id DESC LIMIT 1""",
+        (source_message_id,),
+    ).fetchone()
+    if not turn:
+        conn.close()
+        raise HTTPException(status_code=404, detail="직해 작업 정보를 찾지 못했습니다")
+
+    duration_rows = conn.execute(
+        """SELECT started_at, completed_at FROM pending_turns
+            WHERE persona_name=? AND status='done'
+              AND started_at IS NOT NULL AND completed_at IS NOT NULL
+              AND id<>?
+            ORDER BY id DESC LIMIT 20""",
+        (turn["persona_name"], turn["id"]),
+    ).fetchall()
+    durations = []
+    for row in duration_rows:
+        started = _parsed_timestamp(row["started_at"])
+        completed = _parsed_timestamp(row["completed_at"])
+        if started and completed:
+            seconds = (completed - started).total_seconds()
+            if 2 <= seconds <= 1800:
+                durations.append(seconds)
+    expected_seconds = max(15, min(300, int(statistics.median(durations)))) if durations else 45
+    now = datetime.datetime.now(datetime.timezone.utc)
+    created_at = _parsed_timestamp(turn["created_at"]) or now
+    started_at = _parsed_timestamp(turn["started_at"])
+    status = str(turn["status"] or "pending")
+    queue_position = 0
+    elapsed_seconds = 0
+    eta_seconds = 0
+    percent = 0
+    stage = "요청 대기 중"
+    if status in {"pending", "waiting_personal_ai"}:
+        queue_position = conn.execute(
+            "SELECT COUNT(*) AS n FROM pending_turns WHERE status IN ('pending','waiting_personal_ai') AND id<=?",
+            (turn["id"],),
+        ).fetchone()["n"]
+        elapsed_seconds = max(0, int((now - created_at).total_seconds()))
+        eta_seconds = 0 if status == "waiting_personal_ai" else max(5, int(queue_position * expected_seconds))
+        percent = 5
+        stage = "AI 사용 가능 대기 중" if status == "waiting_personal_ai" else f"대기열 {queue_position}번째"
+    elif status == "processing":
+        elapsed_seconds = max(0, int((now - (started_at or created_at)).total_seconds()))
+        eta_seconds = max(0, expected_seconds - elapsed_seconds)
+        percent = min(92, max(18, int(18 + 74 * elapsed_seconds / max(expected_seconds, 1))))
+        stage = "가사 분석·직해 중"
+    elif status == "done":
+        elapsed_seconds = max(0, int(((_parsed_timestamp(turn["completed_at"]) or now) - (started_at or created_at)).total_seconds()))
+        percent = 100
+        stage = "직해 완료"
+    else:
+        elapsed_seconds = max(0, int(((_parsed_timestamp(turn["completed_at"]) or now) - (started_at or created_at)).total_seconds()))
+        percent = 0
+        stage = "직해 실패"
+    conn.close()
+    return {
+        "status": status,
+        "stage": stage,
+        "percent": percent,
+        "estimated": status in {"pending", "processing"},
+        "queue_position": queue_position,
+        "elapsed_seconds": elapsed_seconds,
+        "eta_seconds": eta_seconds,
+        "result": turn["reply"] if status == "done" and turn["reply"] != "NONE" else None,
+        "error": "일시적으로 직해를 완료하지 못했습니다" if status == "failed" else None,
+    }
+
+
 @app.get("/api/messages")
 def get_messages(
     request: Request,
@@ -13053,9 +17393,14 @@ def get_messages(
         conn.close()
         return {"count": count}
     message_select = """SELECT m.id, m.sender, m.content, m.created_at, m.reply_message_id, m.is_system,
-                               parent.sender AS reply_sender, parent.content AS reply_content
+                               parent.sender AS reply_sender, parent.content AS reply_content,
+                               topic.status AS topic_status,topic.primary_topic,topic.subtopic,
+                               topic.keywords_json,topic.entities_json,topic.message_type,
+                               topic.summary AS topic_summary,topic.confidence AS topic_confidence,
+                               topic.user_corrected AS topic_user_corrected
                           FROM ({subquery}) m
                           LEFT JOIN messages parent ON parent.id = m.reply_message_id
+                          LEFT JOIN message_topic_metadata topic ON topic.message_id=m.id
                          ORDER BY m.id"""
     if before_id > 0:
         # 병법방에서 위로 스와이프할 때만 이전 페이지를 DB에서 가져온다.
@@ -13085,6 +17430,11 @@ def get_messages(
     messages = _with_sender_type(rows, persona_names, persona_avatars, human_profiles)
     for message in messages:
         message["reactions"] = reactions.get(message["id"], [])
+        try:
+            message["topic_keywords"] = json.loads(message.pop("keywords_json") or "[]")
+            message["topic_entities"] = json.loads(message.pop("entities_json") or "[]")
+        except json.JSONDecodeError:
+            message["topic_keywords"], message["topic_entities"] = [], []
         if message.get("reply_sender"):
             message["reply_is_persona"] = message["reply_sender"] in persona_names
             reply_profile = human_profiles.get(message["reply_sender"], {})
@@ -13112,6 +17462,9 @@ def _ensure_message_visible(conn, message, username, is_owner_request):
         and not _group_room_allowed(conn, room_id, username, is_owner_request)
     ):
         raise HTTPException(status_code=403, detail="이 메시지를 볼 수 없습니다")
+
+
+MESSAGE_TTS_GENERATOR_VERSION = "multilingual-edge-v4-markdown-heading"
 
 
 @app.post("/api/messages/{message_id}/tts")
@@ -13146,14 +17499,27 @@ def request_message_tts(message_id: int, request: Request):
         conn.close()
         raise
     existing = conn.execute(
-        "SELECT status, result_url, error FROM message_tts_jobs WHERE message_id = ?", (message_id,)
+        "SELECT status, result_url, error, generator_version FROM message_tts_jobs WHERE message_id = ?", (message_id,)
     ).fetchone()
     if existing:
+        if existing["generator_version"] != MESSAGE_TTS_GENERATOR_VERSION:
+            conn.execute(
+                """UPDATE message_tts_jobs
+                      SET status='pending', result_url=NULL, error=NULL, started_at=NULL,
+                          completed_at=NULL, generator_version=?
+                    WHERE message_id=?""",
+                (MESSAGE_TTS_GENERATOR_VERSION, message_id),
+            )
+            conn.commit()
+            conn.close()
+            return {"status": "pending", "result_url": None, "error": None}
         conn.close()
         return {"status": existing["status"], "result_url": existing["result_url"], "error": existing["error"]}
     conn.execute(
-        "INSERT INTO message_tts_jobs (message_id, persona_name, status, created_at) VALUES (?, ?, 'pending', ?)",
-        (message_id, message["sender"], _now()),
+        """INSERT INTO message_tts_jobs
+             (message_id, persona_name, status, created_at, generator_version)
+             VALUES (?, ?, 'pending', ?, ?)""",
+        (message_id, message["sender"], _now(), MESSAGE_TTS_GENERATOR_VERSION),
     )
     conn.commit()
     conn.close()
@@ -13218,6 +17584,79 @@ class MessageEdit(BaseModel):
     content: str
 
 
+class MessageTopicUpdate(BaseModel):
+    primary_topic: str
+    subtopic: str = ""
+    keywords: list[str] = []
+
+
+def _message_topic_response(row):
+    if not row:
+        return {"topic_status": "pending"}
+    return {
+        "topic_status": row["status"],
+        "primary_topic": row["primary_topic"] or "",
+        "subtopic": row["subtopic"] or "",
+        "topic_keywords": json.loads(row["keywords_json"] or "[]"),
+        "topic_entities": json.loads(row["entities_json"] or "[]"),
+        "message_type": row["message_type"] or "discussion",
+        "topic_summary": row["summary"] or "",
+        "topic_confidence": row["confidence"],
+        "topic_user_corrected": row["user_corrected"],
+    }
+
+
+@app.get("/api/messages/{message_id}/topic")
+def get_message_topic(message_id: int, request: Request):
+    user = getattr(request.state, "user", None)
+    username = user["username"] if user else None
+    is_owner_request = user["is_owner"] if user else True
+    conn = get_conn()
+    message = conn.execute("SELECT id,room_id FROM messages WHERE id=?", (message_id,)).fetchone()
+    if not message:
+        conn.close(); raise HTTPException(status_code=404, detail="메시지를 찾을 수 없습니다")
+    try:
+        _ensure_message_visible(conn, message, username, is_owner_request)
+    except HTTPException:
+        conn.close(); raise
+    row = conn.execute("SELECT * FROM message_topic_metadata WHERE message_id=?", (message_id,)).fetchone()
+    conn.close()
+    return _message_topic_response(row)
+
+
+@app.put("/api/messages/{message_id}/topic")
+def update_message_topic(message_id: int, body: MessageTopicUpdate, request: Request):
+    user = getattr(request.state, "user", None)
+    username = user["username"] if user else None
+    is_owner_request = user["is_owner"] if user else True
+    primary = re.sub(r"\s+", " ", body.primary_topic).strip()[:60]
+    subtopic = re.sub(r"\s+", " ", body.subtopic).strip()[:80]
+    keywords = list(dict.fromkeys(re.sub(r"\s+", " ", item).strip()[:40] for item in body.keywords if item.strip()))[:10]
+    if not primary:
+        raise HTTPException(status_code=400, detail="주제를 입력하세요")
+    conn = get_conn()
+    message = conn.execute("SELECT id,room_id FROM messages WHERE id=?", (message_id,)).fetchone()
+    if not message:
+        conn.close(); raise HTTPException(status_code=404, detail="메시지를 찾을 수 없습니다")
+    try:
+        _ensure_message_visible(conn, message, username, is_owner_request)
+    except HTTPException:
+        conn.close(); raise
+    now = _now()
+    conn.execute(
+        """INSERT INTO message_topic_metadata
+           (message_id,status,primary_topic,subtopic,keywords_json,user_corrected,created_at,updated_at)
+           VALUES(?,'done',?,?,?,1,?,?)
+           ON CONFLICT(message_id) DO UPDATE SET status='done',primary_topic=excluded.primary_topic,
+             subtopic=excluded.subtopic,keywords_json=excluded.keywords_json,user_corrected=1,
+             updated_at=excluded.updated_at""",
+        (message_id, primary, subtopic, json.dumps(keywords, ensure_ascii=False), now, now),
+    )
+    conn.commit(); conn.close()
+    return {"ok": True, "topic_status": "done", "primary_topic": primary,
+            "subtopic": subtopic, "topic_keywords": keywords, "topic_user_corrected": 1}
+
+
 @app.put("/api/messages/{message_id}")
 def edit_message(message_id: int, body: MessageEdit, request: Request):
     """"각 이용자들도 자기 메시지는 수정·삭제할 수 있게 해달라" 요청(2026-08-27)
@@ -13241,6 +17680,11 @@ def edit_message(message_id: int, body: MessageEdit, request: Request):
         conn.close()
         raise HTTPException(status_code=403, detail="본인이 보낸 메시지만 수정할 수 있습니다")
     conn.execute("UPDATE messages SET content = ? WHERE id = ?", (content, message_id))
+    conn.execute(
+        "UPDATE message_topic_metadata SET status='pending',error=NULL,updated_at=? "
+        "WHERE message_id=? AND COALESCE(user_corrected,0)=0",
+        (_now(), message_id),
+    )
     conn.commit()
     conn.close()
     return {"ok": True}
@@ -13286,7 +17730,8 @@ def all_messages(since_id: int = 0):
         for r in conn.execute("SELECT name, avatar_url FROM personas").fetchall()
     }
     rows = conn.execute(
-        "SELECT id, room_id, sender, content, created_at, is_system FROM messages WHERE id > ? ORDER BY id",
+        "SELECT id, room_id, sender, content, created_at, is_system, suppress_shift_alarm "
+        "FROM messages WHERE id > ? ORDER BY id",
         (since_id,),
     ).fetchall()
     human_profiles = _human_profiles(conn)
@@ -13566,7 +18011,7 @@ def post_message(msg: NewMessage, request: Request):
     notify_room_members_new_message(conn, room_id, sender, f"{sender}", preview)
     conn.commit()  # notify_room_members_new_message이 만료 구독 정리 등으로 DB에 쓸 수 있음
     conn.close()
-    return {"ok": True, "notified": targets}
+    return {"ok": True, "notified": targets, "source_message_id": source_message_id}
 
 
 @app.get("/api/sunzi/historical-case/start")
@@ -14430,7 +18875,8 @@ def worker_complete(result: WorkerResult, authorization: Optional[str] = Header(
     _check_worker_auth(authorization)
     conn = get_conn()
     row = conn.execute(
-        """SELECT p.persona_name, p.room_id, p.source_message_id, m.content AS source_content
+        """SELECT p.persona_name, p.room_id, p.source_message_id, m.content AS source_content,
+                  COALESCE(m.suppress_shift_alarm, 0) AS suppress_shift_alarm
              FROM pending_turns p
              LEFT JOIN messages m ON m.id = p.source_message_id
             WHERE p.id = ?""",
@@ -14461,8 +18907,11 @@ def worker_complete(result: WorkerResult, authorization: Optional[str] = Header(
             conn.close()
             return {"ok": True, "skipped": True}
         conn.execute(
-            "INSERT INTO messages (room_id, sender, content, created_at) VALUES (?, ?, ?, ?)",
-            (row["room_id"], row["persona_name"], result.reply, now),
+            "INSERT INTO messages "
+            "(room_id, sender, content, created_at, suppress_shift_alarm, reply_message_id) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (row["room_id"], row["persona_name"], result.reply, now,
+             int(bool(row["suppress_shift_alarm"])), row["source_message_id"]),
         )
         conn.execute(
             "UPDATE ai_fallback_requests SET status='done', resolved_at=? WHERE turn_id=?",
@@ -14699,6 +19148,80 @@ class ReadingSessionDone(BaseModel):
     room_id: str
     content: str
     target_persona: Optional[str] = None
+    suppress_shift_alarm: bool = False
+
+
+class ReadingDiscussionRequest(BaseModel):
+    book_id: str
+    book_name: str
+    title: str
+    start_index: int
+    end_index: int
+    start_page: int
+    end_page: int
+    original: str
+    translation_ko: str = ""
+    study_notes: str = ""
+    source_kind: str = "english"
+
+
+@app.post("/api/reading-session-discussion")
+def start_reading_session_discussion(body: ReadingDiscussionRequest, request: Request):
+    """오늘 읽은 범위를 영어는 독서 토론방, 일본어는 일본어 스터디방에 연결한다."""
+    _require_owner(request)
+    original = body.original.strip()[:24000]
+    if not original:
+        raise HTTPException(status_code=400, detail="오늘 읽은 원문이 없습니다")
+    start_index = max(0, int(body.start_index))
+    end_index = max(start_index, int(body.end_index))
+    start_page = max(1, int(body.start_page))
+    end_page = max(start_page, int(body.end_page))
+    is_japanese = body.source_kind.strip().casefold() == "japanese"
+    target_room_id = JP_SUBTITLE_STUDY_ROOM_ID if is_japanese else EBOOK_DISCUSSION_ROOM_ID
+    book_name = (body.book_name or body.title or ("일본어 EPUB" if is_japanese else "영어 원서")).strip()[:300]
+    fingerprint = hashlib.sha256(
+        f"{_request_username(request)}\0{body.book_id}\0{start_index}\0{end_index}\0{original}".encode("utf-8")
+    ).hexdigest()
+    sessions_dir = Path.home() / ".ebook_reader" / "sessions"
+    sessions_dir.mkdir(parents=True, exist_ok=True)
+    session_path = sessions_dir / f"{datetime.datetime.now():%Y%m%d}_web_{fingerprint[:16]}.json"
+    if session_path.exists():
+        return {"ok": True, "duplicate": True,
+                "chat_url": f"/chat/#room={urllib.parse.quote(target_room_id, safe='')}"}
+    session = {
+        "book_name": book_name,
+        "book_id": body.book_id[:100],
+        "source": "web-japanese-daily-reader" if is_japanese else "web-daily-reader",
+        "start_page": start_page,
+        "end_page": end_page,
+        "start_sentence_index": start_index,
+        "end_sentence_index": end_index,
+        "original": original,
+        "translation_ko": body.translation_ko.strip()[:24000],
+        "study_notes": body.study_notes.strip()[:12000],
+        "created_at": _now(),
+    }
+    temporary = session_path.with_suffix(".tmp")
+    temporary.write_text(json.dumps(session, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.chmod(temporary, 0o600)
+    temporary.replace(session_path)
+    content = (
+        f"🔔 오늘 {'일본어 EPUB' if is_japanese else '독서'} 세션 완료 — {body.title.strip()[:200] or book_name} "
+        f"{start_page}~{end_page}페이지, {end_index - start_index + 1}개 문장. "
+        f"오늘 읽은 {'일본어 원문·한국어 해석·학습 포인트를 함께' if is_japanese else '분량을'} 정리하고 토론을 시작해 주세요."
+    )
+    result = worker_reading_session_done(
+        ReadingSessionDone(
+            room_id=target_room_id,
+            content=content,
+            suppress_shift_alarm=True,
+        ),
+        authorization=f"Bearer {WORKER_TOKEN}" if WORKER_TOKEN else None,
+    )
+    source_message_id = int(result.get("source_message_id") or 0)
+    room = urllib.parse.quote(target_room_id, safe="")
+    return {**result, "duplicate": False,
+            "chat_url": f"/chat/#room={room}&auto_read=1&after={source_message_id}"}
 
 
 @app.post("/api/worker/reading_session_done")
@@ -14753,8 +19276,10 @@ def worker_reading_session_done(body: ReadingSessionDone, authorization: Optiona
         raise HTTPException(status_code=404, detail="구성원이 있는 방을 찾지 못했습니다")
     now = _now()
     cursor = conn.execute(
-        "INSERT INTO messages (room_id, sender, content, created_at, is_system) VALUES (?, 'system', ?, ?, 1)",
-        (room_id, content, now),
+        "INSERT INTO messages "
+        "(room_id, sender, content, created_at, is_system, suppress_shift_alarm) "
+        "VALUES (?, 'system', ?, ?, 1, ?)",
+        (room_id, content, now, int(body.suppress_shift_alarm)),
     )
     message_id = cursor.lastrowid
     for persona_name in targets:
@@ -14764,7 +19289,8 @@ def worker_reading_session_done(body: ReadingSessionDone, authorization: Optiona
         )
     conn.commit()
     conn.close()
-    return {"ok": True, "notified": targets}
+    return {"ok": True, "notified": targets, "room_id": room_id,
+            "source_message_id": int(message_id)}
 
 
 @app.get("/api/worker/group_rooms")

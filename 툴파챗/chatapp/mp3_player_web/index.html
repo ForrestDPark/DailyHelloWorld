@@ -4,34 +4,151 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#f5f1ff" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#100d18" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="플레이어">
   <title>MP3 가사 플레이어</title>
   <link rel="icon" href="/static/system-icons/player.svg" type="image/svg+xml">
-  <link rel="manifest" href="/mp3-player/static/manifest.webmanifest">
-  <link rel="stylesheet" href="/mp3-player/static/style.css?v=20260924-v1">
+  <link rel="apple-touch-icon" sizes="180x180" href="/mp3-player/static/apple-touch-icon.png?v=20261005-clean-v3">
+  <link rel="manifest" href="/mp3-player/static/manifest.webmanifest?v=20261005-clean-v3">
+  <link rel="stylesheet" href="/mp3-player/static/style.css?v=20261024-lyrics-study-v1">
+  <link rel="stylesheet" href="/mp3-player/static/playlist.css?v=20261005-controls-v1">
+  <link rel="stylesheet" href="/mp3-player/static/recommendations.css?v=20261025-download-progress-v1">
+  <style>
+    .source-actions{flex-wrap:wrap}.recent-playlist{width:min(420px,100%);margin-top:10px;border-color:color-mix(in srgb,var(--accent) 45%,var(--line));background:var(--soft);color:var(--accent)}.playlist{margin-top:18px;border:1px solid var(--line);border-radius:18px;background:var(--panel);overflow:hidden}.playlist-head{display:flex;align-items:center;gap:8px;padding:5px 9px 5px 15px}.playlist-head>button{border:0;background:transparent;color:var(--ink)}.playlist-head #playlist-toggle{display:flex;flex:1;align-items:center;justify-content:space-between;min-width:0;padding:11px 2px;text-align:left}.playlist-head #playlist-toggle span{color:var(--muted);font-size:12px}.playlist-clear{padding:9px!important;color:var(--muted)!important;font-size:12px}.playlist-actions{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:8px 12px;border-top:1px solid var(--line)}.playlist-actions button{display:flex;align-items:center;justify-content:center;gap:5px;min-height:40px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font-size:12px}.playlist ol{max-height:280px;margin:0;padding:0 12px 10px;overflow:auto;list-style:none}.playlist-item{display:grid;grid-template-columns:30px minmax(0,1fr) 34px;align-items:center;gap:8px;border-top:1px solid var(--line)}.playlist-item:first-child{border-top:0}.playlist-play,.playlist-remove{border:0;background:transparent;color:var(--muted)}.playlist-play{display:flex;min-width:0;padding:12px 0;text-align:left}.playlist-play span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.playlist-index{color:var(--muted);font-size:11px;text-align:center}.playlist-item.current .playlist-index,.playlist-item.current .playlist-play{color:var(--accent);font-weight:850}.playlist-item.current .playlist-index{font-size:0}.playlist-item.current .playlist-index::after{content:"";display:block;width:18px;height:18px;margin:auto;background:url('/mp3-player/static/player-controls-v1.png') 0 0/400% 200% no-repeat}.playlist-remove{height:34px;font-size:18px}.player>.track{padding:12px 10px 6px}.player>.seek-row{margin-top:16px}.lyrics-card{margin-top:12px}.lyrics-card.collapsed .lyrics{display:none}.lyrics-card.collapsed .lyrics-head{border-bottom:0}.lyric-line.active{font-size:25px}.lyrics[data-size="large"] .lyric-line.active{font-size:29px}.lyrics[data-size="xlarge"] .lyric-line.active{font-size:34px}.lrc-review{margin-top:12px;padding:13px 14px;border:1px solid var(--line);border-radius:16px;background:var(--panel)}.lrc-review label{display:flex;align-items:center;gap:9px;font-weight:800}.lrc-review input{width:20px;height:20px;accent-color:var(--accent)}.lrc-review-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.lrc-review-head button{padding:8px 11px;border:0;border-radius:10px;background:var(--soft);color:var(--accent);font-weight:850}.lrc-review-list{margin:10px 0 0;padding-left:24px;color:var(--muted);font-size:12px;line-height:1.6}.lrc-review-list:empty{display:none}.controls{gap:10px}.controls button{padding:0;overflow:hidden;border:0!important;background:transparent!important;box-shadow:none}.player-icon{display:block;width:100%;height:100%;background-image:url('/mp3-player/static/player-controls-v1.png');background-size:400% 200%;background-repeat:no-repeat}.icon-play{background-position:0 0}.icon-pause{background-position:33.333% 0}.icon-previous{background-position:66.666% 0}.icon-next{background-position:100% 0}.icon-back{background-position:0 100%}.icon-forward{background-position:33.333% 100%}.icon-shuffle{background-position:66.666% 100%}.icon-repeat{background-position:100% 100%}.controls .track-nav{border:0;background:transparent}.shuffle-main{display:flex;align-items:center;gap:6px}.shuffle-main .player-icon,.playlist-actions .player-icon{width:25px;height:25px;flex:0 0 25px}.options{flex-wrap:wrap;gap:8px}.shuffle-main[aria-pressed="true"],.lyric-size[data-size]:not([data-size="normal"]){border-color:var(--accent);background:var(--soft);color:var(--accent);font-weight:850}.lrc-progress{margin-top:10px;padding:14px;border:1px solid var(--line);border-radius:15px;background:var(--panel)}.lrc-progress-head{display:flex;justify-content:space-between;gap:12px;font-size:12px}.lrc-progress-head strong{color:var(--ink)}.lrc-progress-head span{color:var(--muted);font-variant-numeric:tabular-nums}.lrc-progress-track{height:8px;margin-top:10px;overflow:hidden;border-radius:99px;background:var(--line)}.lrc-progress-track i{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .25s}.lrc-progress.indeterminate .lrc-progress-track i{width:38%!important;animation:lrc-progress-slide 1.2s ease-in-out infinite}@keyframes lrc-progress-slide{0%{transform:translateX(-110%)}100%{transform:translateX(280%)}}
+    .restore-hint{display:grid;width:min(520px,100%);gap:5px;margin:0 0 15px;padding:13px 15px;border:1px solid color-mix(in srgb,var(--accent) 38%,var(--line));border-radius:15px;background:var(--soft);text-align:left}.restore-hint strong{color:var(--accent);font-size:14px}.restore-hint span{color:var(--muted);font-size:12px;line-height:1.5}
+    @media(max-width:480px){.source-actions{display:grid;grid-template-columns:1fr 1fr}.source-actions #mac-library-open{grid-column:1/-1}.recent-playlist{grid-column:1/-1}.playlist-actions{grid-template-columns:1fr 1fr}.track{grid-template-columns:52px minmax(0,1fr) auto}.mini-disc{width:52px;height:52px}.lyric-line.active{font-size:24px}.lyrics[data-size="large"] .lyric-line.active{font-size:28px}.lyrics[data-size="xlarge"] .lyric-line.active{font-size:32px}.controls{gap:6px}.controls button{width:42px;height:42px}.controls .play{width:64px;height:64px}}
+  </style>
+  <style>
+    .track-actions{display:flex;align-items:center;gap:8px}.favorite-track{width:42px;height:42px;padding:0;border:0;background:transparent}.favorite-track span{display:block;width:100%;height:100%;background:url('/mp3-player/static/favorite-heart-v1.png') center/contain no-repeat;filter:grayscale(1);opacity:.48;transition:.2s}.favorite-track[aria-pressed="true"] span{filter:none;opacity:1;transform:scale(1.06)}.playlist-favorites{padding:9px!important;border:0!important;background:transparent!important;color:var(--muted)!important;font-size:12px}.playlist-favorites[aria-pressed="true"]{color:var(--accent)!important;font-weight:850}.playlist-filter{max-width:170px;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font-size:12px}.playlist-item.favorite .playlist-play::after{content:"";width:18px;height:18px;margin-left:7px;background:url('/mp3-player/static/favorite-heart-v1.png') center/contain no-repeat}.favorites-empty{padding:22px;color:var(--muted);text-align:center}
+    @media(max-width:480px){.track-actions{gap:4px}.favorite-track{width:38px;height:38px}.replace{font-size:12px}.playlist-head{flex-wrap:wrap}.playlist-head #playlist-toggle{flex-basis:55%}}
+  </style>
+  <style>
+    .lyrics{height:260px;padding:12px 20px;overflow-x:hidden;overflow-y:auto;display:flex;flex-direction:column;justify-content:center;scroll-behavior:auto}.lyrics .lyric-line{display:none;min-height:54px;padding:8px 3px;align-items:center;justify-content:center;overflow:visible;text-align:center}.lyrics .lyric-line.nearby{display:flex}.lyrics .lyric-line.before{display:none!important}.lyrics .lyric-line.after{color:var(--muted);font-size:17px;opacity:.72}.lyrics .lyric-line.active{flex:1 1 auto;max-height:none;color:var(--ink);opacity:1}.lyrics .lyric-line span{display:block;width:100%;overflow:visible;white-space:normal;overflow-wrap:anywhere;word-break:break-word;text-align:center}.lyrics-empty{margin:auto;text-align:center}.lyrics-card.collapsed .lyrics{display:none}
+    @media(max-width:480px){.lyrics{height:228px;padding:8px 16px}.lyrics .lyric-line{min-height:48px}.lyrics .lyric-line.after{font-size:16px}.lyrics .lyric-line.active{max-height:none}}
+    @media(orientation:landscape) and (max-height:560px){header{height:calc(50px + env(safe-area-inset-top))}main{padding-top:6px}.player>.track{padding-top:3px}.lyrics-card{margin-top:5px;border-radius:18px}.lyrics-head{padding:7px 14px 6px}.lyrics-head small{display:none}.lyrics-head h2{font-size:17px}.lyrics{height:132px;padding:3px 14px}.lyrics .lyric-line{min-height:34px;padding:3px;font-size:14px;line-height:1.3}.lyrics .lyric-line.active{max-height:62px;font-size:24px}.lyrics[data-size="large"] .lyric-line.active{font-size:29px}.lyrics[data-size="xlarge"] .lyric-line.active{font-size:34px}.seek-row{margin-top:7px}.controls{margin:6px 0}.options{gap:5px}.options select,.options button{padding:6px 8px}}
+    @media(prefers-color-scheme:dark){.lyrics-card{background:#050505;border-color:#302b20}.lyrics-head{border-bottom-color:#302b20}.lyrics{background:#050505}.lyrics .lyric-line.before,.lyrics .lyric-line.after{color:#d4bc59;opacity:.68}.lyrics .lyric-line.active{color:#ffe45c;text-shadow:0 0 16px rgba(255,228,92,.16)}.lyrics-empty{color:#d4bc59}}
+  </style>
+  <style>
+    .lyrics-translation{margin-top:12px;border:1px solid var(--line);border-radius:16px;background:var(--panel);overflow:hidden}.lyrics-translation summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 16px;cursor:pointer;font-weight:850;list-style:none}.lyrics-translation summary::-webkit-details-marker{display:none}.lyrics-translation summary::after{content:"\2304";color:var(--accent);font-size:20px;transform:rotate(180deg);transition:transform .18s}.lyrics-translation[open] summary::after{transform:rotate(0)}.lyrics-translation summary small{margin-left:auto;color:var(--muted);font-size:11px;font-weight:700}.lyrics-translation-body{padding:0 16px 16px;border-top:1px solid var(--line)}.lyrics-study-progress{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}.lyrics-study-progress.hidden{display:none}.lyrics-study-progress-head{display:flex;justify-content:space-between;gap:10px;color:var(--muted);font-size:12px}.lyrics-study-progress-head strong{color:var(--ink)}.lyrics-study-progress-track{height:8px;margin-top:9px;overflow:hidden;border-radius:99px;background:var(--line)}.lyrics-study-progress-track i{display:block;width:0;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .35s}.lyrics-study-progress small{display:block;margin-top:8px;color:var(--muted);font-size:11px}.lyrics-translation-result{margin:14px 0 0;padding:14px;border-radius:12px;background:var(--bg);color:var(--ink);font:inherit;line-height:1.9;white-space:pre-wrap;overflow-wrap:anywhere}.lyrics-translation-result:empty{display:none}.lyrics-translation-result ruby{ruby-position:over;ruby-align:center}.lyrics-translation-result rt{color:var(--accent);font-size:.48em;font-weight:750;line-height:1}.lyrics-translation .lyrics-study{width:100%;min-height:46px;margin-top:14px;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:14px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:850}.lyrics-translation .lyrics-study:disabled{opacity:.6}
+  </style>
+  <style>
+    html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+    header{grid-template-columns:48px minmax(0,1fr) auto}
+    header h1{min-width:0}
+    #landscape-track-title{display:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #landscape-regenerate{display:none;width:40px;height:40px;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--accent)}
+    #landscape-review{display:none;width:40px;height:40px;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--muted)}
+    #landscape-review[aria-pressed="true"]{border-color:var(--accent);background:var(--soft);color:var(--accent)}
+    #landscape-review svg{display:block;width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+    #landscape-review .landscape-review-check{opacity:0}
+    #landscape-review[aria-pressed="true"] .landscape-review-check{opacity:1}
+    #landscape-regenerate svg{display:block;width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+    #landscape-regenerate.working svg{animation:lrc-regenerate-spin 1s linear infinite}
+    .lrc-failure-actions{display:flex;gap:8px;margin-top:12px}.lrc-failure-actions.hidden{display:none}.lrc-failure-actions button{flex:1;min-height:40px;border:1px solid var(--line);border-radius:11px;background:var(--bg);color:var(--ink);font-weight:800}.lrc-failure-actions .retry{border-color:var(--accent);background:var(--soft);color:var(--accent)}
+    @keyframes lrc-regenerate-spin{to{transform:rotate(360deg)}}
+    .header-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px}
+    .header-actions button{min-width:42px;padding:5px 2px;white-space:nowrap}
+    .lyrics{--active-lyric-size:25px}
+    .lyrics[data-size="large"]{--active-lyric-size:29px}
+    .lyrics[data-size="xlarge"]{--active-lyric-size:34px}
+    .lyrics .lyric-line.active{font-size:var(--active-lyric-size)!important}
+    .lyrics .lyric-line{flex:0 0 54px;min-height:0;transition:color .2s,opacity .2s}
+    .lyrics .lyric-line.active{flex-basis:116px}
+    html[data-theme="dark"]{color-scheme:dark;--bg:#100d18;--panel:#191523;--ink:#f5f0ff;--muted:#aaa1b9;--line:#383044;--soft:#282039}
+    html[data-theme="light"]{color-scheme:light;--bg:#f8f6fc;--panel:#fff;--ink:#211b2d;--muted:#7f768d;--line:#e8e1f0;--accent:#6f4ed6;--accent2:#9d76ff;--soft:#eee8ff}
+    html[data-theme="dark"] .lyrics-card{background:#050505;border-color:#302b20}
+    html[data-theme="dark"] .lyrics-head{border-bottom-color:#302b20}
+    html[data-theme="dark"] .lyrics{background:#050505}
+    html[data-theme="dark"] .lyrics .lyric-line.before,
+    html[data-theme="dark"] .lyrics .lyric-line.after{color:#d4bc59;opacity:.68}
+    html[data-theme="dark"] .lyrics .lyric-line.active{color:#ffe45c;text-shadow:0 0 16px rgba(255,228,92,.16)}
+    @media(max-width:480px){
+      .lyrics .lyric-line{flex-basis:48px}
+      .lyrics .lyric-line.active{flex-basis:108px}
+      .header-actions{gap:4px}.header-actions button{font-size:12px}
+    }
+    @media(orientation:landscape) and (max-height:560px){
+      #player-app-title{display:none}
+      #landscape-track-title{display:block}
+      #landscape-regenerate{display:grid;place-items:center}
+      #landscape-review{display:grid;place-items:center}
+      main{width:100%;max-width:none;height:calc(100dvh - 50px - env(safe-area-inset-top));padding:3px 6px 5px}
+      .player{height:100%}
+      .player>.track{display:none}
+      .player>.seek-row,.player>.controls,.player>.options,.player>.lrc-review,
+      .player>.lyrics-tools,.player>.lrc-progress,.player>.privacy,.player>.playlist{display:none!important}
+      .lyrics-card{width:100%;height:100%;margin:0;border-radius:16px;touch-action:pan-y}
+      .lyrics-head{align-items:center;min-height:24px;padding:4px 14px}
+      .lyrics-head small{display:block;font-size:9px}
+      .lyrics-head h2,.lyrics-head>span{display:none}
+      .lyrics{height:calc(100% - 24px);padding:4px 16px;--active-lyric-size:48px}
+      .lyrics[data-size="large"]{--active-lyric-size:58px}
+      .lyrics[data-size="xlarge"]{--active-lyric-size:68px}
+      .lyrics .lyric-line{flex:1 1 0;min-height:0}
+      .lyrics .lyric-line.before{display:none!important}
+      .lyrics .lyric-line.after{flex:1.7 1 0;font-size:calc(var(--active-lyric-size) * .9)!important;line-height:1.05}
+      .lyrics .lyric-line.active{flex:3 1 0;max-height:none;line-height:1.02}
+      .lyrics .lyric-line.active.long{font-size:min(var(--active-lyric-size),52px)!important}
+      .lyrics .lyric-line.active.very-long{font-size:min(var(--active-lyric-size),46px)!important}
+      .lyrics .lyric-line.active span{text-wrap:balance;overflow-wrap:anywhere}
+      .lyrics-translation{display:none!important}
+      #lyrics-toggle{display:none}
+    }
+  </style>
 </head>
 <body>
-  <header><a href="/#systems" aria-label="시스템으로 돌아가기">‹</a><h1>MP3 가사 플레이어</h1><button id="lyrics-toggle" type="button" disabled>가사</button></header>
+  <header><a href="/#systems" aria-label="시스템으로 돌아가기">‹</a><h1><span id="player-app-title">MP3 가사 플레이어</span><span id="landscape-track-title">재생할 곡을 선택하세요</span></h1><div class="header-actions"><button id="landscape-review" type="button" aria-label="현재 곡 LRC 검토 목록에 추가" aria-pressed="false" title="LRC 검토 요청" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path class="landscape-review-check" d="m7.5 12 3 3 6-7"/></svg></button><button id="landscape-regenerate" type="button" aria-label="현재 곡 LRC 재생성" title="가사 재생성" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M18.2 17.2A8 8 0 1 1 20 12"/></svg></button><button id="theme-toggle" type="button" aria-label="다크 모드로 전환">다크</button><button id="lyrics-toggle" type="button" aria-controls="lyrics" aria-expanded="true" disabled>가사 접기</button></div></header>
   <main>
     <section id="empty" class="empty">
       <div class="disc" aria-hidden="true"><i></i></div>
-      <h2>음악과 가사를 함께</h2><p>iPhone 파일 앱에서 MP3를 선택하세요.<br>파일은 재생할 때 기기 안에 머뭅니다.</p>
-      <label class="pick primary"><input id="audio-file" type="file" accept="audio/mpeg,.mp3">MP3 불러오기</label>
+      <h2>음악과 가사를 함께</h2><p>한 곡을 고르거나 폴더째 불러와<br>플레이리스트로 이어 들으세요.</p>
+      <section id="restore-hint" class="restore-hint hidden" aria-live="polite"><strong id="restore-hint-title">최근 재생 복구 중…</strong><span id="restore-hint-copy"></span></section>
+      <div class="source-actions">
+        <label class="pick primary"><input id="audio-file" type="file" accept="audio/mpeg,.mp3">파일 1곡</label>
+        <label class="pick"><input id="folder-files" type="file" accept="audio/mpeg,.mp3,.lrc,text/plain" multiple webkitdirectory directory>폴더 플레이리스트</label>
+        <button id="mac-library-open" class="pick" type="button">Mac MP3</button>
+        <button id="recommendations-open" class="pick recommendation-open" type="button">일본 노래 추천</button>
+        <button id="recent-playlist" class="pick recent-playlist hidden" type="button"></button>
+      </div>
+      <section id="mac-library" class="mac-library hidden"><div class="mac-library-head"><strong>Mac MP3 보관함</strong><button id="mac-library-refresh" type="button">새로고침</button></div><div id="mac-library-list"></div></section>
+      <section id="recommendations" class="recommendations hidden">
+        <div class="recommendations-head"><div><small>DISCOVERY</small><strong>오늘의 일본 노래</strong></div><button id="recommendations-close" type="button" aria-label="추천 닫기">×</button></div>
+        <form id="recommendation-preferences" class="recommendation-preferences">
+          <fieldset class="recommendation-modes"><legend>추천 방식</legend><label><input type="radio" name="recommendation-mode" value="taste" checked>내 취향</label><label><input type="radio" name="recommendation-mode" value="popular">인기 애니송</label><label><input type="radio" name="recommendation-mode" value="season">분기별 OST</label></fieldset>
+          <div id="recommendation-season-fields" class="recommendation-season-fields hidden"><label>연도 <select id="recommendation-year"></select></label><label>분기 <select id="recommendation-season"><option value="WINTER">겨울</option><option value="SPRING">봄</option><option value="SUMMER">여름</option><option value="FALL">가을</option></select></label></div>
+          <fieldset><legend>좋아하는 장르</legend><label><input type="checkbox" name="genres" value="jpop">J-Pop</label><label><input type="checkbox" name="genres" value="rock">록</label><label><input type="checkbox" name="genres" value="citypop">시티팝</label><label><input type="checkbox" name="genres" value="anime">애니송</label><label><input type="checkbox" name="genres" value="vocaloid">보컬로이드</label><label><input type="checkbox" name="genres" value="ballad">발라드</label><label><input type="checkbox" name="genres" value="indie">인디</label></fieldset>
+          <fieldset><legend>분위기</legend><label><input type="checkbox" name="moods" value="energetic">신나는</label><label><input type="checkbox" name="moods" value="emotional">감성적인</label><label><input type="checkbox" name="moods" value="calm">차분한</label><label><input type="checkbox" name="moods" value="dark">어두운</label><label><input type="checkbox" name="moods" value="study">작업용</label></fieldset>
+          <label class="recommendation-artists">좋아하는 가수 <input id="recommendation-artists" type="text" maxlength="300" placeholder="Ado, 요아소비처럼 쉼표로 구분"></label>
+          <button id="recommendations-refresh" type="submit">취향 저장하고 추천 받기</button>
+        </form>
+        <p id="recommendations-state" class="recommendations-state">취향을 고르고 추천을 받아보세요.</p>
+        <div id="recommendations-list" class="recommendations-list"></div>
+        <button id="recommendations-more" class="recommendations-more hidden" type="button">추천 곡 더 보기</button>
+        <div id="recommendations-sentinel" class="recommendations-sentinel" aria-hidden="true"></div>
+      </section>
     </section>
     <section id="player" class="player hidden">
-      <div class="track"><div class="mini-disc" aria-hidden="true"></div><div><strong id="title"></strong><small id="meta"></small></div><label class="replace"><input id="replace-file" type="file" accept="audio/mpeg,.mp3">다른 곡</label></div>
+      <div class="track"><div class="mini-disc" aria-hidden="true"></div><div><strong id="title"></strong><small id="meta"></small></div><div class="track-actions"><button id="favorite-track" class="favorite-track" type="button" aria-label="현재 곡 좋아요" aria-pressed="false"><span aria-hidden="true"></span></button><label class="replace"><input id="replace-file" type="file" accept="audio/mpeg,.mp3" multiple>곡 추가</label></div></div>
       <section id="lyrics-card" class="lyrics-card">
-        <div class="lyrics-head"><div><small>SYNCED LYRICS</small><h2>가사</h2></div><span id="lyrics-state">가사를 불러오세요</span></div>
-        <div id="lyrics" class="lyrics" aria-live="polite"><p class="lyrics-empty">LRC 파일을 적용하거나<br>로컬 Whisper로 만들어 보세요.</p></div>
+        <div class="lyrics-head"><div><small>NOW PLAYING</small><h2>가사</h2></div><span id="lyrics-state">가사를 불러오세요</span></div>
+        <div id="lyrics" class="lyrics" aria-live="polite"><p class="lyrics-empty">같은 이름의 LRC가 있으면 자동으로 표시됩니다.<br>없다면 아래에서 LRC를 적용하거나 만들어 보세요.</p></div>
       </section>
       <div class="seek-row"><span id="current">0:00</span><input id="seek" type="range" min="0" max="1000" value="0" aria-label="재생 위치"><span id="duration">0:00</span></div>
-      <div class="controls"><button id="back" type="button" aria-label="10초 뒤로">−10</button><button id="play" class="play" type="button" aria-label="재생">▶</button><button id="forward" type="button" aria-label="10초 앞으로">+10</button></div>
-      <div class="options"><label>속도 <select id="rate"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label><button id="follow" type="button" aria-pressed="true">자동 스크롤 켬</button></div>
-      <section class="lyrics-tools"><label class="pick"><input id="lrc-file" type="file" accept=".lrc,text/plain">LRC 적용</label><button id="generate" type="button">일본어 가사 LRC 생성</button><button id="download-lrc" class="hidden" type="button">LRC 저장</button></section>
+      <div class="controls"><button id="previous-track" class="track-nav" type="button" aria-label="이전 곡"><span class="player-icon icon-previous" aria-hidden="true"></span></button><button id="back" type="button" aria-label="10초 뒤로"><span class="player-icon icon-back" aria-hidden="true"></span></button><button id="play" class="play" type="button" aria-label="재생"><span id="play-icon" class="player-icon icon-play" aria-hidden="true"></span></button><button id="forward" type="button" aria-label="10초 앞으로"><span class="player-icon icon-forward" aria-hidden="true"></span></button><button id="next-track" class="track-nav" type="button" aria-label="다음 곡"><span class="player-icon icon-next" aria-hidden="true"></span></button></div>
+      <div class="options"><label>속도 <select id="rate"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label><button id="lyric-size" class="lyric-size" type="button" data-size="xlarge" aria-label="현재 가사 글씨 크기 조정">가사 크기 · 아주 크게</button><button id="shuffle-main" class="shuffle-main" type="button" aria-pressed="false"><span class="player-icon icon-shuffle" aria-hidden="true"></span><span class="control-label">순서대로</span></button><button id="follow" type="button" aria-pressed="true">자동 스크롤 켬</button></div>
+      <section class="lrc-review"><div class="lrc-review-head"><label><input id="lrc-review-check" type="checkbox">이 곡 LRC 검토 요청</label><button id="lrc-review-start" type="button">검토 시작</button></div><ol id="lrc-review-list" class="lrc-review-list"></ol></section>
+      <details id="lyrics-translation" class="lyrics-translation hidden"><summary><span>가사 직해</span><small id="lyrics-translation-state">결과 없음</small></summary><div class="lyrics-translation-body"><section id="lyrics-study-progress" class="lyrics-study-progress hidden" aria-live="polite"><div class="lyrics-study-progress-head"><strong id="lyrics-study-stage">요청 준비 중</strong><span id="lyrics-study-percent">0%</span></div><div id="lyrics-study-progress-track" class="lyrics-study-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="lyrics-study-progress-bar"></i></div><small id="lyrics-study-eta"></small></section><button id="lyrics-study" class="lyrics-study" type="button"></button><pre id="lyrics-translation-result" class="lyrics-translation-result"></pre></div></details>
+      <section class="lyrics-tools"><label class="pick"><input id="lrc-file" type="file" accept=".lrc,text/plain">LRC 적용</label><button id="generate" type="button">LRC 생성</button><button id="download-lrc" class="hidden" type="button">LRC 저장</button></section>
+      <section id="lrc-progress" class="lrc-progress hidden" aria-live="polite"><div class="lrc-progress-head"><strong id="lrc-progress-stage">준비 중</strong><span id="lrc-progress-detail">0%</span></div><div class="lrc-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="lrc-progress-bar"></i></div><div id="lrc-failure-actions" class="lrc-failure-actions hidden"><button id="lrc-retry" class="retry" type="button">실패 지점부터 다시 시도</button><button id="lrc-dismiss" type="button">알림 지우기</button></div></section>
       <p class="privacy">LRC 적용과 재생은 기기 안에서 처리합니다. 자동 생성할 때만 선택한 MP3를 내 Mac 서버로 보내며, 변환 직후 임시 파일을 삭제합니다.</p>
+      <section id="playlist" class="playlist hidden">
+        <div class="playlist-head"><button id="playlist-toggle" type="button" aria-expanded="false"><strong>재생 목록</strong><span id="playlist-count"></span></button><select id="playlist-filter" class="playlist-filter" aria-label="플레이리스트 재생 필터"><option value="all">전체·파일명 순</option><option value="size-asc">용량 작은 순</option><option value="duration-asc">재생시간 짧은 순</option><option value="lrc-none">LRC 없는 곡</option><option value="lrc-only">LRC 있는 곡만</option><option value="lang-ko">한국어 곡만</option><option value="lang-ja">일본어 곡만</option><option value="lang-en">영어 곡만</option></select><button id="playlist-favorites" class="playlist-favorites" type="button" aria-pressed="false">즐겨찾기만</button><button id="playlist-clear" class="playlist-clear" type="button">전체 비우기</button></div>
+        <div id="playlist-body" class="hidden"><div class="playlist-actions"><button id="playlist-prev" type="button"><span class="player-icon icon-previous" aria-hidden="true"></span><span>이전 곡</span></button><button id="playlist-shuffle" type="button" aria-pressed="false"><span class="player-icon icon-shuffle" aria-hidden="true"></span><span class="control-label">순서대로</span></button><button id="playlist-repeat" type="button" data-mode="all"><span class="player-icon icon-repeat" aria-hidden="true"></span><span class="control-label">전체 반복</span></button><button id="playlist-next" type="button"><span class="player-icon icon-next" aria-hidden="true"></span><span>다음 곡</span></button></div><ol id="playlist-list"></ol></div>
+      </section>
     </section>
   </main>
   <div id="status" class="status hidden" role="status" aria-live="polite"></div>
   <audio id="audio" preload="metadata"></audio>
-  <script src="/mp3-player/static/app.js?v=20260925-ja-lyrics-v2"></script>
+  <script src="/mp3-player/static/app.js?v=20261025-mac-lrc-download-progress-v2"></script>
+  <script src="/static/system-help.js?v=20261007-disabled-v1"></script>
 </body>
 </html>
