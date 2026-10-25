@@ -12,6 +12,17 @@ def test_lyrics_are_not_visually_truncated():
     assert "overflow-wrap:anywhere" in html
 
 
+def test_landscape_lyric_size_control_and_auto_fit_do_not_conflict():
+    html = (PLAYER / "index.html").read_text(encoding="utf-8")
+    script = (PLAYER / "app.js").read_text(encoding="utf-8")
+    assert 'id="landscape-lyric-size"' in html
+    assert ".lyrics .lyric-line.active{font-size:var(--active-lyric-size)}" in html
+    assert ".lyrics .lyric-line.active{font-size:var(--active-lyric-size)!important}" not in html
+    assert '$("landscape-lyric-size").addEventListener("click", cycleLyricSize)' in script
+    assert 'node.style.removeProperty("line-height")' in script
+    assert "fitVisibleLyrics();" in script[script.index("function setLyricSize"):script.index("function cycleLyricSize")]
+
+
 def test_translation_stays_inside_player():
     html = (PLAYER / "index.html").read_text(encoding="utf-8")
     script = (PLAYER / "app.js").read_text(encoding="utf-8")

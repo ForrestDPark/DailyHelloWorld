@@ -843,6 +843,7 @@ function fitVisibleLyrics() {
     const nodes = [...root.querySelectorAll(".lyric-line.nearby")];
     nodes.forEach((node) => {
       node.style.removeProperty("font-size");
+      node.style.removeProperty("line-height");
       node.style.removeProperty("overflow-y");
     });
     lyricFitFrame = requestAnimationFrame(() => {
@@ -856,6 +857,7 @@ function fitVisibleLyrics() {
         while (size > minimum && (span.scrollHeight > node.clientHeight + 1 || span.scrollWidth > node.clientWidth + 1)) {
           size -= 1;
           node.style.fontSize = `${size}px`;
+          node.style.lineHeight = landscape ? "1.02" : "1.25";
         }
         if (span.scrollHeight > node.clientHeight + 1) node.style.overflowY = "auto";
       });
@@ -1550,8 +1552,17 @@ function setLyricSize(size) {
   $("lyrics").dataset.size = selected;
   $("lyric-size").dataset.size = selected;
   $("lyric-size").textContent = `가사 크기 · ${LYRIC_SIZE_LABELS[selected]}`;
+  $("landscape-lyric-size").dataset.size = selected;
+  $("landscape-lyric-size").title = `가사 글씨 크기: ${LYRIC_SIZE_LABELS[selected]}`;
+  $("landscape-lyric-size").setAttribute("aria-label", `가사 글씨 크기 ${LYRIC_SIZE_LABELS[selected]}. 눌러서 변경`);
   localStorage.setItem(LYRIC_SIZE_KEY, selected);
   savePlaybackSession();
+  fitVisibleLyrics();
+}
+
+function cycleLyricSize() {
+  const current = $("lyric-size").dataset.size || "normal";
+  setLyricSize(LYRIC_SIZES[(LYRIC_SIZES.indexOf(current) + 1) % LYRIC_SIZES.length]);
 }
 
 function setLyricsCollapsed(collapsed) {
@@ -2256,10 +2267,8 @@ $("lyrics-card").addEventListener("pointerup", finishLandscapeLyricsSwipe);
 $("lyrics-card").addEventListener("pointercancel", () => { landscapeSwipe = null; });
 $("seek").addEventListener("input", () => { if (audio.duration) audio.currentTime = audio.duration * Number($("seek").value) / 1000; });
 $("rate").addEventListener("change", () => { audio.playbackRate = Number($("rate").value); savePlaybackSession(); });
-$("lyric-size").addEventListener("click", () => {
-  const current = $("lyric-size").dataset.size || "normal";
-  setLyricSize(LYRIC_SIZES[(LYRIC_SIZES.indexOf(current) + 1) % LYRIC_SIZES.length]);
-});
+$("lyric-size").addEventListener("click", cycleLyricSize);
+$("landscape-lyric-size").addEventListener("click", cycleLyricSize);
 $("theme-toggle").addEventListener("click", () => {
   setTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark");
 });

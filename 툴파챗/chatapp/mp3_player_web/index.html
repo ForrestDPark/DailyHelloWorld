@@ -37,6 +37,7 @@
     #landscape-track-title{display:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     #landscape-regenerate{display:none;width:40px;height:40px;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--accent)}
     #landscape-review{display:none;width:40px;height:40px;padding:8px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--muted)}
+    #landscape-lyric-size{display:none;width:40px;height:40px;padding:0;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--accent);font-size:18px;font-weight:900}
     #landscape-review[aria-pressed="true"]{border-color:var(--accent);background:var(--soft);color:var(--accent)}
     #landscape-review svg{display:block;width:100%;height:100%;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
     #landscape-review .landscape-review-check{opacity:0}
@@ -50,7 +51,7 @@
     .lyrics{--active-lyric-size:25px}
     .lyrics[data-size="large"]{--active-lyric-size:29px}
     .lyrics[data-size="xlarge"]{--active-lyric-size:34px}
-    .lyrics .lyric-line.active{font-size:var(--active-lyric-size)!important}
+    .lyrics .lyric-line.active{font-size:var(--active-lyric-size)}
     .lyrics .lyric-line{flex:0 0 54px;min-height:0;transition:color .2s,opacity .2s}
     .lyrics .lyric-line.active{flex-basis:116px}
     html[data-theme="dark"]{color-scheme:dark;--bg:#100d18;--panel:#191523;--ink:#f5f0ff;--muted:#aaa1b9;--line:#383044;--soft:#282039}
@@ -71,6 +72,7 @@
       #landscape-track-title{display:block}
       #landscape-regenerate{display:grid;place-items:center}
       #landscape-review{display:grid;place-items:center}
+      #landscape-lyric-size{display:grid;place-items:center}
       main{width:100%;max-width:none;height:calc(100dvh - 50px - env(safe-area-inset-top));padding:3px 6px 5px}
       .player{height:100%}
       .player>.track{display:none}
@@ -83,12 +85,12 @@
       .lyrics{height:calc(100% - 24px);padding:4px 16px;--active-lyric-size:48px}
       .lyrics[data-size="large"]{--active-lyric-size:58px}
       .lyrics[data-size="xlarge"]{--active-lyric-size:68px}
-      .lyrics .lyric-line{flex:1 1 0;min-height:0}
+      .lyrics .lyric-line{flex:1 1 0;min-height:0;overflow:hidden}
       .lyrics .lyric-line.before{display:none!important}
-      .lyrics .lyric-line.after{flex:1.7 1 0;font-size:calc(var(--active-lyric-size) * .9)!important;line-height:1.05}
+      .lyrics .lyric-line.after{flex:1.7 1 0;font-size:calc(var(--active-lyric-size) * .9);line-height:1.05}
       .lyrics .lyric-line.active{flex:3 1 0;max-height:none;line-height:1.02}
-      .lyrics .lyric-line.active.long{font-size:min(var(--active-lyric-size),52px)!important}
-      .lyrics .lyric-line.active.very-long{font-size:min(var(--active-lyric-size),46px)!important}
+      .lyrics .lyric-line.active.long{font-size:min(var(--active-lyric-size),52px)}
+      .lyrics .lyric-line.active.very-long{font-size:min(var(--active-lyric-size),46px)}
       .lyrics .lyric-line.active span{text-wrap:balance;overflow-wrap:anywhere}
       .lyrics-translation{display:none!important}
       #lyrics-toggle{display:none}
@@ -96,7 +98,7 @@
   </style>
 </head>
 <body>
-  <header><a href="/#systems" aria-label="시스템으로 돌아가기">‹</a><h1><span id="player-app-title">MP3 가사 플레이어</span><span id="landscape-track-title">재생할 곡을 선택하세요</span></h1><div class="header-actions"><button id="landscape-review" type="button" aria-label="현재 곡 LRC 검토 목록에 추가" aria-pressed="false" title="LRC 검토 요청" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path class="landscape-review-check" d="m7.5 12 3 3 6-7"/></svg></button><button id="landscape-regenerate" type="button" aria-label="현재 곡 LRC 재생성" title="가사 재생성" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M18.2 17.2A8 8 0 1 1 20 12"/></svg></button><button id="theme-toggle" type="button" aria-label="다크 모드로 전환">다크</button><button id="lyrics-toggle" type="button" aria-controls="lyrics" aria-expanded="true" disabled>가사 접기</button></div></header>
+  <header><a href="/#systems" aria-label="시스템으로 돌아가기">‹</a><h1><span id="player-app-title">MP3 가사 플레이어</span><span id="landscape-track-title">재생할 곡을 선택하세요</span></h1><div class="header-actions"><button id="landscape-lyric-size" type="button" aria-label="가사 글씨 크기 조정" title="가사 글씨 크기">가</button><button id="landscape-review" type="button" aria-label="현재 곡 LRC 검토 목록에 추가" aria-pressed="false" title="LRC 검토 요청" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="4"/><path class="landscape-review-check" d="m7.5 12 3 3 6-7"/></svg></button><button id="landscape-regenerate" type="button" aria-label="현재 곡 LRC 재생성" title="가사 재생성" disabled><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M18.2 17.2A8 8 0 1 1 20 12"/></svg></button><button id="theme-toggle" type="button" aria-label="다크 모드로 전환">다크</button><button id="lyrics-toggle" type="button" aria-controls="lyrics" aria-expanded="true" disabled>가사 접기</button></div></header>
   <main>
     <section id="empty" class="empty">
       <div class="disc" aria-hidden="true"><i></i></div>
@@ -149,7 +151,7 @@
   </main>
   <div id="status" class="status hidden" role="status" aria-live="polite"></div>
   <audio id="audio" preload="metadata"></audio>
-  <script src="/mp3-player/static/app.js?v=20261025-track-language-guard-v1"></script>
+  <script src="/mp3-player/static/app.js?v=20261025-landscape-lyric-size-v1"></script>
   <script src="/static/system-help.js?v=20261007-disabled-v1"></script>
 </body>
 </html>
