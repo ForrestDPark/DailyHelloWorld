@@ -40,6 +40,18 @@ def test_translation_status_uses_turn_result_and_worker_links_reply():
     assert 'suppress_shift_alarm, reply_message_id' in source
 
 
+def test_translation_history_recovers_completed_result_after_reopening_player():
+    script = (PLAYER / "app.js").read_text(encoding="utf-8")
+    source = (ROOT / "server" / "app.py").read_text(encoding="utf-8")
+    assert "/api/mp3/lyrics-study/history" in script
+    assert "recoverLyricsStudyRecord(nextKey)" in script
+    assert "곡 식별자: ${trackIdentity}" in script
+    assert '@app.get("/api/mp3/lyrics-study/history")' in source
+    assert "브라우저 저장소가 사라져도 서버 채팅 원장에서 이전 직해를 복구한다" in source
+    assert 'm.sender=?' in source
+    assert "legacy_youtube_matches" in source
+
+
 def test_shuffle_previous_uses_play_history_instead_of_new_random_track():
     script = (PLAYER / "app.js").read_text(encoding="utf-8")
     assert "let shuffleHistory = []" in script
@@ -73,6 +85,15 @@ def test_japanese_music_recommendations_are_wired_to_player_and_download_queue()
     assert "recommendation-download-progress" in script
     assert "CREATE TABLE IF NOT EXISTS mp3_download_jobs" in (ROOT / "server" / "db.py").read_text(encoding="utf-8")
     assert "_recover_incomplete_download" in source
+    assert 'id="recommendation-sort"' in html
+    assert "sortedRecommendationItems" in script
+    assert 'mode === "views"' in script
+    assert 'mode === "anime"' in script
+    assert 'mode === "artist"' in script
+    assert "collapsedRecommendationGroups" in script
+    assert 'heading.setAttribute("aria-expanded"' in script
+    assert 'window.addEventListener("scroll"' in script
+    assert "recommendations-active" in script
     assert '@app.get("/api/mp3-recommendations")' in source
     assert '"recommendations.css"' in source
 

@@ -17333,6 +17333,84 @@ def get_mp3_lyrics_study_status(request: Request, source_message_id: int = Query
     }
 
 
+def _mp3_lyrics_study_headers(content: str) -> dict[str, str]:
+    """직해 요청 메시지에서 곡 식별용 머리말만 안전하게 읽는다."""
+    values: dict[str, str] = {}
+    for raw_line in str(content or "").splitlines()[1:8]:
+        line = raw_line.strip()
+        if not line or line == "[가사]":
+            break
+        label, separator, value = line.partition(":")
+        if separator and label.strip() in {"곡", "곡 식별자", "언어"}:
+            values[label.strip()] = value.strip()
+    return values
+
+
+def _normalized_mp3_study_value(value: str) -> str:
+    return unicodedata.normalize("NFC", str(value or "")).strip().casefold()
+
+
+def _mp3_study_youtube_id(value: str) -> str:
+    matches = re.findall(r"\[([A-Za-z0-9_-]{11})\]", str(value or ""))
+    return matches[-1].casefold() if matches else ""
+
+
+@app.get("/api/mp3/lyrics-study/history")
+def get_mp3_lyrics_study_history(
+    request: Request,
+    title: str = Query("", max_length=500),
+    track_key: str = Query("", max_length=700),
+    language: str = Query("", max_length=30),
+):
+    """브라우저 저장소가 사라져도 서버 채팅 원장에서 이전 직해를 복구한다.
+
+    새 요청은 LRC 타임스탬프와 무관한 곡 식별자로 찾고, 식별자가 없던 예전
+    요청은 곡 제목과 언어를 정확히 비교해 가장 최근 작업을 돌려준다.
+    """
+    _require_signed_in_user(request)
+    username = _request_username(request)
+    wanted_title = _normalized_mp3_study_value(title)
+    wanted_track_key = _normalized_mp3_study_value(track_key)
+    wanted_language = _normalized_mp3_study_value(language)
+    wanted_youtube_id = _mp3_study_youtube_id(f"{track_key}\n{title}")
+    if not wanted_title and not wanted_track_key:
+        raise HTTPException(status_code=400, detail="곡 식별 정보가 필요합니다")
+    conn = get_conn()
+    rows = conn.execute(
+        """SELECT m.id, m.content, p.status, p.reply
+             FROM messages AS m
+             JOIN pending_turns AS p ON p.source_message_id=m.id
+            WHERE m.sender=? AND m.content LIKE '[MP3 가사 직해 요청]%'
+            ORDER BY m.id DESC, p.id DESC
+            LIMIT 1000""",
+        (username,),
+    ).fetchall()
+    for row in rows:
+        headers = _mp3_lyrics_study_headers(row["content"])
+        saved_track_key = _normalized_mp3_study_value(headers.get("곡 식별자", ""))
+        saved_title = _normalized_mp3_study_value(headers.get("곡", ""))
+        saved_language = _normalized_mp3_study_value(headers.get("언어", ""))
+        identity_matches = bool(wanted_track_key and saved_track_key and wanted_track_key == saved_track_key)
+        legacy_title_matches = bool(wanted_title and wanted_title == saved_title)
+        legacy_youtube_matches = bool(
+            wanted_youtube_id and wanted_youtube_id == _mp3_study_youtube_id(headers.get("곡", ""))
+        )
+        language_matches = not wanted_language or wanted_language == saved_language
+        if (identity_matches or legacy_title_matches or legacy_youtube_matches) and language_matches:
+            conn.close()
+            result = row["reply"] if row["status"] == "done" and row["reply"] != "NONE" else None
+            return {
+                "found": True,
+                "source_message_id": row["id"],
+                "status": row["status"],
+                "result": result,
+                "title": headers.get("곡", ""),
+                "language": headers.get("언어", ""),
+            }
+    conn.close()
+    return {"found": False}
+
+
 @app.get("/api/messages")
 def get_messages(
     request: Request,

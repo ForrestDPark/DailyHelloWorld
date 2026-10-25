@@ -34,7 +34,7 @@ const THEME_KEY = "natum-mp3-theme-v1";
 const PLAYLIST_FILTER_KEY = "natum-mp3-playlist-filter-v1";
 const PLAYBACK_MODE_KEY = "natum-mp3-playback-mode-v1";
 const PLAYBACK_SESSION_KEY = "natum-mp3-playback-session-v2";
-const LYRICS_STUDY_CACHE_KEY = "natum-mp3-lyrics-study-v1";
+const LYRICS_STUDY_CACHE_KEY = "natum-mp3-lyrics-study-v2";
 const RECOMMENDATIONS_RETURN_KEY = "natum-mp3-recommendations-return-v1";
 const LYRIC_SIZES = ["normal", "large", "xlarge"];
 const LYRIC_SIZE_LABELS = { normal: "보통", large: "크게", xlarge: "아주 크게" };
@@ -47,7 +47,10 @@ let lyricsStudyPollTimer = 0;
 let recommendationCursor = null;
 let recommendationLoading = false;
 let recommendationTotal = 0;
+let recommendationItems = [];
+const collapsedRecommendationGroups = new Set();
 let lyricsStudyKey = "";
+const lyricsStudyRecoveryInFlight = new Set();
 let lyricFitFrame = 0;
 let favoritesSyncBusy = false;
 let favoritesKnownCount = 0;
@@ -132,9 +135,53 @@ function saveLyricsStudyRecord(key, record) {
 
 function currentLyricsStudyKey(target = lyricsStudyTarget) {
   if (!target || !lyricRows.length) return "";
+  return `${target.language}:${compactHash(currentLyricsStudyTrackIdentity())}`;
+}
+
+function currentLyricsStudyTrackIdentity() {
+  const item = currentReviewTrack();
+  const youtubeId = trackYoutubeId(item);
+  if (youtubeId) return `youtube:${youtubeId}`;
+  const filename = trackFilename(item).replace(/\.mp3$/i, "");
   const title = $("title").textContent.trim() || "제목 없는 곡";
-  const lyrics = lyricRows.map((row) => `${row.time.toFixed(3)}:${row.text}`).join("\n");
-  return `${target.language}:${compactHash(`${title}\n${lyrics}`)}`;
+  return `title:${normalizedTrackName(filename || title)}`;
+}
+
+async function recoverLyricsStudyRecord(key) {
+  if (!key || key !== lyricsStudyKey || lyricsStudyRecoveryInFlight.has(key)) return;
+  lyricsStudyRecoveryInFlight.add(key);
+  try {
+    const params = new URLSearchParams({
+      track_key: currentLyricsStudyTrackIdentity(),
+      title: $("title").textContent.trim() || "제목 없는 곡",
+      language: lyricsStudyTarget?.language || "",
+    });
+    const response = await fetch(`/api/mp3/lyrics-study/history?${params}`, {
+      credentials: "same-origin",
+      cache: "no-store",
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.found || key !== lyricsStudyKey) return;
+    const complete = data.status === "done" && String(data.result || "").trim();
+    const record = {
+      status: complete ? "complete" : data.status === "failed" ? "failed" : data.status === "processing" ? "processing" : "pending",
+      stage: complete ? "직해 완료" : data.status === "failed" ? "직해 실패" : "이전 요청 확인 중",
+      percent: complete ? 100 : 5,
+      estimated: !complete,
+      sourceMessageId: Number(data.source_message_id),
+      result: complete ? String(data.result).trim() : "",
+      title: data.title || $("title").textContent.trim(),
+      language: data.language || lyricsStudyTarget?.language,
+      updatedAt: Date.now(),
+    };
+    saveLyricsStudyRecord(key, record);
+    setLyricsStudyUi(record);
+    if (["pending", "processing"].includes(record.status)) scheduleLyricsStudyPoll(key, 300);
+  } catch (_) {
+    // 서버 기록을 읽지 못해도 로컬 재생과 새 직해 요청은 그대로 사용할 수 있다.
+  } finally {
+    lyricsStudyRecoveryInFlight.delete(key);
+  }
 }
 
 function formatRemainingTime(seconds) {
@@ -268,6 +315,7 @@ function updateLyricsStudyButton() {
   const record = getLyricsStudyCache()[nextKey] || null;
   setLyricsStudyUi(record);
   if (["pending", "processing"].includes(record?.status)) scheduleLyricsStudyPoll(nextKey, 300);
+  else if (!record) recoverLyricsStudyRecord(nextKey);
 }
 
 async function requestLyricsStudy() {
@@ -279,7 +327,8 @@ async function requestLyricsStudy() {
   const directions = target.language === "일본어"
     ? "가사 순서를 그대로 지키며 각 일본어 원문 바로 아래에 자연스러운 한국어 직해를 붙여주세요. 한자가 있는 줄에는 읽기 어려운 말만 괄호로 후리가나를 덧붙이되, 문법 수업·새 예문·감상 평가는 넣지 마세요."
     : "가사 순서를 그대로 지키며 각 영어 원문 바로 아래에 자연스러운 한국어 직해를 붙여주세요. 문법 수업·새 예문·감상 평가는 넣지 마세요.";
-  const content = `[MP3 가사 직해 요청]\n곡: ${title}\n언어: ${target.language}\n\n${directions}\n반복되는 가사도 생략하지 말고 입력된 순서대로 옮겨주세요. LRC 또는 Whisper 오인식으로 의심되는 대목도 별도의 검수 문구를 붙이지 말고, 입력된 원문을 유지한 채 가능한 범위에서 자연스럽게 직해해주세요.\n\n[가사]\n${lyrics.slice(0, 16000)}`;
+  const trackIdentity = currentLyricsStudyTrackIdentity();
+  const content = `[MP3 가사 직해 요청]\n곡: ${title}\n곡 식별자: ${trackIdentity}\n언어: ${target.language}\n\n${directions}\n반복되는 가사도 생략하지 말고 입력된 순서대로 옮겨주세요. LRC 또는 Whisper 오인식으로 의심되는 대목도 별도의 검수 문구를 붙이지 말고, 입력된 원문을 유지한 채 가능한 범위에서 자연스럽게 직해해주세요.\n\n[가사]\n${lyrics.slice(0, 16000)}`;
   const key = currentLyricsStudyKey(target);
   button.disabled = true;
   button.textContent = "가사 직해 요청 중…";
@@ -1720,14 +1769,43 @@ async function recommendationApi(path, options = {}) {
 function renderRecommendations(items, append = false) {
   const list = $("recommendations-list");
   if (!append) list.replaceChildren();
+  const sortMode = $("recommendation-sort")?.value || "recommended";
+  const groupCounts = items.reduce((counts, item) => {
+    const key = sortMode === "anime" ? (item.anime_title || "기타 애니송") : sortMode === "artist" ? (item.artist || "가수 정보 없음") : "";
+    if (key) counts.set(key, (counts.get(key) || 0) + 1); return counts;
+  }, new Map());
+  let previousGroup = "";
   for (const item of items) {
+    const group = sortMode === "anime" ? (item.anime_title || "기타 애니송") : sortMode === "artist" ? (item.artist || "가수 정보 없음") : "";
+    if (group && group !== previousGroup) {
+      const heading = document.createElement("button"), label = document.createElement("span"), arrow = document.createElement("i");
+      heading.type = "button"; heading.className = "recommendation-group-title"; label.textContent = `${group} · ${groupCounts.get(group) || 0}곡`; arrow.textContent = "⌄";
+      heading.setAttribute("aria-expanded", String(!collapsedRecommendationGroups.has(group)));
+      heading.addEventListener("click", () => {
+        const collapsed = !collapsedRecommendationGroups.has(group);
+        if (collapsed) collapsedRecommendationGroups.add(group); else collapsedRecommendationGroups.delete(group);
+        heading.setAttribute("aria-expanded", String(!collapsed));
+        for (const groupedCard of list.querySelectorAll(".recommendation-card")) {
+          if (groupedCard.dataset.recommendationGroup === group) groupedCard.classList.toggle("hidden", collapsed);
+        }
+      });
+      heading.append(label, arrow);
+      list.append(heading); previousGroup = group;
+    }
     const card = document.createElement("article"), image = document.createElement("img"), copy = document.createElement("div");
     const title = document.createElement("b"), artist = document.createElement("small"), reason = document.createElement("p"), actions = document.createElement("div");
     const preview = document.createElement("button"), youtube = document.createElement("a"), download = document.createElement("button"), dismiss = document.createElement("button");
     const progress = document.createElement("div"), progressHead = document.createElement("div"), progressStage = document.createElement("span"), progressPercent = document.createElement("b"), progressTrack = document.createElement("div"), progressBar = document.createElement("i");
     card.className = "recommendation-card"; card.dataset.youtubeId = item.youtube_id; copy.className = "recommendation-copy"; actions.className = "recommendation-actions";
+    if (group) { card.dataset.recommendationGroup = group; card.classList.toggle("hidden", collapsedRecommendationGroups.has(group)); }
     image.src = item.thumbnail; image.alt = ""; image.loading = "lazy"; title.textContent = item.title;
-    artist.textContent = item.artist || "YouTube Music"; reason.className = "recommendation-reason";
+    artist.textContent = item.artist || "YouTube Music";
+    if (Number(item.view_count || 0) > 0) {
+      const views = document.createElement("span"); views.className = "recommendation-views";
+      views.textContent = `조회수 ${new Intl.NumberFormat("ko-KR", { notation: "compact", maximumFractionDigits: 1 }).format(item.view_count)}회`;
+      artist.append(views);
+    }
+    reason.className = "recommendation-reason";
     reason.textContent = (item.reasons || []).join(" · ") || "새로운 일본 노래 탐색";
     preview.type = "button"; preview.className = "preview"; preview.textContent = "화면에서 재생";
     youtube.href = item.source_url; youtube.target = "_blank"; youtube.rel = "noopener"; youtube.textContent = "YouTube";
@@ -1774,6 +1852,20 @@ function renderRecommendations(items, append = false) {
   }
   restoreRecommendationDownloadStates();
   if (!items.length) $("recommendations-state").textContent = "새 후보를 찾지 못했습니다. 장르나 가수를 바꿔 다시 시도해보세요.";
+}
+
+function sortedRecommendationItems() {
+  const mode = $("recommendation-sort")?.value || "recommended";
+  const items = [...recommendationItems];
+  if (mode === "views") return items.sort((a, b) => Number(b.view_count || 0) - Number(a.view_count || 0) || Number(b.score || 0) - Number(a.score || 0));
+  if (mode === "anime") return items.sort((a, b) => (a.anime_title || "기타 애니송").localeCompare(b.anime_title || "기타 애니송", "ja") || Number(b.view_count || 0) - Number(a.view_count || 0));
+  if (mode === "artist") return items.sort((a, b) => (a.artist || "가수 정보 없음").localeCompare(b.artist || "가수 정보 없음", "ja") || Number(b.view_count || 0) - Number(a.view_count || 0));
+  return items;
+}
+
+function rerenderRecommendationSort() {
+  renderRecommendations(sortedRecommendationItems(), false);
+  if (recommendationItems.length) $("recommendations-state").textContent = `${recommendationTotal || recommendationItems.length}곡 중 ${recommendationItems.length}곡을 표시했습니다.`;
 }
 
 function updateRecommendationDownloadProgress(card, job = {}) {
@@ -1856,6 +1948,7 @@ async function openRecommendations(options = {}) {
   }
   $("mac-library").classList.add("hidden");
   $("recommendations").classList.remove("hidden");
+  document.documentElement.classList.add("recommendations-active");
   $("recommendations-state").textContent = "저장된 취향을 불러오는 중…";
   try {
     const preferences = await recommendationApi("/api/mp3-recommendations/preferences");
@@ -1926,13 +2019,29 @@ async function loadRecommendationPage(append = true) {
       params.set("season", $("recommendation-season").value);
     }
     const result = await recommendationApi(`/api/mp3-recommendations?${params}`);
-    renderRecommendations(result.items || [], append);
+    let addedItems = [];
+    if (append) {
+      const known = new Set(recommendationItems.map(item => item.youtube_id));
+      addedItems = (result.items || []).filter(item => !known.has(item.youtube_id));
+      recommendationItems.push(...addedItems);
+    } else {
+      recommendationItems = [...(result.items || [])];
+      $("recommendation-sort").value = "recommended";
+    }
+    $("recommendation-sort-row").classList.toggle("hidden", !recommendationItems.length);
+    if (append && $("recommendation-sort").value === "recommended") {
+      renderRecommendations(addedItems, true);
+    } else {
+      const scrollTop = window.scrollY;
+      renderRecommendations(sortedRecommendationItems(), false);
+      if (append) window.requestAnimationFrame(() => window.scrollTo({ top: scrollTop, behavior: "auto" }));
+    }
     recommendationCursor = result.next_cursor ?? null;
     recommendationTotal = Number(result.total || 0);
     more.classList.toggle("hidden", recommendationCursor === null);
     more.disabled = false; more.textContent = "추천 곡 더 보기";
     if (append && (result.items || []).length) {
-      $("recommendations-state").textContent = `${recommendationTotal}곡 중 ${$("recommendations-list").children.length}곡을 표시했습니다.`;
+      $("recommendations-state").textContent = `${recommendationTotal}곡 중 ${recommendationItems.length}곡을 표시했습니다.`;
     } else if (append && recommendationCursor === null) {
       $("recommendations-state").textContent = "추천곡을 모두 확인했습니다.";
     }
@@ -2057,6 +2166,7 @@ $("mac-library-refresh").addEventListener("click", () => loadMacLibrary(true));
 $("recommendations-open").addEventListener("click", openRecommendations);
 $("recommendations-close").addEventListener("click", () => {
   $("recommendations").classList.add("hidden");
+  document.documentElement.classList.remove("recommendations-active");
   clearRecommendationsReturn();
 });
 const appBack = document.querySelector("body > header > a");
@@ -2072,12 +2182,19 @@ window.addEventListener("popstate", (event) => {
 });
 $("recommendation-preferences").addEventListener("submit", refreshRecommendations);
 document.querySelectorAll('input[name="recommendation-mode"]').forEach(input => input.addEventListener("change", updateRecommendationModeUi));
+$("recommendation-sort").addEventListener("change", rerenderRecommendationSort);
 $("recommendations-more").addEventListener("click", () => loadRecommendationPage(true).catch(error => message(error.message, true)));
 new IntersectionObserver((entries) => {
   if (entries.some(entry => entry.isIntersecting) && !$("recommendations").classList.contains("hidden") && recommendationCursor !== null) {
     loadRecommendationPage(true).catch(error => message(error.message, true));
   }
 }, { rootMargin: "500px 0px" }).observe($("recommendations-sentinel"));
+window.addEventListener("scroll", () => {
+  if ($("recommendations").classList.contains("hidden") || recommendationCursor === null || recommendationLoading) return;
+  if (window.scrollY + window.innerHeight >= document.documentElement.scrollHeight - 700) {
+    loadRecommendationPage(true).catch(error => message(error.message, true));
+  }
+}, { passive: true });
 $("lrc-file").addEventListener("change", () => applyLrc($("lrc-file").files?.[0]));
 $("generate").addEventListener("click", generateLrc);
 $("landscape-regenerate").addEventListener("click", generateLrc);
