@@ -1051,7 +1051,7 @@ ax.set_facecolor('#f5f0e8')
 
 ## 5. 완료된 구절
 
-**火攻篇 8구절 번호 오류 교정 기록** — 과거 완료 기록의 원문은 화공편 8구절이 아니므로 폐기하고, 소유자가 직접 지정한 정본 `火發上風, 無攻下風.`과 정확한 독음 `화발상풍, 무공하풍`으로 원고·Notion 페이지·사이트 메타데이터를 교체했다. 라이트 모드 계약에 따라 4번 역사적 실증 사례와 도판만 제외하고 1·2·3·5번을 새로 작성했다. `validate_light_analysis.py`와 라이트용 `validate_notion_markup.py`를 통과한 뒤 GitHub `main` 커밋 `b3b8aa0`으로 원고를 배포하고 [Notion 분석 페이지](https://app.notion.com/p/3f832a1eae8081468b14fa8e14af5906)를 정확한 원문 토글 내부로 이동해 재조회했다(2026-10-27, Codex).
+**火攻篇 8구절 번호 오류 교정 기록** — 과거 완료 기록의 원문은 화공편 8구절이 아니므로 폐기하고, 소유자가 직접 지정한 정본 `火發上風, 無攻下風.`과 정확한 독음 `화발상풍, 무공하풍`으로 원고·Notion 페이지·사이트 메타데이터를 교체했다. 라이트 모드 계약에 따라 4번 역사적 실증 사례와 도판만 제외하고 1·2·3·5번을 새로 작성했다. `validate_light_analysis.py`와 라이트용 `validate_notion_markup.py`를 통과한 뒤 GitHub `main` 커밋 `b3b8aa0`으로 원고를 배포하고 [Notion 분석 페이지](https://app.notion.com/p/3f832a1eae8081468b14fa8e14af5906)를 정확한 원문 토글 내부로 이동해 재조회했다. Sites 버전 93을 배포한 뒤 [아카이브](https://sunzi-strategy-notes.pulpilisory.chatgpt.site/archive)와 [화공편 8구절 실페이지](https://sunzi-strategy-notes.pulpilisory.chatgpt.site/verses/47)에서 지정 원문·독음·1·2·3·5번·Notion 정본 링크와 4번 미생성을 확인했다. Tulpa Chat 기존 공지 1967과 한자선생님 풀이 1968을 새 정본으로 갱신했으며, 새 묶음 없이 기존 선택형 큐의 이전·두목·매요신·장예·리링·데니얼 카너먼 6명과 리링 완료 상태를 재확인했다(2026-10-27, Codex).
 
 **用間篇 3구절 후속 배포 기록** — 사이트 생성기는 52개 상세 페이지를 만들었고 Sites 버전 85를 배포한 뒤 [아카이브](https://sunzi-strategy-notes.pulpilisory.chatgpt.site/archive)와 [용간편 3구절 실페이지](https://sunzi-strategy-notes.pulpilisory.chatgpt.site/verses/52)에서 원문·독음·라이트 본문·Notion 정본 링크를 재확인했다. Tulpa Chat 손자병법 토론방에는 두우가 소개하고 진호·조조·이전·두목·리링·데니얼 카너먼 순의 선택형 큐를 시작했으며, 라이트 모드에 따라 지휘관·도판은 게시하지 않았다(메시지 2083, 한자 수업 2084).
 
