@@ -112,10 +112,15 @@
 ### 서양 — 🏛️ 잉글랜드 함대 vs 🏛️ 스페인 무적함대 │ 칼레 화선·그라블린 해전(Calais Fireships and Battle of Gravelines, 1588)
 
 ![칼레·그라블린 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong6/armada_commanders.png)
+
 ![칼레·그라블린 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong6/armada_soldiers_weapons_life.png)
+
 ![칼레·그라블린 지휘·편제 조직도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong6/armada_command_structure.png)
+
 ![칼레·그라블린 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong6/armada_country_map.png)
+
 ![칼레·그라블린 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong6/armada_strategy_map.png)
+
 ![칼레·그라블린 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong6/armada_sequence_map.png)
 
 칼레 앞바다의 화선은 스페인 함선을 직접 태우지 못했다. 그러나 불이 다가온 뒤 스페인 함대가 닻줄을 끊고 흩어졌다는 변화는 분명했다. <span color="blue">**찰스 하워드(Charles Howard)**</span>의 잉글랜드 함대는 불길만 보고 즉시 난입하지 않고 밤의 혼란이 실제 대형 붕괴로 이어지는지를 확인한 뒤, 이튿날 <span color="yellow_bg">**그라블린(Gravelines)**</span> 앞에서 근거리 포격으로 뒤따랐다. 이 사례는 `火發`과 `可從` 사이에 관찰이 있어야 한다는 점을 잘 보여 준다.
@@ -232,10 +237,15 @@
 ### 동양 — 🏛️ 동오군 vs 🏛️ 촉한군 │ 이릉·효정대전(夷陵·猇亭之戰, 222)
 
 ![이릉대전 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong6/yiling_commanders.png)
+
 ![이릉대전 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong6/yiling_soldiers_weapons_life.png)
+
 ![이릉대전 지휘·편제 조직도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong6/yiling_command_structure.png)
+
 ![이릉대전 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong6/yiling_country_map.png)
+
 ![이릉대전 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong6/yiling_strategy_map.png)
+
 ![이릉대전 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong6/yiling_sequence_map.png)
 
 <span color="blue">**육손(陸遜)**</span>은 <span color="red">**유비(劉備)**</span>가 평지의 소수 병력으로 유인했을 때 공격하지 않았다. 매복이 드러난 뒤에도 성급히 본공을 하지 않고 촉군의 장기 주둔과 피로를 기다렸다. 한 영채를 시험 공격해 수비와 가연성 조건을 확인한 뒤 병사들에게 띠 한 묶음씩을 들려 화공했고, 불이 연쇄 혼란을 만들자 여러 부대를 동시에 투입했다. `待而勿攻`과 `可從而從之`가 한 지휘관의 시간차 판단 안에 함께 나타난 사례다.
