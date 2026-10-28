@@ -76,7 +76,7 @@
 현대 임무형 지휘는 상급자가 목적과 제약을 제시하고 현장 지휘관이 변화한 조건에 맞게 방법을 조정하도록 합니다. 다만 자율은 임무 목적을 바꾸는 허가가 아닙니다. **상황에는 유연하고 목적에는 엄격해야 합니다.**
 ---
 ## 4. 역사적 실증 사례
-### 서양 — 크세노폰의 만인대 원정(BCE 401~400)
+### 서양 — 그리스 만인대 생존군 vs 아케메네스 페르시아 추격세력 │ 만인대 귀환(Anabasis, BCE 401~400)
 ![만인대 주요 인물](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi6/anabasis_commanders_v2.png)
 ![만인대 병사·무기·생활](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi6/anabasis_soldier_life_v2.png)
 ![만인대 지휘체계](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi6/anabasis_command_structure_v2.png)
@@ -84,14 +84,49 @@
 ![만인대 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi6/anabasis_strategy_map_v2.png)
 ![만인대 귀환 순서도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi6/anabasis_sequence_map_v2.png)
 
+**뒤에서 반복될 지형을 먼저 잡아두기**
+- <span color="red">**▰**</span> <span color="yellow_bg">**쿠낙사(Cunaxa)**</span> — 🌊 <span color="blue_bg">**유프라테스강(Euphrates River)**</span> 부근의 결전지다. 여기서 소키루스가 죽자 전쟁 목적은 왕위 쟁탈에서 귀환으로 바뀌었다.
+- 🌊 <span color="blue_bg">**티그리스강(Tigris River)**</span>·🌊 <span color="blue_bg">**대자브강(Great Zab River)**</span> — 동쪽으로 나아가는 행렬의 방향을 제한한 수계다. 도하는 전위·후위·짐수레를 한꺼번에 보호해야 하는 병목이었다.
+- ⛰️ <span color="green_bg">**카르두코이 산악(Carduchian Mountains)**</span> — 좁은 고개와 높은 사면 때문에 평야용 공심방진을 그대로 유지할 수 없었다. 고개 선점과 후위 엄호가 생존 조건이 됐다.
+- ⛰️ <span color="green_bg">**아르메니아 고원(Armenian Highlands)**</span> — 눈·추위·식량 부족이 전투보다 큰 손실을 만들 수 있는 구간이었다. 행군 속도와 숙영·조달을 지형에 맞춰 바꿔야 했다.
+- 🌊 <span color="blue_bg">**흑해(Black Sea)**</span>와 <span color="blue">**▰**</span> <span color="yellow_bg">**트라페주스(Trapezus)**</span> — 안전한 해안 네트워크에 다시 접속하는 귀환의 중간 목표였다. ‘바다’는 전술적 승리가 아니라 생존 목적의 달성을 뜻했다.
+
 #### 쿠낙사의 전술적 승리가 한순간에 전략적 패배가 되다
-<span color="red">**소키루스**</span>는 형 <span color="red">**아르타크세르크세스 2세**</span>의 왕위를 빼앗기 위해 그리스 용병을 이끌고 페르시아 내륙으로 들어갔습니다. 쿠낙사에서 그리스 중장보병은 맞은편 병력을 밀어냈지만, <span color="red">**소키루스**</span>가 전사하면서 왕위 쟁탈이라는 원정 목적은 사라졌습니다. <span color="red">**같은 전투를 계속 잘하는 것으로는 해결할 수 없는 상황 변화**였습니다.
+<span color="red">**소키루스**</span>는 형 <span color="red">**아르타크세르크세스 2세**</span>의 왕위를 빼앗기 위해 그리스 용병을 이끌고 페르시아 내륙으로 들어갔습니다. 쿠낙사에서 그리스 중장보병은 맞은편 병력을 밀어냈지만, <span color="red">**소키루스**</span>가 전사하면서 왕위 쟁탈이라는 원정 목적은 사라졌습니다. <span color="red">**같은 전투를 계속 잘하는 것으로는 해결할 수 없는 상황 변화**</span>였습니다.
 
 #### 장군들이 제거되자 병사들이 지휘 기능을 다시 만들다
 <span color="red">**티사페르네스**</span>는 협상을 제안한 뒤 <span color="blue">**클레아르코스**</span> 등 그리스 지휘관들을 붙잡았고, 이들은 처형됐습니다. 그리스군은 지휘부와 후원자, 안전한 보급선을 한꺼번에 잃었습니다. 병사들은 총회를 열어 <span color="blue">**크세노폰**</span>·<span color="blue">**케이리소포스**</span> 등 새 지휘관을 선출하고, 전위·후위와 로코스 단위의 책임을 다시 나눴습니다.
 
 #### 평야의 중장보병이 산악의 생존 조직으로 바뀌다
 새 지휘부는 짐수레와 비전투원을 중앙에 둔 공심방진으로 평야를 이동했습니다. 카르두코이 산악에서는 경보병과 정찰대를 고개에 먼저 올리고, 강에서는 선두 도하와 후위 엄호를 나눴습니다. 아르메니아 설원에서는 속도·식량·숙영을 우선했습니다. **지형마다 진형과 우선순위를 바꾼 것**이 흑해까지의 귀환을 가능하게 했습니다.
+
+#### 전투에서 사용된 속임수 — 협상 초청으로 지휘부를 떼어내다
+<span color="red">**티사페르네스**</span>는 안전 협상을 기대하게 만든 뒤 <span color="blue">**클레아르코스**</span> 등 장군들을 자기 진영으로 불러 분리했고, 그리스 지휘부는 체포·처형됐다. 이는 행군로의 정면 공격이 아니라 **상대가 협상 규칙이 유지된다고 믿는 동안 지휘 기능만 떼어낸 기만**이었다. 다만 세부 동기와 약속의 범위는 크세노폰의 당사자 서술에 크게 의존하므로, 페르시아 측 의도를 현대적 심리 용어로 단정해서는 안 된다.
+
+#### 속임수 작동 구조
+**주체와 의도:** 페르시아 측은 전투력이 온전한 그리스 중장보병을 정면에서 깨기보다 지휘관을 분리해 저항 능력을 낮추려 했다.
+
+**보인 신호와 믿은 이유:** 협상과 안내를 계속한다는 외형은 귀환로가 필요한 그리스군의 기대와 맞았다. 앞선 접촉이 있었기 때문에 초청은 완전히 뜬금없는 신호가 아니었다.
+
+**유발된 행동과 결과:** 핵심 장군들이 호위와 대체 지휘 절차 없이 한꺼번에 이동했고, 체포 뒤 군은 잠시 지도부를 잃었다. 그러나 병사 총회가 새 장군을 선출해 기만의 전략적 효과를 제한했다.
+
+**사료의 경계:** 사건 전개는 『아나바시스』에 상세하지만 저자 크세노폰은 생존군의 당사자다. 따라서 페르시아 지휘부의 내면보다 관찰 가능한 초청·체포·처형·재선출의 순서를 중심으로 판단한다.
+
+#### 속임수 일곱 질문
+1. **누가 누구를 속였는가?** 티사페르네스 측이 그리스 장군단을 속였다.
+2. **어떤 사실이 거짓이었는가?** 안전한 협상과 귀환 협력이 이어질 것이라는 전제가 깨졌다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 실제 협상 접촉과 안내가 있었지만 그것이 장군단의 신변 안전을 보증하지는 않았다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 적지 깊숙이 고립된 군대에는 협상으로 통로와 식량을 얻는 선택이 절실했다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 낮다. 지휘관 동시 상실은 자연스러운 행군 위험보다 초청과 체포에 직접 연결된다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 인질 교환, 분산 회담, 잔류 지휘관 지정과 같은 안전장치를 두지 않았다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 워게임과 보안 모의훈련에서 협상 제안의 검증 절차와 대체 지휘권을 점검할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>親而離之<br>친이리지 — 가까우면 떼어 놓는다</td><td>그리스군과 장군단을 갈라 지휘 중심을 제거한 장면에 해당한다.</td></tr>
+<tr><td>攻其無備, 出其不意<br>공기무비, 출기불의 — 대비 없는 곳을 치고 뜻하지 않은 데서 나온다</td><td>무장 대오가 아니라 협상에 들어온 지휘관의 신변 안전 공백을 공격했다.</td></tr>
+</table>
 
 #### 法 한눈 비교 — 곡제·관도·주용
 <table fit-page-width="true" header-row="true">
@@ -110,6 +145,8 @@
 <tr><td color="yellow_bg">⚙️ **法**</td><td>아래 상세 비교처럼 후계 지휘와 목적 변경 절차 없이 결전 편제에 집중했습니다.</td></tr>
 </table>
 🏳️ <span color="red">**패군 측 결과**</span> — 쿠낙사에서 소키루스가 전사하자 원정의 정치적 목표와 기존 지휘·보급 체계가 함께 붕괴했습니다.
+
+**직관·편향 한 줄:** 결전 한 번의 성공이 왕위 쟁탈을 끝낼 것이라는 <span color="red">**소키루스**</span>의 계획에는 단일 시나리오 집중과 과신이 작동한 것으로 볼 수 있으며, 자신의 사망 뒤 목적·지휘·보급이 동시에 사라지는 분기를 과소평가했습니다.
 
 **〈그리스 만인대 생존 조직(승)〉**
 <table fit-page-width="true" header-row="true">
@@ -145,13 +182,26 @@
 #### 패배를 피할 분기점
 <span color="red">**소키루스**</span>는 결전 전에 자신의 사망·부상 시 정치적 목표와 지휘권을 승계할 체계를 만들었어야 합니다. 그리스 지휘관들도 협상에 전원이 참석하지 말고 인질·호위·분산 회담 원칙을 세웠어야 합니다. 만인대의 생존은 이 실패 뒤 **목적을 귀환으로 즉시 바꾸고 지형별 처방을 재설계한 것**에서 시작됐습니다.
 
-### 동양 — 가정 전투(街亭之戰, CE 228)
+**사료와 연구**
+- [크세노폰 『아나바시스』 3.4.21~40 — 공심방진의 문제와 100인대 재편](https://cts.perseids.org/read/greekLit/tlg0032/tlg006/perseus-eng2/3.4.21-3.4.40)
+- [Encyclopaedia Iranica — Anabasis](https://www.iranicaonline.org/articles/anabasis/)
+- [Encyclopaedia Iranica — Cunaxa](https://www.iranicaonline.org/articles/cunaxa/)
+- [Cambridge University Press — *A Greek Army on the March* 발췌](https://assets.cambridge.org/97805218/70689/excerpt/9780521870689_excerpt.pdf)
+
+### 동양 — 촉한군 vs 조위군 │ 가정 전투(街亭之戰, 228)
 ![가정 전투 주요 인물](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi6/jieting_commanders_v2.png)
 ![가정 전투 병사·무기·생활](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi6/jieting_soldier_life_v2.png)
 ![가정 전투 지휘체계](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi6/jieting_command_structure_v2.png)
 ![제갈량 제1차 북벌 전역 지도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi6/jieting_country_map_v2.png)
 ![가정 전투 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi6/jieting_strategy_map_v2.png)
 ![가정 전투 포위 순서도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi6/jieting_sequence_map_v2.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+- <span color="red">**▰**</span> <span color="yellow_bg">**가정(街亭)**</span> — 관중에서 농우로 들어가는 도로를 제어하는 길목이었다. 촉군의 임무는 산봉우리 자체가 아니라 위군 원군의 통과를 지연하는 것이었다.
+- ⛰️ <span color="green_bg">**가정 산지(街亭山地)**</span> — 관측에는 유리했지만 도로·수원과 분리되면 고립되는 고지였다. 높이라는 한 가지 이점이 임무 전체를 대신하지 못했다.
+- 🌊 <span color="blue_bg">**가정 수원(街亭水源)**</span> — 산상 주둔군의 지속 능력을 결정한 지점이다. 장합은 산을 먼저 오르지 않고 물길을 끊어 시간의 방향을 바꿨다.
+- **관중–농우 도로** — 조위의 구원군과 촉한 북벌군 모두에게 병력·군량·퇴로를 잇는 축이었다. 이 길을 잃자 촉한의 세 군 호응도 유지하기 어려워졌다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**기산(祁山)**</span>·<span color="red">**▰**</span> <span color="yellow_bg">**한중(漢中)**</span> — 제갈량의 북벌 출발·주공 축과 철수 방향을 잇는 후방 거점이다. 가정 패배는 국지전 하나를 넘어 제1차 북벌 전체의 철수를 강제했다.
 
 #### 제갈량이 맡긴 임무는 산 정상이 아니라 가정 길목이었다
 228년 <span color="red">**제갈량**</span>의 제1차 북벌에서 남안·천수·안정이 흔들리자, 위나라는 <span color="blue">**장합**</span>을 보내 농우 방면을 구원했습니다. 가정은 위의 원군이 지나야 하는 길목이었습니다. <span color="red">**마속**</span>의 임무는 멋진 방어 진지를 찾는 일이 아니라 **도로를 붙잡아 장합의 진격을 지연하는 것**이었습니다.
@@ -161,6 +211,30 @@
 
 #### 장합이 산을 오르기 전에 길과 물을 끊다
 <span color="blue">**장합**</span>은 불리한 산상 진영을 정면 공격하지 않았습니다. 산을 포위하고 수원과 도로를 차단해 촉군의 갈증과 혼란을 키웠습니다. 진형이 무너지자 공격했고, <span color="red">**마속**</span>군은 붕괴했습니다. <span color="red">**왕평**</span>은 깃발과 북으로 질서를 유지해 추격을 주저하게 만들고 일부 병력을 수습했습니다.
+
+#### 전투에서 사용된 속임수 — 확인되는 의도적 기만 없음
+정사 기록에서 <span color="blue">**장합**</span>이 거짓 신호나 위장 퇴각으로 <span color="red">**마속**</span>을 산 위로 유인했다는 증거는 확인되지 않는다. 승패는 의도적 속임수보다 <span color="red">**마속**</span>의 임무 오독, 수원과 도로에서 떨어진 배치, <span color="blue">**장합**</span>의 포위·단수에 더 직접적으로 연결된다. 『삼국지연의』의 사마의 관련 장면을 정사 사실로 섞지 않는다.
+
+#### 속임수 작동 구조
+**주체와 의도:** 사료로 확인되는 거짓 신호의 주체는 없다. <span color="blue">**장합**</span>의 의도는 노출된 보급 취약점을 이용해 산상군을 고립시키는 것이었다.
+
+**보인 신호와 믿은 이유:** <span color="red">**마속**</span>이 본 것은 높은 곳의 관측·방어 이점이었다. 이는 적이 만든 가짜 신호라기보다 병법의 일반 원칙을 임무보다 앞세운 자기 해석이었다.
+
+**유발된 행동과 결과:** 촉군 본대가 도로와 수원에서 떨어졌고, 위군은 정면 산악 돌격 대신 차단을 택했다. 시간이 갈수록 갈증과 대오 붕괴가 커졌다.
+
+**사료의 경계:** 정사는 산상 주둔·왕평의 만류·장합의 단수·격파를 전하지만 정확한 지점과 병력 수, 세부 전술 단계는 제한적이다. 후대 소설의 장면을 빈칸 채우기에 쓰지 않는다.
+
+#### 속임수 일곱 질문
+1. **누가 누구를 속였는가?** 사료로 확인되는 의도적 기만은 없다.
+2. **어떤 사실이 거짓이었는가?** 위군이 만든 거짓 정보는 확인되지 않는다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 고지는 관측에 유리하다는 사실이 도로·수원을 버려도 된다는 결론으로 과장됐다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** <span color="red">**마속**</span>은 병법 지식과 고지의 장점을 임무 수행 능력으로 동일시했다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성이 높다. 산상 주둔은 촉군 지휘부 내부의 결정이었다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 수원 지속시간, 도로 통제, 왕평 부대와의 상호지원, 포위 뒤 철수 가능성을 검증하지 않았다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 지도 워게임에서 ‘높이’뿐 아니라 임무·보급·퇴로 점수를 따로 매겨 선택을 비교할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+정사상 실제 신호·행동·결과가 확인되는 의도적 기만 항목은 없다. 따라서 열두 길을 닮았다는 이유만으로 억지로 표에 넣지 않는다. 이 전투의 교훈은 속임수보다 **지형의 한 장점을 전체 임무와 혼동한 자기기만을 독립 검증으로 끊는 일**에 있다.
 
 #### 法 한눈 비교 — 곡제·관도·주용
 <table fit-page-width="true" header-row="true">
@@ -179,6 +253,8 @@
 <tr><td color="yellow_bg">⚙️ **法**</td><td>아래 상세 비교처럼 본대와 지원부대, 식수와 보급을 하나의 방어 체계로 묶지 못했습니다.</td></tr>
 </table>
 🏳️ <span color="red">**패군 측 결과**</span> — 촉군은 물이 끊기고 진형이 붕괴해 가정을 잃었으며, 제갈량은 제1차 북벌 전체를 철수해야 했습니다.
+
+**직관·편향 한 줄:** <span color="red">**마속**</span>이 고지의 장점에 닻을 내린 뒤 왕평의 도로·수원 경고를 낮게 평가한 행동에는 기준점 효과와 확증편향이 작동한 것으로 볼 수 있으며, 진지 수정의 시간을 잃게 했습니다.
 
 **〈장합의 위군(승)〉**
 <table fit-page-width="true" header-row="true">
@@ -213,6 +289,11 @@
 
 #### 패배를 피할 분기점
 <span color="red">**마속**</span>은 <span color="red">**왕평**</span>의 건의대로 도로와 수원을 포함한 진지를 구축하고, 산상 관측대는 본진이 아니라 척후·신호 거점으로 사용했어야 합니다. 이미 포위가 시작됐다면 밤이나 초기 단계에 산을 내려와 <span color="red">**왕평**</span> 부대와 합류해야 했습니다. **높은 지형을 지키는 일보다 가정 길목을 지키는 임무가 우선**이었습니다.
+
+**사료와 연구**
+- [『삼국지』 관련 열전 위치 안내 — 제갈량·장합·왕평 전기](https://sinochronicle.com/en/sources/catalog/)
+- [3KDEX — 정사 기록을 대조한 가정 패전 자료](https://3kdex.com/en/events/scene-095a/)
+- [Three Kingdoms Odyssey — 가정 전투의 정사·소설 구분과 원문 대조](https://threekingdomsodyssey.com/en/events/375)
 ---
 ## 5. 내 삶의 적용 — 일을 시작하기 전에 현재 지형부터 분류하기
 **사실**: 근무 중 같은 “문제 발생”이라도 단순 문의, 반복 오류, 인수인계 직전 장애, 안전과 서비스에 즉시 영향을 주는 사고는 필요한 대응이 서로 다릅니다.
