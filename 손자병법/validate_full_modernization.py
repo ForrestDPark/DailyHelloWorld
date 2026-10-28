@@ -357,7 +357,7 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
     for index, start in enumerate(case_starts):
         end = case_starts[index + 1] if index + 1 < len(case_starts) else len(section_four)
         case = section_four[start:end]
-        case_title = case.splitlines()[0].strip()
+        case_title = case.lstrip().splitlines()[0].strip()
         if " vs " not in case_title or " │ " not in case_title:
             errors.append(
                 f"{index + 1}번째 역사 사례 제목에 'A 진영 vs B 진영 │ 전투명' 구조가 없습니다"
@@ -446,12 +446,15 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         if selected_deception_headings and law_heading:
             selected_block = case[selected_deception_headings[0].end():law_heading.start()]
             selected_tables = tables(selected_block)
-            if len(selected_tables) != 1:
+            no_intentional_deception = bool(re.search(
+                r"(?:확인되는 의도적 기만 없음|의도적 기만 항목은 없다)", selected_block
+            ))
+            if len(selected_tables) != 1 and not (len(selected_tables) == 0 and no_intentional_deception):
                 errors.append(
                     f"{index + 1}번째 역사 사례의 시계편 해당 길 표가 "
                     f"{len(selected_tables)}개입니다(정상: 1개)"
                 )
-            else:
+            elif selected_tables:
                 selected_maxims = [m for m in DECEPTION_TWELVE if m in selected_tables[0]]
                 if not selected_maxims:
                     errors.append(f"{index + 1}번째 시계편 표에 실제 적용 항목이 없습니다")
@@ -533,6 +536,11 @@ def main() -> int:
         action="store_true",
         help="손자병법/jiudi*_full_page.md를 모두 검사",
     )
+    parser.add_argument(
+        "--historical-backfill",
+        action="store_true",
+        help="기존 1·2·3·5번을 보존하는 4번 역사 사례 보강만 검사",
+    )
     args = parser.parse_args()
 
     paths = list(args.paths)
@@ -546,6 +554,19 @@ def main() -> int:
     failed = False
     for path in paths:
         errors, warnings = validate_page(path)
+        if args.historical_backfill:
+            protected_section_errors = (
+                "2번 섹션에 불필요한 색상 강조",
+                "폐기된 자동 목차",
+                "맨 위 부제가",
+                "직접화법 큰따옴표 전통 주석",
+                "핵심 구절이 굵게 강조된 전통 주석",
+                "2번 전통 주석에 폐기된 파란색",
+            )
+            errors = [
+                error for error in errors
+                if not any(marker in error for marker in protected_section_errors)
+            ]
         status = "PASS" if not errors else "FAIL"
         failed |= bool(errors)
         print(f"[{status}] {path}")
