@@ -102,10 +102,15 @@
 ### 서양 — 네덜란드 반란군·해상거지대 vs 🏛️ 스페인 합스부르크군 │ 레이던 구원전(Relief of Leiden, 1574)
 
 ![레이던 구원전 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/leiden_commanders.png)
+
 ![레이던 구원전 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/leiden_soldiers_weapons_life.png)
+
 ![레이던 구원전 지휘·편제 조직도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/leiden_command_structure.png)
+
 ![레이던 구원전 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/leiden_country_map.png)
+
 ![레이던 구원전 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/leiden_strategy_map.png)
+
 ![레이던 구원전 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/leiden_sequence_map.png)
 
 #### 처음 읽는 사람을 위한 전역 안내
@@ -225,10 +230,15 @@
 ### 동양 — 유비군 관우 vs 조조군 번성 수비대 │ 번성 전역(樊城之戰, 219)
 
 ![번성 전역 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/fancheng_commanders.png)
+
 ![번성 전역 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/fancheng_soldiers_weapons_life.png)
+
 ![번성 전역 지휘·편제 조직도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/fancheng_command_structure.png)
+
 ![번성 전역 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/fancheng_country_map.png)
+
 ![번성 전역 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/fancheng_strategy_map.png)
+
 ![번성 전역 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/fancheng_sequence_map.png)
 
 #### 처음 읽는 사람을 위한 전역 안내
