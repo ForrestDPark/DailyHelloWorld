@@ -1,4 +1,4 @@
-<!-- sunzi-analysis-mode: light -->
+<!-- sunzi-analysis-mode: full -->
 > 고이화좌공자명, 이수좌공자강. 수가이절, 불가이탈. — 도구가 길을 열 수는 있어도 승리를 대신하지는 못한다.
 
 ---
@@ -94,6 +94,257 @@
 카너먼의 대체 편향 관점에서 보면 사람은 “목표를 달성했는가”라는 어려운 질문을 “눈에 띄는 조치를 했는가”라는 쉬운 질문으로 바꾸기 쉽다. 큰 불길, 차단된 화면, 멈춘 설비처럼 가시적인 변화는 성취감을 주지만 최종 결과를 보장하지 않는다. 수단 지표와 결과 지표를 분리해 적으면 이런 착각을 줄일 수 있다.
 
 통제 착각도 경계해야 한다. 한 경로를 끊으면 문제 전체를 장악했다고 느끼지만, 적이나 장애는 우회로를 찾을 수 있다. 차단 뒤에는 재탐지, 우회경로 확인, 정상화 시험이 필요하다. **멈추게 한 것과 해결한 것을 같은 칸에 적지 않는 것**이 이 구절의 현대적 검증법이다.
+
+---
+
+## 4. 역사적 실증 사례
+
+### 서양 — 네덜란드 반란군·해상거지대 vs 🏛️ 스페인 합스부르크군 │ 레이던 구원전(Relief of Leiden, 1574)
+
+![레이던 구원전 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/leiden_commanders.png)
+![레이던 구원전 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/leiden_soldiers_weapons_life.png)
+![레이던 구원전 지휘·편제 조직도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/leiden_command_structure.png)
+![레이던 구원전 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/leiden_country_map.png)
+![레이던 구원전 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/leiden_strategy_map.png)
+![레이던 구원전 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/leiden_sequence_map.png)
+
+#### 처음 읽는 사람을 위한 전역 안내
+
+1574년 <span color="red">**프란시스코 데 발데스(Francisco de Valdés)**</span>의 스페인군은 <span color="blue">**▰**</span> <span color="yellow_bg">**레이던(Leiden)**</span>을 굶겨 항복시키려 했다. <span color="blue">**빌럼 1세(William of Orange)**</span>는 제방을 터뜨려 폴더를 범람시키고, <span color="blue">**루이 드 부아소(Louis de Boisot)**</span>의 해상거지대가 평저선으로 들어가는 구원책을 택했다. 물은 포위군의 도로와 보루를 갈랐지만, 수심이 얕아 처음에는 배가 전진하지 못했다. 바람이 물을 밀어 올리고 함대가 실제로 입성했을 때에야 구원이 완성됐다.
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- 🌊 <span color="blue_bg">**북해(North Sea)**</span>·🌊 <span color="blue_bg">**마스강 하구(Meuse estuary)**</span>: 제방 절개 뒤 저지대로 들어온 물의 근원이다.
+- **카펠러 제방(Capelle dike)**: 반란군이 절개한 출발축이다. 물이 들어와도 풍향과 수심이 맞아야 항로가 됐다.
+- **주터메이르(Zoetermeer)·주터바우더(Zoeterwoude)**: 얕은 범람지와 스페인 보루가 이어진 병목이다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**람멘스한스(Lammenschans)**</span>: 레이던 남쪽의 마지막 핵심 스페인 진지였다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**레이던(Leiden)**</span>: 물이 길을 끊는 중간 효과를 구원함대의 입성이라는 최종 성과로 바꿔야 할 목표였다.
+
+#### 상세 전역 서사 — 제방 절개가 아니라 수심·바람·평저선이 구원을 완성했다
+
+<span color="red">**발데스**</span>는 외곽 도로와 보루를 장악해 레이던을 굶겼고, 도시에서는 기아와 질병으로 수천 명이 죽었다. <span color="blue">**빌럼 1세**</span>는 육상 구원이 어렵자 농지를 희생해 제방 절개를 승인했다. 8월 초 물을 들였지만 낮은 수심과 여러 둑 때문에 <span color="blue">**부아소**</span>의 평저선은 멈췄다. 이때의 범람은 적 연결을 불편하게 했을 뿐 도시를 구하지 못했다.
+
+9월 말 북서풍과 남서풍이 물을 안쪽으로 밀자 수심이 올랐다. 평저선과 육전대가 보루를 우회·돌파했고, 스페인군은 침수된 진지 사이의 연락과 퇴로를 잃어 10월 2일 밤 철수했다. 10월 3일 해상거지대가 빵과 청어를 싣고 입성했다. 물의 `絶(절, 연결을 끊음)`과 사람의 `奪(탈, 목표를 실제로 취함)`이 분리되어 있음을 보여준다.
+
+#### 전투에서 사용된 속임수 — 마른 포위전을 수상전으로 바꾼 조건 설계
+
+직접적인 거짓 정보보다 지형 전환이 핵심이었다. 초기 범람이 얕았으므로 스페인군이 물의 위협을 낮게 본 것은 당시 정보로 이해할 수 있다. 그러나 반란군은 낮은 흘수의 배와 제방 작업대를 준비해, 바람이 열어 준 짧은 창을 실제 진입로로 바꾸었다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** <span color="blue">**빌럼 1세**</span>와 <span color="blue">**부아소**</span>는 정면 육전을 피하고 포위망의 운영 지형을 바꾸려 했다.
+
+**보인 신호와 믿은 이유.** 초기 수심은 얕았고 함대는 지연됐다. <span color="red">**발데스**</span>에게 기존 보루망이 계속 유효해 보일 근거가 있었다.
+
+**유발된 행동과 결과.** 스페인군이 저지대 진지를 유지하는 사이 풍향이 바뀌었고, 평저선 함대가 진지 사이로 들어와 철수를 강제했다.
+
+**사료의 경계.** 특정 거짓 정보에 속았다는 기록은 약하다. 의도적 기만보다 환경 변화와 늦은 재평가의 결합으로 보는 편이 안전하다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 특정 거짓말은 확인되지 않으며 반란군이 스페인군의 지형 기대를 뒤집었다.
+2. **어떤 사실이 거짓이었는가?** 사료로 확인되는 허위 정보는 없다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 초기의 얕은 수심은 사실이지만 이후의 수위 상승 가능성까지 없애지는 않았다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 굶주린 도시가 곧 항복할 것이라는 기존 계산이 유지되길 바랄 이유가 있었다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성이 높다. 핵심 변수는 바람과 수심이었다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 수위별 철수 가능 시간을 계속 갱신하는 검증이 충분했는지는 불명이다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 재난 모의훈련에서 도로가 수로로 바뀌는 조건을 넣고 배치를 재평가할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>近而示之遠<br>근이시지원 — 가까이 있으면서 멀리 있는 듯 보인다</td><td>초기에는 얕은 물 때문에 함대가 멀리 묶인 듯 보였지만 풍향 변화 뒤 접근 거리가 급격히 줄었다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**반란군**</span></td><td>평저선·육전대·제방 작업대를 결합했다.</td><td><span color="blue">**빌럼 1세**</span>의 전략을 <span color="blue">**부아소**</span>가 실행했다.</td><td>수로로 병력과 구호 식량을 함께 운반했다.</td></tr>
+<tr><td><span color="red">**스페인군**</span></td><td>보루와 도로 차단선을 분산 유지했다.</td><td><span color="red">**발데스**</span>가 포위망을 통괄했다.</td><td>육상 보급과 마른 숙영지에 의존했다.</td></tr>
+</table>
+
+#### <span color="red">**프란시스코 데 발데스(패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>장기 포위 규율은 유지했으나 범람 뒤 분산 진지의 결속과 사기가 약해졌다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>초기 얕은 수심을 일반화해 풍향·수위의 꼬리위험을 낮게 보았다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>제방과 도로는 포위에 유리했지만 침수 뒤 보루가 섬처럼 고립됐다. (험이·광협·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>환경 변화 뒤 방어선 재편과 철수가 늦었다. (지신인용엄·필생가로)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>수상 기동 예비와 안전한 후퇴축이 부족했다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** <span color="red">**발데스**</span>가 초기의 얕은 범람을 이후에도 대표적인 상태로 본 판단에는 대표성 휴리스틱이 작동했을 가능성이 있다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 레이던을 굶기는 데 거의 성공했지만 구원함대가 접근하자 철수했다. 六敗의 `北(배, 적정을 헤아리지 못한 패배)`에 가깝다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span>: 첫 범람 뒤 수위·풍향별 철수선을 정하고 고지대로 포위망을 재편했다면 급격한 전면 철수는 줄일 수 있었다.
+
+#### <span color="blue">**루이 드 부아소(승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>도시 수비대·선원·육전대가 구원 목표로 결속했다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>바람을 통제했다고 과장하지 않고 항해 가능한 창을 기다려 성공 확률을 높였다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>저지대와 제방을 수상 회랑으로 바꾸었다. (원근·험이·광협)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>지연 중 함대를 유지하고 수심이 생기자 전진했다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>평저선·육전대·식량 수송을 한 작전으로 묶었다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>: 물로 끊은 뒤 함대가 입성해 구원을 완성했다. `以虞待不虞者勝(이우대불우자승, 대비한 채 대비 없는 적을 상대하는 자가 이긴다)`에 해당한다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>설명</td></tr>
+<tr><td><span color="blue">**반란군**</span></td><td>평저선은 수송, 육전대는 보루 돌파, 작업대는 항로 조성을 맡았다.</td></tr>
+<tr><td><span color="red">**스페인군**</span></td><td>보루별 수비대가 범람 뒤 서로 지원하기 어려워졌다.</td></tr>
+</table>
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>설명</td></tr>
+<tr><td><span color="blue">**반란군**</span></td><td><span color="blue">**빌럼 1세**</span>의 결정을 <span color="blue">**부아소**</span>가 함대·작업·육전 임무로 실행했다.</td></tr>
+<tr><td><span color="red">**스페인군**</span></td><td><span color="red">**발데스**</span>의 보루 지휘망은 범람 뒤 육상 연락이 약해졌다.</td></tr>
+</table>
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>설명</td></tr>
+<tr><td><span color="blue">**반란군**</span></td><td>배·화기·구호 식량을 같은 수로로 운반했다.</td></tr>
+<tr><td><span color="red">**스페인군**</span></td><td>육상 진지의 보급·숙영이 침수로 어려워졌다. 총비용은 사료상 불명이다.</td></tr>
+</table>
+
+#### 참고자료
+
+- Museum De Lakenhal, *Siege and Relief of Leiden*.
+- Leiden University, *Dutch Revolt Sources*.
+- William of Orange correspondence, 3 October 1574.
+
+### 동양 — 유비군 관우 vs 조조군 번성 수비대 │ 번성 전역(樊城之戰, 219)
+
+![번성 전역 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/fancheng_commanders.png)
+![번성 전역 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/fancheng_soldiers_weapons_life.png)
+![번성 전역 지휘·편제 조직도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/fancheng_command_structure.png)
+![번성 전역 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/fancheng_country_map.png)
+![번성 전역 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/fancheng_strategy_map.png)
+![번성 전역 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong10/fancheng_sequence_map.png)
+
+#### 처음 읽는 사람을 위한 전역 안내
+
+219년 <span color="red">**관우(關羽)**</span>는 <span color="blue">**조인(曹仁)**</span>이 지키는 <span color="blue">**▰**</span> <span color="yellow_bg">**번성(樊城)**</span>을 포위했다. 가을 장마로 🌊 <span color="blue_bg">**한수(漢水)**</span>가 범람해 <span color="blue">**우금(于禁)**</span>의 칠군이 고립됐고, 수군을 가진 관우군이 이를 제압했다. 그러나 성은 남았고, <span color="blue">**만총(滿寵)**</span>의 진언으로 조인이 버티는 사이 <span color="blue">**서황(徐晃)**</span>이 구원했다. 손권군이 후방을 빼앗자 관우는 철수했다.
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- 🌊 <span color="blue_bg">**한수(漢水)**</span>: 장마 때 범람해 칠군을 갈랐지만 성을 넘겨주지는 않았다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**번성(樊城)**</span>·<span color="blue">**▰**</span> <span color="yellow_bg">**양양(襄陽)**</span>: 한수 양안의 수비 거점이었다.
+- **번북 저지대(樊北低地)**: 우금·방덕 구원군이 범람에 고립된 공간이다.
+- **마피(摩陂)·언성(偃城)**: 서황의 구원군이 집결해 포위선을 압박한 축이다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**강릉(江陵)**</span>·<span color="red">**▰**</span> <span color="yellow_bg">**공안(公安)**</span>: 관우의 후방 보급·귀로였으나 여몽에게 넘어갔다.
+
+#### 상세 전역 서사 — 홍수는 칠군을 끊었지만 번성을 빼앗지는 못했다
+
+<span color="red">**관우**</span>가 번성과 양양을 압박하자 조조는 <span color="blue">**우금**</span>에게 칠군을 주어 구원하게 했다. 장마로 한수가 범람해 저지대 진영이 갈라졌고, 관우군은 배로 접근해 우금의 항복을 받았다. 정사 계통 기록은 홍수를 자연재해로 적으므로 관우가 제방을 터뜨렸다고 꾸며서는 안 된다. 관우는 홍수 뒤의 기동 우위를 잘 이용했지만 번성 성벽과 조인 수비대를 물만으로 취하지 못했다.
+
+<span color="blue">**만총**</span>은 홍수가 오래가지 않을 수 있다며 철수에 반대했고 <span color="blue">**조인**</span>은 버텼다. 물이 빠지고 <span color="blue">**서황**</span>이 포위선을 공격했다. 동시에 여몽이 강릉·공안을 빼앗아 관우의 보급과 귀로를 끊었다. 관우는 칠군을 끊고도 번성을 빼앗지 못한 채 철수했다.
+
+#### 전투에서 사용된 속임수 — 여몽의 지휘 교체와 상인선 위장
+
+홍수 자체는 확인된 기만이 아니다. 분명한 기만은 여몽이 병을 이유로 물러난 듯 보이고 젊은 육손이 대신 나서 관우의 경계를 낮춘 뒤, 정예병을 상인선에 숨겨 형주 초소와 후방 거점을 장악한 일이다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 여몽은 관우의 후방을 전면전 없이 장악하려 했다.
+
+**보인 신호와 믿은 이유.** 여몽의 병과 육손의 낮은 명성은 동오의 공세 위험이 낮아진 듯 보였다.
+
+**유발된 행동과 결과.** 관우는 번성 정면에 더 집중했고, 상인선으로 위장한 병력이 강릉·공안을 장악했다.
+
+**사료의 경계.** 위장 접근은 정사 주석 계통에 전하지만, 홍수까지 관우의 수공 계책으로 묶어서는 안 된다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 여몽과 육손이 관우의 후방 경계를 낮췄다.
+2. **어떤 사실이 거짓이었는가?** 동오가 즉시 대공세를 하지 않을 듯한 신호가 실제 의도와 달랐다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 여몽의 건강 문제와 육손의 젊음은 작전 능력 부재를 뜻하지 않았다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 칠군 격파 뒤 번성 함락에 집중하고 싶었다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 중간 이상이다. 긴 포위와 넓은 후방을 동시에 지켜야 했다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 동오 수군의 선박 이동과 병력 재배치를 지속 확인할 정찰망이 부족했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 체스·바둑에서 공격할수록 반대편 약점과 귀로를 확인하는 규칙으로 연습할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>能而示之不能<br>능이시지불능 — 할 수 있으면서 할 수 없는 듯 보인다</td><td>여몽의 병과 지휘 교체가 공세 능력의 부재처럼 보였다.</td></tr>
+<tr><td>親而離之<br>친이리지 — 친한 것을 갈라놓는다</td><td>관우군 정면과 형주 후방의 연결을 끊어 서로 돕지 못하게 했다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**조조군**</span></td><td>성 수비대·칠군·서황 후속군을 시간차 운용했다.</td><td>조인이 성을, 서황이 외곽 구원을 맡았다.</td><td>성의 비축과 후속 증원을 연결했다.</td></tr>
+<tr><td><span color="red">**관우군**</span></td><td>육상 포위대와 수군을 결합했다.</td><td>관우가 정면을 통괄했으나 후방 경계를 놓쳤다.</td><td>강릉·공안에 의존해 후방 상실 뒤 지속성이 무너졌다.</td></tr>
+</table>
+
+#### <span color="red">**관우(패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>수군·육군은 결합했지만 후방 수비까지 묶지 못했다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>홍수 기회는 이용했으나 수위 하락·증원·동오 개입의 확률 합을 과소평가했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>한수는 장악했지만 번성 성벽과 형주 후방을 함께 통제하지 못했다. (원근·험이·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>용기는 컸으나 전과 확대가 위험 계산을 앞섰다. (지신인용엄·분속가모)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>정면은 강했지만 후방 경계·보급·동맹 관리가 분리됐다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** <span color="red">**관우**</span>가 칠군 격파를 전역 전체 우세로 확장한 판단에는 가용성 편향과 단일 시나리오 집중이 작동했을 가능성이 있다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 칠군을 무너뜨렸지만 번성을 점령하지 못하고 후방을 잃었다. 六敗의 `北(배)`에 가깝다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span>: 칠군 격파 직후 포위 병력을 줄여 강릉·공안과 초소를 보강했다면 형주 기반의 전면 붕괴는 피할 가능성이 컸다.
+
+#### <span color="blue">**조인(승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>만총의 진언을 받아 수비대가 같은 목표로 버티게 했다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>홍수가 지속되지 않을 가능성과 구원군 도착 가능성을 남겨 두었다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>성벽과 고지를 생지로 유지했다. (험이·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>위기 속에서 참모의 반대 의견을 받아들였다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>성내 수비와 외부 구원을 같은 목표로 연결했다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>: 번성을 유지하고 구원군과 후방 정세 변화가 올 때까지 버텼다. `上下同欲者勝(상하동욕자승, 상하가 뜻을 같이하는 자가 이긴다)`에 해당한다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>설명</td></tr>
+<tr><td><span color="blue">**조조군**</span></td><td>조인 수비대, 우금·방덕 선행군, 서황 후속군을 분리했다.</td></tr>
+<tr><td><span color="red">**관우군**</span></td><td>포위대와 수군을 결합했으나 후방 수비를 충분히 남기지 않았다.</td></tr>
+</table>
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>설명</td></tr>
+<tr><td><span color="blue">**조조군**</span></td><td>조인이 성을, 우금이 칠군을, 서황이 후속 구원을 맡았다.</td></tr>
+<tr><td><span color="red">**관우군**</span></td><td>관우의 정면 지휘와 형주 후방 경보망이 충분히 연결되지 않았다.</td></tr>
+</table>
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>설명</td></tr>
+<tr><td><span color="blue">**조조군**</span></td><td>성내 비축·성벽·노·활로 버티며 외부 증원 시간을 벌었다.</td></tr>
+<tr><td><span color="red">**관우군**</span></td><td>수군으로 범람지 기동 우위를 얻었지만 강릉·공안 상실 뒤 보급과 귀로를 잃었다.</td></tr>
+</table>
+
+#### 참고자료
+
+- 『삼국지』 「관우전」·「우금전」·「방덕전」·「조인전」 계통.
+- 『자치통감』 권68 계통.
+- Australian National University 연구 자료, 한수 범람과 번성 전역 검토.
 
 ---
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
