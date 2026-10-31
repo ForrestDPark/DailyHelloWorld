@@ -1012,7 +1012,7 @@ function saveRecentPlaylist(files, count) {
   if (!count) return;
   const name = playlistFolderName(files);
   const previous = getRecentPlaylist();
-  const samePlaylist = previous?.name === name && Number(previous?.count) === count;
+  const samePlaylist = previous?.name === name;
   const recent = {
     name,
     count,
@@ -1020,6 +1020,7 @@ function saveRecentPlaylist(files, count) {
     lastIndex: samePlaylist ? Number(previous.lastIndex || 0) : 0,
     lastTime: samePlaylist ? Number(previous.lastTime || 0) : 0,
     lastTitle: samePlaylist ? String(previous.lastTitle || "") : "",
+    lastFileName: samePlaylist ? String(previous.lastFileName || "") : "",
   };
   try { localStorage.setItem(RECENT_PLAYLIST_KEY, JSON.stringify(recent)); } catch (_) {}
   showRecentPlaylistShortcut();
@@ -1032,16 +1033,19 @@ function savePlaybackPosition(force = false) {
   savePlaybackSession(now);
   if (!activePlaylistName || playlistIndex < 0 || !playlist[playlistIndex]) return;
   const recent = getRecentPlaylist();
-  if (!recent || recent.name !== activePlaylistName || Number(recent.count) !== playlist.length) return;
+  if (!recent || recent.name !== activePlaylistName) return;
+  recent.count = playlist.length;
   recent.lastIndex = playlistIndex;
   recent.lastTime = Math.max(0, Math.floor(audio.currentTime || 0));
   recent.lastTitle = playlist[playlistIndex].title;
+  recent.lastFileName = playlist[playlistIndex].file?.name || playlist[playlistIndex].name || "";
   recent.savedAt = now;
   try { localStorage.setItem(RECENT_PLAYLIST_KEY, JSON.stringify(recent)); } catch (_) {}
   savePlaylistProgress(activePlaylistName, playlist.length, {
     lastIndex: playlistIndex,
     lastTime: recent.lastTime,
     lastTitle: recent.lastTitle,
+    lastFileName: recent.lastFileName,
   });
 }
 
@@ -1134,6 +1138,16 @@ function getPlaylistProgress(name, count) {
   } catch (_) { return null; }
 }
 
+function getLatestPlaylistProgress(name) {
+  try {
+    const all = JSON.parse(localStorage.getItem(PLAYLIST_PROGRESS_KEY) || "{}");
+    return Object.entries(all)
+      .filter(([key]) => key.startsWith(`${name}\u0000`))
+      .map(([, value]) => value)
+      .sort((left, right) => Number(right?.savedAt || 0) - Number(left?.savedAt || 0))[0] || null;
+  } catch (_) { return null; }
+}
+
 function savePlaylistProgress(name, count, progress) {
   try {
     const all = JSON.parse(localStorage.getItem(PLAYLIST_PROGRESS_KEY) || "{}");
@@ -1151,6 +1165,29 @@ function showRecentPlaylistShortcut() {
   if (!recent?.name || !Number(recent.count)) { button.classList.add("hidden"); return; }
   button.textContent = `♫ ${recent.name} · ${recent.count}곡 다시 열기`;
   button.classList.remove("hidden");
+}
+
+function showDevicePlaylistRestore(state = getPlaybackSession()) {
+  if (state?.source !== "device" || !state?.title) return false;
+  const hasLocalFiles = playlist.some((item) => item?.file instanceof File);
+  if (hasLocalFiles || audioFile || remoteTrack) return false;
+
+  // iOS may restore the previous DOM while dropping File objects and the JS playlist.
+  // Treat the File objects as the source of truth and never show a non-playable ghost screen.
+  playlist = [];
+  playlistIndex = -1;
+  audio.pause();
+  if (audio.src) {
+    audio.removeAttribute("src");
+    audio.load();
+  }
+  audioUrl = "";
+  $("player").classList.add("hidden");
+  $("empty").classList.remove("hidden");
+  renderRestoreHint(state);
+  showRecentPlaylistShortcut();
+  renderPlaylist();
+  return true;
 }
 
 function playlistEligibleEntries() {
@@ -1414,18 +1451,33 @@ function setPlaylist(files, append = false) {
   if (!items.length) { message("선택한 곳에서 MP3 파일을 찾지 못했습니다.", true); return; }
   const folderName = playlistFolderName(files);
   const session = getPlaybackSession();
-  const savedProgress = !append ? getPlaylistProgress(folderName, items.length) : null;
+  const savedProgress = !append
+    ? (getPlaylistProgress(folderName, items.length) || getLatestPlaylistProgress(folderName))
+    : null;
   const sessionMatches = !append && session?.source === "device"
-    && session.playlistName === folderName
-    && Number(session.playlistCount) === items.length;
-  const progress = savedProgress || (sessionMatches ? {
+    && session.playlistName === folderName;
+  const progress = (sessionMatches ? {
     lastIndex: session.index,
     lastTime: session.time,
     lastTitle: session.title,
-  } : null);
-  const canResume = Number(progress?.lastIndex) >= 0
-    && Number(progress?.lastIndex) < items.length
-    && (Number(progress?.lastIndex) > 0 || Number(progress?.lastTime) > 3);
+    lastFileName: session.fileName,
+    savedAt: session.savedAt,
+  } : null) || savedProgress;
+  const progressFileName = normalizedTrackName(progress?.lastFileName);
+  const progressTitle = normalizedTrackName(progress?.lastTitle);
+  const fileIndex = progressFileName
+    ? items.findIndex((item) => normalizedTrackName(item.file?.name || item.name) === progressFileName)
+    : -1;
+  const titleIndex = progressTitle
+    ? items.findIndex((item) => normalizedTrackName(item.title) === progressTitle)
+    : -1;
+  const numericIndex = Number(progress?.lastIndex);
+  const resumeIndex = fileIndex >= 0 ? fileIndex
+    : titleIndex >= 0 ? titleIndex
+    : numericIndex >= 0 && numericIndex < items.length ? numericIndex
+    : -1;
+  const canResume = resumeIndex >= 0
+    && (resumeIndex > 0 || Number(progress?.lastTime) > 3);
   const wasEmpty = !playlist.length;
   playlist = append ? playlist.concat(items) : items;
   if (!append) activePlaylistName = folderName;
@@ -1439,8 +1491,7 @@ function setPlaylist(files, append = false) {
     let autoplay = false;
     pendingResumeTime = 0;
     if (canResume) {
-      const titleIndex = items.findIndex((item) => item.title === progress.lastTitle);
-      startIndex = titleIndex >= 0 ? titleIndex : Number(progress.lastIndex);
+      startIndex = resumeIndex;
       pendingResumeTime = Number(progress.lastTime || 0);
       autoplay = true;
     }
@@ -1840,9 +1891,10 @@ async function restoreMacPlayback(state) {
 
 let restorePromise = null;
 function restorePlaybackIfNeeded() {
-  if (audio.src || audioFile || remoteTrack || playlist.length) return Promise.resolve(false);
   const state = getPlaybackSession();
   if (!state?.title) return Promise.resolve(false);
+  if (state.source === "device" && showDevicePlaylistRestore(state)) return Promise.resolve(false);
+  if (audio.src || audioFile || remoteTrack || playlist.length) return Promise.resolve(false);
   renderRestoreHint(state);
   if (state.source !== "mac") return Promise.resolve(false);
   if (!restorePromise) restorePromise = restoreMacPlayback(state).finally(() => { restorePromise = null; });
