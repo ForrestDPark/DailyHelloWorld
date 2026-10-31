@@ -1,4 +1,3 @@
-<!-- sunzi-analysis-mode: light -->
 > 손자왈: 범흥사십만, 출정천리, 백성지비, 공가지봉, 일비천금. — 큰일을 시작하기 전에는 눈앞의 실행비뿐 아니라 멀리서 오래 움직이느라 사회 전체가 매일 치를 비용부터 계산해야 한다.
 
 ---
@@ -121,6 +120,237 @@
 카너먼의 틀에서는 큰 목표와 생생한 성공 장면에 주의가 붙으면, 매일 반복되는 작은 비용과 실패 가능한 다른 시나리오가 배경으로 밀릴 수 있다. 사용자의 최신 독서 메모가 경고하듯 한 가지 시나리오만 보면 그 확률을 과대평가하기 쉽다. 출정 전에는 “계획대로 단기간에 끝난다”만 쓰지 말고, 지연·보급 차질·목표 변경·철수·복구 시나리오를 나누어 각각의 비용과 가능성을 비교해야 한다.
 
 분모 무시도 경계해야 한다. “하루 천금”이라는 강렬한 숫자만으로 공포를 만들거나, 반대로 전체 예산에서 작아 보인다는 이유로 무시해서는 안 된다. 총동원 기간, 전체 가구와 생산, 달성하려는 목적을 분모로 두고 비교해야 한다. 정확한 고대 수치를 현대 돈으로 환산할 수 없다는 한계를 인정하면서도, 비용이 매일 누적되고 여러 주체에게 분산된다는 판단 구조는 유지할 수 있다.
+
+---
+## 4. 역사적 실증 사례
+
+### 서양 — 🇫🇷 프랑스 제국·동맹 대육군 vs 🏛️ 러시아 제국군 │ 1812년 러시아 원정(French invasion of Russia, 1812)
+
+![1812년 러시아 원정 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan1/napoleon_commanders.png)
+![1812년 러시아 원정 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan1/napoleon_soldiers.png)
+![1812년 러시아 원정 지휘·편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan1/napoleon_command_structure.png)
+![1812년 유럽 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan1/napoleon_country_map.png)
+![1812년 러시아 원정 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan1/napoleon_strategy_map.png)
+![1812년 러시아 원정 단계별 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan1/napoleon_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+- 🌊 <span color="blue_bg">**네만강(Niemen River)**</span>은 대륙군이 건너 원정을 시작한 선이다. 이 선을 넘는 순간 행군 거리와 수송 손실이 매일 늘었다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**스몰렌스크(Smolensk)**</span>는 보급고와 도로가 모이는 중간 거점이었지만, 소진된 군대를 완전히 회복시키지 못했다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**모스크바(Moscow)**</span>는 점령했으나 평화와 보급을 주지 않은 목표였다. 성공의 외형과 전략적 성과가 갈라진 곳이다.
+- 🌊 <span color="blue_bg">**베레지나강(Berezina River)**</span>은 퇴로의 병목이었다. 도하 시간과 교량 자재, 후위가 한거번에 엉키며 특히 큰 인명·장비 손실이 났다.
+
+#### 전투의 서사 — 보급 준비를 압도한 결전 목표의 확대
+
+<span color="red">**나폴레옹 보나파르트(Napoleon Bonaparte)**</span>는 평소 보급을 무시한 장수가 아니었다. 주요 도로와 창고, 수레 부대와 현지 조달을 결합했지만, 1812년에는 규모와 거리가 그 체계의 한계를 넘었다. 🌊 <span color="blue_bg">**네만강(Niemen River)**</span>을 건너며 부대가 퍼졌고 말과 수레가 먼저 소진됐다. 
+
+<span color="blue">**바클라이 데 톨리(Michael Andreas Barclay de Tolly)**</span>와 러시아군은 결전을 피하며 내륙으로 물러서 공간을 무기로 삼았다. 대륙군은 전투보다 질병·탈영·말 손실로 줄어들었고, <span color="red">**나폴레옹**</span>은 속전을 강요하려 더 멀리 진격했다. <span color="blue">**미하일 쿠투조프(Mikhail Kutuzov)**</span>가 지휘한 보로디노의 대규모 전투는 러시아군을 파괴하지 못했다.
+
+<span color="red">**나폴레옹**</span>은 <span color="red">**▰**</span> <span color="yellow_bg">**모스크바(Moscow)**</span>를 점령했으나 알렉산드르 1세는 협상하지 않았고 도시는 대화재와 공급 부족으로 원정군을 먹여 살릴 수 없었다. 진격은 멈췄지만 `일비`는 멈추지 않았다. 퇴각 결정이 늦어지자 군대는 이미 환경이 망가진 기존 진격로를 되짚았고, 🌊 <span color="blue_bg">**베레지나강(Berezina River)**</span>에서 교량·포병·민간 행렬이 한꺼번에 몰렸다.
+
+#### 전투에서 사용된 속임수 — 결전을 피하는 후퇴와 모스크바의 빈 승리
+
+러시아군의 후퇴 전체를 하나의 위장 각본으로 보면 과장이다. 하지만 결전을 피하며 공간을 내주는 행동은 <span color="red">**나폴레옹**</span>에게 다음 전투를 얻으면 정치적 승리를 완성할 수 있다는 신호로 읽혔다. 실제로는 원정군이 한 걸음씩 보급 기반에서 멀어지게 하는 것이 러시아 전략의 핵심 효과였다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 러시아 지휘부는 군대를 보존하고 원정군의 거리와 소모를 키우려 했다.
+
+**보인 신호와 믿은 이유.** 거점과 수도를 내주는 후퇴는 패배로 보였고, 과거의 유럽 전역에서 결전 승리가 정치 결착을 가져왔던 경험이 그 해석을 강화했다.
+
+**유발된 행동과 결과.** 대륙군은 결전을 잡으려 더 깊이 진격했고, 최종 목표를 얻었을 때는 전투력과 보급 여유가 이미 크게 줄어 있었다.
+
+**사료의 경계.** 각 후퇴·소각 조치의 지역별 집행과 의도는 달랐다. 모든 피해와 후퇴를 동일한 중앙 계획으로 단정하지 않는다.
+
+#### 속임수 일곱 질문
+1. **누가 누구를 속였는가?** 러시아군의 지연·후퇴 운용이 프랑스 지휘부의 조기 결전 기대를 계속 살려 두었다.
+2. **어떤 사실이 거짓이었는가?** 명시적 거짓 통보보다 후퇴가 전면 붕괴라는 해석이 거짓에 가까웠다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 러시아군은 실제로 도시와 전장을 내줬지만 전력 보존이라는 다른 목적을 달성했다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** <span color="red">**나폴레옹**</span>의 기존 전역은 결전 승리가 강화와 협상으로 이어진 경험을 주었다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 높다. 정치 목표와 보급 한계를 연결하지 못한 것이 더 깊은 원인이었다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 역량·말·수레·창고 재고를 행군 거리와 함께 재산정하는 중간 평가가 부족했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 전략 보드게임에서 목표점 확대와 보급 비용을 따로 기록하며 연습할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>佚而勞之<br>일이노지 — 쉬는 적을 피로하게 한다</td><td>결전을 피한 후퇴가 원정군의 행군·수송·말을 계속 소모시켰다.</td></tr>
+<tr><td>近而示遠<br>근이시원 — 가까운데 먼 것처럼 보인다</td><td>러시아군의 전투력은 유지됐지만 후퇴는 결전 능력이 사라지는 신호로 오독됐다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**러시아군(승)**</span></td><td>야전군·코사크·지역 수비를 공간과 시간으로 결합했다.</td><td>후퇴 후 쿠투조프 지휘 아래 보존과 타격을 조율했다.</td><td>자국 내륙으로 물러서며 보급과 새 병력에 가까워졌다.</td></tr>
+<tr><td><span color="red">**대륙군(패)**</span></td><td>다국적 군단을 폭넓게 펼쳐 진격했으나 손실 보충이 어려웠다.</td><td>집중 지휘의 목표 변경이 먼 군단과 보급대에 느리게 반영됐다.</td><td>도로·말·수레·현지조달이 전력 규모를 감당하지 못했다.</td></tr>
+</table>
+
+〈<span color="red">**나폴레옹의 대륙군**</span> (패)〉
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>편제와 국적이 다른 군대를 결전 기대에 묶었으나 손실이 누적되자 탈영과 질서 붕괴가 커졌다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>러시아군이 결전을 열 가능성만 크게 보고, 시간과 거리가 원정군을 줄일 가능성을 과소평가했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>서로 먼 도로와 강, 늑, 희소한 취락이 수송 밀도를 낮췄다. (원근·험이·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="red">**나폴레옹**</span>의 결행력은 강했으나 정치적 결착이 없는 점령 후 퇴각을 늦췄다. (지신인용엄·분속가무)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>군단 편제는 강력했지만 원거리 수송·정비·위생·말 보충이 병력 규모를 따라가지 못했다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏳️ <span color="red">**패군 측 결과**</span>
+대륙군은 점령한 땅을 정치적 결과로 바꾸지 못한 채 괴멸적 손실을 입었다. 육패 중에서는 적과 자기 지속력을 잘못 헤아린 `北`(배, 패주)에 가깝다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span>
+<span color="red">**나폴레옹**</span>이 <span color="red">**▰**</span> <span color="yellow_bg">**스몰렌스크(Smolensk)**</span>에서 군단 효과·말·수레·창고 재고를 재산정하고 이를 최대 진격선으로 삼았다면 모스크바 점령은 포기했어도 대륙군의 핵심은 보존할 수 있었다.
+
+**직관·편향 한 줄:** 러시아군이 결국 결전을 받아줄 것이라는 기존 성공 시나리오에 묶인 확증편향이 스몰렌스크 이후의 손실 지표를 퇴각 근거로 갱신하지 못하게 한 것으로 볼 수 있다.
+
+〈<span color="blue">**쿠투조프의 러시아군**</span> (승)〉
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>모스크바를 내주는 정치적 비용을 감수하면서 야전군 보존이라는 목적을 유지했다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>결전이 없어도 프랑스군의 손실이 누적될 가능성을 키웠지만 겨울만으로 승리했다고 단순화하지 않아야 한다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>원근을 제거할 수 없는 러시아 내륙의 깊이와 강·도로 병목을 아군의 전투력으로 바꾸었다. (원근·광협·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="blue">**쿠투조프**</span>는 전통적인 결전 승리보다 군대 보존과 적의 소모를 우선했다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>정규군·코사크·농민·거점 보급을 다른 거리와 시간에 연결했다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>
+러시아군은 `以虞待不虞者勝`(이우대불우자승, 대비한 채 대비하지 못한 적을 맞는 자가 이긴다)의 조건을 만들어 프랑스 제국의 전쟁 능력을 크게 약화했다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**러시아군**</span></td><td>야전군은 전면 소지를 피하고 코사크·농민·수비대는 보급로 교란과 지연을 맡았다.</td></tr>
+<tr><td><span color="red">**대륙군**</span></td><td>군단 분진은 신속한 포위를 노렸으나 도로가 벌어지며 상호 지원과 보급 밀도가 낮아졌다.</td></tr>
+</table>
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**러시아군**</span></td><td>황제의 정치적 거부와 야전군의 후퇴·후위·추격 명령이 러시아 종심을 타고 연결됐다.</td></tr>
+<tr><td><span color="red">**대륙군**</span></td><td><span color="red">**나폴레옹**</span>과 <span color="red">**베르티에**</span>의 집중 지휘가 다국적 군단을 운용했으나, 전령 변경이 넓은 공간과 지연을 거쳤다.</td></tr>
+</table>
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**러시아군**</span></td><td>자국 영토의 창고·새 병력·마초에 가까워지며 적의 현지 조달 가능성을 줄였다.</td></tr>
+<tr><td><span color="red">**대륙군**</span></td><td>창고·수레·제빵·현지 조달을 결합했으나, 질병·말 손실·파괴된 도로가 규모의 이점을 상쇄했다.</td></tr>
+</table>
+
+### 동양 — 🏛️ 수 제국군 vs 🏛️ 고구려군 │ 살수대첩·612년 수–고구려 원정(Sui invasion of Goguryeo, 612)
+
+![612년 수–고구려 원정 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan1/sui_commanders.png)
+![612년 수–고구려 원정 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan1/sui_soldiers.png)
+![612년 수–고구려 원정 지휘·편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan1/sui_command_structure.png)
+![612년 동아시아 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan1/sui_country_map.png)
+![612년 수–고구려 원정 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan1/sui_strategy_map.png)
+![612년 수–고구려 원정 단계별 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan1/sui_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+- <span color="red">**▰**</span> <span color="yellow_bg">**탁군(涿郡)**</span>은 대규모 동원과 물자가 집결한 후방 기지였다. 운하·도로로 북상한 공급이 여기서 전장으로 다시 퍼졌다.
+- 🌊 <span color="blue_bg">**요하(遼河)**</span>와 <span color="blue">**▰**</span> <span color="yellow_bg">**요동성(遼東城)**</span>은 원정군의 속도를 멈춰 세운 첫 큰 병목이었다.
+- 🌊 <span color="blue_bg">**압록강(鴨綠江)**</span>을 넘은 별동대는 본대 보급과 연결이 약해진 채 평양으로 깊이 들어갔다.
+- 🌊 <span color="blue_bg">**살수(薩水, 오늘날 청천강)**</span>는 퇴각대가 건너야 한 수로 병목이었고, 추격과 혼란이 겹친 결정적 타격점이 되었다.
+
+#### 전투의 서사 — 백만 동원을 삼십만 별동대의 기아로 바꾼 거리
+
+<span color="red">**수 양제(隋煬帝)**</span>는 국가의 운하·창고·역역을 이용해 <span color="red">**▰**</span> <span color="yellow_bg">**탁군(涿郡)**</span>에 전례 없는 병력과 물자를 모았다. 그러나 집결 규모는 전투력인 동시에 도로·선박·역부·농가를 매일 소모하는 비용 체계였다. 🌊 <span color="blue_bg">**요하(遼河)**</span>를 건넜 전선이 벌어지자 <span color="blue">**영양왕(嬰陽王)**</span>의 고구려는 산성과 거점 방어로 수군의 속도를 낮췄다.
+
+<span color="red">**수 양제**</span>는 요동성 공방이 길어지자 <span color="red">**우중문(于仲文)**</span>과 <span color="red">**우문술(宇文述)**</span>이 이끄는 30만 5천 명 규모의 별동대를 평양 방면으로 보냈다. 병사가 직접 운반해야 한 식량과 장비는 기동력을 떨어뜨렸고, 유기·은닉으로 실제 소지량은 더 줄었다. <span color="blue">**을지문덕(乙支文德)**</span>은 수군의 진영을 살피고 싸우며 물러나 깊이 이끌었다.
+
+평양 앞에 이른 수군은 함락을 벌이기에 부족했고 전투를 계속할 식량도 부족했다. 퇴각이 시작되자 추격대가 피로한 행렬을 압박했고, 🌊 <span color="blue_bg">**살수(薩水)**</span>를 건너는 구간에서 질서가 무너졌다. 사료의 귀환 수치는 전통적 서술이므로 현대적 정밀 통계로 다루지 않는다. 확실한 것은 대규모 별동대가 보급과 지휘의 한계를 넘은 상태에서 퇴각하며 파괴됐다는 점이다.
+
+#### 전투에서 사용된 속임수 — 을지문덕의 위장 후퇴와 항복 탐색
+
+<span color="blue">**을지문덕**</span>은 적정을 살피면서 싸우며 물러나 수군이 거리를 더 쓰게 했다. 수군 지휘부는 항복 가능성과 고구려의 약세를 탐색했지만, 실제 효과는 원정군을 평양 깊숙이 들여보내 보급 한계를 드러내는 것이었다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** <span color="blue">**을지문덕**</span>은 수군의 병력·보급 상태를 확인하고 마른 행렬을 더 깊이 들여보내려 했다.
+
+**보인 신호와 믿은 이유.** 반복된 후퇴와 항복 가능성은 고구려군이 결전을 감당하지 못한다는 해석을 가능하게 했다.
+
+**유발된 행동과 결과.** 수군은 본대·수군·보급선과의 연결이 약한 채 평양 방면까지 진입했고, 퇴각 시점에 추격과 강 병목에 잡혔다.
+
+**사료의 경계.** 살수의 수공 전설은 후대 서사와 분리해야 한다. 본문은 사료로 확인되는 위장 후퇴·기아·퇴각 중 타격에 초점을 둔다.
+
+#### 속임수 일곱 질문
+1. **누가 누구를 속였는가?** <span color="blue">**을지문덕**</span>의 고구려군이 <span color="red">**우중문·우문술**</span>의 수군 별동대에 후퇴와 항복 가능성을 보였다.
+2. **어떤 사실이 거짓이었는가?** 고구려의 저항 의지와 야전 능력이 소진됐다는 인상이 거짓에 가까웠다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 고구려군은 실제로 물러났지만 군대 보존과 적의 기아를 목표로 한 퇴각이었다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 요하를 넘은 대군의 규모와 제국의 자원이 지속 가능성까지 보장한다는 기대가 있었다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성이 높다. 평양까지의 거리와 실제 식량 재고만으로도 진격 위험은 컸다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 병사가 직접 운반한 식량의 실제 잔량과 본대·수군과의 재연결 가능성을 독립적으로 검산하지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 체스·바둑에서 물러나며 상대의 돌출을 유도하는 수를 복기하며 연습할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>佚而勞之<br>일이노지 — 쉬는 적을 피로하게 한다</td><td>반복 후퇴와 추격이 수군의 식량·체력·행군 질서를 소모시켰다.</td></tr>
+<tr><td>近而示遠<br>근이시원 — 가까운데 먼 것처럼 보인다</td><td>평양이 눈앞에 있어도 보급과 결착이 없으면 작전적으로는 멀리 있는 목표였다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**고구려군(승)**</span></td><td>산성 수비·야전 지연·추격대를 거리에 따라 결합했다.</td><td>을지문덕이 정찰·후퇴·추격의 시점을 연결했다.</td><td>자국 거점에 가까운 방어군이 원정군의 식량이 줄 때까지 버폈다.</td></tr>
+<tr><td><span color="red">**수군(패)**</span></td><td>대규모 본대·별동대·수군이 서로 다른 시간표로 움직였다.</td><td>황제의 지침과 여러 지휘관의 판단이 겹쳐 현장 재량을 제한했다.</td><td>병사 자체 운반에 지나치게 의존해 전투 전에 식량이 줄었다.</td></tr>
+</table>
+
+〈<span color="red">**수 양제의 수군**</span> (패)〉
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>전국 동원은 병력을 모았지만 농가·역부·장인의 생업과 동의를 소진시켰다. (지기·사기·충성)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>고구려군의 후퇴와 항복 탐색을 전체 저항 붕괴 가능성으로 해석했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>요하·요동성·압록강·살수가 만든 연속 병목을 규모로 돌파하려 했다. (원근·험이·광협·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="red">**수 양제**</span>의 결행과 <span color="red">**우중문·우문술**</span>의 쟁공 구조가 식량 부족을 중단 명분으로 바꾸지 못했다. (지신인용엄·분속가무)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>별동대와 수군, 본대의 명령·보급·합류 시간표가 어괋났다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏳️ <span color="red">**패군 측 결과**</span>
+수군 별동대는 기아 상태에서 퇴각하다 추격과 🌊 <span color="blue_bg">**살수(薩水)**</span> 병목에서 붕괴했다. 육패 중에서는 적과 나의 지속력을 헤아리지 못한 `北`(배, 패주)에 가깝다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span>
+<span color="red">**우중문·우문술**</span>이 🌊 <span color="blue_bg">**압록강(鴨綠江)**</span> 이후 실제 식량 잔량을 독립적으로 재점검하고, 평양 진격 대신 요동 전선과의 연결 회복을 택했다면 별동대의 괴멸적 패주는 피할 수 있었다.
+
+**직관·편향 한 줄:** 황제가 동원한 규모가 작전 지속력과 승리 확률을 보장한다는 규모 편향과 매몰비용이, 현재 식량 정보를 철수 근거로 바꾸지 못하게 한 것으로 볼 수 있다.
+
+〈<span color="blue">**을지문덕의 고구려군**</span> (승)〉
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>산성·야전·추격 부대가 침공군의 지연과 소모라는 공통 목적에 묶였다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>수군의 식량과 질서가 줄어드는 시간을 방어군의 승리 확률로 바꾸었으나, 후대의 수공 전설까지 사실로 단정하지 않아야 한다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>산성과 강을 단독 거점이 아니라 지연·정찰·추격의 연속 체계로 썼다. (험이·광협·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="blue">**을지문덕**</span>은 정찰과 기만, 퇴각과 타격을 같은 시간표에 넣었다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>수의 대군을 정면 대칭하지 않고 수비·지연·정찰·추격으로 분할해 운용했다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>
+고구려군은 `識衆寡之用者勝`(식중과지용자승, 대군과 소수 병력을 각각 쓸 줄 아는 자가 이긴다)과 `以虞待不虞者勝`(이우대불우자승, 대비한 채 대비하지 못한 적을 맞는 자가 이긴다)의 조건을 결합했다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**고구려군**</span></td><td>산성 수비대가 본대를 지연하고, 야전군은 후퇴로 별동대를 깊이 이끌었으며, 추격대가 퇴로를 타격했다.</td></tr>
+<tr><td><span color="red">**수군**</span></td><td>본대·평양 별동대·내호아 수군이 분리되어 서로의 실패를 보완하지 못했다.</td></tr>
+</table>
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**고구려군**</span></td><td><span color="blue">**영양왕**</span>의 전략 아래 <span color="blue">**을지문덕**</span>이 현장 정찰·지연·추격을 연결했다.</td></tr>
+<tr><td><span color="red">**수군**</span></td><td><span color="red">**수 양제**</span>의 엄격한 지침과 <span color="red">**우중문·우문술**</span> 등 복수 지휘관의 권한 경계가 중단과 퇴각 판단을 느리게 했다.</td></tr>
+</table>
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**고구려군**</span></td><td>산성·강·지역 보급 기반을 이용해 지연전을 지속하고 적의 식량이 먼저 줄게 했다.</td></tr>
+<tr><td><span color="red">**수군**</span></td><td>별동대 병사가 식량을 직접 지고 갔고, 은닉·유기·장거리 소비로 평양 부근에서 지속력을 잃었다.</td></tr>
+</table>
+
+#### 참고자료
+- [Air University — Napoleon's Logistics](https://ntrl.ntis.gov/NTRL/dashboard/searchResults/titleDetail/AD1022125.xhtml)
+- [U.S. Army — Army Logistics and Its Historical Influences](https://asu.army.mil/alog/2012/JanFeb12/pdf/jan-feb2012.pdf)
+- [국사편찬위원회 — A History of Korea](https://contents.history.go.kr/resources/common/pdf/A%20History%20of%20Korea_The%20Understanding%20Korea%20Series.pdf)
+- [한국사데이터베이스 — 612년 수–고구려 전쟁 관련 기록](https://db.history.go.kr/common/compareViewer.do?levelId=sg_027_0050_0150&type=ancient)
 
 ---
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
