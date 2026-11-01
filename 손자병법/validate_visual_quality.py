@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
+import json
 import math
 import re
 import subprocess
@@ -24,6 +26,8 @@ ROOT = next(
 REQUIRED_CATEGORIES = (
     "commanders", "soldiers", "command_structure", "country_map", "strategy_map", "sequence"
 )
+YONGGAN3_PIPELINE = "yonggan3-v2-deterministic-overlay"
+YONGGAN3_DIR = ROOT / "generated" / "jiudi_yonggan3"
 BENCHMARKS = {
     "commanders": ("jiudi12/cowpens_commanders.png", "jiudi12/caizhou_commanders.png"),
     "soldiers": ("jiudi17/alesia_soldiers_weapons_life.png", "jiudi17/feiriver_soldiers_weapons_life.png"),
@@ -150,6 +154,67 @@ def target_image(repo_relative: str) -> Image.Image:
     return Image.open(io.BytesIO(completed.stdout)).convert("RGB")
 
 
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def yonggan3_provenance_errors(
+    repo_relative: str,
+    image: Image.Image,
+    build_entries: dict[str, dict[str, object]],
+    qa_entries: dict[str, dict[str, object]],
+) -> list[str]:
+    """용간편 3구절의 글자 합성·시대 검수 증거가 최종 PNG와 함께 있는지 확인한다."""
+    if "/generated/jiudi_yonggan3/" not in f"/{repo_relative}":
+        return []
+
+    errors: list[str] = []
+    name = Path(repo_relative).name
+    local = YONGGAN3_DIR / name
+    source = YONGGAN3_DIR / "source" / name
+    info = image.info
+    width, height = image.size
+    if width < 2400 or height < 2000:
+        errors.append(f"{name}: 최종 크기 {width}×{height}가 최소 2400×2000보다 작습니다")
+    if info.get("sunzi_visual_pipeline") != YONGGAN3_PIPELINE:
+        errors.append(f"{name}: 결정론적 글자 합성 파이프라인 메타데이터가 없습니다")
+    try:
+        labels = json.loads(info.get("sunzi_required_labels", "[]"))
+    except json.JSONDecodeError:
+        labels = []
+    if len(labels) < 3 or any(not str(label).strip() for label in labels):
+        errors.append(f"{name}: 제목·지명·인물·단계 필수 라벨 기록이 불완전합니다")
+    try:
+        forbidden = json.loads(info.get("sunzi_forbidden_objects", "[]"))
+    except json.JSONDecodeError:
+        forbidden = []
+    if not forbidden:
+        errors.append(f"{name}: 시대착오 금지 물체 목록이 없습니다")
+    if not source.exists():
+        errors.append(f"{name}: 합성 전 원본 베이스가 source/에 없습니다")
+    elif info.get("sunzi_source_sha256") != sha256(source):
+        errors.append(f"{name}: 기록된 원본 베이스 해시가 실제 source 파일과 다릅니다")
+
+    build = build_entries.get(name)
+    if not build:
+        errors.append(f"{name}: visual_build_report.json에 생성 기록이 없습니다")
+    elif local.exists() and build.get("output_sha256") != sha256(local):
+        errors.append(f"{name}: 생성 보고서와 최종 PNG 해시가 다릅니다")
+
+    qa = qa_entries.get(name)
+    required_checks = (
+        "original_inspected", "mobile_390_inspected", "required_text_visible",
+        "forbidden_objects_absent", "period_equipment_verified", "empty_label_plates_resolved",
+    )
+    if not qa:
+        errors.append(f"{name}: 사람 눈의 원본·390px·시대 고증 검수 기록이 없습니다")
+    else:
+        failed = [check for check in required_checks if qa.get(check) is not True]
+        if failed:
+            errors.append(f"{name}: 시각 검수 미통과 — {', '.join(failed)}")
+    return errors
+
+
 def validate(page: Path) -> list[str]:
     errors: list[str] = []
     images = [(path, category(Path(path).name)) for path in referenced_images(page)]
@@ -163,9 +228,23 @@ def validate(page: Path) -> list[str]:
         kind: [metrics(git_image(relative)) for relative in relatives]
         for kind, relatives in BENCHMARKS.items()
     }
+    build_entries: dict[str, dict[str, object]] = {}
+    qa_entries: dict[str, dict[str, object]] = {}
+    build_report = YONGGAN3_DIR / "visual_build_report.json"
+    qa_report = YONGGAN3_DIR / "visual_qa_report.json"
+    if build_report.exists():
+        build_entries = {
+            item["file"]: item for item in json.loads(build_report.read_text(encoding="utf-8"))["images"]
+        }
+    if qa_report.exists():
+        qa_entries = {
+            item["file"]: item for item in json.loads(qa_report.read_text(encoding="utf-8"))["images"]
+        }
+
     loaded: list[tuple[str, str, Image.Image]] = []
     for path, kind in images:
         image = target_image(path)
+        errors.extend(yonggan3_provenance_errors(path, image, build_entries, qa_entries))
         loaded.append((path, kind, image))
         current = metrics(image)
         entropy_floor = min(item["entropy"] for item in baseline[kind]) * 0.72

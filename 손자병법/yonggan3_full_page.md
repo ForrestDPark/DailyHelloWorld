@@ -55,15 +55,15 @@
 ---
 ## 2. 전통 주석 기반 분석
 
-- **조조(曹操)** — “여러 해 서로 지키다가 하루에 승부를 정한다. **작록과 백금을 아껴 적정을 모르는 자를 어질다고 여기지 마라.**”
-- **이전(李筌)** — “병사와 백성이 오래 수고했는데 정보의 값을 아끼지 마라. **작은 재물을 보전하려다 수년의 비용과 목숨을 함께 잃는다.**”
-- **두목(杜牧)** — “`爵祿`은 공을 인정해 사람을 붙들고 `百金`은 일을 이루게 하는 비용이다. **정보를 얻을 사람에게 합당한 명분과 보상을 모두 갖추어라.**”
-- **매요신(梅堯臣)** — “결전은 하루지만 그날 쓸 앎은 미리 길러야 한다. **싸움이 닥친 뒤에야 적정을 찾으면 이미 늦었음을 잊지 마라.**”
-- **장예(張預)** — “날마다 천금을 쓰면서 백금을 아끼는 계산을 절약이라 부르지 마라. **큰 손실을 줄일 작은 비용의 비례를 먼저 따져라.**”
-- **왕석(王晳)** — “`情`을 뜬소문으로 채우지 마라. **적의 허실과 의도, 내부 사정을 실제 사람에게서 얻고 서로 맞추어 보아라.**”
-- **가림(賈林)** — “대치가 길수록 익숙한 추측을 사실로 착각하기 쉽다. **오래 믿어 온 판단일수록 새 보고로 다시 시험하라.**”
-- **두우(杜佑)** — “작위·녹봉·재물은 정보 체계를 유지하는 서로 다른 수단이다. **한 번의 포상보다 지속적인 신뢰와 보호까지 마련하라.**”
-- **진호(陳皞)** — “여기서 `不仁`은 부드러운 마음의 부족만이 아니다. **알아볼 수 있었는데도 비용을 아껴 공동체의 희생을 키운 책임을 물어라.**”
+- **조조(曹操)** — "여러 해 서로 지키다가 하루에 승부를 정한다. **작록과 백금을 아껴 적정을 모르는 자를 어질다고 여기지 마라.**"
+- **이전(李筌)** — "병사와 백성이 오래 수고했는데 정보의 값을 아끼지 마라. **작은 재물을 보전하려다 수년의 비용과 목숨을 함께 잃는다.**"
+- **두목(杜牧)** — "`爵祿`은 공을 인정해 사람을 붙들고 `百金`은 일을 이루게 하는 비용이다. **정보를 얻을 사람에게 합당한 명분과 보상을 모두 갖추어라.**"
+- **매요신(梅堯臣)** — "결전은 하루지만 그날 쓸 앎은 미리 길러야 한다. **싸움이 닥친 뒤에야 적정을 찾으면 이미 늦었음을 잊지 마라.**"
+- **장예(張預)** — "날마다 천금을 쓰면서 백금을 아끼는 계산을 절약이라 부르지 마라. **큰 손실을 줄일 작은 비용의 비례를 먼저 따져라.**"
+- **왕석(王晳)** — "`情`을 뜬소문으로 채우지 마라. **적의 허실과 의도, 내부 사정을 실제 사람에게서 얻고 서로 맞추어 보아라.**"
+- **가림(賈林)** — "대치가 길수록 익숙한 추측을 사실로 착각하기 쉽다. **오래 믿어 온 판단일수록 새 보고로 다시 시험하라.**"
+- **두우(杜佑)** — "작위·녹봉·재물은 정보 체계를 유지하는 서로 다른 수단이다. **한 번의 포상보다 지속적인 신뢰와 보호까지 마련하라.**"
+- **진호(陳皞)** — "여기서 `不仁`은 부드러운 마음의 부족만이 아니다. **알아볼 수 있었는데도 비용을 아껴 공동체의 희생을 키운 책임을 물어라.**"
 
 #### 리링의 고증과 현대적 독법
 
@@ -127,17 +127,17 @@
 
 ### 서양 — 🇺🇸 미국 태평양함대 vs 🏛️ 일본 제국 해군 │ 미드웨이 해전(Battle of Midway, 1942)
 
-![미드웨이 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/midway_commanders.png)
+![미드웨이 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/midway_commanders.png?v=20261101-v2)
 
-![미드웨이 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/midway_soldiers_weapons_life.png)
+![미드웨이 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/midway_soldiers_weapons_life.png?v=20261101-v2)
 
-![미드웨이 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/midway_command_structure.png)
+![미드웨이 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/midway_command_structure.png?v=20261101-v2)
 
-![미드웨이 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/midway_country_map.png)
+![미드웨이 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/midway_country_map.png?v=20261101-v2)
 
-![미드웨이 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/midway_strategy_map.png)
+![미드웨이 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/midway_strategy_map.png?v=20261101-v2)
 
-![미드웨이 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/midway_sequence.png)
+![미드웨이 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/midway_sequence.png?v=20261101-v2)
 
 **뒤에서 반복될 지형을 먼저 잡아두기**
 
@@ -252,17 +252,17 @@
 
 ### 동양 — <span color="blue">🏛️ 조조군</span> vs <span color="red">🏛️ 원소군</span> │ 관도대전(官渡之戰, 200)
 
-![관도대전 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/guandu_commanders.png)
+![관도대전 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/guandu_commanders.png?v=20261101-v2)
 
-![관도대전 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/guandu_soldiers_weapons_life.png)
+![관도대전 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/guandu_soldiers_weapons_life.png?v=20261101-v2)
 
-![관도대전 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/guandu_command_structure.png)
+![관도대전 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/guandu_command_structure.png?v=20261101-v2)
 
-![관도대전 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/guandu_country_map.png)
+![관도대전 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/guandu_country_map.png?v=20261101-v2)
 
-![관도대전 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/guandu_strategy_map.png)
+![관도대전 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/guandu_strategy_map.png?v=20261101-v2)
 
-![관도대전 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/guandu_sequence.png)
+![관도대전 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/guandu_sequence.png?v=20261101-v2)
 
 **뒤에서 반복될 지형을 먼저 잡아두기**
 

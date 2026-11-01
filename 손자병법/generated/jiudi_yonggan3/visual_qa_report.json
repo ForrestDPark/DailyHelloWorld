@@ -1,0 +1,126 @@
+{
+  "reviewed_at": "2026-11-01",
+  "review_scope": "원본 2400×3600 및 390px 모바일 축소 연락판 육안 검수",
+  "images": [
+    {
+      "file": "midway_commanders.png",
+      "original_inspected": true,
+      "mobile_390_inspected": true,
+      "required_text_visible": true,
+      "forbidden_objects_absent": true,
+      "period_equipment_verified": true,
+      "empty_label_plates_resolved": true,
+      "notes": "지휘관 이름표와 미·일 진영 구분이 390px 축소본에서도 식별됨"
+    },
+    {
+      "file": "midway_soldiers_weapons_life.png",
+      "original_inspected": true,
+      "mobile_390_inspected": true,
+      "required_text_visible": true,
+      "forbidden_objects_absent": true,
+      "period_equipment_verified": true,
+      "empty_label_plates_resolved": true,
+      "notes": "1942년 항공모함·함재기·갑판 장비와 설명 라벨 확인"
+    },
+    {
+      "file": "midway_command_structure.png",
+      "original_inspected": true,
+      "mobile_390_inspected": true,
+      "required_text_visible": true,
+      "forbidden_objects_absent": true,
+      "period_equipment_verified": true,
+      "empty_label_plates_resolved": true,
+      "notes": "양측 지휘 계통의 인명·부대명이 빈 칸 없이 표시됨"
+    },
+    {
+      "file": "midway_country_map.png",
+      "original_inspected": true,
+      "mobile_390_inspected": true,
+      "required_text_visible": true,
+      "forbidden_objects_absent": true,
+      "period_equipment_verified": true,
+      "empty_label_plates_resolved": true,
+      "notes": "하와이·미드웨이·일본과 작전 방향 표식 확인"
+    },
+    {
+      "file": "midway_strategy_map.png",
+      "original_inspected": true,
+      "mobile_390_inspected": true,
+      "required_text_visible": true,
+      "forbidden_objects_absent": true,
+      "period_equipment_verified": true,
+      "empty_label_plates_resolved": true,
+      "notes": "항모 위치와 정찰·공격 방향 라벨 확인"
+    },
+    {
+      "file": "midway_sequence.png",
+      "original_inspected": true,
+      "mobile_390_inspected": true,
+      "required_text_visible": true,
+      "forbidden_objects_absent": true,
+      "period_equipment_verified": true,
+      "empty_label_plates_resolved": true,
+      "notes": "4단계 시간 흐름과 핵심 사건 라벨 확인"
+    },
+    {
+      "file": "guandu_commanders.png",
+      "original_inspected": true,
+      "mobile_390_inspected": true,
+      "required_text_visible": true,
+      "forbidden_objects_absent": true,
+      "period_equipment_verified": true,
+      "empty_label_plates_resolved": true,
+      "notes": "기존 빈 세로 명패를 번호 표식으로 덮고 하단 범례에 조조·원소 양측 인명을 대응함"
+    },
+    {
+      "file": "guandu_soldiers_weapons_life.png",
+      "original_inspected": true,
+      "mobile_390_inspected": true,
+      "required_text_visible": true,
+      "forbidden_objects_absent": true,
+      "period_equipment_verified": true,
+      "empty_label_plates_resolved": true,
+      "notes": "현대 총기를 제거하고 후한 말 석궁·활·창·방패·공성기·수레로 교정함"
+    },
+    {
+      "file": "guandu_command_structure.png",
+      "original_inspected": true,
+      "mobile_390_inspected": true,
+      "required_text_visible": true,
+      "forbidden_objects_absent": true,
+      "period_equipment_verified": true,
+      "empty_label_plates_resolved": true,
+      "notes": "조조·원소 양 진영의 인명과 지휘 관계가 표시됨"
+    },
+    {
+      "file": "guandu_country_map.png",
+      "original_inspected": true,
+      "mobile_390_inspected": true,
+      "required_text_visible": true,
+      "forbidden_objects_absent": true,
+      "period_equipment_verified": true,
+      "empty_label_plates_resolved": true,
+      "notes": "업·백마·연진·관도와 양 세력 진출 방향 확인"
+    },
+    {
+      "file": "guandu_strategy_map.png",
+      "original_inspected": true,
+      "mobile_390_inspected": true,
+      "required_text_visible": true,
+      "forbidden_objects_absent": true,
+      "period_equipment_verified": true,
+      "empty_label_plates_resolved": true,
+      "notes": "관도 방어선·원소 본영·오소 군량고와 이동선 확인"
+    },
+    {
+      "file": "guandu_sequence.png",
+      "original_inspected": true,
+      "mobile_390_inspected": true,
+      "required_text_visible": true,
+      "forbidden_objects_absent": true,
+      "period_equipment_verified": true,
+      "empty_label_plates_resolved": true,
+      "notes": "현대 총기 없이 4단계 전투 흐름과 사건 라벨 확인"
+    }
+  ]
+}
