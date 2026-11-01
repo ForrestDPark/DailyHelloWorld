@@ -1,4 +1,3 @@
-<!-- sunzi-analysis-mode: light -->
 > 선지자, 불가취어귀신, 불가상어사, 불가험어도, 필취어인, 지적지정자야. — 당사자와 현장을 확인하지 않고 짐작만으로 결론 내리면 재수가 없다.
 
 ---
@@ -125,6 +124,476 @@
 심리학적으로 `象於事`의 위험은 대표성 휴리스틱과 한 가지 시나리오 집중에서 선명해진다. 과거의 생생한 사건과 닮았다는 이유로 같은 원인·결과의 확률을 높게 잡으면 기저율과 다른 가능한 설명을 놓친다. 사용자의 「생각에대한 생각」 메모처럼 `고장 / 조작 미숙 / 통신 지연 / 센서 오류 / 실제 공격`처럼 가능한 시나리오를 나누고, 각각 무엇을 관찰하면 구별되는지 정해야 한다.
 
 다만 “사람에게 물었다”는 사실만으로 편향이 사라지지 않는다. 질문 방식이 답을 유도할 수 있고, 같은 소문을 들은 여러 사람이 독립된 출처처럼 보일 수 있으며, 권위가 높은 사람의 말이 과대평가될 수 있다. 출처의 접근 범위와 독립성, 관찰 시각, 이해관계, 반증 자료를 함께 기록해야 귀신의 권위를 사람의 권위로 바꾸는 데서 멈추지 않는다.
+
+---
+## 4. 역사적 실증 사례
+
+### 서양 — 🇺🇸·🇬🇧 연합군 vs 🏛️ 나치 독일군 │ 노르망디 상륙과 포티튜드(Operation Fortitude & Normandy, 1944)
+
+![노르망디 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan5/normandy_commanders.png)
+
+![노르망디 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan5/normandy_soldiers_weapons_life.png)
+
+![노르망디 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan5/normandy_command_structure.png)
+
+![노르망디 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan5/normandy_country_map.png)
+
+![노르망디 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan5/normandy_strategy_map.png)
+
+![노르망디 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan5/normandy_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- 🇬🇧 **영국 남동부**는 실제 상륙군이 출항한 남부 항만과 가상의 제1미군집단(FUSAG)이 꾸며진 도버 방면을 동시에 품었다. 독일 정찰이 본 실제 집결과 가짜 무선·장비가 한 그림 안에 섞였다.
+- 🌊 <span color="blue_bg">**영국해협(English Channel)**</span>은 가장 짧은 도버–칼레 축을 상식적인 침공로처럼 보이게 했지만, 실제 함대는 더 서쪽의 노르망디로 건넜다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**파드칼레(Pas-de-Calais)**</span>는 독일 제15군이 붙들린 예상 주공 지점이었다. 이 예비대가 즉시 빠져나오면 노르망디 교두보가 훨씬 위험해졌다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**노르망디(Normandy)**</span>의 유타·오마하·골드·주노·소드 해안은 실제 상륙 지점이었다. 해안 뒤 보카주와 도로 병목 때문에 상륙 성공 뒤에도 증원이 중요했다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**셰르부르(Cherbourg)**</span>와 <span color="blue">**▰**</span> <span color="yellow_bg">**캉(Caen)**</span>은 항만·도로망 확보의 핵심이었다. 독일 예비대가 늦게 움직인 시간은 연합군이 교두보를 넓힐 시간을 주었다.
+
+#### 상세 전역 서사 — 통제된 사람 출처가 독일의 ‘칼레가 주공’이라는 모델을 굳히다
+
+<span color="blue">**아이젠하워**</span>의 연합군은 대규모 함대와 상륙 준비를 완전히 숨길 수 없었다. 그래서 존재 자체를 감추기보다 **어디가 주공인가**를 틀리게 읽도록 만들었다. 영국 방첩기관은 독일이 영국에 보낸 요원 대부분을 체포하거나 통제했고, 이중간첩망을 통해 사실과 거짓을 섞은 보고를 보냈다. <span color="blue">**후안 푸홀 가르시아(Juan Pujol García, GARBO)**</span>는 독일이 실재한다고 믿은 가상 하부 요원망의 보고를 축적해 신뢰를 만들었다.
+
+포티튜드 사우스는 도버 맞은편 <span color="red">**▰**</span> <span color="yellow_bg">**파드칼레(Pas-de-Calais)**</span>가 가장 짧은 해협이라는 지리적 상식, <span color="blue">**패튼**</span>의 명성, 가짜 무선량과 모형 장비를 하나의 이야기로 묶었다. 6월 6일 실제 상륙이 시작된 뒤에도 <span color="blue">**가르보**</span>는 노르망디가 양동이고 주공은 아직 칼레로 온다는 취지의 보고를 독일에 전달했다. 독일 지휘부는 이 말을 단독으로 믿은 것이 아니라, 이미 세워 둔 ‘칼레 주공’ 가설과 다른 기만 신호가 서로 맞는다고 보았다.
+
+그 결과 <span color="red">**히틀러**</span>와 독일 최고지휘부는 <span color="red">**룬트슈테트**</span>·<span color="red">**롬멜**</span>이 맞닥뜨린 노르망디 현장과 떨어진 채 예비대를 분산했다. 제15군의 상당 전력은 칼레 방면에 남았다. 노르망디의 독일 제7군은 실제 상륙을 보고도 그것이 전체 침공의 중심인지 확신하지 못했고, 연합군은 해안 교두보를 연결하고 증원을 쌓을 시간을 얻었다.
+
+#### 전투에서 사용된 속임수 — 믿을 만한 사람 출처에 가짜 주공을 실어 보내다
+
+속인 주체는 연합군 기만기획부와 영국의 이중간첩 체계였고, 실제 의도는 노르망디 상륙이었다. 독일에는 가상의 FUSAG, 도버 일대 집결, 칼레 주공 보고를 보였다. 독일이 이를 믿은 이유는 칼레의 지리적 개연성과 <span color="blue">**패튼**</span>에 대한 기대, 그리고 오랜 기간 정확한 일부 정보를 섞어 신뢰를 쌓은 사람 출처가 결합했기 때문이다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 연합군은 노르망디의 실제 주공을 보호하고 독일 예비대를 칼레에 묶으려 했다.
+
+**보인 신호와 믿은 이유.** 가상 군집단·무선·모형 장비와 이중간첩 보고가 칼레라는 기존 예상에 맞아떨어졌다.
+
+**유발된 행동과 결과.** 독일 제15군이 칼레에 남고 노르망디 증원이 지연되어 연합군 교두보의 생존 확률이 높아졌다.
+
+**사료의 경계.** 노르망디 승리를 기만 하나로 환원할 수 없다. 제공권·해군력·병참·현장 전투와 독일 지휘구조의 제약도 함께 작용했다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 연합군 기만조직과 통제된 이중간첩들이 독일 정보기관과 최고지휘부를 속였다.
+2. **어떤 사실이 거짓이었는가?** FUSAG의 실전 전력과 칼레 주공 계획이 거짓이었다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 연합군이 영국에 대군을 모았고 <span color="blue">**패튼**</span>이 유력 지휘관이라는 사실은 참이었지만, 그 의미는 조작됐다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 최단 해협과 좋은 항만이라는 기존 모델에 부합했고, 익숙한 사람 출처가 반복해 확인해 주었다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 칼레의 지리 때문에 가능성은 있었지만, 상륙 뒤까지 예비대를 붙든 기간은 짧아졌을 가능성이 높다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 노르망디 현장 보고가 기존 칼레 가설을 깨는지 신속히 재평가하지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 워게임과 보안 모의훈련에서 가설별 독립 확인 항목을 정해 연습할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>해당 구절·독음·뜻</td>
+<td>전장의 장면</td>
+</tr>
+<tr>
+<td>近而示之遠<br>
+근이시지원 — 가까우면서 멀리 있는 듯 보인다</td>
+<td>실제 노르망디 공격을 숨기고 칼레를 주공처럼 보였다.</td>
+</tr>
+<tr>
+<td>攻其無備, 出其不意<br>
+공기무비, 출기불의 — 대비하지 않은 곳을 치고 뜻하지 않은 데서 나온다</td>
+<td>독일이 주공을 기다린 칼레가 아니라 노르망디에 대규모 상륙했다.</td>
+</tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>곡제(편제)</td>
+<td>관도(지휘)</td>
+<td>주용(보급·지속)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**연합군**</span>
+</td>
+<td>상륙군·공수군·해공군과 기만조직을 분업했다.</td>
+<td>SHAEF 아래 실제 작전과 기만 정보가 조정됐다.</td>
+<td>멀버리 항과 해상 수송으로 교두보를 지속했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**독일군**</span>
+</td>
+<td>제7군과 제15군이 떨어져 있었고 기갑 예비대 권한이 갈렸다.</td>
+<td>현장·서부전선·최고지휘부의 권한 충돌로 대응이 늦었다.</td>
+<td>연합군 제공권과 철도·도로 타격으로 증원과 보급이 지연됐다.</td>
+</tr>
+</table>
+
+#### <span color="red">**독일군 (패군)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>현장 지휘관과 최고지휘부가 예비대 운용에 뜻을 모으지 못했다. (지기·결속)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>사람 출처의 신뢰 이력과 칼레 기저 가설을 과대평가하고 노르망디의 새 증거로 확률을 갱신하지 못했다. (지피·타이밍·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>최단거리인 칼레의 이점이 실제 상륙지 선택을 결정한다고 보아 노르망디 해안과 보카주의 작전 가치를 늦게 읽었다. (원근·험이·광협)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>
+<span color="red">**히틀러**</span>·<span color="red">**룬트슈테트**</span>·<span color="red">**롬멜**</span> 사이 권한 분산이 결단 속도를 떨어뜨렸다. (지신인용엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>해안군·기갑예비대·제15군을 하나의 반격 체계로 결합하지 못했다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+**직관·편향 한 줄:** 노르망디 상륙 뒤에도 칼레 주공을 기다린 명령은 기존 가설과 맞는 이중간첩 보고를 더 무겁게 본 확증편향이 작동한 것으로 볼 수 있으며, 예비대 전환을 늦췄다.
+
+🏳️ <span color="red">**패군 측 결과**</span> — 독일군은 六敗의 `亂`(란, 지휘와 명령 체계가 어지러움)에 가까웠다. 🔀 <span color="orange">**패군 측 회피 분기점**</span>은 6월 6일 이후 칼레 가설을 임시 보류하고 노르망디 현장 증거를 독립 평가해 일부 예비대를 조기에 전환하는 것이었다.
+
+#### <span color="blue">**연합군 (승군)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>다국적군과 정보기관이 실제 작전과 기만의 목적을 공유했다. (지기·결속)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>독일의 믿음을 확정 사실로 보지 않고 감청과 이중간첩 반응으로 기만 효과를 계속 확인했다. (지피·타이밍·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>칼레의 명백한 원근 이점을 미끼로 삼고 노르망디의 다섯 해안을 실제 진입구로 열었다. (원근·광협·사생)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>
+<span color="blue">**아이젠하워**</span>는 해공군·상륙군·정보조직의 역할을 통합했다. (지신인용엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>기만·상륙·공수·해상보급을 시간표에 맞춰 결합했다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span> — 연합군은 五勝의 `以虞待不虞者勝`(이우대불우자승, 대비한 채 대비하지 못한 적을 상대하는 자가 이긴다)에 해당했다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**연합군**</span>
+</td>
+<td>다섯 해안 상륙부대, 공수부대, 함대·항공군과 별도의 기만조직을 공동 시간표로 결합했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**독일군**</span>
+</td>
+<td>제7군·제15군·기갑예비대가 지역과 권한별로 갈려 주공 판단 변화에 빠르게 재편되지 못했다.</td>
+</tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**연합군**</span>
+</td>
+<td>SHAEF가 작전 보안을 유지하며 해·공·지상군과 이중간첩 메시지를 조정했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**독일군**</span>
+</td>
+<td>현장군·OB West·최고지휘부 사이에서 기갑 투입 권한과 주공 판단이 갈렸다.</td>
+</tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**연합군**</span>
+</td>
+<td>수송선·상륙정·멀버리 항·해저 송유관과 제공권을 통해 병력과 물자를 계속 투입했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**독일군**</span>
+</td>
+<td>철도·도로망이 공습을 받아 증원과 보급이 느렸고, 칼레에 남은 전력은 노르망디에서 즉시 쓰이지 못했다.</td>
+</tr>
+</table>
+
+출처: [영국 국립문서보관소 — Operation Overlord and D-Day](https://www.nationalarchives.gov.uk/explore-the-collection/explore-by-time-period/second-world-war/operation-overlord-and-d-day/) · [영국 국립문서보관소 — Double Agent Operations](https://www.nationalarchives.gov.uk/double-agent-operations/) · [미 육군 군사사 연구](https://history.army.mil/Portals/143/Images/Publications/ArmyHistoryMag/pdf/20002009/AH70%28W%29.pdf)
+
+### 동양 — <span color="blue">🏛️ 당군</span> vs <span color="red">🏛️ 회서군</span> │ 설야 채주 기습(雪夜襲蔡州, 817)
+
+![채주 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan5/caizhou_commanders.png)
+
+![채주 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan5/caizhou_soldiers_weapons_life.png)
+
+![채주 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan5/caizhou_command_structure.png)
+
+![채주 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan5/caizhou_country_map.png)
+
+![채주 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan5/caizhou_strategy_map.png)
+
+![채주 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan5/caizhou_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- <span color="blue">**▰**</span> <span color="yellow_bg">**문성책(文城柵)**</span>은 오수림이 귀순한 뒤 당군의 전진 기지가 되었다. 적 내부 인물과 병력이 이 지점에서 당군 편제로 전환됐다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**장시촌(張柴村)**</span>은 이우를 사로잡은 곳이자 설야 행군의 출발 거점이었다. 여기서 채주까지 약 70리 기습이 시작됐다.
+- ⛰️ <span color="green_bg">**낭산(朗山) 일대**</span>의 산길과 겨울 눈은 대군 이동을 어렵게 했지만, 귀순 장수의 안내가 위험을 줄였다.
+- 🌊 <span color="blue_bg">**진흙 하천과 수로**</span>는 눈이 녹아 병사들이 고생한 장애물이었다. 행군을 포기하면 비밀이 새고, 계속하면 탈락자가 생기는 분기였다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**회곡(洄曲)**</span>에는 회서 주력이 묶여 있었다. 이 배치 때문에 <span color="red">**▰**</span> <span color="yellow_bg">**채주(蔡州)**</span> 본성의 수비가 얇아졌다.
+
+#### 상세 전역 서사 — 포로를 죽이지 않고 묻자 채주의 허실과 길이 열리다
+
+이전 당군 지휘관들은 회서군의 보루를 정면으로 압박하다 손실을 냈다. <span color="blue">**이소(李愬)**</span>는 부임 뒤 붙잡은 장졸을 직접 불러 사정을 자세히 물었고, 그 결과 적지의 험하고 평탄한 길, 멀고 가까움, 허실을 알게 됐다고 《자치통감》은 기록한다. 그는 포로 <span color="blue">**정사량(丁士良)**</span>을 살려 써서 <span color="blue">**오수림(吳秀琳)**</span>의 문성책 귀순을 이끌었다.
+
+<span color="blue">**오수림**</span>은 채주를 취하려면 <span color="blue">**이우(李祐)**</span>가 필요하다고 말했다. <span color="blue">**이소**</span>는 장시촌에서 보리를 거두던 <span color="blue">**이우**</span>가 당군을 가볍게 여긴다는 정보를 이용해 매복으로 생포했다. 조정과 군중에서 처형 요구가 나왔지만 그는 <span color="blue">**이우**</span>를 살리고 가까이 두어 밤늦게까지 적 내부의 허실을 물었다.
+
+817년 10월, <span color="blue">**이소**</span>는 <span color="blue">**이우**</span>·<span color="blue">**이충의**</span>의 선봉 3천, 자신의 중군 3천, <span color="blue">**전진성**</span>의 후군 3천으로 나누어 장시촌을 떠났다. 목적지를 소수에게만 알리고 눈보라 속을 70리 행군했다. 회서 주력이 회곡에 나가 있고 채주가 비었다는 정보, 성으로 가는 길과 방비를 아는 귀순자의 안내가 없었다면 계산만으로 감행하기 어려운 기동이었다.
+
+새벽에 당군은 성 아래 도착해 성벽을 넘어 문을 열었다. <span color="red">**오원제(吳元濟)**</span>는 처음 소동을 대수롭지 않게 여겼지만, 외부 주력은 돌아오지 못했고 성 안 지휘는 무너졌다. <span color="blue">**이소**</span>는 채주를 점령하고 <span color="red">**오원제**</span>를 사로잡았다. 승리를 연 것은 눈 자체가 아니라, 포로와 귀순 장수를 통해 **현재 채주의 빈틈·길·수비 습관**을 알아낸 과정이었다.
+
+#### 전투에서 사용된 속임수 — 약한 척하며 경계를 늦추고 목적지를 숨기다
+
+<span color="blue">**이소**</span>는 새 지휘관이 전투에 적극적이지 않은 듯 알리고 군기를 느슨하게 보이게 해 회서군의 경계를 낮췄다. 실제로는 군을 정비하고 귀순자를 통해 적정을 모았다. 최종 행군 때도 목적지를 숨겨 정보 누설을 막았고, 회서군은 채주 본성이 직접 공격받을 것이라는 신호를 충분히 얻지 못했다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** <span color="blue">**이소**</span>는 회서군이 방비를 강화하기 전에 채주 본성을 찌르려 했다.
+
+**보인 신호와 믿은 이유.** 이전 지휘관들의 실패 뒤 부임한 그가 온건하고 소극적으로 보이자 회서군은 즉각적 위협을 낮게 평가했다.
+
+**유발된 행동과 결과.** 회서 주력은 외곽에 남고 채주 수비는 얇아져 설야 기습에 고립됐다.
+
+**사료의 경계.** 폭설은 기습을 도왔지만 당군도 큰 고통을 겪었다. 날씨만으로 승리를 설명하면 귀순 장수의 정보와 편제·보급 준비를 지운다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** <span color="blue">**이소**</span>가 <span color="red">**오원제**</span>와 회서 지휘부의 경계를 흐렸다.
+2. **어떤 사실이 거짓이었는가?** 적극적으로 싸울 뜻이 없다는 인상이 실제 준비와 달랐다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 당군이 이전 패배로 지쳐 있다는 사실은 참이었지만 회복·정비 중이라는 점은 감춰졌다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 앞선 당군 지휘관을 물리친 경험이 새 지휘관도 위협적이지 않다는 과신을 만들었다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 외곽 주력 배치 때문에 가능했지만, 채주 방비를 강화했을 가능성이 더 높다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 귀순이 연쇄적으로 일어난 뒤에도 당군의 준비와 장시촌 움직임을 충분히 재확인하지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 워게임에서 목적지를 제한 공개하고 정찰 보고로 계획을 갱신하는 훈련이 가능하다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>해당 구절·독음·뜻</td>
+<td>전장의 장면</td>
+</tr>
+<tr>
+<td>能而示之不能<br>
+능이시지불능 — 능하면서 능하지 못한 듯 보인다</td>
+<td>
+<span color="blue">**이소**</span>는 정비와 정보 수집을 진행하면서도 소극적인 지휘관처럼 보였다.</td>
+</tr>
+<tr>
+<td>攻其無備, 出其不意<br>
+공기무비, 출기불의 — 대비하지 않은 곳을 치고 뜻하지 않은 데서 나온다</td>
+<td>회서 주력이 외곽에 있는 동안 설야에 채주 본성을 직접 기습했다.</td>
+</tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>곡제(편제)</td>
+<td>관도(지휘)</td>
+<td>주용(보급·지속)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**당군**</span>
+</td>
+<td>선봉·중군·후군 각 3천으로 분절했다.</td>
+<td>목적지를 소수만 알고 귀순 장수가 길을 안내했다.</td>
+<td>장시촌에서 휴식·급양한 뒤 70리 야간행군을 감행했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**회서군**</span>
+</td>
+<td>주력과 본성 수비가 분리됐다.</td>
+<td>귀순 연쇄로 내부 정보와 지휘 연결이 무너졌다.</td>
+<td>외곽 주력은 본성 위기에 제때 복귀하지 못했다.</td>
+</tr>
+</table>
+
+#### <span color="red">**회서군 (패군)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>포로·장수의 귀순이 이어져 내부 결속과 사기가 무너졌다. (지기·사기)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>앞선 승리를 새 지휘관에게 일반화하고, 귀순자가 제공할 정보의 위험을 낮게 봤다. (지피·타이밍·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>회곡 주력과 채주 본성이 떨어져 설야 기습에 본성이 고립됐다. (원근·험이·사생)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>
+<span color="red">**오원제**</span>는 새벽 성내 소동을 늦게 심각하게 받아들였고 외부군을 통제하지 못했다. (지신인용엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>본성 수비·외곽 주력·정보 방첩을 하나로 묶지 못했다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+**직관·편향 한 줄:** <span color="red">**오원제**</span>가 앞선 당군의 실패를 새 지휘관에게도 적용한 판단은 대표성·과신이 작동한 것으로 볼 수 있으며, 채주 본성의 낮은 방비를 방치했다.
+
+🏳️ <span color="red">**패군 측 결과**</span> — 회서군은 六敗의 `崩`(붕, 부대와 지휘가 분리되어 무너짐)에 가까웠다. 🔀 <span color="orange">**패군 측 회피 분기점**</span>은 오수림·이우 귀순 뒤 채주 수비를 강화하고 회곡 주력과 본성의 조기경보·복귀 계획을 새로 세우는 것이었다.
+
+#### <span color="blue">**당군 (승군)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>
+<span color="blue">**이소**</span>는 패전 뒤 병사를 돌보고 귀순자를 신뢰해 결속과 사기를 회복했다. (지기·사기)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>포로 한 명의 말에 머물지 않고 정사량·오수림·이우의 접근 범위가 다른 보고를 이어 붙여 채주 공백의 가능성을 높였다. (지피·타이밍·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>귀순자의 안내로 산길·거리·하천·성벽의 위험을 실제 행군 계획으로 바꿨다. (원근·험이·광협·사생)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>
+<span color="blue">**이소**</span>는 포로를 알아보는 지혜와 믿고 맡기는 신의, 설야 행군의 용기를 결합했다. (지신인용엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>9천을 세 갈래 제대로 나누고 정보 안내자·선봉·중군·후군을 결합했다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span> — 당군은 五勝의 `知可以戰與不可以戰者勝`(지가이전여불가이전자승, 싸울 때와 싸우지 않을 때를 아는 자가 이긴다)과 `將能而君不御者勝`(장능이군불어자승, 장수가 유능하고 군주가 억누르지 않으면 이긴다)에 해당했다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**당군**</span>
+</td>
+<td>
+<span color="blue">**이우**</span>·<span color="blue">**이충의**</span> 선봉 3천, <span color="blue">**이소**</span> 중군 3천, <span color="blue">**전진성**</span> 후군 3천으로 나눠 돌파·지휘·후방경계를 결합했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**회서군**</span>
+</td>
+<td>주력이 회곡에 있고 채주 본성 수비가 얇아 상호 지원이 끊겼다.</td>
+</tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**당군**</span>
+</td>
+<td>
+<span color="blue">**이소**</span>가 목적지를 제한 공개하고 귀순 장수에게 길 안내와 선봉 임무를 맡겼다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**회서군**</span>
+</td>
+<td>
+<span color="red">**오원제**</span>의 본성과 외곽 주력 사이 보고·복귀 경로가 기습 속도를 따라가지 못했다.</td>
+</tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**당군**</span>
+</td>
+<td>겨울 장비와 휴대 식량, 말 사료를 갖추고 장시촌을 중간 거점으로 삼았으나 설야 행군의 상세 비용은 사료상 불명이다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**회서군**</span>
+</td>
+<td>채주 성내 물자는 있었으나 외곽 주력과 분리되어 기습 당일 전투 지속 능력으로 전환하지 못했다.</td>
+</tr>
+</table>
+
+출처: [《자치통감》 권240 원문 계열](https://ourartnet.com/%E8%B3%87%E6%B2%BB%E9%80%9A%E9%91%91%E5%85%A8%E9%9B%86.pdf) · [《자치통감》 당기56 번역 대조](https://shishuguan.com/books/zizhi-tongjian-baihuawen-full/volume-11/chapter-240) · [칭화대 공개강의 자료](https://ocw.nthu.edu.tw/ocw/upload/21/417/9702_%E5%BC%B5%E5%85%83%E6%95%99%E6%8E%88_%E7%AC%AC11%E8%AC%9B_%E5%A4%95%E9%99%BD%E7%84%A1%E9%99%90%E5%A5%BD----%E5%AE%89%E5%8F%B2%E4%B9%8B%E4%BA%82%E5%8F%8A%E5%85%B6%E5%BE%8C%E7%9A%84%E5%94%90%E4%BB%A3.pdf)
 
 ---
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
