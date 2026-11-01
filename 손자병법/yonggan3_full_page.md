@@ -1,4 +1,4 @@
-<!-- sunzi-analysis-mode: light -->
+<!-- sunzi-analysis-mode: full -->
 > 상수삭년, 이쟁일일지승, 이애작녹백금, 부지적지정자, 불인지지야. — 오래 끌 일의 결정적 정보를 아끼면 재수가 없다.
 
 ---
@@ -121,6 +121,259 @@
 이 연결에는 한계가 있다. 정보가치 연구의 수학적 모형과 고대 전쟁의 `百金`은 같은 측정 체계가 아니며, 현대 군사 교리는 합법적 민간 조직에 그대로 적용할 수 없다. 또한 특정 지휘자의 내면을 “손실회피”라고 단정할 수 없다. 우리가 사용할 수 있는 것은 **확정된 작은 비용과 불확실한 큰 손실을 같은 표에 올리고, 결정을 바꿀 질문에만 수집 자원을 집중하라**는 판단 절차다.
 
 참고: [Value of Information Analysis 종설](https://doi.org/10.1146/annurev-statistics-040120-010730), [예측·선호 불확실성의 정보가치 연구](https://doi.org/10.1016/j.omega.2023.102936), [미 육군 우선정보요구 관리](https://www.army.mil/article/285410/priority_intelligence_requirement_management_in_divisions_and_corps)
+
+---
+## 4. 역사적 실증 사례
+
+### 서양 — 🇺🇸 미국 태평양함대 vs 🏛️ 일본 제국 해군 │ 미드웨이 해전(Battle of Midway, 1942)
+
+![미드웨이 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/midway_commanders.png)
+
+![미드웨이 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/midway_soldiers_weapons_life.png)
+
+![미드웨이 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/midway_command_structure.png)
+
+![미드웨이 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/midway_country_map.png)
+
+![미드웨이 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/midway_strategy_map.png)
+
+![미드웨이 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/midway_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- 🌊 <span color="blue_bg">**태평양(Pacific Ocean)**</span>: 🏛️ 일본 본토와 🇺🇸 하와이 사이의 거대한 거리 자체가 정찰·무선·연료를 전투력으로 바꾸었다. 함대를 먼저 발견한 쪽이 항공모함의 짧은 타격 창을 얻었다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**진주만(Pearl Harbor)**</span>: 니미츠의 사령부와 스테이션 HYPO가 있던 출발점이다. 암호해독 결과가 함대 배치 명령으로 이어진 곳이다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**미드웨이 환초(Midway Atoll)**</span>: 활주로·정찰기·잠수함을 갖춘 전초기지이자 일본군이 `AF`라 부른 목표였다. 물 부족 위장 전문은 이 목표를 확인하는 검증 실험이 되었다.
+- **미드웨이 북동 해역**: <span color="blue">**플레처**</span>와 <span color="blue">**스프루언스**</span>의 항공모함 세 척이 대기한 매복 공간이다. 일본 정찰선 바깥에서 먼저 타격할 위치를 잡았다.
+- **미드웨이 북서 해역**: <span color="red">**나구모**</span>의 제1항공함대가 접근한 축이다. 섬 공격대와 대함 타격대 사이에서 무장을 바꾸는 동안 갑판 운용이 꼬였다.
+
+#### 상세 전역 서사 — 암호해독에 쓴 비용이 매복 위치와 하루의 승부로 바뀌다
+
+1942년 봄, <span color="red">**야마모토 이소로쿠(Isoroku Yamamoto)**</span>는 미드웨이를 공격해 미국 항공모함을 끌어내고 격멸하려 했다. 그러나 🇺🇸 미 해군은 수개월 동안 통신감청소와 암호해독 인력을 유지했고, 진주만의 <span color="blue">**조지프 로슈포트(Joseph Rochefort)**</span> 팀은 일본 해군 암호 JN-25의 일부와 통신 패턴을 이어 맞추었다. `AF`가 어느 곳인지 논쟁이 남자 미드웨이에서 담수 부족을 평문으로 흘렸고, 일본 통신이 `AF`의 물 부족을 보고하면서 가설을 확인했다.
+
+<span color="blue">**체스터 니미츠(Chester W. Nimitz)**</span>는 완전한 해독을 기다리지 않았다. 목표·대략의 날짜·항공모함 수라는 결정에 필요한 정보를 받아, 수리 중이던 요크타운까지 투입하고 세 항공모함을 미드웨이 북동쪽에 배치했다. 반대로 일본군은 미국 항공모함이 진주만에 있으리라는 가정과 복잡하게 분산된 작전계획에 묶였다.
+
+6월 4일 새벽 일본군은 미드웨이를 공습했지만, 섬의 활주로와 항공전력은 완전히 제거되지 않았다. <span color="red">**나구모 주이치(Chuichi Nagumo)**</span>는 대함 무장을 유지할지 섬 공격용으로 바꿀지 판단해야 했고, 정찰 보고는 늦고 불완전했다. 미국 뇌격기들의 희생적 공격은 직접 명중을 내지 못했지만 일본 전투기를 저공으로 끌어내고 진형을 흐트러뜨렸다. 이어 급강하폭격기가 도착해 아카기·가가·소류를 짧은 시간에 치명적으로 타격했다. 히류의 반격으로 요크타운도 결국 잃었으나 일본은 항공모함 네 척과 숙련 항공요원을 상실했다.
+
+#### 전투에서 사용된 속임수 — `AF` 담수 부족 전문과 일본의 알류샨 양동
+
+미군의 담수 전문은 무작위 거짓말이 아니라 하나의 식별 가설을 시험한 통제된 신호였다. 일본군이 그 신호를 자기 암호망에서 `AF`와 연결해 재전송하자, 미군은 목표를 확인했다. 일본의 알류샨 작전도 미국 전력을 북쪽으로 흩뜨릴 양동이었지만, 통신정보 분석은 그것이 주공이 아님을 구분했다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 미군 정보팀은 `AF=미드웨이`라는 가설을 검증하고 일본 주공을 특정하려 했다.
+
+**보인 신호와 믿은 이유.** 미드웨이가 담수 부족을 평문으로 보냈고, 일본 측은 자신들이 감청한 현지 사정을 내부 보고에 반영했다.
+
+**유발된 행동과 결과.** 일본 암호망의 반응이 목표를 확인해 주자 니미츠는 항공모함을 매복 위치에 먼저 보냈다.
+
+**사료의 경계.** 승리는 암호해독 하나의 자동 결과가 아니다. 정찰, 함재기 조종사의 희생, 일본 정찰 지연, 우연한 조우와 전술 판단이 함께 작용했다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 미군 정보팀은 일본 통신망이 담수 전문에 반응하도록 유도했고, 일본군은 알류샨 양동으로 미국의 시선을 나누려 했다.
+2. **어떤 사실이 거짓이었는가?** 계획적으로 만든 핵심 신호는 미드웨이의 긴급 담수 부족이었다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 일본의 알류샨 공격은 실제 작전이었지만 주공처럼 보이게 배치되었다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 일본군은 미 태평양함대가 기습에 늦게 반응하리라는 작전 전제를 유지했다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 목표 추정은 가능했지만 확신과 배치 시점은 약해졌을 가능성이 높다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 일본군은 장거리 정찰과 잠수함 경계선을 제때 완성하지 못해 미국 항공모함의 출항을 확인하지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 보안 모의훈련에서 식별 가능한 시험 신호를 넣고, 한 출처가 아니라 독립 로그로 가설을 확인할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>近而示之遠<br>근이시원 — 가까우면서 멀리 있는 듯 보임</td><td>미 항공모함은 미드웨이 북동 해역에 이미 접근했지만 일본군은 진주만에 남았으리라 판단했다.</td></tr>
+<tr><td>攻其無備, 出其不意<br>공기무비, 출기불의 — 대비 없는 곳을 치고 뜻하지 않은 때에 나옴</td><td>미 급강하폭격기는 일본 전투기가 저공에 몰리고 항공모함 갑판 운용이 혼란한 순간을 타격했다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**미군**</span></td><td>미드웨이 육상항공대와 TF16·TF17을 분산 배치하되 목표를 하나로 묶었다.</td><td>니미츠의 의도 아래 플레처가 전술지휘하고 스프루언스가 기동부대를 운용했다.</td><td>진주만 수리·암호·정찰 기반을 활용해 요크타운까지 급히 복귀시켰다.</td></tr>
+<tr><td><span color="red">**일본군**</span></td><td>주력·침공·알류샨·잠수함 전력을 넓게 분산했다.</td><td>야마모토의 복잡한 계획과 나구모 현장 판단 사이 정보 지연이 컸다.</td><td>항공모함의 무장 전환과 연료·정찰 운용이 짧은 결전 창에 집중되었다.</td></tr>
+</table>
+
+#### 〈<span color="red">**나구모 주이치**</span> — 패군〉
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>숙련된 승조원은 강했지만 임무 변경과 정보 지연 속에서 공동 상황인식이 흔들렸다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>미 항공모함 위치를 확인하지 못한 채 기존 가정을 유지했다. 불완전한 정찰 보고가 올 때 여러 가능성을 동시에 보존하지 못했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>광대한 해역에서 탐색 부채와 정찰 시간이 곧 생사 통로였다. 미국 매복 위치를 늦게 발견했다. (원근·광협·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>절차를 지켰으나 급변한 정보에 대응하는 결단이 늦었고, 섬과 함대라는 두 목표 사이에서 전환 비용을 키웠다. (지신인용엄·장유오위)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>정찰기 출발 지연, 무장 전환, 전투기 엄호가 얽혀 항공모함의 시간표가 무너졌다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** 미 항공모함이 아직 나타나지 않았다는 제한된 관측을 부재의 증거로 취급한 명령에는 기존 계획을 지지하는 신호를 더 무겁게 보는 **확증편향**이 작동한 것으로 볼 수 있고, 그 결과 대비 전환이 늦었다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 일본군은 지형편의 `北`(배, 적정을 헤아리지 못하고 강적과 맞서 패함)에 가까운 정보 실패를 겪고 항공모함 네 척을 잃었다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span>: 미국 항공모함의 위치를 확인할 때까지 예비 대함 타격대의 즉응성을 보존하고 정찰선을 앞당겼다면 승리를 보장할 수는 없어도 네 척이 한꺼번에 노출되는 완패 가능성은 낮출 수 있었다.
+
+#### 〈<span color="blue">**체스터 니미츠**</span> — 승군〉
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>워싱턴과 HYPO의 견해 차이 속에서도 현지 정보팀을 신뢰하고 함대가 쓸 수 있는 결론으로 바꾸었다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>해독을 전지로 과장하지 않고 목표·날짜·규모의 범위를 사용해 유리한 확률을 높였다. 우연과 조종사 희생이 남았음을 감수했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>미드웨이의 정찰 반경과 북동 해역의 은폐 거리를 매복 지형으로 사용했다. (원근·광협·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>부하의 전문성을 믿고 제한된 정보로 기한 안에 결단했으며 현장 지휘관에게 재량을 주었다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>암호해독·정찰·수리·항모 편제를 하나의 결정 체계로 결합했다. (곡제·관도·주용)</td></tr>
+</table>
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제 曲制(곡제)</td></tr>
+<tr><td><span color="blue">**미군**</span></td><td>TF16·TF17과 미드웨이 육상항공대를 별도 축으로 두고 같은 일본 항모군을 압박했다.</td></tr>
+<tr><td><span color="red">**일본군**</span></td><td>항모 주력, 전함 본대, 침공대, 알류샨대를 분산해 상호지원 시간이 길어졌다.</td></tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>관도 官道(관도)</td></tr>
+<tr><td><span color="blue">**미군**</span></td><td>정보팀→레이턴→니미츠→플레처·스프루언스로 판단과 명령이 연결되었다.</td></tr>
+<tr><td><span color="red">**일본군**</span></td><td>분산 함대와 무선침묵 때문에 야마모토가 나구모의 전술 상황을 즉시 교정하기 어려웠다.</td></tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>주용 主用(주용)</td></tr>
+<tr><td><span color="blue">**미군**</span></td><td>진주만 수리창이 요크타운을 급히 복구했고 섬·잠수함·초계기까지 정찰망에 넣었다.</td></tr>
+<tr><td><span color="red">**일본군**</span></td><td>장거리 작전의 연료와 함재기 무장 전환이 지속 능력과 즉응성을 제한했다.</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>: 미군은 `以虞待不虞者勝`(이우대불우자승, 대비하여 대비하지 않은 적을 상대하는 자가 이김)을 구현했다. 정보 조직에 든 지속 비용이 하루의 배치 우위로 전환되었다.
+
+**서양 실증 사례 출처:** [미 해군 역사유산사령부 — Battle of Midway](https://www.history.navy.mil/browse-by-topic/wars-conflicts-and-operations/world-war-ii/1942/midway.html) · [미 해군 — The Role of COMINT in the Battle of Midway](https://www.history.navy.mil/content/history/nhhc/research/library/online-reading-room/title-list-alphabetically/r/the-role-of-comint-in-the-battle-of-midway.html) · [NSA 국립암호박물관 — Battle of Midway](https://www.nsa.gov/History/National-Cryptologic-Museum/Exhibits-Artifacts/Exhibit-View/Article/2719156/world-war-2-battle-of-midway/)
+
+### 동양 — <span color="blue">🏛️ 조조군</span> vs <span color="red">🏛️ 원소군</span> │ 관도대전(官渡之戰, 200)
+
+![관도대전 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/guandu_commanders.png)
+
+![관도대전 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/guandu_soldiers_weapons_life.png)
+
+![관도대전 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/guandu_command_structure.png)
+
+![관도대전 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/guandu_country_map.png)
+
+![관도대전 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/guandu_strategy_map.png)
+
+![관도대전 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan3/guandu_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- 🌊 <span color="blue_bg">**황하(黃河)**</span>: 하북의 <span color="red">**원소**</span>가 남하할 때 건너야 하는 보급 장벽이었다. 백마·연진의 나루와 관도 전선이 연결된다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**관도(官渡)**</span>: <span color="blue">**조조**</span>가 토루와 방책으로 버틴 주진지다. 병력 열세를 좁은 정면과 견고한 진영으로 줄였다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span>: <span color="red">**순우경**</span>이 지킨 원소군의 군량 집적지다. 관도 본영과 떨어진 거리가 정보가 행동으로 바뀌는 시간 창을 만들었다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**허창(許昌)**</span>: 헌제를 둔 조조의 정치·군수 중심지다. 관도 방어선이 무너지면 직접 위협받을 후방이었다.
+- **오소로 가는 소로**: <span color="blue">**조조**</span>의 5천 정예가 원소군 표지를 가장하고 밤에 통과한 우회축이다.
+
+#### 상세 전역 서사 — 허유의 정보가 오소 기습으로 전환되기까지
+
+관도의 교착은 병력이 적고 군량이 빠듯한 <span color="blue">**조조(曹操)**</span>에게 시간이 불리한 싸움이었다. <span color="red">**원소(袁紹)**</span>는 우세한 병력으로 토산과 누차를 운용했지만 견고한 관도 진영을 단숨에 무너뜨리지 못했다. <span color="blue">**순유**</span>의 건의로 서황·사환이 운송대를 먼저 습격해 보급의 취약성을 드러냈다.
+
+결정적 정보는 <span color="red">**원소**</span> 진영을 이탈한 <span color="blue">**허유**</span>에게서 왔다. 허유는 오소에 대량의 군량이 있고 수비가 허술하다고 알렸다. 조조의 장수 일부는 투항자의 말을 의심했지만 <span color="blue">**순유**</span>와 <span color="blue">**가후**</span>가 공격을 권했다. 조조는 조홍에게 관도 본영을 맡기고 보·기병 5천을 이끌어 밤길로 오소를 쳤다.
+
+기습대는 원소군 증원부대로 가장하고 사람은 재갈을 물고 말의 입을 묶어 소리를 줄였다는 기록이 전한다. 오소의 군량이 불타자 원소 지휘부는 구원과 조조 본영 공격 사이에서 병력을 나누었다. <span color="red">**장합**</span>과 <span color="red">**고람**</span>의 관도 공격은 성과를 내지 못했고, 책임 추궁을 두려워한 두 장수가 투항하면서 원소군은 붕괴했다. 정보는 그 자체로 승리가 아니었다. 출처의 이해관계를 의심하되 시간 안에 검증하고, 정예병·위장·우회·본영 방어를 붙여 실행한 순간에 승리로 바뀌었다.
+
+#### 전투에서 사용된 속임수 — 원소군 증원대로 가장한 오소 야습
+
+조조의 5천 기습대는 불쏘시개를 휴대하고 밤길로 이동하면서 길에서 만난 원소군에게 “장기가 보낸 증원”이라 속였다고 전한다. 이 위장은 소수 병력이 적진 깊은 군량고에 접근할 시간을 벌었다. 그러나 허유의 투항 동기와 세부 대화는 후대 서술에서 각색되었을 가능성을 구분해야 한다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 조조는 관도 정면이 아니라 오소 군량을 태워 원소군의 지속 능력과 사기를 동시에 끊으려 했다.
+
+**보인 신호와 믿은 이유.** 야간 행군대는 원소군 표지를 쓰고 증원부대라고 답했다. 원소군도 오소 방어를 강화할 병력이 올 수 있는 상황이었다.
+
+**유발된 행동과 결과.** 검문과 경보가 늦어졌고 조조군은 군량고 가까이 접근해 불을 놓았다. 원소의 분산 대응은 본영과 오소 어느 쪽도 구하지 못했다.
+
+**사료의 경계.** 『삼국지』와 『자치통감』 계열은 기습의 큰 골격을 지지하지만, 병력 수·대화·잔혹행위의 세부는 기록별 차이와 후대 편집을 감안해야 한다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 조조의 오소 기습대가 길목의 원소군과 오소 수비대를 속였다.
+2. **어떤 사실이 거짓이었는가?** 기습대가 원소군의 증원부대라는 신분이었다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 실제로 오소 방어가 위급해져 증원이 필요했으므로 이동 자체는 그럴듯했다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 대군을 거느린 원소 측은 후방 도로와 표지가 자기 통제 아래 있다고 기대했다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 야간 경계와 지휘 분산 때문에 침투 가능성은 있었지만 오소 가까이까지 무경보 접근하기는 어려웠을 것이다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 이동 명령의 출처와 지휘관 신원을 본영에 재확인하지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 보드게임과 보안 모의훈련에서 가짜 이동과 신원 재확인 절차를 함께 시험할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>遠而示之近<br>원이시지근 — 멀면서 가까운 듯 보임</td><td>조조군은 적진 깊숙한 오소로 향하면서 원소군 내부의 정상 증원 이동처럼 보였다.</td></tr>
+<tr><td>攻其無備, 出其不意<br>공기무비, 출기불의 — 대비 없는 곳을 치고 뜻하지 않은 때에 나옴</td><td>관도 정면이 아니라 떨어진 군량고를 밤에 공격했다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**조조군**</span></td><td>본영 방어와 5천 기습대를 분리하고 임무를 명확히 했다.</td><td>순유·가후의 판단을 받은 조조가 직접 기습대를 지휘했다.</td><td>열세한 군량 때문에 적 보급 파괴를 결전 목표로 삼았다.</td></tr>
+<tr><td><span color="red">**원소군**</span></td><td>대군과 공성장비는 강했지만 오소 후방 수비가 취약했다.</td><td>구원과 본영 공격 사이 명령이 갈리고 장합·고람에게 책임이 전가되었다.</td><td>대량 군량을 오소 한곳에 집중해 단일 실패점이 되었다.</td></tr>
+</table>
+
+#### 〈<span color="red">**원소**</span> — 패군〉
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>저수의 경고와 허유의 건의를 받아들이지 못하고 패전 책임이 예하 장수에게 돌아가 내부 신뢰가 무너졌다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>조조군 군량이 먼저 고갈되리라는 시나리오에 집중했고, 오소 상실이라는 낮게 본 위험이 실제화될 때 대응을 나눴다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>황하를 건넌 대군의 긴 보급선과 관도에서 떨어진 오소 사이 거리를 보호하지 못했다. (원근·험이·광협·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>많은 계책 가운데 일관된 우선순위를 세우지 못하고 실패 책임을 조정하지 못했다. (지신인용엄·장유오위)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>군량을 집중했으나 경계·보고·증원 절차를 그 가치에 맞게 강화하지 않았다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** 조조군이 먼저 소진될 것이라는 초기 전망을 붙든 채 오소 기습 가능성과 허유 이탈 신호를 낮게 본 명령에는 **확증편향과 과신**이 작동한 것으로 볼 수 있고, 구원과 본영 공격을 나눈 대응이 패배를 키웠다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 원소군은 지형편의 `亂`(란, 명령과 편제가 어지러움)과 `崩`(붕, 예하 장수가 불복·독자 행동하고 장수가 통제하지 못함)의 연쇄로 무너졌다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span>: 군량고를 분산하고 저수의 호위 강화 건의를 받아들였거나, 오소 피습 뒤 구원과 본영 공격 중 한 목표에 전력을 집중했다면 적어도 전군 붕괴는 피할 가능성이 있었다.
+
+#### 〈<span color="blue">**조조**</span> — 승군〉
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>교착과 군량 부족을 숨기지 않고 참모의 상반된 판단을 들은 뒤 역할을 나눴다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>허유의 정보가 거짓일 가능성을 남겨 두되 순유·가후의 판단과 기존 보급 습격 경험으로 행동 가치가 더 크다고 보았다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>관도 방책으로 정면을 묶고 오소 소로를 이용해 적의 후방 깊숙이 기동했다. (원근·험이·광협·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>정보의 시간가치를 알아 직접 위험을 감수하면서도 조홍에게 본영을 맡겼다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>5천 정예·위장·불쏘시개·본영 방어를 하나의 짧은 작전으로 결합했다. (곡제·관도·주용)</td></tr>
+</table>
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제 曲制(곡제)</td></tr>
+<tr><td><span color="blue">**조조군**</span></td><td>본영 수비대와 보·기병 5천의 기습대를 나누고, 서황의 선행 운송대 습격과 연결했다.</td></tr>
+<tr><td><span color="red">**원소군**</span></td><td>대군·공성대·오소 수비대를 두었으나 후방과 정면의 상호지원 설계가 약했다.</td></tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>관도 官道(관도)</td></tr>
+<tr><td><span color="blue">**조조군**</span></td><td>조조가 기습을 직접 지휘하고 조홍·순유가 관도 본영을 지키는 명령선을 세웠다.</td></tr>
+<tr><td><span color="red">**원소군**</span></td><td>순우경의 오소 수비와 장합·고람의 관도 공격이 하나의 우선순위로 통합되지 못했다.</td></tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>주용 主用(주용)</td></tr>
+<tr><td><span color="blue">**조조군**</span></td><td>군량 열세를 인정하고 적 군량을 태워 지속 능력의 비교 자체를 뒤집었다.</td></tr>
+<tr><td><span color="red">**원소군**</span></td><td>하북에서 황하를 건넌 군량을 오소에 대량 집적해 화재 한 번에 손실이 집중되었다.</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>: 조조군은 `識衆寡之用者勝`(식중과지용자승, 대군과 소수 병력의 쓰임을 아는 자가 이김)을 구현했다. 허유의 정보에 보상·신뢰·검증·기동을 붙여 하루의 승부로 바꾸었다.
+
+**동양 실증 사례 출처:** [『삼국지』 위서 무제기·순유전 계열 — Chinese Text Project](https://ctext.org/sanguozhi) · [『자치통감』 권63 — Chinese Text Project](https://ctext.org/wiki.pl?if=gb&chapter=427095) · [관도대전 개요와 원전 대조](https://zh.wikipedia.org/wiki/%E5%AE%98%E6%B8%A1%E4%B9%8B%E6%88%98)
 
 ---
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
