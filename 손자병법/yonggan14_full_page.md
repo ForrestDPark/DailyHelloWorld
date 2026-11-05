@@ -1,4 +1,4 @@
-<!-- sunzi-analysis-mode: light -->
+<!-- sunzi-analysis-mode: full -->
 <!-- sunzi-original: 左右, 謁者, 門者, 舍人之姓名, 令吾間必索知之. -->
 > 좌우, 알자, 문자, 사인지성명, 영오간필색지지 — 이름과 역할과 확인 근거를 함께 적지 않으면 재수가 없다.
 
@@ -126,6 +126,471 @@
 사용자의 「생각에대한 생각」 메모가 경고하는 가용성과 분모 무시는 인물망 분석에서도 나타난다. 최근에 큰 실수를 한 사람, 말이 많아 눈에 띄는 사람, 한 번 강한 보고를 한 사람이 실제 영향력보다 더 중요하게 기억될 수 있다. 이름별로 `직접 관찰 횟수 / 전체 근무 횟수 / 반대 사례 / 관찰하지 못한 구간`을 함께 적으면 생생한 한 장면이 전체 성향으로 번지는 오류를 줄일 수 있다.
 
 현대 적용의 윤리적 경계도 분명하다. 직장 동료의 사생활·건강·가족관계를 몰래 조사하거나 개인을 압박할 명단을 만드는 것은 이 구절의 정당한 적용이 아니다. 업무상 필요한 담당자·승인자·당직자·인수인계자와 그 공식 기록만 최소한으로 확인하고, 접근 권한과 보존 기간을 지켜야 한다.
+
+---
+## 4. 역사적 실증 사례
+
+### 서양 — ⚔️ 제1차 십자군 vs 🏛️ 안티오키아 수비군 │ 안티오키아 공방전(Siege of Antioch, 1097–1098)
+
+![안티오키아 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan14/antioch_commanders.png)
+
+![안티오키아 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan14/antioch_soldiers_weapons_life.png)
+
+![안티오키아 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan14/antioch_command_structure.png)
+
+![1098년 북부 시리아 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan14/antioch_country_map.png)
+
+![안티오키아 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan14/antioch_strategy_map.png)
+
+![안티오키아 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan14/antioch_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- 🌊 <span color="blue_bg">**오론테스강(Orontes River)**</span>은 성 서쪽을 감싸며 십자군 진영과 성문 접근을 나눴다.
+- ⛰️ <span color="green_bg">**실피우스산(Mount Silpius)**</span>은 성 남동벽과 성채를 떠받친 급경사였다. <span color="blue">**보에몽**</span>은 이 산을 돌아 피루즈 담당 구간에 접근했다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**안티오키아(Antioch)**</span>의 남동 성벽에는 <span color="red">**피루즈**</span>가 맡은 세 탑과 작은 출입구가 있었다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**성채(Citadel)**</span>는 가장 높은 동쪽 방어점으로, 시가지가 함락된 뒤에도 저항을 이어 갔다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**성 시메온 항(St Symeon)**</span>은 해상 보급의 연결점이었고, 동쪽에서는 <span color="red">**케르보가**</span>의 구원군이 다가왔다.
+
+#### 상세 전역 서사 — 성벽보다 먼저 문지기의 이름과 담당 구간을 얻다
+
+1097년 10월 시작된 포위는 이듬해 봄까지 이어졌지만 십자군은 긴 성벽을 완전히 봉쇄하지 못했다. 식량과 사기가 줄어드는 동안 모술의 <span color="red">**케르보가**</span>가 대규모 구원군을 모으자, 성을 빨리 열지 못하면 포위군이 협공을 받을 처지였다. 이때 <span color="blue">**보에몽**</span>은 성 남동부의 세 탑을 맡은 <span color="red">**피루즈**</span>와 비밀 연락을 맺었다. 연대기마다 그의 출신·동기·이름 표기가 피루즈·피루스·루즈바 등으로 다르지만, 그가 **담당 구간과 출입 권한을 가진 특정 수비자**였다는 핵심은 여러 전승이 공유한다.
+
+#### 이름·역할·접근권을 하나의 작전 정보로 묶다
+
+<span color="blue">**보에몽**</span>은 “성 안에 협력자가 있다”는 막연한 소문에서 멈추지 않았다. <span color="red">**피루즈**</span>가 어느 탑들을 지휘하며 언제 사다리와 작은 문을 통제할 수 있는지 확인했고, 약속 이행을 보증하는 인질까지 받았다고 《게스타 프랑코룸》 계열 기록은 전한다. 이는 `姓名`을 알아내는 일이 표적 명부 작성이 아니라 **권한·근무 위치·행동 가능 시각을 검증하는 출발점**임을 보여 준다.
+
+#### 위장 출정 뒤 실피우스산을 돌아 세 탑으로
+
+6월 2일 저녁 십자군은 다른 곳을 치러 떠나는 듯 진영을 움직였다가 어둠 속에서 방향을 바꾸었다. 침투대는 ⛰️ <span color="green_bg">**실피우스산(Mount Silpius)**</span>을 돌아 <span color="red">**피루즈**</span>의 탑 아래에 이르렀다. 약 60명이 사다리를 타고 탑을 점거한 뒤 작은 문과 큰 성문을 열었고, 대기하던 병력이 시가지로 들어갔다. <span color="red">**야기 시얀**</span>은 성채까지 함락됐다고 오인해 달아났고, 그의 아들 <span color="red">**샴스 앗다울라**</span>는 성채에서 저항했다.
+
+#### 전투에서 사용된 속임수 — 위장 출정과 담당 수비자의 제한된 문 열기
+
+속인 주체는 <span color="blue">**보에몽**</span>과 침투대였고, 숨긴 실제 목표는 <span color="red">**피루즈**</span>의 담당 탑이었다. 겉으로는 포위군 일부가 다른 원정을 떠나는 신호를 보였고, 성 수비대는 그 구간의 경계가 곧 공격받으리라고 예상하기 어려웠다. 그 믿음은 남동벽 감시를 정상 수준에 머물게 했고, 침투대는 탑과 출입구를 장악해 대군을 들였다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** <span color="blue">**보에몽**</span>은 구원군 도착 전에 성을 열기 위해, 성벽 전체가 아니라 이름과 담당 구간이 확인된 한 수비자의 접근권을 이용했다.
+
+**보인 신호와 믿은 이유.** 십자군 일부는 원정에 나서는 모습을 보였고, 수비대는 수개월간 이어진 통상적 포위의 리듬에 기대었다.
+
+**유발된 행동과 결과.** 경계의 중심이 피루즈의 탑에 집중되지 않은 사이 침투대가 올라가 성문을 열었고, 시가지는 급속히 함락됐다.
+
+**사료의 경계.** 피루즈의 출신·동기와 탑의 정확한 위치는 기록마다 다르므로 뇌물이나 원한 하나로 단정할 수 없다. 확실한 것은 특정 수비 책임자와 비밀 합의가 돌파구가 됐다는 점이다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** <span color="blue">**보에몽**</span>의 침투대가 <span color="red">**야기 시얀**</span>의 성 수비 체계를 속였다.
+2. **어떤 사실이 거짓이었는가?** 다른 원정을 떠나는 듯 보인 이동은 실제 최종 목표를 감췄다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 부대가 실제로 진영을 떠났지만 곧 산을 돌아 성벽으로 향했다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 장기 포위의 반복과 구원군 접근은 수비대가 시간을 자기편으로 보게 했다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 낮다. 공개된 정면 공격이었다면 급경사 성벽과 탑이 침투를 훨씬 어렵게 했을 것이다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 피루즈 담당 구간의 야간 교대·탑 사이 연락·외부 기동의 귀환 방향을 교차 확인하지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 보안 모의훈련에서 담당자·권한·교대 기록을 확인하되 실제 계정과 사람을 공격하지 않는 방식으로 연습할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>해당 구절·독음·뜻</td>
+<td>전장의 장면</td>
+</tr>
+<tr>
+<td>近而示之遠<br>근이시지원 — 가까이 가면서 멀리 가는 듯 보임</td>
+<td>원정하는 듯 떠난 뒤 야간에 성 남동벽으로 되돌아왔다.</td>
+</tr>
+<tr>
+<td>攻其無備<br>공기무비 — 대비하지 못한 곳을 공격함</td>
+<td>피루즈의 담당 탑과 작은 출입구를 제한된 시각에 열었다.</td>
+</tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>곡제(편제)</td>
+<td>관도(지휘)</td>
+<td>주용(보급·지속)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**십자군(승)**</span>
+</td>
+<td>60명 안팎 침투대와 대기 본대를 분리했다.</td>
+<td>
+<span color="blue">**보에몽**</span>이 비밀을 제한 공유했다.</td>
+<td>기근 속에서 짧은 결행에 힘을 집중했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**수비군(패)**</span>
+</td>
+<td>성벽·시가지·성채 지휘가 분리됐다.</td>
+<td>
+<span color="red">**피루즈**</span> 담당 구간을 상호 감시하지 못했다.</td>
+<td>구원군을 기다렸으나 내부 접근 통제가 깨졌다.</td>
+</tr>
+</table>
+
+#### 패군과 승군의 五事
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>탑 지휘관과 성주 사이의 결속이 무너졌다. (지기·사기)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>구원군 접근을 믿고 내부 배반 위험을 낮게 보았다. (지피·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>급경사 성벽을 믿었지만 담당 탑 하나가 통로가 됐다. (험이·사생)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>
+<span color="red">**야기 시얀**</span>은 시가지 혼란을 성채 함락으로 오인했다. (지신인용엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>교대·탑·성문 사이 상호 확인이 없었다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+**직관·편향 한 줄:** <span color="red">**야기 시얀**</span>이 구원군 도착과 장기 방어 경험을 기준점으로 삼아 내부 통제 붕괴 가능성을 과소평가한 데에는 확증편향이 작동한 것으로 볼 수 있다.
+
+🏳️ <span color="red">**패군 측 결과**</span> 수비군은 시가지를 잃고 성채로 축소됐으며 <span color="red">**야기 시얀**</span>은 도주 중 죽었다. 六敗 중 지휘·연락 체계가 흔들린 `亂`에 가깝다. 🔀 <span color="orange">**패군 측 회피 분기점**</span> 탑 지휘관 교대와 야간 출입권을 이중 확인하고 구원군 도착 전 내부 충성도를 재점검했다면 적어도 기습 함락은 피할 수 있었다.
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>결행 목표를 핵심 지휘관과 침투대에 묶었다. (지기·사기)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>구원군 도착 전이라는 좁은 시간창을 이용했다. (지피·타이밍·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>산악 우회로와 담당 탑을 결합했다. (험이·광협)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>
+<span color="blue">**보에몽**</span>은 사람·권한·지형을 하나의 계획으로 묶었다. (지신인용엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>침투대·개문대·본대를 시간차로 연결했다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span> 십자군은 안티오키아 시가지를 점령했다. 五勝 중 `以虞待不虞者勝`(이우대불우자승, 대비한 채 대비 없는 적을 상대하는 자가 이김)에 해당한다.
+
+#### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**십자군**</span>
+</td>
+<td>선도 침투대, 성문 개방대, 대기 본대를 차례로 투입했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**수비군**</span>
+</td>
+<td>탑·성문·성채 수비가 나뉘었으나 배반 상황의 상호 지원 규정이 작동하지 않았다.</td>
+</tr>
+</table>
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**십자군**</span>
+</td>
+<td>
+<span color="blue">**보에몽**</span>과 소수 지휘관이 목적·시각·진입점을 공유했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**수비군**</span>
+</td>
+<td>
+<span color="red">**야기 시얀**</span>과 탑 지휘관 사이 충성·보고 검증이 끊겼다.</td>
+</tr>
+</table>
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**십자군**</span>
+</td>
+<td>사다리·로프와 경장 병력을 짧은 야간 작전에 집중했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**수비군**</span>
+</td>
+<td>긴 포위를 견딜 성벽과 구원군은 있었지만 내부 통제 자원을 잃었다.</td>
+</tr>
+</table>
+
+### 동양 — <span color="blue">🏛️ 한군</span> vs <span color="red">🏛️ 조군</span> │ 정형 전투(井陘之戰, 기원전 204년)
+
+![정형 전투 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan14/jingxing_commanders.png)
+![정형 전투 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan14/jingxing_soldiers_weapons_life.png)
+![정형 전투 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan14/jingxing_command_structure.png)
+![초한전쟁 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan14/jingxing_country_map.png)
+![정형 전투 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan14/jingxing_strategy_map.png)
+![정형 전투 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan14/jingxing_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- ⛰️ <span color="green_bg">**태항산맥(太行山脈)**</span>은 한군의 진격과 보급을 좁은 길에 묶었다.
+- ⛰️ <span color="green_bg">**정형관(井陘關)**</span>은 이좌거가 막고 후방 군량로를 끊자고 한 병목이었다.
+- 🌊 <span color="blue_bg">**면만수(綿蔓水)**</span>는 한군 배수진의 뒤를 막았고, 동시에 물러서지 못하는 결속 조건이 됐다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**조군 본영**</span>은 주력이 유인에 따라 나가자 비었고, 한군 🐎 기병 2천이 점령했다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**상국(襄國)**</span>은 조의 정치 중심으로, 진여가 야전에서 패하자 방어의 중심도 함께 흔들렸다.
+
+#### 상세 전역 서사 — 거절된 참모의 계책을 간첩이 확인하다
+
+<span color="red">**이좌거**</span>는 <span color="red">**진여**</span>에게 정형관을 굳게 지키고 별동대로 한군의 긴 군량로를 끊자고 건의했다. 좁은 산길을 통과한 한군은 앞뒤가 막히면 싸우지 않고도 지칠 수 있었다. 그러나 <span color="red">**진여**</span>는 정면 승부를 피하면 제후의 비웃음을 산다고 보아 계책을 채택하지 않았다. 《사기》는 <span color="blue">**한신**</span>이 간첩을 보내 이 계책이 쓰이지 않았음을 알아낸 뒤에야 크게 기뻐하며 정형관으로 들어갔다고 기록한다.
+
+#### 사람 이름에서 실제 의사결정으로 내려가다
+
+<span color="blue">**한신**</span>이 알아낸 것은 “조군이 어리석다”는 평판이 아니었다. 참모 <span color="red">**이좌거**</span>가 어떤 계책을 냈고, 총지휘관 <span color="red">**진여**</span>가 그것을 거절했으며, 따라서 관문과 군량로가 실제로 어떻게 운용될지를 확인한 것이다. 이는 좌우와 알자와 문자의 성명을 알아내라는 구절이 **사람의 이름→역할→제안→채택 여부→실제 배치**로 이어져야 함을 보여 준다.
+
+#### 배수진과 빈 본영을 노린 기병 2천
+
+<span color="blue">**한신**</span>은 🐎 경기병 2천을 산길로 우회시켜 조군 본영을 엿보게 했다. 본대 일부는 🌊 <span color="blue_bg">**면만수(綿蔓水)**</span>를 등지고 진을 쳤고, 선봉은 조군을 공격한 뒤 깃발과 북을 버리는 듯 물러났다. <span color="red">**진여**</span>의 주력이 본영을 비우고 추격하자 숨은 기병은 조기를 뽑고 한기를 세웠다. 돌아온 조군은 자기 본영이 넘어간 장면을 보고 지휘와 사기가 동시에 무너졌고, 배수진의 한군이 반격했다.
+
+#### 전투에서 사용된 속임수 — 약한 퇴각을 보이고 빈 본영을 빼앗다
+
+속인 주체는 <span color="blue">**한신**</span>이었고, 실제 의도는 조군 주력을 본영 밖으로 끌어낸 뒤 후방 표지와 지휘 중심을 바꾸는 것이었다. 한군 선봉은 깃발과 북을 버리며 무너지는 신호를 보였고, <span color="red">**진여**</span>는 정면 결전으로 승부할 수 있다는 기존 판단 때문에 이를 믿었다. 추격으로 본영이 비자 🐎 기병이 깃발을 바꿨고, 돌아온 조군은 지휘 중심을 잃었다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** <span color="blue">**한신**</span>은 간첩 보고로 군량로 차단 위험이 없음을 확인한 뒤, 조군을 본영에서 떼어낼 계획을 세웠다.
+
+**보인 신호와 믿은 이유.** 선봉은 패주하듯 물러나고 군기와 북까지 버렸다. <span color="red">**진여**</span>는 수적 우세와 정면 승부 원칙 때문에 붕괴 신호로 해석했다.
+
+**유발된 행동과 결과.** 조군 주력이 본영을 비우고 추격했고, 한군 🐎 기병이 본영의 깃발을 바꿔 퇴로·지휘·사기를 동시에 끊었다.
+
+**사료의 경계.** 정확한 병력 수와 세부 위치에는 후대 과장이 섞일 수 있다. 그러나 이좌거의 계책, 간첩의 확인, 기병의 본영 점거라는 인과는 《사기》 서사에서 분명하다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** <span color="blue">**한신**</span>이 <span color="red">**진여**</span>와 조군 주력을 속였다.
+2. **어떤 사실이 거짓이었는가?** 선봉의 후퇴가 전군 붕괴라는 신호는 거짓이었다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 한군은 실제로 강을 등졌고 실제로 깃발과 북을 버렸지만, 이는 전군의 무질서가 아니었다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** <span color="red">**진여**</span>는 대군으로 정면에서 이겨야 명분과 위신을 지킨다고 판단했다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 중간이다. 과신은 있었지만 노골적 후퇴 신호가 없었다면 본영을 전부 비울 이유는 줄었을 것이다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 추격 전에 본영 후방과 산길의 🐎 기병 움직임을 정찰하지 않았다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 바둑·체스·스포츠에서 일부 공간을 내주고 상대의 집중을 이동시키는 연습으로 제한할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>해당 구절·독음·뜻</td>
+<td>전장의 장면</td>
+</tr>
+<tr>
+<td>利而誘之<br>이이유지 — 이익을 보여 유인함</td>
+<td>버려진 깃발과 북, 달아나는 선봉이 쉬운 전과처럼 보였다.</td>
+</tr>
+<tr>
+<td>近而示之遠<br>근이시지원 — 가까이 있으면서 멀리 있는 듯 보임</td>
+<td>🐎 기병 2천은 조군 본영 가까운 산길에 숨어 존재를 감췄다.</td>
+</tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>곡제(편제)</td>
+<td>관도(지휘)</td>
+<td>주용(보급·지속)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**한군(승)**</span>
+</td>
+<td>선봉·배수진·우회 기병을 분리 결합했다.</td>
+<td>
+<span color="blue">**한신**</span>이 간첩 보고를 작전 조건으로 바꿨다.</td>
+<td>긴 보급로가 끊기기 전에 단기 결전을 택했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**조군(패)**</span>
+</td>
+<td>대군이 추격에 쏠려 본영 예비가 사라졌다.</td>
+<td>
+<span color="red">**이좌거**</span>의 계책이 지휘 결정에 반영되지 않았다.</td>
+<td>충분한 자원을 병목 차단보다 정면 결전에 썼다.</td>
+</tr>
+</table>
+
+#### 패군과 승군의 五事
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>참모의 반대 의견을 작전 대안으로 보존하지 않았다. (지기·사기)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>한군이 차단 위험을 확인했다는 사실을 몰랐다. (지피·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>관문 병목과 한군 군량로를 쓰지 않았다. (원근·험이)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>
+<span color="red">**진여**</span>는 위신과 정면전 원칙에 묶였다. (지신인용엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>본영 예비와 후방 정찰을 남기지 않았다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+**직관·편향 한 줄:** <span color="red">**진여**</span>가 정면전의 명분과 수적 우세를 기준점으로 삼아 군량로 차단이라는 대안을 버린 판단에는 과신과 확증편향이 작동한 것으로 볼 수 있다.
+
+🏳️ <span color="red">**패군 측 결과**</span> 조군은 본영과 지휘 중심을 잃고 붕괴했으며 <span color="red">**진여**</span>는 죽고 <span color="red">**조왕 헐**</span>은 사로잡혔다. 六敗 중 적정을 헤아리지 못한 `北`에 가깝다. 🔀 <span color="orange">**패군 측 회피 분기점**</span> <span color="red">**이좌거**</span>의 차단책을 채택하거나 최소한 본영 예비와 산길 정찰대를 남겼다면 완패와 왕의 포획은 피할 수 있었다.
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>퇴로 없는 진형을 분명한 반격 계획과 묶었다. (지기·사기)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>이좌거의 계책이 거절됐다는 확인 뒤 진입했다. (지피·타이밍·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>강·관문·산길·본영을 하나의 유인 장치로 썼다. (험이·광협·사생)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>
+<span color="blue">**한신**</span>은 사람의 결정과 지형을 연결했다. (지신인용엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>기병 2천과 본대를 시간차로 운용했다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span> 한군은 조를 멸하고 북방 진출로를 열었다. 五勝 중 `識衆寡之用者勝`(식중과지용자승, 대군과 소수 병력의 쓰임을 아는 자가 이김)에 해당한다.
+
+#### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**한군**</span>
+</td>
+<td>유인 선봉, 강을 등진 본대, 산길 우회 🐎 기병 2천을 결합했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**조군**</span>
+</td>
+<td>주력이 본영을 떠나 추격했고 후방 예비가 사라졌다.</td>
+</tr>
+</table>
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**한군**</span>
+</td>
+<td>
+<span color="blue">**한신**</span>은 간첩 보고와 기병의 깃발 교체 임무를 제한 공유했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**조군**</span>
+</td>
+<td>
+<span color="red">**진여**</span>은 <span color="red">**이좌거**</span>의 반대안을 거절하고 정면전 명령으로 통일했다.</td>
+</tr>
+</table>
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**한군**</span>
+</td>
+<td>취약한 장거리 군량을 오래 노출하지 않고 결전을 서둘렀다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**조군**</span>
+</td>
+<td>유리한 현지 보급과 대군을 병목 봉쇄가 아닌 추격에 소모했다.</td>
+</tr>
+</table>
+
+#### 참고자료
+
+- [Gesta Francorum 원문 주석 — Dickinson College Commentaries](https://dcc.dickinson.edu/gesta-francorum/8-20-4%E2%80%935)
+- [Cambridge University Press — Firuz and the capture of Antioch](https://www.cambridge.org/core/books/abs/crusading-and-pilgrimage-in-the-norman-world/enemy-within-bohemond-byzantium-and-the-subversion-of-the-first-crusade/D238127231C494C9DCD0168807CED078)
+- [《史記》 淮陰侯列傳 — Chinese Text Project](https://ctext.org/shiji/huai-yin-hou-lie-zhuan/zh)
+- [정형 전투 개요와 이좌거의 계책](https://en.wikipedia.org/wiki/Battle_of_Jingxing)
 
 ---
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
