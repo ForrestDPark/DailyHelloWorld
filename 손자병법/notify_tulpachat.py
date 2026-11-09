@@ -314,8 +314,7 @@ def main() -> None:
     commanders = [] if is_light else victorious_commanders(markdown, original)
     hanja_lesson = build_hanja_lesson(markdown, original, subtitle)
     site_url = args.site_url or f"{SUNZI_SITE_BASE}/verses/{number}"
-    site_number_match = re.search(r"/verses/(\d+)(?:[/?#]|$)", site_url)
-    discussion_number = int(site_number_match.group(1)) if site_number_match else number
+    discussion_number = number
     content = (
         f"📜 손자병법 새 구절 분석이 완료되었습니다 — {chapter_name} {number}구절\n\n"
         f"원문: {original}\n"
