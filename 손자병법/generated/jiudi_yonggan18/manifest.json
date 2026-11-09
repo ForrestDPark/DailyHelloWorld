@@ -1,0 +1,41 @@
+{
+  "chapter": "yonggan",
+  "verse": 18,
+  "original": "五間之事, 君必知之, 知之必在於反間, 故反間不可不厚也.",
+  "mode": "historical_case_backfill",
+  "engine": "built-in image generation",
+  "cases": {
+    "fortitude": {
+      "title": "Operation Fortitude and D-Day (1944)",
+      "files": [
+        "fortitude_commanders.png",
+        "fortitude_soldiers_weapons_life.png",
+        "fortitude_command_structure.png",
+        "fortitude_country_map.png",
+        "fortitude_strategy_map.png",
+        "fortitude_sequence.png"
+      ],
+      "prompt_summary": "Double Cross and GARBO; period-accurate London intelligence rooms, Channel geography, Normandy and Pas-de-Calais; blue Allied and red German visual language; independent compositions for people, soldiers, command, theater, terrain, and sequence."
+    },
+    "feishui": {
+      "title": "Battle of Fei River (383)",
+      "files": [
+        "feishui_commanders.png",
+        "feishui_soldiers_weapons_life.png",
+        "feishui_command_structure.png",
+        "feishui_country_map.png",
+        "feishui_strategy_map.png",
+        "feishui_sequence.png"
+      ],
+      "prompt_summary": "Eastern Jin versus Former Qin; Zhu Xu as the information hinge; late-fourth-century armor, camps, Fei River hydrology, Shouyang and Bagong Mountain; independent compositions for people, soldiers, command, theater, terrain, and sequence."
+    }
+  },
+  "quality_checks": [
+    "12 final PNG files",
+    "independent composition by visual role",
+    "no shared base image",
+    "original-size inspection",
+    "390px mobile inspection",
+    "validate_visual_quality.py pass"
+  ]
+}
