@@ -1,4 +1,4 @@
-<!-- sunzi-analysis-mode: light -->
+<!-- sunzi-analysis-mode: full -->
 
 > 석은지흥야, 이지재하, 주지흥야, 여아재은 — 결과를 보고 사람의 지난 자리를 꾸며 말하면 재수가 없다.
 
