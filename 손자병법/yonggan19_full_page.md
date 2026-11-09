@@ -135,6 +135,261 @@
 
 ---
 
+## 4. 역사적 실증 사례
+
+### 서양 — <span color="blue">🏛️ 옥타비아누스 진영</span> vs <span color="red">🏛️ 안토니우스·클레오파트라 진영</span> │ 악티움 해전(Battle of Actium, BCE 31)
+
+![악티움 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan19/actium_commanders.png)
+
+![악티움 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan19/actium_soldiers_weapons_life.png)
+
+![악티움 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan19/actium_command_structure.png)
+
+![기원전 31년 지중해 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan19/actium_country_map.png)
+
+![악티움 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan19/actium_strategy_map.png)
+
+![악티움 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan19/actium_sequence.png)
+
+<span color="blue">**옥타비아누스(Octavian)**</span>와 <span color="blue">**마르쿠스 빕사니우스 아그리파(Marcus Vipsanius Agrippa)**</span>는 <span color="red">**마르쿠스 안토니우스(Mark Antony)**</span>·<span color="red">**클레오파트라 7세(Cleopatra VII)**</span>의 연합 함대를 🌊 <span color="blue_bg">**암브라키아만(Ambracian Gulf)**</span> 안에 압박했다. 핵심은 내부자의 말만 믿은 승리가 아니라, 해상 거점과 보급로를 먼저 장악한 상태에서 <span color="red">**퀸투스 델리우스(Quintus Dellius)**</span>가 가져온 작전 정보를 실제 배치와 대조한 승리였다.
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- 🌊 <span color="blue_bg">**암브라키아만(Ambracian Gulf)**</span> — 좁은 입구가 내해와 🌊 <span color="blue_bg">**이오니아해(Ionian Sea)**</span>를 잇는다. 출구가 막히면 중장선의 크기는 힘보다 정체의 원인이 된다.
+- **악티움 곶(Actium Promontory)** — 만 입구 남쪽의 함대·육군 거점이다. <span color="red">**안토니우스**</span>의 전열이 이곳을 떠나야만 보급 압박에서 벗어날 수 있었다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**레우카스(Leucas)**</span>와 <span color="blue">**▰**</span> <span color="yellow_bg">**파트라이(Patrae)**</span> — <span color="blue">**아그리파**</span>가 빼앗은 해상 거점들이다. 남쪽 보급과 퇴로를 차례로 좁혔다.
+- 🌊 <span color="blue_bg">**이오니아해(Ionian Sea)**</span> — 돌파에 성공하면 이집트로 향할 수 있지만, 열린 바다로 나오기 전 좁은 출구에서 진형을 유지해야 했다.
+
+#### 상세 전역 서사 — 내부자의 계획은 이미 닫혀 가던 바다에서 효력을 얻었다
+
+<span color="blue">**아그리파**</span>는 정면 해전을 서두르지 않고 메토네·코르키라·파트라이 등 해상 연결점을 공격해 <span color="red">**안토니우스**</span>의 식량과 통신을 압박했다. 만 안의 병력에는 질병과 보급 부족이 겹쳤고, 육상 철수와 해상 돌파 사이의 선택이 좁아졌다. 이때 <span color="red">**델리우스**</span>가 진영을 떠나 <span color="blue">**옥타비아누스**</span>에게 해전을 벌이는 동안 돌파한다는 계획을 알렸다는 전승이 카시우스 디오 계열 기록에 남는다.
+
+<span color="blue">**옥타비아누스**</span> 측은 이 제보를 마법 같은 예언으로 쓰지 않았다. <span color="blue">**아그리파**</span>의 경량 함선은 거리를 두어 대형선의 충각을 피하고, 전열이 벌어지는 순간을 기다렸다. <span color="red">**클레오파트라**</span>의 함대가 틈을 따라 남쪽으로 빠져나가자 <span color="red">**안토니우스**</span>도 뒤따랐고, 남은 전열의 지휘 일관성이 무너졌다. 내부 정보는 이미 구축된 봉쇄·기동·지휘 체계와 결합했을 때만 결정을 바꿨다.
+
+#### 전투에서 사용된 속임수 — 결전을 보이되 실제 목적은 돌파와 탈출이었다
+
+<span color="red">**안토니우스**</span> 측은 정면 결전을 준비하는 대형을 보였지만, 일부 함선에는 돛과 재산을 실어 전투 중 탈출할 조건을 마련했다. <span color="red">**델리우스**</span>의 이탈은 그 숨은 목적을 상대에게 노출했다. 결과적으로 보이는 전열은 <span color="blue">**옥타비아누스**</span> 측을 묶어 두지 못했고, 탈출은 전열 붕괴의 신호로 바뀌었다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** <span color="red">**안토니우스**</span>·<span color="red">**클레오파트라**</span> 측은 함대 전체의 승리보다 핵심 세력의 돌파 가능성을 남겼다.
+
+**보인 신호와 믿은 이유.** 대형선 중심의 정면 전열은 결전 의지를 보였다. 상대가 가까이 붙으면 중장선의 충각과 승선전이 유리했다.
+
+**유발된 행동과 결과.** <span color="blue">**아그리파**</span>는 성급히 접근하지 않았고 전열이 늘어지기를 기다렸다. 남쪽 탈출이 시작되자 남은 함대의 결속이 무너졌다.
+
+**사료의 경계.** 탈출 계획의 구체적 범위와 <span color="red">**델리우스**</span>가 전달한 정보의 정확한 내용은 고대 저자마다 강조가 다르다. 제보 하나가 승리를 만들었다고 단정할 수 없다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** <span color="red">**안토니우스**</span> 측은 결전 전열로 실제 돌파 목적을 감추려 했다.
+2. **어떤 사실이 거짓이었는가?** 함대 전체가 끝까지 정면 결전을 수행한다는 인상이 실제 우선순위와 달랐다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 대형 함선의 전투력은 진짜였지만 그것이 전 함대의 공동 목표를 보증하지는 않았다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 결정적 해전 한 번으로 내전을 끝낼 기회가 필요했다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 낮다. <span color="blue">**아그리파**</span>의 봉쇄로 돌파 의도 자체는 추론 가능했지만 내부 정보가 대비를 구체화했다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** <span color="red">**안토니우스**</span> 측은 탈출 계획이 여러 지휘관에게 노출된 보안 취약성을 통제하지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 보드게임에서 공개 전력과 숨은 목표를 분리하고, 상대의 한 수를 독립 단서 둘로 확인하는 훈련이 적합하다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>用而示之不用<br>용이시지불용 — 쓰려 하면서 쓰지 않는 듯 보인다</td><td>돌파를 위한 함대 운용을 정면 결전처럼 보였다.</td></tr>
+<tr><td>近而示之遠<br>근이시지원 — 가까운 목적을 멀리 있는 듯 보인다</td><td>당장의 출구 돌파보다 전열 전체의 교전을 앞세워 의도를 가렸다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**옥타비아누스 진영**</span></td><td>경량 함선과 해병을 <span color="blue">**아그리파**</span>가 유연하게 운용했다.</td><td><span color="blue">**옥타비아누스**</span>의 정치 지휘와 <span color="blue">**아그리파**</span>의 해상 지휘가 분명했다.</td><td>서쪽 거점과 해상 보급망을 유지했다.</td></tr>
+<tr><td><span color="red">**안토니우스 진영**</span></td><td>대형선은 강했지만 질병·결원으로 운용 밀도가 떨어졌다.</td><td>돌파와 결전이 섞여 하위 지휘관이 공동 목표를 잃었다.</td><td>봉쇄로 식량·물·건강이 악화했다.</td></tr>
+</table>
+
+#### 패군과 승군의 五事
+
+##### <span color="red">**안토니우스·클레오파트라 진영(패군)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>탈출 우선순위가 전 함대와 충분히 공유되지 않아 결속이 끊겼다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>봉쇄가 길어질수록 질병과 이탈 위험이 커지는 분포를 축소 평가했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>좁은 만 입구는 대형선의 전개와 동시 돌파를 어렵게 했다. (험이·광협·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="red">**안토니우스**</span>는 용기는 있었으나 결전과 보존 중 목표를 하나로 묶지 못했다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>강한 함선이 지휘·보급 단절을 상쇄하지 못했다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** <span color="red">**안토니우스**</span>가 대형 함선의 국지적 우세에 판단을 고정한 행동에서는 기준점 효과가 작동해 봉쇄가 만든 누적 위험을 늦게 반영한 것으로 볼 수 있다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 六敗(육패) 중 `亂(란, 지휘와 진형이 어지러움)`에 가깝다. **회피 분기점:** 해전 전에 육군 철수와 함대 돌파 중 하나를 전군 목표로 확정하고 정보 접근을 최소화했다면 적어도 함대 전체의 급속한 붕괴는 줄일 수 있었다.
+
+##### <span color="blue">**옥타비아누스·아그리파 진영(승군)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>정치 목표와 해상 작전이 한 지휘 체계에 묶였다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>내부 정보 하나를 맹신하지 않고 봉쇄·정찰과 대조해 돌파 가능성에 대비했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>만 입구와 외해를 잇는 통로를 장악해 적 선택지를 줄였다. (험이·광협·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="blue">**아그리파**</span>는 거점 점령·거리 유지·추격의 순서를 지켰다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>기동성 높은 선단과 안정된 보급을 결합했다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>: 五勝(오승) 중 `以虞待不虞者勝(이우대불우자승, 대비한 채 대비하지 못한 적을 상대하는 자가 이김)`에 해당한다.
+
+#### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제 曲制(곡제)</td></tr>
+<tr><td><span color="blue">**승군**</span></td><td>경량 함선의 측면 기동과 해병 승선전을 결합했다.</td></tr>
+<tr><td><span color="red">**패군**</span></td><td>중장선과 이집트 선단이 같은 탈출 목표 아래 완전히 통합되지 않았다.</td></tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>관도 官道(관도)</td></tr>
+<tr><td><span color="blue">**승군**</span></td><td><span color="blue">**아그리파**</span>의 해상 재량과 <span color="blue">**옥타비아누스**</span>의 총지휘가 분리·연결됐다.</td></tr>
+<tr><td><span color="red">**패군**</span></td><td>탈출 계획의 제한적 공유가 전투 중 명령 해석을 갈라놓았다.</td></tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>주용 主用(주용)</td></tr>
+<tr><td><span color="blue">**승군**</span></td><td>해상 거점을 통해 식량·물·수리 능력을 유지했다.</td></tr>
+<tr><td><span color="red">**패군**</span></td><td>장기 봉쇄로 식량·식수·건강·노 젓는 인력이 함께 약화됐다.</td></tr>
+</table>
+
+### 동양 — <span color="blue">🏛️ 조조 진영</span> vs <span color="red">🏛️ 원소 진영</span> │ 관도대전(官渡之戰, 200)
+
+![관도대전 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan19/guandu_commanders.png)
+
+![관도대전 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan19/guandu_soldiers_weapons_life.png)
+
+![관도대전 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan19/guandu_command_structure.png)
+
+![후한 말 200년 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan19/guandu_country_map.png)
+
+![관도대전 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan19/guandu_strategy_map.png)
+
+![관도대전 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan19/guandu_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- 🌊 <span color="blue_bg">**황하(黃河)**</span> — 하북과 하남을 가르는 거대한 수계다. <span color="red">**원소**</span>의 병력과 군량은 이 강을 건너 남하했다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**관도(官渡)**</span> — <span color="blue">**조조**</span>가 버틴 방어 거점이다. 허창으로 이어지는 길을 막는 동시에 북쪽 오소를 기습할 출발점이었다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span> — <span color="red">**원소**</span>군의 군량 집적지다. 전선의 대군을 지속시키는 생명선이었다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**허창(許昌)**</span> — <span color="blue">**조조**</span>의 후방 정치·보급 중심이다. 관도가 무너지면 직접 위협받는다.
+
+#### 상세 전역 서사 — 허유의 귀순은 오소라는 좌표와 수비 상태를 가져왔다
+
+관도의 교착은 병력이 적고 식량이 줄어드는 <span color="blue">**조조(曹操)**</span>에게 불리했다. <span color="blue">**순욱(荀彧)**</span>은 후퇴론을 막았고, <span color="blue">**순유(荀攸)**</span>는 새 군량 수송대와 오소의 취약성을 공격할 기회로 보았다. 그때 <span color="red">**원소(袁紹)**</span>의 참모였던 <span color="red">**허유(許攸)**</span>가 진영을 떠나 <span color="blue">**조조**</span>에게 귀순해 <span color="red">**순우경(淳于瓊)**</span>이 지키는 오소 군량고의 위치와 경계 취약성을 알렸다.
+
+<span color="blue">**조조**</span>는 본영을 <span color="blue">**조홍**</span>과 <span color="blue">**순유**</span>에게 맡기고 정예를 직접 이끌어 밤길로 오소를 쳤다. 기습대는 원소군처럼 보이게 이동해 검문을 넘었다는 기록이 전한다. <span color="red">**원소**</span>는 오소를 전력으로 구원하지 않고 <span color="red">**장합**</span>·<span color="red">**고람**</span>에게 관도 본영 공격을 맡겼다. 본영은 버텼고 오소는 불탔으며, <span color="red">**장합**</span>과 <span color="red">**고람**</span>은 이후 <span color="blue">**조조**</span>에게 귀순했다. 내부자의 정보는 좌표를 열었지만, 승리는 그 좌표에 즉시 병력을 집중한 결심과 본영 방어의 지속 능력이 완성했다.
+
+#### 전투에서 사용된 속임수 — 원소군으로 가장한 야간 기동
+
+<span color="blue">**조조**</span>의 기습대는 겉으로 원소군의 명령을 수행하는 부대처럼 보이며 관도에서 오소로 이동했다. 실제 목적은 군량고 방화였고, 속도와 어둠이 신원 확인의 시간을 줄였다. <span color="red">**원소**</span>는 본영 공격으로 상대를 흔들 수 있다고 보았지만, 오소 상실이 먼저 대군의 지속 능력을 꺾었다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** <span color="blue">**조조**</span>는 주력을 관도에 묶어 둔 것처럼 보이면서 정예대를 오소로 보냈다.
+
+**보인 신호와 믿은 이유.** 야간에 원소군 표식을 흉내 낸 이동은 후방 도로에서 아군 수송·전령처럼 보였다.
+
+**유발된 행동과 결과.** 경계는 즉각 봉쇄되지 않았고, 오소 수비대가 대응하기 전에 불이 붙었다. 군량 상실 소식은 전선의 지휘와 사기를 동시에 흔들었다.
+
+**사료의 경계.** 병력 수와 세부 이동 방식은 전승마다 차이가 있다. 확실한 중심은 <span color="red">**허유**</span>의 귀순, 오소 기습, 군량 소각, 원소군 붕괴의 연쇄다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** <span color="blue">**조조**</span>의 기습대가 <span color="red">**원소**</span>군의 후방 경계를 속였다.
+2. **어떤 사실이 거짓이었는가?** 야간 이동 부대가 원소군이라는 외형이 거짓이었다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 관도 본영에 조조군이 남아 있다는 사실은 주력 전체가 움직이지 않았다는 오해를 만들었다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 대군을 가진 <span color="red">**원소**</span> 측은 후방 도로가 자기 통제 아래 있다고 전제하기 쉬웠다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 중간이다. 오소 방비의 취약성은 있었지만 가장이 없었다면 경보가 더 빨랐을 수 있다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 후방 통과 부대의 명령서·출발지·지휘관을 교차 확인하는 경계가 약했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 체스·바둑에서 한쪽 압박을 유지한 채 다른 목표를 치는 양동을 연습할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>近而示之遠<br>근이시지원 — 가까운 곳을 멀리 있는 듯 보인다</td><td>관도 본영의 대치를 유지해 가까운 오소 기습을 감췄다.</td></tr>
+<tr><td>攻其無備<br>공기무비 — 대비하지 않은 곳을 공격한다</td><td>대군 정면이 아니라 경계가 느슨한 군량고를 쳤다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**조조 진영**</span></td><td>본영 방어와 기습대를 분리했다.</td><td><span color="blue">**조조**</span>가 기습을 직접 지휘하고 <span color="blue">**조홍**</span>이 본영을 지켰다.</td><td>열세인 보급을 적 군량 파괴로 보완했다.</td></tr>
+<tr><td><span color="red">**원소 진영**</span></td><td>대군과 군량고 수비가 분리됐다.</td><td>오소 구원과 관도 공격 사이에서 명령이 갈렸다.</td><td>군량이 오소 한 거점에 집중됐다.</td></tr>
+</table>
+
+#### 패군과 승군의 五事
+
+##### <span color="red">**원소 진영(패군)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>참모의 반대 의견을 흡수하지 못하고 귀순을 연쇄적으로 허용했다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>군량고 상실의 낮지만 치명적인 위험을 과소평가했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>관도·오소 두 거점의 거리를 하나의 방어 체계로 묶지 못했다. (원근·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="red">**원소**</span>는 병력 우세를 결심의 일관성으로 바꾸지 못했다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>보급 집중과 분할 명령이 동시에 취약점이 됐다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** <span color="red">**원소**</span>가 오소 구원보다 관도 본영 공격에 기대를 건 명령에서는 기존 정면 승리 시나리오에 매인 확증편향이 작동해 군량 상실의 파급을 축소한 것으로 볼 수 있다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 六敗(육패) 중 `亂(란, 명령 체계의 혼란)`과 `北(배, 적정을 헤아리지 못한 패주)`가 겹쳤다. **회피 분기점:** <span color="red">**장합**</span>의 건의대로 오소 구원에 주력을 집중했다면 승리를 보장할 수는 없어도 군량고 소실과 전군 붕괴가 같은 시간에 일어나는 완패는 피할 가능성이 있었다.
+
+##### <span color="blue">**조조 진영(승군)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>불리한 교착 속에서도 본영 방어와 기습 임무를 분명히 나눴다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td><span color="red">**허유**</span>의 정보가 거짓일 위험을 감수하되 정예 소수로 손실 상한을 관리했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>관도에서 오소까지 야간 기동로를 이용해 적 후방의 빈틈을 찔렀다. (원근·험이·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="blue">**조조**</span>는 정보를 결심과 속도로 바꾸고 본영 지휘를 위임했다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>소수 정예·본영 수비·적 보급 파괴를 결합했다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>: 五勝(오승) 중 `識衆寡之用者勝(식중과지용자승, 많고 적은 병력의 쓰임을 아는 자가 이김)`과 `以虞待不虞者勝(이우대불우자승, 대비한 채 대비하지 못한 적을 상대하는 자가 이김)`에 해당한다.
+
+#### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제 曲制(곡제)</td></tr>
+<tr><td><span color="blue">**승군**</span></td><td>관도 수비와 오소 기습의 임무를 분리하고 소수 정예를 집중했다.</td></tr>
+<tr><td><span color="red">**패군**</span></td><td>오소 구원과 관도 공격에 병력을 나눠 어느 쪽도 결정력을 얻지 못했다.</td></tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>관도 官道(관도)</td></tr>
+<tr><td><span color="blue">**승군**</span></td><td><span color="blue">**조조**</span>·<span color="blue">**조홍**</span>·<span color="blue">**순유**</span>의 임무와 재량이 분명했다.</td></tr>
+<tr><td><span color="red">**패군**</span></td><td><span color="red">**원소**</span>의 명령이 <span color="red">**장합**</span>의 구원 건의와 충돌했다.</td></tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>주용 主用(주용)</td></tr>
+<tr><td><span color="blue">**승군**</span></td><td>자군 군량이 부족한 상황에서 적의 집중 보급 거점을 파괴해 지속 능력의 차이를 뒤집었다.</td></tr>
+<tr><td><span color="red">**패군**</span></td><td>대군의 식량을 오소에 집중하고 경계와 신속한 구원 체계를 충분히 두지 못했다.</td></tr>
+</table>
+
+#### 참고자료
+
+- [Plutarch, Life of Antony](https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Plutarch/Lives/Antony*.html)
+- [Cassius Dio, Roman History, Book 50](https://penelope.uchicago.edu/Thayer/E/Roman/Texts/Cassius_Dio/50*.html)
+- [Institute for the Study of the Ancient World — New Light on the Battle of Actium](https://mc.dlib.nyu.edu/files/books/isaw_aphs000029/isaw_aphs000029_lo.pdf)
+- [三國志 魏書 — 순욱·순유·가후전 번역](https://sanguozhi.app/en/chapter/10)
+- [中國哲學書電子化計劃 — 三國志](https://ctext.org/sanguozhi)
+- [Encyclopaedia Britannica — Battle of Guandu](https://www.britannica.com/event/Battle-of-Guandu)
+
+---
+
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
 
 ### 핵심 통찰
