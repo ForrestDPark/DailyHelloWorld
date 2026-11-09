@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import urllib.request
+import urllib.error
 from pathlib import Path
 
 ROOM_ID = "custom_16ea779e1f"
@@ -17,6 +18,7 @@ KEYCHAIN_SERVICE = "com.forrest.tulpachat.worker"
 MARKDOWN_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\((https?://[^)\s]+)\)")
 COMMANDER_NAME_ALIASES = {
     "에르난 코르테스": "코르테스",
+    "조지 S. 패튼": "조지 패튼",
 }
 BATTLE_COMMANDER_PREFERENCES = {
     "요크타운": "조지 워싱턴",
@@ -314,7 +316,8 @@ def main() -> None:
     commanders = [] if is_light else victorious_commanders(markdown, original)
     hanja_lesson = build_hanja_lesson(markdown, original, subtitle)
     site_url = args.site_url or f"{SUNZI_SITE_BASE}/verses/{number}"
-    discussion_number = number
+    site_number_match = re.search(r"/verses/(\d+)(?:[/?#]|$)", site_url)
+    discussion_number = int(site_number_match.group(1)) if site_number_match else number
     content = (
         f"📜 손자병법 새 구절 분석이 완료되었습니다 — {chapter_name} {number}구절\n\n"
         f"원문: {original}\n"
@@ -348,8 +351,12 @@ def main() -> None:
         headers={"Authorization": f"Bearer {keychain_token()}", "Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(request, timeout=20) as response:
-        result = json.load(response)
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            result = json.load(response)
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode("utf-8", "replace")
+        raise RuntimeError(f"Tulpa Chat 보고 HTTP {error.code}: {detail}") from error
     if not result.get("ok"):
         raise RuntimeError(f"Tulpa Chat 보고 실패: {result}")
     if not result.get("duplicate") and not isinstance(result.get("hanja_lesson_message_id"), int):
