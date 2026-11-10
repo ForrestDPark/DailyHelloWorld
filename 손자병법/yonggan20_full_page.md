@@ -129,6 +129,401 @@
 2025년 미 육군 정보 분야 논의는 정보 장교가 지휘 결심과 제대로 통합되지 못하면 기동의 민첩성과 정보에 대한 신뢰가 함께 약해진다고 지적한다. 이는 분석의 정확성만큼 전달 시점과 지휘 관계가 중요하다는 뜻이다. 평시 조직에서는 이를 감시나 비밀 포섭으로 옮기지 않고, 보고자가 불확실성과 반대 증거를 안전하게 말할 수 있는 회의·인계·기록 절차로 제한해야 한다. [U.S. Army, “The Intelligence Warfighting Function in Crisis: Training, Trust, and Readiness”](https://www.lineofdeparture.army.mil/Journals/Military-Intelligence/Military-Intelligence-Archive/2025-July-December/Intelligence-Warfighting/)
 
 ---
+## 4. 역사적 실증 사례
+
+### 서양 — <span color="blue">🏛️ 미·프 연합군</span> vs <span color="red">🏛️ 영국군</span> │ 요크타운 전역(Yorktown Campaign, 1781)
+
+![요크타운 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan20/yorktown_commanders.png)
+![요크타운 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan20/yorktown_soldiers_weapons_life.png)
+![요크타운 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan20/yorktown_command_structure.png)
+![1781년 버지니아 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan20/yorktown_country_map.png)
+![요크타운 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan20/yorktown_strategy_map.png)
+![요크타운 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan20/yorktown_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- <span color="blue">**▰**</span> <span color="yellow_bg">**윌리엄스버그(Williamsburg)**</span> — <span color="blue">**라파예트**</span>가 영국군을 추적하며 요크 반도로 몰아넣는 내륙 거점이었다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**요크타운(Yorktown)**</span> — <span color="red">**콘월리스**</span>가 항구와 해상 지원을 기대해 택한 방어 거점이다.
+- 🌊 <span color="blue_bg">**요크강(York River)**</span> — 요크타운과 글로스터 포인트 사이의 물길이며 해상 탈출과 보급의 축이었다.
+- 🌊 <span color="blue_bg">**체서피크만(Chesapeake Bay)**</span> — 프랑스 함대가 장악하면서 영국 구원함대와 해상 퇴로가 차단됐다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**글로스터 포인트(Gloucester Point)**</span> — 영국군의 맞은편 교두보로, 폭풍 속 탈출 시도가 향한 곳이었다.
+- **제9·10 보루(Redoubts 9 and 10)** — 연합군 참호 완성을 막던 외곽 거점으로, 점령 뒤 포위선이 닫혔다.
+
+#### 상세 전역 서사 — 제임스의 보고를 라파예트가 봉쇄 판단으로, 연합 지휘부가 포위 작전으로 바꾸다
+
+1781년 버지니아에서 <span color="blue">**제임스 라파예트(James Lafayette)**</span>는 노예 신분으로 <span color="blue">**라파예트(Marquis de Lafayette)**</span> 휘하의 정보 임무를 수행했다. 그는 영국 측에 미국군 정보를 제공할 사람처럼 접근하면서 <span color="red">**콘월리스(Charles Cornwallis)**</span> 본부에서 들은 병력 이동과 의도를 미국 측에 전했다. <span color="blue">**라파예트**</span>의 8월 25일자 편지는 “전에 말한 이 하인을 통해 정보”를 얻었다고 워싱턴에게 보고한다. 다만 후대의 ‘한 사람이 요크타운 승리를 만들었다’는 서사는 경계해야 한다. 제임스의 보고는 정찰·포로 심문·해군 소식과 함께 쓰였고, 정확한 개별 보고의 전부는 남아 있지 않다.
+
+#### 라파예트의 절제 — 보고를 받았지만 조급한 결전을 피하다
+
+<span color="red">**콘월리스**</span>가 요크타운에 주둔해 해상 지원을 기다리자 <span color="blue">**라파예트**</span>는 성급한 정면공격 대신 영국군을 감시하고 내륙 이탈을 제한했다. 이어 <span color="blue">**워싱턴**</span>과 <span color="blue">**로샹보**</span>가 뉴욕 앞 주력을 남쪽으로 돌렸고, 프랑스 함대가 체서피크만의 출입을 막았다. 정보가 ‘적이 어디 있다’는 지식으로 멈추지 않고 대륙군·프랑스군·함대의 시간표를 맞추는 명령으로 바뀐 것이다.
+
+#### 체서피크 봉쇄와 참호 — 정보가 육해군의 같은 시간표가 되다
+
+연합군은 외곽 보루를 점령해 제2평행참호를 완성했고, 해상 구원이 실패한 영국군은 10월 19일 항복했다. 승리는 제임스의 첩보만이 아니라 <span color="blue">**라파예트**</span>의 절제된 봉쇄, <span color="blue">**워싱턴**</span>·<span color="blue">**로샹보**</span>의 남하, 드 그라스 함대의 제해권, 공성 포병과 보급이 결합한 결과였다. 이것이 `上智爲間`을 `三軍之所恃而動`으로 바꾼 실제 구조다.
+
+#### 정보의 작동 구조 — 출처를 존중하되 한 사람의 말로 전쟁 전체를 설명하지 않다
+
+**주체와 정보.** <span color="blue">**제임스**</span>는 영국 지휘부에 접근해 병력 이동과 주둔 의도를 전했고, <span color="blue">**라파예트**</span>는 이를 상급 지휘부에 올렸다.
+
+**검증과 결심.** 연합군은 그의 보고를 다른 정찰·해군 정보와 맞추며 영국군이 요크 반도에 묶일 시간창을 판단했다.
+
+**삼군의 움직임.** 버지니아의 견제, 뉴욕 전선의 남하, 프랑스 함대의 해상 차단, 참호 공사가 하나의 포위로 이어졌다.
+
+**사료의 경계.** 제임스의 공로는 라파예트의 증명서와 편지로 확인되지만, 특정 보고 하나가 승리를 ‘결정했다’고 단정할 수는 없다.
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>곡제(편제)</td>
+<td>관도(지휘)</td>
+<td>주용(보급·지속)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**연합군**</span>
+</td>
+<td>대륙군·프랑스군·함대를 봉쇄와 공성에 결합했다.</td>
+<td>제임스의 정보가 라파예트·워싱턴으로 올라가 육해군 결심과 연결됐다.</td>
+<td>체서피크 해상로와 중포·참호 자재를 확보했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**영국군**</span>
+</td>
+<td>요크타운·글로스터에 분산돼 포위됐다.</td>
+<td>클린턴의 구원 약속과 콘월리스의 현장 판단이 시간상 어긋났다.</td>
+<td>해상 보급과 철수가 프랑스 함대에 막혔다.</td>
+</tr>
+</table>
+
+##### <span color="red">**영국군(패군)**</span>
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>현장군과 뉴욕 총사령부의 목적·구원 시간표가 어긋났다. (지기·사기)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>해상 우세와 적시 구원을 기대했지만 프랑스 함대와 연합군 남하 가능성을 낮게 보았다. (지피·타이밍·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>두 물길 사이 반도 끝 거점은 항구가 열리면 유리했으나 봉쇄 뒤에는 퇴로가 좁아졌다. (광협·사생)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>
+<span color="red">**콘월리스**</span>는 요새화했지만 육해군 연결이 끊긴 뒤의 탈출 조건을 충분히 확보하지 못했다. (지신인용엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>분산 주둔과 해상 의존이 공성 지속력의 약점이 됐다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+**직관·편향 한 줄:** <span color="red">**콘월리스**</span>가 영국 해군의 통상적 우세와 구원 약속을 기준점으로 삼은 판단에는 계획 오류가 작동했을 가능성이 있으며, 프랑스 함대가 만을 닫는 대안 시나리오의 가중치가 낮았다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 六敗(육패)의 `北(배, 적정을 충분히 헤아리지 못함)`에 가깝다. **회피 분기점:** 체서피크 봉쇄가 확정되기 전 포츠머스 방향으로 주력을 빼거나, 요크타운에 머문다면 글로스터 교두보와 수송선을 더 일찍 강화했으면 승리를 보장하지는 못해도 전군 항복 위험을 낮출 수 있었다.
+
+##### <span color="blue">**미·프 연합군(승군)**</span>
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>독립전쟁의 결정적 기회를 공동 목표로 묶고 미국·프랑스군을 결합했다. (지기·사기)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>현장 정보와 함대 소식을 결합해 영국군이 반도에 묶이는 짧은 시간창을 활용했다. (지피·타이밍·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>육상 포위와 체서피크 해상 차단을 연결해 반도를 위지로 만들었다. (원근·광협·사생)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>
+<span color="blue">**라파예트**</span>는 정보원을 쓰되 무리한 결전을 피했고, <span color="blue">**워싱턴**</span>과 <span color="blue">**로샹보**</span>는 전략축을 남쪽으로 전환했다. (지신인용엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>정찰·첩보·함대·중포·참호를 같은 시간표에 올렸다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>: 五勝(오승)의 `識衆寡之用者勝(식중과지용자승, 많고 적은 병력의 쓰임을 아는 자가 이김)`과 `以虞待不虞者勝(이우대불우자승, 대비한 채 대비 없는 적을 상대하는 자가 이김)`에 해당한다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>곡제 曲制(곡제)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**승군**</span>
+</td>
+<td>라파예트의 견제군, 워싱턴·로샹보 주력, 드 그라스 함대, 공성대를 기능별로 결합했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**패군**</span>
+</td>
+<td>요크타운과 글로스터의 주둔군이 육상 포위와 해상 봉쇄에 동시에 대응해야 했다.</td>
+</tr>
+</table>
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>관도 官道(관도)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**승군**</span>
+</td>
+<td>제임스→라파예트→워싱턴의 정보 경로와 미·프 지휘 협의가 작전으로 이어졌다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**패군**</span>
+</td>
+<td>콘월리스와 클린턴 사이 서신·구원 시간표가 거리와 해상 상황 때문에 늦었다.</td>
+</tr>
+</table>
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>주용 主用(주용)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**승군**</span>
+</td>
+<td>프랑스 함대의 수송·중포와 연합군 참호 자재가 공성을 지속시켰다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**패군**</span>
+</td>
+<td>해상 보급이 끊기고 외곽 보루가 함락되면서 식량·탄약·수리·퇴로가 함께 압박받았다.</td>
+</tr>
+</table>
+
+#### 참고자료
+- [Lafayette College Archives — 1781년 8월 25일 라파예트 서신](https://www.lafayette.edu/bicentennial/2026/09/02/from-the-archives-letters-from-the-marquis-de-lafayette-to-gen-george-washington/)
+- [National Park Service — James Lafayette](https://www.nps.gov/articles/000/james-lafayette-a-legacy-of-courage-and-espionage.htm)
+- [Defense Intelligence Agency — Good intelligence led to victory at Yorktown](https://www.dia.mil/News-Features/Articles/Article-View/Article/566988/good-intelligence-led-to-victory-at-yorktown/)
+- [Smithsonian — African Americans at Yorktown](https://americanhistory.si.edu/explore/exhibitions/american-revolution-world-war/online/yorktown/african-americans)
+
+### 동양 — <span color="blue">🏛️ 당 조정군</span> vs <span color="red">🏛️ 회서 절도사 세력</span> │ 이소의 설야입채주(李愬雪夜入蔡州, 817)
+
+![채주 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan20/caizhou_commanders.png)
+![채주 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan20/caizhou_soldiers_weapons_life.png)
+![채주 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan20/caizhou_command_structure.png)
+![817년 당·회서 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan20/caizhou_country_map.png)
+![설야입채주 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan20/caizhou_strategy_map.png)
+![설야입채주 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan20/caizhou_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- <span color="blue">**▰**</span> <span color="yellow_bg">**문성책(文城柵)**</span> — <span color="blue">**이소**</span>가 9천을 출발시킨 전진기지다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**장시촌(張柴村)**</span> — 야간행군의 첫 목표로 봉화와 교통을 끊고 병사를 쉬게 한 곳이다.
+- **아압지(鵝鴨池)** — 성 가까이의 거위·오리 울음으로 행군 소음을 가렸다고 전하는 지점이다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**채주(蔡州)**</span> — <span color="red">**오원제**</span>의 본거지이지만 정예가 외곽에 집중된 틈이 있었다.
+- **회곡(洄曲)** — 회서 정예가 당군과 대치하던 전선으로, 채주의 상대적 공허를 만들었다.
+- **낭산(朗山)** — 채주 주변 작전축을 가르는 산지로, 기밀을 유지한 우회와 길 안내가 중요했다.
+
+#### 상세 전역 서사 — 항졸의 말을 직접 묻고 이우의 지식을 9천 명의 눈보라 행군으로 바꾸다
+
+『자치통감』 권240은 <span color="blue">**이소(李愬)**</span>가 항복한 병사를 얻을 때마다 직접 불러 사정을 묻고, 험하고 쉬운 길·멀고 가까움·적의 허실을 모두 알았다고 기록한다. 그는 <span color="blue">**정사량**</span>과 <span color="blue">**오수림**</span>을 포섭한 뒤 회서의 용장 <span color="blue">**이우(李祐)**</span>를 사로잡았다. 부하들이 죽이자고 했지만 이소는 살려 후대하고, 조정의 의심 속에서도 다시 데려와 핵심 계획에 참여시켰다.
+
+#### 이우를 살린 판단 — 배신 전력보다 현재의 지식과 검증을 보다
+
+<span color="blue">**이우**</span>는 회서 정예가 회곡과 사경에 몰려 있어 채주가 비었다는 내부 지식과 길을 제공했다. 이소는 이 말을 맹신하지 않고 연속된 항졸 심문과 전초 점령으로 주변 형세를 대조했다. 또한 첩자를 숨긴 집까지 처벌하던 명령을 거두고 적의 정보원을 후대해, 거짓 안도감과 정보 유입을 함께 만들었다.
+
+#### 목적지를 감춘 70리 — 정보가 9천 명의 행군 규율이 되다
+
+817년 음력 10월, 이소는 9천을 이끌고 문성책을 나섰다. 목적지는 지휘부 일부만 알았고, 장시촌을 거쳐 70리를 눈보라 속에 행군했다. 병사들이 목적지를 묻자 “동쪽으로 간다”는 정도만 전달됐다. 밤중에 채주 외곽에 도달한 당군은 경계가 느슨한 틈을 타 성벽을 넘었고, 다음 날 <span color="red">**오원제**</span>를 붙잡았다.
+
+이 승리를 ‘눈보라의 기적’으로만 읽으면 손자의 결론이 사라진다. 기상은 우연한 은폐를 제공했지만, 승리를 가능하게 한 것은 항졸을 정보원으로 바꾸는 처우, 이우의 높은 현지 지식, 여러 보고의 대조, 목적지 보안, 9천 명의 편제와 행군 통제였다. `上智`가 보고한 길을 `賢將`이 삼군의 실제 움직임으로 번역한 사례다.
+
+#### 정보의 작동 구조 — 포로를 소모품이 아니라 지형과 지휘를 읽는 전문가로 쓰다
+
+**주체와 정보.** 정사량·오수림·이우는 회서 내부의 길·장수·배치·경계 습관을 제공했다.
+
+**검증과 결심.** 이소는 항졸을 직접 심문하고 전초를 차례로 확보해 ‘채주 공허’ 판단을 누적했다.
+
+**삼군의 움직임.** 9천을 기능별로 나눠 장시촌 차단, 야간행군, 성벽 진입, 성내 통제를 연속시켰다.
+
+**사료의 경계.** 세부 숫자와 극적인 장면은 후대 편찬 사료에 의존하며, 이우 한 사람만으로 성공했다고 축소할 수 없다.
+
+#### 法 한눈 비교 — 곡제·관도·주용
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>곡제(편제)</td>
+<td>관도(지휘)</td>
+<td>주용(보급·지속)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**당군**</span>
+</td>
+<td>9천을 선봉·중군·후군과 안내·차단 임무로 묶었다.</td>
+<td>목적지를 제한 공개하고 이우의 정보가 이소의 단일 결심으로 이어졌다.</td>
+<td>짧은 기습을 위해 경량 행군하고 현지 거점을 연속 확보했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**회서군**</span>
+</td>
+<td>정예가 회곡 등 외곽 전선에 집중됐다.</td>
+<td>항장 이탈과 채주 경계 정보가 본부에 충분히 반영되지 않았다.</td>
+<td>본거지의 장기 방어 물자는 있었으나 기습 경보와 즉응 전력이 부족했다.</td>
+</tr>
+</table>
+
+##### <span color="red">**회서군(패군)**</span>
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>연속된 항복과 포섭으로 내부 인재·정보·사기가 빠져나갔다. (지기·사기)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>악천후에는 대규모 접근이 어렵다는 기대가 경계를 낮췄다. (지피·타이밍·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>외곽 전선에 정예를 두면서 본거지로 이어지는 겨울 길과 성벽의 허실을 노출했다. (원근·험이·사생)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>
+<span color="red">**오원제**</span>는 이우 등 이탈자의 지식이 당군 작전으로 전환될 위험을 막지 못했다. (지신인용엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>외곽 전투력과 본거지 경계·예비대가 분리됐다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+**직관·편향 한 줄:** <span color="red">**오원제**</span> 측이 눈보라와 당군의 이전 부진을 ‘오늘도 기습은 어렵다’는 대표적 장면으로 본 판단에는 정상성 편향과 가용성의 영향이 작동했을 가능성이 있다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 六敗(육패)의 `亂(란, 지휘·경계의 혼란)`과 `北(배, 적정을 헤아리지 못함)`이 겹쳤다. **회피 분기점:** 항장 이탈 직후 채주 성문의 암호·숙직·순찰로를 바꾸고 외곽 정예 일부를 예비대로 복귀시켰다면 승리를 보장하지는 못해도 본거지가 하룻밤에 무너지는 결과는 피할 가능성이 컸다.
+
+##### <span color="blue">**당 조정군(승군)**</span>
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>항졸을 죽이기보다 쓰고 보호해 정보와 전투력을 함께 얻었다. (지기·사기)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>눈보라의 위험을 인정하면서도 적의 경계가 낮아질 시간창으로 바꿨다. (지피·타이밍·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>현지 안내와 직접 심문으로 70리 겨울길·성벽·경계의 허실을 구체화했다. (원근·험이·광협)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>
+<span color="blue">**이소**</span>는 이우를 보호하고 반대 속에서도 책임졌으며 기밀과 행군을 통제했다. (지신인용엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>정보·안내·차단·행군·성내 통제를 9천의 임무로 번역했다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>: 五勝(오승)의 `上下同欲者勝(상하동욕자승, 상하가 뜻을 같이하면 이김)`, `以虞待不虞者勝(이우대불우자승, 대비한 채 대비 없는 적을 상대하면 이김)`, `將能而君不御者勝(장능이군불어자승, 장수가 유능하고 군주가 억누르지 않으면 이김)`에 해당한다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>곡제 曲制(곡제)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**승군**</span>
+</td>
+<td>선봉·중군·후군, 장시촌 차단, 이우의 안내, 성벽 진입대를 한 행군열에 결합했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**패군**</span>
+</td>
+<td>정예는 회곡 등 외곽에, 채주에는 상대적으로 약한 경계병이 남았다.</td>
+</tr>
+</table>
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>관도 官道(관도)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**승군**</span>
+</td>
+<td>헌종·배도의 승인 아래 이소가 현장 지휘권을 갖고, 이우의 정보와 길 안내를 제한된 참모선에서만 공유했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**패군**</span>
+</td>
+<td>항장과 첩자망의 이탈 신호가 오원제의 본거지 경계 변경으로 이어지지 않았다.</td>
+</tr>
+</table>
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>주용 主用(주용)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**승군**</span>
+</td>
+<td>장기 공성 대신 9천의 단기 경량 기습을 택해 눈보라 속 보급 부담을 시간으로 상쇄했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**패군**</span>
+</td>
+<td>채주의 저장과 성벽은 있었지만 외곽 정예가 돌아올 때까지 버틸 경보·숙직·즉응 체계가 실패했다.</td>
+</tr>
+</table>
+
+#### 참고자료
+- [『資治通鑑』 권240 — 이소의 항졸 심문·이우 후대·설야입채주](https://www.sidneyluo.net/c/240.html)
+- [위키문헌 사고전서본 『資治通鑑』 권240](https://zh.wikisource.org/wiki/%E8%B3%87%E6%B2%BB%E9%80%9A%E9%91%91_(%E5%9B%9B%E5%BA%AB%E5%85%A8%E6%9B%B8%E6%9C%AC)/%E5%8D%B7240)
+- [Chinese Text Project — 『舊唐書』](https://ctext.org/wiki.pl?if=en&res=456771)
+
+---
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
 
 ### 핵심 통찰
@@ -156,4 +551,3 @@
 **보고의 출처와 판단 근거를 확인하지 않고 사람을 움직이면 재수가 없다.**
 
 **이유:** 근무 시작과 에러 인계 때 3분을 써서 `누가 직접 보았는가 / 언제의 정보인가 / 로그와 일치하는가 / 다른 설명은 무엇인가 / 무엇이 바뀌면 멈출 것인가`를 확인한다. 이 과정이 없으면 생생한 말이나 직급이 사실을 대신하고, 잘못된 원인으로 인력과 설비가 움직여 작은 오판이 공정 지연·책임 공방·다음 교대의 반복 오류로 커진다. `明君賢將`이 `上智`를 알아보고 `三軍`을 움직인다는 순서는 **사람의 권위가 아니라 검증된 정보가 행동을 받쳐야 한다**는 원리다.
-
