@@ -134,10 +134,15 @@ CIA의 경쟁가설분석은 마음에 드는 설명 하나를 먼저 고른 뒤
 ### 서양 — <span color="blue">🏛️ 미·프 연합군</span> vs <span color="red">🏛️ 영국군</span> │ 요크타운 전역(Yorktown Campaign, 1781)
 
 ![요크타운 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan16/yorktown_commanders.png)
+
 ![요크타운 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan16/yorktown_soldiers_weapons_life.png)
+
 ![요크타운 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan16/yorktown_command_structure.png)
+
 ![1781년 버지니아 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan16/yorktown_country_map.png)
+
 ![요크타운 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan16/yorktown_strategy_map.png)
+
 ![요크타운 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan16/yorktown_sequence.png)
 
 **뒤에서 반복될 지형을 먼저 잡아두기**
@@ -330,10 +335,15 @@ CIA의 경쟁가설분석은 마음에 드는 설명 하나를 먼저 고른 뒤
 ### 동양 — <span color="blue">🏛️ 당 조정군</span> vs <span color="red">🏛️ 회서 절도사 세력</span> │ 이소의 설야입채주(李愬雪夜入蔡州, 817)
 
 ![채주 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan16/caizhou_commanders.png)
+
 ![채주 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan16/caizhou_soldiers_weapons_life.png)
+
 ![채주 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan16/caizhou_command_structure.png)
+
 ![817년 당·회서 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan16/caizhou_country_map.png)
+
 ![설야입채주 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan16/caizhou_strategy_map.png)
+
 ![설야입채주 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan16/caizhou_sequence.png)
 
 **뒤에서 반복될 지형을 먼저 잡아두기**
