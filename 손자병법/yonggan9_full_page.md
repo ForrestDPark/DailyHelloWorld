@@ -257,10 +257,15 @@
 ### 동양 — 🏛️ 후한·우전 연합군 vs 🏛️ 구자·온숙 연합군 │ 반초의 사차 원정(莎車之戰, 87년)
 
 ![사차 원정 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan9/shache_commanders.png)
+
 ![사차 원정 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan9/shache_soldiers_weapons_life.png)
+
 ![사차 원정 지휘 편제 조직도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan9/shache_command_structure.png)
+
 ![87년 서역 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan9/shache_country_map.png)
+
 ![사차 원정 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan9/shache_strategy_map.png)
+
 ![사차 원정 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan9/shache_sequence.png)
 
 **뒤에서 반복될 지형을 먼저 잡아두기**
