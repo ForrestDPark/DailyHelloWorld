@@ -1,0 +1,58 @@
+{
+  "id": "yonggan-17",
+  "battle": {
+    "source_verse_ids": [70],
+    "source_kind": "historical_case",
+    "title": "미트 작전 — 죽은 전달자와 살아 있는 검증망",
+    "year": "1943",
+    "commander": "영국 해군정보부 17M과 XX위원회",
+    "verse": "因是而知之. 故死間爲誑事可使告敵, 因是而知之, 故生間, 可使如期.",
+    "verse_meaning": "적의 검증 습관을 알아야 거짓 정보를 믿게 할 수 있고, 살아 있는 정보 채널로 반응을 확인해야 기만을 실제 작전의 시간표와 연결할 수 있다.",
+    "map": "https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan17/mincemeat_strategy_map.png",
+    "briefing": "시칠리아 상륙이 너무 뻔합니다. 가공 인물의 생활 흔적과 고위 서신을 한 묶음으로 만들되, 독일이 무엇을 믿는지 살아 있는 감청·외교 채널로 확인하십시오. 역사적 사실 선택지와 반사실 분기를 구분해 판단해야 합니다.",
+    "initial_state": {"troops": 64, "morale": 58, "supply": 56, "intelligence": 2, "initiative": 0, "damage": 0, "time": 6},
+    "phases": [
+      {
+        "title": "1단계 — 표적의 믿음을 먼저 조사하다",
+        "prompt": "독일은 시칠리아 상륙을 예상하고 있습니다. 기만의 첫 기준은 무엇입니까?",
+        "choices": [
+          {"text": "독일의 발칸 우려와 스페인 친독 정보망, 문서 검증 습관을 먼저 대조한다", "result": "사실 기반: 영국은 우엘바의 현지 정보 경로와 독일의 기존 전략 기대를 이용했다.", "score": 4, "effects": {"intelligence": 2, "initiative": 1}, "principle": "因是而知之 — 광사는 상대가 무엇을 믿는지 아는 데서 시작한다"},
+          {"text": "시칠리아가 뻔하므로 반대편 지명을 아무 곳이나 골라 문서를 만든다", "result": "반사실: 적의 기존 정보와 맞지 않는 거짓은 독립 확인에서 고립된다.", "score": -3, "effects": {"intelligence": -2, "initiative": -1}}
+        ]
+      },
+      {
+        "title": "2단계 — 가공 인물의 흔적을 만들다",
+        "prompt": "‘윌리엄 마틴 소령’의 서류가 우연히 노출된 진짜 문서처럼 보이려면 무엇이 필요합니까?",
+        "choices": [
+          {"text": "신분증·영수증·개인 편지와 고위 서신을 서로 모순 없이 묶는다", "result": "사실 기반: 생활 흔적과 공식 문서의 일관성이 가공 인물의 신빙성을 높였다.", "score": 5, "effects": {"intelligence": 1, "initiative": 2, "supply": -1}, "principle": "誑事는 한 문장이 아니라 적이 확인할 수 있는 정황의 묶음이다"},
+          {"text": "고위 지휘관 서신 한 장만 넣고 개인 흔적은 만들지 않는다", "result": "반사실: 문서의 가치가 클수록 출처와 소지자의 실재 여부를 더 엄격히 의심받는다.", "score": -2, "effects": {"intelligence": -1}}
+        ]
+      },
+      {
+        "title": "3단계 — 우엘바 경로에 맡기다",
+        "prompt": "문서가 독일 정보망에 닿도록 어떤 경로를 택하겠습니까?",
+        "choices": [
+          {"text": "HMS 세라프로 우엘바 앞바다에 투입하고 스페인 당국의 회수 경로를 이용한다", "result": "사실 기반: 세라프가 1943년 4월 우엘바 인근에 작전 대상을 투입했고 문서는 스페인 경로를 거쳐 독일 측에 복제됐다.", "score": 5, "effects": {"initiative": 2, "time": -1, "supply": -2}, "principle": "可使告敵 — 정보가 적의 실제 결정권자에게 닿을 전달망을 설계한다"},
+          {"text": "독일 대사관에 익명 우편으로 바로 보낸다", "result": "반사실: 출처가 너무 직접적이면 영국이 심은 정보라는 의심을 키운다.", "score": -3, "effects": {"initiative": -2}}
+        ]
+      },
+      {
+        "title": "4단계 — 적의 반응을 살아 있는 채널로 확인하다",
+        "prompt": "문서가 넘어간 뒤 곧 성공을 선언하시겠습니까?",
+        "choices": [
+          {"text": "울트라 해독과 외교 관찰로 독일의 신뢰·재배치 신호를 확인한다", "result": "사실 기반: 해독 통신은 독일이 문서를 받아들였음을 보여 주었고 후속 배치 변화가 관찰됐다.", "score": 6, "effects": {"intelligence": 3, "initiative": 2, "time": -1}, "principle": "生間의 기능은 현대전에서 감청·현지 관찰 등 살아 있는 피드백망으로 분화된다"},
+          {"text": "문서가 회수됐다는 소식만으로 독일이 완전히 속았다고 단정한다", "result": "반사실: 전달과 신뢰, 신뢰와 실제 명령은 서로 다른 단계다.", "score": -4, "effects": {"intelligence": -2, "initiative": -2}}
+        ]
+      },
+      {
+        "title": "5단계 — 허스키의 기한을 지키다",
+        "prompt": "독일이 발칸과 사르데냐를 보강합니다. 실제 상륙은 어떻게 연결하겠습니까?",
+        "choices": [
+          {"text": "기만 반응을 확인하되 실제 해공군 준비를 기준으로 예정된 시칠리아 상륙을 실행한다", "result": "사실 기반: 연합군은 1943년 7월 10일 시칠리아에 상륙했다. 성공은 미트뿐 아니라 광범위한 기만과 실제 전력이 결합한 결과였다.", "score": 6, "effects": {"troops": 4, "morale": 6, "initiative": 3, "supply": -5, "time": -2}, "principle": "如期는 기만에 취하는 마감이 아니라 검증된 정보와 실제 준비가 만나는 시간표다"},
+          {"text": "독일이 속았으니 준비가 덜 됐어도 즉시 상륙한다", "result": "반사실: 기만은 해공 엄호·상륙정·보급을 대신하지 못한다.", "score": -5, "effects": {"troops": -14, "damage": 10, "morale": -8}},
+          {"text": "완벽한 확신을 얻을 때까지 상륙을 무기한 연기한다", "result": "반사실: 정보의 불확실성을 0으로 만들려다 기상·조수·작전 보안의 시간창을 잃는다.", "score": -2, "effects": {"initiative": -3, "time": 2}}
+        ]
+      }
+    ]
+  }
+}

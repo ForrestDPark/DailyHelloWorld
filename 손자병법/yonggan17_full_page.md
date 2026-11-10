@@ -1,4 +1,4 @@
-<!-- sunzi-analysis-mode: light -->
+<!-- sunzi-analysis-mode: full -->
 > 인시이지지. 고사간위광사가사고적, 인시이지지, 고생간, 가사여기. — 확인하지 않은 정보로 남을 움직이거나 귀환 약속을 잡으면 재수가 없다.
 
 ---
@@ -135,6 +135,257 @@
 윤리적 한계는 분명하다. 군사 기만은 무력충돌법과 지휘 책임의 적용을 받으며, 평시 직장이나 인간관계에서 타인의 신뢰를 조작하는 허가가 아니다. 일상에서 취할 것은 거짓을 퍼뜨리는 법이 아니라 **받는 사람이 어떻게 검증할지 고려해 사실을 명료하게 전하고, 보고자에게 현실적인 기한과 안전한 실패 신호를 주는 습관**이다.
 
 ---
+
+## 4. 역사적 실증 사례
+
+### 서양 — 연합군 vs 추축군 │ 미트 작전(Operation Mincemeat, 1943)
+
+![미트 작전 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan17/mincemeat_commanders.png)
+
+![미트 작전 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan17/mincemeat_soldiers_weapons_life.png)
+
+![미트 작전 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan17/mincemeat_command_structure.png)
+
+![1943년 서부 지중해 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan17/mincemeat_country_map.png)
+
+![미트 작전 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan17/mincemeat_strategy_map.png)
+
+![미트 작전 단계별 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan17/mincemeat_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- 🌊 <span color="blue_bg">**지브롤터 해협(Strait of Gibraltar)**</span>은 잠수함 세라프가 대서양으로 빠져나가는 관문이었다. 이 통로가 막히면 우엘바 투입 자체가 성립하지 않는다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**우엘바(Huelva)**</span>는 친독일 정보망과 조류 조건 때문에 선택된 회수 지점이었다. 문서가 스페인 당국을 거쳐 독일 정보기관에 닿는 연결점이다.
+- 🌊 <span color="blue_bg">**지중해(Mediterranean Sea)**</span>의 중앙에는 시칠리아·사르데냐·그리스가 갈라져 있었다. 같은 연합군 준비를 어느 목표로 해석하느냐가 추축군 배치를 바꿨다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**시칠리아(Sicily)**</span>는 실제 허스키 작전의 목표였다. 미트 작전은 이곳을 양동처럼 보이게 해야 했다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**사르데냐(Sardinia)**</span>와 그리스는 꾸민 문서가 가리킨 거짓 목표였다. 독일군이 이쪽을 보강할수록 시칠리아의 방어 집중은 약해졌다.
+
+#### 상세 전역 서사 — 적의 검증 습관을 시신과 서류 한 묶음으로 통과시키다
+
+1943년 연합군이 북아프리카를 장악한 뒤 다음 상륙지로 <span color="blue">**▰**</span> <span color="yellow_bg">**시칠리아(Sicily)**</span>가 너무 뻔해졌다. <span color="blue">**이언 몬태규(Ewen Montagu)**</span>와 <span color="blue">**찰스 촐먼들리(Charles Cholmondeley)**</span>는 글린더 마이클의 시신에 가공의 왕립해병 소령 ‘윌리엄 마틴’이라는 신원을 만들고, 그리스와 <span color="red">**▰**</span> <span color="yellow_bg">**사르데냐(Sardinia)**</span>를 주공처럼 보이게 하는 서신을 휴대시켰다. 이때 글린더 마이클은 자발적 간첩이 아니었으므로, 사람을 영웅적 사간으로 미화하지 않고 **시신을 매개로 만든 광사**라고 구분해야 한다.
+
+잠수함 HMS 세라프는 시신과 서류가방을 <span color="blue">**▰**</span> <span color="yellow_bg">**우엘바(Huelva)**</span> 앞바다에 투입했다. 스페인은 중립국이었지만 현지의 친독일 정보 경로가 활발했고, 영국은 서류를 애써 되찾으려는 외교적 몸짓까지 보여 문서의 가치가 높아 보이게 했다. 독일 측이 문서를 복제하고 진짜라고 판단했다는 사실은 울트라 해독으로 다시 확인됐다. 이것이 첫 `因是而知之`와 두 번째 `因是而知之` 사이의 피드백 고리다.
+
+독일은 발칸·그리스·사르데냐 방어를 보강했고, 연합군은 7월 10일 실제 목표인 시칠리아에 상륙했다. 다만 성공을 미트 한 건에만 돌릴 수는 없다. 바클레이 등 더 큰 기만 체계, 추축군의 해공군 열세, 연합군의 실제 전력이 함께 작용했다. **사간형 메시지는 적을 움직였지만, 생간의 기능은 살아 돌아온 한 사람이 아니라 통신감청·외교 관찰·정찰 채널로 분화되었다.**
+
+#### 전투에서 사용된 속임수 — 진짜 생활 흔적이 떠받친 거짓 작전문서
+
+연합군은 거짓 서신만 만들지 않았다. 신분증·영수증·연인의 사진·은행 통지처럼 한 사람의 생활 흔적을 붙여 독일 분석관이 독립적으로 확인했다고 느끼게 했다. 실제 의도는 시칠리아 상륙이었지만, 적에게 보인 신호는 그리스와 사르데냐가 주공이라는 것이었다. 독일은 이미 발칸 방어를 중시했고, 중립국 경로에서 우연히 얻은 듯한 문서를 신뢰할 이유가 있었다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 영국 해군정보부와 XX위원회는 시칠리아 상륙의 예측 가능성을 낮추려 했다.
+
+**보인 신호와 믿은 이유.** 가공 인물의 생활 흔적, 고위 지휘관 서신, 영국의 회수 요구가 ‘우연히 노출된 진짜 문서’라는 서사를 만들었다.
+
+**유발된 행동과 결과.** 독일은 그리스·발칸·사르데냐를 보강했고 시칠리아 상륙은 전략적 기습 효과를 얻었다.
+
+**사료의 경계.** 미트가 독일 지휘부 전체를 단독으로 움직였다는 평가는 과장될 수 있다. 광범위한 기만 계획과 전력 조건을 함께 보아야 한다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 영국 기만 지휘부가 스페인 경유 정보망을 통해 독일 정보기관과 최고지휘부를 속였다.
+2. **어떤 사실이 거짓이었는가?** 그리스·사르데냐가 주공이고 시칠리아가 양동이라는 작전 방향이 거짓이었다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 연합군의 지중해 상륙 준비 자체는 진짜였고, 그 사실이 거짓 목표를 더 믿기 쉽게 했다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 발칸을 잃을 위험을 크게 본 기존 전략 판단과 우연히 입수한 고급 문서라는 출처 효과가 결합했다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 있었지만 낮아졌을 것이다. 시칠리아는 지리적으로 가장 뚜렷한 목표였다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 문서의 진위를 세밀히 보았지만, 실제 상륙 물량과 시칠리아 접근 능력을 충분히 반대 증거로 쓰지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 보드게임·보안 모의훈련에서 미끼 신호와 독립 확인 절차를 함께 설계할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>近而示之遠(근이시지원)<br>가까운 곳을 치면서 먼 곳을 치는 듯 보임</td><td>실제 목표 시칠리아를 감추고 그리스·사르데냐를 주공처럼 보였다.</td></tr>
+<tr><td>用而示之不用(용이시지불용)<br>쓰면서 쓰지 않는 듯 보임</td><td>실제 상륙 준비를 계속하면서 그 준비가 다른 목표를 향한 것처럼 해석되게 했다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**연합군**</span></td><td>기만 전담부서·잠수함·통신감청을 결합했다.</td><td>XX위원회가 메시지와 실제 작전을 중앙 조정했다.</td><td>서류·신원·잠수함·울트라 확인을 지속적으로 연결했다.</td></tr>
+<tr><td><span color="red">**추축군**</span></td><td>정보 분석과 방어군 배치가 여러 지역으로 분산됐다.</td><td>독일 정보기관의 판단이 최고지휘부 배치로 이어졌다.</td><td>발칸·그리스·사르데냐 보강이 시칠리아 집중을 약화했다.</td></tr>
+</table>
+
+#### <span color="red">**독일 정보·지휘부 (패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>기존 발칸 위협 인식이 조직의 판단을 한 방향으로 묶었다. 반대 가설을 충분히 살리지 못했다. (지기·결속)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>중립국 경로와 우연한 회수라는 드문 사건에 높은 비중을 주고 시칠리아라는 기저율 높은 목표를 낮게 보았다. (지피·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>시칠리아의 중앙 위치와 연합군 항공 엄호 범위를 알면서도 동부 지중해의 정치적 공포에 끌렸다. (원근·광협)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>입수 문서의 진위를 확인하는 데 집중했지만, 문서가 진짜여도 내용이 조작될 가능성을 별도 가설로 유지하지 못했다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>방어군·항공기·해군 자산을 여러 거짓 목표에 분산했다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** 우연히 얻은 고급 문서의 생생함에 붙잡혀 시칠리아 상륙의 높은 기저율을 낮게 본 판단에는 가용성·확증편향이 작동한 것으로 볼 수 있다.
+
+🏳️ <span color="red">**패군 측 결과**</span> — 六敗 가운데 `北(배, 적을 헤아리지 못하고 약점을 내줌)`에 가깝다. 독립 확인을 ‘문서 진위’가 아니라 ‘상륙 능력과 목표 분포’까지 넓혔다면 적어도 방어 분산을 줄일 수 있었다.
+
+#### <span color="blue">**연합군 기만 지휘부 (승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>정보·외교·해군·실전 작전이 같은 목표 아래 움직였다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>독일의 발칸 우려와 스페인 정보망이라는 외부 조건을 이용하되 울트라로 반응을 확인했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>우엘바의 조류와 정보 경로, 지중해 목표들의 거리 차이를 하나의 서사로 묶었다. (원근·험이·광협)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>세부 일관성을 만들고 실제 작전과 거짓 신호를 분리했다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>문서 제작·운반·회수 연기·감청 확인을 단계별 책임으로 나눴다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span> — 五勝 중 `以虞待不虞者勝`(이우대불우자승, 대비한 채 대비 없는 적을 상대하는 자가 이김)에 해당한다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**연합군**</span></td><td>정보 기획자, 잠수함 승조원, 외교 채널, 감청 분석을 서로 다른 임무로 나누고 같은 기만 목표에 결합했다.</td></tr>
+<tr><td><span color="red">**추축군**</span></td><td>문서 분석과 지역 방어를 연결했으나 반대 가설을 전담하는 검증 기능이 약했다.</td></tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**연합군**</span></td><td>XX위원회와 해군정보부가 세라프의 현장 임무, 외교적 회수 요구, 울트라 피드백을 중앙에서 통제했다.</td></tr>
+<tr><td><span color="red">**추축군**</span></td><td>스페인 현지망–아브베어–최고지휘부를 거친 판단이 광범위한 재배치 명령으로 확대됐다.</td></tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**연합군**</span></td><td>잠수함 항해, 위조 신원과 서류, 통신감청, 실제 허스키 상륙 물량을 별도로 유지했다.</td></tr>
+<tr><td><span color="red">**추축군**</span></td><td>항공기와 방어 전력을 발칸·그리스·사르데냐로 나누어 시칠리아의 지속 방어 여력을 낮췄다.</td></tr>
+</table>
+
+**출처:** [Imperial War Museums, Operation Mincemeat](https://www.iwm.org.uk/sites/default/files/files/2023-10/spies_large_print_guide.pdf) · [National Museum of the Royal Navy, HMS Seraph](https://www.royalnavymuseums.org.uk/news/operation-mincemeat-hms-seraphs-special-operations-and-man-who-never-was) · [U.S. Naval History and Heritage Command, Sicilian Campaign](https://www.history.navy.mil/browse-by-topic/wars-conflicts-and-operations/world-war-ii/1943/sicilian-campaign.html)
+
+### 동양 — 🏛️ 북송 vs 🏛️ 서하 │ 종세형의 법숭 사간·생환 작전(1040년대)
+
+![종세형과 법숭 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan17/wangsong_commanders.png)
+
+![송하 변경 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan17/wangsong_soldiers_weapons_life.png)
+
+![종세형 법숭 작전 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan17/wangsong_command_structure.png)
+
+![11세기 송하 변경 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan17/wangsong_country_map.png)
+
+![법숭 잠입과 귀환 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan17/wangsong_strategy_map.png)
+
+![법숭 사간 생환 단계별 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan17/wangsong_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- <span color="blue">**▰**</span> <span color="yellow_bg">**청간성(青澗城)**</span>은 종세형이 쌓은 북송 변경 거점이자 법숭의 출발·귀환 지점이었다.
+- ⛰️ <span color="green_bg">**황토고원 협곡대(黃土高原)**</span>는 길이 갈리고 감시가 어려운 잠입 공간이면서, 붙잡히면 구조가 어려운 장벽이었다.
+- 🌊 <span color="blue_bg">**황하(黃河)**</span>의 큰 굽이는 북송과 서하 변경의 이동축을 갈랐다. 나루와 계곡길을 아는 것이 귀환 가능성을 좌우했다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**하주(夏州)**</span>와 서하 북경은 법숭이 심문·이송된 적지의 권력 공간이었다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**천도산(天都山)**</span> 일대는 야리우걸 등 서하 중신의 영향권이었다. 숨긴 서신은 이 권력관계를 겨냥했다.
+
+#### 상세 전역 서사 — 죽으라고 보낸 사간이 적정을 품고 살아 돌아오다
+
+심괄의 《몽계필담》은 <span color="blue">**종세형(種世衡)**</span>이 <span color="blue">**법숭(法崧, 뒤의 왕숭 王嵩)**</span>을 오래 후대하고도 혹독하게 시험해 비밀을 지킬지를 확인했다고 기록한다. 종세형은 그에게 몇 가지 군사기밀과 거짓 보고를 주고, 자신이 입던 솜옷까지 건넸다. 그러나 옷깃에는 법숭이 모르는 서하 중신 야리우걸에게 보내는 친밀한 서신을 숨겼다.
+
+법숭은 변경을 넘어 서하로 들어갔고, 의심을 받아 붙잡혔다. 서하 측이 옷깃에서 편지를 찾아내자 법숭은 자신도 몰랐던 증거 때문에 가혹한 심문을 받았다. 이 장치의 실제 표적은 법숭이 아니라 서하 군주와 야리우걸 사이의 신뢰였다. 법숭은 여기서 전형적인 사간의 위치에 놓인다. 자신이 믿는 임무와 지휘부가 숨긴 광사가 달랐고, 진상이 드러나면 살아남기 어려웠다.
+
+서하 측은 야리우걸을 의심했고, 법숭은 북쪽으로 옮겨졌다가 오래 뒤 탈출해 돌아왔다. 그는 적지의 사정을 모두 보고했고 조정은 공을 기록해 관직을 주었다. 심괄은 이 결말을 `世衡本賣崧爲死間, 邂逅得生還`(세형본매숭위사간, 해후득생환 — 종세형은 본래 법숭을 사간으로 팔았으나 우연히 살아 돌아왔다)이라고 정리한다. **한 사람이 사간으로 투입되었다가 생간의 기능까지 수행한 희귀 사례**지만, 귀환은 계획된 `如期`가 아니라 우연한 생환이었다는 한계를 감추면 안 된다.
+
+#### 전투에서 사용된 속임수 — 전달자도 모르는 옷깃 속 서신
+
+종세형은 법숭이 심문에서 일관되게 무지함을 드러낼 수 있도록 핵심 서신을 숨겼다. 법숭이 알고 있는 군사정보와 그가 모르는 편지가 섞였기 때문에 서하 측은 편지를 조작물보다 실제 내통 흔적으로 오인할 여지가 커졌다. 상대의 의심을 이용했지만 전달자의 동의를 빼앗고 죽음에 노출시킨 냉혹한 계책이었다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 종세형은 서하 군주와 핵심 참모의 신뢰를 깨뜨려 변경의 지휘력을 약화하려 했다.
+
+**보인 신호와 믿은 이유.** 법숭의 솜옷 속 비밀편지는 당사자도 모르는 물증이었고, 친밀한 문구는 실제 내통처럼 보였다.
+
+**유발된 행동과 결과.** 서하 측은 야리우걸을 의심했고, 후대 기록은 그가 의심 속에 죽었다고 전한다. 법숭은 뜻밖에 탈출해 적정을 보고했다.
+
+**사료의 경계.** 《몽계필담》은 심괄이 변경 사람들에게 자세히 들었다고 밝힌 후대 기록이다. 야리 형제의 처형 원인과 세부 순서는 다른 송대 기록과 차이가 있어 단일 인과로 확정하지 않는다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 종세형이 법숭과 서하의 포획·심문망을 거쳐 서하 군주를 속였다.
+2. **어떤 사실이 거짓이었는가?** 야리우걸이 북송과 내통한다는 친밀한 서신과 귀순 약속이 거짓이었다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 법숭이 실제로 종세형의 임무를 받고 적지에 들어온 사실이 숨긴 서신의 신빙성을 높였다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 변경 중신의 독자 병력과 기존 정치적 긴장이 배신 가능성을 크게 보게 했다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 내부 긴장은 있었겠지만 특정 서신이 없었다면 같은 속도와 강도로 의심이 확대될 가능성은 낮다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 필적·전달 경로·법숭의 인지 여부와 북송이 증거를 심을 유인을 분리해 확인하지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 보안훈련에서 심어진 문서의 출처·내용·전달 경로를 독립 확인하는 연습으로 바꿀 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>近而示之遠(근이시지원)<br>가까이 있으면서 멀리 있는 듯 보임</td><td>실제 표적은 서하 군주와 야리우걸의 신뢰였지만, 겉으로는 법숭의 정보 전달 임무처럼 보였다.</td></tr>
+<tr><td>利而誘之(이이유지)<br>이익으로 꾐</td><td>귀순과 관직의 이익을 암시한 숨은 서신이 서하 지휘부의 의심을 스스로 키우게 했다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**북송**</span></td><td>변경 지휘관·승려 정보원·성채 정찰망을 결합했다.</td><td>종세형이 기만 정보와 전달 경로를 단독 통제했다.</td><td>솜옷·말·노자와 변경 길 지식이 침투를 지탱했다.</td></tr>
+<tr><td><span color="red">**서하**</span></td><td>변경 순찰·심문·궁정 판단이 이어졌다.</td><td>포획 정보가 군주와 중신 사이의 의심으로 직결됐다.</td><td>북방 이송과 감시가 있었지만 법숭의 탈출을 막지 못했다.</td></tr>
+</table>
+
+#### <span color="red">**서하 지휘부 (패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>군주와 중신의 신뢰가 한 장의 서신으로 흔들렸다. (지기·결속)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>법숭이 편지를 몰랐다는 반대 설명보다 내통이라는 단일 시나리오를 높게 보았다. (지피·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>깊은 적지와 북방 이송로를 통제했지만 황토고원의 복잡한 귀환로를 완전히 봉쇄하지 못했다. (험이·원근)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>물증을 중시했으나 출처가 의도적으로 심어진 가능성을 검증하지 못했다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>포획·심문·이송은 했지만 정보 검증과 내부 신뢰 보호가 분리되지 않았다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** 숨겨진 서신이라는 생생한 물증을 배신의 증거로 곧장 연결한 판단에는 단일 시나리오 집중과 확증편향이 작동했을 가능성이 있다.
+
+🏳️ <span color="red">**패군 측 결과**</span> — 六敗 중 `亂(란, 지휘와 질서가 흔들림)`에 가깝다. 서신의 필적·전달 경로·상대가 이 증거를 심을 유인을 독립 검증했다면 적어도 내부 불신의 확대는 줄일 수 있었다.
+
+#### <span color="blue">**종세형·법숭 (승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>법숭의 충성·인내와 변경 조직의 지원이 임무를 가능하게 했다. 다만 위험을 온전히 알리지 않은 윤리적 결함이 크다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>서하 내부의 의심을 이용했고, 법숭의 생환이라는 낮은 확률의 우연까지 정보 수확으로 바꿨다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>청간성에서 서하 권력권으로 이어지는 변경길과 겨울 기후를 계산해 솜옷·노자를 준비했다. (원근·험이)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>종세형의 지략은 강했지만 부하를 속여 소모품으로 삼은 엄격함은 인의 한계를 넘었다. (지신인용엄·장유오위)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>거짓 기밀, 숨긴 편지, 이동 지원, 귀환 후 보고를 한 작전으로 엮었다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span> — 五勝 중 `以虞待不虞者勝`에 닿지만, 생환은 예정된 승리가 아니라 우연이었다. 이 사례는 사간의 효율보다 지휘 책임의 냉혹한 비용을 함께 보여 준다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**북송**</span></td><td>청간성 수비·정찰과 법숭의 단독 잠입을 분리하고, 숨긴 서신을 별도 기만 장치로 붙였다.</td></tr>
+<tr><td><span color="red">**서하**</span></td><td>변경 포획대·심문기관·궁정 판단이 순차 대응했으나 내부 중신 검증은 취약했다.</td></tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**북송**</span></td><td>종세형이 임무·거짓정보·숨긴 편지를 통제했고 법숭은 자신이 아는 범위만 전달했다.</td></tr>
+<tr><td><span color="red">**서하**</span></td><td>현장 발견이 야리우걸과 군주 사이의 정치 판단으로 곧장 올라가 의심을 증폭했다.</td></tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**북송**</span></td><td>솜옷·여비·말과 변경 안내가 장거리 침투를 지탱했다. 구체적 식량·비용은 사료상 불명이다.</td></tr>
+<tr><td><span color="red">**서하**</span></td><td>포획 후 장기 구금과 북방 이송을 유지했으나 감시·수송의 구체 비용은 사료상 불명이다.</td></tr>
+</table>
+
+**출처:** [심괄 《몽계필담》 권지 기록](https://www.shidianguji.com/book/SBCK364/chapter/SBCK364_26) · [《몽계필담》 법숭 원문·번역](https://www.quanben.io/n/wanjuanlouguoxuejingdian-zhencangban-mengxibitan/37.html) · [송대 왕숭 관련 기록 대조](https://www.shidianguji.com/mid-page/7540775826317770802)
+
+---
+
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
 
 ### 핵심 통찰
