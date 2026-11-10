@@ -108,6 +108,259 @@
 사용자의 「생각에대한 생각」 메모가 경고한 한 가지 시나리오 집중을 피하려면 실행 전 세 갈래를 적을 수 있다. ‘내부 지원 없이도 정상 실행’, ‘예상보다 확산되어 아군에 위해’, ‘효과가 없어 자원만 소모’의 확률과 관찰 신호를 함께 놓는다. 숫자를 억지로 정밀하게 만들 필요는 없지만, 성공 장면 하나가 전체 가능성을 차지하지 못하게 해야 한다. 그 뒤 `외부에서 통제 가능한 조건`, `중단 신호`, `다음 확인 시각`을 정하면 기다림과 돌진 사이에 검증 가능한 결단이 생긴다.
 
 ---
+## 4. 역사적 실증 사례
+
+### 서양 — 🇬🇧 영국 해군 vs 🇫🇷 프랑스 해군 │ 바스크 로드 해전(Battle of the Basque Roads, 1809)
+
+![바스크 로드 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong7/basque_commanders.png)
+
+![1809년 수병 무기 화선 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong7/basque_soldiers.png)
+
+![바스크 로드 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong7/basque_command_structure.png)
+
+![1809년 로슈포르 연안 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong7/basque_country_map.png)
+
+![바스크 로드 실제 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong7/basque_strategy_map.png)
+
+![바스크 로드 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong7/basque_sequence_map.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- 🌊 <span color="blue_bg">**바스크 로드(Basque Roads)**</span>는 로슈포르 앞의 넓은 정박지다. 프랑스 함대는 일드엑스 안쪽에 머물렀고 영국 주력은 바깥 바다에서 봉쇄했다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**일드엑스(Île d’Aix)**</span>는 프랑스 함대의 북서쪽 방패였다. 섬과 사주 사이의 좁은 수로 때문에 대형 함선은 자유롭게 흩어지기 어려웠다.
+- 🌊 <span color="blue_bg">**보야르 사주(Boyart Shoal)**</span>와 🌊 <span color="blue_bg">**팔 사주(Palles Shoal)**</span>는 밀물에는 통로처럼 보이지만 썰물에는 함선을 붙잡았다. 닻줄을 끊고 달아난 프랑스 함선 다수가 이곳에 얹혔다.
+- 🌊 <span color="blue_bg">**샤랑트강(Charente River)**</span> 수로는 로슈포르로 이어지는 후퇴·구난 통로였다. 좁은 물길은 영국 대형함의 추격에도 위험을 주었다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**영국 외해 봉쇄선**</span>은 코크런의 공격대를 지원할 수 있었지만 갬비어가 주력을 깊숙이 들이지 않으면서 전과 확대의 병목이 됐다.
+
+#### 상세 전역 서사 — 코크런이 밀물·서풍·야음을 묶어 화선을 보내고, 갬비어의 정지가 완승을 막다
+
+프랑스 로슈포르 함대는 일드엑스 남쪽에 닻을 내리고 통나무 방책과 소형 함정으로 접근로를 막았다. <span color="blue">**토머스 코크런(Thomas Cochrane)**</span>은 적 내부의 방화자나 반란을 기다리지 않았다. 그는 폭약선과 화선을 준비하고, 밀물이 프랑스 정박지 안쪽으로 흐르며 서풍이 같은 방향으로 부는 1809년 4월 11일 밤을 골랐다.
+
+폭약선은 방책 일부를 깨고 경계선을 흔들었으며, 뒤따른 화선들은 승무원이 마지막 순간까지 조종한 뒤 불을 붙여 버렸다. 실제로 프랑스 함선을 직접 태운 수보다 더 큰 효과는 닻을 끊게 만든 데 있었다. <span color="red">**자카리 알레망(Zacharie Allemand)**</span>의 함대는 불붙은 배를 피하려고 야간에 흩어졌고, 썰물이 시작되자 전열함 다수가 보야르·팔 사주에 좌초했다.
+
+다음 날 프랑스 함선들은 포격 가능한 고정 표적이 됐다. 코크런은 신호를 올려 영국 주력의 진입을 요구했지만 <span color="blue">**제임스 갬비어(James Gambier)**</span>는 얕은 수로와 해안 포대의 위험을 크게 보아 머뭇거렸다. 일부 영국 함선만 들어가 네 척을 파괴했고, 나머지 프랑스 함선 다수는 다시 떠올라 로슈포르로 빠졌다. 외부에서 불을 낼 수 있을 때를 정확히 잡은 사례인 동시에, **발화 뒤 후속 공격의 때를 놓치면 만들어 낸 혼란도 완전한 승리로 이어지지 않는다**는 반례다.
+
+#### 전투에서 사용된 속임수 — 화선의 직접 파괴력보다 더 크게 보인 폭발 위협
+
+코크런은 화선 앞에 폭약선을 투입해 굉음과 파편으로 방책과 프랑스 승조원의 판단을 동시에 흔들었다. 실제 화선 모두가 전열함에 충돌할 능력은 없었지만, 어둠 속에서는 어느 배가 폭약선이고 어느 배가 단순 화선인지 구별하기 어려웠다. 프랑스 함대가 닻을 끊고 흩어진 행동은 합리적인 즉시 회피였으나, 썰물과 사주가 그 회피를 좌초로 바꾸었다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 코크런의 공격대는 내부 내응 없이 외부에서 방책을 깨고, 화선의 충돌보다 적 대형의 자발적 해체를 노렸다.
+
+**보인 신호와 믿은 이유.** 폭약선의 폭발과 뒤따른 다수의 불빛은 모든 접근선이 대형 폭발물일 수 있다는 신호를 만들었다. 야음·연기·밀물 때문에 프랑스군은 위험을 개별 확인할 시간이 없었다.
+
+**유발된 행동과 결과.** 프랑스 함선은 충돌을 피하려 닻줄을 끊었고, 바람과 조류를 받아 사주 쪽으로 밀렸다. 화재 자체보다 좌초와 전열 붕괴가 다음 날의 공격 기회를 만들었다.
+
+**사료의 경계.** 프랑스군의 공포를 단순한 비겁함으로 볼 수 없다. 폭약선은 실제 위험이었고 즉시 회피는 타당했다. 실패는 회피 뒤 재집결 지점과 썰물·사주 위험을 통제하지 못한 데 있었다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 코크런의 영국 공격대가 알레망의 프랑스 함대에 실제보다 광범위한 폭발 위협을 보였다.
+2. **어떤 사실이 거짓이었는가?** 모든 불붙은 배가 대형 폭약선이라는 인상은 사실이 아니었다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 선두 폭약선의 대폭발은 실제였고, 그 생생한 사건이 뒤따른 화선 전부의 위험을 과대평가하게 했다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 믿고 싶었다기보다 야간 정박지에서 최악의 충돌을 피해야 했다. 확인 시간이 짧아 보수적인 회피가 합리적으로 보였다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 낮다. 폭발과 다수 화선이 없었다면 프랑스군이 동시에 닻을 버릴 이유가 약했다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 개별 접근선의 규모와 진로를 확인할 초계선을 충분히 앞에 두지 못했고, 닻 절단 뒤 안전한 집결 수로도 준비하지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 해전 시뮬레이션에서 위협의 실제 파괴력과 대형 교란 효과를 분리해 평가할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>近而示之遠<br>근이시지원 — 가까우면서 멀리 있는 듯 보인다</td><td>소수 폭약선의 실제 위험이 뒤따른 화선 전부에 투사되어 훨씬 큰 파괴력이 다가오는 듯 보였다.</td></tr>
+<tr><td>亂而取之<br>난이취지 — 어지럽혀 취한다</td><td>야간에 닻을 끊게 해 전열을 무너뜨린 뒤 썰물에 좌초한 함선을 다음 날 공격했다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**영국 해군**</span></td><td>폭약선·화선·호위정·후속 전열함을 시간차로 나눴다.</td><td><span color="blue">**코크런**</span>이 공격대를 통제했지만 <span color="blue">**갬비어**</span>의 주력 지원은 늦었다.</td><td>외해 봉쇄 기반은 강했으나 얕은 수역 진입 위험 때문에 전과 확대가 제한됐다.</td></tr>
+<tr><td><span color="red">**프랑스 해군**</span></td><td>전열함을 방책 안에 밀집 정박시켰고 야간 분산 뒤 재집결 계획이 약했다.</td><td><span color="red">**알레망**</span>은 닻 절단을 허용했지만 각 함선의 피항로를 통합하지 못했다.</td><td>로슈포르와 가까웠으나 사주에 좌초한 동안 함선·포·승조원을 동시에 구하기 어려웠다.</td></tr>
+</table>
+
+#### 자카리 알레망 (패)
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>승조원은 함선을 구하려 움직였지만 동시 닻 절단 뒤 함대 단위 결속이 끊어졌다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>화선 충돌 위험은 읽었으나 밀물 뒤 썰물과 바람이 사주 좌초로 이어질 확률을 함께 계산하지 못했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>좁은 수로·사주·얕은 정박지가 대형 전열함의 분산 회피를 가로막았다. (험이·광협·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>즉시 화재 회피에는 성공했지만 닻을 버린 뒤의 집결·예인·방어 순서를 준비하지 못했다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>방책은 정면 진입을 막았으나 폭약선에 깨졌고 함선별 탈출이 편제 전체를 해체했다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** <span color="red">**알레망**</span>과 함장들이 선두 폭발의 생생함을 뒤따른 화선 전부에 일반화한 판단에는 가용성 휴리스틱이 작동했을 가능성이 있으며, 사주·썰물이라는 두 번째 위험을 상대적으로 작게 보게 했다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 야간 회피로 직접 소각은 줄였으나 다수 함선이 좌초하고 네 척이 파괴되어 `亂(란)`—지휘와 진형이 일정하지 않은 패배—에 가까운 결과를 맞았다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span>: 화선 접근 전에 방책 바깥 초계정과 예인정을 늘리고, 닻을 끊을 함선별 안전 수로와 재집결점을 정했다면 완승을 거두지는 못해도 집단 좌초는 줄일 수 있었다.
+
+#### 토머스 코크런·제임스 갬비어 (승)
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>공격대는 위험한 화선 임무를 수행했으나 코크런과 갬비어의 위험 판단 차이가 후속 행동을 갈랐다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>코크런은 밀물·서풍·야음을 같은 창으로 묶었지만 다음 날 좌초한 적을 공격할 창은 주력 지연으로 축소됐다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>바람과 조류를 외부 발화의 운반 수단으로 썼고 사주를 적의 덫으로 바꿨다. (원근·험이·광협)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="blue">**코크런**</span>은 준비와 결단이 강했으나 <span color="blue">**갬비어**</span>는 주력 보존을 중시해 결정타를 늦췄다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>화선 공격대는 임무가 명확했지만 공격대와 본대의 지휘 의도가 끝까지 일치하지 않았다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>: `知可以戰與不可以戰者勝(지가이전여불가이전자승 — 싸울 수 있는 때와 없는 때를 아는 자가 이긴다)`의 전반부처럼 외부 발화의 창을 잡아 프랑스 함대를 무너뜨렸지만, 후속 공격의 ‘싸울 수 있는 때’를 놓쳐 제한 승리에 머물렀다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**영국군**</span></td><td>폭약선이 방책을 깨고 화선이 진형을 흩뜨리며 호위정과 전열함이 후속 타격을 맡도록 나눴다.</td></tr>
+<tr><td><span color="red">**프랑스군**</span></td><td>방책 뒤 밀집 정박 편제는 정면 방어에는 유리했으나 동시 분산과 재집결에는 취약했다.</td></tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**영국군**</span></td><td><span color="blue">**코크런**</span>은 근접 공격을 지휘했으나 신호를 받은 <span color="blue">**갬비어**</span>가 본대를 즉시 투입하지 않아 지휘가 끊겼다.</td></tr>
+<tr><td><span color="red">**프랑스군**</span></td><td><span color="red">**알레망**</span>의 함대는 야간에 각 함장이 닻을 끊으며 중앙 통제가 약해졌다.</td></tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**영국군**</span></td><td>구형 함선·가연물·폭약을 일회용 공격 수단으로 전환하고 외해 봉쇄선이 지속 작전을 받쳤다.</td></tr>
+<tr><td><span color="red">**프랑스군**</span></td><td>함선은 항구 가까이에 있었으나 닻과 삭구를 잃고 좌초해 예인·수리·포격 대응을 동시에 감당해야 했다.</td></tr>
+</table>
+
+**출처:** [미 해군 역사유산사령부 — 1809년 4월 11~12일 공격도와 설명](https://www.history.navy.mil/content/history/nhhc/our-collections/photography/numerical-list-of-images/nhhc-series/nh-series/NH-67000/NH-67933.html) · [프랑스 국방역사국 — L’Affaire des Brûlots](https://www.servicehistorique.sga.defense.gouv.fr/ressources/laffaire-des-brulots-le-peril-anglais-quelques-encablures-des-cotes) · [Wikimedia Commons — Battle of Basque Roads 11 April.svg](https://commons.wikimedia.org/wiki/File:Battle_of_Basque_Roads_11_April.svg)
+
+### 동양 — 🏛️ 오국(吳國)군 vs 🏛️ 한국(漢國)군 │ 파양호 전투(鄱陽湖之戰, 1363)
+
+![파양호 전투 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong7/poyang_commanders.png)
+
+![1363년 수군 무기 화선 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong7/poyang_soldiers.png)
+
+![파양호 전투 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong7/poyang_command_structure.png)
+
+![1363년 장강 중하류 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong7/poyang_country_map.png)
+
+![파양호 실제 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong7/poyang_strategy_map.png)
+
+![파양호 전투 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong7/poyang_sequence_map.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- <span color="blue">**▰**</span> <span color="yellow_bg">**남창(南昌)**</span>은 진우량군이 포위한 오군 거점이었다. 성이 버틴 덕분에 주원장은 구원 함대를 조직할 시간을 얻었다.
+- 🌊 <span color="blue_bg">**감강(贛江)**</span>은 남창에서 파양호로 이어지는 수로다. 구원군과 보급선이 호수 전장으로 들어오는 축이었다.
+- 🌊 <span color="blue_bg">**파양호(鄱陽湖)**</span>는 계절 수위가 내려가면 사주와 얕은 수역이 넓어졌다. 소형선은 움직일 수 있었지만 진우량의 대형 누선은 기동이 제한됐다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**강주(江州)**</span>와 🌊 <span color="blue_bg">**장강(長江)**</span> 상류는 진우량 세력의 후방과 연결됐다.
+- 🌊 <span color="blue_bg">**호구(湖口)**</span>는 파양호가 장강으로 빠져나가는 병목이다. 주원장이 출구를 막자 진우량군의 철수·보급 선택이 좁아졌다.
+
+#### 상세 전역 서사 — 주원장이 얕아지는 호수와 바람을 기다려 외부 화공을 걸고, 호구 봉쇄로 살아남은 적의 퇴로까지 닫다
+
+진우량은 대형 누선을 앞세워 남창을 포위했지만 성은 쉽게 무너지지 않았다. <span color="blue">**주원장(朱元璋)**</span>은 남창 내부의 방화나 내응을 전제로 삼지 않고 구원 함대를 여러 대로 나누어 파양호로 들어갔다. <span color="red">**진우량(陳友諒)**</span>의 함선은 높고 컸지만 서로 밀집했고, 여름이 지나며 얕아지는 호수에서는 회전과 분산이 어려웠다.
+
+첫날 정면전에서 주원장군은 대형 누선의 높이와 화력에 고전했다. 다음 날 그는 준비한 화선을 전면에 내고 바람이 진우량 진영으로 부는 순간을 기다렸다. 작은 배에 풀과 화약을 싣고 허수아비를 세운 뒤 접근시켜 불을 붙였고, 뒤의 소형 전선이 그 혼란을 이용했다. 기록과 현대 연구는 이 공격으로 스무 척 이상이 불타거나 손상됐다고 전한다.
+
+화공 한 번이 전쟁을 끝낸 것은 아니다. 주원장은 호구를 막아 진우량 함대의 장강 복귀와 보급을 압박했고, 전투는 한 달 넘게 이어졌다. 10월 초 진우량군이 돌파를 시도했을 때 다시 화공과 근접전이 벌어졌고 진우량이 화살에 맞아 죽었다. 남은 세력은 항복했다. **밖에서 불을 낼 수 있는 능력을 갖추고 바람의 짧은 창에 실행한 뒤, 봉쇄와 추격으로 효과를 지속시킨 사례**다.
+
+#### 전투에서 사용된 속임수 — 허수아비를 태운 화선과 작은 배의 의도 은폐
+
+주원장군의 화선에는 풀·화약과 함께 사람처럼 보이는 허수아비가 실렸다고 전한다. 멀리서 보면 승선한 공격선처럼 보였고, 가까워졌을 때는 이미 바람과 추진력이 큰 누선 진형으로 배를 밀어 넣었다. 실제 의도는 승선 공격이 아니라 무인 또는 최소 인원의 외부 발화였다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 주원장군은 작은 배의 낮은 전투 가치를 화선의 접근성과 바꾸어 대형 누선의 밀집을 약점으로 만들었다.
+
+**보인 신호와 믿은 이유.** 허수아비와 접근 대형은 일반 공격선처럼 보였다. 높은 누선의 승조원은 아래쪽 작은 배가 가까워져도 정면 화력으로 제압할 수 있다고 판단하기 쉬웠다.
+
+**유발된 행동과 결과.** 진우량군은 대형을 크게 풀지 않은 채 접근을 받았고, 바람을 탄 불이 인접 함선으로 번져 전열을 갈랐다. 주원장군은 그 틈에 소형선과 투사 무기를 집중했다.
+
+**사료의 경계.** 병력 수와 함선 수는 후대 기록의 과장 가능성이 크다. 화공·유리한 바람·대형 누선의 기동 제약은 여러 연구에서 공통되지만 개별 화선의 세부 장치는 기록별 차이를 남겨 둬야 한다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 주원장군이 진우량의 한군 함대에 화선을 일반 공격선처럼 보였다.
+2. **어떤 사실이 거짓이었는가?** 배 위 허수아비가 실제 승조원처럼 보인 신호였다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 작은 배가 실제로 정면 접근한다는 사실은 맞았지만 목적은 승선전이 아니라 충돌·연소였다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 대형 누선은 작은 선박보다 높고 강했으므로 통상적인 근접 공격을 격퇴할 수 있다는 기대가 합리적이었다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 중간이다. 밀집 대형은 원래 화재에 취약했지만 허수아비와 바람을 이용한 접근이 경계 시간을 더 줄였다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 접근선의 적재물과 승조원 움직임을 작은 정찰선으로 확인하고 대형 사이 방화 간격을 벌리는 조치를 충분히 하지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 바둑·체스·해전 게임에서 값싼 미끼의 겉모습과 실제 기능을 구분하는 훈련으로 연습할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>近而示之遠<br>근이시지원 — 가까우면서 멀리 있는 듯 보인다</td><td>이미 화공 거리 안으로 들어온 작은 배가 평범한 공격선처럼 보여 위험의 즉시성을 숨겼다.</td></tr>
+<tr><td>利而誘之<br>리이유지 — 이익을 보여 유인한다</td><td>대형 누선이 쉽게 제압할 수 있는 작은 배라는 겉모습이 진형을 유지하게 했다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**오군**</span></td><td>소형선·중앙 대선·화선·투사 부대를 여러 대로 나눠 결합했다.</td><td><span color="blue">**주원장**</span>이 전날 손실 뒤 편제를 바꾸고 화공·봉쇄·추격을 연속 명령했다.</td><td>남창 구원과 호구 봉쇄를 연결해 호수 안에서 장기전을 버텼다.</td></tr>
+<tr><td><span color="red">**한군**</span></td><td>대형 누선 중심의 밀집 편제가 높은 화력 대신 얕은 물·화재에 취약했다.</td><td><span color="red">**진우량**</span>에게 지휘가 집중되어 사망 뒤 통합 저항이 급속히 약해졌다.</td><td>남창 함락 실패와 호구 봉쇄로 장강 후방과의 보급·철수로가 막혔다.</td></tr>
+</table>
+
+#### 진우량 (패)
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>대형 함대는 남창을 즉시 함락하지 못한 채 장기전에 묶였고 지휘관 사망 뒤 결속이 급격히 약해졌다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>첫날의 우세를 계속될 기준으로 삼아 바람이 바뀐 날의 화선 위험을 충분히 갱신하지 못했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>대형 누선은 낮아지는 수위와 사주에서 소형선보다 회전·분산이 느렸고 호구 봉쇄 뒤 퇴로도 좁아졌다. (원근·험이·광협·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>압도적 규모로 남창과 구원군을 함께 누르려 했으나 장기 봉쇄 속 대안 철수 시점을 놓쳤다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>높은 누선의 화력은 강했지만 함선 간격·화재 격리·얕은 수역 대응이 부족했다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** <span color="red">**진우량**</span>이 첫날 대형 누선의 우세를 이후 전투에도 연장한 판단에는 기준점 효과가 작동했을 가능성이 있으며, 바람·수위·호구 봉쇄가 바꾼 위험을 늦게 반영하게 했다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 화공과 장기 봉쇄로 함대가 소모되고 돌파전에서 지휘관까지 잃어 `北(배)`—적정과 지형을 헤아리지 못한 패주—에 가까운 붕괴를 맞았다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span>: 남창이 단기에 무너지지 않았을 때 대형 누선을 깊은 수역으로 물리고 호구 보급선을 먼저 확보했다면 승리를 보장할 수는 없어도 얕은 호수의 화공과 장기 봉쇄에 동시에 갇히는 일은 피할 수 있었다.
+
+#### 주원장 (승)
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>첫날 손실 뒤에도 편제를 바꾸고 남창 구원·화공·호구 봉쇄라는 공동 목표를 유지했다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>유리한 바람을 만들어 냈다고 과장하지 않고, 준비한 화선을 바람이 적진으로 향하는 짧은 시간창에 투입했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>소형선으로 얕은 수역을 쓰고 호구 병목을 막아 대형 누선의 크기를 불리함으로 바꿨다. (험이·광협·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>정면전의 손실을 고집하지 않고 화공과 봉쇄로 수단을 바꾸며 여러 대의 임무를 다시 묶었다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>화선만 보내고 끝내지 않고 소형선의 후속 타격, 장기 봉쇄, 최종 돌파 저지를 연결했다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>: `以虞待不虞者勝(이우대불우자승 — 대비한 채 대비 없는 적을 상대하는 자가 이긴다)`처럼 외부 화공을 준비하고 바람이 맞는 순간 실행한 뒤 호구 봉쇄로 적의 다음 선택까지 제한했다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**오군**</span></td><td>열한 개 안팎의 전대로 소형선·대선·화선·투사 부대를 나누고 정면·측면·봉쇄 임무를 결합했다.</td></tr>
+<tr><td><span color="red">**한군**</span></td><td>대형 누선을 밀집 운용해 정면 화력은 높였지만 화재 격리와 얕은 수역 기동을 희생했다.</td></tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**오군**</span></td><td><span color="blue">**주원장**</span>이 전체 목표를 정하고 <span color="blue">**서달**</span>·<span color="blue">**상우춘**</span> 등 예하 지휘관이 전대와 상륙·추격 임무를 나눠 맡았다.</td></tr>
+<tr><td><span color="red">**한군**</span></td><td><span color="red">**진우량**</span> 중심의 지휘는 강했으나 장기전과 그의 전사 뒤 후계 지휘가 전장 전체를 묶지 못했다.</td></tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**오군**</span></td><td>소형선·화약·풀·투사 무기와 수로 보급을 결합하고 호구를 통제해 장기 봉쇄를 유지했다.</td></tr>
+<tr><td><span color="red">**한군**</span></td><td>대형 누선의 인원·식량·수리 부담이 컸고 남창 지연과 호구 차단으로 장강 보급선이 약해졌다.</td></tr>
+</table>
+
+**출처:** [Cambridge/Anthem Press — Bruce A. Elleman, Battle of Lake Poyang (1363)](https://www.cambridge.org/core/books/abs/making-of-the-modern-chinese-navy/battle-of-lake-poyang-1363/D867DB972D2B8C9E3F4DA2E24F8EB9CA) · [미 해군연구소 Naval History — From River Pirate to Ming Emperor](https://www.usni.org/magazines/naval-history-magazine/2010/june/river-pirate-ming-emperor) · [University of Washington — Fir and Empire, Naval Timber](https://uw.manifoldapp.org/read/fir-and-empire/section/d1fdd798-02e0-439b-9282-73f1bfd0d269)
+
+---
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
 
 ### 핵심 통찰
