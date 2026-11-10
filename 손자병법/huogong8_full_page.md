@@ -90,6 +90,273 @@
 카너먼의 관점에서는 불이 붙고 적이 흔들리는 장면이 너무 선명해 공격의 이득만 크게 보일 수 있다. 가용성은 눈앞의 성공 신호에 무게를 싣고, 한 가지 시나리오 집중은 “적이 무너진다” 이외의 전개—풍향 변화, 연기 속 오인, 퇴로 차단, 불의 역류—를 판단 밖으로 밀어낸다. 교정하려면 공격 전에 `불·연기가 갈 방향 / 아군 진입축 / 안전한 퇴로 / 풍향이 바뀔 때의 중단 조건`을 따로 적고, 불리한 대안 시나리오의 확률도 함께 검토해야 한다.
 
 ---
+## 4. 역사적 실증 사례
+
+### 서양 — 🏛️ 잉글랜드 왕국·네덜란드 봉쇄함대 vs 🏛️ 스페인 왕국 │ 칼레 화선과 그라블린 해전(Spanish Armada, 1588)
+
+![칼레·그라블린 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong8/armada_commanders.png)
+
+![1588년 병사 함포 항해 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong8/armada_soldiers.png)
+
+![잉글랜드 함대와 스페인 무적함대 지휘 구조](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong8/armada_command_structure.png)
+
+![1588년 영국해협 플랑드르 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong8/armada_country_map.png)
+
+![칼레 화선 그라블린 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong8/armada_strategy_map.png)
+
+![칼레 그라블린 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong8/armada_sequence_map.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- 🌊 <span color="blue_bg">**영국해협(English Channel)**</span>은 무적함대가 서쪽에서 칼레로 올라온 좁은 접근축이다. 잉글랜드 함대는 풍상 위치를 유지하며 뒤를 따랐다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**칼레(Calais)**</span> 정박지는 파르마군을 기다리는 곳이었지만 방파된 항구가 아니어서 화선과 조류에 노출됐다.
+- 🌊 <span color="blue_bg">**플랑드르 수로(Flemish waterways)**</span>는 파르마군의 승선로였으나 네덜란드 함대가 봉쇄해 무적함대와 육군의 결합을 막았다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**그라블린(Gravelines)**</span> 앞바다는 흩어진 선단이 다음 날 근거리 포격을 받은 결전 공간이었다.
+- 🌊 <span color="blue_bg">**제일란트 얕은 바다(Zeeland shoals)**</span>는 8월 9일 스페인 함대를 좌초 직전까지 몰았으나 갑작스러운 풍향 전환이 퇴로를 열었다.
+
+#### 상세 전역 서사 — 파르마를 기다리는 고정 정박이 야간 화선의 창을 열다
+
+<span color="red">**메디나 시도니아 공작(Alonso Pérez de Guzmán, Duke of Medina Sidonia)**</span>의 무적함대는 파르마 공작의 플랑드르군과 합류하려고 칼레 앞에 닻을 내렸다. 그러나 네덜란드 함대가 연안 수로를 막아 파르마군은 제때 나오지 못했고, 스페인 함대는 목적을 이루지 못한 채 노출된 정박지에 머물렀다. <span color="blue">**하워드 경(Lord Howard of Effingham)**</span>은 정면 포격의 낮은 효과를 확인한 뒤 전략을 바꾸었다.
+
+8월 7일 밤 잉글랜드군은 화선 여덟 척을 풍상에서 흘려보냈다. 불타는 배가 밀려오자 스페인 함장들은 충돌과 폭발을 피하려 닻줄을 끊었다. 실제 화선이 대규모로 적함을 태운 것이 아니라, 어둠·바람·조류 속에서 대형을 해체한 것이 결정적 효과였다. 다음 날 <span color="blue">**드레이크(Francis Drake)**</span>·<span color="blue">**호킨스(John Hawkins)**</span> 등이 흩어진 함대를 그라블린 앞에서 근거리 포격했다.
+
+8월 9일 강풍은 스페인 함대를 제일란트의 얕은 바다로 밀어 좌초 위험을 키웠다. 그런데 바람이 갑자기 유리하게 바뀌어 선단은 해안에서 벗어났다. 같은 바람이 밤에는 화선과 분산을 돕고, 뒤에는 패군을 전멸에서 구했다. 이 전역은 `無攻下風`이 불을 따라 적진 정면으로 들어가라는 명령이 아니라, **화선이 만든 위험축은 비워 두고 그 축이 깨뜨린 진형을 다른 방향에서 치라는 금지선**임을 보여 준다.
+
+#### 전투에서 사용된 속임수 — 화선의 실제 파괴력보다 크게 보인 위협
+
+화선은 불붙은 무인 선박이라는 공개된 위협이었지만, 스페인군은 그것이 단순 화선인지 화약을 가득 실은 폭발선인지 어둠 속에서 확인하기 어려웠다. 정박 대형 안에서 한 척이 불붙으면 연쇄 피해가 날 수 있었으므로 닻을 버린 회피는 비합리적 공황만은 아니었다. 잉글랜드군의 의도는 배 여덟 척으로 함대를 소각하는 것보다 결속된 진형을 풀어 다음 날 포격의 표적으로 만드는 데 있었다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 잉글랜드 지휘부는 화선을 보내 스페인의 정박 대형과 지휘 연결을 해체하려 했다.
+
+**보인 신호와 믿은 이유.** 불붙은 배와 야간 조류는 폭발·연쇄 화재 가능성을 크게 보였고, 칼레 정박지는 회피 공간이 좁았다.
+
+**유발된 행동과 결과.** 스페인 함선들은 닻줄을 끊어 흩어졌고, 다음 날 그라블린에서 상호지원이 약한 상태로 포격을 받았다.
+
+**사료의 경계.** 화선이 직접 태운 함선 수보다 진형 해체 효과가 컸다. 이후 폭풍 피해까지 모두 잉글랜드의 계획으로 돌려서는 안 된다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 잉글랜드 지휘부가 스페인 정박 함대의 위협 판단을 흔들었다.
+2. **어떤 사실이 거짓이었는가?** 화선 자체는 실제였으나 폭발선일 수 있다는 공포는 확인되지 않았다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 불붙은 배는 진짜 위험이었지만 직접 소각보다 진형 해체가 목적이었다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 믿고 싶었다기보다 닻을 유지할 때의 연쇄 화재 위험이 너무 컸다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 낮다. 화선이 없었다면 야간에 닻을 버릴 직접 계기가 약했다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 어둠과 조류 때문에 화선의 적재물·간격·회피 가능성을 충분히 확인하기 어려웠다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 해상 시뮬레이션과 보드게임에서 위협의 실제 피해와 진형 교란 효과를 분리해 평가할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>近而示之遠<br>근이시지원 — 가까우면서 멀리 있는 듯 보인다</td><td>화선의 작은 직접 타격 수단이 야간에는 대규모 폭발·연쇄 화재 가능성으로 보였다.</td></tr>
+</table>
+
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**잉글랜드군**</span></td><td>네 전대와 동부 증원대를 화선·추격·포격에 연결했다.</td><td><span color="blue">**하워드**</span>가 전략을 바꾸고 전대장들이 근거리 교전을 수행했다.</td><td>탄약 부족이 추격 한계를 만들었으나 짧은 해협 작전과 자국 항구가 버팀목이었다.</td></tr>
+<tr><td><span color="red">**스페인군**</span></td><td>초승달 대형은 항해 중 강했지만 닻을 잃은 뒤 재결집이 어려웠다.</td><td><span color="red">**메디나 시도니아**</span>의 함대와 파르마군은 봉쇄 때문에 연결되지 못했다.</td><td>화약·탄약 부족, 손상, 장거리 귀환이 지속 능력을 깎았다.</td></tr>
+</table>
+
+
+#### <span color="red">**메디나 시도니아 (패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>함대는 규율을 유지했으나 파르마군과 결합하지 못해 침공 목적이 흔들렸다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>야간 바람·조류·화선 위협에 즉시 반응했지만 닻을 버린 뒤 아침 진형 회복까지 설계하지 못했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>열린 칼레 정박지와 플랑드르 얕은 바다는 대형 유지와 파르마 합류에 불리했다. (원근·험이·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>질서 있는 북해 철수를 이끌었지만 합류 불능과 기상 변화에 맞춰 작전 목적을 일찍 바꾸지 못했다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>함대·상륙군·연안 수송이 하나의 통제 가능한 체계로 결합되지 않았다. (곡제·관도·주용)</td></tr>
+</table>
+
+
+**직관·편향 한 줄:** <span color="red">**메디나 시도니아**</span>가 파르마군과의 합류를 계속 중심 시나리오로 둔 판단에는 계획 오류가 작동했을 가능성이 있으며, 봉쇄와 정박 위험이 커진 뒤에도 대안 목표 전환을 늦췄다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 침공군과 합류하지 못하고 그라블린에서 손상된 뒤 북해로 밀려 돌아가 `北(배)`—적정·지형·지속 능력을 충분히 헤아리지 못한 퇴각—에 가까운 결과를 맞았다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span>: 파르마군의 수로 봉쇄가 풀리지 않는다는 보고를 받았을 때 노출된 칼레 정박을 중단하고 재정비 가능한 해역으로 이동했다면 침공 성공을 보장할 수는 없어도 닻 상실과 전열 분산은 줄일 수 있었다.
+
+#### <span color="blue">**하워드 (승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>전대장들이 장거리 포격의 한계를 공유하고 화선 이후 근거리 추격으로 전환했다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>풍상 위치와 야간 조류를 이용하되 다음 날의 바람까지 통제한다고 가정하지 않았다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>칼레 정박지의 노출과 그라블린·제일란트의 얕은 바다를 압박 공간으로 활용했다. (원근·광협·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>효과 낮은 포격을 반복하지 않고 화선으로 진형을 흔든 뒤 가까이 붙는 전략 변화를 승인했다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>화선·전대·네덜란드 봉쇄·동부 증원을 서로 다른 임무로 결합했다. (곡제·관도·주용)</td></tr>
+</table>
+
+
+🏆 <span color="blue">**승군 측 결과**</span>: `以虞待不虞者勝(이우대불우자승 — 대비한 채 대비 없는 적을 상대하는 자가 이긴다)`처럼 정박한 적의 변화를 유도하고 다음 날 가까운 거리에서 타격했다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**잉글랜드군**</span></td><td>전대를 분리 운용하면서 화선·추격·포격을 시간차로 결합했다.</td></tr>
+<tr><td><span color="red">**스페인군**</span></td><td>초승달 대형과 수송 보호 편제는 닻 절단 뒤 개별 함선으로 흩어졌다.</td></tr>
+</table>
+
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**잉글랜드군**</span></td><td><span color="blue">**하워드**</span> 아래 전대장들이 기동 재량을 갖고 흩어진 적을 압박했다.</td></tr>
+<tr><td><span color="red">**스페인군**</span></td><td><span color="red">**메디나 시도니아**</span>의 신호 체계는 야간 분산과 닻 상실 뒤 재결집에 시간이 걸렸다.</td></tr>
+</table>
+
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**잉글랜드군**</span></td><td>자국 연안에서 보급했지만 화약·탄약 부족 때문에 북해 추격을 끝까지 계속하지 못했다.</td></tr>
+<tr><td><span color="red">**스페인군**</span></td><td>탄약 부족과 손상, 닻 상실이 북해·대서양 우회 귀환의 위험을 키웠다.</td></tr>
+</table>
+
+
+**출처:** [Royal Museums Greenwich — Spanish Armada charts and campaign chronology](https://www.rmg.co.uk/collections/research-guides/research-guide-p3-charts-spanish-armada-robert-adams-museum) · [Encyclopaedia Britannica — Spanish Armada](https://www.britannica.com/topic/Armada-Spanish-naval-fleet)
+
+### 동양 — ⚔️ 손권·유비 연합군 vs 🏛️ 조조군 │ 적벽대전(赤壁之戰, 208)
+
+![적벽대전 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong8/chibi_commanders.png)
+
+![208년 병사 무기 수군 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong8/chibi_soldiers.png)
+
+![적벽대전 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong8/chibi_command_structure.png)
+
+![208년 형주 강동 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong8/chibi_country_map.png)
+
+![적벽 오림 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong8/chibi_strategy_map.png)
+
+![적벽대전 단계별 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong8/chibi_sequence_map.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- 🌊 <span color="blue_bg">**장강(長江)**</span>은 조조의 북방군이 익숙하지 않은 수전 공간이자 연합군이 화선과 추격을 연결한 주축이다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**적벽(赤壁)**</span> 남안은 주유군이 조조군과 마주한 지점이다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**오림(烏林)**</span> 북안은 조조 선단과 육상 영채가 붙어 있어 화재가 배에서 언덕의 군영으로 번질 수 있었다.
+- 🌲 <span color="green_bg">**화용도(華容道)**</span>와 주변 늪지는 조조군이 강릉 쪽으로 퇴각한 진흙길로, 화재 뒤의 혼란과 추격 피해를 키웠다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**강릉(江陵)**</span>은 조조가 남은 병력을 수습하고 수비대를 남긴 후방 거점이었다.
+
+#### 상세 전역 서사 — 황개가 풍상에서 화선을 보내고 후속군은 불길의 뒤가 아닌 안전한 수륙축으로 움직이다
+
+조조군은 첫 교전과 질병으로 물러나 장강 북안 오림에 정박했고, <span color="blue">**주유(周瑜)**</span>·<span color="blue">**정보(程普)**</span>의 군은 남안에 섰다. <span color="blue">**황개(黃蓋)**</span>는 적선이 밀집해 서로 이어진 상태를 보고 마른 갈대와 땔나무에 기름을 부은 배를 준비했다. 그는 거짓 항복 서신을 보내 접근의 의심을 낮추었다.
+
+『삼국지』 주유전 주석이 인용한 기록은 `時東南風急`(시동남풍급 — 그때 동남풍이 세찼다)이라 전한다. 황개의 앞선 배들은 강 가운데 돛을 올리고 북서쪽 오림으로 달려가 적선 약 이 리 앞에서 동시에 불을 붙였다. `火烈風猛, 船往如箭`(화렬풍맹, 선왕여전 — 불은 사납고 바람은 거세어 배가 화살처럼 나아갔다)고 할 만큼 불과 바람이 결합했고, 불은 북군의 배와 강가 영채로 번졌다.
+
+연합군의 경장 병력이 불길을 따라 수륙으로 진격하자 이미 질병과 수전 미숙에 시달리던 조조군은 무너졌다. 조조는 남은 배를 스스로 태우고 화용의 진흙길을 거쳐 강릉으로 물러났다. 다만 제갈량이 제단에서 바람을 빌렸다는 이야기는 후대 『삼국연의』의 서사이며 정사에서 확인되지 않는다. 역사적으로 확인되는 것은 **황개가 실제 동남풍이 강한 순간에 화선·기만·후속 공격을 결합했다는 점**이다.
+
+#### 전투에서 사용된 속임수 — 항복선으로 보인 화선
+
+황개는 항복 의사를 미리 알리고, 불붙일 배 뒤에 도주용 작은 배를 매달았다. 조조군은 접근하는 선단을 투항선으로 보고 갑판에 나와 바라보았다고 전한다. 실제 의도는 항복이 아니라 바람을 받아 적 선단에 충돌할 화공이었고, 신호를 믿은 순간 경계와 차단 거리가 사라졌다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 황개와 주유는 거짓 항복으로 화선을 적 선단 가까이 들여보내려 했다.
+
+**보인 신호와 믿은 이유.** 항복 서신·깃발·선두 함선은 열세 진영의 이탈처럼 보였고 조조군은 실제로 형주 수군의 항복을 이미 경험했다.
+
+**유발된 행동과 결과.** 조조군은 접근선을 조기에 공격하지 않았고, 강한 동남풍 아래 화선이 짧은 거리를 돌파해 밀집 선단과 영채에 불을 옮겼다.
+
+**사료의 경계.** 동남풍과 화공은 기록되지만 ‘제갈량의 차풍’은 정사 사실이 아니다. 전염병·수전 미숙·첫 교전 패배도 함께 작용했다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 황개와 주유가 조조군을 거짓 항복 신호로 속였다.
+2. **어떤 사실이 거짓이었는가?** 황개가 조조에게 투항한다는 의사였다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 열세 연합군 내부에서 이탈이 생길 수 있다는 가능성 자체는 그럴듯했다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 조조군은 형주 세력의 연속 항복을 이미 경험해 같은 패턴을 기대할 근거가 있었다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 낮다. 항복 서신이 없었다면 접근선은 더 일찍 차단됐을 것이다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 접근선의 정지·검색과 풍상 화공 위험의 재평가를 생략했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 체스·바둑·해전 게임에서 미끼와 실제 주공을 구분하는 훈련으로 연습할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>近而示之遠<br>근이시지원 — 가까우면서 멀리 있는 듯 보인다</td><td>공격용 화선이 항복선으로 보여 경계 거리 안까지 들어갔다.</td></tr>
+<tr><td>利而誘之<br>리이유지 — 이익을 보여 유인한다</td><td>황개의 투항이라는 이익이 조조군으로 하여금 접근선을 받아들이게 했다.</td></tr>
+</table>
+
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**손·유 연합군**</span></td><td>화선·도주선·경장 수륙 추격대를 연결했다.</td><td><span color="blue">**주유**</span>가 <span color="blue">**황개**</span>의 건의를 승인하고 후속군을 붙였다.</td><td>현지 수군·선박·강풍의 짧은 창을 집중 사용했다.</td></tr>
+<tr><td><span color="red">**조조군**</span></td><td>북방군·형주 수군·육상 영채가 밀집해 연쇄 화재에 취약했다.</td><td><span color="red">**조조**</span>의 대군은 질병과 화재 뒤 명령 전달이 무너졌다.</td><td>질병·말 먹이·장거리 원정의 부담이 전투 지속력을 낮췄다.</td></tr>
+</table>
+
+
+#### <span color="red">**조조 (패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>새로 얻은 형주 병력과 북방 주력이 질병·낯선 수전 속에서 하나로 결속되지 못했다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>거짓 항복선과 동남풍이 겹칠 가능성을 낮게 보고, 풍향이 바뀐 순간 경계를 갱신하지 못했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>북안 오림의 밀집 선단과 영채는 불이 배에서 육지로 번지는 연속 표적이 됐다. (험이·광협·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>형주를 빠르게 얻은 성공을 강동 수전에도 연장하고 항복 신호를 독립 확인하지 않았다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>대군·항복 수군·선박·영채의 결합이 화재 격리와 신속한 이탈을 어렵게 했다. (곡제·관도·주용)</td></tr>
+</table>
+
+
+**직관·편향 한 줄:** <span color="red">**조조**</span>가 앞선 연속 항복 경험을 황개의 신호에도 적용한 판단에는 대표성 휴리스틱이 작동했을 가능성이 있으며, 풍향과 접근선의 위험을 재검증하지 못하게 했다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 선단과 영채가 불타고 질병·진흙길·추격 피해가 겹쳐 `北(배)`의 패주로 남정이 중단됐다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span>: 항복선을 원거리에서 정지시켜 소형선으로 확인하고 선단 사이에 방화 간격과 견인 가능한 예비를 뒀다면 전쟁 승리를 보장할 수는 없어도 화재의 연쇄 확산과 전군 붕괴는 줄일 수 있었다.
+
+#### <span color="blue">**주유·황개 (승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>손권의 항전 결심 아래 주유·정보·황개와 유비군이 같은 목표로 움직였다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>동남풍을 만들어 냈다고 과장하지 않고, 실제로 강해진 짧은 시간창에 준비한 화선을 투입했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>남안에서 북안 오림으로 부는 바람과 장강의 수로를 접근·연소·추격에 연결했다. (험이·광협·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="blue">**황개**</span>의 건의를 <span color="blue">**주유**</span>가 받아들여 기만·화공·후속 타격을 한 시간표로 만들었다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>화선 뒤에 도주선을 매고 경장 수륙군을 대기시켜 불만 보내고 끝내지 않았다. (곡제·관도·주용)</td></tr>
+</table>
+
+
+🏆 <span color="blue">**승군 측 결과**</span>: `知可以戰與不可以戰者勝(지가이전여불가이전자승 — 싸울 수 있는 때와 없는 때를 아는 자가 이긴다)`처럼 준비를 끝낸 뒤 풍향이 맞는 순간에만 불과 병력을 함께 보냈다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**연합군**</span></td><td>황개의 화선·도주선, 주유의 수군, 유비의 수륙 추격대를 단계별로 결합했다.</td></tr>
+<tr><td><span color="red">**조조군**</span></td><td>북방 보병·형주 수군·밀집 선박·육상 영채가 화재 격리 없이 붙어 있었다.</td></tr>
+</table>
+
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**연합군**</span></td><td><span color="blue">**주유**</span>가 화공을 승인하고 <span color="blue">**황개**</span>가 선두 화선을 지휘했으며 후속군은 신호에 맞춰 진격했다.</td></tr>
+<tr><td><span color="red">**조조군**</span></td><td>항복 신호를 받아들이는 중앙 판단이 접근 차단보다 앞섰고 화재 뒤 수륙 지휘가 함께 흔들렸다.</td></tr>
+</table>
+
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**연합군**</span></td><td>마른 섶·기름·가벼운 선박과 현지 수군 경험을 짧은 결정적 공격에 집중했다.</td></tr>
+<tr><td><span color="red">**조조군**</span></td><td>질병과 장거리 원정 부담 속에서 선단·영채·말·군량을 한꺼번에 지키기 어려웠다.</td></tr>
+</table>
+
+
+**출처:** [중화민국 국방부 육군학술쌍월간 — 적벽전역 연구](https://www.mnd.gov.tw/File/30767) · [『삼국지』 오서 주유전](https://zh.wikisource.org/wiki/%E4%B8%89%E5%9C%8B%E5%BF%97/%E5%8D%B754)
+
+
+---
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
 
 ### 핵심 통찰
