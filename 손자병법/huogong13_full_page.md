@@ -101,10 +101,15 @@
 ### 서양 — 🇺🇸 미국 vs 🏛️ 소련·🇨🇺 쿠바 │ 쿠바 미사일 위기(Cuban Missile Crisis, 1962)
 
 ![쿠바 미사일 위기 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/cuban_commanders.png)
+
 ![쿠바 미사일 위기 병사·장비·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/cuban_soldiers_weapons_life.png)
+
 ![쿠바 미사일 위기 지휘·의사결정 구조](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/cuban_command_structure.png)
+
 ![1962년 카리브해 세력·접근로 지도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/cuban_country_map.png)
+
 ![쿠바 미사일 위기 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/cuban_strategy_map.png)
+
 ![쿠바 미사일 위기 단계별 전개](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/cuban_sequence_map.png)
 
 **뒤에서 반복될 지형을 먼저 잡아두기**
@@ -183,10 +188,15 @@
 ### 동양 — 🏛️ 동진 북부부대 vs 🏛️ 전진군 │ 비수대전(淝水之戰, 383)
 
 ![비수대전 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/feiriver_commanders.png)
+
 ![비수대전 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/feiriver_soldiers_weapons_life.png)
+
 ![비수대전 지휘·작전 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/feiriver_command_structure.png)
+
 ![383년 전진·동진 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/feiriver_country_map.png)
+
 ![비수대전 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/feiriver_strategy_map.png)
+
 ![비수대전 단계별 전개](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/feiriver_sequence_map.png)
 
 **뒤에서 반복될 지형을 먼저 잡아두기**
