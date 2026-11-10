@@ -127,10 +127,15 @@
 ### 서양 — 🇬🇧 연합군 정보·기만 조직 vs 🏛️ 독일 국방군 │ 포티튜드 작전(Operation Fortitude, 1944)
 
 ![포티튜드 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/fortitude_commanders.png)
+
 ![포티튜드 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/fortitude_soldiers_weapons_life.png)
+
 ![포티튜드 지휘 편제 조직도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/fortitude_command_structure.png)
+
 ![1944년 서유럽 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/fortitude_country_map.png)
+
 ![포티튜드 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/fortitude_strategy_map.png)
+
 ![포티튜드 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/fortitude_sequence.png)
 
 **뒤에서 반복될 지형을 먼저 잡아두기**
@@ -283,10 +288,15 @@
 ### 동양 — ⚔️ 도쿠가와 동군 vs ⚔️ 이시다 서군 │ 세키가하라 전투(関ヶ原の戦い, 1600)
 
 ![세키가하라 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/sekigahara_commanders.png)
+
 ![세키가하라 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/sekigahara_soldiers_weapons_life.png)
+
 ![세키가하라 지휘 편제 조직도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/sekigahara_command_structure.png)
+
 ![1600년 일본 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/sekigahara_country_map.png)
+
 ![세키가하라 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/sekigahara_strategy_map.png)
+
 ![세키가하라 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/sekigahara_sequence.png)
 
 **뒤에서 반복될 지형을 먼저 잡아두기**
