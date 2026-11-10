@@ -242,7 +242,7 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         if f"**{commentator}**" not in section_two:
             errors.append(f"2번 전통 주석에 {commentator}가 없습니다")
     commentary_rows = re.findall(
-        r'^\s*-\s+\*\*[^*]+\*\*\s+—\s+"[^"]+"',
+        r'^\s*-\s+\*\*[^*]+\*\*\s+—\s+["“][^"”]+["”]',
         section_two,
         re.MULTILINE,
     )
@@ -253,7 +253,7 @@ def validate_page(path: Path) -> tuple[list[str], list[str]]:
         )
     emphasized_commentary_rows = [
         row for row in commentary_rows
-        if re.search(r'—\s+"[^"\n]*\*\*[^*\n]+\*\*[^"\n]*"', row)
+        if re.search(r'—\s+["“][^"”\n]*\*\*[^*\n]+\*\*[^"”\n]*["”]', row)
     ]
     if len(emphasized_commentary_rows) != len(COMMENTATORS):
         errors.append(

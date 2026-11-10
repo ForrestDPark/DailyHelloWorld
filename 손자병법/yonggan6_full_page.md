@@ -1,4 +1,3 @@
-<!-- sunzi-analysis-mode: light -->
 > 고용간유오, 유향간, 유내간, 유반간, 유사간, 유생간. — 중요한 판단에서 출처의 위치와 이해관계를 구분하지 않으면 재수가 없다.
 
 ---
@@ -132,6 +131,233 @@
 
 다만 교차 확인을 무한히 늘리면 결정이 마비될 수 있다. 정보의 중요도와 가역성에 따라 확인 기준을 다르게 두어야 한다. 안전·징계·대규모 중단처럼 피해가 큰 결정은 독립 확인과 반론 기회를 강화하고, 되돌릴 수 있는 작은 조치는 불확실성을 표시한 채 제한적으로 시험할 수 있다.
 
+## 4. 역사적 실증 사례
+
+오간은 다섯 사람을 채우는 명단이 아니라 서로 다른 접근·전달·검증 기능을 결합하는 정보 체계다. 아래 두 사례는 향간·내간·반간·사간·생간이 현대의 고정 직책과 일대일로 대응한다고 주장하지 않는다. 대신 현지 관찰, 제도 내부 보고, 적의 정보 요구 역이용, 의도적으로 보인 신호, 돌아와 확인하는 보고가 실제 의사결정에서 어떻게 연결되거나 실패했는지 검증한다.
+
+### 서양 — 🇺🇸 대륙군 정보망 vs 🏛️ 영국군 뉴욕 지휘부 │ 컬퍼 첩보망과 1780년 뉴포트 위기(Culper Spy Ring, 1778~1783)
+
+![컬퍼 첩보망 주요 인물](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan7/culper_commanders.png)
+
+![컬퍼 첩보망 사람 장비 생활](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan7/culper_soldiers_weapons_life.png)
+
+![컬퍼 첩보망 지휘 운반 구조](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan7/culper_command_structure.png)
+
+![1780년 뉴욕 뉴포트 전구](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan7/culper_country_map.png)
+
+![컬퍼 첩보망 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan7/culper_strategy_map.png)
+
+![1780년 컬퍼망 단계별 흐름](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan7/culper_sequence.png)
+
+컬퍼망은 한 명의 전설적 첩자가 아니라 서로 다른 접근권과 운반 능력을 가진 사람들을 분리해 연결한 체계였다. <span color="blue">**로버트 타운센드(Robert Townsend)**</span>는 영국 점령지 <span color="red">**▰**</span> <span color="yellow_bg">**뉴욕(New York City)**</span>에서 장교와 상인의 움직임을 관찰했고, <span color="blue">**오스틴 로(Austin Roe)**</span>는 상점 거래를 위장해 보고를 동쪽으로 옮겼다. <span color="blue">**에이브러햄 우드헐(Abraham Woodhull)**</span>은 <span color="blue">**▰**</span> <span color="yellow_bg">**세토킷(Setauket)**</span>에서 접선과 육로 구간을 맡았으며, <span color="blue">**애나 스트롱(Anna Strong)**</span>의 해안 신호와 <span color="blue">**케일럽 브루스터(Caleb Brewster)**</span>의 고래잡이 보트가 🌊 <span color="blue_bg">**롱아일랜드 해협(Long Island Sound)**</span>을 건넜다. <span color="blue">**벤저민 톨매지(Benjamin Tallmadge)**</span>가 망을 통제했고 최종 수신자는 <span color="blue">**조지 워싱턴(George Washington)**</span>이었다.
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- <span color="red">**▰**</span> <span color="yellow_bg">**맨해튼(Manhattan)**</span>은 영국군 본부·항만·상점이 밀집한 수집 지점이었다. 정보를 얻기 쉬운 만큼 영국 순찰과 방첩에 노출될 위험도 가장 컸다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**세토킷(Setauket)**</span>은 맨해튼에서 동쪽으로 이어지는 육로와 해상 운반이 만나는 중계점이었다. 이 연결이 끊기면 도시의 보고가 워싱턴 본영까지 가지 못했다.
+- 🌊 <span color="blue_bg">**롱아일랜드 해협(Long Island Sound)**</span>은 영국 점령지와 대륙군 지역을 가르는 장벽이자 브루스터가 밤에 넘은 은밀한 통로였다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**페어필드(Fairfield)**</span>와 코네티컷 연안은 해상 보고를 대륙군 육로로 바꾸는 인계 지점이었다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**뉴포트(Newport)**</span>는 1780년 7월 프랑스 로샹보 군이 도착한 항구였다. 영국군이 회복 전의 프랑스군을 공격하면 동맹 전력이 무너질 수 있었다.
+
+#### 상세 전역 서사 — 뉴포트 공격정보를 뉴욕 공격의 허상으로 되돌리다
+
+1778년부터 톨매지는 우드헐·타운센드·로·브루스터의 임무를 나누고, 가명·숫자 암호·보이지 않는 잉크·중계 운반을 결합했다. 워싱턴은 타운센드에게 상점을 그만두고 전업 첩자가 되라고 하지 않았다. 상점이야말로 영국 점령지에서 의심받지 않고 관찰할 수 있는 위장이었기 때문이다.
+
+1780년 7월, 컬퍼망의 보고는 <span color="red">**헨리 클린턴(Henry Clinton)**</span>이 뉴욕의 영국 병력을 바다로 보내 막 도착한 프랑스군을 뉴포트에서 공격하려 한다는 계획을 워싱턴에게 전했다. CIA의 미국 독립전쟁 정보사 연구는 이 정보가 7월 21일 오후 워싱턴에게 도착했고, 워싱턴이 곧바로 가짜 뉴욕 공격계획을 작성했다고 설명한다.
+
+워싱턴은 서명된 가짜 계획을 한 농부가 길에서 주웠다고 주장하며 영국 전초에 넘기게 했다. 동시에 대륙군을 뉴욕 쪽으로 실제 이동시켜 문서가 단독 거짓말로 보이지 않게 했다. 클린턴은 뉴욕 공격이 임박했다고 판단해 뉴포트로 향하던 병력을 회군시켰다. 정보 수집·운반·분석·기만·가시적 병력 이동이 하나의 결론을 만들었지만, 각 참여자는 전체 경로를 알 필요가 없었다.
+
+이 성과를 컬퍼망 하나로 미국 독립전쟁을 이겼다고 확대해서는 안 된다. 프랑스 함대와 로샹보 군의 존재, 영국의 지휘 부담, 대륙군의 실제 이동이 함께 작용했다. 다만 이 사건은 다수의 은밀한 통로가 한 판단으로 모이고, 그 판단이 다시 공개 신호와 기만으로 변환된 `五間俱起`의 구조를 선명하게 보여 준다.
+
+#### 전투에서 사용된 속임수 — 서명된 가짜 계획과 실제 병력 이동
+
+속인 주체는 <span color="blue">**워싱턴**</span>과 대륙군 지휘부였고 실제 목적은 뉴포트의 프랑스군을 보호하는 것이었다. 영국군에는 뉴욕 공격계획 문서와 대륙군의 접근이라는 서로 맞는 신호가 보였다. <span color="red">**클린턴**</span>이 이를 믿은 까닭은 뉴욕이 실제로 중요한 영국 거점이었고 병력 이동이 문서의 내용을 독립적으로 확인하는 듯 보였기 때문이다. 그 판단은 해상 병력의 회군을 낳았고 프랑스군은 회복할 시간을 얻었다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 컬퍼망은 클린턴의 계획을 알아냈고 워싱턴은 그 지식을 프랑스군 보호라는 작전목표로 바꾸었다.
+
+**보인 신호와 믿은 이유.** 서명된 가짜 계획과 실제 대륙군 이동은 서로 다른 출처처럼 같은 결론을 지지했다. 뉴욕의 전략적 가치가 그 결론을 더 그럴듯하게 했다.
+
+**유발된 행동과 결과.** 영국군은 뉴포트 공격을 지속하지 않고 뉴욕 방어를 강화하려 회군했다. 수집 정보가 적의 배치를 바꾸는 작전으로 닫혔다.
+
+**사료의 경계.** ‘Lady’의 정확한 신원과 일부 운반 세부에는 논쟁이 남는다. 확인되는 것은 클린턴의 계획정보, 워싱턴의 허위 문서와 병력 이동, 영국군 회군의 연결이며 불확실한 개인 신원은 성과의 단일 원인으로 삼지 않는다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 워싱턴의 대륙군 지휘부가 클린턴의 영국군 뉴욕 지휘부를 속였다.
+2. **어떤 사실이 거짓이었는가?** 대륙군이 곧 뉴욕을 공격한다는 서명 계획은 의도적으로 만든 허위 계획이었다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 대륙군 병력이 뉴욕 쪽으로 움직였다는 사실은 참이었지만 그 이동의 실제 목적은 공격 확정이 아니라 기만 강화였다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 뉴욕은 영국의 핵심 항만·지휘 거점이어서 공격 가능성을 무시했을 때의 손실이 컸다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 낮다. 문서와 가시적 이동이 없었다면 클린턴은 뉴포트 공격을 계속할 더 강한 근거를 가졌다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 병력 이동이 실제 공성·보급 준비와 연결되는지, 문서의 발견 경로가 조작될 수 있는지 충분히 분리하지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 레드팀 모의훈련에서 문서·로그·현장 움직임이 같은 원천에서 설계됐는지 추적하고, 독립 검증팀이 행동 증거를 따로 확인하는 방식으로 연습할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>用而示之不用<br>용이시지불용 — 쓰면서 쓰지 않는 듯 보인다</td><td>컬퍼망의 실제 목적은 뉴포트 보호였지만 외부에는 뉴욕 공격 준비가 전면에 보였다.</td></tr>
+<tr><td>近而示之遠<br>근이시지원 — 가까운 것을 멀리 보인다</td><td>뉴포트의 즉각적 위험을 숨기고 영국군이 자기 본거지 뉴욕의 위협에 집중하게 했다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**대륙군 정보망**</span></td><td>수집·육로·해로·통제·최종판단을 분리했다.</td><td>톨매지가 접점과 암호를 통제하고 워싱턴이 목적을 결정했다.</td><td>상점·농장·보트·기병 등 기존 생활 기반을 위장과 운반에 활용했다.</td></tr>
+<tr><td><span color="red">**영국군 뉴욕 지휘부**</span></td><td>뉴욕 수비와 뉴포트 원정 전력이 같은 병력 풀에서 경쟁했다.</td><td>클린턴이 문서와 군 이동을 뉴욕 공격 신호로 통합했다.</td><td>해상 원정은 회군 명령에 민감했고 프랑스군 공격 시간창을 잃었다.</td></tr>
+</table>
+
+#### <span color="red">**헨리 클린턴(Henry Clinton, 패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>뉴욕 방어와 뉴포트 공격의 우선순위를 동시에 만족시키지 못해 원정 의지가 흔들렸다. (지기·결속)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>서명 문서와 대륙군 이동이 독립 증거일 가능성뿐 아니라 하나의 기만 설계일 가능성을 충분히 계산하지 못했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>뉴욕과 뉴포트 사이의 해상 거리는 병력을 한쪽에 보내는 순간 다른 쪽의 위험을 키웠다. (원근·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="red">**클린턴**</span>은 뉴욕 상실 위험을 중하게 보았으나 허위 문서의 전달경로를 재검증하지 못했다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>원정 함대와 뉴욕 수비의 전환 비용 때문에 한 번의 회군이 작전 시간창을 닫았다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** 서명 문서와 눈앞의 병력 이동을 같은 공격 서사의 독립 증거로 묶은 판단에는 일관된 한 시나리오에 집중하는 확증편향이 작동한 것으로 볼 수 있으며, 뉴포트 공격의 시기를 잃게 했다.
+
+🏳️ <span color="red">**패군 측 결과**</span> — 六敗 가운데 정보와 명령선이 허상에 끌린 `亂(란)`의 성격이 강하다. 🔀 <span color="orange">**패군 측 회피 분기점**</span>은 발견 문서의 출처와 대륙군 이동의 실제 보급·공성 준비를 분리 검증하고, 뉴욕 방어예비대와 뉴포트 원정대를 전부 회군시키지 않는 것이었다.
+
+#### <span color="blue">**조지 워싱턴(George Washington, 승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td><span color="blue">**워싱턴**</span>은 각 첩보원의 전모 접근을 제한하면서 톨매지의 통제 아래 공동목표를 유지했다. (지기·신뢰)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>프랑스군이 항해 직후 취약하고 영국군이 뉴욕 방어를 중시한다는 외부 변수를 결합해 회군 확률을 높였다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>맨해튼–세토킷–해협–코네티컷의 분절된 지형을 오히려 정보망의 구획과 방호에 사용했다. (원근·험이)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="blue">**워싱턴**</span>은 정보 수신에서 멈추지 않고 허위 문서와 실제 이동을 결합해 적 행동을 바꾸었다. (지·용·엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>암호·가명·보이지 않는 잉크·육해 중계·필요지식 원칙으로 한 구간 노출이 전체 망으로 번지지 않게 했다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span> — `以虞待不虞者勝(이우대불우자승, 준비한 채 준비되지 않은 적을 상대하는 자가 이긴다)`에 가깝다. 다중 보고를 한 판단으로 묶고 그 판단을 적의 이동을 바꾸는 작전으로 전환했다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td></tr>
+<tr><td><span color="blue">**대륙군 정보망**</span></td><td>도시 수집·육로 운반·해협 횡단·망 통제·최종판단을 다른 사람에게 맡겨 서로의 노출 범위를 제한했다.</td></tr>
+<tr><td><span color="red">**영국군**</span></td><td>뉴욕 수비와 뉴포트 원정이 같은 지휘 판단에 묶여 기만 신호 하나가 양쪽 배치를 함께 흔들었다.</td></tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>관도(지휘)</td></tr>
+<tr><td><span color="blue">**대륙군 정보망**</span></td><td>톨매지가 암호명·운반 순서·과업을 통제했고 워싱턴이 정보 요구와 기만 결심을 직접 연결했다.</td></tr>
+<tr><td><span color="red">**영국군**</span></td><td>클린턴이 입수 문서와 군 이동을 종합했으나 두 증거가 같은 기만 목적에서 나왔는지 역추적하지 못했다.</td></tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**대륙군 정보망**</span></td><td>상점·농장·말·고래잡이 보트와 보이지 않는 잉크를 활용해 대규모 전담조직 없이 장기 운용했다.</td></tr>
+<tr><td><span color="red">**영국군**</span></td><td>뉴포트 해상작전은 선박·병력·시간의 집중이 필요해 회군 뒤 같은 기회를 즉시 되살리기 어려웠다.</td></tr>
+</table>
+
+**출처:** [CIA, Three Key Intelligence Contributions of the Culper Ring](https://www.cia.gov/stories/story/three-key-intelligence-contributions-of-the-little-known-culper-ring/) · [CIA, The Founding Fathers of American Intelligence](https://www.cia.gov/resources/csi/static/4c28451b90165b446ac948e3dd47c972/The-Founding-Fathers-of-American-Intelligence-.pdf) · [George Washington's Mount Vernon, George Washington Spymaster](https://www.mountvernon.org/george-washington/the-revolutionary-war/spying-and-espionage/george-washington-spymaster)
+
+### 동양 — 🏛️ 청 황제 직통 주접망 vs 누층 관료제의 지연·누설 │ 옹정제의 궁중주접 제도(1723~1735)
+
+![옹정 주접망 주요 인물](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan7/yongzheng_commanders.png)
+
+![옹정 주접망 사람 장비 운반](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan7/yongzheng_soldiers_weapons_life.png)
+
+![옹정 주접망 지휘 정보 구조](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan7/yongzheng_command_structure.png)
+
+![옹정대 청 제국 주접망](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan7/yongzheng_country_map.png)
+
+![옹정 주접망 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan7/yongzheng_strategy_map.png)
+
+![옹정 주접망 단계별 흐름](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan7/yongzheng_sequence.png)
+
+궁중주접은 전투의 첩자망과 같지는 않지만, 서로 다른 지방과 직위의 보고를 비밀 직통경로로 결합한 역사적 정보체계였다. 강희제 때 시작된 제도를 <span color="blue">**옹정제(雍正帝)**</span>가 확대·정규화했다. 총독·순무뿐 아니라 포정사·도원·제독 등 더 다양한 고위 관원이 민정·군정·물가·풍속·관리 행태를 친필로 보고하면서, 상급자 한 명이 지방의 모든 정보를 걸러 올리는 구조를 우회했다.
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- <span color="blue">**▰**</span> <span color="yellow_bg">**북경(北京)**</span>의 자금성은 보고가 수렴하는 중심이었다. 건청문 부근의 주사처를 통과한 봉함은 황제에게 직접 전달됐다.
+- 🌊 <span color="blue_bg">**대운하(大運河)**</span>와 동부 역로는 강남·절강의 재정·곡물·민정 보고가 북상하는 핵심 축이었다.
+- 🌊 <span color="blue_bg">**장강(長江)**</span>과 🌊 <span color="blue_bg">**황하(黃河)**</span>는 넓은 행정권역을 잇지만 홍수·계절·도하가 전달시간을 바꾸는 자연 장벽이기도 했다.
+- ⛰️ <span color="green_bg">**사천 산로(四川山路)**</span>와 ⛰️ <span color="green_bg">**서북 변경(西北邊境)**</span>은 거리와 험로 때문에 역참·말 교체·봉함의 무결성이 특히 중요했다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**건청문(乾清門)**</span>에서 양심전까지의 마지막 짧은 구간은 일반 문서경로와 황제 직통경로를 가르는 제도적 병목이었다.
+
+#### 상세 통치 서사 — 지방의 눈을 늘리되 봉함의 열쇠와 최종 판단은 중앙에 모으다
+
+명·청의 통상 상신은 여러 관청과 상급자의 검토를 거쳐 황제에게 갔다. 이 과정은 행정적 검토를 제공했지만 긴급문서를 늦추고 민감한 내용이 새거나 지방 상급자가 불리한 정보를 걸러낼 여지도 만들었다. 강희제는 별도의 사적 보고경로를 만들었고 옹정제는 이를 넓혀 지방의 서로 다른 직위가 독립적으로 보고하게 했다.
+
+국립고궁박물원 자료에 따르면 보고자는 문서를 직접 써서 봉하고, 신임하는 가인이 말로 운반했다. 문서는 황지와 황견으로 싸고 잠금 상자에 넣었으며, 열쇠와 상자는 내정이 관리했다. 건청문 당직자가 이를 황제에게 올리면 황제는 직접 붉은 글씨로 답하고 같은 보호경로로 돌려보냈다.
+
+이 구조는 보고자 수를 늘리는 데서 끝나지 않았다. 서로 다른 직위가 같은 지방의 군정·세정·관리 행태를 보고하면 황제는 불일치 자체를 질문으로 바꿀 수 있었다. 옹정제는 보고가 개인 수중에 흩어져 망의 기억을 잃지 않도록 연말 회수와 궁중 보관을 명했고, 나중에는 발송 기록의 참조 사본도 남겼다. `神紀`에 가까운 지점은 비밀의 신비화가 아니라 수집·봉함·회송·보관의 반복 가능한 규율이다.
+
+그러나 성공은 곧 한계를 만들었다. 황제에게 정보와 결재가 과도하게 집중되면 독립 보고가 교차검증이 아니라 경쟁적 밀고로 변할 수 있고, 외부 관료제는 책임 있게 판단하기보다 황제의 비공개 의중을 추측하게 된다. 옹정대 주접망은 `莫知其道`의 효과와 함께, 경로를 아는 책임자가 검증·반론·기록을 독점할 때 생기는 위험도 보여 준다.
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**궁중주접망**</span></td><td>지역·직위가 다른 보고자를 병렬로 두고 황제가 통합했다.</td><td>친필·봉함·건청문 직송·황제 주비·원보고자 회송으로 경로를 줄였다.</td><td>역참 말·잠금함·황지·황견·궁중 보관으로 장거리 지속성을 확보했다.</td></tr>
+<tr><td><span color="red">**통상 문서경로**</span></td><td>하급 보고가 상급자와 중앙 관청을 차례로 거쳤다.</td><td>검토층이 많아 전문성은 얻지만 지연·누설·선별 위험이 컸다.</td><td>공식 문서망은 넓고 안정적이지만 긴급·민감 보고에 둔했다.</td></tr>
+</table>
+
+#### <span color="red">**누층 관료제의 정보 필터(패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>하급자가 상급자에게 불리한 사실을 올릴 유인이 약해지면 보고가 실제보다 일치된 목소리로 변했다. (지기·결속)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>거리와 계절뿐 아니라 중간 검토자의 선택이 도착 정보의 분포를 바꾸는 외부변수였다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>광대한 제국과 강·산·변경의 거리가 문서 지연과 정보 비대칭을 키웠다. (원근·험이)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>상급 관원이 자기 평가에 불리한 보고까지 전달하는지에 따라 중앙의 현실 인식이 달라졌다. (신·엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>누층 결재는 책임 분산과 누설 지점을 늘려 민감 정보의 속도와 원형을 훼손할 수 있었다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** 여러 단계에서 다듬어진 보고를 객관적 합의로 보는 판단에는 같은 위계의 필터를 거친 상관된 보고를 독립 증거로 착각하는 편향이 작동할 수 있으며, 지방의 나쁜 소식을 늦게 발견하게 한다.
+
+🏳️ <span color="red">**패군 측 결과**</span> — 전투의 六敗에 직접 대응시키면 명령·보고경로가 실제를 흐리는 `亂(란)`의 제도적 형태다. 🔀 <span color="orange">**패군 측 회피 분기점**</span>은 통상 경로를 폐기하는 것이 아니라, 긴급·민감 사안에 독립 직통보고와 사후 대조를 허용하는 것이었다.
+
+#### <span color="blue">**옹정제(雍正帝, 승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td><span color="blue">**옹정제**</span>는 서로 다른 직위의 보고자를 황제와 직접 연결해 상급자 한 사람의 정보독점을 약화했다. (지기·결속)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>지방관의 관찰 범위와 이해관계가 다르다는 변수를 없애지 않고 보고 수와 위치를 늘려 단일 실패 확률을 낮췄다. (지피·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>역참과 잠금 상자를 통해 강·산·장거리의 전달손실을 줄였지만 거리 자체는 없애지 못했다. (원근·험이)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="blue">**옹정제**</span>가 직접 읽고 주비하면서 통합 책임을 졌으나 과도한 집중은 반론 통로를 약화시키는 위험도 만들었다. (지·엄과 한계)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>친필·밀봉·잠금·직송·회송·연말 회수·보관을 한 절차로 묶었다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span> — `識衆寡之用者勝(식중과지용자승, 많고 적은 수의 쓰임을 아는 자가 이긴다)`에 비유할 수 있다. 보고자를 무작정 늘리지 않고 서로 다른 위치의 제한된 눈을 직통경로와 기록으로 결합했다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td></tr>
+<tr><td><span color="blue">**궁중주접망**</span></td><td>총독·순무·포정사·도원·제독 등 접근 범위가 다른 보고자를 병렬로 배치했다.</td></tr>
+<tr><td><span color="red">**통상 경로**</span></td><td>문서가 동일 위계선을 순차 통과해 상급자가 하급자의 관찰을 합치거나 지울 수 있었다.</td></tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>관도(지휘)</td></tr>
+<tr><td><span color="blue">**궁중주접망**</span></td><td>보고자 친필→신임 가인→역참→건청문→황제 친람·주비→원보고자 회송으로 책임자를 명확히 했다.</td></tr>
+<tr><td><span color="red">**통상 경로**</span></td><td>지방 상급자·내각 등 여러 검토층이 전문성을 제공하는 동시에 긴급성·기밀성과 충돌했다.</td></tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**궁중주접망**</span></td><td>황지·황견·봉랍·잠금 상자·열쇠·역참 말을 표준화하고 회수·보관으로 제도 기억을 만들었다.</td></tr>
+<tr><td><span color="red">**통상 경로**</span></td><td>기존 관청과 운송망을 넓게 쓸 수 있었지만 문서 복제·대기·누설 지점이 많았다.</td></tr>
+</table>
+
+**출처:** [National Palace Museum, Understanding Qing Dynasty Palace Memorials](https://www.npm.gov.tw/Publications-Content.aspx?l=2&sno=04013226) · [National Palace Museum, Palace Memorials](https://theme.npm.edu.tw/selection/Article.aspx?lang=2&sNo=04001049) · [Mark C. Elliott, The Manchu-Language Archives and the Palace Memorial System](https://elliott.scholars.harvard.edu/sites/g/files/omnuum10991/files/elliott/files/elliott_lic_manchu_language_archives_and_palace_memorial_system.pdf) · [Social Forces, Information Foundations of State Capacity](https://academic.oup.com/sf/advance-article/doi/10.1093/sf/soaf106/8208286?guestAccessKey=709dd3a5-1c65-41c7-b235-48e26b177de6)
+
+---
 ---
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
 
