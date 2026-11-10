@@ -1,4 +1,3 @@
-<!-- sunzi-analysis-mode: light -->
 > 비리부동, 비득불용, 비위부전. 주불가이노이흥사, 장불가이온이치전. — 이익·성과·위험의 기준 없이 감정으로 움직이지 않는다.
 
 ---
@@ -94,6 +93,266 @@
 카너먼의 관점에서 분노는 판단을 빠르고 확신에 차게 만들 수 있다. 도발의 선명함은 가용성 편향을 키우고, 상대의 악의만 찾는 확증편향은 다른 설명과 대안을 밀어낸다. 이때 먼저 결론을 내린 뒤 利·得·危를 끼워 맞추면 세 기준은 제동 장치가 아니라 합리화 도구가 된다.
 
 교정 방법은 감정을 부정하는 것이 아니라 관찰 가능한 조건으로 번역하는 것이다. “화가 난다”를 “어떤 손해가 이미 발생했는가”, “지금 움직이면 무엇을 얻는가”, “싸우지 않을 때 어떤 위험이 언제 현실화되는가”로 바꾼다. 그리고 감정의 당사자가 아닌 한 사람이 같은 자료로 반대 결론을 검토하게 한다. 감정은 문제를 알리는 경보로 남기되, 행동의 허가는 증거가 내리게 하는 절차다.
+
+---
+## 4. 역사적 실증 사례
+
+### 서양 — 🇷🇸 세르비아 왕국 vs 🏛️ 오스트리아-헝가리 제국 │ 체르 전투(Battle of Cer, 1914)
+
+![체르 전투 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong12/cer_commanders.png)
+
+![체르 전투 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong12/cer_soldiers.png)
+
+![체르 전투 지휘 편제 조직도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong12/cer_command_structure.png)
+
+![1914년 세르비아 전역 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong12/cer_country_map.png)
+
+![체르 전투 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong12/cer_strategy_map.png)
+
+![체르 전투 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong12/cer_sequence_map.png)
+
+오스트리아-헝가리의 세르비아 공격은 사라예보 암살에 대한 대응이었지만, 암살 수사와 전쟁 결정은 같은 일이 아니었다. 빈 정부는 세르비아를 제압해 제국의 위신을 회복하고 발칸의 도전을 꺾으려 했고, 독일의 이른바 ‘백지수표’ 지원은 국지적 징벌전이 유럽 전쟁으로 번질 위험을 감수하게 했다. 따라서 이 사례의 핵심은 ‘화가 나서 아무 목적도 없었다’가 아니다. **정치적 목적은 있었지만, 얻을 성과와 확전 위험을 검증하는 절차보다 응징의 시간표가 앞섰다**는 데 있다.
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- 🌊 <span color="blue_bg">**드리나강(Drina River)**</span>은 보스니아와 세르비아 사이의 서쪽 장벽이다. 포티오레크는 이 강을 넘어 발예보로 진격하려 했으나, 도하 지점과 산악 도로가 병력 집중을 늦췄다.
+- 🌊 <span color="blue_bg">**사바강(Sava River)**</span>과 <span color="red">**▰**</span> <span color="yellow_bg">**샤바츠(Šabac)**</span>는 북쪽 도하축이었다. 북쪽 시위와 서쪽 주공이 갈라지면서 세르비아 최고사령부는 주공을 늦게 판별했지만, 공격군도 상호 지원이 어려웠다.
+- ⛰️ <span color="green_bg">**체르산(Cer Mountain)**</span>은 드리나 저지와 마치바 평야 사이의 능선 장벽이다. 이곳을 잡으면 발예보와 세르비아 내륙으로 이어지는 길을 통제할 수 있었다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**발예보(Valjevo)**</span>는 오스트리아-헝가리군이 노린 내륙 결절점이었다. 세르비아군은 이곳과 체르 사이에서 제2군을 전환해 주공을 막았다.
+- **테케리시(Tekeriš)–야다르(Jadar) 축**은 야간 접촉과 역습이 집중된 길목이다. 세르비아군이 이 능선을 지키자 공격군의 도하 교두보는 내륙 돌파로 연결되지 못했다.
+
+#### 전투의 서사 — 징벌의 정치 시간표가 분산 도하와 산악 패주로 바뀌다
+
+6월 28일 사라예보 암살 뒤 오스트리아-헝가리 지도부는 세르비아를 제압할 기회로 위기를 다뤘다. 7월 23일 제시한 최후통첩은 48시간 안에 광범위한 요구를 받아들이게 했고, 세르비아가 대부분을 수용했어도 외교관계는 끊어졌다. 7월 28일 선전포고 뒤 <span color="red">**오스카르 포티오레크(Oskar Potiorek)**</span>는 발칸군을 지휘해 서쪽 보스니아에서 🌊 <span color="blue_bg">**드리나강(Drina River)**</span>을 건너는 공세를 택했다. 공격 방향은 세르비아가 예상한 북쪽 모라바축과 달랐으나, 제5군의 도하와 북쪽 부대의 움직임이 분리돼 있었다.
+
+세르비아 최고사령관 <span color="blue">**라드미르 푸트니크(Radomir Putnik)**</span>는 주공을 확인한 뒤 <span color="blue">**스테파 스테파노비치(Stepa Stepanović)**</span>의 제2군을 ⛰️ <span color="green_bg">**체르산(Cer Mountain)**</span>으로 돌렸다. 🪖 보병은 하루 수십 킬로미터를 행군했고, 8월 15~16일 밤 능선에서 양측 선두가 충돌했다. <span color="blue">**스테파노비치**</span>는 우발적 접촉을 국지전으로만 보지 않고 산악 전체의 주도권을 건 싸움으로 판단해 증원을 밀어 넣었다. 반면 <span color="red">**포티오레크**</span>의 부대들은 강과 능선 사이에서 서로의 진척을 충분히 맞추지 못했다.
+
+세르비아군의 역습이 테케리시와 능선의 거점을 되찾자 오스트리아-헝가리군은 🌊 <span color="blue_bg">**드리나강(Drina River)**</span> 쪽으로 밀렸다. <span color="red">**▰**</span> <span color="yellow_bg">**샤바츠(Šabac)**</span> 일대의 전투는 더 이어졌지만 첫 침공의 내륙 돌파는 실패했다. 이 승리를 세르비아의 의지 하나로 설명하면 부족하다. 공격군의 분산 도하, 불완전한 협동, 험한 접근로와 보급 부담이 세르비아의 빠른 집중과 결합했다. 징벌전으로 출발한 행동은 세르비아를 굴복시키지 못했고, 오히려 유럽 전쟁의 전선을 하나 더 열었다.
+
+#### 전투에서 사용된 속임수 — 의도적 기만보다 더 중요했던 국지전이라는 희망
+
+체르 전투의 승패를 가른 대표적 거짓 정보 작전은 확인되지 않는다. 오스트리아-헝가리의 서쪽 주공이 세르비아의 초기 배치를 흔들었지만, 이를 정교한 기만계획으로 단정하기보다 작전 방향의 선택과 정보 지연으로 보는 편이 안전하다. 더 큰 오독은 정치 단계에 있었다. 빈과 베를린은 세르비아에 대한 강압이 러시아·프랑스·영국을 잇는 연쇄 반응을 낳을 가능성을 알면서도 통제 가능한 위기로 취급했다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 오스트리아-헝가리는 세르비아를 신속히 굴복시켜 발칸의 위신과 억지력을 회복하려 했다.
+
+**보인 신호와 믿은 이유.** 독일의 전폭 지원과 세르비아의 상대적 소국 지위는 국지적 징벌이 가능하다는 확신을 강화했다. 이는 고의로 꾸민 전장 신호라기보다 동맹 보장과 과거 위기의 경험이 만든 위험한 기준점이었다.
+
+**유발된 행동과 결과.** 외교적 숙고 시간이 줄고 최후통첩·동원·선전포고가 이어졌다. 실제 전장에서는 여러 도하축이 분산되고 체르산의 저항을 돌파하지 못해 첫 침공이 후퇴로 끝났다.
+
+**사료의 경계.** 개인의 분노만으로 국가 결정을 설명할 수 없다. 제국 안보, 민족주의, 군부의 선제전쟁론과 동맹구조가 함께 작동했으며, 여기서 ‘怒’는 감정 하나가 아니라 응징 욕구가 비용·위험 검토를 압도한 결정 구조를 가리킨다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 전투 승패를 결정한 단일 의도적 기만은 사료로 확인하기 어렵다.
+2. **어떤 사실이 거짓이었는가?** 세르비아가 쉽게 굴복하고 전쟁이 국지적으로 통제될 것이라는 가정은 사실로 검증되지 않은 전망이었다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 독일의 지원은 진실이었지만 그것이 러시아 개입과 다전선 비용을 제거하지는 않았다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 신속한 응징이 제국의 위신과 억지력을 회복한다는 정치적 기대가 있었다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성이 높다. 오판의 핵심은 적이 만든 거짓보다 자기 확신과 확전 위험의 과소평가였다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 러시아 동원 가능성, 세르비아군의 동원·지형 방어력, 분산 도하 뒤의 지속 가능성을 충분히 반증하지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 위기 모의훈련에서 ‘국지적으로 끝난다’는 가정을 빼고 동맹·제3자 반응을 포함한 대안 시나리오를 만든다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>近而示之遠<br>근이시지원 — 가까우면서 멀리 있는 듯 보인다</td><td>서쪽 도하축은 세르비아가 북쪽 주공을 예상한 틈을 이용했으나, 이것이 정교한 기만 명령이었는지는 불명확하다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**세르비아군**</span></td><td>제2군을 주공에 전환하고 사단을 능선에 연속 투입했다.</td><td>최고사령부의 전환 명령과 스테파노비치의 현장 집중이 이어졌다.</td><td>자국 내선과 강행군으로 짧은 결전 구간에 전력을 모았다.</td></tr>
+<tr><td><span color="red">**오스트리아-헝가리군**</span></td><td>도하축과 군단이 강·산악으로 분리됐다.</td><td>포티오레크의 정치·군사 압박 아래 제5군과 북부 움직임의 협동이 약했다.</td><td>교량·강 건너 보급과 산악 도로가 공세 지속을 제약했다.</td></tr>
+</table>
+
+#### <span color="red">**오스카르 포티오레크 (패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>응징의 정치 목적이 병사에게 명료한 작전 종착점으로 번역되지 않았고, 첫 역습 뒤 사기가 흔들렸다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>세르비아의 빠른 집중과 러시아 개입이라는 외부 변수를 낮게 보았다. 짧은 징벌전 전망에 과도한 확률을 주었다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>강 도하 뒤 ⛰️ <span color="green_bg">**체르산(Cer Mountain)**</span>의 능선과 제한된 도로가 군단 결합을 끊었다. (원근·험이·광협)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="red">**포티오레크**</span>는 결단력은 있었으나 정치적 조급함을 군사적 준비보다 앞세웠다. (지·용 부족, 분속 위험)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>여러 도하축과 불완전한 보급선이 전투력을 동시에 집중하지 못하게 했다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏳️ <span color="red">**패군 측 결과**</span> 첫 세르비아 침공은 격퇴됐고, 六敗(육패) 중 `北`(배, 적정을 충분히 헤아리지 못하고 강행해 패주함)에 가깝다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span> 최후통첩 뒤 외교적 중재 시간을 확보하고, 전쟁을 택하더라도 북·서 도하축의 목표와 보급을 통합할 때까지 공세를 늦췄다면 체르에서의 급격한 패주는 줄일 수 있었다. 다만 유럽 동맹구조상 국지전 보장은 불가능했다.
+
+**직관·편향 한 줄:** <span color="red">**포티오레크**</span>의 서쪽 공세와 빈 정부의 징벌 구상은 ‘소국 세르비아는 빨리 굴복할 것’이라는 기준점·과신이 작동한 것으로 볼 수 있으며, 세르비아의 내선 집중과 확전 가능성을 축소했다.
+
+#### <span color="blue">**스테파 스테파노비치 (승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>침공 방어라는 목적이 분명했고, 피로한 🪖 보병도 능선 역습을 지속했다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>초기 주공 오판을 고집하지 않고 새 정보에 따라 제2군을 돌렸다. 불확실성을 없애지 못했지만 빠른 집중으로 유리한 결과의 확률을 높였다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>테케리시와 능선을 연결해 공격군이 강에서 멀어질수록 취약해지는 구조를 이용했다. (험이·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="blue">**스테파노비치**</span>는 야간 접촉을 전체 전장의 전환점으로 읽고 예비를 투입했다. (지·신·용)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>제2군 사단의 강행군과 연속 투입으로 국지적 수적 우세를 만들었다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span> 세르비아군은 첫 침공을 격퇴했다. 五勝(오승) 중 `以虞待不虞者勝`(이우대불우자승, 대비한 채 대비하지 못한 적을 상대하는 자가 이긴다)과 `識衆寡之用者勝`(식중과지용자승, 많고 적은 병력의 쓰임을 아는 자가 이긴다)에 가깝다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**세르비아군**</span></td><td>제2군의 콤비네이션 사단 등 가용 부대를 ⛰️ <span color="green_bg">**체르산(Cer Mountain)**</span> 방향으로 돌려 선두 접촉을 연속 증원했다.</td></tr>
+<tr><td><span color="red">**오스트리아-헝가리군**</span></td><td>제5군과 주변 부대가 서로 다른 강·도로를 사용해 선두가 고립되기 쉬웠다.</td></tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**세르비아군**</span></td><td><span color="blue">**푸트니크**</span>의 최고사령부가 주공 판단을 갱신하고 <span color="blue">**스테파노비치**</span>가 제2군의 현장 집중을 지휘했다.</td></tr>
+<tr><td><span color="red">**오스트리아-헝가리군**</span></td><td><span color="red">**포티오레크**</span>가 발칸군을 통괄했으나 분산된 군단의 이동·보고가 산악과 강으로 지연됐다.</td></tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**세르비아군**</span></td><td>탄약과 장비가 넉넉하지 않았지만 자국 내선에서 🪖 보병을 짧은 결전축으로 이동시켰다. 세부 일일 급양량은 사료상 불명이다.</td></tr>
+<tr><td><span color="red">**오스트리아-헝가리군**</span></td><td>도하교와 산악 도로에 수송이 묶였고, 후퇴 때 강을 다시 건너야 해 장비와 사상자 회수가 어려웠다.</td></tr>
+</table>
+
+**사료와 연구:** [세르비아 국방부 — 체르 전투](https://www.mod.gov.rs/lat/17052/cerska-bitka-prva-pobeda-antante17052) · [International Encyclopedia of the First World War — July Crisis 1914](https://encyclopedia.1914-1918-online.net/article/july-crisis-1914/) · [미 국무부 사료집 — 1914년 오스트리아-세르비아 위기](https://history.state.gov/historicaldocuments/frus1914Supp/d194)
+
+---
+
+### 동양 — 🏛️ 촉한 vs 🏛️ 손오 │ 이릉대전(夷陵之戰, 221~222)
+
+![이릉대전 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong12/yiling_commanders.png)
+
+![이릉대전 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong12/yiling_soldiers.png)
+
+![이릉대전 지휘 편제 조직도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong12/yiling_command_structure.png)
+
+![이릉대전 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong12/yiling_country_map.png)
+
+![이릉대전 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong12/yiling_strategy_map.png)
+
+![이릉대전 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong12/yiling_sequence_map.png)
+
+『삼국지』 선주전은 <span color="red">**유비**</span>가 손권의 관우 습격에 분노해 동정을 준비했고, 손권의 화의 요청에도 “성대히 노하여” 허락하지 않았다고 기록한다. 그러나 이 전쟁에는 관우의 복수 외에도 형주 상실, 장강 중류의 전략축, 촉한 정권의 정통성과 동맹 재편이 얽혀 있었다. **사적 감정만으로 국가전략을 설명하지 않되, 감정이 화의와 대안 검토의 문턱을 낮춘 기록은 분명히 구분해 읽어야 한다.**
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- <span color="red">**▰**</span> <span color="yellow_bg">**백제성(白帝城)**</span>은 촉한의 동쪽 관문이자 패전 뒤 <span color="red">**유비**</span>가 물러난 최종 방어거점이다.
+- 🌊 <span color="blue_bg">**장강(長江)**</span>과 ⛰️ <span color="green_bg">**무협(巫峽)**</span>은 서쪽 촉한에서 형주로 나가는 좁은 회랑이다. 수륙군과 보급이 같은 축에 길게 늘어졌다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**자귀(秭歸)**</span>는 촉군의 전진 거점이었고, 이후 동쪽 연속 진영의 출발점이 됐다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**이릉(夷陵)**</span>·<span color="blue">**▰**</span> <span color="yellow_bg">**효정(猇亭)**</span>은 삼협 출구의 병목이다. 육손은 이 선에서 더 물러나지 않고 촉군의 장기 주둔을 기다렸다.
+- ⛰️ <span color="green_bg">**마안산(馬鞍山)**</span>은 패주 중 마지막으로 병력이 모인 고지였다. 진영이 연쇄 붕괴한 뒤에는 조직적 방어선이 되지 못했다.
+
+#### 상세 전역 서사 — 화의를 거부한 동정이 수백 리 연영과 화공의 표적이 되다
+
+219년 손권군이 형주를 빼앗고 관우를 죽인 뒤 촉한은 동쪽 전략축과 핵심 지휘관을 함께 잃었다. 221년 <span color="red">**유비(劉備)**</span>는 황제에 오른 뒤 오 정벌을 시작했다. 손권은 화의를 청했지만 <span color="red">**유비**</span>는 격노해 받아들이지 않았다. 촉군은 초기 교전에서 오군을 밀어내며 <span color="red">**▰**</span> <span color="yellow_bg">**자귀(秭歸)**</span>에서 <span color="blue">**▰**</span> <span color="yellow_bg">**이릉(夷陵)**</span>·<span color="blue">**▰**</span> <span color="yellow_bg">**효정(猇亭)**</span> 방면으로 전진했다.
+
+손권은 <span color="blue">**육손(陸遜)**</span>을 대도독으로 삼아 주연·반장·한당·서성·손환 등을 지휘하게 했다. 오군 장수들은 즉시 싸우거나 포위된 손환을 구하자고 재촉했지만 <span color="blue">**육손**</span>은 촉군의 예봉과 고지 진영을 이유로 거부했다. 촉군은 오반의 일부 병력을 평지에 내보내 도전하고 골짜기에 복병을 두었으나 <span color="blue">**육손**</span>은 응하지 않았다. 이 지연은 화려한 거짓말이 아니라 **적이 스스로 긴 전선을 만들 때까지 싸움의 시간을 내주지 않는 통제**였다.
+
+교착이 길어지고 여름 더위가 심해지자 촉군의 수륙 협동은 약해졌다. 수백 리에 걸친 진영은 서로 지지하기 어려웠고, 숲과 나무 울타리는 불에 취약했다. <span color="blue">**육손**</span>은 먼저 한 진영을 시험 공격해 손실을 보았지만, 그 과정에서 화공 가능성을 확인했다. 오군은 병사들에게 마른 풀 묶음을 들게 하고 여러 진영에 불을 놓은 뒤 동시에 공격했다. 기록은 40여 진영이 무너지고 풍습·장남 등 촉 장수가 죽었다고 전한다.
+
+<span color="red">**유비**</span>는 ⛰️ <span color="green_bg">**마안산(馬鞍山)**</span>에 병력을 모았으나 포위를 견디지 못하고 밤에 도주해 <span color="red">**▰**</span> <span color="yellow_bg">**백제성(白帝城)**</span>으로 들어갔다. 오군이 끝까지 추격하지 않은 데에는 위의 개입 위험도 있었다. 이 승패를 ‘불 한 번’으로 줄이면 핵심을 놓친다. 화공은 수개월의 지연, 촉군의 장거리 연영, 지휘·보급 분산, 시험 공격으로 확인한 취약점이 결합된 마지막 타격이었다.
+
+#### 전투에서 사용된 속임수 — 촉군의 평지 도전과 육손의 거부
+
+<span color="red">**유비**</span>는 <span color="red">**오반**</span>에게 수천 명을 평지에 주둔시켜 오군을 끌어내게 하고 골짜기에 복병을 두었다. 보인 것은 공격하기 쉬운 소수 진영이었고, 숨긴 것은 협곡의 매복이었다. 그러나 <span color="blue">**육손**</span>은 촉군이 강한 고지를 버리고 평지에 노출된 이유를 의심해 응전하지 않았다. 이 기만은 간파됐고, 오군의 지연은 반대로 촉군이 진영을 길게 늘이고 피로해지는 시간을 만들었다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** <span color="red">**유비**</span>와 <span color="red">**오반**</span>은 약한 선두를 보여 오군을 협곡 복병 앞으로 끌어내려 했다.
+
+**보인 신호와 믿은 이유.** 평지의 소수 부대는 쉽게 공격할 수 있는 표적으로 보였다. 오군 장수들도 싸움을 재촉했으므로 유인은 당시 기대와 맞았다.
+
+**유발된 행동과 결과.** <span color="blue">**육손**</span>은 비정상적으로 좋은 표적을 독립 확인하고 공격을 금지했다. 촉군 복병은 쓰이지 못했고, 장기 교착이 촉군에 불리하게 흘렀다.
+
+**사료의 경계.** 오군의 지연 전체가 촉군을 속이기 위한 위장 후퇴였다고 단정할 수는 없다. 육손전이 분명히 기록하는 것은 촉군의 유인과 육손의 간파, 이후 조건이 바뀐 뒤의 화공이다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** <span color="red">**유비·오반**</span>이 <span color="blue">**육손과 오군 장수들**</span>을 평지로 유인하려 했다.
+2. **어떤 사실이 거짓이었는가?** 평지의 수천 명이 고립된 쉬운 표적이라는 인상이 거짓이었다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 병력이 실제로 평지에 있었지만 뒤의 골짜기 매복을 숨겼다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 오군 장수들은 장기간 수세와 손환 구원 문제 때문에 즉시 싸우고 싶어 했다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 중간이다. 조급함은 있었지만 육손의 지휘 통제가 독립 확인을 강제했다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 육손은 생략하지 않았다. 표적이 지나치게 유리한 이유와 주변 골짜기를 함께 판단했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 체스·바둑·보드게임에서 일부 말을 노출하고 상대의 응수를 예상하되, 실제 조직에서는 ‘너무 좋은 기회’의 숨은 비용을 검토한다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>利而誘之<br>이이유지 — 이익을 보여 유인한다</td><td><span color="red">**오반**</span>의 평지 진영은 오군에게 쉬운 전과를 보여 골짜기 복병 앞으로 끌어내려 했다.</td></tr>
+<tr><td>近而示之遠<br>근이시지원 — 가까우면서 멀리 있는 듯 보인다</td><td>눈앞의 소수 병력 뒤에 가까이 있던 복병의 실제 위협을 감췄다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**오군**</span></td><td>여러 장수의 부대를 육손 지휘 아래 묶고 반격 시점에 결합했다.</td><td>손권이 육손에게 가절을 주어 고참 장수를 통제하게 했다.</td><td>자국 방어선에 가까운 짧은 보급축에서 교착을 견뎠다.</td></tr>
+<tr><td><span color="red">**촉군**</span></td><td>수백 리에 걸친 수십 진영이 상호 지원하기 어려웠다.</td><td>유비의 친정 아래 별독들이 긴 축에 분산됐다.</td><td>삼협을 지난 장거리 보급과 여름 주둔으로 지속 능력이 낮아졌다.</td></tr>
+</table>
+
+#### <span color="red">**유비 (패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>관우의 죽음과 형주 회복은 강한 동원 명분이었지만, 화의 거부 뒤의 구체적 종착점과 감당 가능한 비용이 약했다. 패전 때 수십 진영이 연쇄 붕괴했다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td><span color="blue">**육손**</span>의 장기 수세와 위의 개입 가능성을 충분히 활용하지 못했다. 초기 승리를 계속될 추세로 본 표본 일반화 위험이 있었다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>🌊 <span color="blue_bg">**장강(長江)**</span> 회랑을 따라 진영을 길게 늘여 숲·협곡·절벽이 상호 지원을 끊었다. (원근·험이·광협·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="red">**유비**</span>는 경험과 용기는 강했으나 분노와 초기 성과가 철수·화의 재검토를 어렵게 했다. (지 부족·분속 위험)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>풍습을 대독으로 두고 여러 별독을 배치했으나, 수군과 육군·수십 진영의 지휘와 보급이 한 축으로 결합되지 못했다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏳️ <span color="red">**패군 측 결과**</span> 촉군은 40여 진영과 수륙 군수품을 잃고 <span color="red">**유비**</span>는 <span color="red">**▰**</span> <span color="yellow_bg">**백제성(白帝城)**</span>으로 물러났다. 六敗(육패) 중 `北`(배, 적정을 헤아리지 못한 패주)과 `亂`(란, 진영과 지휘 질서가 무너짐)이 겹친다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span> 손권의 화의 요청을 곧바로 수락하지 않더라도, 전쟁 목표·중단선·위의 개입 위험을 재검토하고 <span color="red">**▰**</span> <span color="yellow_bg">**자귀(秭歸)**</span> 동쪽의 전선을 좁혔다면 수십 진영의 동시 붕괴는 피할 가능성이 있었다. 교착 뒤에는 수군을 육상 진영과 다시 결합하고 숲의 장기 숙영을 피했어야 했다.
+
+**직관·편향 한 줄:** <span color="red">**유비**</span>의 화의 거부와 장기 전진은 관우 피살이라는 생생한 손실이 가용성·손실회피를 키우고 초기 전과가 확증편향을 보탠 것으로 볼 수 있으며, 육손의 지연이 만든 새로운 위험을 늦게 반영했다.
+
+#### <span color="blue">**육손 (승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>고참 장수의 반발을 견디며 군령을 통일했고, 손환 구원을 위한 성급한 분산을 막았다. (지기·사기·충성)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>촉군의 예봉이 강할 때 피하고 여름 교착으로 피로·진영 취약성이 커질 때 공격했다. 위의 움직임 때문에 추격 한계도 두었다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>삼협 출구의 병목에서 더 물러나지 않고, 촉군의 긴 연영과 숲을 화공의 연결 표적으로 바꿨다. (험이·광협·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="blue">**육손**</span>은 유인을 간파하고 시험 공격의 손실에서 화공법을 찾아 여러 진영의 동시 붕괴로 연결했다. (지·신·엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>주연·반장·한당·서성·손환 등의 부대를 통제해 시험 공격 뒤 전군 동시 공격으로 전환했다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span> 오군은 형주 서부 방어선을 지키고 촉한의 동정 주력을 격파했다. 五勝(오승) 중 `知可以戰與不可以戰者勝`(지가이전여불가이전자승, 싸울 때와 싸우지 않을 때를 아는 자가 이긴다)과 `將能而君不御者勝`(장능이군불어자승, 장수가 유능하고 군주가 간섭하지 않으면 이긴다)에 가깝다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**오군**</span></td><td><span color="blue">**육손**</span>이 주연·반장·한당·서성·손환 등 약 5만의 여러 부대를 통괄하고 반격 때 동시에 결합했다.</td></tr>
+<tr><td><span color="red">**촉군**</span></td><td><span color="red">**풍습**</span>을 대독으로 두고 오반·장남·보광·조융·요화·부융 등을 별독으로 나눴으나 진영이 수백 리에 분산됐다.</td></tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**오군**</span></td><td><span color="blue">**손권**</span>이 <span color="blue">**육손**</span>에게 대도독·가절 권한을 주어 고참 장수들의 독자 행동을 막았다.</td></tr>
+<tr><td><span color="red">**촉군**</span></td><td><span color="red">**유비**</span>가 친정하고 <span color="red">**풍습**</span> 이하 별독이 긴 전선의 각 진영을 맡아, 화공 때 보고와 상호 구원이 끊겼다.</td></tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**오군**</span></td><td>형주 방어 기반과 🌊 <span color="blue_bg">**장강(長江)**</span> 수로를 활용하고, 공격 시점을 늦춰 보급 부담을 상대에게 넘겼다. 세부 일일 급양량은 사료상 불명이다.</td></tr>
+<tr><td><span color="red">**촉군**</span></td><td>삼협을 지난 장거리 수륙 보급이 수백 리 진영으로 흩어졌고, 여름 숙영과 화재로 군수품을 한꺼번에 잃었다.</td></tr>
+</table>
+
+**사료와 연구:** [中國哲學書電子化計劃 — 『삼국지』 문제 관련 본기](https://ctext.org/text.pl?if=en&node=602030) · [『삼국지』 육손전 원문 자료](https://www.shidianguji.com/zh/book/SK0711/chapter/1l9yz2wga92qx) · [홍콩 교육자료 — 제갈량과 이릉대전](https://chiculture.org.hk/sites/mainsite/files/2019-08/0104_zhugeliang_pdf_hk.pdf)
 
 ---
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
