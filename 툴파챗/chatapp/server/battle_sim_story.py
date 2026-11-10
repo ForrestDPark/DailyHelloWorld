@@ -1,4 +1,7 @@
-"""손자병법 역사적 실증 사례를 선택형 지휘 게임으로 옮긴 정적 데이터."""
+"""손자병법 역사적 실증 사례를 선택형 지휘 게임으로 옮긴 데이터."""
+import json
+import os
+from pathlib import Path
 
 BATTLES = {
     "jingxing": {
@@ -61,3 +64,61 @@ def battle_summary(battle, score):
     if score >= 4:
         return {"rank": "승리", "lesson": "핵심 분기점은 잡았지만 정보·시간·예비대 중 하나가 흔들렸습니다."}
     return {"rank": "패배", "lesson": "유명한 전술의 겉모양보다 그 전술이 작동한 선행 조건을 다시 확인하세요."}
+
+
+GENERATED_BATTLES_DIR = Path(os.environ.get(
+    "SUNZI_GENERATED_BATTLES_DIR",
+    str(Path(__file__).with_name("generated_battles")),
+))
+_GENERATED_BATTLE_IDS = set()
+
+
+def _valid_generated_battle(battle):
+    if not isinstance(battle, dict):
+        return False
+    required = {
+        "title", "year", "commander", "verse", "verse_meaning", "map",
+        "briefing", "initial_state", "phases", "source_verse_ids", "source_kind",
+    }
+    if not required.issubset(battle) or battle.get("source_kind") != "historical_case":
+        return False
+    if not isinstance(battle.get("map"), str) or not battle["map"].startswith("https://"):
+        return False
+    source_ids = battle.get("source_verse_ids")
+    if not isinstance(source_ids, list) or any(not isinstance(item, int) or item < 1 for item in source_ids):
+        return False
+    phases = battle.get("phases")
+    if not isinstance(phases, list) or not 3 <= len(phases) <= 8:
+        return False
+    for phase in phases:
+        choices = phase.get("choices") if isinstance(phase, dict) else None
+        if not phase.get("title") or not phase.get("prompt") or not isinstance(choices, list) or len(choices) < 2:
+            return False
+        if any(not isinstance(choice, dict) or not choice.get("text") or not choice.get("result") for choice in choices):
+            return False
+    return True
+
+
+def refresh_generated_battles():
+    """자동 보강이 만든 선언형 JSON만 읽고 Python 코드는 실행하지 않는다."""
+    global _GENERATED_BATTLE_IDS
+    for battle_id in _GENERATED_BATTLE_IDS:
+        BATTLES.pop(battle_id, None)
+    loaded = set()
+    try:
+        paths = sorted(GENERATED_BATTLES_DIR.glob("*.json"))
+    except OSError:
+        paths = []
+    for path in paths:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            continue
+        battle_id = str(payload.get("id") or path.stem).strip()
+        battle = payload.get("battle") if isinstance(payload.get("battle"), dict) else payload
+        if not battle_id.replace("-", "").replace("_", "").isalnum() or not _valid_generated_battle(battle):
+            continue
+        BATTLES[battle_id] = battle
+        loaded.add(battle_id)
+    _GENERATED_BATTLE_IDS = loaded
+    return loaded

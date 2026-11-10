@@ -7301,6 +7301,7 @@ def life_terrain_submit(body: LifeTerrainSubmitRequest, request: Request):
 
 
 def _battle(battle_id):
+    battle_sim_story.refresh_generated_battles()
     battle = battle_sim_story.BATTLES.get(battle_id)
     if not battle:
         raise HTTPException(status_code=404, detail="전투를 찾을 수 없습니다")
@@ -7464,6 +7465,7 @@ def sunzi_static(filename: str, request: Request):
 @app.get("/api/battle-sim/battles")
 def battle_sim_battles(request: Request):
     _require_signed_in_user(request)
+    battle_sim_story.refresh_generated_battles()
     return [{"id": key, **{k: v for k, v in battle.items() if k in {"title", "year", "commander", "map"}}}
             for key, battle in battle_sim_story.BATTLES.items()]
 
