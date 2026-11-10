@@ -1,4 +1,4 @@
-<!-- sunzi-analysis-mode: light -->
+<!-- sunzi-analysis-mode: full -->
 > 화가발어외, 무대어내, 이시발지. — 남의 내부 사정만 기다리지 말고, 내가 통제할 수 있는 조건과 때가 갖춰지면 움직여라.
 
 ---
