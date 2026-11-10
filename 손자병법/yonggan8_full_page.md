@@ -129,10 +129,15 @@
 ### 서양 — 🇬🇧 연합군 기만조직 vs 🏛️ 나치 독일 정보·지휘체계 │ 포티튜드 사우스 작전(Operation Fortitude South, 1944)
 
 ![포티튜드 주요 인물](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/fortitude_commanders.png)
+
 ![포티튜드 병사 무기 생활](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/fortitude_soldiers_weapons_life.png)
+
 ![포티튜드 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/fortitude_command_structure.png)
+
 ![포티튜드 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/fortitude_country_map.png)
+
 ![포티튜드 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/fortitude_strategy_map.png)
+
 ![포티튜드 단계별 전역 흐름](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/fortitude_sequence.png)
 
 **뒤에서 반복될 지형을 먼저 잡아두기**
@@ -353,10 +358,15 @@
 ### 동양 — 🏛️ 조조군 vs 🏛️ 원소군 │ 관도대전(官渡之戰, 200년)
 
 ![관도대전 주요 인물](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/guandu_commanders.png)
+
 ![관도대전 병사 무기 생활](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/guandu_soldiers_weapons_life.png)
+
 ![관도대전 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/guandu_command_structure.png)
+
 ![후한 말 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/guandu_country_map.png)
+
 ![관도대전 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/guandu_strategy_map.png)
+
 ![관도대전 단계별 전역 흐름](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/guandu_sequence.png)
 
 **뒤에서 반복될 지형을 먼저 잡아두기**
