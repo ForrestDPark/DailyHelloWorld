@@ -1,4 +1,3 @@
-<!-- sunzi-analysis-mode: light -->
 > 내외소동, 태어도로, 부득조사자, 칠십만가. — 긴급한 일에 사람을 끌어모으기 전에, 그 이동 때문에 멈출 본업과 흔들릴 주변부터 계산해야 한다.
 
 ---
@@ -115,6 +114,258 @@
 카너먼의 틀에서는 전면의 큰 사건이 생생할수록 뒤에서 멈춘 수많은 작은 일을 과소평가하기 쉽다. “에러 한 건을 해결했다”는 성공 장면만 보면 그동안 누락된 모니터링·기록·교대·본업의 확률을 분모에서 빼 버린다. 사용자의 최신 독서 메모가 경고하듯 한 시나리오에만 주목하지 말고, `즉시 해결 / 장기화 / 재발 / 인수인계 실패` 시나리오를 함께 만들고 확률의 합이 전체가 되게 보아야 한다.
 
 적용의 한계도 분명하다. 인지 연구는 통제된 과제에서 평균적인 경향을 보여 줄 뿐, 특정 개인이 실수할 것이라고 단정하지 않는다. 군사 교리는 전쟁의 생존 조건을 다루므로 평범한 사무실에 그대로 옮길 수도 없다. 우리가 취할 수 있는 것은 **긴급 대응 인원만 세지 말고 중단·재개·대체·검증의 비용까지 사전에 기록하라**는 제한된 원리다.
+
+---
+## 4. 역사적 실증 사례
+
+이 구절은 대군의 전투력보다 그 대군을 움직이느라 길과 후방에 묶이는 사람을 센다. 아래 두 사례는 승패를 추위나 명장 한 사람에게 환원하지 않고, 보이는 전투병과 보이지 않는 운송·대체·생산 중단이 어떻게 한 작전의 한계를 만들었는지 살핀다.
+
+### 서양 — <span color="blue">🏛️ 러시아 제국군</span> vs <span color="red">🏛️ 프랑스 제국 대육군</span> │ 1812년 러시아 원정(French invasion of Russia, 1812)
+
+![1812년 러시아 원정 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan2/russia1812_commanders.png)
+
+![1812년 러시아 원정 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan2/russia1812_soldiers_weapons_life.png)
+
+![1812년 러시아 원정 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan2/russia1812_command_structure.png)
+
+![1812년 유럽 세력과 원정축](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan2/russia1812_country_map.png)
+
+![1812년 러시아 원정 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan2/russia1812_strategy_map.png)
+
+![1812년 러시아 원정 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan2/russia1812_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- 🌊 <span color="blue_bg">**네만강(Niemen River)**</span>은 원정의 출발선이었다. 이 강을 건넌 뒤 전투부대와 수송대가 같은 빈약한 도로를 동쪽으로 밀고 들어갔다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**빌나(Vilna)**</span>와 <span color="red">**▰**</span> <span color="yellow_bg">**비테프스크(Vitebsk)**</span>는 전진 보급 거점이었지만 대군의 소비와 진격 속도를 따라잡지 못했다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**스몰렌스크(Smolensk)**</span>는 도로와 창고가 모이는 중간축이었다. 퇴각 때 같은 길을 다시 사용하면서 이미 소진된 지역을 통과해야 했다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**모스크바(Moscow)**</span> 점령은 정치적 종결을 만들지 못했고, 불탄 도시와 빈 창고는 장기 주둔의 기반이 되지 못했다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**말로야로슬라베츠(Maloyaroslavets)**</span>는 남쪽 칼루가 방면으로 나가려던 길을 막았다. 대육군은 소진된 스몰렌스크 도로로 돌아섰다.
+- 🌊 <span color="blue_bg">**베레지나강(Berezina River)**</span>은 퇴각군과 남은 수송이 한꺼번에 몰린 마지막 병목이었다.
+
+#### 상세 전역 서사 — 결전을 강요하려던 속도가 수송망을 앞질렀다
+
+<span color="red">**나폴레옹 보나파르트(Napoleon Bonaparte)**</span>는 1812년 6월 다국적 대육군을 네만강 너머로 진입시켰다. 원정 전 창고와 수송대가 준비됐지만, 러시아의 거리·불량 도로·희박한 취락은 계획된 보급을 전진부대까지 밀어 넣는 속도를 낮췄다. 비와 진흙은 수레와 말을 소모했고, 병사와 군마는 결전 전부터 질병·탈영·피로로 줄었다.
+
+<span color="blue">**미하일 쿠투조프(Mikhail Kutuzov)**</span>와 앞선 러시아 지휘부는 대육군이 원한 조기 결전을 계속 피하며 공간을 내주었다. 보로디노에서 큰 전투가 벌어졌지만 러시아군은 완전히 소멸하지 않았다. <span color="red">**나폴레옹**</span>이 모스크바를 점령했을 때에도 <span color="blue">**알렉산드르 1세(Alexander I)**</span>는 강화를 거부했고, 프랑스군은 정치적 성과 없이 보급선 끝에 머물렀다.
+
+10월 철수에서 남쪽의 덜 소진된 지역으로 이동하려던 시도는 말로야로슬라베츠에서 막혔다. 대육군은 이미 태우고 먹어 치운 스몰렌스크 도로를 되짚었다. 추위는 참사를 키웠지만, 실패를 겨울 하나로 설명하면 진격 단계부터 누적된 도로 마찰·말 손실·수송 지연·러시아군의 잔존이라는 인과를 놓친다.
+
+#### 전투에서 사용된 속임수 — 결전을 피한 후퇴가 만든 시간과 거리
+
+러시아의 후퇴는 허위 문서 한 장의 기만이라기보다 적이 기대한 결전의 시점과 장소를 계속 거부한 조건 설계였다. 프랑스군에는 러시아군이 약해져 물러나는 듯 보였지만, 실제 결과는 대육군이 보급축에서 멀어지고 러시아군은 전력을 보존하는 것이었다. 다만 후퇴 전체를 사전에 완벽히 설계된 ‘초토화 기만’으로 단정해서는 안 된다. 지휘 갈등과 강제된 철수도 함께 있었다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 러시아 지휘부의 핵심 의도는 야전군을 보존하고 프랑스가 원하는 조기 섬멸전을 피하는 것이었다.
+
+**보인 신호와 믿은 이유.** 연속된 후퇴는 프랑스군에게 러시아군이 결정적 패배 직전이라는 기대를 주었다. 유럽에서 빠른 결전으로 전쟁을 끝낸 경험이 그 기대를 강화했다.
+
+**유발된 행동과 결과.** 대육군은 더 깊이 진격했고 수송대와 전투부대의 간격이 벌어졌다. 모스크바 점령 뒤에도 러시아군이 남아 있어 점령은 종결이 되지 못했다.
+
+**사료의 경계.** 러시아의 모든 후퇴와 화재를 하나의 중앙 기만 계획으로 묶을 수는 없다. 확인되는 것은 야전군 보존, 길어진 보급선, 빈 모스크바와 강화 거부의 결합이다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 러시아 지휘부는 프랑스군이 후퇴를 약화와 종결 임박으로 읽게 했다.
+2. **어떤 사실이 거짓이었는가?** 러시아군이 곧 완전히 붕괴한다는 결론은 사실이 아니었다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 러시아군이 실제로 후퇴하고 도시를 내준 것은 참이었지만 전쟁 수행능력 전체가 사라진 것은 아니었다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** <span color="red">**나폴레옹**</span>은 빠른 결전과 정치적 강화로 대원정을 끝내야 보급 한계를 피할 수 있었다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성이 높다. 광대한 거리와 빈약한 도로 자체가 전진부대와 수송을 갈라놓았기 때문이다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 점령지가 실제로 군량·말·숙영을 제공하는지, 러시아 야전군의 잔존이 강화를 거부할 능력을 남기는지 충분히 반영하지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 보드게임이나 모의훈련에서 점령지 숫자와 실제 보급 지속일을 따로 계산하고, 상대 주력의 잔존 여부를 독립 승리조건으로 두어 연습할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>退而示之不退<br>퇴이시지불퇴 — 물러나면서도 싸울 힘이 남은 형세를 보인다</td><td>러시아군은 후퇴하면서 야전군을 보존하고 보로디노·말로야로슬라베츠에서 다시 길을 막았다.</td></tr>
+<tr><td>利而誘之<br>리이유지 — 이익을 보여 유인한다</td><td>모스크바라는 큰 정치적 목표는 대육군을 보급선 끝까지 끌어들였으나 점령 자체는 강화를 보장하지 않았다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**러시아군**</span></td><td>분리된 야전군을 합류시키며 후퇴·차단·기병 습격을 결합했다.</td><td>초기 갈등 뒤 쿠투조프가 주력을 보존하는 방향으로 통합했다.</td><td>자국 후방으로 물러나며 수송거리를 줄이고 프랑스의 길을 길게 만들었다.</td></tr>
+<tr><td><span color="red">**대육군**</span></td><td>다국적 군단과 대규모 기병·포병·수송대를 한 축으로 밀어 넣었다.</td><td>나폴레옹의 결전 요구가 군단의 속도와 수송의 한계를 압박했다.</td><td>창고와 수레를 준비했지만 도로·거리·말 사료가 전진 속도를 감당하지 못했다.</td></tr>
+</table>
+
+#### <span color="red">**나폴레옹(패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>다국적 대군의 결속은 행군 손실과 보급 부족 속에서 빠르게 약해졌다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>러시아군이 결전을 피하고 강화도 거부할 가능성을 낮게 잡아, 점령 뒤의 선택지를 줄였다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>장거리·불량 도로·강과 진흙이 수송속도를 떨어뜨렸고 퇴각 때 같은 소진축이 병목이 됐다. (원근·험이·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="red">**나폴레옹**</span>은 결전 창출에는 대담했지만 정치적 종결 없는 점령을 중단할 기준을 늦게 적용했다. (지·용과 장유오위)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>전진 창고와 수송대가 있었어도 대군의 소비·말 사료·도로 정체가 공급능력을 앞질렀다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** 유럽에서 반복된 빠른 결전의 성공을 러시아에서도 재현할 수 있다고 본 판단에는 대표성·과신이 작동한 것으로 볼 수 있으며, 철수 기준을 늦췄다.
+
+🏳️ <span color="red">**패군 측 결과**</span> — 六敗의 `北(배)`처럼 적의 전쟁지속 능력과 장거리 지형을 충분히 헤아리지 못한 원정이었다. 🔀 <span color="orange">**패군 측 회피 분기점**</span>은 러시아 야전군 섬멸이 이루어지지 않은 스몰렌스크 전후에 원정 목표를 제한하고, 동계 이전에 전진축을 축소하는 것이었다.
+
+#### <span color="blue">**쿠투조프(승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>모스크바를 내주는 정치적 고통 속에서도 야전군 보존과 항전을 이어 갔다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>프랑스의 보급 저하와 계절 변화를 승리의 보증이 아니라 반격 확률을 높이는 조건으로 썼다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>말로야로슬라베츠에서 남쪽 길을 막아 적을 소진된 스몰렌스크 도로로 돌렸다. (원근·험이·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="blue">**쿠투조프**</span>은 상징적 도시보다 야전군과 시간의 가치를 우선했다. (지·인·엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>주력 보존·코사크 압박·후방 보급을 결합해 적의 퇴각로를 계속 마모시켰다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span> — `知可以戰與不可以戰者勝(지가이전여불가이전자승, 싸울 수 있는 때와 없는 때를 아는 자가 이긴다)`의 사례다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td></tr>
+<tr><td><span color="blue">**러시아군**</span></td><td>주력 야전군·후위·코사크 기동대를 나누어 보존·지연·습격 임무를 결합했다.</td></tr>
+<tr><td><span color="red">**대육군**</span></td><td>군단별 독립기동 능력이 있었지만 같은 도로와 수송망에 몰리며 다국적 부대의 이탈이 커졌다.</td></tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>관도(지휘)</td></tr>
+<tr><td><span color="blue">**러시아군**</span></td><td>쿠투조프가 주력의 보존과 길목 차단을 통합하고 기동대는 후방 압박을 지속했다.</td></tr>
+<tr><td><span color="red">**대육군**</span></td><td>나폴레옹–베르티에–군단장 체계는 명료했지만 거리와 말 손실로 명령·보고의 시간차가 커졌다.</td></tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**러시아군**</span></td><td>자국 후방과 짧아지는 보급축을 활용하고 적이 현지조달할 수 있는 자원을 줄였다.</td></tr>
+<tr><td><span color="red">**대육군**</span></td><td>창고·수레·현지조달을 함께 썼으나 말 사료·식량·정비가 진격속도를 따라가지 못했다.</td></tr>
+</table>
+
+**출처:** [Eric A. Sibul, The Logistical Aspects of Napoleon’s 1812 Russian Campaign](https://publications.tlu.ee/index.php/eymh/article/view/472) · [U.S. Army Center of Military History, Terrain Factors in the Russian Campaign](https://history.army.mil/Portals/143/Images/Publications/Publication%20By%20Title%20Images/T%20PDF/CMH_Pub_104-5.pdf) · [Oxford Reference, Russian Campaign of 1812](https://academic.oup.com/reference/62399/reference-article-abstract/555374004)
+
+### 동양 — <span color="blue">🏛️ 고구려군</span> vs <span color="red">🏛️ 수나라 원정군</span> │ 612년 고수전쟁과 살수대첩(高句麗–隋戰爭, 612)
+
+![612년 고수전쟁 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan2/salsu_commanders.png)
+
+![612년 고수전쟁 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan2/salsu_soldiers_weapons_life.png)
+
+![612년 고수전쟁 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan2/salsu_command_structure.png)
+
+![612년 수나라 동원과 동아시아 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan2/salsu_country_map.png)
+
+![612년 고수전쟁 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan2/salsu_strategy_map.png)
+
+![612년 고수전쟁 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan2/salsu_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- <span color="red">**▰**</span> <span color="yellow_bg">**탁군(涿郡)**</span>은 병력과 물자가 모인 집결지였다. 전국에서 온 인력과 수레가 이곳에서 동쪽 전선으로 이어졌다.
+- 🌊 <span color="blue_bg">**요하(遼河)**</span>와 <span color="blue">**▰**</span> <span color="yellow_bg">**요동성(遼東城)**</span> 일대는 고구려 성곽 방어가 수군의 진격을 오래 붙든 첫 병목이었다.
+- 🌊 <span color="blue_bg">**압록강(鴨綠江)**</span>을 넘은 별동군은 본국 운송망과 더 멀어졌고, 병사 각자에게 지운 100일분 군량의 무게가 기동을 깎았다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**평양성(平壤城)**</span>은 깊숙한 목표였지만 수나라 수륙군의 협동은 어긋났다.
+- 🌊 <span color="blue_bg">**살수(薩水, 오늘날 청천강으로 비정)**</span>는 퇴각군이 강을 건너는 동안 대오가 갈라지는 병목이었다. 둑을 터뜨렸다는 이야기는 후대 전승이며 동시대 기록으로 확정할 수 없다.
+
+#### 상세 전역 서사 — 전투병의 두 배를 운반에 붙이고도 국경 너머에서 끊긴 보급
+
+<span color="red">**수 양제(隋煬帝)**</span>는 611년부터 대규모 징발을 본격화했다. 2024년 연구는 동래의 선박 제조, 하남·회남·강남의 수레와 물자, 여러 지역에서 뽑은 운반 인력을 대조해 사실상 전국이 원정 준비에 묶였다고 설명한다. 정규 전투병 1,133,800명이라는 기록과 별도로 그 두 배에 이르는 궤운자 2,267,600명이 군수 운반에 동원되었다.
+
+그러나 이 거대한 후방은 고구려 영토 깊숙이까지 작동하지 못했다. 요동 성곽의 지연을 피하려 별동군이 평양으로 향할 때, <span color="red">**우문술(宇文述)**</span>과 <span color="red">**우중문(于仲文)**</span> 휘하 병사들은 100일분 군량을 직접 졌다. 무게를 견디지 못한 병사들이 군량을 버리자 깊은 진격은 곧 결핍으로 바뀌었다.
+
+<span color="blue">**을지문덕(乙支文德)**</span>은 수군의 형편을 살피고 후퇴와 접전을 반복해 더 깊이 끌어들였다. 수나라 별동군은 평양을 얻지 못한 채 돌아섰고 살수 도하에서 고구려군의 공격을 받았다. 이 패배를 물 한 번의 기적으로만 설명하면, 전국 동원에서 100일분 자가운반과 긴 퇴각으로 이어진 구조적 실패가 가려진다.
+
+#### 전투에서 사용된 속임수 — 거듭 물러나며 적의 군량을 먼저 소진시키다
+
+<span color="blue">**을지문덕**</span>의 후퇴는 수나라 별동군에 평양까지 밀고 갈 수 있다는 신호를 주었다. 실제 의도는 즉시 결전하기보다 적을 요동의 보급 기반에서 멀어지게 하고, 군량이 줄어든 퇴각 때 공격할 조건을 만드는 것이었다. 다만 세부 접전 횟수와 시문 일화의 해석에는 후대 서술이 섞여 있어, 확실한 작전 흐름과 문학적 장식을 구분해야 한다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 고구려군은 성곽 방어와 지연으로 주력을 붙들고, 별동군에는 후퇴와 습격을 반복해 시간을 무기로 삼았다.
+
+**보인 신호와 믿은 이유.** 수군은 고구려군의 물러남을 평양 진입 가능성으로 읽었다. 대군과 황제의 압력이 후퇴 결정을 어렵게 했다.
+
+**유발된 행동과 결과.** 수나라군은 100일 군량을 짊어진 채 깊이 들어갔고, 버린 군량과 길어진 행군 때문에 퇴각 때 전투 지속능력을 잃었다.
+
+**사료의 경계.** 살수에서 인공 둑을 터뜨렸다는 홍수 서사는 널리 알려졌으나 동시대 근거가 확실하지 않다. 본문은 강 도하 중 공격과 대오 붕괴까지만 사실의 중심에 둔다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** <span color="blue">**을지문덕**</span>과 고구려군이 <span color="red">**우문술·우중문**</span>의 별동군을 깊은 진격으로 끌어들였다.
+2. **어떤 사실이 거짓이었는가?** 고구려군의 후퇴가 곧 방어의 붕괴라는 결론은 거짓이었다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 고구려군이 실제로 여러 차례 물러난 것은 참이지만 전투능력을 잃은 것은 아니었다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 대원정의 규모와 황제의 명령은 평양 점령이라는 가시적 성과를 요구했다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성이 높다. 100일분 자가운반과 장거리 진격은 후퇴가 없어도 병력을 지치게 했다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 버려진 군량 뒤 남은 실제 지속일, 수륙군 협동 가능성, 퇴각 시 강 도하 안전을 충분히 확인하지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 워게임에서 병력 숫자와 운반능력을 분리하고, 목표 도달보다 안전한 복귀에 필요한 잔여 보급을 의무적으로 계산할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>利而誘之<br>리이유지 — 이익을 보여 유인한다</td><td>평양으로 향하는 길을 열어 둔 듯 보이며 수나라 별동군을 보급 기반에서 멀어지게 했다.</td></tr>
+<tr><td>佚而勞之<br>일이로지 — 편안한 쪽이 지친 적을 만든다</td><td>고구려군은 성곽과 산하를 이용해 시간을 벌고 수나라군은 군량을 직접 지며 행군했다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**고구려군**</span></td><td>성곽 수비와 기동 야전군·도하 공격을 결합했다.</td><td>을지문덕이 정찰·후퇴·반격의 시간을 연결했다.</td><td>짧아지는 자국 보급축과 성곽 비축을 활용했다.</td></tr>
+<tr><td><span color="red">**수나라군**</span></td><td>30군과 수군·별동군·대규모 궤운자를 동원했다.</td><td>황제 명령과 장수간 이견이 현장 재량을 억눌렀다.</td><td>국경까지의 거대 운송 뒤 적지에서는 100일분 자가운반에 의존했다.</td></tr>
+</table>
+
+#### <span color="red">**우문술·우중문(패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>병사에게 과중한 군량을 지운 뒤 투기와 피로를 통제하지 못했다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>고구려의 후퇴를 붕괴로 읽고 황제의 성과 압박 아래 철수 시점을 놓쳤다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>요동에서 평양까지의 산악로·강·긴 거리가 전투력보다 보급을 먼저 소진시켰다. (원근·험이·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="red">**우문술·우중문**</span>은 지휘 이견 속에서도 깊은 진격을 중단할 명확한 기준을 세우지 못했다. (지·엄과 장유오위)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>전국적 운송망이 국경 안에서 멈추고 적지에서는 병사 개인의 휴대량에 의존했다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** 압도적 동원 규모가 고구려의 저항과 보급 한계를 덮을 것이라 본 판단에는 규모를 능력으로 착각하는 과신이 작동한 것으로 볼 수 있다.
+
+🏳️ <span color="red">**패군 측 결과**</span> — 六敗의 `北(배)`에 해당한다. 적과 지형·보급을 헤아리지 못한 채 깊이 들어갔다. 🔀 <span color="orange">**패군 측 회피 분기점**</span>은 버려진 군량으로 실제 지속일이 무너졌을 때 평양 진격을 멈추고 요동성 공방과 수륙군 협동을 재평가하는 것이었다.
+
+#### <span color="blue">**을지문덕(승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>성곽 수비와 야전 기동을 한 목표 아래 묶어 열세의 병력을 보존했다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>적의 군량 투기와 지휘 갈등을 관찰해 퇴각 때의 취약성이 커질 확률을 높였다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>요동 성곽·산악로·살수 도하라는 연속 병목을 방어와 반격에 이용했다. (원근·험이·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="blue">**을지문덕**</span>은 접전의 승리보다 적의 지속능력을 먼저 깎았다. (지·용·엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>고정 성곽과 기동군을 분담시키고 짧은 보급축을 유지했다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span> — `識衆寡之用者勝(식중과지용자승, 대군과 소수 병력의 쓰임을 아는 자가 이긴다)`에 해당한다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td></tr>
+<tr><td><span color="blue">**고구려군**</span></td><td>성곽 주둔군·기동 야전군·도하 공격대를 나누어 지연과 결전을 결합했다.</td></tr>
+<tr><td><span color="red">**수나라군**</span></td><td>30군·수군·별동군·운반 인력을 크게 동원했지만 성곽전과 평양 진격의 협동이 갈라졌다.</td></tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>관도(지휘)</td></tr>
+<tr><td><span color="blue">**고구려군**</span></td><td>을지문덕이 적정을 직접 살피고 후퇴·습격·도하 공격의 시점을 연결했다.</td></tr>
+<tr><td><span color="red">**수나라군**</span></td><td>수 양제의 세부 통제와 우문술·우중문의 이견이 현장 판단을 늦췄다.</td></tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**고구려군**</span></td><td>요동 성곽의 비축과 자국 내 짧은 이동을 이용해 장기 지연을 감당했다.</td></tr>
+<tr><td><span color="red">**수나라군**</span></td><td>전투병의 두 배에 이르는 운반 인력을 동원했지만 적지 깊숙이에서는 병사에게 100일 군량을 지워 운송 실패를 개인 부담으로 넘겼다.</td></tr>
+</table>
+
+**출처:** [최진열, 「612년 고수 전쟁 전후 수나라의 병사 징발과 물자 동원」](https://www.kci.go.kr/kciportal/ci/sereArticleSearch/ciSereArtiView.kci?sereArticleSearchBean.artiId=ART003156510) · [동북아역사넷, 612년 수의 고구려 원정 준비](https://contents.nahf.or.kr/item/level.do?levelId=gt.d_0006_0010_0030_0010) · [군사편찬연구소, 고수전쟁의 동원 연구](https://medcmd.mil.kr/user/imhc/upload/pblictn/PBLICTNEBOOK_202508041007432180.pdf)
 
 ---
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
