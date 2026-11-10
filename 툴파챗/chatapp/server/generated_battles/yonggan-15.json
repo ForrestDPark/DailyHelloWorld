@@ -1,0 +1,49 @@
+{
+  "id": "yonggan-15",
+  "battle": {
+    "source_verse_ids": [68],
+    "source_kind": "historical_case",
+    "title": "알여 구원전 — 적의 첩자가 보고할 장면을 설계하다",
+    "year": "기원전 269년",
+    "commander": "조나라 조사(趙奢)",
+    "verse": "必索敵人之間來間我者, 因而利之, 導而舍之, 故反間可得而用也.",
+    "verse_meaning": "우리 진영에 들어온 적의 첩자를 찾아 그가 보게 될 상황과 귀환 뒤의 보고를 통제하면, 적의 정보 통로를 역으로 이용할 수 있다.",
+    "map": "https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan15/eyu_strategy_map.png",
+    "briefing": "진나라가 알여를 포위했습니다. 조군은 구원에 나섰지만 진나라 첩자가 진영에 들어왔습니다. 역사적 사실 선택지는 『사기』의 기록을 따르고, 반사실 선택지는 당시 조건에서 가능한 위험과 대안을 분리해 보여 줍니다.",
+    "initial_state": {"troops": 58, "morale": 61, "supply": 55, "intelligence": 2, "initiative": 0, "damage": 0, "time": 7},
+    "phases": [
+      {
+        "title": "1단계 — 원군인가, 미끼인가",
+        "prompt": "한단에서 출발했지만 진군은 무안 서쪽에서 위세를 보입니다. 어떻게 움직이겠습니까?",
+        "choices": [
+          {"text": "한단에서 30리쯤 나아가 보루를 쌓고 28일 동안 움직임을 감춘다", "result": "역사적 사실: 조사는 장기 정지처럼 보이는 진지를 만들어 진군이 알여 구원을 포기했다고 판단할 조건을 만들었다.", "score": 4, "effects": {"intelligence": 1, "initiative": 1, "time": -1}, "principle": "導 — 적의 눈에 들어갈 장면을 먼저 통제한다"},
+          {"text": "알여를 향해 즉시 대로로 전속 진군한다", "result": "반사실: 진군은 접근축과 시간표를 일찍 파악해 태항산 길목을 선점할 수 있다.", "score": -3, "effects": {"troops": -5, "initiative": -2, "supply": -3}}
+        ]
+      },
+      {
+        "title": "2단계 — 진나라 첩자가 들어오다",
+        "prompt": "진나라 첩자가 조군 진영을 살핍니다. 체포 사실을 드러낼까요?",
+        "choices": [
+          {"text": "잘 먹이고 진영을 충분히 보게 한 뒤 그대로 돌려보낸다", "result": "역사적 사실: 『사기』는 ‘秦間來入, 趙奢善食而遣之’라고 기록한다. 첩자는 조군이 움직이지 않을 것이라는 허상을 진장에게 보고했다.", "score": 6, "effects": {"intelligence": 2, "initiative": 3, "supply": -1}, "principle": "因而利之, 導而舍之 — 후대·관찰·귀환을 하나의 정보 설계로 묶는다"},
+          {"text": "즉시 처형해 진군에 경고를 보낸다", "result": "반사실: 침투 통로는 끊지만, 진군은 첩자의 미귀환을 경보로 받아 조군의 움직임을 다시 의심한다.", "score": -3, "effects": {"intelligence": -1, "initiative": -2, "morale": -1}}
+        ]
+      },
+      {
+        "title": "3단계 — 보고가 도착한 직후",
+        "prompt": "첩자가 진영을 떠났습니다. 다음 명령은 무엇입니까?",
+        "choices": [
+          {"text": "갑옷을 말아 휴대하고 2일 1야 급행군해 알여 50리 지점에 진을 친다", "result": "역사적 사실: 조사는 첩자를 보낸 직후 속도를 뒤집어 진군의 판단 갱신보다 먼저 전장에 도착했다.", "score": 6, "effects": {"initiative": 4, "time": -3, "supply": -4, "morale": 3}, "principle": "舍 이후의 속도 — 거짓 인상이 유효한 시간창 안에서 움직인다"},
+          {"text": "허상을 굳히기 위해 보루에서 사흘 더 기다린다", "result": "반사실: 기만은 오래 유지될수록 좋은 것이 아니다. 알여 수비와 산악 길목을 잃을 시간이 늘어난다.", "score": -4, "effects": {"initiative": -3, "time": 2, "morale": -2}}
+        ]
+      },
+      {
+        "title": "4단계 — 허력의 북산 건의",
+        "prompt": "알여 부근에서 허력이 북산 고지를 먼저 차지하자고 건의합니다.",
+        "choices": [
+          {"text": "군사 1만을 보내 북산 고지를 먼저 점령한다", "result": "역사적 사실: 고지를 차지한 조군은 아래에서 올라오는 진군을 압박했고, 진군은 크게 무너졌다.", "score": 6, "effects": {"troops": 5, "morale": 6, "initiative": 4, "damage": -2}, "principle": "반간의 시간 이익을 地의 우위로 바꾸어야 승리가 완성된다"},
+          {"text": "첩자를 속였으니 지형과 무관하게 계곡 정면에서 결전한다", "result": "반사실: 정보 기만은 험한 지형과 불리한 고도를 대신하지 못한다.", "score": -5, "effects": {"troops": -14, "morale": -8, "damage": 10, "initiative": -3}}
+        ]
+      }
+    ]
+  }
+}
