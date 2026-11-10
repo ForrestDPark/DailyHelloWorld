@@ -163,7 +163,7 @@
 </table>
 
 
-#### <span color="red">**메디나 시도니아 (패)**</span>
+#### 메디나 시도니아 (패)
 
 <table fit-page-width="true" header-row="true">
 <tr><td>요소</td><td>판단</td></tr>
@@ -181,7 +181,7 @@
 
 🔀 <span color="orange">**패군 측 회피 분기점**</span>: 파르마군의 수로 봉쇄가 풀리지 않는다는 보고를 받았을 때 노출된 칼레 정박을 중단하고 재정비 가능한 해역으로 이동했다면 침공 성공을 보장할 수는 없어도 닻 상실과 전열 분산은 줄일 수 있었다.
 
-#### <span color="blue">**하워드 (승)**</span>
+#### 하워드 (승)
 
 <table fit-page-width="true" header-row="true">
 <tr><td>요소</td><td>판단</td></tr>
@@ -295,7 +295,7 @@
 </table>
 
 
-#### <span color="red">**조조 (패)**</span>
+#### 조조 (패)
 
 <table fit-page-width="true" header-row="true">
 <tr><td>요소</td><td>판단</td></tr>
@@ -313,7 +313,7 @@
 
 🔀 <span color="orange">**패군 측 회피 분기점**</span>: 항복선을 원거리에서 정지시켜 소형선으로 확인하고 선단 사이에 방화 간격과 견인 가능한 예비를 뒀다면 전쟁 승리를 보장할 수는 없어도 화재의 연쇄 확산과 전군 붕괴는 줄일 수 있었다.
 
-#### <span color="blue">**주유·황개 (승)**</span>
+#### 주유·황개 (승)
 
 <table fit-page-width="true" header-row="true">
 <tr><td>요소</td><td>판단</td></tr>
