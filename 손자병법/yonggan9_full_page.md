@@ -129,6 +129,250 @@
 현대 적용에는 분명한 한계가 있다. 군사 기만은 무력충돌의 엄격한 법과 지휘 책임 아래 다루는 수단이며, 민간인·대중·동료를 몰래 조종하는 일반 기술이 아니다. 일상에서는 거짓 정보 유포가 아니라 **가설을 제한된 안전 환경에서 시험하고, 반응을 측정하고, 불리한 결과까지 보고받아 수정하는 폐쇄 고리**만 가져와야 한다.
 
 ---
+## 4. 역사적 실증 사례
+
+### 서양 — 🇬🇧 연합군 정보조직 vs 🏛️ 추축국 정보·지휘체계 │ 민스미트 작전(Operation Mincemeat, 1943)
+
+![민스미트 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan9/mincemeat_commanders.png)
+
+![민스미트 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan9/mincemeat_soldiers_weapons_life.png)
+
+![민스미트 지휘 편제 조직도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan9/mincemeat_command_structure.png)
+
+![1943년 지중해 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan9/mincemeat_country_map.png)
+
+![민스미트 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan9/mincemeat_strategy_map.png)
+
+![민스미트 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan9/mincemeat_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- 🌊 <span color="blue_bg">**대서양(Atlantic Ocean) 우엘바 연안**</span>은 조류가 투입물을 중립국 해안으로 운반하게 한 출발점이다. 스페인 당국이 회수하고 독일 정보망이 접근할 수 있다는 지역 조건이 작전 통로를 만들었다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**마드리드(Madrid)**</span>는 회수 문서가 독일 정보기관으로 복사·전달되는 중계점이었다. 문서가 실제로 열렸다는 흔적은 영국이 회수 뒤 검사할 수 있었다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**베를린(Berlin)**</span>은 보고가 군 최고지휘부와 히틀러의 배치 판단으로 바뀌는 종착점이었다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**시칠리아(Sicily)**</span>는 실제 허스키 작전의 목표였고, 🏛️ **그리스**와 <span color="red">**▰**</span> <span color="yellow_bg">**사르데냐(Sardinia)**</span>는 문서가 가리킨 허위 축이었다.
+- 🌊 <span color="blue_bg">**지중해(Mediterranean Sea)**</span>의 북아프리카·몰타 기지는 실제 상륙군을 모으는 공간이었다. 허위 문서만이 아니라 바클레이 작전의 다른 신호와 실제 병력 준비가 함께 움직였다.
+
+#### 상세 전역 서사 — 죽은 운반체의 문서가 적 정보망을 통과하고 울트라가 반응을 되돌려주다
+
+1943년 연합군은 북아프리카 승리 뒤 다음 목표가 시칠리아임을 감추려 했다. 영국 해군정보부의 <span color="blue">**이언 플레밍**</span> 계열 아이디어를 <span color="blue">**이언 몬태규**</span>와 <span color="blue">**찰스 촐먼들리**</span>가 실행안으로 만들었다. 신원을 알 수 없는 사망자에게 ‘윌리엄 마틴 소령’이라는 가공의 경력과 편지·영수증·사진을 붙이고, 그리스와 사르데냐가 주공이며 시칠리아는 양동이라는 비공식 서신을 휴대시켰다.
+
+잠수함 HMS 세라프는 4월 30일 우엘바 앞바다에 운반체를 투입했다. 스페인 당국이 서류가 든 가방을 회수했고, 현지 독일 정보망은 문서를 촬영해 상부로 보냈다. 문서가 돌아왔을 때 봉투와 종이의 흔적은 비밀 열람이 있었음을 보여 주었고, 5월 14일 울트라 해독은 독일 측이 내용을 신뢰한다는 보고를 포착했다.
+
+이 `反報`는 한 명의 생간이 귀환한 형태가 아니었다. 문서 물리검사, 통신감청, 외교·군사 배치 관찰이 나뉘어 귀환 보고 기능을 수행했다. 독일은 그리스와 사르데냐 방어를 강화했고, 연합군은 7월 10일 시칠리아에 상륙했다. 성공은 시신 한 구의 기발함만이 아니라 전체 기만체계, 해공군 우세, 실제 상륙 준비가 결합한 결과였다.
+
+#### 전투에서 사용된 속임수 — 개인의 삶처럼 보이는 `誑事`와 적의 자발적 회수
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 연합군 정보조직은 시칠리아 방어 집중을 낮추려 그리스·사르데냐 침공 서사를 만들었다.
+
+**보인 신호와 믿은 이유.** 공식 전문이 아니라 사적 편지와 생활 흔적을 섞어 적이 우연히 얻은 진짜 문서로 보이게 했다. 추축군은 연합군이 지중해 여러 지점을 노릴 수 있다는 기존 기대를 갖고 있었다.
+
+**유발된 행동과 결과.** 문서는 우엘바·마드리드·베를린을 거쳐 지휘 판단에 들어갔고 그리스·사르데냐 방어 강화에 기여했다. 연합군은 시칠리아 상륙에서 전략적 기습 효과를 얻었다.
+
+**사료의 경계.** 독일 지휘부 전체가 같은 정도로 속았는지는 논쟁이 있으며, 재배치를 민스미트 한 건의 단독 효과로 돌릴 수 없다. 공식 전사와 독일 기록·울트라를 함께 봐야 한다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 영국 기만조직이 스페인 내 독일 정보망과 독일 최고지휘부의 판단을 겨냥했다.
+2. **어떤 사실이 거짓이었는가?** 그리스가 주공이고 시칠리아가 양동이라는 문서 내용과 윌리엄 마틴 소령의 신분이 꾸며졌다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 연합군이 지중해 상륙을 준비한다는 사실과 실제 고위 장교 형식의 서신은 진짜 작전 범위를 잘못 해석하게 했다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 방어해야 할 해안은 넓었고, 우연히 회수한 비공식 서신은 기존 정보 부족을 해소하는 뜻밖의 획득물처럼 보였다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 일부 분산은 가능했지만, 특정 문서가 그리스·사르데냐 가설의 신뢰도를 높였다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 문서의 서사와 실제 상륙수단·항공권역·집결지의 모순을 충분히 반증하지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 합법적 보안 모의훈련에서 가짜 표식의 전파 경로를 기록하고 종료 뒤 참가자에게 공개·복기할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>近而示之遠<br>근이시지원 — 가까우면서도 멀리 있는 듯 보임</td><td>실제 목표 시칠리아를 양동으로 낮추고 그리스·사르데냐를 주공처럼 보였다.</td></tr>
+<tr><td>能而示之不能<br>능이시지불능 — 능하면서도 능하지 못한 듯 보임</td><td>연합군은 시칠리아 상륙 준비 능력을 다른 축의 위협 신호 속에 감췄다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**연합군**</span></td><td>해군정보·잠수함·울트라·상륙군을 분업했다.</td><td>20위원회와 지중해 지휘부가 기만과 실제 작전을 분리했다.</td><td>북아프리카·몰타의 실제 전력이 허위 서사의 배경을 지탱했다.</td></tr>
+<tr><td><span color="red">**추축군**</span></td><td>광범위한 해안 방어를 여러 축에 나눴다.</td><td>현지 획득 보고가 마드리드·베를린의 판단으로 올라갔다.</td><td>그리스·사르데냐 증원이 시칠리아 집중 여력을 낮췄다.</td></tr>
+</table>
+
+#### <span color="red">**아돌프 클라우스(Adolf Clauss, 패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>희귀한 획득물을 반증보다 성과로 받아들이는 정보조직의 압력이 작동했다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>우연히 떠밀려온 문서라는 한 시나리오에 높은 확률을 두고 연합군의 역기만 가능성을 충분히 갱신하지 못했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>중립 스페인 해안과 외교 중계망이 진위 확인을 어렵게 했다. (원근·험이)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>문서의 생활 세부와 획득 경로를 신빙성의 대체물로 받아들였다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>현지 획득·복사·보고는 빨랐으나 경쟁 가설 검증이 약했다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** <span color="red">**클라우스**</span>와 상급 분석선이 문서의 풍부한 생활 흔적을 진실성으로 읽은 판단에는 대표성·확증편향이 작동했을 가능성이 있으며, 독립 반증보다 서사의 일관성이 앞섰다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 추축군은 대비 자원을 허위 축에 더 배분해 北(배, 적정을 충분히 헤아리지 못한 배치)에 가까운 정보전 패배를 입었다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span>: 문서 내용과 연합군 상륙정·항공 엄호·집결지의 실제 분포를 별도 팀이 반증했다면 시칠리아 방어 집중의 전면 약화는 줄일 수 있었다.
+
+#### <span color="blue">**이언 몬태규(Ewen Montagu, 승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>기만팀·잠수함·감청·상륙지휘부를 실제 목표 보호에 묶었다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>적이 문서를 회수할 가능성과 믿지 않을 가능성을 모두 남겨 두고, 물리 흔적과 울트라로 반응을 확인했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>우엘바의 조류·중립국 행정·독일 정보망 접근을 하나의 전달 경로로 사용했다. (원근·험이·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>기발한 아이디어를 문서·인물·전달·검증의 통제된 체계로 바꾸었다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>사간형 운반체와 생간형 검증 채널을 분리해 닫힌 정보순환을 만들었다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>: 연합군은 준비된 기만과 실제 전력을 결합해 以虞待不虞者勝(이우대불우자승, 대비한 자가 대비하지 못한 적을 이김)에 해당했다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**연합군**</span></td><td>20위원회·해군정보부·HMS 세라프·울트라·허스키 상륙군을 역할별로 분리했다.</td></tr>
+<tr><td><span color="red">**추축군**</span></td><td>현지 아프베어·외교 중계·최고지휘부·지역 방어군이 긴 보고선으로 연결됐다.</td></tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**연합군**</span></td><td>기만 승인은 제한된 선에서 관리하고, 적 반응은 암호 해독과 배치 관찰로 최고지휘부에 보고했다.</td></tr>
+<tr><td><span color="red">**추축군**</span></td><td>우엘바에서 복사된 문서가 마드리드와 베를린을 거쳐 배치 명령에 영향을 주었다.</td></tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**연합군**</span></td><td>잠수함·암호해독·상륙함대와 북아프리카 보급기지를 실제 작전 자원으로 유지했다.</td></tr>
+<tr><td><span color="red">**추축군**</span></td><td>제한된 병력과 수송력을 그리스·사르데냐·시칠리아 등 여러 축에 나누었다.</td></tr>
+</table>
+
+**사료와 연구:** [영국 제국전쟁박물관 안내서](https://www.iwm.org.uk/sites/default/files/files/2023-10/spies_large_print_guide.pdf) · [미 국립2차대전박물관](https://www.nationalww2museum.org/war/articles/secret-agents-secret-armies-operation-mincemeat) · [미 육군 군사기만 연구](https://www.govinfo.gov/content/pkg/GOVPUB-D110-PURL-gpo115577/pdf/GOVPUB-D110-PURL-gpo115577.pdf) · [CIA, 독일 기록을 통한 평가](https://www.cia.gov/resources/csi/static/Masterman-Revisited.pdf)
+
+### 동양 — 🏛️ 후한·우전 연합군 vs 🏛️ 구자·온숙 연합군 │ 반초의 사차 원정(莎車之戰, 87년)
+
+![사차 원정 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan9/shache_commanders.png)
+![사차 원정 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan9/shache_soldiers_weapons_life.png)
+![사차 원정 지휘 편제 조직도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan9/shache_command_structure.png)
+![87년 서역 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan9/shache_country_map.png)
+![사차 원정 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan9/shache_strategy_map.png)
+![사차 원정 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan9/shache_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- <span color="blue">**▰**</span> <span color="yellow_bg">**우전(于闐)**</span>은 반초와 동맹한 남도 오아시스였다. 우전군이 동쪽으로 물러난다는 거짓 신호가 온숙군을 끌어냈다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**사차(莎車)**</span>는 연합군의 목표이자 구자·온숙 원군이 보호해야 할 본영이었다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**구자(龜茲)**</span>와 <span color="red">**▰**</span> <span color="yellow_bg">**온숙(溫宿)**</span>은 북도에서 내려온 구원축이었다. 양쪽 차단에 병력을 나누자 사차 본영이 비었다.
+- 🏜️ <span color="green_bg">**타클라마칸 사막(Taklamakan Desert) 오아시스 회랑**</span>은 대군의 이동을 우물·도로에 묶었다. 거짓 철수 방향은 적 기병의 실제 이동을 멀리 벌렸다.
+- ⛰️ <span color="green_bg">**곤륜산계(Kunlun Mountains)**</span>와 천산 남록은 남북 회랑을 제한했다. 한 번 동서로 분산된 원군은 새벽 전에 사차로 돌아오기 어려웠다.
+
+#### 상세 전역 서사 — 포로가 전한 철수 신호를 적의 동서 분산으로 확인하다
+
+『후한서·반초열전』은 87년 <span color="blue">**반초**</span>가 우전 등 2만5천을 동원해 사차를 공격했고, 구자왕이 온숙·고묵·위두의 5만 구원군을 보냈다고 기록한다. 열세인 <span color="blue">**반초**</span>는 회의에서 우전군은 동쪽으로, 자신은 서쪽으로 밤 북소리에 맞춰 흩어져 물러나자고 말했다.
+
+그는 붙잡은 포로의 경계를 일부러 느슨하게 했다. 탈출자는 구자왕에게 철수 계획을 전했고, 구자왕은 1만 기병을 이끌고 서쪽의 <span color="blue">**반초**</span>를 막으러 갔다. 온숙왕은 8천 기병으로 동쪽 우전군을 막으러 갔다. 거짓 이야기는 적의 수집 경로를 타고 실제 병력 분산으로 바뀌었다.
+
+<span color="blue">**반초**</span>는 적이 계책에 빠졌다는 보고를 확인한 뒤 은밀히 진군을 멈추고 새벽에 사차 본영을 급습했다. 구원군이 멀리 떨어진 동안 사차군은 붕괴했고 사차는 항복했다. 포로의 운명은 기록에 남지 않으므로 ‘죽도록 버린 사간’이라고 단정하지 않는다. 다만 거짓 정보를 적에게 전달할 위험한 운반체로 썼다는 점과, 정찰·보고가 적의 분산을 확인해 `反報` 기능을 수행했다는 점은 분명하다.
+
+#### 전투에서 사용된 속임수 — 공개 철수 회의와 의도적으로 느슨해진 포로 경계
+
+#### 속임수 작동 구조
+
+**주체와 의도.** <span color="blue">**반초**</span>는 수적 열세를 정면전이 아니라 구원군 분산으로 바꾸려 했다.
+
+**보인 신호와 믿은 이유.** 연합군 회의에서 실제처럼 동서 철수를 말하고 포로가 탈출하도록 했다. 구자왕에게는 열세인 반초가 도망친다는 설명이 지형과 병력비에 맞아 보였다.
+
+**유발된 행동과 결과.** 구자왕 1만은 서쪽, 온숙왕 8천은 동쪽으로 나뉘었다. 반초는 그 이동을 확인한 뒤 철수를 취소하고 사차 본영을 급습했다.
+
+**사료의 경계.** 병력·전과 숫자는 『후한서』 서술에 의존하며 현대의 정밀 통계처럼 취급하지 않는다. 탈출 포로의 생사와 보고 뒤 처우도 사료상 불명이다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 반초가 탈출 포로를 경로로 구자왕과 온숙왕을 속였다.
+2. **어떤 사실이 거짓이었는가?** 한군과 우전군이 밤 북소리에 맞춰 동서로 철수한다는 계획이 거짓이었다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 반초군이 수적으로 열세였고 양쪽으로 갈 수 있는 길이 있다는 사실은 진짜였다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 도주하는 열세군을 양쪽에서 차단하면 사차를 지키면서 쉽게 격파할 수 있다고 보였다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 낮다. 구원군이 사차 근처에 집중했다면 본영 급습은 훨씬 어려웠다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 구자왕은 한군 본대가 실제로 출발했는지 연속 정찰로 확인하지 않고 포로의 한 보고에 병력을 걸었다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 보드게임·모의훈련에서 허위 철수와 정찰 확인을 규칙 안에서 연습하고 종료 뒤 정보 경로를 복기할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>近而示之遠<br>근이시지원 — 가까우면서도 멀리 가는 듯 보임</td><td>사차 가까이 있던 한·우전군이 동서로 멀리 철수할 듯 보였다.</td></tr>
+<tr><td>利而誘之<br>이이유지 — 이익으로 유인함</td><td>열세군을 추격해 차단할 쉬운 승리처럼 보여 구원군을 본영 밖으로 끌어냈다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**후한·우전 연합군**</span></td><td>서·동 철수 연기와 급습 본대를 한 계획에 묶었다.</td><td>반초가 공개 신호와 비밀 전환 시점을 통제했다.</td><td>오아시스 회랑에서 짧은 새벽 급습으로 열세를 상쇄했다.</td></tr>
+<tr><td><span color="red">**구자·온숙 연합군**</span></td><td>1만·8천 기병이 반대 방향으로 분산됐다.</td><td>탈출 포로의 단일 보고가 각 왕의 추격 명령으로 이어졌다.</td><td>사막 회랑에서 멀어진 기병은 사차 본영을 즉시 지원하지 못했다.</td></tr>
+</table>
+
+#### <span color="red">**구자왕(龜茲王, 패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>연합군을 사차 방어라는 공통 목적보다 각 방향 추격으로 흩었다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>탈출 포로 한 명의 보고를 철수 확정으로 보고 기만·정지·역습 시나리오를 낮게 평가했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>사막 오아시스 길에서 동서로 멀어지면 본영 복귀가 늦어진다는 원근을 놓쳤다. (원근·험이·광협)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>쉬운 추격의 이익에 급해 정찰 확인보다 먼저 주력을 움직였다. (지신인용엄·장유오위)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>구원군·본영·정찰의 보고선을 유지하지 못한 채 기병을 분산했다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** <span color="red">**구자왕**</span>이 열세군은 도주할 것이라는 대표적 장면에 맞춰 포로 보고를 즉시 채택한 판단에는 대표성·확증편향이 작동했을 가능성이 있으며, 실제 출발 확인을 생략해 본영을 비웠다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 연합군은 지휘관이 적정을 헤아리지 못하고 병력을 반대 방향에 나눈 北(배)에 가까운 패배를 입었다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span>: 기병 일부만 추적에 내보내고 사차 근처에 주력을 둔 채 한군 본대의 실제 이동을 재확인했더라면 본영 급습과 연합군 붕괴는 피할 가능성이 컸다.
+
+#### <span color="blue">**반초(班超, 승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>한군과 우전 동맹군이 서로 다른 철수 역할을 연기하면서도 실제 전환 명령에는 함께 움직이게 했다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>적이 포로 보고를 믿을 가능성을 이용하되, 분산을 확인한 뒤에만 급습해 실패 확률을 낮췄다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>오아시스 회랑의 긴 동서 거리를 적의 복귀 지연으로 바꾸고 사차까지 짧은 축을 택했다. (원근·험이·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>열세에서 정면 결전을 피하고 정보 전달·적 반응·급습의 순서를 통제했다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>포로·척후·북 신호·기병 이동을 결합해 거짓 신호를 실제 기동 우세로 바꾸었다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>: 반초는 적의 분산을 확인한 뒤 대비 없는 본영을 쳐 以虞待不虞者勝(이우대불우자승, 대비한 자가 대비하지 못한 적을 이김)에 해당했다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**후한·우전 연합군**</span></td><td>동서 철수 연기와 새벽 급습을 분리하되 전환 시점에 본대를 결합했다.</td></tr>
+<tr><td><span color="red">**구자·온숙 연합군**</span></td><td>구자왕 1만과 온숙왕 8천이 반대 방향 차단 임무로 나뉘어 사차 방어와 분리됐다.</td></tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**후한·우전 연합군**</span></td><td>반초가 공개 회의와 밤 북소리를 거짓 신호로 쓰고 실제 정지·급습 명령은 좁게 통제했다.</td></tr>
+<tr><td><span color="red">**구자·온숙 연합군**</span></td><td>탈출 포로의 보고가 독립 확인 없이 왕들의 동서 추격 명령으로 바뀌었다.</td></tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**후한·우전 연합군**</span></td><td>우물·건량·짐승에 의존하는 오아시스 보급에서 장기전 대신 짧은 급습을 택했다.</td></tr>
+<tr><td><span color="red">**구자·온숙 연합군**</span></td><td>기병의 속도를 추격에 썼으나 서로 반대 방향으로 멀어져 사차의 지속 방어력을 잃었다.</td></tr>
+</table>
+
+**사료와 연구:** [『후한서·반초열전』 원문](https://dudianji.com/book/%E5%90%8E%E6%B1%89%E4%B9%A6/%E7%8F%AD%E8%B6%85%E5%88%97%E4%BC%A0) · [중국 지방지의 해당 기록 인용](https://dfz.shaanxi.gov.cn/zslm/fzzlk/xbsxsxz/xbsxz/xys_16200/201405/P020240923610952878171.pdf)
+
+---
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
 
 ### 핵심 통찰
