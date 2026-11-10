@@ -358,7 +358,6 @@
 **출처:** [National Palace Museum, Understanding Qing Dynasty Palace Memorials](https://www.npm.gov.tw/Publications-Content.aspx?l=2&sno=04013226) · [National Palace Museum, Palace Memorials](https://theme.npm.edu.tw/selection/Article.aspx?lang=2&sNo=04001049) · [Mark C. Elliott, The Manchu-Language Archives and the Palace Memorial System](https://elliott.scholars.harvard.edu/sites/g/files/omnuum10991/files/elliott/files/elliott_lic_manchu_language_archives_and_palace_memorial_system.pdf) · [Social Forces, Information Foundations of State Capacity](https://academic.oup.com/sf/advance-article/doi/10.1093/sf/soaf106/8208286?guestAccessKey=709dd3a5-1c65-41c7-b235-48e26b177de6)
 
 ---
----
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
 
 ### 핵심 통찰
