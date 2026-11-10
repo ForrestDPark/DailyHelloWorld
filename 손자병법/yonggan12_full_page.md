@@ -128,6 +128,246 @@
 반대로 “지금까지 한 번도 안 샜다”는 경험도 안전의 증거가 아니다. 관측되지 않은 누설, 발견되지 않은 접근, 낮지만 누적되는 위험을 분모에 넣어야 한다. 다만 모든 대화를 위협으로 취급하면 협업과 사고 보고가 얼어붙는다. 위험의 크기, 정보의 민감도, 실제 접근 가능성을 나누어 최소한의 대책을 선택해야 한다.
 
 ---
+## 4. 역사적 실증 사례
+
+### 서양 — 🏛️ 독일 제국 제8군 vs 🏛️ 러시아 제국 제2군 │ 타넨베르크 전투(Battle of Tannenberg, 1914)
+
+![타넨베르크 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan12/tannenberg_commanders.png)
+
+![타넨베르크 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan12/tannenberg_soldiers_weapons_life.png)
+
+![타넨베르크 지휘 편제 조직도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan12/tannenberg_command_structure.png)
+
+![1914년 동프로이센 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan12/tannenberg_country_map.png)
+
+![타넨베르크 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan12/tannenberg_strategy_map.png)
+
+![타넨베르크 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan12/tannenberg_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- 🌊 <span color="blue_bg">**마주리안 호수군(Masurian Lakes)**</span>은 러시아 제1군과 제2군 사이의 횡적 연락을 가로막았다. 두 군이 호수의 북쪽과 서남쪽으로 갈라진 채 전진하면 서로를 하루 안에 돕기 어려웠다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**쾨니히스베르크(Königsberg)**</span>와 동프로이센 철도망은 독일 제8군이 병력을 내선으로 옮기는 기반이었다. 러시아군의 이동 계획을 먼저 안 독일군은 이 철도로 국지적 우세를 만들었다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**알렌슈타인(Allenstein, 오늘날 Olsztyn)**</span> 남쪽의 숲·호수·도로망은 러시아 제2군의 군단들이 서로 다른 속도로 전진하게 만들었다. 이 틈으로 독일군 양익이 들어갔다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**오르텔스부르크(Ortelsburg, 오늘날 Szczytno)**</span>와 <span color="red">**▰**</span> <span color="yellow_bg">**나이덴부르크(Neidenburg, 오늘날 Nidzica)**</span>는 제2군의 후방 도로와 철도 방향이었다. 포위가 닫히자 퇴로와 보고선이 함께 끊겼다.
+- 🌲 <span color="green_bg">**동프로이센 남부의 숲과 습지**</span>는 전령·전화선을 지연시키고 무선 의존을 높였다. 보안되지 않은 보고는 지형이 만든 통신 문제를 적의 정보 우세로 바꾸었다.
+
+#### 상세 전역 서사 — 암호 없는 명령이 독일의 철도 기동을 결심으로 바꾸다
+
+1914년 8월 러시아군은 프랑스를 돕기 위해 동프로이센에 빠르게 진입했지만, <span color="red">**렌넨캄프**</span>의 제1군과 <span color="red">**삼소노프**</span>의 제2군은 🌊 <span color="blue_bg">**마주리안 호수군(Masurian Lakes)**</span>을 사이에 두고 떨어져 있었다. 이동 중인 군단들은 전화선을 충분히 깔 수 없었고 암호표 배포도 불완전했다. 시간 압박 속에서 러시아군은 작전 명령과 위치 보고를 평문 무선으로 보냈다.
+
+쾨니히스베르크와 토른의 독일 수신소는 이 전파를 들었다. 8월 24~25일의 감청은 <span color="red">**삼소노프**</span>의 군단 배치와 <span color="red">**렌넨캄프**</span>의 전진이 당장 제2군을 돕지 못한다는 판단을 뒷받침했다. <span color="blue">**호프만**</span>의 정보 판단만으로 승리가 자동으로 생긴 것은 아니다. 항공 정찰, 현지 철도, 독일 군단의 행군, 러시아군의 보급·협동 실패가 함께 맞물렸다.
+
+<span color="blue">**힌덴부르크**</span>와 <span color="blue">**루덴도르프**</span>는 제1군을 막는 북쪽에 제한된 경계만 남기고 주력을 남쪽으로 집중하는 위험한 결정을 내렸다. 적의 계획을 미리 듣지 못했다면 감행하기 어려운 선택이었다. 독일 I군단은 서쪽에서, XVII군단과 I예비군단은 동쪽에서 러시아 제2군의 측면과 후방을 닫았다.
+
+러시아 군단은 서로의 위치와 상급부 명령을 늦게 알았고, <span color="red">**삼소노프**</span>의 지휘부는 전황을 한 장의 그림으로 묶지 못했다. 8월 26~30일 독일의 포위가 알렌슈타인 남쪽에서 닫히자 제2군은 퇴로와 보급을 잃었다. 전투 결과는 감청 하나의 마법이 아니라, **누설된 의도와 위치를 적이 철도·정찰·지휘 집중으로 즉시 행동화한 결과**였다.
+
+#### 전투에서 사용된 정보 우세 — 평문 무선이 작전계획을 적의 결심표로 바꾸다
+
+**주체와 의도.** 러시아군은 멀어진 군단을 신속히 통제하려 무선을 사용했다. 독일군은 수신소가 들은 메시지를 러시아 두 군의 위치·행군 방향·협동 가능성을 판단하는 정보로 바꾸었다.
+
+**보인 신호와 믿은 이유.** 이 사례는 독일이 거짓 신호를 보낸 기만이 아니라 러시아가 스스로 노출한 실제 명령을 이용한 감청이다. 독일 지휘부는 단일 전문만 믿지 않고 항공 정찰과 포로·문서·현지 보고를 함께 보았다.
+
+**유발된 행동과 결과.** 러시아 제1군의 즉각적 개입 가능성이 낮다는 판단은 독일군이 남쪽에 주력을 집중하도록 만들었다. 감청은 병력을 직접 움직이지 않았지만, 철도 이동과 양익 포위의 위험을 감수할 근거가 되었다.
+
+**사료의 경계.** 후대 회고록은 감청의 비중을 축소하거나 과장했다. 현대 연구는 무선 감청이 중요했으나 항공 정찰, 철도망, 러시아군 통신·보급 실패와 분리해 단독 원인으로 볼 수 없다고 경계한다.
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**독일 제8군**</span></td><td>군단을 철도로 재배치해 제2군에 국지 집중했다.</td><td>감청·정찰을 제8군 지휘부가 한 작전 그림으로 묶었다.</td><td>동프로이센 내선 철도가 병력·탄약 이동을 지탱했다.</td></tr>
+<tr><td><span color="red">**러시아 제1·2군**</span></td><td>두 군이 호수군을 사이에 두고 분리 진격했다.</td><td>평문 무선과 늦은 연락으로 의도는 노출되고 협동은 지연됐다.</td><td>철도 종점에서 멀어질수록 식량·탄약·전령망이 약해졌다.</td></tr>
+</table>
+
+#### <span color="red">**알렉산드르 삼소노프(Alexander Samsonov, 패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>군단별 전진과 지휘 마찰을 하나의 공동 목적과 보고 규칙으로 묶지 못했다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>제1군의 지원과 독일군의 후퇴를 낙관했으나 적은 감청·정찰로 그의 배치를 더 정확히 읽었다. 가능한 독일 집중 시나리오의 확률을 낮게 두었다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>호수·숲·장거리 도로가 횡적 연락과 보급을 제한하는 원지·험지를 충분히 상쇄하지 못했다. (원근·험이·광협)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>전진 압력 속에서 군단 간 간격과 통신 보안을 동시에 통제하지 못했다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>암호표·무선 규율·전화선·전령의 대체 체계가 부족해 지휘 정보가 적에게 먼저 도착했다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** <span color="red">**삼소노프**</span>가 독일군이 계속 물러날 것이라는 초기 그림을 유지한 명령에서는 확증편향과 계획 오류가 작동했을 가능성이 있으며, 평문 무선이 그 오판을 적에게 투명하게 만들었다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 러시아 제2군은 포위·해체되어 「지형편」의 北(배, 적정을 헤아리지 못하고 불리한 병력 운용으로 패함)에 가까운 패배를 입었다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span>: 진격 전에 제1군과 공동 연락 시각·암호·무선 침묵 조건을 정하고, 평문 발신이 불가피하면 위치·의도·시간을 분리했더라면 독일군의 확신을 낮추고 적어도 전군 포위는 피할 가능성이 있었다.
+
+#### <span color="blue">**파울 폰 힌덴부르크(Paul von Hindenburg, 승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>지휘부 교체 직후에도 군단·철도·정보 부서를 제2군 격파라는 한 목표로 묶었다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>감청을 확정 예언으로 보지 않고 정찰과 대조해 제1군 개입 위험을 관리했다. 불확실성을 없애기보다 남쪽 집중의 성공 확률을 높였다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>호수군과 숲이 러시아 두 군을 가르는 지형을 이용하고 철도 내선을 아군의 짧은 거리로 바꾸었다. (원근·험이·광협)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>감청에 근거한 위험한 집중을 승인하되 군단별 임무와 시간표를 유지했다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>수신소·항공 정찰·철도 운송·군단 기동을 하나의 작전 순환으로 결합했다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>: 독일 제8군은 대비한 채 분리된 적을 집중 공격해 「모공편」의 以虞待不虞者勝(이우대불우자승, 대비한 자가 대비하지 못한 적을 이김)에 해당했다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**독일 제8군**</span></td><td>I군단·XVII군단·I예비군단·XX군단을 서·동·중앙 축으로 나누고 철도로 다시 결합해 제2군 포위에 집중했다.</td></tr>
+<tr><td><span color="red">**러시아 제1·2군**</span></td><td>두 야전군과 제2군 예하 군단이 넓은 전선에서 서로 다른 속도로 전진해 국지 지원이 늦었다.</td></tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**독일 제8군**</span></td><td>수신소의 전문이 오토바이 전령으로 사령부에 전달됐고, 정보·작전 판단이 군단 명령과 철도 시간표로 이어졌다.</td></tr>
+<tr><td><span color="red">**러시아 제1·2군**</span></td><td>무선·전령·부족한 전화선이 혼재했고 암호표 부족과 시간 압박 때문에 평문 명령이 반복됐다.</td></tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**독일 제8군**</span></td><td>자국 철도망으로 병력·포병·탄약을 짧게 이동시키고 현지 통신소와 정찰 자산을 이용했다.</td></tr>
+<tr><td><span color="red">**러시아 제1·2군**</span></td><td>철도 종점에서 멀어진 군단은 도로·마차 보급과 제한된 전선에 의존했고, 식량·탄약·연락의 지연이 포위 속에서 증폭됐다.</td></tr>
+</table>
+
+**사료와 연구:** [독일 역사박물관 LeMO](https://www.dhm.de/lemo/kapitel/erster-weltkrieg/kriegsverlauf/tannenberg-1914) · [미 NSA 공개자료, The Beginnings of Radio Intercept](https://media.defense.gov/2021/Jun/30/2002752756/-1/-1/0/BEGINNINGS%20RADIO%20INTERCEPT.PDF) · [미 NSA 공개자료, War Secrets in the Ether](https://www.nsa.gov/portals/75/documents/news-features/declassified-documents/friedman-documents/reports-research/FOLDER_264/41761019080017.pdf)
+
+### 동양 — 🏛️ 진(秦) vs 🏛️ 조(趙) │ 장평대전(長平之戰, 기원전 260년)
+
+![장평대전 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan12/changping_commanders.png)
+
+![장평대전 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan12/changping_soldiers_weapons_life.png)
+
+![장평대전 지휘 편제 조직도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan12/changping_command_structure.png)
+
+![전국시대 장평 전역 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan12/changping_country_map.png)
+
+![장평대전 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan12/changping_strategy_map.png)
+
+![장평대전 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan12/changping_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- ⛰️ <span color="green_bg">**상당고원(上黨高原)**</span>은 진·한·조가 만나는 고지대였다. 서쪽 진에서 동쪽 조로 넘어가는 길목을 누가 잡느냐가 보급과 증원의 방향을 결정했다.
+- 🌊 <span color="blue_bg">**단수(丹水)**</span> 계곡과 양쪽 산지는 대군을 길게 늘어뜨렸다. 방어 진지는 강과 고지를 이용했지만 추격군은 측면 차단에 취약했다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**한단(邯鄲)**</span>은 조의 수도이자 장평 전선으로 인력·군량을 보내는 후방이었다. 이 보급로가 끊기면 장기전의 지속력이 사라졌다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**하내(河內)**</span>는 진이 추가 동원을 모아 장평의 구원로를 막는 후방 기반이었다. 포위 뒤 진 소양왕이 이곳에서 직접 동원을 독려했다.
+- ⛰️ <span color="green_bg">**태행산(太行山) 협곡**</span>은 구원군과 군량이 통과할 수 있는 길을 제한했다. 진의 별동대가 길목을 차단하자 포위된 조군은 전투보다 굶주림에 먼저 압박받았다.
+
+#### 상세 전역 서사 — 지휘관 교체를 숨긴 진이 조괄의 공격 시점을 기다리다
+
+장평의 교착에서 <span color="red">**염파**</span>는 진군과 정면 결전을 피하고 진지를 굳혔다. 진의 승상 <span color="blue">**범저**</span>는 조에 사람을 보내 재물을 풀고 “진이 두려워하는 것은 조사의 아들 <span color="red">**조괄**</span>뿐”이라는 말을 퍼뜨렸다. 조 효성왕은 오래 끄는 <span color="red">**염파**</span>에게 불만을 품고 있었고, 이 신호는 기존 기대와 결합해 지휘관 교체를 촉진했다.
+
+『사기』는 진이 <span color="red">**조괄**</span>의 부임을 듣자 <span color="blue">**백기**</span>를 몰래 상장군으로 삼고, 그 사실을 누설하는 자는 참형에 처한다고 군중에 명했다고 기록한다. 이 대목은 `間事未發, 而先聞者`의 고대적 집행을 그대로 보여 준다. 다만 오늘의 독해는 참형을 정당화하는 것이 아니라, **결정적 지휘 변경을 적이 알지 못하게 한 정보 격리의 효과와 그 폭력적 비용을 분리해 보는 것**이어야 한다.
+
+<span color="red">**조괄**</span>은 도착 뒤 기존 장교와 명령 체계를 바꾸고 공격으로 전환했다. <span color="blue">**백기**</span>는 진군 일부를 물러나게 해 추격을 유도했다. 조군이 본진과 보급선에서 멀어지자 진군 2만5천이 후방을 끊고, 기병 5천이 조군과 진영 사이를 갈랐다.
+
+조군은 포위망 안에서 진지를 만들고 구원을 기다렸지만 군량이 끊겼다. 진 소양왕은 하내에서 추가 인력을 동원해 조의 증원과 보급을 막았다. 장기 포위 뒤 <span color="red">**조괄**</span>이 돌파를 시도하다 전사했고 조군은 항복했다. 항복병 대량 살해 숫자와 방식은 『사기』의 기록에 기대며 고고학·현대 연구에서 세부 논쟁이 있으므로 확정된 정밀 통계처럼 쓰지 않는다.
+
+#### 전투에서 사용된 속임수 — 가짜 두려움과 비밀 지휘관 교체
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 진은 조가 방어형 지휘관 <span color="red">**염파**</span>를 공격형 <span color="red">**조괄**</span>로 바꾸게 하고, 그 뒤 실제 상대가 될 <span color="blue">**백기**</span>의 부임은 숨기려 했다.
+
+**보인 신호와 믿은 이유.** 진은 “조괄만 두렵다”는 소문을 보였다. 조왕은 장기 교착과 비용 때문에 염파의 방어를 무능으로 보고 싶어 했고, 조괄의 명성과 부친 조사에 대한 기억이 소문의 설득력을 높였다.
+
+**유발된 행동과 결과.** 조는 염파를 해임하고 조괄에게 공격을 맡겼다. 진은 백기의 부임을 격리한 채 조괄의 공격을 유인 후퇴와 양로 차단으로 받아 포위했다.
+
+**사료의 경계.** 핵심 서사는 전한대 『사기』에 의존한다. 소문 공작·비밀 임명·처벌 명령은 문헌상 명확하지만 세부 병력 숫자와 후대의 극적인 일화는 사료층을 구분해야 한다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 진의 범저와 정보망이 조왕의 지휘관 선택을 흔들었고, 진 지휘부는 백기의 부임을 조군에 숨겼다.
+2. **어떤 사실이 거짓이었는가?** 진이 조괄만 두려워한다는 소문은 조가 원하는 교체를 유도하기 위한 신호였다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 염파가 결전을 피하고 장기 방어를 택한 것은 사실이지만, 그것이 곧 무능이나 패배를 뜻하지는 않았다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 조왕은 길어진 전쟁과 비용을 끝낼 결전을 원했고, 조괄의 명문과 병법 지식이 빠른 해결책처럼 보였다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 중간 정도다. 조 내부의 교체 압력은 이미 있었지만 진의 소문이 선택의 확신과 시점을 앞당겼다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 조정은 진이 실제로 두려워한 작전 조건, 조괄의 대군 지휘 경험, 염파 방어의 시간 효과를 독립적으로 검증하지 않았다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 보드게임과 모의훈련에서 공개 정보와 비공개 역할을 분리하고, 상대가 보인 신호와 실제 승리 조건을 따로 적는 훈련으로 연습할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>能而示之不能<br>능이시지불능 — 능하면서도 능하지 못한 듯 보임</td><td>진은 백기라는 가장 위험한 지휘관을 숨기고 기존 지휘 모습이 계속되는 듯 보였다.</td></tr>
+<tr><td>利而誘之<br>이이유지 — 이익으로 유인함</td><td>조괄이 결전하면 진이 두려워한다는 소문은 지휘관 교체와 공격이 이익인 듯 보이게 했다.</td></tr>
+<tr><td>佚而勞之<br>일이노지 — 쉬면서 적을 수고롭게 함</td><td>진은 유인 후퇴 뒤 조군을 본진에서 끌어내고 보급을 끊어 포위 속에서 소모시켰다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**진군**</span></td><td>정면 유인대·후방 차단대·기병 별동대를 결합했다.</td><td>백기 임명을 좁게 격리하고 왕흘을 부장으로 유지했다.</td><td>하내 동원으로 포위망과 구원로 차단을 지속했다.</td></tr>
+<tr><td><span color="red">**조군**</span></td><td>대군이 공격축으로 길게 나가 본진과 분리됐다.</td><td>지휘관·장교·명령 체계가 한꺼번에 바뀌었다.</td><td>후방과 군량로가 끊겨 포위 장기전에 취약했다.</td></tr>
+</table>
+
+#### <span color="red">**조괄(趙括, 패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>부임 직후 기존 장교와 명령을 바꾸어 장기 방어에 적응한 조직의 연속성을 약화했다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>상대 지휘관이 왕흘이라고 보는 동안 실제로는 백기가 결정을 통제했다. 지휘관 교체라는 대안 시나리오를 분모에 넣지 못했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>단수 계곡에서 공격대를 본진·군량로와 멀리 내보내 협곡의 차단 가능성을 키웠다. (원근·험이·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>병법 지식과 결전 의지가 실제 대군 지휘 경험과 독립 정찰을 대신했다. (지신인용엄·장유오위)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>지휘 교체 뒤 편제·보고·보급을 안정시키기 전에 공격해 군과 진영의 연결이 끊겼다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** <span color="red">**조괄**</span>이 진의 유인 후퇴를 자신이 기대한 결전 기회로 해석한 공격에서는 과신과 확증편향이 작동했을 가능성이 있으며, 백기의 비밀 부임을 확인하지 못한 채 보급로까지 걸었다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 조군은 지휘관이 적정을 헤아리지 못하고 대군을 포위에 넣은 北(배)에 가까운 패배를 입었다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span>: 조괄이 부임 뒤 즉시 전면 공격하지 않고 염파의 진지·장교·정찰망을 유지한 채 진 지휘부 변화와 퇴각로를 독립 확인했더라면, 승리를 장담할 수 없어도 군량로가 끊긴 전면 포위는 피할 가능성이 있었다.
+
+#### <span color="blue">**백기(白起, 승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>왕흘을 부장으로 두고 기존 진군과 별동대를 하나의 포위 계획에 묶었다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>조괄의 지휘관 교체와 공격 전환이 열린 시점을 이용하되, 그 행동을 유인 후퇴로 확인한 뒤 차단대를 투입했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>단수 계곡·상당고원의 제한된 길을 이용해 조군의 앞뒤를 가르고 구원로를 막았다. (험이·광협·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>자신의 부임을 숨긴 채 정면 승부보다 상대의 지휘 습관과 보급선을 먼저 겨냥했다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>주력·2만5천 차단대·5천 기병을 시차 결합하고 국가 동원으로 포위 지속력을 보강했다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>: 진군은 적의 지휘관 교체를 먼저 알고 대비한 채 공격을 유도해 以虞待不虞者勝(이우대불우자승, 대비한 자가 대비하지 못한 적을 이김)에 해당했다. 항복 뒤의 대량 살해는 군사적 승리와 분리해 비판해야 하며 이 구절의 현대적 적용으로 계승할 수 없다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**진군**</span></td><td>정면 유인대와 주력, 2만5천 후방 차단대, 5천 기병 별동대를 서로 다른 임무로 나눠 포위 시점에 결합했다.</td></tr>
+<tr><td><span color="red">**조군**</span></td><td>공격대가 후퇴하는 진군을 따라 나가면서 본진·방어선·군량 호위와 분리됐다.</td></tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**진군**</span></td><td>진왕이 백기를 비밀 상장군으로 임명하고 왕흘을 부장으로 두었으며, 임명 정보의 범위를 군율로 제한했다.</td></tr>
+<tr><td><span color="red">**조군**</span></td><td>조왕이 염파를 조괄로 바꾸었고 조괄은 기존 장교와 명령을 교체해 전선의 경험과 중앙 결정 사이의 마찰을 키웠다.</td></tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**진군**</span></td><td>진지는 조군을 포위한 뒤 하내의 추가 동원으로 구원·군량로를 막아 장기 지속력을 국가 차원에서 보강했다.</td></tr>
+<tr><td><span color="red">**조군**</span></td><td>대군의 식량 수요가 큰 상태에서 본진과 후방로를 잃어 굶주림과 탈진이 전투력보다 먼저 한계에 닿았다.</td></tr>
+</table>
+
+**사료와 연구:** [『사기』 백기왕전열전 원문·역주](https://www.shiwens.cn/bookv_23650.html) · [『사기』 해당 대목 현대어역](https://esdiscovery.jp/knowledge/classic/china2/shiki057.html) · [장평대전 개관과 사료 쟁점](https://en.wikipedia.org/wiki/Battle_of_Changping)
+
+---
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
 
 ### 핵심 통찰
