@@ -1,0 +1,57 @@
+{
+  "id": "yonggan-13",
+  "battle": {
+    "source_verse_ids": [66],
+    "source_kind": "historical_case",
+    "title": "마릉 전투 — 방연의 추격 성향을 감조 신호로 유인하다",
+    "year": "기원전 341년경",
+    "commander": "제나라 군사 손빈(孫臏)",
+    "verse": "凡軍之所欲擊, 城之所欲攻, 人之所欲殺, 必先知其守將,",
+    "verse_meaning": "군대·성·특정 인물을 타격하려면 먼저 그 목표를 지키고 움직이는 지휘관의 성향·권한·호위·행동 가능성을 알아야 한다.",
+    "map": "https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan13/maling_strategy_map.png",
+    "briefing": "위나라와 조나라가 한나라를 공격하자 제나라는 위나라 수도 대량을 압박해 방연의 귀환을 유도했습니다. 역사적 사실 선택지는 『사기』의 감조·배속 추격·마릉 매복 기록을 따르고, 반사실 선택지는 당시 지형과 정보 조건에서 가능한 대안을 구분합니다. 마릉의 정확한 현대 위치와 일부 세부 숫자는 논쟁이 있습니다.",
+    "initial_state": {"troops": 72, "morale": 64, "supply": 62, "intelligence": 2, "initiative": 0, "damage": 0, "time": 6},
+    "phases": [
+      {
+        "title": "1단계 — 한나라 전선을 직접 구할 것인가",
+        "prompt": "위군이 한나라를 압박하고 있습니다. 제군은 어느 축으로 움직이겠습니까?",
+        "choices": [
+          {"text": "위나라 수도 대량으로 향해 방연이 스스로 돌아오게 한다", "result": "역사적 사실: 제군은 한나라 전선의 위군을 정면에서 받지 않고 대량을 위협해 방연의 귀환을 강제했다.", "score": 4, "effects": {"initiative": 2, "intelligence": 1, "time": -1}, "principle": "攻其所必救 — 상대 지휘관이 지켜야 할 곳을 먼저 안다"},
+          {"text": "한나라 전선으로 곧장 가서 위군 주력과 정면 결전한다", "result": "반사실: 구원 의도는 분명하지만, 전투를 고를 권한과 위군의 피로·귀환 강제를 활용하지 못한다.", "score": -2, "effects": {"troops": -7, "damage": 5, "initiative": -2}}
+        ]
+      },
+      {
+        "title": "2단계 — 방연이 믿는 제군의 모습",
+        "prompt": "방연은 삼진군이 용맹하고 제군은 겁이 많다고 여깁니다. 어떤 흔적을 남기겠습니까?",
+        "choices": [
+          {"text": "부뚜막을 10만에서 5만, 다시 3만으로 줄여 탈영이 늘어난 듯 보인다", "result": "역사적 사실: 방연은 제군의 병사가 사흘 만에 절반 넘게 달아났다고 판단했다.", "score": 6, "effects": {"intelligence": 2, "initiative": 3, "supply": -2}, "principle": "先知其將 — 방연의 경시와 추격 성향에 맞는 신호를 보낸다"},
+          {"text": "전 병력과 부뚜막을 과시해 제군의 강함을 알린다", "result": "반사실: 방연은 보병 주력을 유지하고 협로 진입 전에 정찰·전개를 강화할 가능성이 커진다.", "score": -3, "effects": {"initiative": -3, "morale": 1}}
+        ]
+      },
+      {
+        "title": "3단계 — 추격대의 속도와 마릉 도착 시각",
+        "prompt": "방연이 경예만 이끌고 배의 속도로 추격합니다. 어디에서 받아내겠습니까?",
+        "choices": [
+          {"text": "해질 무렵 도착할 좁고 험한 마릉도 양쪽에 노병 1만을 매복시킨다", "result": "역사적 사실: 손빈은 방연의 행군 속도와 마릉의 협로를 결합해 야간 매복점을 정했다.", "score": 6, "effects": {"initiative": 4, "intelligence": 1, "time": -2}, "principle": "知其守將 — 지휘관의 행동을 시간과 지형으로 예측한다"},
+          {"text": "넓은 평원에서 위군 전체가 모일 때까지 기다린다", "result": "반사실: 제군은 매복의 지형 우위와 분리된 경예를 먼저 칠 기회를 잃는다.", "score": -4, "effects": {"initiative": -4, "troops": -5, "damage": 4}}
+        ]
+      },
+      {
+        "title": "4단계 — 불빛을 발사 신호로 바꿀 것인가",
+        "prompt": "밤이 되어 방연의 선두가 길가의 글씨를 읽으려 합니다. 매복대의 발사 조건은 무엇입니까?",
+        "choices": [
+          {"text": "나무 아래 불빛이 보이면 양쪽 노병이 일제히 발사한다", "result": "역사적 사실: 불을 밝혀 글을 읽는 행동이 위치 확인과 일제 사격의 신호가 됐고 위군은 혼란에 빠졌다.", "score": 6, "effects": {"morale": 7, "initiative": 4, "damage": -2}, "principle": "형태·시간·신호를 하나의 실행 조건으로 묶는다"},
+          {"text": "방연의 얼굴을 직접 확인할 때까지 가까이 접근한다", "result": "반사실: 표적 확인은 강화되지만 매복 은폐가 깨지고 경예가 전개할 시간을 줄 수 있다.", "score": -3, "effects": {"troops": -8, "damage": 7, "initiative": -2}}
+        ]
+      },
+      {
+        "title": "5단계 — 무너진 선두 뒤의 위군을 어떻게 할 것인가",
+        "prompt": "경예가 혼란에 빠졌지만 뒤에는 위군 보병과 태자 신의 부대가 남아 있습니다.",
+        "choices": [
+          {"text": "매복대와 주력을 결합해 지휘가 끊긴 위군을 연속 압박한다", "result": "역사적 사실: 제군은 승세를 타고 위군을 격파하고 태자 신을 사로잡았다.", "score": 5, "effects": {"morale": 5, "initiative": 3, "troops": -2}, "principle": "先知의 목표는 표적 하나가 아니라 그 뒤 지휘체계의 붕괴까지 읽는 것이다"},
+          {"text": "방연만 쓰러졌으니 즉시 추격을 멈추고 철수한다", "result": "반사실: 표적 제거에는 성공하지만 위군 주력과 태자 신이 지휘를 회복해 전략적 승리를 줄일 수 있다.", "score": 0, "effects": {"morale": 1, "initiative": -2}}
+        ]
+      }
+    ]
+  }
+}

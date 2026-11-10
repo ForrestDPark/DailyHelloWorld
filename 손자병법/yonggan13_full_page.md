@@ -1,4 +1,4 @@
-<!-- sunzi-analysis-mode: light -->
+<!-- sunzi-analysis-mode: full -->
 <!-- sunzi-original: 凡軍之所欲擊, 城之所欲攻, 人之所欲殺, 必先知其守將, -->
 > 범군지소욕격, 성지소욕공, 인지소욕살, 필선지기수장 — 행동부터 정하고 책임자와 지휘선을 확인하지 않으면 재수가 없다.
 
@@ -132,6 +132,407 @@
 사용자의 「생각에대한 생각」 메모는 한 가지 시나리오에 집중하면 그 확률을 과대평가하고, 생생한 희귀 사건은 분모를 가린다고 경고한다. “수비장은 겁이 많다” 같은 인상적인 보고가 있으면 그 한 장면의 조건, 전체 관측 횟수, 반대 사례, 대체 지휘관이 개입할 가능성을 함께 적어야 한다. 인물 한 명에 대한 대표성 판단이 조직 전체의 행동 예측으로 번지는 순간 오류가 커진다.
 
 한계도 분명하다. 고대 용간의 표적화 논리를 직장 동료의 사생활 조사나 압박에 옮길 수 없다. 현대 생활에서는 공개된 역할표, 업무 인계, 관리자 지시, 공식 기록을 통해 **누가 결정하고 누가 대리하며 어떤 정보가 판단을 바꾸는지** 확인하는 절차로 제한해야 한다.
+
+---
+## 4. 역사적 실증 사례
+
+### 서양 — <span color="blue">🇺🇸 미 육군항공대·미 해군 정보부</span> vs <span color="red">🏛️ 일본 제국 해군 연합함대</span> │ 벤전스 작전(Operation Vengeance, 1943)
+
+![벤전스 작전 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan13/vengeance_commanders.png)
+
+![벤전스 작전 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan13/vengeance_soldiers_weapons_life.png)
+
+![벤전스 작전 지휘·정보 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan13/vengeance_command_structure.png)
+
+![1943년 남서태평양 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan13/vengeance_country_map.png)
+
+![벤전스 작전 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan13/vengeance_strategy_map.png)
+
+![벤전스 작전 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan13/vengeance_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- <span color="blue">**▰**</span> <span color="yellow_bg">**헨더슨 비행장(Henderson Field)**</span>은 P-38 편대가 출격한 과달카날의 기지다. 목표 비행보다 훨씬 긴 우회 항로를 날 수 있도록 연료·항법·귀환 시간을 함께 계산해야 했다.
+- 🌊 <span color="blue_bg">**솔로몬해(Solomon Sea)**</span>는 미군 편대가 일본 감시망을 피하려 저공으로 돌아간 접근 공간이다. 직선 최단로를 버리는 대신, 정확한 시각에 요격점에 도착하는 것이 임무의 성패를 갈랐다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**라바울(Rabaul)**</span>은 <span color="red">**야마모토 이소로쿠(Isoroku Yamamoto)**</span>가 출발한 일본군 거점이다. 해독된 전문은 출발 시각과 방문 일정을 특정해 이동하는 지휘관을 예측 가능한 표적으로 바꿨다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**발랄레(Ballale)**</span>는 시찰 일정의 목적지였다. 미군은 목적지 자체를 공격하지 않고 그 사이의 항로를 계산해 요격했다.
+- 🌲 <span color="green_bg">**부건빌 남부 정글(Bougainville jungle)**</span>과 <span color="red">**▰**</span> <span color="yellow_bg">**카힐리(Kahili)**</span> 일대가 실제 요격 공간이다. 산호해·해안선·정글이 섞인 좁은 시간창에서 두 G4M과 호위 A6M을 구분해야 했다.
+
+#### 상세 전역 서사 — 해독한 일정표를 600마일 저공 항로와 1분 단위 요격으로 바꾸다
+
+1943년 4월 14일 미군 감청소들은 일본 해군 암호 JN-25D로 전송된 전문을 포착했고, FRUPAC과 워싱턴의 해독진은 <span color="red">**야마모토**</span>의 4월 18일 시찰 일정·출발 시각·항로를 복원했다. 문제는 정보를 얻었다는 사실이 아니라, 그 정보를 일본군에게 들키지 않고 실제 타격으로 바꾸는 일이었다. <span color="blue">**체스터 니미츠(Chester W. Nimitz)**</span>의 지휘선은 표적의 군사적 가치와 암호 해독 노출 위험을 함께 따졌고, 작전에는 해안감시원이 우연히 일정을 알아냈다는 위장 설명이 붙었다.
+
+<span color="blue">**존 W. 미첼(John W. Mitchell)**</span>은 P-38G의 항속거리·증조·해풍·저공 비행을 계산해 일본 점령 섬의 시야를 피하는 우회로를 설계했다. 16대의 P-38은 <span color="blue">**▰**</span> <span color="yellow_bg">**헨더슨 비행장(Henderson Field)**</span>에서 출격해 🌊 <span color="blue_bg">**솔로몬해(Solomon Sea)**</span> 위를 낮게 날았다. 네 대는 폭격기를 잡는 요격조, 나머지는 호위 전투기를 막는 상공 엄호조로 나뉘었다.
+
+4월 18일 09시 35분, 미 편대는 <span color="red">**야마모토**</span>가 탄 G4M과 동행기, 여섯 대의 A6M을 예상 지점에서 만났다. 요격조는 폭격기로 곧장 파고들었고 두 G4M은 각각 🌲 <span color="green_bg">**부건빌 남부 정글(Bougainville jungle)**</span>과 해안에 추락했다. 작전의 핵심은 ‘유명 장수를 죽였다’가 아니라 **그 장수의 신원·일정·호위·항로를 먼저 알고, 제한된 항속거리 안에서 실제 만날 수 있는 지점으로 바꾼 것**이었다.
+
+#### 전투에서 사용된 속임수 — 암호 해독의 출처를 해안감시원 첩보로 가리다
+
+미군이 일본군에게 보이고 싶지 않았던 것은 요격 편대가 아니라 JN-25 해독 능력이었다. 실제 의도는 해독 전문을 이용해 <span color="red">**야마모토**</span>를 표적화하는 것이었고, 외부에는 해안감시원의 우연한 관측이라는 설명을 준비했다. 이 출처 은폐는 일본이 암호체계를 즉시 바꾸는 것을 늦추려는 방호 기만이었다. 다만 일본 측이 당시 그 설명을 실제로 믿고 특정 행동을 했다는 직접 사료는 제한적이므로, 요격 성공과 출처 위장의 효과를 같은 수준의 사실로 단정하지 않는다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 미 태평양함대 정보부는 야마모토의 일정은 사용하되 암호 해독 능력은 보존하려 했다.
+
+**보인 신호와 믿은 이유.** 조종사들에게도 표적을 ‘VIP’로 제한해 알리고, 정보 출처는 해안감시원으로 설명했다. 실제로 솔로몬 제도에는 연합군 해안감시망이 있었으므로 개연성이 있었다.
+
+**유발된 행동과 결과.** 작전 보안이 유지된 채 P-38 편대가 정확한 요격점으로 날아갔다. 그러나 일본 암호 운용 변화에 미친 장기 효과는 별도 자료로 평가해야 한다.
+
+**사료의 경계.** 미 해군 역사유산사령부는 해독·엄폐 설명·요격 시각을 확인하지만, 일부 조종사의 격추 공적과 최후 장면에는 상충 진술이 있어 특정 개인의 단독 공적으로 단정하지 않는다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 미군 정보 지휘부는 일본군이 해독 능력을 알아차리지 못하게 했고, 아군 내부에도 필요정보만 공개했다.
+2. **어떤 사실이 거짓이었는가?** 표적 일정의 출처가 해안감시원이라는 설명은 암호 해독을 숨기기 위한 위장이었다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 솔로몬 제도에 해안감시원이 존재한 것은 사실이어서 위장 설명의 개연성을 높였다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 정찰·현지 제보는 전장에서 흔한 정보원이라, 고급 암호가 깨졌다는 더 위험한 가설보다 받아들이기 쉬웠다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 요격 자체는 가능했지만 해독 노출 위험이 커져 이후 정보 우위가 빨리 사라질 가능성이 있었다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 일본군은 일정 전문이 노출됐을 가능성을 전제로 항로·시각·호위를 충분히 바꾸지 않았다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 합법적 보안 모의훈련에서 정보의 필요공개 범위와 대체 설명이 방어 자산을 보호하는지 점검할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>遠而示之近<br>원이시지근 — 멀리 있으면서 가까운 듯 보인다</td><td>P-38 편대는 직선으로 다가가지 않고 바다 쪽으로 크게 우회해 일본 감시망에 접근축을 노출하지 않았다.</td></tr>
+<tr><td>攻其無備, 出其不意<br>공기무비, 출기불의 — 대비하지 않은 곳을 치고 뜻하지 않은 때에 나온다</td><td>해독한 일정과 엄격한 시간 계산으로 이동 중인 지휘관이 방어를 바꾸기 전 요격했다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**미군**</span></td><td>16대의 P-38을 요격조와 엄호조로 나눴다.</td><td>감청·해독·정책 판단·비행 지휘를 구획했다.</td><td>증조와 장거리 항법으로 왕복 항속 한계를 관리했다.</td></tr>
+<tr><td><span color="red">**일본군**</span></td><td>두 G4M과 여섯 A6M으로 시찰 편대를 구성했다.</td><td>연합함대 일정이 암호 전문으로 전달됐다.</td><td>정시 운항을 유지했지만 항로·시간 변경 여지가 작았다.</td></tr>
+</table>
+
+#### <span color="red">야마모토·일본 시찰 편대(패군)</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>연합함대 총사령관의 전선 시찰은 사기 진작 목적이었지만, 개인 일정이 조직 전체의 고가치 표적으로 집중됐다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>정시 운항과 암호 보안을 당연시해 전문 노출·장거리 요격이라는 낮아 보이는 시나리오를 충분히 반영하지 못했다. (지피·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>섬과 바다가 미군의 항속을 막는 장벽이라고 보았으나, 같은 공간은 저공 우회 접근로가 됐다. (원근·험이)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>정시성과 현장 방문을 중시했지만, 지휘관 개인의 예측 가능성을 줄이는 보안 엄격성이 부족했다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>호위 편대는 있었으나 일정·항로·대체 지휘선의 노출 위험을 분산하지 못했다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** 정시 운항 관행과 기존 암호 보안이 계속 유효할 것이라는 판단에는 정상성 편향과 과신이 작동한 것으로 볼 수 있고, 그 결과 정확한 시간표가 적의 장거리 요격으로 전환될 가능성을 과소평가했다.
+
+🏳️ <span color="red">**패군 측 결과**</span> — <span color="red">**야마모토**</span>와 참모장 <span color="red">**우가키 마토메(Matome Ugaki)**</span>가 탄 두 G4M이 모두 격추됐고, 야마모토는 전사했다. `北(배, 적정을 헤아리지 못해 불리한 조건에서 패함)`에 가깝다. 🔀 <span color="orange">**패군 측 회피 분기점**</span>은 고위 지휘관 일정을 저급·고급 채널로 분리하고, 출발 직전 항로·시각을 무작위화하며 대체 지휘 절차를 준비하는 것이었다.
+
+#### <span color="blue">미 태평양함대 정보부·P-38 편대(승군)</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>해독진·정책 결정자·비행대가 서로 다른 비밀 범위에서도 같은 요격 목표에 맞춰 움직였다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>전문을 확실한 사실과 추정으로 나누고, 정시 도착 확률을 항로·속도·바람 계산으로 높였다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>🌊 <span color="blue_bg">**솔로몬해(Solomon Sea)**</span>의 넓은 우회 공간을 은폐로 쓰고 <span color="red">**▰**</span> <span color="yellow_bg">**카힐리(Kahili)**</span> 부근의 좁은 요격창으로 집중했다. (원근·광협)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="blue">**미첼**</span>은 항속·편대 분업·도착 시각을 하나의 실행표로 묶었다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>요격조·엄호조·예비기, 감청과 비행 지휘를 분리하면서 연료 한계를 임무 설계의 중심에 뒀다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span> — `以虞待不虞者勝(이우대불우자승, 대비한 채 대비 없는 적을 상대하는 자가 이긴다)`에 해당한다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**미군**</span>
+</td>
+<td>P-38 16대를 폭격기 요격조와 전투기 엄호조로 나눠 임무를 결합했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**일본군**</span>
+</td>
+<td>두 수송 폭격기와 여섯 호위기를 묶었지만 기습 시 분산 대응 여지가 작았다.</td>
+</tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**미군**</span>
+</td>
+<td>감청소→FRUPAC→태평양함대 지휘부→항공 지휘선으로 필요정보만 전달했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**일본군**</span>
+</td>
+<td>시찰 일정이 암호 전문으로 여러 수신처에 전달돼 공격자가 시간표를 복원할 단서를 남겼다.</td>
+</tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**미군**</span>
+</td>
+<td>장거리 증조·저공 항법·연료 계산으로 600마일 우회와 귀환을 가능하게 했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**일본군**</span>
+</td>
+<td>G4M의 장거리 성능과 A6M 호위를 사용했으나 지휘관 일정의 보안 비용을 충분히 치르지 않았다.</td>
+</tr>
+</table>
+
+#### 참고자료
+
+- [미 해군 역사유산사령부 — Operation Vengeance](https://www.history.navy.mil/about-us/leadership/director/directors-corner/h-grams/h-gram-018/h-018-2.html)
+- [미 해군 국립박물관 — 일본군 I 작전과 야마모토 요격](https://www.history.navy.mil/content/history/museums/nmusn/explore/photography/wwii/wwii-pacific/south-southwestern-pacific/papau-new-guinea-42-43/japanese-i-operation.html)
+- [미 해군 역사유산사령부 H-Gram 018](https://www.history.navy.mil/about-us/leadership/director/directors-corner/h-grams/h-gram-018.html)
+
+### 동양 — <span color="blue">🏛️ 제나라</span> vs <span color="red">🏛️ 위나라</span> │ 마릉 전투(馬陵之戰, 기원전 341년경)
+
+![마릉 전투 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan13/maling_commanders.png)
+
+![마릉 전투 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan13/maling_soldiers_weapons_life.png)
+
+![마릉 전투 지휘·작전 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan13/maling_command_structure.png)
+
+![기원전 341년경 전국 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan13/maling_country_map.png)
+
+![마릉 전투 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan13/maling_strategy_map.png)
+
+![마릉 전투 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan13/maling_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- <span color="red">**▰**</span> <span color="yellow_bg">**대량(大梁)**</span>은 위나라 수도이자 제군이 한나라를 구원하기 위해 압박한 목표다. 전기는 한나라 전선의 위군을 직접 맞지 않고 대량을 위협해 방연을 되돌렸다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**한나라 전선**</span>은 위군 주력이 빠져 있던 출발 공간이다. 방연이 돌아설 때 제군은 이미 위나라 땅 안으로 들어와 있었다.
+- **제군의 감조 진영 세 곳**은 첫날 10만, 다음날 5만, 그다음 날 3만의 부뚜막 흔적을 남긴 구간이다. 정확한 각 야영지 위치는 사료상 불명이나, 방연의 추격 판단을 바꾼 연속 신호였다.
+- ⛰️ <span color="green_bg">**마릉도(馬陵道)**</span>는 길이 좁고 양쪽에 장애와 험지가 많아 매복하기 좋은 곳으로 기록된다. 정확한 현대 비정은 논쟁이 있으므로 도판은 작전 관계를 보여 주는 개략도다.
+- 🌲 <span color="green_bg">**마릉 수림과 협로**</span>는 제나라 노병 1만이 양쪽에 숨은 결정 공간이다. 해질 무렵 불빛을 신호로 일제 사격하도록 시간·지형·표적 행동을 묶었다.
+
+#### 상세 전역 서사 — 방연이 믿던 ‘제군은 겁이 많다’를 부뚜막 숫자로 확신하게 하다
+
+위나라와 조나라가 한나라를 공격하자 제나라는 <span color="blue">**전기(田忌)**</span>를 장수로, <span color="blue">**손빈(孫臏)**</span>을 군사로 보내 구원했다. 손빈은 한나라 전선으로 곧장 가는 대신 <span color="red">**▰**</span> <span color="yellow_bg">**대량(大梁)**</span>을 향해 위나라의 빈 곳을 찔렀다. <span color="red">**방연(龐涓)**</span>은 한나라 전선을 떠나 귀환했고, 제군은 이미 위나라 영내에서 서쪽으로 움직인 뒤였다.
+
+손빈은 삼진의 병사가 용맹하고 제나라 군을 겁쟁이로 가볍게 본다는 적의 기대를 작전 재료로 삼았다. 제군은 첫날 10만, 다음날 5만, 사흘째 3만 명분의 부뚜막만 남겼다. <span color="red">**방연**</span>은 사흘 동안 탈영자가 절반을 넘었다고 판단해 🪖 보병 주력을 뒤에 두고 경예만 이끌어 배의 속도로 추격했다. 감조는 단순한 숫자 조작이 아니라 **방연이 이미 믿고 있던 상대상과 빠른 추격 성향을 확인한 뒤 보낸 맞춤 신호**였다.
+
+손빈은 방연의 이동 속도를 계산해 해질 무렵 ⛰️ <span color="green_bg">**마릉도(馬陵道)**</span>에 이를 것으로 보았다. 『사기』는 그 길이 좁고 곁에 장애와 험지가 많아 매복하기 좋았다고 전한다. 손빈은 길가 큰 나무의 껍질을 벗겨 “방연이 이 나무 아래서 죽는다”라고 쓰고, 노병 1만을 양쪽에 숨겨 불빛이 보이면 일제히 쏘게 했다.
+
+<span color="red">**방연**</span>은 밤에 나무 아래 이르러 불을 밝혀 글을 읽었다. 불빛이 신호가 되자 제군의 노가 한꺼번에 발사됐고 위군은 지휘와 대열을 잃었다. 『사기』는 방연이 스스로 목숨을 끊고 제군이 위군을 격파해 태자 신을 사로잡았다고 기록한다. 후대에는 세부 장면의 서사화 가능성이 지적되므로, 감조와 매복의 작동 원리는 설명하되 모든 숫자와 대사를 동시대 전투일지처럼 확정하지 않는다.
+
+#### 전투에서 사용된 속임수 — 감조로 병력 감소가 아니라 방연의 추격 욕망을 보여 주다
+
+속인 주체는 <span color="blue">**손빈**</span>, 속은 상대는 <span color="red">**방연**</span>이었다. 실제 제군 전력은 급감하지 않았지만 야영 흔적은 탈영이 누적되는 것처럼 보였다. 방연은 삼진군이 용맹하고 제군이 겁이 많다는 기존 기대 때문에 그 신호를 믿었고, 🪖 보병 주력을 떼어 놓은 채 경예로 추격했다. 그 결과 빠른 부대일수록 먼저 협로의 매복점에 들어가는 역전이 일어났다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 손빈은 방연의 경시와 추격 속도를 이용해 위군의 선두를 주력에서 떼어내려 했다.
+
+**보인 신호와 믿은 이유.** 부뚜막 수가 10만→5만→3만으로 줄었다. 방연은 이를 제군 탈영의 직접 흔적으로 읽었고, 기존의 ‘제군은 겁이 많다’는 믿음과 맞아떨어졌다.
+
+**유발된 행동과 결과.** 방연은 보병을 뒤에 남기고 경예로 배일겸행했다. 선두가 해질 무렵 좁은 마릉도에 들어오자 제군은 불빛을 신호로 매복 사격했다.
+
+**사료의 경계.** 『사기』가 감조·추격·매복을 전하지만 마릉의 정확한 위치, 부뚜막 숫자의 물리적 가능성, 방연 최후의 세부 대사는 후대 논쟁이 있다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 손빈이 방연과 위군 추격대를 속였다.
+2. **어떤 사실이 거짓이었는가?** 제군 병력이 사흘 만에 10만에서 3만으로 무너졌다는 결론이 거짓이었다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 실제 야영지의 부뚜막 수가 줄어든 흔적은 진실이었지만 그것이 탈영자 수를 뜻하지는 않았다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 방연은 제군을 겁이 많다고 평소부터 낮게 봤고, 빠른 추격으로 손빈을 잡을 수 있다는 기대가 있었다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 중간이다. 경시는 있었지만 감조라는 수량 신호가 없었다면 보병을 버리고 배속 추격할 확신은 약했을 것이다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 포로 심문·후방 정찰·행군 흔적·제군 주력의 실제 규모를 교차 확인하지 않았다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 바둑·체스에서 일부 돌이나 말을 버리는 듯 보인 뒤 상대의 과도한 추격을 유도하고, 사후에 독립 확인 누락을 복기할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>해당 구절·독음·뜻</td>
+<td>전장의 장면</td>
+</tr>
+<tr>
+<td>弱而示之弱<br>약이시지약 — 약한 듯한 형세를 더 약하게 보인다</td>
+<td>제군은 실제 퇴각과 줄어드는 부뚜막을 결합해 방연의 경시를 확신으로 바꿨다.</td>
+</tr>
+<tr>
+<td>利而誘之<br>이이유지 — 이익으로 꾄다</td>
+<td>도망치는 제군을 빨리 잡을 수 있다는 이익이 방연으로 하여금 경예만 이끌고 깊이 추격하게 했다.</td>
+</tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>곡제(편제)</td>
+<td>관도(지휘)</td>
+<td>주용(보급·지속)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**제나라**</span>
+</td>
+<td>주력 퇴각과 노병 1만 매복을 결합했다.</td>
+<td>전기가 지휘하고 손빈이 시간·신호·지형을 설계했다.</td>
+<td>후퇴 야영의 부뚜막을 정보 신호로 전환했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**위나라**</span>
+</td>
+<td>경예가 보병 주력에서 분리됐다.</td>
+<td>방연의 속도 판단이 추격대를 앞세웠다.</td>
+<td>배속 추격으로 보급·증원 결합이 약해졌다.</td>
+</tr>
+</table>
+
+#### <span color="red">방연·위군(패군)</span>
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>경예를 앞세운 추격은 공격 의지는 높였지만 보병 주력과의 결속을 끊었다. (지기·사기)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>부뚜막 감소를 탈영의 확실한 표본으로 보고 매복·허위 흔적이라는 대안 확률을 낮게 잡았다. (지피·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>⛰️ <span color="green_bg">**마릉도(馬陵道)**</span>의 협소함과 양옆 험지를 추격 속도보다 늦게 보았다. (험이·광협·사생)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>신속함은 있었지만 적을 가벼이 여기는 조급함과 독립 확인 부족이 지혜·엄격함을 압도했다. (지신인용엄·분속가모)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>경예와 보병을 분리한 뒤 정찰·보급·증원 경로를 함께 유지하지 못했다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+**직관·편향 한 줄:** 방연이 ‘제군은 겁이 많다’는 기존 인상과 부뚜막 감소를 곧바로 연결한 판단에는 확증편향과 대표성 휴리스틱이 작동한 것으로 볼 수 있고, 그 결과 감조가 의도적으로 설계됐을 가능성을 배제했다.
+
+🏳️ <span color="red">**패군 측 결과**</span> — 경예가 매복에 걸려 지휘를 잃고 위군 전체가 패했으며 태자 신이 포로가 됐다. `北(배, 적정을 헤아리지 못하고 불리한 조건으로 강한 조건을 맞음)`에 해당한다. 🔀 <span color="orange">**패군 측 회피 분기점**</span>은 부뚜막 수를 탈영자 수로 확정하지 않고 보병과 정찰대를 유지한 채 협로 입구에서 행군 흔적·포로 진술·고지 점거를 교차 확인하는 것이었다.
+
+#### <span color="blue">손빈·전기·제군(승군)</span>
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>전기의 공식 지휘와 손빈의 계책, 노병의 매복 신호를 한 목표로 묶었다. (지기·사기)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>방연의 경시를 활용하되 도착 시각을 행군 속도와 해질 무렵의 불빛 조건에 연결해 성공 확률을 높였다. (지피·타이밍·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>좁은 길과 양옆 험지를 이용해 적 경예의 속도를 전개 불능으로 바꿨다. (험이·광협·사생)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>적의 선입견·행군 속도·협로·점화 행동을 하나의 매복 조건으로 계산했다. (지신인용엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>주력의 퇴각, 감조 흔적, 노병 1만의 양측 매복, 불빛 신호를 단계별로 결합했다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span> — `識衆寡之用者勝(식중과지용자승, 많고 적은 병력을 쓸 줄 아는 자가 이긴다)`와 `以虞待不虞者勝(이우대불우자승, 대비한 채 대비 없는 적을 상대하는 자가 이긴다)`에 해당한다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**제나라**</span>
+</td>
+<td>퇴각하는 주력과 마릉도 양옆의 노병 1만을 분리해 추격대가 들어오는 시점에 결합했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**위나라**</span>
+</td>
+<td>방연이 경예만 이끌고 배속 추격해 보병 주력과의 상호지원이 끊겼다.</td>
+</tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**제나라**</span>
+</td>
+<td>전기가 총지휘하고 손빈이 감조·도착 시각·불빛 신호를 설계해 노병에게 명확한 발사 조건을 줬다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**위나라**</span>
+</td>
+<td>방연의 추격 판단이 선두를 가속했지만 후속 보병·정찰 보고와 갱신되는 지휘선은 늦어졌다.</td>
+</tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**제나라**</span>
+</td>
+<td>야영 부뚜막을 줄여 보급 흔적을 기만 신호로 쓰고, 노와 화살을 협로 양쪽에 집중했다. 세부 비용은 사료상 불명이다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**위나라**</span>
+</td>
+<td>경예의 속도를 위해 보병과 보급을 뒤에 두면서 매복 후 전투를 지속할 여력이 줄었다. 세부 수량은 사료상 불명이다.</td>
+</tr>
+</table>
+
+#### 참고자료
+
+- [『사기』 「손자오기열전」 — 감조·추격·마릉 매복 원문](https://www.shidianguji.com/zh/mid-page/7601263103322128410)
+- [중국철학서전자화계획 — 손빈 자료](https://ctext.org/datawiki.pl?if=gb&res=783329)
+- [고문도 — 『사기』 손자오기열전 절선](https://www.gushiwen.cn/shiwenv_d697b06d807a.aspx)
 
 ---
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
