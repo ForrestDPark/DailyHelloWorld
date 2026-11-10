@@ -1,0 +1,57 @@
+{
+  "id": "yonggan-10",
+  "battle": {
+    "source_verse_ids": [63],
+    "source_kind": "historical_case",
+    "title": "포티튜드 작전 — 가르보의 신뢰망으로 칼레에 예비대를 묶다",
+    "year": "1944년",
+    "commander": "연합군 이중간첩 통제조직·후안 푸홀 가르시아(GARBO)",
+    "verse": "故三軍之事, 莫親於間, 賞莫厚於間, 事莫密於間,",
+    "verse_meaning": "전군의 판단을 맡길 정보원은 가까운 보고선, 위험에 맞는 보상, 신원과 임무를 지키는 비밀을 함께 보장해야 한다.",
+    "map": "https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/fortitude_strategy_map.png",
+    "briefing": "역사적 사실 선택지는 영국의 Double Cross 체계, GARBO의 가공 정보망, 칼레 주공설 유지와 노르망디 상륙 뒤 독일 예비대 지연을 따른다. 반사실 선택지는 당시 지리·정보 조건에서 가능한 다른 결심이며, 정보원 관계를 착취나 무제한 비밀로 오독하지 않는다.",
+    "initial_state": {"troops": 72, "morale": 68, "supply": 70, "intelligence": 2, "initiative": 0, "damage": 0, "time": 6},
+    "phases": [
+      {
+        "title": "1단계 — 정보원의 신뢰를 무엇으로 만들 것인가",
+        "prompt": "가르보가 독일 측에 신뢰받는 가공 정보망을 만들고 있습니다. 담당 조직은 무엇을 우선합니까?",
+        "choices": [
+          {"text": "담당관이 가까이 협업하고 보고의 사실·추정·위험을 함께 검증한다", "result": "역사적 사실: 가르보는 담당관 토마스 해리스와 긴밀히 메시지를 구성했고, 가공 정보망의 일관성을 장기간 유지했다.", "score": 5, "effects": {"intelligence": 2, "morale": 2, "time": -1}, "principle": "莫親於間 — 가까움은 편애가 아니라 왜곡을 줄이는 보고선이다"},
+          {"text": "성과만 요구하고 출처의 위험과 동기는 묻지 않는다", "result": "반사실: 단기 메시지는 늘지만 모순과 노출 위험이 쌓여 장기 신뢰망이 흔들린다.", "score": -3, "effects": {"intelligence": -2, "morale": -4, "damage": 3}}
+        ]
+      },
+      {
+        "title": "2단계 — 보상을 어떻게 다룰 것인가",
+        "prompt": "상대 측 지급과 조직의 지원이 정보원 행동에 영향을 줍니다. 어떤 원칙을 세웁니까?",
+        "choices": [
+          {"text": "약속·비용·위험을 기록하고 지속 가능한 보호와 지원을 실제로 제공한다", "result": "역사적 사실에 근거한 선택: 가르보망은 독일이 가공 요원 비용까지 지급할 만큼 신뢰를 쌓았고, 영국 측은 그의 신원과 활동을 보호했다.", "score": 5, "effects": {"morale": 4, "intelligence": 1, "supply": -2}, "principle": "賞莫厚於間 — 대가는 액수보다 이행과 보호를 포함한다"},
+          {"text": "극적인 정보에만 큰돈을 주고 틀린 보고는 즉시 버린다", "result": "반사실: 듣고 싶은 정보를 꾸밀 유인을 키우고 불리한 사실의 보고를 끊는다.", "score": -4, "effects": {"intelligence": -3, "morale": -3, "supply": -3}}
+        ]
+      },
+      {
+        "title": "3단계 — 칼레 신호와 노르망디 준비를 어떻게 분리할 것인가",
+        "prompt": "실제 상륙 준비와 가짜 주공 신호가 동시에 움직입니다. 보안과 기만을 어떻게 결합합니까?",
+        "choices": [
+          {"text": "실제 상륙 정보는 구획하고 칼레 가짜 무선·모형·요원 보고는 서로 맞춘다", "result": "역사적 사실: Fortitude는 여러 기만 수단을 칼레 이야기로 수렴시키면서 Overlord의 실제 위치와 시기를 보호했다.", "score": 7, "effects": {"initiative": 4, "intelligence": 2, "supply": -2}, "principle": "事莫密於間 — 비밀은 필요한 연결을 남긴 최소 공개다"},
+          {"text": "모든 부서에 실제와 가짜 계획을 함께 공유한다", "result": "반사실: 조정은 쉬워 보이지만 누출면과 모순이 늘어 실제 상륙계획이 위험해진다.", "score": -5, "effects": {"intelligence": -4, "damage": 5, "initiative": -2}}
+        ]
+      },
+      {
+        "title": "4단계 — 상륙 뒤 메시지를 끝낼 것인가",
+        "prompt": "노르망디 상륙이 시작되었습니다. 칼레 주공설을 어떻게 다룹니까?",
+        "choices": [
+          {"text": "노르망디는 양동이며 칼레의 후속 주공이 남았다는 신호를 계속 보낸다", "result": "역사적 사실: 가르보는 상륙 뒤에도 칼레 위협을 유지했고 독일군은 상당한 병력을 그 지역에 남겼다.", "score": 7, "effects": {"initiative": 5, "time": -2, "intelligence": 1}, "principle": "기만의 목적은 첫 놀람이 아니라 상대의 다음 명령을 늦추는 데 있다"},
+          {"text": "노르망디 상륙과 동시에 모든 가짜 신호를 중단한다", "result": "반사실: 독일은 기만망이 끝났음을 더 빨리 알아차리고 예비대 전환을 검토할 수 있다.", "score": -4, "effects": {"initiative": -4, "time": 2, "damage": 3}}
+        ]
+      },
+      {
+        "title": "5단계 — 성공 뒤 무엇을 검증할 것인가",
+        "prompt": "칼레 예비대가 지연되고 노르망디 교두보가 커집니다. 어떤 결론을 내립니까?",
+        "choices": [
+          {"text": "기만 외에 제공권·수송망·지휘권 제약도 함께 평가하고 가설을 갱신한다", "result": "역사적 사실과 해석의 구분: Double Cross는 중요한 요인이었지만 독일군 이동에는 공중공격과 지휘구조도 작용했다.", "score": 5, "effects": {"intelligence": 3, "morale": 2, "initiative": 2}, "principle": "한 성공 사례를 단일 원인으로 과대평가하지 않는다"},
+          {"text": "가르보의 메시지만으로 모든 결과가 결정됐다고 선언한다", "result": "반사실적 오독: 성공 서사를 단순화해 다음 작전에서 다른 조건과 실패 가능성을 놓친다.", "score": -3, "effects": {"intelligence": -3, "morale": 1, "damage": 2}}
+        ]
+      }
+    ]
+  }
+}

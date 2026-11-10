@@ -122,6 +122,385 @@
 사용자의 「생각에대한 생각」 메모는 생생한 한 사례가 확률 판단을 지배하고, 한 시나리오에만 집중하면 그 가능성을 과대평가할 수 있다고 경고한다. 가까운 정보원이 전한 극적인 보고는 특히 가용성이 높다. 그래서 보고를 받을 때 `확인됨 / 추정 / 미확인`, 대안 시나리오, 각 시나리오를 바꿀 증거를 나누어 적어야 `親`이 확증편향으로 변하는 것을 막을 수 있다.
 
 ---
+## 4. 역사적 실증 사례
+
+### 서양 — 🇬🇧 연합군 정보·기만 조직 vs 🏛️ 독일 국방군 │ 포티튜드 작전(Operation Fortitude, 1944)
+
+![포티튜드 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/fortitude_commanders.png)
+![포티튜드 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/fortitude_soldiers_weapons_life.png)
+![포티튜드 지휘 편제 조직도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/fortitude_command_structure.png)
+![1944년 서유럽 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/fortitude_country_map.png)
+![포티튜드 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/fortitude_strategy_map.png)
+![포티튜드 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/fortitude_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- 🇬🇧 <span color="blue">**▰**</span> <span color="yellow_bg">**런던(London)**</span>은 이중간첩 통제와 기만계획을 묶은 중심이었다. 여기서 만든 보고선이 실제 상륙부대와 분리되어야 비밀이 유지됐다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**도버(Dover)**</span>와 🌊 <span color="blue_bg">**파드칼레 해협(Strait of Dover)**</span>은 영국과 프랑스 사이가 가장 좁아 독일군이 주공을 기대하기 쉬운 축이었다. 가짜 무선과 장비는 이 기존 기대를 강화했다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**포츠머스(Portsmouth)**</span> 서쪽 항만과 🌊 <span color="blue_bg">**영국해협(English Channel)**</span>은 실제 상륙부대의 집결·항해 공간이었다. 이 움직임이 칼레 신호에 가려져야 했다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**파드칼레(Pas-de-Calais)**</span>는 독일군 예비대가 묶인 가짜 결전지였고, <span color="blue">**▰**</span> <span color="yellow_bg">**노르망디(Normandy)**</span>는 실제 상륙과 교두보 확장이 벌어진 곳이었다.
+
+#### 상세 전역 서사 — 가르보의 신뢰를 지키면서 칼레의 가짜 주공을 오래 살리다
+
+연합군의 문제는 상륙일 하루만 속이는 것이 아니라, 상륙 뒤에도 독일 예비대가 🌊 <span color="blue_bg">**영국해협(English Channel)**</span>을 건너온 실제 증원을 즉시 막지 못하게 하는 것이었다. 영국의 이중간첩 통제조직은 <span color="blue">**후안 푸홀 가르시아(Juan Pujol García, GARBO)**</span>와 담당관 <span color="blue">**토마스 해리스(Tomás Harris)**</span>가 만든 가공의 27명 정보망을 독일 측에 실제 조직처럼 보이게 했다. 보고는 무작정 거짓말을 쌓지 않고, 독일이 이미 예상하던 <span color="red">**▰**</span> <span color="yellow_bg">**파드칼레(Pas-de-Calais)**</span> 주공설에 시간표·부대 흔적·무선 교신을 보탰다.
+
+6월 6일 <span color="blue">**▰**</span> <span color="yellow_bg">**노르망디(Normandy)**</span> 상륙이 시작된 뒤에도 <span color="blue">**가르보**</span>는 그것이 더 큰 칼레 공격을 위한 양동이라는 메시지를 보냈다. 영국 국립문서보관소는 그 결과 독일군이 7~8월에도 칼레 일대에 기갑 2개 사단과 보병 19개 사단을 유지했다고 설명한다. 정보원의 신뢰는 가까운 담당관 관계, 독일 측이 실제로 지급한 비용과 훈장, 정교한 구획 보안이 함께 만들었다. 이 사례는 `親·厚·密`이 감정적 친분·돈·침묵의 세 조각이 아니라 **보고선의 지속성을 만드는 하나의 체계**임을 보여준다.
+
+#### 전투에서 사용된 속임수 — 진실의 지연과 가짜 조직을 한 신뢰계정에 쌓다
+
+가르보망은 일부 실제 사건을 늦게 보고해 신뢰를 지키고, 결정적 의도와 위치는 거짓으로 돌렸다. 독일 측이 본 것은 반복적으로 정확해 보이는 작은 보고와 칼레를 가리키는 큰 결론이었다. 연합군은 이 신뢰를 실제 상륙 뒤에도 유지해 독일군의 이동 결심을 늦췄다. 다만 기만의 성공을 가르보 한 사람에게만 돌리면 안 된다. 무선통제·가짜 장비·공중정찰 대응·해상 움직임이 같은 이야기를 지지했기 때문이다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 연합군 기만조직은 노르망디 주공을 감추고 독일 예비대를 칼레에 묶으려 했다.
+
+**보인 신호와 믿은 이유.** 가공의 부대·무선·27명 정보망은 독일군의 기존 칼레 예상과 맞아떨어졌다.
+
+**유발된 행동과 결과.** 독일군은 노르망디가 양동일 가능성을 남겨두고 칼레 병력을 즉시 전환하지 않았다.
+
+**사료의 경계.** 개별 독일 지휘관의 판단에는 히틀러의 통제, 연합군 제공권, 수송 제약도 함께 작용했으므로 기만만으로 전 결과를 설명하지 않는다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 연합군 기만조직과 통제된 이중간첩들이 독일 정보·지휘체계를 속였다.
+2. **어떤 사실이 거짓이었는가?** 칼레가 후속 주공이고 가르보가 27명 현지 정보원을 운영한다는 설정이었다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 연합군이 영국에 대군을 모았다는 사실은 참이었지만 집결 방향과 후속 목적은 오해를 유도했다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 최단 해협과 항만이라는 지리적 개연성이 기존 계획과 맞았다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 있었지만 상륙 뒤까지 예비대를 묶을 확률은 낮아졌을 것이다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 서로 다른 신호가 하나의 통제된 이야기에서 나올 가능성을 충분히 분리하지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 보드게임과 합법적 보안 모의훈련에서 복수 신호를 교차검증하는 연습을 할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr><td>해당 구절·독음·뜻</td><td>전장의 장면</td></tr>
+<tr><td>近而示之遠(근이시지원)<br>가까이 있으면서 멀리 있는 듯 보인다</td><td>실제 노르망디 준비를 감추고 칼레를 향한 후속 주공이 남은 듯 보였다.</td></tr>
+<tr><td>實而備之(실이비지)<br>충실한 적은 대비한다</td><td>독일군은 칼레 위협을 실재하는 것으로 보고 예비대를 유지했다.</td></tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**연합군**</span></td><td>정보원·무선·가짜 장비를 분업했다.</td><td>이중간첩 메시지를 중앙에서 승인했다.</td><td>실제 상륙 보급과 기만 자원을 분리했다.</td></tr>
+<tr><td><span color="red">**독일군**</span></td><td>칼레와 노르망디 사이 예비대를 분산했다.</td><td>상급부 승인 지연이 현장 전환을 늦췄다.</td><td>연합군 제공권과 수송 손실로 재배치가 어려웠다.</td></tr>
+</table>
+
+#### <span color="red">**독일 서부전선 지휘부(패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>상하의 칼레 가정은 강했으나 반대 증거를 올리는 통로가 좁았다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>노르망디 상륙 뒤에도 제2상륙 가능성을 과대평가했다. 여러 시나리오의 분모를 충분히 갱신하지 못했다. (지피·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>🌊 <span color="blue_bg">**파드칼레 해협(Strait of Dover)**</span>의 짧은 거리를 주공의 필연으로 읽었다. (원근·광협)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>현장 판단과 최고지휘권의 승인 구조가 충돌해 신속한 수정이 어려웠다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>예비대 배치·명령·수송이 한 가정에 묶였다. (곡제·관도·주용)</td></tr>
+</table>
+
+**직관·편향 한 줄:** 칼레가 가장 가까운 상륙축이라는 대표성에 고정되어 노르망디라는 관찰 증거 뒤에도 가설을 충분히 수정하지 못한 것으로 볼 수 있다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 노르망디 교두보가 안정될 때까지 상당한 예비대가 칼레에 묶였다. 六敗(육패) 가운데 지휘와 배치가 흔들린 `亂(란)`의 성격이 강하다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span>: 6월 6일 이후 칼레 후속상륙 가설에 기한을 두고, 현장 정찰·수송 징후·상륙지 보급량을 독립적으로 재평가했다면 완패는 아니어도 예비대 전환 지연을 줄일 수 있었다.
+
+#### <span color="blue">**연합군 기만·상륙 지휘부(승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td><span color="blue">**가르보**</span>와 <span color="blue">**해리스**</span>의 지속적 협업은 나쁜 소식과 위험도 보고하게 했다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>독일이 칼레를 기대할 확률은 높였지만 성공을 필연으로 보지 않고 여러 신호를 중첩했다. (지피·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>가까운 칼레와 실제 노르망디의 공간 차이를 기만의 뼈대로 썼다. (원근·광협)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td>정보원 관계·메시지 승인·작전 보안을 함께 관리했다. (지신인용엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>가짜 무선·장비·이중간첩과 실제 상륙부대의 역할을 분리했다. (곡제·관도·주용)</td></tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>: `以虞待不虞者勝(이우대불우자승, 대비한 채 대비 없는 적을 상대하는 자가 이긴다)`의 조건을 만들며 상륙 뒤의 결정적 시간을 벌었다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**연합군**</span>
+</td>
+<td>기만 기획·이중간첩·무선·모형부대·실제 상륙군을 서로 다른 임무로 묶었다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**독일군**</span>
+</td>
+<td>칼레 방어와 노르망디 대응 사이에 예비대를 분산했다.</td>
+</tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**연합군**</span>
+</td>
+<td>이중간첩 보고는 중앙 승인 아래 독일 수신망으로 전달됐다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**독일군**</span>
+</td>
+<td>정보평가와 예비대 이동권한이 분리되어 수정 속도가 늦었다.</td>
+</tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**연합군**</span>
+</td>
+<td>실제 함선·차량·병력은 노르망디에 집중하면서 모형과 무선으로 칼레 위협을 지속했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**독일군**</span>
+</td>
+<td>폭격과 수송망 손상 속에 칼레 예비대를 유지해 노르망디 증원이 지연됐다.</td>
+</tr>
+</table>
+
+**출처:** [영국 국립문서보관소 Double Agent Operations](https://www.nationalarchives.gov.uk/double-agent-operations/) · [영국 국립문서보관소 Operation Overlord and D-Day](https://www.portals.livewp.nationalarchives.gov.uk/explore-the-collection/explore-by-time-period/second-world-war/operation-overlord-and-d-day/)
+
+### 동양 — ⚔️ 도쿠가와 동군 vs ⚔️ 이시다 서군 │ 세키가하라 전투(関ヶ原の戦い, 1600)
+
+![세키가하라 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/sekigahara_commanders.png)
+![세키가하라 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/sekigahara_soldiers_weapons_life.png)
+![세키가하라 지휘 편제 조직도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/sekigahara_command_structure.png)
+![1600년 일본 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/sekigahara_country_map.png)
+![세키가하라 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/sekigahara_strategy_map.png)
+![세키가하라 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan10/sekigahara_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- <span color="red">**▰**</span> <span color="yellow_bg">**오가키성(大垣城)**</span>은 서군이 밤에 떠난 출발점이고, <span color="yellow_bg">**나카센도(中山道)**</span>는 동서 이동을 묶는 통로였다.
+- ⛰️ <span color="green_bg">**사사오산(笹尾山)**</span>은 <span color="red">**이시다 미쓰나리**</span>의 중심 진지가 놓인 북서 고지였다.
+- ⛰️ <span color="green_bg">**마쓰오산(松尾山)**</span>은 <span color="blue">**고바야카와 히데아키**</span>의 대군이 서군 우익을 내려다본 곳으로, 배신 여부가 지형상 즉시 측면 타격으로 바뀌는 자리였다.
+- ⛰️ <span color="green_bg">**난구산(南宮山)**</span>의 모리계 부대는 서군의 큰 예비대였지만 비밀 합의와 진로 봉쇄로 움직이지 않았다.
+
+#### 상세 전역 서사 — 비밀 서신과 전후 영지 약속이 서군의 측면을 안에서 열다
+
+전투 전 몇 달 동안 <span color="blue">**도쿠가와 이에야스(徳川家康)**</span>와 <span color="red">**이시다 미쓰나리(石田三成)**</span>는 무력뿐 아니라 서신과 보상 약속으로 다이묘의 선택을 다퉜다. <span color="blue">**고바야카와 히데아키(小早川秀秋)**</span>는 명목상 서군에 있었지만 동군과 비밀 연락을 이어갔고, 전투 며칠 전 이에야스에게 전향 의사를 알리며 큰 영지 보상을 기대했다. <span color="blue">**깃카와 히로이에(吉川広家)**</span>도 동군과 협상해 ⛰️ <span color="green_bg">**난구산(南宮山)**</span>의 모리계 부대가 전투에 참여하지 못하게 했다.
+
+서군은 비가 내린 밤 <span color="red">**▰**</span> <span color="yellow_bg">**오가키성(大垣城)**</span>에서 세키가하라로 이동해 고지를 점했지만, 병력표에 적힌 숫자와 실제로 명령을 따를 병력은 달랐다. 정오 무렵 ⛰️ <span color="green_bg">**마쓰오산(松尾山)**</span>의 고바야카와군이 오타니 진영을 측면 공격하자 다른 전향 세력도 움직였고 서군의 전선은 안에서 무너졌다. 후대의 유명한 ‘이에야스가 마쓰오산에 총을 쏘아 결단을 재촉했다’는 이야기는 늦은 군기물에 의존하므로 확정 사실로 쓰지 않는다. 검증 가능한 핵심은 **비밀 연락·조건부 보상·전향 시점이 병력의 명목과 실제를 갈라놓았다**는 데 있다.
+
+#### 전투에서 사용된 속임수 — 서군 깃발 아래 숨은 중립과 전향
+
+동군과 내통한 장수들은 전투 전까지 서군 편제 안에 남아 있었다. 서군이 본 신호는 같은 깃발과 배치였지만 실제 의도는 중립 또는 전향이었다. 그 결과 미쓰나리는 ⛰️ <span color="green_bg">**마쓰오산(松尾山)**</span>과 ⛰️ <span color="green_bg">**난구산(南宮山)**</span>의 병력을 가용 전력으로 계산했고, 결정적 순간에 측면과 예비대가 동시에 사라졌다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 이에야스는 서군 장수에게 전후 영지와 지위의 대가를 제시해 싸우지 않거나 전향하게 만들었다.
+
+**보인 신호와 믿은 이유.** 내통 세력은 서군 배치에 남았고, 연합군이라는 외형은 전투 직전까지 유지됐다.
+
+**유발된 행동과 결과.** 미쓰나리는 불확실한 부대를 전력으로 계산했고, 측면 공격과 불참이 겹치며 전선이 붕괴했다.
+
+**사료의 경계.** 개별 서신은 남아 있으나 결단의 정확한 시각과 총격 재촉 이야기는 후대 서술이 섞였으므로 구분한다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 이에야스와 내통 장수들이 미쓰나리의 연합지휘를 속였다.
+2. **어떤 사실이 거짓이었는가?** 서군 배치에 있다는 사실이 실제 충성까지 보장한다는 전제였다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 고바야카와군이 마쓰오산에 실제 주둔한 사실은 참이었지만 공격 방향은 숨겨졌다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 서군은 명목 병력과 연합 규모를 유지해야 동군과 대등하다고 볼 수 있었다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 연합의 이해충돌 때문에 가능성은 있었지만 동시 불참과 전향의 충격은 작아졌을 것이다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 명령 이행 조건과 인질·연락망·전투 전 확약을 충분히 통제하지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 협상 시뮬레이션에서 공개 약속과 실제 인센티브가 일치하는지 점검할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>해당 구절·독음·뜻</td>
+<td>전장의 장면</td>
+</tr>
+<tr>
+<td>親而離之(친이리지)<br>친한 세력은 갈라놓는다</td>
+<td>서군 내부 장수에게 개별 조건을 제시해 연합을 분해했다.</td>
+</tr>
+<tr>
+<td>能而示之不能(능이시지불능)<br>할 수 있으면서 못하는 듯 보인다</td>
+<td>마쓰오산 병력은 전투 개입 의도를 숨긴 채 대기했다.</td>
+</tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>곡제(편제)</td>
+<td>관도(지휘)</td>
+<td>주용(보급·지속)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**동군**</span>
+</td>
+<td>내통·정면군을 결합했다.</td>
+<td>개별 서신으로 다이묘를 이에야스에게 묶었다.</td>
+<td>승리 뒤 영지를 보상 자원으로 약속했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**서군**</span>
+</td>
+<td>대군이었으나 충성도가 달랐다.</td>
+<td>연합 장수에 대한 명령 강제가 약했다.</td>
+<td>전투 전날 이동과 비로 피로가 누적됐다.</td>
+</tr>
+</table>
+
+#### <span color="red">**이시다 미쓰나리(石田三成, 패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>연합의 명분은 있었지만 다이묘별 이해를 하나로 묶지 못했다. (지기·사기)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>고바야카와·깃카와의 선택이라는 외부 변수를 명목 충성으로 과소평가했다. (지피·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>고지를 점했지만 마쓰오산의 측면 위험을 통제하지 못했다. (험이·사생)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>연합 장수에게 신뢰와 엄격한 이행 장치를 함께 만들지 못했다. (지신인용엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>명목 편제와 실제 지휘 가능 병력이 달랐다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+**직관·편향 한 줄:** 서군 깃발 아래 배치된 병력을 실제 가용병력으로 계산한 판단에는 희망하는 연합 규모에 맞는 증거만 무겁게 보는 확증편향이 작동한 것으로 볼 수 있다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 측면 전향과 예비대 불참이 겹쳐 서군은 빠르게 붕괴했다. 六敗(육패) 중 `弛(이)`와 `亂(란)`이 결합한 사례다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span>: 내통 의심 부대를 측면 핵심고지에 두지 않고, 즉시 명령에 응할 확실한 부대로 예비대를 구성했다면 승리를 보장할 수는 없어도 급격한 연쇄 붕괴는 줄일 수 있었다.
+
+#### <span color="blue">**도쿠가와 이에야스(徳川家康, 승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>동군 직속 세력과 조건부 동맹을 구분해 관리했다. (지기·사기)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>전향을 확신하지 않고 정면군을 유지한 채 선택 가능성을 높였다. (지피·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>마쓰오산의 측면효과와 나카센도 축을 전역 결심에 연결했다. (원근·험이)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>서신·보상·비밀을 실제 전장 배치와 결합했다. (지신인용엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>정면전력과 상대 내부의 비전투·전향 세력을 동시에 운용했다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>: `識衆寡之用者勝(식중과지용자승, 대군과 소수 병력을 각각 쓸 줄 아는 자가 이긴다)`처럼 명목 병력보다 실제로 움직일 병력을 계산했다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**동군**</span>
+</td>
+<td>정면 공격군과 서군 내부의 전향·불참 세력을 결합했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**서군**</span>
+</td>
+<td>고지별 대군을 배치했지만 실제 협동 여부가 검증되지 않았다.</td>
+</tr>
+</table>
+
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**동군**</span>
+</td>
+<td>이에야스의 서신과 측근 중개가 개별 다이묘의 선택을 연결했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**서군**</span>
+</td>
+<td>미쓰나리는 연합 다이묘에게 직속 가신과 같은 강제력을 행사하지 못했다.</td>
+</tr>
+</table>
+
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**동군**</span>
+</td>
+<td>전후 영지 배분을 현재의 협력·중립을 사는 전략 자원으로 썼다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**서군**</span>
+</td>
+<td>야간 이동 뒤 곧바로 진을 쳤고, 장기전에 앞서 연합 결속이 먼저 소진됐다.</td>
+</tr>
+</table>
+
+**출처:** [미국 국립공원관리청 세키가하라 전투](https://home.nps.gov/articles/000/battle-of-sekigahara.htm) · [기후 세키가하라 전장기념관 협력 캠페인 해설](https://www.nps.gov/gett/learn/historyculture/sekigahara-campaign.htm) · [세키가하라 역사민속학습관 고문서](https://rekimin-sekigahara.jp/main/exhibition/palaeography/post_52.html)
+
+---
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
 
 ### 핵심 통찰
