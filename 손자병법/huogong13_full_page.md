@@ -96,6 +96,175 @@
 군사학의 비례성·필요성·구별 원칙은 이 구절을 현대에 옮길 때 중요한 한계를 제공한다. 공적 이익이 있다고 주장하는 것만으로 무력 사용이 정당화되지는 않는다. 법적 권한, 민간인 보호, 대안의 존재, 예상 피해를 함께 심사해야 한다. ‘利’를 좁은 승리나 조직 이익으로 축소하면 망국과 죽음을 경계한 결구의 뜻을 거스른다.
 
 ---
+## 4. 역사적 실증 사례
+
+### 서양 — 🇺🇸 미국 vs 🏛️ 소련·🇨🇺 쿠바 │ 쿠바 미사일 위기(Cuban Missile Crisis, 1962)
+
+![쿠바 미사일 위기 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/cuban_commanders.png)
+![쿠바 미사일 위기 병사·장비·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/cuban_soldiers_weapons_life.png)
+![쿠바 미사일 위기 지휘·의사결정 구조](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/cuban_command_structure.png)
+![1962년 카리브해 세력·접근로 지도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/cuban_country_map.png)
+![쿠바 미사일 위기 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/cuban_strategy_map.png)
+![쿠바 미사일 위기 단계별 전개](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/cuban_sequence_map.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- <span color="blue">**▰**</span> <span color="yellow_bg">**워싱턴(Washington, D.C.)**</span>은 사진 판독·ExComm 심의·군사 명령이 모인 미국의 결정 중심이었다. 현장 함정의 접촉을 전쟁으로 바꿀 권한을 이곳에 묶는 일이 위기 통제의 핵심이었다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**모스크바(Moscow)**</span>는 흐루쇼프의 공개 서한과 비공개 신호가 나온 소련의 결정 중심이었다. 워싱턴과의 통신 지연 때문에 한쪽의 행동은 상대의 다음 판단보다 먼저 현장에서 충돌할 수 있었다.
+- 🇨🇺 <span color="yellow_bg">**쿠바(Cuba)**</span>의 산크리스토발·사과라그란데·레메디오스 일대에는 중거리 미사일 기지가 건설됐다. 미국에는 본토 위협이었고 소련에는 쿠바 침공을 억제할 전진 배치였다.
+- 🌊 <span color="blue_bg">**플로리다 해협(Florida Straits)**</span>과 🌊 <span color="blue_bg">**카리브해(Caribbean Sea)**</span>는 미 해군의 격리선과 소련 상선의 접근로가 만나는 공간이었다. 이 선에서 식별·경고·검색·발포의 순서를 통제하지 못하면 외교 위기가 즉시 교전으로 바뀔 수 있었다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**관타나모(Guantánamo)**</span> 기지는 쿠바 안의 미국 거점이었다. 위기가 침공으로 확대되면 가장 먼저 고립·공격될 수 있는 지점이라 방어와 민간인 대피가 필요했다.
+
+#### 상세 전역 서사 — 공습보다 느린 격리를 택해 다음 결정을 위한 시간을 남기다
+
+1962년 10월 14일 U-2 정찰사진은 쿠바에 소련의 공격용 미사일 기지가 건설되고 있음을 보여 주었다. <span color="blue">**존 F. 케네디(John F. Kennedy)**</span>는 이를 공개하기 전에 ExComm을 소집했고, 합참은 공습 뒤 침공을 강하게 주장했다. 그러나 공습이 모든 미사일과 핵탄두를 제거한다는 보장은 없었고, 소련의 보복이 쿠바·베를린·유럽 가운데 어디서 나올지도 알 수 없었다.
+
+<span color="blue">**케네디**</span>는 즉시 공격 대신 해상 ‘격리’를 택했다. 봉쇄는 전쟁행위로 해석될 수 있었지만 공습보다 낮은 단계의 압박이었고, 접근 선박을 식별하며 소련 지도부가 선택할 시간을 남겼다. <span color="red">**니키타 흐루쇼프(Nikita Khrushchev)**</span>도 일부 선박을 돌렸지만 쿠바의 공사는 계속됐다. 양쪽은 공격 준비를 유지하면서도 상대가 물러날 수 있는 출구를 찾았다.
+
+10월 27일 쿠바 상공에서 미 U-2가 격추되어 루돌프 앤더슨이 사망하자 보복 요구가 커졌다. <span color="blue">**케네디**</span>는 즉각 폭격하지 않고 격추 명령의 지휘 경로를 확인하며 협상을 계속했다. 이미 생긴 죽음을 추가 죽음의 자동 근거로 만들지 않은 선택이었다. 미국은 공개적으로 쿠바 불침공을 약속하고, 비공개로 튀르키예의 주피터 미사일 철수 시차를 조정했다. 10월 28일 <span color="red">**흐루쇼프**</span>가 쿠바 미사일 철수를 수용했고, 검증 뒤 11월 20일 격리가 해제됐다.
+
+이 위기는 어느 한쪽이 완벽히 정보를 통제한 승리가 아니다. 오인된 잠수함 신호, U-2의 항로 이탈, 현장 방공 명령처럼 중앙이 즉시 통제하지 못한 위험이 여럿 있었다. 역사적 사실은 핵전쟁이 일어나지 않았다는 것이고, 반사실적 판단은 공습·보복·무기한 압박이 그 위험을 얼마나 키웠을지에 관한 것이다. 이 사례가 구절을 입증하는 지점은 감정을 없앤 데 있지 않다. **비가역적 파국 앞에서 되돌릴 수 있는 압박을 선택하고, 목적이 달성되자 멈춘 데** 있다.
+
+#### 속임수와 정보의 경계 — 비밀 배치, 공개 사진, 비공개 거래
+
+소련은 쿠바 배치를 비밀리에 진행했고 미국에는 공격용 무기 배치 의도를 부인했다. 미국은 U-2 사진을 공개해 이 비밀을 깨뜨렸지만, 튀르키예 주피터 미사일 철수 약속은 즉시 공개하지 않았다. 앞의 것은 상대의 판단을 속이기 위한 은폐였고, 뒤의 것은 합의를 가능하게 한 비공개 외교였다. 두 행위를 같은 ‘기만’으로 묶으면 목적·대상·위험이 사라진다.
+
+#### 法 한눈 비교 — 곡제·관도·주용
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**미국(위기 통제)**</span></td><td>ExComm·해군 격리대·정찰·공격대기를 분리했다.</td><td>현장 발포를 단계별 규칙과 대통령 승인 아래 묶었다.</td><td>장기 격리와 정찰을 유지하면서 협상 시간을 벌었다.</td></tr>
+<tr><td><span color="red">**소련·쿠바(배치 철회)**</span></td><td>비밀 미사일 배치·방공·상선 수송이 서로 다른 지휘선에 걸렸다.</td><td>모스크바·현지군·쿠바 지휘부의 권한과 통신 지연이 위험을 키웠다.</td><td>해상 접근이 막히고 배치 비밀이 깨져 지속 조건이 약해졌다.</td></tr>
+</table>
+
+#### <span color="red">**흐루쇼프·소련 배치 측(철회)**</span>
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>쿠바 방어와 전략 균형이라는 목적은 있었으나 배치 비밀과 공개 부인이 동맹·상대의 신뢰를 함께 소모했다. (지기·정치)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>미국이 배치를 늦게 발견하고 기정사실을 받아들일 가능성에 걸었으나 U-2 사진과 공개 압박이 그 가정을 무너뜨렸다. (지피·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>쿠바의 근접성은 미국 본토를 위협했지만 🌊 <span color="blue_bg">**대서양(Atlantic Ocean)**</span> 보급선은 미 해군의 격리에 노출됐다. (원근·사생)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="red">**흐루쇼프**</span>는 대담한 배치 뒤 전쟁을 피할 출구도 찾았으나, 비밀 작전의 노출 가능성과 현장 통제 위험을 과소평가했다. (지·용·엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>현지 핵전력·방공·상선·외교 메시지의 지휘와 공개 수준이 달라 중앙 통제와 현장 행동 사이에 간극이 생겼다. (곡제·관도·주용)</td></tr>
+</table>
+🏳️ <span color="red">**패군 측 결과**</span> 소련은 쿠바 미사일을 철수했지만 쿠바 불침공 약속과 미국의 주피터 미사일 후속 철수를 얻었다. 이를 일방적 항복으로만 읽으면 위기를 끝낸 상호 출구가 보이지 않는다.
+
+#### <span color="blue">**케네디·미국 위기관리 측(목표 달성)**</span>
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>미사일 제거라는 제한 목표를 유지하고 모욕의 보복이나 쿠바 정권 교체로 목적을 넓히지 않았다. (지기·정치)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>소련의 반응과 현장 우발을 통제할 수 없음을 인정해 공습보다 되돌릴 여지가 큰 격리를 택했다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>🌊 <span color="blue_bg">**카리브해(Caribbean Sea)**</span> 접근로를 압박 공간으로 쓰되 쿠바 본토 침공은 보류했다. (원근·광협)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="blue">**케네디**</span>는 합참의 전문 의견을 듣고도 정치 목적과 핵 확전 위험을 함께 판단했으며, U-2 격추 뒤 즉각 보복을 멈췄다. (지·인·엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>ExComm 심의, 해군 교전규칙, 공개 서한과 비공개 채널을 분리해 압박과 출구를 동시에 운용했다. (곡제·관도·주용)</td></tr>
+</table>
+🏆 <span color="blue">**승군 측 결과**</span> 미국은 쿠바의 공격용 미사일 철수를 얻고 전면전을 피했다. 목적 달성 뒤 격리를 해제했기에 압박이 관성적 전쟁으로 변하지 않았다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**미국**</span></td><td>정찰·해상 격리·공습 대기·외교를 서로 다른 수단으로 두고 대통령이 단계 전환을 통제했다.</td></tr>
+<tr><td><span color="red">**소련·쿠바**</span></td><td>미사일 부대·방공부대·상선·쿠바군이 분리되어 있었고 각자의 행동이 전체 위기를 바꿀 수 있었다.</td></tr>
+</table>
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**미국**</span></td><td>ExComm의 논쟁을 거쳐 대통령이 결론을 내리고 해군에는 식별·경고·검색·발포의 단계가 전달됐다.</td></tr>
+<tr><td><span color="red">**소련·쿠바**</span></td><td>모스크바와 현지 방공·쿠바 지도부 사이의 정보와 권한이 완전히 일치하지 않아 U-2 격추 같은 위험이 생겼다.</td></tr>
+</table>
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**미국**</span></td><td>해군·정찰기·공군 대기를 유지할 물자와 기지를 갖고 있었지만, 장기화할수록 우발 충돌 확률도 누적됐다.</td></tr>
+<tr><td><span color="red">**소련·쿠바**</span></td><td>대서양 상선 수송과 쿠바 내 건설이 격리·정찰에 노출되어 배치를 은밀히 완성할 조건이 사라졌다.</td></tr>
+</table>
+
+**사료와 연구:** [미 국무부 역사실 — Cuban Missile Crisis](https://history.state.gov/milestones/1961-1968/cuban-missile-crisis) · [미 국립문서기록관리청 — Aerial Photograph of Missiles in Cuba](https://www.archives.gov/milestone-documents/aerial-photograph-of-missiles-in-cuba) · [미 국립문서기록관리청 — One Step from Nuclear War](https://www.archives.gov/publications/prologue/2012/fall/cuban-missiles.html)
+
+### 동양 — 🏛️ 동진 북부부대 vs 🏛️ 전진군 │ 비수대전(淝水之戰, 383)
+
+![비수대전 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/feiriver_commanders.png)
+![비수대전 병사·무기·생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/feiriver_soldiers_weapons_life.png)
+![비수대전 지휘·작전 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/feiriver_command_structure.png)
+![383년 전진·동진 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/feiriver_country_map.png)
+![비수대전 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/feiriver_strategy_map.png)
+![비수대전 단계별 전개](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong13/feiriver_sequence_map.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- <span color="red">**▰**</span> <span color="yellow_bg">**수양(壽陽)**</span>은 전진 선봉의 전진기지였고 🌊 <span color="blue_bg">**비수(淝水)**</span> 서안 진지와 가까웠다. 부견이 대군 전체보다 앞서 이곳에 와 선봉의 판단을 직접 끌었다.
+- 🌊 <span color="blue_bg">**비수(淝水)**</span>는 전진군이 서안, 동진군이 동안에 선 결전 수로였다. 강을 사이에 둔 채 기다리면 전진이 유리했지만, 후퇴 명령은 큰 혼성군 전체에 동시에 전달되지 못했다.
+- 🌊 <span color="blue_bg">**낙간(洛澗)**</span>은 결전 전 전진군이 먼저 패한 전초였다. 유뢰지의 승리는 동진군 사기를 높이고 전진군 내부에는 ‘이미 밀리고 있다’는 신호를 만들었다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**항성(項城)**</span> 일대에는 전진의 후속 대군이 길게 늘어섰다. 병력 수의 장점은 선봉·중군·후속이 한 명령과 한 박자로 움직일 때만 실제 전력이 될 수 있었다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**광릉(廣陵)**</span>에서 훈련된 북부병은 사현·유뢰지의 지휘 아래 비교적 통일된 편제를 갖췄다. 적은 병력이었지만 강을 건너는 순간에 힘을 집중할 수 있었다.
+
+#### 상세 전역 서사 — 통일의 이익이 사라졌는데도 대군의 위세를 멈춤 기준으로 삼다
+
+전진의 군주 <span color="red">**부견(苻堅)**</span>은 북방을 통일한 뒤 동진 정벌을 추진했다. 중신들은 새로 편입된 여러 지역과 종족의 결속이 충분하지 않고 대규모 원정의 이익이 불분명하다고 반대했지만, <span color="red">**부견**</span>은 병력 규모와 연전의 기세를 믿었다. 사료의 병력 숫자는 과장 가능성이 크므로, ‘백만’이라는 수치보다 선봉과 후속이 길게 분리된 거대한 혼성군이었다는 구조가 중요하다.
+
+동진은 <span color="blue">**사안(謝安)**</span>이 전체 방어를 조정하고 <span color="blue">**사현(謝玄)**</span>이 북부병을 지휘했다. <span color="blue">**유뢰지(劉牢之)**</span>가 낙간에서 전진의 양성을 격파하자 수적 열세였던 동진군은 사기를 얻었다. 전진의 항장 주서가 내부의 허실을 알려 준 것도 동진이 결전을 서두르는 근거가 됐다.
+
+🌊 <span color="blue_bg">**비수(淝水)**</span> 서안의 전진군은 강을 막고 기다리면 됐다. <span color="blue">**사현**</span>이 군대를 조금 물려 동진군이 건너게 해 달라고 제안하자 전진 장수 다수는 반대했다. 그러나 <span color="red">**부견**</span>과 <span color="red">**부융(苻融)**</span>은 적이 반쯤 건넜을 때 치겠다는 계산으로 후퇴를 허용했다. 문제는 계책 자체보다, 대군이 질서 있게 잠깐 물러섰다가 다시 서라는 명령을 수행할 통제력이 없었다는 점이다.
+
+후퇴가 시작되자 주서가 뒤에서 “진군이 패했다”고 외쳤고, 이미 낙간 패전과 불안한 결속을 안고 있던 전진군은 이를 사실로 받아들였다. <span color="blue">**사현**</span>의 정예가 도하해 공격했고 <span color="red">**부융**</span>이 전사하면서 후퇴는 붕괴로 바뀌었다. 전진은 몇 해 안에 여러 정권으로 갈라졌다. 단 한 번의 전투가 모든 원인은 아니지만, 통합되지 않은 제국이 감당할 수 없는 전쟁을 멈추지 못한 것이 붕괴를 가속했다.
+
+#### 속임수 작동 구조 — ‘조금 물러나라’는 제안과 자기기만
+
+동진의 제안은 전진군이 자발적으로 유리한 강변 진지를 비우게 만든 유인이었다. 실제 의도는 안전하게 건널 공간을 얻어 전진의 후퇴가 대형 혼란으로 바뀌는 순간을 치는 것이었다. 그러나 전진 지휘부가 이를 믿은 이유는 단순한 어리석음이 아니라 압도적 병력으로 반도하격을 해낼 수 있다는 기존 기대였다. 주서의 외침은 혼란을 패전 신호로 굳혔지만, 통제 가능한 후퇴였다면 그 한마디만으로 전군이 붕괴하지는 않았을 것이다.
+
+#### 法 한눈 비교 — 곡제·관도·주용
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>곡제(편제)</td><td>관도(지휘)</td><td>주용(보급·지속)</td></tr>
+<tr><td><span color="blue">**동진군(승)**</span></td><td>북부병 정예를 도하 순간에 집중했다.</td><td>사안–사석·사현–유뢰지의 역할이 비교적 선명했다.</td><td>짧은 방어선과 지역 기반으로 병력을 유지했다.</td></tr>
+<tr><td><span color="red">**전진군(패)**</span></td><td>선봉과 후속 대군이 길게 분산됐다.</td><td>부견의 판단이 현장 지휘를 압도했고 후퇴 명령이 통제되지 않았다.</td><td>대규모 원정군의 이동·보급·결속 비용이 누적됐다.</td></tr>
+</table>
+
+#### <span color="red">**부견·전진군(패)**</span>
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>새로 편입한 여러 세력과 병사의 전쟁 목적이 충분히 같지 않았고 후퇴 순간 사기가 급락했다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>과거의 연승과 병력 우세를 이번 전쟁의 승산으로 일반화하고 낙간 패전·주서의 정보·동진군 사기 상승을 낮게 보았다. (지피·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>유리한 강변 차단선을 스스로 비우고, 좁은 도하 정면에서 후퇴와 재공격을 동시에 하려 했다. (험이·광협)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="red">**부견**</span>은 대담했으나 반대 진언을 이익 재평가의 근거로 쓰지 않았고, <span color="red">**부융**</span>은 붕괴한 대열을 되돌리다 전사했다. (지·용·엄)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>거대한 혼성군에 잠깐 후퇴·즉시 정지·반격을 실행할 통일된 신호와 예비가 부족했다. (곡제·관도·주용)</td></tr>
+</table>
+🏳️ <span color="red">**패군 측 결과**</span> 전진군은 비수에서 붕괴했고 부견의 권위와 군사력이 크게 손상됐다. 六敗(육패) 가운데 `亂`(란, 지휘와 대오가 무너짐)과 `北`(배, 적정을 헤아리지 못한 패배)이 겹쳤다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span> 동진의 도하 제안을 거절하고 서안 진지를 유지했거나, 후퇴가 필요했다면 선봉 일부만 통제된 간격으로 움직이고 예비대를 세웠다면 한 번의 신호가 전군 붕괴로 번지는 일을 줄일 수 있었다. 더 이른 분기점은 남정을 연기하고 새로 통합한 북방의 지휘·보급·충성을 먼저 굳히는 것이었다. 이는 완전한 승리를 보장하지 않지만 제국 붕괴를 앞당긴 완패는 피할 가능성이 컸다.
+
+#### <span color="blue">**사현·동진군(승)**</span>
+<table fit-page-width="true" header-row="true">
+<tr><td>요소</td><td>판단</td></tr>
+<tr><td color="orange_bg">🤝 **道**</td><td>북부병의 훈련과 지휘 신뢰가 낙간 승리 뒤 결속으로 이어졌다. (지기·사기)</td></tr>
+<tr><td color="blue_bg">🌤️ **天**</td><td>전진군의 불안한 결속과 후퇴 명령을 기회로 삼되, 수적 열세 자체를 없다고 과장하지 않았다. (지피·타이밍·확률 관점)</td></tr>
+<tr><td color="green_bg">🧭 **地**</td><td>강을 건너야 하는 불리함을 상대가 진지를 비우는 순간 집중 도하로 바꿨다. (원근·험이·광협)</td></tr>
+<tr><td color="purple_bg">🎖️ **將**</td><td><span color="blue">**사현**</span>은 제안·도하·공격의 시간을 연결했고 <span color="blue">**유뢰지**</span>의 전초 승리를 전체 사기로 전환했다. (지·신·용)</td></tr>
+<tr><td color="yellow_bg">⚙️ **法**</td><td>정예 선봉과 본대를 좁은 시점에 결합해 수적 열세를 국지적 우세로 바꿨다. (곡제·관도·주용)</td></tr>
+</table>
+🏆 <span color="blue">**승군 측 결과**</span> 동진군은 수도권과 🌊 <span color="blue_bg">**장강(長江)**</span> 하류 방어를 지켰다. 五勝(오승) 중 `識衆寡之用者勝`(식중과지용자승, 많고 적은 병력의 쓰임을 아는 자가 이긴다)에 가깝다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**동진군**</span></td><td>유뢰지의 전초 정예와 사현의 도하 주력을 연속해 투입했다.</td></tr>
+<tr><td><span color="red">**전진군**</span></td><td>선봉·중군·후속이 넓게 분리되어 비수 정면의 혼란을 흡수할 예비가 부족했다.</td></tr>
+</table>
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**동진군**</span></td><td>사안의 전략 조정 아래 사현이 현장을 지휘하고 유뢰지가 독립 선봉 임무를 수행했다.</td></tr>
+<tr><td><span color="red">**전진군**</span></td><td>부견·부융의 후퇴 판단이 대군에 전달됐지만 정지 지점과 재반격 신호가 통일되지 않았다.</td></tr>
+</table>
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr><td>진영</td><td>실제 운용</td></tr>
+<tr><td><span color="blue">**동진군**</span></td><td>방어 기반에 가까운 정예군을 짧은 결전 구간에 집중해 피로와 보급 부담을 제한했다.</td></tr>
+<tr><td><span color="red">**전진군**</span></td><td>대규모 혼성군을 먼 거리로 이동시키면서 식량·숙영·명령 전달과 사기 유지 비용이 누적됐다.</td></tr>
+</table>
+
+**사료와 연구:** [中國哲學書電子化計劃 — 『資治通鑑』 관련 자료](https://ctext.org/datawiki.pl?if=gb&res=5998570) · [홍콩 교육국 — 비수대전 사료 학습자료](https://www.edb.gov.hk/attachment/sc/curriculum-development/kla/pshe/references-and-resources/chinese-history/war3_sc.pdf)
+
+---
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
 
 ### 핵심 통찰
