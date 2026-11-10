@@ -5,7 +5,8 @@
 ## 1. 원문 + 독음 + 직역 + 한자어 뜻풀이
 
 <details color="orange_bg">
-<summary><span color="red">鄕間</span>者, <span color="red">因</span>其<span color="red">鄕人</span>而<span color="red">用</span>之, <span color="red">內間</span>者, <span color="red">因</span>其<span color="red">官人</span>而<span color="red">用</span>之, <span color="red">反間</span>者, <span color="red">因</span>其<span color="red">敵間</span>而<span color="red">用</span>之.<br>향간자, 인기향인이용지, 내간자, 인기관인이용지, 반간자, 인기적간이용지.</summary>
+<summary>
+<span color="red">鄕間</span>者, <span color="red">因</span>其<span color="red">鄕人</span>而<span color="red">用</span>之, <span color="red">內間</span>者, <span color="red">因</span>其<span color="red">官人</span>而<span color="red">用</span>之, <span color="red">反間</span>者, <span color="red">因</span>其<span color="red">敵間</span>而<span color="red">用</span>之.<br>향간자, 인기향인이용지, 내간자, 인기관인이용지, 반간자, 인기적간이용지.</summary>
 
 **직역**  
 향간은 적지의 고을 사람에게 기대어 그를 쓰는 것이고, 내간은 적국의 관직에 있는 사람에게 기대어 그를 쓰는 것이며, 반간은 적이 보낸 간첩에게 기대어 그를 되돌려 쓰는 것이다.
@@ -121,6 +122,457 @@
 사용자의 「생각에대한 생각」 메모가 경계한 한 가지 시나리오 집중과 분모 무시도 여기에 적용된다. 내부자 한 명의 생생한 말은 기억에 잘 남아 그 조직 전체를 대표하는 듯 보이지만, 그 사람이 실제로 접한 부서·기간·사건은 전체 가운데 작은 분자일 수 있다. 출처 유형마다 `직접 본 범위 / 전해 들은 범위 / 보지 못한 범위 / 대안 설명`을 함께 적어야 생생함이 확률 판단을 삼키지 않는다.
 
 현대 적용의 핵심은 더 많은 사람을 몰래 모으는 것이 아니다. 중요한 판단마다 현장 관찰, 절차 기록, 독립된 외부 확인처럼 합법적이고 공개된 서로 다른 경로를 정하고, 각 경로가 결론을 바꿀 수 있는 질문에 실제로 접근하는지 확인하는 것이다.
+
+---
+## 4. 역사적 실증 사례
+
+### 서양 — 🇬🇧 연합군 기만조직 vs 🏛️ 나치 독일 정보·지휘체계 │ 포티튜드 사우스 작전(Operation Fortitude South, 1944)
+
+![포티튜드 주요 인물](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/fortitude_commanders.png)
+![포티튜드 병사 무기 생활](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/fortitude_soldiers_weapons_life.png)
+![포티튜드 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/fortitude_command_structure.png)
+![포티튜드 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/fortitude_country_map.png)
+![포티튜드 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/fortitude_strategy_map.png)
+![포티튜드 단계별 전역 흐름](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/fortitude_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- <span color="blue">**▰**</span> <span color="yellow_bg">**런던(London)**</span>은 연합군 기만 통제와 MI5의 반간 운용이 결합된 중심이었다. 여기서 만든 이야기는 무선·가짜 편제·이중간첩 보고를 통해 서로 독립된 증거처럼 보이게 설계되었다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**도버(Dover)**</span>와 켄트는 🌊 <span color="blue_bg">**도버 해협(Strait of Dover)**</span>의 최단 횡단축을 마주한다. 연합군은 이 지리적 상식을 이용해 파드칼레 주공설을 그럴듯하게 만들었다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**파드칼레(Pas-de-Calais)**</span>는 독일이 가장 짧고 항공 엄호가 쉬운 상륙축으로 예상한 곳이다. 가상 제1미집단군(FUSAG)의 신호는 이 기존 기대를 강화했다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**노르망디(Normandy)**</span>는 실제 상륙지였다. 파드칼레와 충분히 떨어져 있어 그곳에 묶인 독일 예비대가 즉시 교두보를 압박하기 어려웠다.
+- 🌊 <span color="blue_bg">**영국 해협(English Channel)**</span>은 같은 바다이지만 도버의 짧은 횡단과 노르망디의 긴 항해를 동시에 제공했다. 기만은 지리를 부정하지 않고, 적이 더 자연스럽다고 믿는 한쪽만 과대평가하게 했다.
+
+#### 상세 전역 서사 — 서로 다른 정보 통로가 한 거짓 결론을 독립적으로 지지하게 만들다
+
+연합군의 문제는 상륙 지점을 비밀로 하는 데서 끝나지 않았다. 상륙 뒤 독일 예비대가 노르망디로 몰려오는 시간을 늦춰야 했다. 런던 통제부는 켄트에 실재하지 않는 대규모 편제와 무선 활동을 보이게 하고, <span color="blue">**후안 푸욜 가르시아(Juan Pujol García)**</span>를 비롯한 이중간첩망이 독일이 이미 기대하던 파드칼레 주공설을 사람의 보고로 되받치게 했다.
+
+가르보라는 암호명의 <span color="blue">**푸욜**</span>은 27명의 가상 하위 정보원을 꾸몄다. 지역별 생활·부대 이동·무선 보고가 서로 다른 향간처럼 보였지만 실제로는 영국 측이 통제한 이야기였다. MI5는 적이 보낸 간첩을 붙잡아 돌려 쓰는 반간 체계와, 스스로 독일 측에 접근한 <span color="blue">**푸욜**</span>의 독특한 경로를 하나의 검증된 송신망으로 묶었다.
+
+1944년 6월 6일 실제 상륙이 시작된 뒤에도 기만은 끝나지 않았다. 6월 9일 가르보의 메시지는 노르망디를 양동으로, 파드칼레 공격을 아직 오지 않은 주공으로 해석하도록 유도했다. 🏛️ 독일 지휘부는 자신이 신뢰해 온 출처와 짧은 해협이라는 지리, 가상 편제의 무선 흔적이 같은 결론을 가리킨다고 보았다.
+
+영국 국립문서보관소는 독일이 7~8월에도 파드칼레에 기갑 2개 사단과 보병 19개 사단을 유지했다고 설명한다. 모든 지연을 반간 하나의 효과로 돌릴 수는 없지만, 서로 다른 통로처럼 보이는 신호가 독일의 기존 기대를 강화한 것은 노르망디 교두보에 시간을 주었다.
+
+#### 전투에서 사용된 속임수 — 가상 하위 정보원과 적이 신뢰한 반간망
+
+속인 주체는 연합군 기만기구와 MI5였고, 실제 의도는 노르망디 상륙 뒤에도 독일 예비대를 파드칼레에 묶는 것이었다. 독일에는 켄트의 가상군, 무선 교신, 가르보의 지역별 하위망이 보였다. 독일이 이를 믿은 까닭은 파드칼레가 지리적으로 가장 짧은 횡단축이라는 기존 기대와, 가르보가 오랜 기간 쌓은 신뢰가 맞물렸기 때문이다. 그 믿음은 예비대의 잔류를 낳았고, 실제 타격은 노르망디에서 이루어졌다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 연합군은 존재하지 않는 편제를 보이려는 데 그치지 않고 독일 정보기관이 스스로 수집·대조했다고 느끼는 구조를 만들었다.
+
+**보인 신호와 믿은 이유.** 짧은 도버 해협, 패튼의 명성, 무선 활동, 가르보망의 세부 보고가 동일한 파드칼레 결론을 지지했다. 서로 독립적으로 보였다는 점이 신뢰를 키웠다.
+
+**유발된 행동과 결과.** 독일 지휘부는 노르망디 상륙 뒤에도 제2공격 가능성을 남겨 두고 파드칼레 전력을 유지했다. 이는 연합군의 노르망디 증원 시간을 늘렸다.
+
+**사료의 경계.** 독일의 예비대 운용에는 히틀러의 지휘방식, 연합군 제공권, 수송망 파괴도 함께 작용했다. 포티튜드만으로 노르망디의 성패를 단일 설명해서는 안 된다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 연합군 기만조직과 MI5의 이중간첩망이 독일 정보기관과 지휘부를 속였다.
+2. **어떤 사실이 거짓이었는가?** 켄트의 대규모 FUSAG 편제와 파드칼레 주공 계획은 조작된 것이었다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 패튼이 실제 장군이고 도버 해협이 최단거리라는 사실은 참이었지만, 그것이 실제 주공을 뜻하지는 않았다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 가장 짧은 횡단축이 주공일 것이라는 기존 계획 가정과 장기간 신뢰한 정보원이 결론을 편안하게 만들었다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 있었지만 지속 기간은 짧았을 것이다. 노르망디 상륙 자체가 반대 증거였기 때문이다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 사람 보고·무선·가상 편제가 실제 상륙 준비와 연결되는지, 각 증거의 원천이 정말 독립적인지 충분히 분리하지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 보안 모의훈련에서 여러 채널의 경보가 같은 원천을 공유하는지 추적하고, 레드팀이 만든 가상 신호를 화이트팀이 독립 검증하는 방식으로 연습할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>해당 구절·독음·뜻</td>
+<td>전장의 장면</td>
+</tr>
+<tr>
+<td>近而示之遠<br>근이시지원 — 가까운 것을 멀리 보인다</td>
+<td>실제 노르망디 상륙 준비를 가리고, 지리적으로 가까운 파드칼레를 아직 오지 않은 주공으로 보였다.</td>
+</tr>
+<tr>
+<td>用而示之不用<br>용이시지불용 — 쓰면서 쓰지 않는 듯 보인다</td>
+<td>실제 상륙군은 노르망디로 움직였지만 가상 편제의 신호가 진짜 주공은 대기 중인 듯 보이게 했다.</td>
+</tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>곡제(편제)</td>
+<td>관도(지휘)</td>
+<td>주용(보급·지속)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**연합군**</span>
+</td>
+<td>실제 상륙 편제와 가상 FUSAG·반간망을 분리해 결합했다.</td>
+<td>LCS·MI5·SHAEF가 신호와 실제 작전의 노출을 통제했다.</td>
+<td>가짜 장비는 적은 비용으로 신호를 만들고 실제 함대·병력은 노르망디에 집중했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**독일군**</span>
+</td>
+<td>해안방어와 기갑 예비대가 여러 지휘권 아래 나뉘었다.</td>
+<td>OB West·국방군 최고사령부·히틀러의 권한 중첩이 전환을 늦췄다.</td>
+<td>연합군 공습으로 철도·도로 이동이 제한되어 잘못 배치된 전력의 전환 비용이 컸다.</td>
+</tr>
+</table>
+
+#### <span color="red">**게르트 폰 룬트슈테트(Gerd von Rundstedt, 패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>서부전선 지휘권이 히틀러·OB West·기갑집단 사이에 갈려 신속한 공동 판단이 어려웠다. (지기·결속)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>노르망디 상륙이라는 강한 새 증거보다 파드칼레 제2공격 가능성을 오래 남겼다. 여러 증거가 같은 기만 설계에서 나왔을 가능성을 낮게 보았다. (지피·타이밍·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>🌊 <span color="blue_bg">**도버 해협(Strait of Dover)**</span>의 최단거리 이점이 실제 선택을 보증한다고 과대평가했다. (원근·광협)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>
+<span color="red">**룬트슈테트**</span>는 경험이 풍부했지만 상위 지휘의 승인 구조를 깨고 예비대를 집중할 권한이 제한되었다. (지신인용엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>분산 지휘와 손상된 수송망 때문에 파드칼레 병력을 노르망디로 신속히 돌리기 어려웠다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+**직관·편향 한 줄:** 노르망디 상륙 뒤에도 파드칼레 주공 가설을 오래 유지한 명령과 배치는 기존 계획에 맞는 가르보 보고를 더 무겁게 본 확증편향이 작동한 것으로 볼 수 있으며, 예비대 전환을 늦췄다.
+
+🏳️ <span color="red">**패군 측 결과**</span> — 六敗 가운데 지휘권과 명령선이 흔들린 `亂(란)`의 성격이 강하다. 🔀 <span color="orange">**패군 측 회피 분기점**</span>은 6월 9일 이후 사람 보고·무선 신호·가상 편제의 원출처 독립성을 다시 계산하고, 파드칼레 전력을 단계적으로 노르망디에 전환하는 것이었다.
+
+#### <span color="blue">**후안 푸욜 가르시아(Juan Pujol García, 승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>
+<span color="blue">**푸욜**</span>과 <span color="blue">**토머스 해리스**</span>는 장기간 일관된 보고 체계로 독일 측 신뢰를 쌓되 영국 통제 아래 움직였다. (지기·신뢰)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>독일이 파드칼레를 기대한다는 외부 변수를 이용했지만 성공을 가정하지 않고 감청과 독일 반응으로 신뢰를 확인했다. (지피·타이밍·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>도버의 짧은 거리와 노르망디의 실제 상륙축을 하나의 대조 구조로 사용했다. (원근·광협)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>
+<span color="blue">**푸욜**</span>은 세부 생활 보고와 지연·실수까지 포함해 출처의 인간적 신빙성을 유지했다. (지·신)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>27명 가상 하위망, 무선, 가상 부대, 실제 작전을 각각 다른 신호층으로 편제했다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span> — `以虞待不虞者勝(이우대불우자승 — 준비한 채 준비되지 않은 적을 상대하는 자가 이긴다)`에 해당한다. 반간 한 사람을 믿은 것이 아니라 적이 믿는 경로를 장기간 시험하고 여러 신호를 통제했다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>곡제(편제)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**연합군**</span>
+</td>
+<td>LCS·MI5·무선부대·가상 FUSAG·실제 상륙군을 역할별로 분리했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**독일군**</span>
+</td>
+<td>해안군·기갑예비대·정보기관의 판단이 통합되지 못했다.</td>
+</tr>
+</table>
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>관도(지휘)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**연합군**</span>
+</td>
+<td>기만 메시지는 승인·조정 절차를 거쳐 실제 작전과 충돌하지 않게 했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**독일군**</span>
+</td>
+<td>현장·서부사령부·최고사령부 사이 권한 중첩이 예비대 전환을 늦췄다.</td>
+</tr>
+</table>
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>주용(보급·지속)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**연합군**</span>
+</td>
+<td>가짜 장비·무선은 실제 대군보다 적은 비용으로 지속 가능한 신호를 냈다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**독일군**</span>
+</td>
+<td>파괴된 철도·도로와 연료 부족은 잘못 배치된 병력의 재배치를 더 어렵게 했다.</td>
+</tr>
+</table>
+
+**출처:** [영국 국립문서보관소 — Operation Overlord and D-Day](https://www.nationalarchives.gov.uk/explore-the-collection/explore-by-time-period/second-world-war/operation-overlord-and-d-day/) · [영국 국립문서보관소 — Double Agent Operations](https://www.nationalarchives.gov.uk/double-agent-operations/) · [MI5 Official Secrets](https://www.nationalarchives.gov.uk/whats-on/exhibitions/mi5-official-secrets/)
+
+### 동양 — 🏛️ 조조군 vs 🏛️ 원소군 │ 관도대전(官渡之戰, 200년)
+
+![관도대전 주요 인물](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/guandu_commanders.png)
+![관도대전 병사 무기 생활](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/guandu_soldiers_weapons_life.png)
+![관도대전 지휘 편제](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/guandu_command_structure.png)
+![후한 말 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/guandu_country_map.png)
+![관도대전 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/guandu_strategy_map.png)
+![관도대전 단계별 전역 흐름](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_yonggan8/guandu_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- 🌊 <span color="blue_bg">**황하(黃河)**</span>는 원소 세력권과 조조의 중원 방어권을 가르는 큰 장벽이었다. 백마·연진의 나루는 원소군의 남진과 조조군의 지연전이 만나는 통로였다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**여양(黎陽)**</span>은 원소군이 황하 남진을 준비한 전진 거점이었다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**관도(官渡)**</span>는 허도로 향하는 길목의 조조군 방어 거점이었다. 장기 교착이 이어지면서 조조군의 군량도 한계에 가까워졌다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**오소(烏巢)**</span>는 원소군의 대규모 군량이 모인 후방 창고였다. 본영과 떨어진 이 거점의 위치·수비 상태를 아는 내부자 정보가 전환점을 만들었다.
+- <span color="blue">**▰**</span> <span color="yellow_bg">**허도(許都)**</span>는 조조의 정치·보급 중심이었다. 허유는 원소에게 이곳을 기습하자고 했으나 받아들여지지 않았다.
+
+#### 상세 전역 서사 — 받아들여지지 않은 내부자의 계책이 반대 진영의 표적으로 바뀌다
+
+관도의 교착은 병력이 적고 군량이 빠듯한 <span color="blue">**조조(曹操)**</span>에게 시간이 불리한 싸움이었다. 원소군 내부에서는 <span color="red">**저수(沮授)**</span>가 오소 바깥에 별도 부대를 두어 후방 약탈을 막자고 건의했으나 채택되지 않았다. 원소의 모사 <span color="red">**허유(許攸)**</span>도 허도를 기습하자는 계책이 받아들여지지 않은 뒤 조조 진영으로 넘어갔다.
+
+《삼국지》 계열 기록에서 <span color="blue">**허유**</span>는 원소군 군량 수레 만여 승이 고시·오소에 있고 수비가 엄하지 않다고 알렸다. 이 정보는 내부자의 직무·관계로 닿은 `官人`형 접근을 보여 주지만, 조조는 옛 지인이라는 이유만으로 곧바로 믿은 것이 아니다. <span color="blue">**순유(荀攸)**</span>와 <span color="blue">**가후(賈詡)**</span>의 판단을 거쳐 본영 수비와 기습 위험을 나눴다.
+
+<span color="blue">**조조**</span>는 <span color="blue">**조홍(曹洪)**</span>과 <span color="blue">**순유**</span>에게 관도 본영을 맡기고 보병·기병 5천을 골라 밤에 오소로 향했다. 병사들은 원소군 깃발을 들고 마주친 이들에게 후방 방비를 증원하러 간다고 답했다. 내부 정보가 표적을 정했고, 위장 깃발과 야간 기동이 접근을 완성했다.
+
+오소에 불이 붙자 <span color="red">**원소(袁紹)**</span>는 주력을 관도 본영 공격에 보내고 오소에는 제한된 구원만 보냈다. <span color="red">**장합(張郃)**</span>과 <span color="red">**고람(高覽)**</span>의 본영 공격은 실패했고, 군량 소실 소식과 내부 비난이 겹치자 두 장수는 조조군에 투항했다. 내부 접근을 보호하지 못한 조직에서 한 번의 전향은 표적 정보, 후속 기만, 지휘체계 붕괴로 연쇄되었다.
+
+#### 전투에서 사용된 속임수 — 원소군 깃발과 후방 증원이라는 통과 신호
+
+속인 주체는 <span color="blue">**조조**</span>의 오소 기습대였다. 실제 목표는 군량창 소각이었지만 원소군 깃발과 “후방 방비 증원”이라는 설명을 보였다. 원소군 영역 안에서 자기 깃발과 후방 이동을 보는 경계병에게 이 신호는 합리적으로 보였다. 그 결과 기습대는 야간 접근에 성공했고 오소 군량을 불태웠다.
+
+#### 속임수 작동 구조
+
+**주체와 의도.** <span color="blue">**조조**</span>는 정면 교착을 계속하는 대신 내부자가 알려 준 후방 표적을 작은 정예대로 치려 했다.
+
+**보인 신호와 믿은 이유.** 원소군 깃발, 야간 이동, 후방 방비라는 설명은 원소군의 실제 경계 임무와 맞아 보였다.
+
+**유발된 행동과 결과.** 길목의 원소군은 기습대를 통과시켰고, 오소의 군량이 소실되면서 원소군의 보급·사기·지휘가 함께 무너졌다.
+
+**사료의 경계.** 허유의 전향 동기와 조조와의 대화는 《후한서》·《삼국지》 주석 자료 사이에 세부 차이가 있다. 확실한 골격은 전향, 오소 정보, 야간 기습, 군량 소실이다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 조조의 오소 기습대가 이동로의 원소군 경계와 오소 수비를 속였다.
+2. **어떤 사실이 거짓이었는가?** 기습대가 원소군의 후방 증원부대라는 표지와 설명이 거짓이었다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 오소가 실제로 후방 방비가 필요한 군량거점이라는 사실이 거짓 설명을 자연스럽게 했다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 자기 깃발과 자기 후방으로 향하는 부대를 정상 증원으로 보는 것이 당시 경계병에게 합리적이었다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 낮다. 깃발·설명이 없었다면 야간 정예대는 더 일찍 저지되었을 것이다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 증원 명령의 발신자, 부대 지휘관, 이동 암구호를 별도 전령으로 확인하지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 보안 훈련에서 유니폼·메일 발신자만 믿지 않고 작업지시 번호와 별도 승인채널을 확인하는 모의훈련으로 연습할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>해당 구절·독음·뜻</td>
+<td>전장의 장면</td>
+</tr>
+<tr>
+<td>能而示之不能<br>능이시지불능 — 능하면서 능하지 않은 듯 보인다</td>
+<td>오소로 향하는 적대 기습대를 원소군 후방을 지키러 가는 우군처럼 보였다.</td>
+</tr>
+<tr>
+<td>近而示之遠<br>근이시지원 — 가까운 것을 멀리 보인다</td>
+<td>본영 정면이 아니라 내부자가 알려 준 수비가 약한 군량창을 정예 5천으로 쳤다.</td>
+</tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>곡제(편제)</td>
+<td>관도(지휘)</td>
+<td>주용(보급·지속)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**조조군**</span>
+</td>
+<td>본영 수비와 오소 정예대를 분리했다.</td>
+<td>조홍·순유가 본영, 조조·악진이 기습을 맡았다.</td>
+<td>열세 군량을 적의 군량 소각으로 뒤집었다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**원소군**</span>
+</td>
+<td>대군과 군량창이 떨어졌고 별도 외곽호위 건의가 거부되었다.</td>
+<td>오소 구원과 관도 공격의 우선순위가 갈렸다.</td>
+<td>대군의 지속능력이 오소 한 거점에 과도하게 집중되었다.</td>
+</tr>
+</table>
+
+#### <span color="red">**원소(袁紹, 패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>모사들의 파벌과 상충하는 진언을 통합하지 못했고 전향과 투항이 연쇄되었다. (지기·사기·충성)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>오소 피습 뒤 본영 공격이 먼저 성공할 한 시나리오에 기대고, 군량 소실이 전군 붕괴로 번질 위험을 낮게 보았다. (지피·타이밍·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>🌊 <span color="blue_bg">**황하(黃河)**</span> 남쪽 장기전에서 관도와 오소 사이 거리가 약점이 되었다. (원근·사생)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>
+<span color="red">**원소**</span>는 큰 세력을 모았지만 저수·허유·장합의 서로 다른 경고를 임무로 전환하지 못했다. (지신인용엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>군량창의 외곽 호위와 비상 지휘경로가 부족했고 구원·본영공격으로 병력이 나뉘었다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+**직관·편향 한 줄:** 오소가 공격받은 뒤에도 관도 본영을 치면 위기를 상쇄할 수 있다는 한 시나리오에 병력을 건 명령은 확증편향과 계획 오류가 작동한 것으로 볼 수 있으며, 군량·사기 붕괴의 연쇄 위험을 과소평가했다.
+
+🏳️ <span color="red">**패군 측 결과**</span> — 六敗의 `亂(란)`과 `北(배)`가 겹친다. 지휘가 갈리고 정예의 임무가 분산된 가운데 적의 작은 기습대가 핵심 지속능력을 끊었다. 🔀 <span color="orange">**패군 측 회피 분기점**</span>은 저수의 건의대로 오소 바깥에 별도 호위대를 두고, 피습 즉시 관도 공격보다 군량창 구원에 전력을 집중하는 것이었다.
+
+#### <span color="blue">**조조(曹操, 승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>
+<span color="blue">**조조**</span>는 내부자의 정보에 흔들리지 않고 순유·가후의 재검토를 거쳐 본영과 기습대의 역할을 나눴다. (지기·결속)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>허유의 전향이라는 외부 변수를 기회로 보되 본영 함정 가능성을 남겨 두고 수비대를 배치했다. (지피·타이밍·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>관도 정면이 아니라 떨어진 오소를 표적으로 삼아 원소군의 넓은 전선을 약점으로 바꿨다. (원근·광협)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>
+<span color="blue">**조조**</span>는 위험한 야간 기습을 직접 지휘하면서도 본영 방어를 유능한 참모에게 맡겼다. (지·용·엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>5천 정예의 경량 기습, 위장 깃발, 본영 분리 수비를 한 목표에 결합했다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span> — `識衆寡之用者勝(식중과지용자승 — 대군과 소수 병력을 각각 쓸 줄 아는 자가 이긴다)`에 해당한다. 내부자의 접근 범위를 정확한 표적으로 바꾸고 소수 정예를 집중했다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>곡제(편제)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**조조군**</span>
+</td>
+<td>조홍·순유의 본영 수비와 조조·악진의 보병·기병 5천 기습대를 분리했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**원소군**</span>
+</td>
+<td>순우경의 오소 수비, 장합·고람의 관도 공격, 소수 기병 구원이 분산되었다.</td>
+</tr>
+</table>
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>관도(지휘)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**조조군**</span>
+</td>
+<td>조조가 기습 목표를 단일화하고 본영은 순유의 판단 아래 버티게 했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**원소군**</span>
+</td>
+<td>곽도의 본영 공격안과 장합의 오소 구원안이 충돌했고 실패 뒤 책임 전가가 투항을 불렀다.</td>
+</tr>
+</table>
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>주용(보급·지속)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**조조군**</span>
+</td>
+<td>자군 군량이 빠듯한 상황에서 적 군량을 파괴해 시간의 불리를 뒤집었다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**원소군**</span>
+</td>
+<td>대군의 식량을 오소에 집중하고 외곽호위를 충분히 두지 않아 단일 실패점이 생겼다.</td>
+</tr>
+</table>
+
+**출처:** [《통전》 수록 관도 기록](https://ivantsoi.myds.me/web/schoolebook/pdf/043014.pdf) · [대만 국방부 군사 연구](https://www.mnd.gov.tw/File/28958) · [군량 보급 관점의 관도대전 연구](https://journal.kci.go.kr/kucsi/archive/articlePdf?artiId=ART001713713)
 
 ---
 ## 5. 핵심 통찰 + 실생활 적용 + 생활루틴
