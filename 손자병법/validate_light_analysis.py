@@ -47,6 +47,19 @@ def validate(path: Path) -> list[str]:
         for perspective in perspectives:
             if f"**{perspective}**" not in section2:
                 errors.append(f"도덕경 주석·판본 관점 누락: {perspective}")
+        if "오쇼" not in section2:
+            errors.append("도덕경 중심 현대 해석축 오쇼 누락")
+        if "오쇼 중심 해석" not in section2:
+            errors.append("도덕경 2번 섹션이 오쇼 중심 구조가 아닙니다")
+        osho_start = section2.find("### 오쇼")
+        traditional_start = section2.find("### 전통 주석")
+        if osho_start < 0 or traditional_start <= osho_start:
+            errors.append("도덕경 2번 섹션의 오쇼 본문과 전통 주석 대조 순서가 올바르지 않습니다")
+        else:
+            osho_length = len(section2[osho_start:traditional_start].strip())
+            traditional_length = len(section2[traditional_start:].strip())
+            if osho_length < traditional_length * 2:
+                errors.append("오쇼 해석 분량이 전통 주석 대조의 두 배보다 작습니다")
         perspective_count = len(re.findall(r"^- \*\*[^*]+\*\*", section2, re.MULTILINE))
         if not 2 <= perspective_count <= 4:
             errors.append(f"도덕경 전통 주석·판본 관점이 {perspective_count}개입니다(정상: 2~4개)")
