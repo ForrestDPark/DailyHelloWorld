@@ -44,6 +44,18 @@ class NotifyTulpaChatTest(unittest.TestCase):
         self.assertEqual(stable, notify.discussion_dedupe_key(24, "format-v2", False))
         self.assertEqual(stable, notify.discussion_dedupe_key(24, "format-v2", True))
 
+    def test_daodejing_uses_separate_classic_key_and_filename(self):
+        page = Path(__file__).with_name("daodejing1_full_page.md")
+        number, original, subtitle = notify.read_page(page)
+
+        self.assertEqual(number, 1)
+        self.assertTrue(original.startswith("道可道，非常道"))
+        self.assertTrue(subtitle.startswith("도가도, 비상도"))
+        self.assertEqual(
+            notify.discussion_dedupe_key(number, "commanders-v1", False, "daodejing"),
+            f"{notify.ROOM_ID}:daodejing-1",
+        )
+
     def test_hanja_lesson_prepares_reading_and_literal_without_a_table(self):
         # ★ 2026-09-24: "한자선생님이 한자 뜻 표 작성하는거있는데 이제 표는
         # 작성안해도될거같아" 요청 — 글자별 훈·음 표 절을 없앴으니, 그

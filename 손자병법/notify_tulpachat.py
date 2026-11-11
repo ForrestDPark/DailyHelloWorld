@@ -168,7 +168,7 @@ def build_hanja_lesson(markdown: str, original: str, subtitle: str) -> str:
 
 
 def read_page(path: Path) -> tuple[int, str, str]:
-    match = re.search(r"(?:jiudi|huogong|yonggan)(\d+)_full_page\.md$", path.name)
+    match = re.search(r"(?:jiudi|huogong|yonggan|daodejing)(\d+)_full_page\.md$", path.name)
     if not match:
         raise ValueError("파일명이 <편 식별자><번호>_full_page.md 형식이어야 합니다")
     markdown = path.read_text(encoding="utf-8")
@@ -274,9 +274,11 @@ def keychain_token() -> str:
     return result.stdout.strip()
 
 
-def discussion_dedupe_key(number: int, discussion_run: str, republish: bool) -> str:
+def discussion_dedupe_key(
+    number: int, discussion_run: str, republish: bool, classic: str = "sunzi"
+) -> str:
     """한 구절에는 토론방 공지 하나만 유지한다."""
-    return f"{ROOM_ID}:sunzi-{number}"
+    return f"{ROOM_ID}:{classic}-{number}"
 
 
 def main() -> None:
@@ -309,25 +311,35 @@ def main() -> None:
         "jiudi": "구지편",
         "huogong": "화공편",
         "yonggan": "용간편",
+        "daodejing": "도덕경",
     }[chapter_slug]
+    classic = "daodejing" if chapter_slug == "daodejing" else "sunzi"
     markdown = args.page.read_text(encoding="utf-8")
     is_light = args.light or "<!-- sunzi-analysis-mode: light -->" in markdown
     if not is_light and not args.site_url:
         parser.error("풀 모드에는 --site-url이 필요합니다")
     commanders = [] if is_light else victorious_commanders(markdown, original)
     hanja_lesson = build_hanja_lesson(markdown, original, subtitle)
+    if classic == "daodejing":
+        hanja_lesson = hanja_lesson.replace(
+            "이 뜻을 바탕으로 이제 전투 사례를 함께 살펴보겠습니다.",
+            "이 뜻을 바탕으로 이름과 관찰의 두 층위를 다시 살펴보겠습니다.",
+        )
     site_url = args.site_url or f"{SUNZI_SITE_BASE}/verses/{number}"
     site_number_match = re.search(r"/verses/(\d+)(?:[/?#]|$)", site_url)
     discussion_number = int(site_number_match.group(1)) if site_number_match else number
     content = (
-        f"📜 손자병법 새 구절 분석이 완료되었습니다 — {chapter_name} {number}구절\n\n"
+        f"📜 {'도덕경 새 장' if classic == 'daodejing' else '손자병법 새 구절'} 분석이 완료되었습니다 — "
+        f"{chapter_name} {number}{'장' if classic == 'daodejing' else '구절'}\n\n"
         f"원문: {original}\n"
         f"핵심 해석: {subtitle}\n\n"
         f"[병법 사이트에서 분석 보기]({site_url})\n"
         + "\n"
         + (
-            "병법가들은 한자선생님의 풀이를 들은 뒤, 각자의 주석 관점에서 이 구절의 뜻과 "
-            "다른 병법과의 연결, 현대에 옮길 때의 오용 위험 가운데 가장 중요한 쟁점을 논합니다."
+            ("한자선생님의 원문·독음·직역 카드와 전체 분석 페이지를 함께 확인할 수 있습니다."
+             if classic == "daodejing" else
+             "병법가들은 한자선생님의 풀이를 들은 뒤, 각자의 주석 관점에서 이 구절의 뜻과 "
+             "다른 병법과의 연결, 현대에 옮길 때의 오용 위험 가운데 가장 중요한 쟁점을 논합니다.")
             if is_light else
             "병법가들은 각자의 주석 관점에서 이 구절의 뜻, 역사 사례에서 놓치기 쉬운 조건, "
             "현대에 옮길 때의 오용 위험 가운데 가장 중요하다고 보는 한 가지를 논합니다."
@@ -339,10 +351,13 @@ def main() -> None:
         {
             "room_id": ROOM_ID,
             "content": content,
-            "dedupe_key": discussion_dedupe_key(discussion_number, args.discussion_run, args.republish),
+            "dedupe_key": discussion_dedupe_key(
+                number, args.discussion_run, args.republish, classic
+            ),
             "hanja_lesson": hanja_lesson,
             "victory_commanders": commanders,
             "analysis_mode": "light" if is_light else "full",
+            "classic": classic,
         },
         ensure_ascii=False,
     ).encode("utf-8")
@@ -368,7 +383,7 @@ def main() -> None:
             "Tulpa Chat 전투 도판 게시 수 불일치: "
             f"원고 {expected_image_count}장, 게시 {result.get('posted_image_count')}장"
         )
-    if is_light and not result.get("duplicate"):
+    if is_light and classic == "sunzi" and not result.get("duplicate"):
         notified = result.get("notified") or []
         traditional = [name for name in notified if name in TRADITIONAL_COMMENTATORS]
         if (
@@ -380,7 +395,8 @@ def main() -> None:
                 "Tulpa Chat 라이트 선택형 토론 큐 불일치: "
                 f"기대 전통 주석가 4명+리링+카너먼, 실제 {notified}"
             )
-    if not result.get("duplicate") and LI_LING_NAME not in (result.get("notified") or []):
+    if (classic == "sunzi" and not result.get("duplicate")
+            and LI_LING_NAME not in (result.get("notified") or [])):
         raise RuntimeError("Tulpa Chat 토론 큐에 필수 현대 연구자 리링이 없습니다")
     print(json.dumps(result, ensure_ascii=False))
 
