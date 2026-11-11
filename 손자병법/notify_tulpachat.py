@@ -19,6 +19,7 @@ MARKDOWN_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\((https?://[^)\s]+)\)")
 COMMANDER_NAME_ALIASES = {
     "에르난 코르테스": "코르테스",
     "조지 S. 패튼": "조지 패튼",
+    "율리시스 S. 그랜트": "율리시스 그랜트",
 }
 BATTLE_COMMANDER_PREFERENCES = {
     "요크타운": "조지 워싱턴",
