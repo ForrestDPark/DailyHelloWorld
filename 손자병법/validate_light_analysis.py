@@ -41,6 +41,14 @@ def validate(path: Path) -> list[str]:
             errors.append(f"1번 필수 요소 누락: {token}")
     if '<span color="red">' not in section1:
         errors.append("1번 원문의 핵심 한자 붉은색 강조가 없습니다")
+    if is_daodejing:
+        for token in ("#### 먼저 문장이 어떻게 움직이는지", "이제 이 전체 흐름을 만든 핵심 글자"):
+            if token not in section1:
+                errors.append(f"도덕경 한자선생식 첫 이해층 누락: {token}")
+        first_flow = section1.find("#### 먼저 문장이 어떻게 움직이는지")
+        first_key = section1.find("#### 글자들이 완성하는 한 장면")
+        if first_flow < 0 or first_key <= first_flow:
+            errors.append("도덕경 1번 섹션의 문장 흐름 풀이와 최종 장면 순서가 올바르지 않습니다")
     section2 = text[text.find("## 2."):text.find("## 3.")]
     if is_daodejing:
         perspectives = ("왕필(王弼)", "하상공(河上公)", "마왕퇴 백서")
