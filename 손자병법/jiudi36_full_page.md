@@ -1,4 +1,3 @@
-<!-- sunzi-analysis-mode: light -->
 > 고위병지사, 재어순상적지의, 병적일향, 천리살장, 시위교능성사자야. — 적이 바라는 방향을 거스르지 않는 듯 세밀히 따라가되, 결정할 때는 힘을 한 방향에 합쳐 천 리 밖의 지휘 중심까지 끊어라.
 
 ---
@@ -95,6 +94,437 @@ Notion 정본은 `順祥敵之意`로 적지만, 널리 전하는 십일가주 �
 현대 의사결정 연구에서 ‘진단성(diagnosticity)’은 관찰된 신호가 여러 가설 가운데 어느 하나를 실제로 더 잘 가려 주는지를 뜻한다. 적의 첫 움직임 하나를 보고 결론을 확정하면 확증편향에 빠지기 쉽다. 順祥敵之意는 상대가 예상한 흐름을 잠시 이어 가게 하여 추가 행동과 자원 배치를 보게 하고, 그 신호들이 같은 의도를 가리키는지 확인하는 절차로 읽을 수 있다. 이는 적의 마음을 신비롭게 꿰뚫는 능력이 아니라 **행동으로 드러난 증거를 더 모으는 일**이다.
 
 군사학의 임무형 지휘(mission command)와 주력의 집중 원칙도 幷敵一向의 현대적 대응축이 된다. 상급자는 목적과 결정적 효과를 분명히 하되, 현장 부대가 변화에 맞춰 방법을 조정할 재량을 남긴다. 여기서 一向은 모든 부대가 같은 길로 몰려가라는 뜻이 아니라, 서로 다른 기동이 하나의 결정적 효과를 향하도록 만드는 것이다. 카너먼의 언어로 말하면, 처음 떠오른 이야기의 일관성만 믿는 ‘보이는 것이 전부’의 오류를 피하면서도, 증거가 충분해진 뒤에는 선택지를 끝없이 늘리지 않고 결정을 내려야 한다.
+
+---
+
+## 4. 역사적 실증 사례
+
+### 서양 — 🏛️ 대영제국군 vs 🏛️ 프랑스 왕국·누벨프랑스군 │ 퀘벡 공방·아브라함 평원 전투(Battle of the Plains of Abraham, 1759)
+
+![퀘벡 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_39/quebec_commanders.png)
+![퀘벡 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_39/quebec_soldiers_weapons_life.png)
+![퀘벡 지휘 편제 조직도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_39/quebec_command_structure.png)
+![1759년 퀘벡 전역 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_39/quebec_country_map.png)
+![아브라함 평원 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_39/quebec_strategy_map.png)
+![퀘벡 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_39/quebec_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- 🌊 <span color="blue_bg">**세인트로렌스강(St. Lawrence River)**</span>은 함대의 공격로이면서 높은 북안 절벽 때문에 상륙지를 제한한 장벽이었다.
+- <span color="red">**▰**</span> <span color="yellow_bg">**보포르(Beauport)**</span>는 몽칼름 주력의 방어선이었다. 울프는 이곳을 계속 위협해 프랑스군의 시선을 동쪽에 묶었다.
+- 🌊 <span color="blue_bg">**앙스오풀롱(Anse-au-Foulon)**</span>은 <span color="red">**▰**</span> <span color="yellow_bg">**퀘벡(Québec)**</span> 서쪽의 작은 만과 가파른 오솔길이었다. 길을 열면 함대의 병력을 고원에 올릴 수 있었다.
+- ⛰️ <span color="green_bg">**아브라함 평원(Plains of Abraham)**</span>은 절벽 위 개활지였다. 영국군이 먼저 전열을 완성하자 프랑스군은 기다릴지 즉시 공격할지 선택해야 했다.
+
+#### 상세 전역 서사 — 보포르에 묶인 시선을 유지한 채 앙스오풀롱 한 길로 집중하다
+
+<span color="blue">**제임스 울프(James Wolfe)**</span>는 1759년 6월 약 8,500명의 군과 함대로 퀘벡에 도착했지만, <span color="red">**루이조제프 드 몽칼름(Louis-Joseph de Montcalm)**</span>은 도시 동쪽 연안을 요새화했다. 7월 몽모랑시 공격이 실패한 뒤 영국군은 함선과 보트를 상하류에 반복해 보여 프랑스군이 실제 상륙점을 확정하지 못하게 했다. 9월 12일 밤 상륙대는 앙스오풀롱으로 내려가 경계대를 제압하고 절벽을 올라, 아침까지 약 4,500명의 전열을 고원에 만들었다.
+
+<span color="red">**몽칼름**</span>은 상류의 <span color="red">**부건빌**</span>을 기다리거나 성벽에 기대 지연할 수 있었지만 영국군이 굳히기 전에 공격했다. 영국 보병은 근거리 일제사격으로 급히 모인 프랑스 전열을 무너뜨렸다. <span color="blue">**울프**</span>와 <span color="red">**몽칼름**</span>은 모두 치명상을 입었고 퀘벡은 9월 18일 항복했다. 여러 가능성을 보인 順祥敵之意가 결정적 순간 앙스오풀롱과 평원 한 축의 幷敵一向으로 바뀌고, 지휘 중심의 죽음이라는 千里殺將에 닿은 사례다.
+
+#### 전투에서 사용된 속임수 — 여러 상륙 가능성을 보인 뒤 한 절벽길로 집중
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 영국군은 프랑스군이 넓은 강안을 계속 지키게 하면서 실제 상륙점은 앙스오풀롱으로 좁혔다.
+
+**보인 신호와 믿은 이유.** 상하류의 보트 이동은 여러 상륙 가능성을 남겼고, 초병에게는 프랑스 보급선이 밤에 내려올 수 있다는 기대가 있었다.
+
+**유발된 행동과 결과.** 프랑스군은 보포르와 상류 분견대에 나뉜 채 첫 상륙을 막지 못했고 영국군은 고원에 전열을 완성했다.
+
+**사료의 경계.** 야간 암구호의 세부는 회고마다 다르다. 앙스오풀롱 경계가 얇았고 영국군이 아침까지 고원에 집결한 사실을 중심으로 판단한다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 울프의 함대·상륙대가 프랑스 강안 경계에 실제 축을 늦게 드러냈다.
+2. **어떤 사실이 거짓이었는가?** 모든 상하류 움직임이 실제 대규모 상륙 준비라는 인상이다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 여러 지점을 탐색했지만 최종 선택은 한 길에 집중됐다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 보포르가 가장 현실적인 대규모 상륙지라는 지형 판단과 앞선 공격 경험이 있었다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 낮다. 앙스오풀롱이 조기 확정됐다면 경계가 집중될 수 있었다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 보트 규모·방향과 절벽 위 경계를 하나의 보고망으로 합치지 못했다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 공개 규칙의 보드게임·모의훈련에서 여러 진입축과 결정적 목표를 구분해 연습할 수 있다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>해당 구절·독음·뜻</td>
+<td>전장의 장면</td>
+</tr>
+<tr>
+<td>近而示之遠, 遠而示之近<br>근이시지원, 원이시지근 — 가까우면서 멀리 있는 듯 보임</td>
+<td>보트의 상하류 이동은 실제 거리와 방향을 확정하기 어렵게 했다.</td>
+</tr>
+<tr>
+<td>攻其無備, 出其不意<br>공기무비, 출기불의 — 대비 없는 곳을 치고 뜻하지 않은 데서 나옴</td>
+<td>보포르가 아니라 얇게 지켜진 앙스오풀롱 절벽길로 올랐다.</td>
+</tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>곡제(편제)</td>
+<td>관도(지휘)</td>
+<td>주용(보급·지속)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**영국군**</span>
+</td>
+<td>함대·상륙대·경보병·전열보병을 시차 결합했다.</td>
+<td>울프와 여단장·해군이 야간 이동을 맞췄다.</td>
+<td>함대가 병력·탄약 수송을 유지했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**프랑스군**</span>
+</td>
+<td>보포르 주력·도시 수비·상류 분견대가 갈렸다.</td>
+<td>몽칼름·보드뢰유·부건빌의 합류가 늦었다.</td>
+<td>장기 봉쇄 속에 넓은 강안을 지켜야 했다.</td>
+</tr>
+</table>
+
+#### <span color="red">**루이조제프 드 몽칼름(패)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>서로 다른 전투 방식의 정규군·민병을 급히 한 전열로 묶었다. (지기·사기)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>영국군의 축성 위험에 집중해 부건빌 합류와 지연전 가능성을 낮게 두었다. (지피·타이밍·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>강한 보포르 방어선을 떠나 적이 먼저 고른 개활지로 들어갔다. (원근·험이·광협)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>결단은 빨랐으나 부대가 정렬될 시간을 주지 않았다. (지신인용엄·장유오위)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>분산된 전력을 결전 전에 재결합하지 못했다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+**직관·편향 한 줄:** <span color="red">**몽칼름**</span>의 즉시 공격에는 가용성·행동편향이 작동했을 가능성이 있으며 증원을 기다릴 선택지를 밀어냈다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 급한 집결과 공격으로 전열이 풀려 六敗의 亂(란)에 가까운 패배를 입었다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span>: 성벽과 고지를 이용해 부건빌을 기다렸다면 승리를 장담할 수 없어도 준비되지 않은 단시간 붕괴는 피할 가능성이 있었다.
+
+#### <span color="blue">**제임스 울프(승)**</span>
+
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>실패 뒤 여단장 의견을 받아 함대·상륙대를 한 목표로 묶었다. (지기·사기)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>경계 분산을 이용하되 야간 항해·조수·발견 위험을 감수했다. (지피·타이밍·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>절벽을 통과한 뒤 개활지에서 전열보병의 강점을 살렸다. (험이·광협·사생)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>여러 가능성을 보인 뒤 결전에는 한 축으로 지휘를 집중했다. (지신인용엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>해군 수송·선두 경보병·후속 전열을 순차 결합했다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>: 싸울 장소와 때를 바꿔 以虞待不虞者勝(이우대불우자승, 대비한 자가 대비하지 못한 적을 이김)에 해당했다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**영국군**</span>
+</td>
+<td>함대·보트·경보병·전열보병을 상륙 시간표로 결합했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**프랑스군**</span>
+</td>
+<td>보포르·도시·상류가 넓은 강안을 나눠 맡았다.</td>
+</tr>
+</table>
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**영국군**</span>
+</td>
+<td>울프 아래 여단장과 해군이 상륙·전개를 나눴다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**프랑스군**</span>
+</td>
+<td>초병 경보에서 분견대 합류까지 시간차가 생겼다.</td>
+</tr>
+</table>
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**영국군**</span>
+</td>
+<td>함대가 병력·탄약·상륙정을 제공해 축을 바꾸게 했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**프랑스군**</span>
+</td>
+<td>봉쇄 속에 도시·강안·상류를 동시에 유지했다.</td>
+</tr>
+</table>
+
+**사료와 연구:** [캐나다 공원청](https://www.pc.gc.ca/apps/dfhd/page_nhs_eng.aspx?id=13017) · [퀘벡시](https://www.ville.quebec.qc.ca/en/apropos/portrait/histoire/1756-1867.aspx) · [미 의회도서관 작전도](https://www.loc.gov/item/2005630163/) · [미시간대 클레먼츠 도서관](https://clements.umich.edu/exhibit/1759-britains-year-of-victories/case-10/)
+
+### 동양 — 🏛️ 제(齊) vs 🏛️ 위(魏) │ 마릉전투(馬陵之戰, 기원전 342년)
+
+![마릉 주요 인물 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_39/maling_commanders.png)
+![마릉 병사 무기 생활 안내판](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_39/maling_soldiers_weapons_life.png)
+![마릉 지휘 편제 조직도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_39/maling_command_structure.png)
+![마릉 시대 세력도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_39/maling_country_map.png)
+![마릉 전략지형도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_39/maling_strategy_map.png)
+![마릉 단계별 전역 흐름도](https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_39/maling_sequence.png)
+
+**뒤에서 반복될 지형을 먼저 잡아두기**
+
+- <span color="red">**▰**</span> <span color="yellow_bg">**대량(大梁)**</span>은 위의 수도였다. 제군이 이곳을 위협하자 위군은 한 전선을 떠나 동쪽으로 돌아왔다.
+- 🌊 <span color="blue_bg">**황하(黃河)**</span> 일대의 도로와 도하점은 제·위·한의 이동축을 제한했다.
+- 🌲 <span color="green_bg">**마릉(馬陵) 협로**</span>는 숲과 굴곡이 매복에 유리한 곳으로 전해진다. 정확한 고대 전투지 비정에는 이견이 있다.
+- **감조계의 취사 흔적**은 길 위의 병력 상태를 읽는 표지였다. 아궁이 감소는 실제 붕괴가 아니라 추격 속도를 높이는 신호였다.
+
+#### 상세 전역 서사 — 방연이 믿은 탈영 신호를 마릉 한 길의 매복으로 닫다
+
+위가 한을 공격하자 제는 <span color="blue">**전기**</span>를 장수로, <span color="blue">**손빈**</span>을 군사로 보내 한을 직접 구하기보다 위 수도 대량을 위협했다. 위는 <span color="red">**방연**</span>에게 본국으로 돌아오게 했다. 『사기』는 제군이 위 땅에서 아궁이를 10만→5만→3만으로 줄였고, 방연이 대규모 탈영으로 판단해 정예병으로 추격했다고 전한다.
+
+<span color="blue">**손빈**</span>은 도착 시각을 계산해 마릉 협로 양쪽에 쇠뇌수 1만을 매복시켰다. 위군 선두가 어둠 속에서 불을 밝히자 일제사격이 시작됐고, 후속과 분리된 지휘부가 무너졌다. 『사기』는 <span color="red">**방연**</span>의 자결과 위 태자 신의 포획을 전한다. 숫자·유언은 문학적 정형 가능성을 고려하되 신호→추격→분리→매복의 골격은 분명하다.
+
+#### 전투에서 사용된 속임수 — 줄어드는 아궁이로 추격 의도를 가속하다
+
+#### 속임수 작동 구조
+
+**주체와 의도.** 손빈은 제군이 탈영으로 무너지는 듯 보여 방연의 정예 추격대를 주력에서 떼려 했다.
+
+**보인 신호와 믿은 이유.** 줄어든 아궁이는 관찰 가능한 흔적이었고 ‘제 병사는 겁이 많다’는 방연의 기존 평가와 맞았다.
+
+**유발된 행동과 결과.** 방연은 정예병으로 속도를 높여 마릉에 먼저 들어갔고 후속과 분리된 지휘부가 매복의 표적이 됐다.
+
+**사료의 경계.** 아궁이·병력 숫자와 유언은 『사기』의 서사층을 고려해 정밀 통계가 아니라 작전 인과로 읽는다.
+
+#### 속임수 일곱 질문
+
+1. **누가 누구를 속였는가?** 손빈이 방연의 정찰과 선입견을 이용했다.
+2. **어떤 사실이 거짓이었는가?** 아궁이 감소가 대규모 탈영을 뜻한다는 결론이다.
+3. **어떤 사실은 진실이지만 오해를 유도했는가?** 취사 흔적 감소는 관찰됐지만 원인은 조작이었다.
+4. **상대는 왜 그것을 믿고 싶어 했는가?** 제군을 빨리 따라잡을 수 있다는 기존 기대와 경쟁심이 있었다.
+5. **속임수가 없었어도 같은 오판이 발생했을까?** 가능성은 중간 이하이다. 감조계가 단독 추격의 확신을 키웠다.
+6. **속은 사람은 어떤 독립 확인을 생략했는가?** 실제 이탈자·행군폭·후방 흔적을 교차 확인하지 않았다.
+7. **신뢰·동의·안전을 해치지 않으면서 같은 원리를 어디서 연습할 수 있는가?** 보드게임에서 신호와 실제 승리 조건을 따로 기록해 복기한다.
+
+#### 시계편 兵者詭道也 — 이 전장에 해당하는 속이는 길
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>해당 구절·독음·뜻</td>
+<td>전장의 장면</td>
+</tr>
+<tr>
+<td>能而示之不能<br>능이시지불능 — 능하면서 능하지 못한 듯 보임</td>
+<td>통제 후퇴와 아궁이 감소로 제군이 무너지는 듯 보였다.</td>
+</tr>
+<tr>
+<td>利而誘之<br>이이유지 — 이익으로 유인함</td>
+<td>약해진 제군을 정예병으로 따라잡을 수 있다는 이익을 보였다.</td>
+</tr>
+</table>
+
+#### 法 한눈 비교 — 곡제·관도·주용
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>곡제(편제)</td>
+<td>관도(지휘)</td>
+<td>주용(보급·지속)</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**제군**</span>
+</td>
+<td>후퇴 유도대·주력·쇠뇌 매복대를 결합했다.</td>
+<td>전기가 지휘하고 손빈이 시간과 매복을 설계했다.</td>
+<td>취사 흔적까지 정보 신호로 통제했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**위군**</span>
+</td>
+<td>정예 추격대가 보병 주력보다 앞서 분리됐다.</td>
+<td>방연의 속도 판단이 독립 검증을 앞질렀다.</td>
+<td>귀환·추격으로 피로와 보급 간격이 커졌다.</td>
+</tr>
+</table>
+
+#### <span color="red">**방연(龐涓, 패)**</span>
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>정예 선두와 후속 보병을 한 속도로 묶지 못했다. (지기·사기)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>아궁이 감소를 탈영으로 단정해 조작 가능성을 낮게 두었다. (지피·타이밍·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>좁은 숲길에 선두가 먼저 들어가 지원을 잃었다. (험이·광협·사생)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>속도와 포획 욕구가 확인을 대신해 忿速可侮(분속가모, 조급하면 모욕당할 수 있음)에 가까웠다. (지신인용엄·장유오위)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>정예 추격대·주력·보급을 분리했다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+**직관·편향 한 줄:** <span color="red">**방연**</span>의 추격에는 확증편향과 분모 무시가 작동했을 가능성이 있으며 다른 원인과 독립 정찰을 생략하게 했다.
+
+🏳️ <span color="red">**패군 측 결과**</span>: 적정을 헤아리지 못하고 분리된 정예로 매복에 들어간 北(배)에 가까운 패배였다.
+
+🔀 <span color="orange">**패군 측 회피 분기점**</span>: 아궁이 외에 포로·행군폭·후속 흔적을 교차 확인하고 주력과 간격을 유지했다면 지휘부 전멸은 피할 가능성이 있었다.
+
+#### <span color="blue">**손빈(孫臏, 승)**</span>
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>요소</td>
+<td>판단</td>
+</tr>
+<tr>
+<td color="orange_bg">🤝 **道**</td>
+<td>전기의 지휘·자신의 계책·쇠뇌수 신호를 한 목표로 묶었다. (지기·사기)</td>
+</tr>
+<tr>
+<td color="blue_bg">🌤️ **天**</td>
+<td>방연의 평가를 아궁이로 시험하고 추격 속도가 계산과 맞을 때 매복을 확정했다. (지피·타이밍·확률 관점)</td>
+</tr>
+<tr>
+<td color="green_bg">🧭 **地**</td>
+<td>좁은 숲길에서 위군 종심을 측면 사격 표적으로 바꿨다. (험이·광협·사생)</td>
+</tr>
+<tr>
+<td color="purple_bg">🎖️ **將**</td>
+<td>대량 위협과 지휘관 유인을 전략·전술로 연결했다. (지신인용엄)</td>
+</tr>
+<tr>
+<td color="yellow_bg">⚙️ **法**</td>
+<td>감조계·후퇴 속도·쇠뇌수·야간 신호를 결합했다. (곡제·관도·주용)</td>
+</tr>
+</table>
+
+🏆 <span color="blue">**승군 측 결과**</span>: 병력의 쓰임을 나눠 識衆寡之用者勝(식중과지용자승, 많고 적은 병력의 쓰임을 아는 자가 이김)에 해당했다.
+
+##### 法을 압축하지 않고 보기 — 곡제·관도·주용
+**곡제 曲制(곡제): 부대를 어떻게 나누고 결합했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**제군**</span>
+</td>
+<td>대량 위협군·후퇴대·쇠뇌 매복대를 나눴다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**위군**</span>
+</td>
+<td>정예 추격대가 보병 주력과 분리됐다.</td>
+</tr>
+</table>
+**관도 官道(관도): 누가 명령하고 어떻게 전달했는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**제군**</span>
+</td>
+<td>전기가 통솔하고 손빈이 행군·발사 신호를 설계했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**위군**</span>
+</td>
+<td>방연의 추격 명령과 후속 보고 간격이 벌어졌다.</td>
+</tr>
+</table>
+**주용 主用(주용): 군량·장비·전투 지속 능력을 어떻게 썼는가**
+<table fit-page-width="true" header-row="true">
+<tr>
+<td>진영</td>
+<td>실제 운용</td>
+</tr>
+<tr>
+<td>
+<span color="blue">**제군**</span>
+</td>
+<td>취사 흔적을 정보전으로 바꾸고 쇠뇌수를 먼저 배치했다.</td>
+</tr>
+<tr>
+<td>
+<span color="red">**위군**</span>
+</td>
+<td>귀환 뒤 추격해 선두와 후속의 피로·군량 간격이 커졌다.</td>
+</tr>
+</table>
+
+**사료와 연구:** [『사기』 「손자오기열전」](https://ctext.org/shiji/sun-zi-wu-qi-lie-zhuan/zh) · [UC eScholarship 연구자료](https://escholarship.org/content/qt2bm4160b/qt2bm4160b_noSplash_4c1dae4e8ce2ca70f23768585228e0a1.pdf). 고대 전투지와 숫자는 전승·비정 논쟁을 밝혀 작전 관계 중심으로 사용했다.
 
 ---
 
