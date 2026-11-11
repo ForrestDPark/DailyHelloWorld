@@ -1,0 +1,150 @@
+{
+  "id": "huogong-5",
+  "battle": {
+    "title": "적벽대전",
+    "year": "208",
+    "commander": "주유",
+    "verse": "火發於內, 則早應之於外.",
+    "verse_meaning": "불이 안에서 일어나면, 곧 밖에서 일찍 호응한다.",
+    "map": "https://raw.githubusercontent.com/ForrestDPark/DailyHelloWorld/main/%EC%86%90%EC%9E%90%EB%B3%91%EB%B2%95/generated/jiudi_huogong5/red_cliffs_strategy_map.png",
+    "briefing": "황개의 화선이 조조의 선단 안에 불을 옮기는 순간을 주유의 후속 공격과 연결하십시오. 역사적 사실 선택지는 정사에 남은 작전 골격을 따르고, 반사실 분기는 다른 판단이 불의 효과와 전역 결과를 어떻게 바꿀지 절제해 보여 줍니다.",
+    "source_verse_ids": [44],
+    "source_kind": "historical_case",
+    "initial_state": {
+      "troops": 100,
+      "morale": 62,
+      "supply": 68,
+      "intelligence": 1,
+      "initiative": 0,
+      "damage": 0,
+      "time": 5
+    },
+    "phases": [
+      {
+        "title": "조조군의 실상 계산",
+        "prompt": "조조는 대군을 내세워 항복을 요구하지만 북방 병사는 수전에 익숙하지 않고 질병도 퍼져 있다. 손권에게 무엇을 건의할까?",
+        "choices": [
+          {
+            "text": "[역사적 사실] 공문상의 대군 수치를 그대로 믿지 않고 실제 가용 전력·질병·수전 숙련·보급 부담을 나누어 계산해 결전을 건의한다",
+            "result": "주유는 숫자의 위압과 실제 전투 능력을 분리해 연합군이 싸울 조건을 찾았습니다.",
+            "score": 3,
+            "effects": {"intelligence": 2, "morale": 5, "initiative": 1},
+            "flags": {"enemy_assessed": true},
+            "principle": "知彼知己",
+            "ratings": {"information": 3, "doctrine": 2}
+          },
+          {
+            "text": "[반사실 분기] 조조가 주장한 병력 수를 검증 없이 받아들이고 장강 이남을 포기한다",
+            "result": "전투 없이 전략 공간을 내주고 동맹의 결속도 무너집니다.",
+            "score": -1,
+            "effects": {"morale": -18, "initiative": -3, "time": -1},
+            "principle": "不知彼",
+            "ratings": {"information": -3, "doctrine": -2}
+          }
+        ]
+      },
+      {
+        "title": "황개의 제안과 화선 준비",
+        "prompt": "황개가 조조의 밀집 선단에 화공을 제안했다. 화선과 후속 부대를 어떻게 준비할까?",
+        "choices": [
+          {
+            "text": "[역사적 사실] 갈대·장작·기름을 실은 화선, 탈출용 소형선, 거짓 항복 편지, 뒤따를 경무장 부대를 하나의 시간표로 묶는다",
+            "result": "내부 발화 수단과 외부 호응 부대가 분리 준비되어도 같은 신호로 움직일 수 있습니다.",
+            "score": 4,
+            "effects": {"supply": -8, "intelligence": 1, "initiative": 2},
+            "flags": {"fireships_ready": true, "followup_ready": true},
+            "requires": {"enemy_assessed": true},
+            "locked_reason": "먼저 조조군의 실제 약점과 전투 조건을 계산해야 합니다.",
+            "principle": "煙火必素具",
+            "ratings": {"logistics": 3, "speed": 1, "doctrine": 3}
+          },
+          {
+            "text": "[반사실 분기] 화선만 준비하고 주력은 결과가 확인된 뒤 출항하기로 한다",
+            "result": "불이 나도 조조군이 소화하고 대오를 수습할 시간이 생겨 화공이 고립됩니다.",
+            "score": 0,
+            "effects": {"initiative": -2, "time": -1, "morale": -4},
+            "flags": {"fireships_only": true},
+            "principle": "應之不早",
+            "ratings": {"speed": -2, "doctrine": -2}
+          }
+        ]
+      },
+      {
+        "title": "거짓 항복의 접근",
+        "prompt": "황개의 선박이 조조의 경계선으로 접근한다. 어느 순간까지 위장을 유지할까?",
+        "choices": [
+          {
+            "text": "[역사적 사실] 항복선처럼 접근해 유효 거리에서 일제히 점화하고 승조원은 뒤에 맨 소형선으로 이탈한다",
+            "result": "조조군의 원거리 차단 시간을 줄이고 바람이 화선을 밀집 선단 안으로 운반합니다.",
+            "score": 4,
+            "effects": {"initiative": 3, "troops": -2, "damage": 2},
+            "flags": {"fire_inside_enemy": true},
+            "requires": {"fireships_ready": true},
+            "locked_reason": "가연물·탈출선·후속 공격을 먼저 준비해야 접근 기만이 작동합니다.",
+            "principle": "利而誘之",
+            "ratings": {"information": 2, "speed": 2, "preservation": 1, "doctrine": 3}
+          },
+          {
+            "text": "[반사실 분기] 조조가 의심할까 두려워 멀리서 불을 붙여 위장을 일찍 벗는다",
+            "result": "조조군은 화선을 피하거나 견인할 시간을 얻고 불길은 선단 깊이 닿지 못합니다.",
+            "score": 0,
+            "effects": {"initiative": -3, "supply": -6, "morale": -5},
+            "principle": "示形過早",
+            "ratings": {"information": -1, "speed": -1, "doctrine": -2}
+          }
+        ]
+      },
+      {
+        "title": "안의 불에 밖에서 호응",
+        "prompt": "불이 조조의 선단과 강변 영채로 번지기 시작했다. 주력 함대에 어떤 명령을 내릴까?",
+        "choices": [
+          {
+            "text": "[역사적 사실] 북을 울리고 경무장 선봉과 주력 함대를 즉시 전진시켜 소화·지휘 회복·퇴로 정리를 동시에 압박한다",
+            "result": "화재가 단순 손실이 아니라 지휘 붕괴로 확대되고 조조군은 질서 있게 수습할 시간을 잃습니다.",
+            "score": 5,
+            "effects": {"initiative": 4, "morale": 10, "troops": -4, "damage": 3},
+            "flags": {"timely_response": true},
+            "requires": {"fire_inside_enemy": true, "followup_ready": true},
+            "locked_reason": "적 선단 안의 발화와 미리 준비된 후속 부대가 모두 필요합니다.",
+            "principle": "火發於內則早應之於外",
+            "ratings": {"speed": 3, "logistics": 1, "doctrine": 4}
+          },
+          {
+            "text": "[반사실 분기] 화재 규모와 적 사상자를 완전히 확인할 때까지 강 건너에서 대기한다",
+            "result": "조조군 일부가 닻을 끊고 영채를 정리하며 퇴로를 확보해 화공의 짧은 기회가 닫힙니다.",
+            "score": -1,
+            "effects": {"initiative": -4, "time": -2, "morale": -8},
+            "principle": "失其時",
+            "ratings": {"speed": -3, "doctrine": -3}
+          }
+        ]
+      },
+      {
+        "title": "퇴각과 전과의 경계",
+        "prompt": "조조군이 진창 난 북쪽 길로 물러난다. 승리를 어떻게 마무리할까?",
+        "choices": [
+          {
+            "text": "[역사적 사실] 수군의 압박을 유지하되 지친 부대를 무리하게 깊이 추격하지 않고 강릉 방면 후속 작전과 연합 유지로 전환한다",
+            "result": "조조의 남진을 꺾고 장강 이남의 전략 공간을 지키면서 후속전을 준비합니다.",
+            "score": 3,
+            "effects": {"initiative": 2, "morale": 8, "supply": -3, "troops": -2},
+            "flags": {"strategic_victory": true},
+            "requires": {"timely_response": true},
+            "locked_reason": "적의 지휘를 먼저 흔들어 퇴각을 유도해야 후속 목표를 선택할 수 있습니다.",
+            "principle": "勝可知而不可爲",
+            "ratings": {"preservation": 2, "logistics": 1, "doctrine": 2}
+          },
+          {
+            "text": "[반사실 분기] 화공의 성공에 취해 전 함대를 낯선 북안 깊숙이 풀어 추격한다",
+            "result": "보급과 지휘가 늘어지고 재집결한 조조군의 반격 위험이 커져 연합군의 제한된 승리가 흔들립니다.",
+            "score": 0,
+            "effects": {"troops": -10, "supply": -14, "damage": 9, "initiative": -2},
+            "flags": {"overextended": true},
+            "principle": "窮寇勿迫",
+            "ratings": {"preservation": -3, "logistics": -3, "doctrine": -1}
+          }
+        ]
+      }
+    ]
+  }
+}
