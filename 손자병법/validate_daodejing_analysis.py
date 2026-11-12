@@ -87,6 +87,29 @@ def validate(path: Path) -> list[str]:
             errors.append(f"도덕경 문장 흐름 풀이의 핵심 전환 누락: {token}")
     if len(flow) < 700:
         errors.append("도덕경 문장 흐름 풀이가 지나치게 짧습니다")
+
+    section2_start = text.find("## 2.")
+    section2_end = text.find("## 3.")
+    section2 = text[section2_start:section2_end] if section2_start >= 0 and section2_end > section2_start else ""
+    quote_heading = "### 오쇼가 실제로 한 말"
+    commentary_heading = "### 오쇼 라즈니쉬"
+    for token in (
+        quote_heading,
+        "> “Truth cannot be expressed.”",
+        "> “The Tao can be communicated, but it can only be communicated from being to being.”",
+        "**한국어 직역**",
+        "[오쇼 전체 강설 읽기](https://osholive.com/tao-the-three-treasures-vol-1/discourse-1)",
+    ):
+        if token not in section2:
+            errors.append(f"도덕경 오쇼 직접 인용 필수 요소 누락: {token}")
+    if section2.find(quote_heading) > section2.find(commentary_heading):
+        errors.append("오쇼의 실제 문장이 해설보다 먼저 나오지 않습니다")
+    quote_end = section2.find("\n### ", section2.find(quote_heading) + len(quote_heading))
+    quote_block = section2[section2.find(quote_heading):quote_end if quote_end >= 0 else len(section2)]
+    quoted_english = " ".join(re.findall(r'^>\s*[“\"]([^”\"]+)[”\"]\s*$', quote_block, re.MULTILINE))
+    quote_word_count = len(re.findall(r"[A-Za-z]+(?:'[A-Za-z]+)?", quoted_english))
+    if quote_word_count > 25:
+        errors.append(f"같은 오쇼 강설의 직접 인용이 25단어를 넘습니다: {quote_word_count}단어")
     return errors
 
 
