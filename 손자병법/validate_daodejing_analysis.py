@@ -28,6 +28,8 @@ def validate(path: Path) -> list[str]:
         "<details",
         "<summary>",
         "**직역**",
+        "**아주 쉽게 먼저 말하면**",
+        "#### 낱글자부터 뜻을 풀기",
         "#### 먼저 문장이 어떻게 움직이는지",
         "이제 이 전체 흐름을 만든 핵심 글자",
         "#### 글자들이 완성하는 한 장면",
@@ -40,6 +42,20 @@ def validate(path: Path) -> list[str]:
             errors.append(f"도덕경 1번 필수 요소 누락: {token}")
     if all(position >= 0 for position in positions) and positions != sorted(positions):
         errors.append("도덕경 1번 섹션의 첫 이해층 순서가 올바르지 않습니다")
+
+    beginner_start = section1.find("#### 낱글자부터 뜻을 풀기")
+    beginner_end = section1.find("#### 먼저 문장이 어떻게 움직이는지")
+    beginner = section1[beginner_start:beginner_end] if beginner_start >= 0 and beginner_end > beginner_start else ""
+    beginner_tokens = (
+        "`非(비)`", "`常(상)`", "비상사태", "`常道(상도)`",
+        "`無名(무명)`", "`有名(유명)`", "유명인",
+        "`無欲(무욕)`", "`有欲(유욕)`", "`妙(묘)`", "`徼(요)`",
+    )
+    for token in beginner_tokens:
+        if token not in beginner:
+            errors.append(f"도덕경 초보자 낱글자 풀이 누락: {token}")
+    if len(beginner) < 1800:
+        errors.append("도덕경 초보자 낱글자 풀이가 지나치게 짧습니다")
 
     flow_start = section1.find("#### 먼저 문장이 어떻게 움직이는지")
     flow_end = section1.find("이제 이 전체 흐름을 만든 핵심 글자")
