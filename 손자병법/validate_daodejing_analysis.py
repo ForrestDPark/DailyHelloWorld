@@ -54,6 +54,27 @@ def validate(path: Path) -> list[str]:
     for token in beginner_tokens:
         if token not in beginner:
             errors.append(f"도덕경 초보자 낱글자 풀이 누락: {token}")
+    anchor_counts = {
+        "**원문 구절**": 8,
+        "**독음**": 8,
+        "**한 문장 뜻**": 8,
+        "**앞 문장과의 연결**": 8,
+    }
+    for token, minimum in anchor_counts.items():
+        count = beginner.count(token)
+        if count < minimum:
+            errors.append(f"도덕경 초보자 문맥 발판 부족: {token} {count}개(최소 {minimum}개)")
+    source_clauses = (
+        "`道可道，非常道。`",
+        "`名可名，非常名。`",
+        "`無名天地之始；有名萬物之母。`",
+        "`故常無欲以觀其妙；常有欲以觀其徼。`",
+        "`此兩者同出而異名，同謂之玄。`",
+        "`玄之又玄，衆妙之門。`",
+    )
+    for token in source_clauses:
+        if token not in beginner:
+            errors.append(f"도덕경 초보자 풀이의 원문 구절 누락: {token}")
     if len(beginner) < 1800:
         errors.append("도덕경 초보자 낱글자 풀이가 지나치게 짧습니다")
 
