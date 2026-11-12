@@ -232,6 +232,24 @@
 ---
 ## 2. 오쇼 중심 해석과 전통 주석 대조
 
+### 오쇼가 실제로 한 말
+
+> “Ambition means: We make his ego stand in competition with the ego of others.”
+
+**한국어 직역**
+
+“야망이란 우리가 그의 자아를 다른 사람들의 자아와 경쟁하도록 세우는 것을 뜻한다.”
+
+> “Rarity creates the value.”
+
+**한국어 직역**
+
+“희소성이 가치를 만들어 낸다.”
+
+강설: 『The Way of Tao, Volume 1』 제9강 「The poison of ambition and the order of life」, 1971년 7월 19일. 두 문장은 도덕경 제3장 본문을 직접 다룬 강설에서 가져왔다. 위 문장들은 오쇼의 체험적 설명을 확인하는 자료이며, 고대 문헌의 성립을 증명하는 사료로 취급하지 않는다.
+
+[오쇼 전체 강설 읽기](https://www.oshosearch.net/Convert/Articles_Osho/The_Way_of_Tao_Volume_1/Osho-The-Way-of-Tao-Volume-1-00000009.html)
+
 ### 오쇼 라즈니쉬 — 경쟁은 아이 안에 원래 들어 있는 것이 아니라 길러진다
 
 오쇼는 『The Way of Tao, Volume 1』의 제9강에서 제3장 첫 세 문장을 직접 다룬다. 그의 중심 질문은 “사람은 왜 경쟁하는가”이다. 그는 학교, 가정, 사회가 아이에게 끊임없이 첫째가 되라고 요구하면서 경쟁을 자연스러운 본성처럼 만든다고 본다. 공부든 놀이든 옷이든 행동이든 비교표가 앞에 놓이면, 아이는 자기 행위의 기쁨보다 남보다 위에 서는 결과에 집중한다. 그때 능력은 표현과 기여의 힘이 아니라 상대를 밀어내고 얻는 자리로 바뀐다.
