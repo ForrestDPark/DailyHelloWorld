@@ -24,7 +24,7 @@ def validate(path: Path) -> list[str]:
     errors = validate_markup(text)
     if text.count("<!-- sunzi-analysis-mode: light -->") != 1:
         errors.append("라이트 모드 표식이 정확히 1개가 아닙니다")
-    expected = (1, 2, 3, 5)
+    expected = (1, 3, 5) if is_daodejing else (1, 2, 3, 5)
     for number in expected:
         count = len(re.findall(rf"^##\s+{number}\.\s+", text, re.MULTILINE))
         if count != 1:
@@ -35,7 +35,8 @@ def validate(path: Path) -> list[str]:
         errors.append("라이트 모드에는 전투 도판을 넣지 않습니다")
     if "<table_of_contents" in text:
         errors.append("자동 목차가 남아 있습니다")
-    section1 = text[text.find("## 1."):text.find("## 2.")]
+    section1_end = text.find("## 3.") if is_daodejing else text.find("## 2.")
+    section1 = text[text.find("## 1."):section1_end]
     for token in ("<details", "<summary>", "<br>", "**직역**", "#### 글자들이 완성하는 한 장면"):
         if token not in section1:
             errors.append(f"1번 필수 요소 누락: {token}")
@@ -50,7 +51,7 @@ def validate(path: Path) -> list[str]:
         first_key = section1.find("#### 글자들이 완성하는 한 장면")
         if beginner < 0 or first_flow <= beginner or first_key <= first_flow:
             errors.append("도덕경 1번 섹션의 문장 흐름 풀이와 최종 장면 순서가 올바르지 않습니다")
-    section2 = text[text.find("## 2."):text.find("## 3.")]
+    section2 = section1 if is_daodejing else text[text.find("## 2."):text.find("## 3.")]
     if is_daodejing:
         perspectives = ("왕필(王弼)", "하상공(河上公)", "마왕퇴 백서")
         for perspective in perspectives:
@@ -59,11 +60,11 @@ def validate(path: Path) -> list[str]:
         if "오쇼" not in section2:
             errors.append("도덕경 중심 현대 해석축 오쇼 누락")
         if "오쇼 중심 해석" not in section2:
-            errors.append("도덕경 2번 섹션이 오쇼 중심 구조가 아닙니다")
+            errors.append("도덕경 1번 안의 오쇼 중심 구조가 없습니다")
         osho_start = section2.find("### 오쇼")
         traditional_start = section2.find("### 전통 주석")
         if osho_start < 0 or traditional_start <= osho_start:
-            errors.append("도덕경 2번 섹션의 오쇼 본문과 전통 주석 대조 순서가 올바르지 않습니다")
+            errors.append("도덕경 1번 안의 오쇼 본문과 전통 주석 대조 순서가 올바르지 않습니다")
         else:
             osho_length = len(section2[osho_start:traditional_start].strip())
             traditional_length = len(section2[traditional_start:].strip())
@@ -76,8 +77,9 @@ def validate(path: Path) -> list[str]:
         for commentator in COMMENTATORS:
             if f"**{commentator}**" not in section2:
                 errors.append(f"전통 주석가 누락: {commentator}")
+    commentary_scope = section2[traditional_start:] if is_daodejing and traditional_start >= 0 else section2
     for phrase in FORBIDDEN_COMMENTARY_PHRASES:
-        if phrase in section2:
+        if phrase in commentary_scope:
             errors.append(f"전통 주석의 보고서체 표현이 남아 있습니다: {phrase}")
     section3 = text[text.find("## 3."):text.find("## 5.")]
     axes = (
