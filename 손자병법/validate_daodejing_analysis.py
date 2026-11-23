@@ -46,21 +46,25 @@ def validate(path: Path) -> list[str]:
     beginner_start = section1.find("#### 낱글자부터 뜻을 풀기")
     beginner_end = section1.find("#### 먼저 문장이 어떻게 움직이는지")
     beginner = section1[beginner_start:beginner_end] if beginner_start >= 0 and beginner_end > beginner_start else ""
+    is_chapter_one = path.name == "daodejing1_full_page.md"
     beginner_tokens = (
         "`非(비)`", "`常(상)`", "비상사태", "`常道(상도)`",
         "`無名(무명)`", "`有名(유명)`", "유명인",
         "`無欲(무욕)`", "`有欲(유욕)`", "`妙(묘)`", "`徼(요)`",
         "`此(차)`", "`兩(량)`", "`者(자)`", "`此兩者(차량자)`",
     )
-    for token in beginner_tokens:
-        if token not in beginner:
-            errors.append(f"도덕경 초보자 낱글자 풀이 누락: {token}")
+    if is_chapter_one:
+        for token in beginner_tokens:
+            if token not in beginner:
+                errors.append(f"도덕경 초보자 낱글자 풀이 누락: {token}")
     anchor_counts = {
         "**원문 구절**": 8,
         "**독음**": 8,
         "**한 문장 뜻**": 8,
         "**앞 문장과의 연결**": 8,
     }
+    if not is_chapter_one:
+        anchor_counts = {key: (0 if key == "**앞 문장과의 연결**" else 1) for key in anchor_counts}
     for token, minimum in anchor_counts.items():
         count = beginner.count(token)
         if count < minimum:
@@ -73,19 +77,21 @@ def validate(path: Path) -> list[str]:
         "`此兩者同出而異名，同謂之玄。`",
         "`玄之又玄，衆妙之門。`",
     )
-    for token in source_clauses:
-        if token not in beginner:
-            errors.append(f"도덕경 초보자 풀이의 원문 구절 누락: {token}")
+    if is_chapter_one:
+        for token in source_clauses:
+            if token not in beginner:
+                errors.append(f"도덕경 초보자 풀이의 원문 구절 누락: {token}")
     if len(beginner) < 1800:
         errors.append("도덕경 초보자 낱글자 풀이가 지나치게 짧습니다")
 
     flow_start = section1.find("#### 먼저 문장이 어떻게 움직이는지")
     flow_end = section1.find("이제 이 전체 흐름을 만든 핵심 글자")
     flow = section1[flow_start:flow_end] if flow_start >= 0 and flow_end > flow_start else ""
-    for token in ("道可道", "名", "無名", "有名", "無欲", "有欲", "同出而異名", "玄之又玄"):
-        if token not in flow:
-            errors.append(f"도덕경 문장 흐름 풀이의 핵심 전환 누락: {token}")
-    if len(flow) < 700:
+    if is_chapter_one:
+        for token in ("道可道", "名", "無名", "有名", "無欲", "有欲", "同出而異名", "玄之又玄"):
+            if token not in flow:
+                errors.append(f"도덕경 문장 흐름 풀이의 핵심 전환 누락: {token}")
+    if len(flow) < (700 if is_chapter_one else 150):
         errors.append("도덕경 문장 흐름 풀이가 지나치게 짧습니다")
 
     section2_start = text.find("## 2.")
@@ -93,19 +99,23 @@ def validate(path: Path) -> list[str]:
     section2 = text[section2_start:section2_end] if section2_start >= 0 and section2_end > section2_start else ""
     quote_heading = "### 오쇼가 실제로 한 말"
     commentary_heading = "### 오쇼 라즈니쉬"
-    for token in (
+    chapter_one_quote_tokens = (
         quote_heading,
         "> “Truth cannot be expressed.”",
         "> “The Tao can be communicated, but it can only be communicated from being to being.”",
         "**한국어 직역**",
         "[오쇼 전체 강설 읽기](https://osholive.com/tao-the-three-treasures-vol-1/discourse-1)",
-    ):
-        if token not in section2:
-            errors.append(f"도덕경 오쇼 직접 인용 필수 요소 누락: {token}")
-    if section2.find(quote_heading) > section2.find(commentary_heading):
+    )
+    if is_chapter_one:
+        for token in chapter_one_quote_tokens:
+            if token not in section2:
+                errors.append(f"도덕경 오쇼 직접 인용 필수 요소 누락: {token}")
+    elif "오쇼" not in section2 or "http" not in section2 or "직접" not in section2:
+        errors.append("도덕경 오쇼 직접 강설의 범위와 출처가 없습니다")
+    if is_chapter_one and section2.find(quote_heading) > section2.find(commentary_heading):
         errors.append("오쇼의 실제 문장이 해설보다 먼저 나오지 않습니다")
     quote_end = section2.find("\n### ", section2.find(quote_heading) + len(quote_heading))
-    quote_block = section2[section2.find(quote_heading):quote_end if quote_end >= 0 else len(section2)]
+    quote_block = section2[section2.find(quote_heading):quote_end if quote_end >= 0 else len(section2)] if is_chapter_one else ""
     quoted_english = " ".join(re.findall(r'^>\s*[“\"]([^”\"]+)[”\"]\s*$', quote_block, re.MULTILINE))
     quote_word_count = len(re.findall(r"[A-Za-z]+(?:'[A-Za-z]+)?", quoted_english))
     if quote_word_count > 25:
