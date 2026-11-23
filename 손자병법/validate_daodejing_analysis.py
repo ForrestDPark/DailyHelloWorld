@@ -16,13 +16,16 @@ def validate(path: Path) -> list[str]:
     if "<!-- classical-work: daodejing -->" not in text:
         errors.append("도덕경 고전 표식이 없습니다")
 
-    expected = (1, 2, 3, 5) if "sunzi-analysis-mode: light" in text else (1, 2, 3, 4, 5)
+    inline_osho = "## 1. 원문, 독음, 직역, 한자어풀이, 오쇼강설" in text
+    expected = ((1, 3, 5) if "sunzi-analysis-mode: light" in text else (1, 3, 4, 5)) if inline_osho else ((1, 2, 3, 5) if "sunzi-analysis-mode: light" in text else (1, 2, 3, 4, 5))
     for number in expected:
         count = len(re.findall(rf"^##\s+{number}\.\s+", text, re.MULTILINE))
         if count != 1:
             errors.append(f"{number}번 섹션 헤더가 {count}개입니다(정상: 1개)")
 
     section1_end = text.find("## 2.")
+    if section1_end < 0:
+        section1_end = text.find("## 3.")
     section1 = text[text.find("## 1."):section1_end]
     required = (
         "<details",
@@ -96,7 +99,7 @@ def validate(path: Path) -> list[str]:
 
     section2_start = text.find("## 2.")
     section2_end = text.find("## 3.")
-    section2 = text[section2_start:section2_end] if section2_start >= 0 and section2_end > section2_start else ""
+    section2 = text[section2_start:section2_end] if section2_start >= 0 and section2_end > section2_start else (section1 if inline_osho else "")
     quote_heading = "### 오쇼가 실제로 한 말"
     commentary_heading = "### 오쇼 라즈니쉬"
     chapter_one_quote_tokens = (

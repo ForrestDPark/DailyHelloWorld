@@ -92,7 +92,11 @@ def validate(
             errors.append(f"{line}행: 표의 행별 셀 개수가 다릅니다: {widths}")
 
     if require_five_sections:
-        for number in range(1, 6):
+        expected_sections = (1, 3, 4, 5) if (
+            "<!-- classical-work: daodejing -->" in text
+            and "## 1. 원문, 독음, 직역, 한자어풀이, 오쇼강설" in text
+        ) else range(1, 6)
+        for number in expected_sections:
             count = len(
                 re.findall(
                     rf"(?:<summary>{number}\.|^##\s+{number}\.)",
