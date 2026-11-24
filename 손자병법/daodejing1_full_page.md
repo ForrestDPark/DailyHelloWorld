@@ -318,6 +318,12 @@
 
 출처: [OSHO World, 『Tao: The Three Treasures, Vol. 1』](https://oshoworld.com/tao-the-three-treasures-vol-1), [1975년 6월 11일 강설 「On the Absolute Tao」](https://osholive.com/tao-the-three-treasures-vol-1/discourse-1)
 
+### 이경숙의 해설을 바탕으로 재구성
+
+앞에서 노자가 뭘 이야기했노? 이름 이야기했잖아. 그러면 여기서 뭘 하고 싶은 건지부터 물어봐야지. 앞 문장하고 이어 보면 도에 이름을 붙이고 싶은 거라. 이름을 붙이기 전에는 그 묘함을 보고, 붙인 뒤에는 무엇이 어떤 모습으로 드러났는지 알아보는 거지. 그 드러난 모습이 여기서 말하는 요(徼)라 이 말이야.
+
+[『노자를 웃긴 남자』 제1장 전재본](https://dosa65.tistory.com/693)
+
 ### 전통 주석과 판본의 짧은 대조
 
 - **왕필(王弼)** — 무명은 만물이 드러나기 전의 바탕, 유명은 만물이 생겨나는 국면으로 본다. 오쇼의 체험적 ‘열림’을 존재론적 근본과 말단의 구조로 붙잡아 준다.
